@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "090b02ce-9e40-4be3-81bc-5ced34cef1b6",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 102,
+  "height": 65,
+  "platformSettings": {},
+  "subMetas": {
+    "VIP月卡": {
+      "ver": "1.0.6",
+      "uuid": "7a8b7323-067a-49ba-9fe9-1dd85d8dfe8d",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "090b02ce-9e40-4be3-81bc-5ced34cef1b6",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 102,
+      "height": 65,
+      "rawWidth": 102,
+      "rawHeight": 65,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "发怒",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.6,
+  "sample": 10,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "97331c98-1192-475a-a357-003f6dbb9b7e"
+            }
+          },
+          {
+            "frame": 0.1,
+            "value": {
+              "__uuid__": "d7c38286-d5e7-4a3e-bcf2-58c5cab6d470"
+            }
+          },
+          {
+            "frame": 0.2,
+            "value": {
+              "__uuid__": "4108d5be-ffc4-4524-aa67-82f772c11a2b"
+            }
+          },
+          {
+            "frame": 0.3,
+            "value": {
+              "__uuid__": "f38f8b66-e27e-47a7-8a96-26bd3a126142"
+            }
+          },
+          {
+            "frame": 0.4,
+            "value": {
+              "__uuid__": "c9e4c6ef-a327-4cba-9555-e9dd26d2d457"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "67692f4c-561a-4565-a182-0eb399845caf"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "9621f979-f9da-4a0b-ac0b-310ef4bfd635",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 128,
+  "height": 17,
+  "platformSettings": {},
+  "subMetas": {
+    "item15_bowfly1": {
+      "ver": "1.0.6",
+      "uuid": "f6221c7a-eabd-4123-bc3f-e5787a38f11c",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "9621f979-f9da-4a0b-ac0b-310ef4bfd635",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 128,
+      "height": 17,
+      "rawWidth": 128,
+      "rawHeight": 17,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

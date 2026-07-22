@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "困",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8571428571428571,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "16dd05ef-19f7-468c-a1ed-79943687bd65"
+            }
+          },
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "7a2a0a74-db1f-48b5-876f-1db4b517e3d3"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "a025845c-a29a-4888-9afe-a48f9a3eb7c4"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "2424de00-f7de-4e70-904f-024de43f199a"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "fc4a3b10-08a1-42aa-b168-c225056ab100"
+            }
+          },
+          {
+            "frame": 0.7142857142857143,
+            "value": {
+              "__uuid__": "926b88a7-e9f9-4686-a371-6865a6e8f5e9"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

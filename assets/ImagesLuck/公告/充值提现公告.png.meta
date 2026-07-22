@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "725add85-7597-4dd6-a660-d91c0331e201",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 571,
+  "height": 115,
+  "platformSettings": {},
+  "subMetas": {
+    "充值提现公告": {
+      "ver": "1.0.6",
+      "uuid": "c81b9e7c-403d-4615-8770-98b46ef4f685",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "725add85-7597-4dd6-a660-d91c0331e201",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 571,
+      "height": 115,
+      "rawWidth": 571,
+      "rawHeight": 115,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

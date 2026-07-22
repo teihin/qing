@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "8fe5b45f-8075-4c0c-af48-b37c0f73bcd7",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 78,
+  "height": 31,
+  "platformSettings": {},
+  "subMetas": {
+    "玩家数": {
+      "ver": "1.0.6",
+      "uuid": "0c739b0d-6812-4d91-a8e1-22ce754ff1c2",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "8fe5b45f-8075-4c0c-af48-b37c0f73bcd7",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 78,
+      "height": 31,
+      "rawWidth": 78,
+      "rawHeight": 31,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

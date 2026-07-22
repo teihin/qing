@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "冰冷",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.75,
+  "sample": 8,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "03af4911-7bd0-4512-b4f7-77fbdec9cb36"
+            }
+          },
+          {
+            "frame": 0.125,
+            "value": {
+              "__uuid__": "d7644b59-01a4-4090-9350-890e9b0244a6"
+            }
+          },
+          {
+            "frame": 0.25,
+            "value": {
+              "__uuid__": "3b53b4d9-3ff1-4326-9d33-bdc9ee3d1eab"
+            }
+          },
+          {
+            "frame": 0.375,
+            "value": {
+              "__uuid__": "824ae47c-4ee7-4d7b-a622-8de1dd517d63"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "37ebee15-e26a-4f96-81d4-3b39bf094443"
+            }
+          },
+          {
+            "frame": 0.625,
+            "value": {
+              "__uuid__": "2cfeeaa1-fb9f-4aa8-9312-7344c1920af3"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

@@ -1,0 +1,93 @@
+1、提取红利按钮没有
+2、盟主页面标题 少分成文字
+3、盟主少设置比例按键
+
+
+4、游戏内界面。实时战绩。文字没有
+5\牌型提示文字
+6、切牌动画没有
+7、桌面图片少
+8、奖池动画中间多个数字
+
+
+--------
+惩罚公告
+VIP
+大厅公告弹3个
+
+
+http://139.224.113.242:89/zc?guuid=512671#
+
+
+    //拷贝数据到手机
+    public static void CopyData(final String strTxt)
+    {
+
+        //一定要确保在UI线程操作
+        app.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                ClipboardManager cm = (ClipboardManager) app.getSystemService(Context.CLIPBOARD_SERVICE);
+                ClipData clip = ClipData.newPlainText("kk", strTxt);
+                cm.setPrimaryClip(clip);
+            }
+        });
+    }
+    //读取剪切板
+    public static void GetCopyData()
+    {
+        // 获取系统剪贴板
+        ClipboardManager clipboard = (ClipboardManager) app.getSystemService(Context.CLIPBOARD_SERVICE);
+
+        // 获取剪贴板的剪贴数据集
+        ClipData clipData = clipboard.getPrimaryClip();
+
+        if (clipData != null && clipData.getItemCount() > 0) {
+        // 从数据集中获取（粘贴）第一条文本数据
+            CharSequence text = clipData.getItemAt(0).getText();
+            Cocos2dxJavascriptJavaBridge.evalString("cc.MobileManager.onMsgReturn(\"粘贴\",\""+text+"\")");
+        }
+    }
+
+
+
+
+----------------------------------
+
+
+//复制到剪切板
++(void)CopyData:(NSString*)strKey
+{
+    NSLog(@"拷贝到剪切板:%@",strKey);
+    //获得ios的剪切板
+    UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
+    //改变剪切板的内容
+    pasteboard.string = strKey;
+}
+//读取剪切板
++(void)GetCopyData
+{
+    NSLog(@"读取剪切板");
+    UIPasteboard *pasteboard=[UIPasteboard generalPasteboard];
+    NSString* result=@"";
+    
+    double version=[[[UIDevice currentDevice]systemVersion]doubleValue];
+    if(version>= 10.0)
+    {
+        if([pasteboard hasStrings])
+        {
+            result=pasteboard.string;
+        }
+    }
+    else
+    {
+        result=pasteboard.string;
+    }
+    
+    
+    std::string param = [result UTF8String];
+    std::string jsCallStr = cocos2d::StringUtils::format("cc.MobileManager.onMsgReturn(\"粘贴\",\"%s\");",param.c_str());
+    NSLog(@"jsCallStr = %s", jsCallStr.c_str());
+    
+    se::ScriptEngine::getInstance()->evalString(jsCallStr.c_str());
+}

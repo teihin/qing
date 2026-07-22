@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "拜拜",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 1,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "8231e4ca-1f1d-43b4-bb1a-dae50343918e"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "e2edff38-8f78-400e-bd98-ebba5952a190"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "1e0a670b-6414-4945-ae12-d96afd874ae1"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "db714a8e-18c1-4a8f-8c08-aceaefc91444"
+            }
+          },
+          {
+            "frame": 0.7142857142857143,
+            "value": {
+              "__uuid__": "7b8e8384-e2f1-46f3-a58f-bdcf1611c7de"
+            }
+          },
+          {
+            "frame": 0.8571428571428571,
+            "value": {
+              "__uuid__": "85c950d0-b358-41e0-9e27-2d21edbd4a3d"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

@@ -1,0 +1,37 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "语音",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.75,
+  "sample": 4,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "c8a43159-13b0-4289-add3-3303306df5be"
+            }
+          },
+          {
+            "frame": 0.25,
+            "value": {
+              "__uuid__": "d29fbd38-07f2-413f-a3c9-25f64642a795"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "be8b91fe-b374-4f67-8843-65753fa8ffbe"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

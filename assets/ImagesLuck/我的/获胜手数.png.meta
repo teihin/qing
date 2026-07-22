@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "5b88742c-6928-4b34-9823-1cb4bd53eb3c",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 105,
+  "height": 27,
+  "platformSettings": {},
+  "subMetas": {
+    "获胜手数": {
+      "ver": "1.0.6",
+      "uuid": "aea0d5c1-ccd4-4b7d-92bd-7e26ae84a3e6",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "5b88742c-6928-4b34-9823-1cb4bd53eb3c",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 105,
+      "height": 27,
+      "rawWidth": 105,
+      "rawHeight": 27,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

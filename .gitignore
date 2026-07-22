@@ -1,0 +1,43 @@
+build/*
+Certifi*/*
+Crowd*/*
+Default/*
+FileType*/*
+Grshader*/*
+Intervertion*/*
+library/*
+local/*
+MEIP*/*
+node_mo*/*
+OriginTri*/*
+output/*
+packages/*
+packVersion/*
+pnacl/*
+Safe*/*
+settings/*
+ShaderCache/*
+SSLE*/*
+Subresource*/*
+temp/*
+TLSDep*/*
+Widev*/*
+/*.ts
+/*.txt
+/*.py
+/Local State
+/*.json
+!/project.json
+.vscode/*
+!问题.txt
+
+# macOS metadata
+.DS_Store
+._*
+
+# Local signing credentials and archived native project
+*.keystore
+*.jks
+*.p12
+*.pfx
+runtime-src.zip

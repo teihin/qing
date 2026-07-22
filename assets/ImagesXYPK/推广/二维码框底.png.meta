@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "8d716c78-654a-4aa7-bdf1-9dadcb0753c2",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 363,
+  "height": 363,
+  "platformSettings": {},
+  "subMetas": {
+    "二维码框底": {
+      "ver": "1.0.6",
+      "uuid": "cb0d8bff-0bc3-41b3-81c4-06e903d6ba28",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "8d716c78-654a-4aa7-bdf1-9dadcb0753c2",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0.5,
+      "offsetY": -0.5,
+      "trimX": 30,
+      "trimY": 30,
+      "width": 304,
+      "height": 304,
+      "rawWidth": 363,
+      "rawHeight": 363,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "282c2bad-3e26-41e9-ae2c-088702609f4d",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 268,
+  "height": 100,
+  "platformSettings": {},
+  "subMetas": {
+    "我的玩家": {
+      "ver": "1.0.6",
+      "uuid": "3e0e72e8-e4aa-4dcd-810e-8820bdf188cb",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "282c2bad-3e26-41e9-ae2c-088702609f4d",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 268,
+      "height": 100,
+      "rawWidth": 268,
+      "rawHeight": 100,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

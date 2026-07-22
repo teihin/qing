@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "拇指",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8571428571428571,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "c55eb5f9-a3c7-4803-8b18-2b3426a57730"
+            }
+          },
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "ff368a45-8e7e-485a-9706-a224b4fa796b"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "3edc14c6-f4ca-4e4d-910a-9834f94cebc9"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "c5b74bb4-80af-4075-a3e6-1dbcc3f41d6a"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "136d871b-16ea-483a-be8e-28c6e586ea96"
+            }
+          },
+          {
+            "frame": 0.7142857142857143,
+            "value": {
+              "__uuid__": "5a47bd8d-edb3-4f36-9756-637d26bb31b5"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "0435751c-1572-4222-a647-bfe332c19201",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 446,
+  "height": 54,
+  "platformSettings": {},
+  "subMetas": {
+    "玩家手数": {
+      "ver": "1.0.6",
+      "uuid": "5ce76eaa-eb70-44c8-9f28-5d44b9f3d9f4",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "0435751c-1572-4222-a647-bfe332c19201",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 446,
+      "height": 54,
+      "rawWidth": 446,
+      "rawHeight": 54,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

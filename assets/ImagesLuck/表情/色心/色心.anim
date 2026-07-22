@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "色心",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8571428571428571,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "57ab23fd-ee58-46dd-bf51-addea7480593"
+            }
+          },
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "865148a3-f35a-45cf-924c-ef83c6ee7187"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "412b508d-7e84-4263-b885-425bd14cac3d"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "0e10a627-4a8b-46e6-91a5-75404407f805"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "9eb942ff-3a9f-4117-814c-a36f79a9f15a"
+            }
+          },
+          {
+            "frame": 0.7142857142857143,
+            "value": {
+              "__uuid__": "a57ab501-d4b0-4c51-bc21-305f84f44c71"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

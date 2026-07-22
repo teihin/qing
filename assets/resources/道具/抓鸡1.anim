@@ -1,0 +1,67 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "抓鸡1",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.875,
+  "sample": 8,
+  "speed": 1,
+  "wrapMode": 1,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": -0.125,
+            "value": {
+              "__uuid__": "c6aaff0c-904b-41a8-a19f-91cc41941988"
+            }
+          },
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "abbcb450-1cc1-4364-8ac1-4e4f27962aa7"
+            }
+          },
+          {
+            "frame": 0.125,
+            "value": {
+              "__uuid__": "5952dc39-8fe8-41d6-9d40-94779302cd7f"
+            }
+          },
+          {
+            "frame": 0.25,
+            "value": {
+              "__uuid__": "a699add4-8890-4bc5-a438-488a9eaebba5"
+            }
+          },
+          {
+            "frame": 0.375,
+            "value": {
+              "__uuid__": "a19c17b2-b435-45c6-95ee-7b442340a2ee"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "0cbfe1f4-f4bc-429a-b114-7ae28b6920eb"
+            }
+          },
+          {
+            "frame": 0.625,
+            "value": {
+              "__uuid__": "74394a6d-1276-4828-9c3f-4f2e8c1b5098"
+            }
+          },
+          {
+            "frame": 0.75,
+            "value": {
+              "__uuid__": "7cb9b071-8d97-4a11-8221-74b36e55f273"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

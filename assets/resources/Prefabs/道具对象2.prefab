@@ -1,0 +1,205 @@
+[
+  {
+    "__type__": "cc.Prefab",
+    "_name": "",
+    "_objFlags": 0,
+    "_native": "",
+    "data": {
+      "__id__": 1
+    },
+    "optimizationPolicy": 0,
+    "asyncLoadAssets": false,
+    "readonly": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "道具对象",
+    "_objFlags": 0,
+    "_parent": null,
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 2
+      },
+      {
+        "__id__": 3
+      }
+    ],
+    "_prefab": {
+      "__id__": 4
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 51,
+      "height": 49
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        2,
+        2,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Sprite",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_spriteFrame": {
+      "__uuid__": "2993d97a-801c-4105-92e3-4a56092d0f69"
+    },
+    "_type": 0,
+    "_sizeMode": 1,
+    "_fillType": 0,
+    "_fillCenter": {
+      "__type__": "cc.Vec2",
+      "x": 0,
+      "y": 0
+    },
+    "_fillStart": 0,
+    "_fillRange": 0,
+    "_isTrimmedMode": true,
+    "_atlas": null,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Animation",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 1
+    },
+    "_enabled": true,
+    "_defaultClip": null,
+    "_clips": [
+      {
+        "__uuid__": "95df6078-fc44-44ac-a466-88d6a00f0933"
+      },
+      {
+        "__uuid__": "0a87c08d-9b12-4e3b-a208-1590702d4ac3"
+      },
+      {
+        "__uuid__": "8949e830-2efa-4a08-bc02-1ea594592852"
+      },
+      {
+        "__uuid__": "1c6e2ea5-0a1d-48c6-8de5-7a74014d95a4"
+      },
+      {
+        "__uuid__": "06941c6b-700f-4c7c-80cb-5e831e8ac604"
+      },
+      {
+        "__uuid__": "f3d47262-3725-4132-84f9-374d30205dbe"
+      },
+      {
+        "__uuid__": "15822b85-b021-4e7c-891e-83d1809b3d1d"
+      },
+      {
+        "__uuid__": "63d58adb-b475-445b-8d32-8afbac7e6375"
+      },
+      {
+        "__uuid__": "e787c744-ba4b-4ea8-8100-574aeb510f11"
+      },
+      {
+        "__uuid__": "21f30c35-ee75-4b44-aa32-c0a0a610b7bb"
+      },
+      {
+        "__uuid__": "54c7e4e5-d27e-4829-a95f-56f2ba8e2132"
+      },
+      {
+        "__uuid__": "1e425f4e-3271-4f6a-82fe-d8bc43b4f644"
+      },
+      {
+        "__uuid__": "eb069d77-e982-44ea-8280-3e0a13e52575"
+      },
+      {
+        "__uuid__": "8c23fa38-cc51-4272-8d3a-03e5710f1dfa"
+      },
+      {
+        "__uuid__": "b29dad81-0186-4097-86a8-5ecf81c46408"
+      },
+      {
+        "__uuid__": "8eb0b580-2a7c-4fbc-ade7-e8dce2eeea60"
+      },
+      {
+        "__uuid__": "4cf10d4b-a01b-449c-8fdf-fb684e6e5560"
+      },
+      {
+        "__uuid__": "e7a34b24-d0d6-4675-8e27-8986d70c0e89"
+      },
+      {
+        "__uuid__": "915d8e05-27a1-4aa5-a64c-d1559eae0cf7"
+      },
+      {
+        "__uuid__": "a4f6d462-8bb1-4e55-b587-75cd57220b1d"
+      },
+      {
+        "__uuid__": "de5ff947-ef13-48fd-86fe-47c22e7b0c32"
+      },
+      {
+        "__uuid__": "91cdc410-b125-4c31-9b0f-5c1ea3219552"
+      },
+      {
+        "__uuid__": "06736ab6-a50e-4c78-a5ad-72a502139eaf"
+      }
+    ],
+    "playOnLoad": false,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__uuid__": "6839a304-542d-4244-b607-29cd0a281303"
+    },
+    "fileId": "5bbyRTHL1PTbnw5SNr49NX",
+    "sync": false
+  }
+]

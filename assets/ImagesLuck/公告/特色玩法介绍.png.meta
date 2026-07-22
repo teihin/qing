@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "3af4ebd4-9eae-46a3-b39f-71089ca86565",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 571,
+  "height": 115,
+  "platformSettings": {},
+  "subMetas": {
+    "特色玩法介绍": {
+      "ver": "1.0.6",
+      "uuid": "e5e9cd3d-1d65-46ba-8d45-4e82a85f331e",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "3af4ebd4-9eae-46a3-b39f-71089ca86565",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 571,
+      "height": 115,
+      "rawWidth": 571,
+      "rawHeight": 115,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

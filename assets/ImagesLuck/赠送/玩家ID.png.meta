@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "7653ec8b-6a3e-4fd2-b90c-b5a1af50fea1",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 598,
+  "height": 100,
+  "platformSettings": {},
+  "subMetas": {
+    "玩家ID": {
+      "ver": "1.0.6",
+      "uuid": "379fd7b8-7b22-48e5-a6ab-bcf6b11ba58e",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "7653ec8b-6a3e-4fd2-b90c-b5a1af50fea1",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 598,
+      "height": 100,
+      "rawWidth": 598,
+      "rawHeight": 100,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

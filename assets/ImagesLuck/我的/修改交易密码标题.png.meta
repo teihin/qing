@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "c2577871-0bc1-43a6-b79e-c28e2a62f9a1",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 189,
+  "height": 40,
+  "platformSettings": {},
+  "subMetas": {
+    "修改交易密码标题": {
+      "ver": "1.0.6",
+      "uuid": "24db3c8c-1b8f-4bf9-bb30-d4aae73f2f8d",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "c2577871-0bc1-43a6-b79e-c28e2a62f9a1",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 189,
+      "height": 40,
+      "rawWidth": 189,
+      "rawHeight": 40,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

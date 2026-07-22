@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "8f3f13df-af0b-41a0-98b5-a73fdb93e632",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 67,
+  "height": 27,
+  "platformSettings": {},
+  "subMetas": {
+    "开牌": {
+      "ver": "1.0.6",
+      "uuid": "784c2e67-4161-4bfb-901c-f8cc12390056",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "8f3f13df-af0b-41a0-98b5-a73fdb93e632",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 67,
+      "height": 27,
+      "rawWidth": 67,
+      "rawHeight": 27,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

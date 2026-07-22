@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "931db72b-9ca0-4e72-90f9-48f628cf1fca",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 187,
+  "height": 241,
+  "platformSettings": {},
+  "subMetas": {
+    "修改登录密码": {
+      "ver": "1.0.6",
+      "uuid": "09a2e143-746c-4001-9216-f40c16329893",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "931db72b-9ca0-4e72-90f9-48f628cf1fca",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 187,
+      "height": 241,
+      "rawWidth": 187,
+      "rawHeight": 241,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

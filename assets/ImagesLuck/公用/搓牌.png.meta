@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "f535027a-0761-44dc-9797-ccebfd98cfcb",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 56,
+  "height": 32,
+  "platformSettings": {},
+  "subMetas": {
+    "搓牌": {
+      "ver": "1.0.6",
+      "uuid": "0c458c74-c211-455d-bac0-9b56c4334326",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "f535027a-0761-44dc-9797-ccebfd98cfcb",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 56,
+      "height": 32,
+      "rawWidth": 56,
+      "rawHeight": 32,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

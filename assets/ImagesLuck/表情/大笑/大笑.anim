@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "大笑",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8571428571428571,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "f12e7857-0354-41c5-adf1-8c5c18de6b40"
+            }
+          },
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "f7bde736-390d-489e-beed-f3554a2a315f"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "0e5d67ae-08b7-4e9d-a0c2-98ce4c82abd6"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "c7dc0cc6-a581-4873-9dc8-72220c0c8434"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "d5942c0d-00ff-4650-945a-908a46c354da"
+            }
+          },
+          {
+            "frame": 0.7142857142857143,
+            "value": {
+              "__uuid__": "f69fc400-a310-4fca-b197-0120eec7f2b4"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

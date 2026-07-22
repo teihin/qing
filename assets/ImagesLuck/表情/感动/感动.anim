@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "感动",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8571428571428571,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "f46f0108-fefe-4ad0-8522-37a6d6f6736b"
+            }
+          },
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "410269da-0d6e-4781-95a4-303abe62f52c"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "12c030fc-d97d-480b-8cf7-7443521b7f17"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "71b7f5fe-a183-4709-a2d7-78b5adf05c4e"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "fcc0b622-1c72-445c-9b37-6f7f803223cc"
+            }
+          },
+          {
+            "frame": 0.7142857142857143,
+            "value": {
+              "__uuid__": "2328be68-7d13-42cf-bde3-afe7d9954603"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

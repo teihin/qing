@@ -1,0 +1,67 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "亲嘴1",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 1,
+  "sample": 8,
+  "speed": 1,
+  "wrapMode": 1,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "27c2be82-b1de-4281-9177-fd50cc9e1965"
+            }
+          },
+          {
+            "frame": 0.125,
+            "value": {
+              "__uuid__": "3142bb6a-b88b-48ab-98a1-e8dd2d691752"
+            }
+          },
+          {
+            "frame": 0.25,
+            "value": {
+              "__uuid__": "c826b433-06ed-40db-8f23-470b3284a94a"
+            }
+          },
+          {
+            "frame": 0.375,
+            "value": {
+              "__uuid__": "1efc4eeb-51f3-4d73-be5e-e770f71000df"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "b8f2ca65-26ee-4af1-ad2f-c857a0ce1b4a"
+            }
+          },
+          {
+            "frame": 0.625,
+            "value": {
+              "__uuid__": "757b0289-8fe6-445a-a288-869511b9024e"
+            }
+          },
+          {
+            "frame": 0.75,
+            "value": {
+              "__uuid__": "7c2c11f5-f232-4599-8612-f2726819ab40"
+            }
+          },
+          {
+            "frame": 0.875,
+            "value": {
+              "__uuid__": "54d6ad94-df1e-41fb-8600-40c53c49904e"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

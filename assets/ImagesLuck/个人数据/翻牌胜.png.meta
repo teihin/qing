@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "cafdc8a1-d317-4657-bf77-61e8c159b4d2",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 109,
+  "height": 32,
+  "platformSettings": {},
+  "subMetas": {
+    "翻牌胜": {
+      "ver": "1.0.6",
+      "uuid": "8807aee1-2065-4a31-8471-6a64fd467a30",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "cafdc8a1-d317-4657-bf77-61e8c159b4d2",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 109,
+      "height": 32,
+      "rawWidth": 109,
+      "rawHeight": 32,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

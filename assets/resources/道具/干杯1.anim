@@ -1,0 +1,67 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "干杯1",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 1,
+  "sample": 8,
+  "speed": 1,
+  "wrapMode": 1,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "2be7f072-2e5e-43db-af27-55d1d6b744de"
+            }
+          },
+          {
+            "frame": 0.125,
+            "value": {
+              "__uuid__": "643da918-4dc9-41eb-920a-b0b21d53eeee"
+            }
+          },
+          {
+            "frame": 0.25,
+            "value": {
+              "__uuid__": "71faa89a-feb5-4f0f-a6b6-7688690d3049"
+            }
+          },
+          {
+            "frame": 0.375,
+            "value": {
+              "__uuid__": "d92a111a-5090-4a32-b5af-907aed673c68"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "cb1ffb9b-edef-4e21-a1ce-41fdf3def395"
+            }
+          },
+          {
+            "frame": 0.625,
+            "value": {
+              "__uuid__": "fb138fce-ba9c-40d6-ba91-0e473f1d6087"
+            }
+          },
+          {
+            "frame": 0.75,
+            "value": {
+              "__uuid__": "b8eb3444-c2a8-41a7-9c3b-196d9885cab1"
+            }
+          },
+          {
+            "frame": 0.875,
+            "value": {
+              "__uuid__": "9bc4630e-2fed-4273-b3b3-7eea4c247b30"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

@@ -1,0 +1,79 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "干杯2",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.9,
+  "sample": 10,
+  "speed": 1,
+  "wrapMode": 1,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": -0.1,
+            "value": {
+              "__uuid__": "1176b249-9533-4d10-b381-5aaedceb6931"
+            }
+          },
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "5c3a60b1-5ef4-402d-aaf4-b5e87aa34517"
+            }
+          },
+          {
+            "frame": 0.1,
+            "value": {
+              "__uuid__": "7b93d08c-bb09-4363-89d5-8fe7f3956f1f"
+            }
+          },
+          {
+            "frame": 0.2,
+            "value": {
+              "__uuid__": "1a4750ed-a495-4e68-983e-020726457a3d"
+            }
+          },
+          {
+            "frame": 0.3,
+            "value": {
+              "__uuid__": "72631949-8fee-4664-8641-0a1847ef4b6f"
+            }
+          },
+          {
+            "frame": 0.4,
+            "value": {
+              "__uuid__": "846dfd59-348f-4c78-ad07-636dd1ad26a9"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "7d2595a3-0ccf-4275-b3a8-fb27befb7466"
+            }
+          },
+          {
+            "frame": 0.6,
+            "value": {
+              "__uuid__": "cea61782-787f-4d30-8a5b-2dba87a28b72"
+            }
+          },
+          {
+            "frame": 0.7,
+            "value": {
+              "__uuid__": "ecc596c1-bfa6-4d2d-9782-b82fb40a3172"
+            }
+          },
+          {
+            "frame": 0.8,
+            "value": {
+              "__uuid__": "4941213b-1d15-4917-89eb-cb735464d9d0"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

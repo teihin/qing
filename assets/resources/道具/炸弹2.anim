@@ -1,0 +1,79 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "炸弹2",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8,
+  "sample": 10,
+  "speed": 1,
+  "wrapMode": 1,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": -0.2,
+            "value": {
+              "__uuid__": "ba444318-b247-48ea-b0cd-b23c89fb3d60"
+            }
+          },
+          {
+            "frame": -0.1,
+            "value": {
+              "__uuid__": "47bbe3ba-a06f-44db-81a7-59b566a42287"
+            }
+          },
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "9fc45eef-a625-4db5-8e6e-6a3e8483db49"
+            }
+          },
+          {
+            "frame": 0.1,
+            "value": {
+              "__uuid__": "01e6a4c3-dc10-42ae-b9af-f6cc31abd2e6"
+            }
+          },
+          {
+            "frame": 0.2,
+            "value": {
+              "__uuid__": "8605495e-efd4-4cd2-a4fb-2ba00e41ceca"
+            }
+          },
+          {
+            "frame": 0.3,
+            "value": {
+              "__uuid__": "78344f1b-8a5c-4836-89f6-d52f3bc99403"
+            }
+          },
+          {
+            "frame": 0.4,
+            "value": {
+              "__uuid__": "2ceaa15f-b26c-46fc-9578-87c0d922bad4"
+            }
+          },
+          {
+            "frame": 0.5,
+            "value": {
+              "__uuid__": "3255c51a-b697-4fe3-a24a-7444da765bdd"
+            }
+          },
+          {
+            "frame": 0.6,
+            "value": {
+              "__uuid__": "58647664-3604-4123-a796-13a04b576907"
+            }
+          },
+          {
+            "frame": 0.7,
+            "value": {
+              "__uuid__": "5cc44d06-d27d-4804-b1f3-f25bf939ce15"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

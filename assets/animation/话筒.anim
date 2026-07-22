@@ -1,0 +1,43 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "话筒",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8,
+  "sample": 5,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "ac3f28e9-eadf-4add-8ec1-74a7c041ece2"
+            }
+          },
+          {
+            "frame": 0.2,
+            "value": {
+              "__uuid__": "c5ed8a5a-6a08-4b04-82e9-2aeeeb3e6444"
+            }
+          },
+          {
+            "frame": 0.4,
+            "value": {
+              "__uuid__": "882533c2-b941-490f-936a-2e9a8bd12e16"
+            }
+          },
+          {
+            "frame": 0.6,
+            "value": {
+              "__uuid__": "14323ed3-db63-41c0-b46a-039a70bac364"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

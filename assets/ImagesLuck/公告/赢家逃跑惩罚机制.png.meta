@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "83ef2867-858f-4091-81b9-be3d4c75090a",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 620,
+  "height": 129,
+  "platformSettings": {},
+  "subMetas": {
+    "赢家逃跑惩罚机制": {
+      "ver": "1.0.6",
+      "uuid": "1b8e7384-9e25-4f49-aa67-1191977e64bf",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "83ef2867-858f-4091-81b9-be3d4c75090a",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 620,
+      "height": 129,
+      "rawWidth": 620,
+      "rawHeight": 129,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

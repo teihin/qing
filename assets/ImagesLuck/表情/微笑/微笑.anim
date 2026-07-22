@@ -1,0 +1,55 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "微笑",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.8571428571428571,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "9c27f949-d0c7-4ebe-8c70-a2bdab912095"
+            }
+          },
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "9fdadd99-8bb7-4717-bba2-2a5fc6c34f61"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "4011771b-4c1c-48e0-9cc3-cda3e13363a0"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "48fe504e-e92e-4627-b4d6-6dccc1521292"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "3745a813-4794-4bac-bece-09e67d217580"
+            }
+          },
+          {
+            "frame": 0.7142857142857143,
+            "value": {
+              "__uuid__": "0838142f-588d-4e3d-96e5-2311abfe1113"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

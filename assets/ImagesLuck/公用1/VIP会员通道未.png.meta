@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "bbb93798-14cd-46d9-9176-dfb8bb982e24",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 229,
+  "height": 44,
+  "platformSettings": {},
+  "subMetas": {
+    "VIP会员通道未": {
+      "ver": "1.0.6",
+      "uuid": "57851bcc-2936-485c-ba15-48ed7be71d23",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "bbb93798-14cd-46d9-9176-dfb8bb982e24",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 229,
+      "height": 44,
+      "rawWidth": 229,
+      "rawHeight": 44,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

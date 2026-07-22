@@ -1,0 +1,49 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "奖杯",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 1,
+  "sample": 5,
+  "speed": 1,
+  "wrapMode": 2,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "72e8b50f-949e-4a88-94f2-439383c6bd6d"
+            }
+          },
+          {
+            "frame": 0.2,
+            "value": {
+              "__uuid__": "342f478c-e000-45e3-b2e8-c5a18f5601e5"
+            }
+          },
+          {
+            "frame": 0.4,
+            "value": {
+              "__uuid__": "b65cbbe4-feee-41c9-a499-f679d1ede568"
+            }
+          },
+          {
+            "frame": 0.6,
+            "value": {
+              "__uuid__": "e2afe2f5-8545-4a89-a743-d1c43a36a05d"
+            }
+          },
+          {
+            "frame": 0.8,
+            "value": {
+              "__uuid__": "e528f9de-c8ff-4500-985d-39997c24e9c0"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}

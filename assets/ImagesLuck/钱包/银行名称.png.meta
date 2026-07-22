@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "e035f290-961d-4680-8e23-222291b9b150",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 107,
+  "height": 31,
+  "platformSettings": {},
+  "subMetas": {
+    "银行名称": {
+      "ver": "1.0.6",
+      "uuid": "765358f2-c1d6-49c9-8aee-025e4b0114ae",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "e035f290-961d-4680-8e23-222291b9b150",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 107,
+      "height": 31,
+      "rawWidth": 107,
+      "rawHeight": 31,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

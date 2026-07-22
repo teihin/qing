@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "70399346-56ee-4fdb-95cb-c76821ec4ee4",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 348,
+  "height": 447,
+  "platformSettings": {},
+  "subMetas": {
+    "搓背2": {
+      "ver": "1.0.6",
+      "uuid": "d28907b0-ea6a-45d5-ba66-03fa342574c8",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "70399346-56ee-4fdb-95cb-c76821ec4ee4",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": -6.5,
+      "offsetY": 7,
+      "trimX": 4,
+      "trimY": 4,
+      "width": 327,
+      "height": 425,
+      "rawWidth": 348,
+      "rawHeight": 447,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

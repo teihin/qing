@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "3079edc6-c2a4-43c7-aedb-75d784f11b26",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 107,
+  "height": 121,
+  "platformSettings": {},
+  "subMetas": {
+    "愤怒拿刀": {
+      "ver": "1.0.6",
+      "uuid": "f87b5ce4-6d50-45f8-a93b-5e6c32ec2918",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "3079edc6-c2a4-43c7-aedb-75d784f11b26",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 107,
+      "height": 121,
+      "rawWidth": 107,
+      "rawHeight": 121,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

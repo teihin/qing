@@ -1,0 +1,61 @@
+{
+  "__type__": "cc.AnimationClip",
+  "_name": "钓鱼3",
+  "_objFlags": 0,
+  "_native": "",
+  "_duration": 0.7142857142857143,
+  "sample": 7,
+  "speed": 1,
+  "wrapMode": 1,
+  "curveData": {
+    "comps": {
+      "cc.Sprite": {
+        "spriteFrame": [
+          {
+            "frame": -0.2857142857142857,
+            "value": {
+              "__uuid__": "0fcfb271-b122-4ecc-b31f-406a100ed734"
+            }
+          },
+          {
+            "frame": -0.14285714285714285,
+            "value": {
+              "__uuid__": "8cb2b079-51b1-4de6-b86d-0fed40f50c96"
+            }
+          },
+          {
+            "frame": 0,
+            "value": {
+              "__uuid__": "0f25988a-7cb6-4374-8fa3-5925b74de570"
+            }
+          },
+          {
+            "frame": 0.14285714285714285,
+            "value": {
+              "__uuid__": "acfc53d4-b4a7-4064-b036-25797388256e"
+            }
+          },
+          {
+            "frame": 0.2857142857142857,
+            "value": {
+              "__uuid__": "fee1da3a-0e2e-4315-9840-a959bac4a992"
+            }
+          },
+          {
+            "frame": 0.42857142857142855,
+            "value": {
+              "__uuid__": "e46131e2-4d93-48d8-9c66-25c1512d5708"
+            }
+          },
+          {
+            "frame": 0.5714285714285714,
+            "value": {
+              "__uuid__": "4a92524c-f9e9-4004-a8b9-8f8119cfda63"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "events": []
+}
