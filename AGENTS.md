@@ -134,6 +134,7 @@ login.fire
 - 登录换皮已生成并接入：新增 `秦_登录背景.png`（750×1334）、`秦_输入框.png`（573×86）和 `秦_清除.png`（45×45），原位替换登录专用的 `账号.png`、`密码.png`、`手机登陆.png`；`panelLogin.prefab` 保持节点结构和节点名不变，只更新对应 SpriteFrame 引用及输入/占位文字颜色。
 - 登录背景、输入框和清除按钮原资源均被其他界面共用，因此本次采用新增登录专用资源并只重绑 `panelLogin`，没有覆盖 `背景.png`、`公用/输入框.png`、`CHACHA.png`。新 UUID 已被 Creator 资源库识别，静态尺寸和引用检查通过；实际运行显示与交互由用户在现有 Creator 实例中验证。
 - 登录页顶部LOGO已从会被四边Widget非等比拉伸的`秦_登录背景.png`中完整分离：圆环、“秦”和`QIN`现合并为新增的400×400 RGBA资源`秦_登录LOGO.png`，`panelLogin`新增同级节点`登录LOGO`，Sprite使用SIMPLE/CUSTOM且trimmed=false，Widget只启用TOP+HORIZONTAL_CENTER（alignFlags=17、top=118），固定宽高与1:1比例；背景仍保持750×1334 RGB及原UUID，只在原LOGO区域补回宫阙暗纹。生成脚本`tools/generate_qin_login_skin.py`使用原始带环源图生成独立LOGO，并用`art_sources/login/qin_login_background_clean_source.png`局部修复无LOGO背景；输入框、按钮、业务节点与逻辑均未改。实际多设备显示仍由用户在现有Creator实例中验证。
+- 2026-07-22 用户指出登录LOGO的宋体“秦”与最初确认效果图不一致；现已按用户提供的确认图改为横向展开、尖角收笔的定制金属“秦”字及独立`QIN`排版，继续使用原400×400透明资源、同一`.meta`/UUID、Prefab节点和Widget参数；自动裁剪边界已随新透明像素更新为`trimX=34、trimY=9、331×382`。最终源图保存为`art_sources/login/qin_login_logo_final_source.png`，生成脚本优先使用该源图，避免重建时退回系统字体；静态合成预览已更新，Creator实际显示仍待用户验证。
 - 当前 `assets/resources/project.manifest` 仍是旧热更新清单；换皮资源进入 Native 热更新或发布包前必须重新构建生成清单。
 - 登录换皮已以提交 `c0859bc` 推送到 `origin/main`；提交正文使用中文详细记录了资源、结构、验证结果和待验证风险。
 - 共享弹窗背景 `assets/imagesKK/公用/框.png` 已经用户确认并替换为黑曜石、暗金多层边框、秦纹标题栏和底部秦印收口风格。图片保持635×680 RGBA，`.meta`、纹理UUID、SpriteFrame UUID及九宫格边距左83/右81/上106/下42均未改变；12个场景或Prefab共34处原引用继续生效。PNG、尺寸、透明通道和引用数静态检查通过，Creator实际显示仍由用户验证。

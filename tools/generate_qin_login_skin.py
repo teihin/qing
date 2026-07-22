@@ -18,6 +18,7 @@ PING_FONT = ROOT / "assets" / "font" / "PingFF.ttf"
 HEITI_FONT = Path("/System/Library/Fonts/STHeiti Medium.ttc")
 SONGTI_FONT = Path("/System/Library/Fonts/Supplemental/Songti.ttc")
 LATIN_FONT = Path("/System/Library/Fonts/Supplemental/Times New Roman.ttf")
+LOGIN_LOGO_SOURCE = ART_DIR / "qin_login_logo_final_source.png"
 
 
 def sc(value: float) -> int:
@@ -140,6 +141,18 @@ def make_background(source_path: Path, clean_source_path: Path) -> Path:
 
 
 def make_logo(source_path: Path) -> Path:
+    if LOGIN_LOGO_SOURCE.exists():
+        result = Image.open(LOGIN_LOGO_SOURCE).convert("RGBA")
+        if result.size != (400, 400):
+            result = ImageOps.contain(result, (400, 400), method=Image.Resampling.LANCZOS)
+            canvas = Image.new("RGBA", (400, 400), (0, 0, 0, 0))
+            canvas.alpha_composite(result, ((400 - result.width) // 2, (400 - result.height) // 2))
+            result = canvas
+
+        target = LOGIN_DIR / "秦_登录LOGO.png"
+        result.save(target, optimize=True)
+        return target
+
     work = prepare_background(source_path)
 
     # Accurate, controllable game mark.  The circle comes from the approved
