@@ -74,6 +74,15 @@ def write_meta(path: Path) -> None:
 def build() -> list[Path]:
     sheet = Image.open(SOURCE).convert("RGB")
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    folder_meta = {
+        "ver": "1.1.3", "uuid": deterministic_uuid("avatars", "folder"),
+        "importer": "folder", "isBundle": False, "bundleName": "", "priority": 1,
+        "compressionType": {}, "optimizeHotUpdate": {}, "inlineSpriteFrames": {},
+        "isRemoteBundle": {}, "subMetas": {},
+    }
+    OUTPUT.with_suffix(".meta").write_text(
+        json.dumps(folder_meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     paths: list[Path] = []
 
     for row in range(ROWS):
