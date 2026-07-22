@@ -122,6 +122,7 @@ login.fire
 - 当前 `/Volumes/CB/qing` 已初始化为 Git 仓库，默认分支为 `main`，远程 `origin` 为 `git@github.com:teihin/qing.git`。
 - 公开仓库提交前已将 `Tool.ts` 的短信平台账号字段和 `MobileManager.ts` 的微信、语音及统计平台配置字段置空；恢复这些功能时必须改用服务端或不入库的安全配置，不得再次硬编码真实凭据。
 - `.gitignore` 已排除根目录签名文件、`runtime-src.zip`、macOS 元数据以及既有 Creator 缓存目录，避免敏感文件和生成内容进入仓库。
+- 2026-07-22 已完成首次提交并成功推送到 `origin/main`；后续改动应继续先检查敏感信息和大文件，再提交并推送该分支。
 
 ## 审查范围说明
 
