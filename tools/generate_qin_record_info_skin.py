@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
+import random
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,6 +20,7 @@ GOLD_HI = (255, 239, 183, 255)
 GOLD = (219, 164, 72, 255)
 GOLD_DARK = (82, 47, 15, 255)
 IVORY = (242, 226, 188, 255)
+RED = (137, 38, 20, 255)
 
 
 def ft(size: int) -> ImageFont.FreeTypeFont:
@@ -61,14 +63,45 @@ def canvas(size: tuple[int, int]) -> Image.Image:
     return Image.new("RGBA", (size[0] * S, size[1] * S), (0, 0, 0, 0))
 
 
+def obsidian_texture(size: tuple[int, int], alpha=255) -> Image.Image:
+    random.seed(size[0] * 1009 + size[1])
+    im = Image.new("RGBA", (size[0] * S, size[1] * S), (9, 9, 8, alpha))
+    p = im.load()
+    for y in range(im.height):
+        for x in range(im.width):
+            n = random.randrange(-5, 6)
+            v = max(3, min(20, 10 + n + int(4 * y / max(1, im.height))))
+            p[x, y] = (v + 2, v + 1, v, alpha)
+    return im.filter(ImageFilter.GaussianBlur(0.35 * S))
+
+
+def corner_key(d: ImageDraw.ImageDraw, x: int, y: int, sx: int, sy: int, span=22) -> None:
+    x *= S; y *= S; span *= S
+    pts = [(x, y + sy*span), (x, y), (x + sx*span, y),
+           (x + sx*span, y + sy*5*S), (x + sx*7*S, y + sy*5*S),
+           (x + sx*7*S, y + sy*14*S), (x + sx*13*S, y + sy*14*S)]
+    d.line(pts, fill=(202, 146, 61, 230), width=2*S, joint="curve")
+
+
 def lacquer_panel(size: tuple[int, int], radius=10, inset=2) -> Image.Image:
     im = canvas(size)
     d = ImageDraw.Draw(im)
     b = (inset*S, inset*S, (size[0]-inset)*S-1, (size[1]-inset)*S-1)
-    d.rounded_rectangle(b, radius=radius*S, fill=(7, 7, 6, 244), outline=GOLD_DARK, width=3*S)
+    panel = obsidian_texture(size, 248)
+    mask = Image.new("L", im.size, 0)
+    ImageDraw.Draw(mask).rounded_rectangle(b, radius=radius*S, fill=255)
+    panel.putalpha(mask)
+    im.alpha_composite(panel)
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle(b, radius=radius*S, outline=(55, 31, 10, 255), width=5*S)
+    d.rounded_rectangle((b[0]+2*S, b[1]+2*S, b[2]-2*S, b[3]-2*S), radius=max(1,radius-2)*S, outline=GOLD, width=2*S)
     d.rounded_rectangle((b[0]+3*S, b[1]+3*S, b[2]-3*S, b[3]-3*S),
                         radius=max(1, radius-3)*S, outline=(236, 188, 102, 210), width=S)
     d.line((b[0]+12*S, b[1]+5*S, b[2]-12*S, b[1]+5*S), fill=(255, 235, 176, 80), width=S)
+    corner_key(d, inset+7, inset+7, 1, 1, min(22, size[0]//5))
+    corner_key(d, size[0]-inset-7, inset+7, -1, 1, min(22, size[0]//5))
+    corner_key(d, inset+7, size[1]-inset-7, 1, -1, min(22, size[0]//5))
+    corner_key(d, size[0]-inset-7, size[1]-inset-7, -1, -1, min(22, size[0]//5))
     return im
 
 
@@ -86,11 +119,21 @@ def label(path: Path, text: str, size: tuple[int, int], font_size: int) -> Path:
 
 def badge(path: Path, text: str) -> Path:
     size = Image.open(path).size
-    im = lacquer_panel(size, radius=15, inset=2)
+    im = canvas(size)
     d = ImageDraw.Draw(im)
-    d.polygon(((8*S, size[1]*S//2), (15*S, (size[1]//2-5)*S), (15*S, (size[1]//2+5)*S)), fill=GOLD)
-    d.polygon((((size[0]-8)*S, size[1]*S//2), ((size[0]-15)*S, (size[1]//2-5)*S), ((size[0]-15)*S, (size[1]//2+5)*S)), fill=GOLD)
-    center(d, (0, 0, size[0]*S, size[1]*S), text, ft(21), GOLD_HI, 1)
+    cx, cy = size[0]*S//2, size[1]*S//2
+    if text == "土豪":
+        d.ellipse((cx-28*S,cy-28*S,cx+28*S,cy+28*S),fill=(11,10,8,255),outline=GOLD,width=3*S)
+        d.ellipse((cx-23*S,cy-23*S,cx+23*S,cy+23*S),outline=(239,202,123,220),width=S)
+    elif text == "MVP":
+        d.polygon([(cx,3*S),(cx+13*S,13*S),(cx+29*S,17*S),(cx+21*S,31*S),(cx+23*S,52*S),(cx,45*S),(cx-23*S,52*S),(cx-21*S,31*S),(cx-29*S,17*S),(cx-13*S,13*S)],fill=(31,20,10,255),outline=GOLD)
+    elif text == "大鱼":
+        d.ellipse((cx-29*S,cy-25*S,cx+29*S,cy+25*S),fill=(9,15,14,255),outline=GOLD,width=3*S)
+        d.arc((cx-17*S,cy-11*S,cx+15*S,cy+13*S),195,520,fill=(220,171,78,255),width=2*S)
+    else:
+        d.rounded_rectangle((cx-30*S,4*S,cx+30*S,(size[1]-4)*S),radius=5*S,fill=(18,13,8,255),outline=GOLD,width=2*S)
+        for yy in (9, size[1]-9): d.line((cx-25*S,yy*S,cx+25*S,yy*S),fill=(239,202,123,170),width=S)
+    center(d, (0, 0, size[0]*S, size[1]*S), text, ft(20), GOLD_HI, 1)
     return save(path, im.resize(size, Image.Resampling.LANCZOS))
 
 
@@ -110,11 +153,12 @@ def medal(path: Path, number: str, tone: tuple[int, int, int, int]) -> Path:
 
 def tab(path: Path, text: str, selected: bool) -> Path:
     size = Image.open(path).size
-    im = lacquer_panel(size, radius=22, inset=2)
+    im = lacquer_panel(size, radius=5, inset=2)
     d = ImageDraw.Draw(im)
     if selected:
-        d.rounded_rectangle((8*S, 8*S, (size[0]-8)*S, (size[1]-8)*S), radius=17*S,
-                            fill=(92, 53, 16, 150), outline=GOLD, width=2*S)
+        d.polygon(((8*S,8*S),((size[0]-8)*S,8*S),((size[0]-16)*S,(size[1]-8)*S),(16*S,(size[1]-8)*S)),
+                  fill=(78,45,15,210), outline=GOLD)
+        d.line((35*S,(size[1]-7)*S,(size[0]-35)*S,(size[1]-7)*S),fill=GOLD_HI,width=2*S)
     center(d, (0, 0, size[0]*S, size[1]*S), text, ft(24), GOLD_HI if selected else IVORY, 1)
     return save(path, im.resize(size, Image.Resampling.LANCZOS))
 
@@ -139,12 +183,30 @@ def build() -> list[Path]:
 
     for name, text in (("MVP.png","MVP"),("劳模.png","劳模"),("土豪.png","土豪"),("大鱼.png","大鱼")):
         out.append(badge(DETAIL/name, text))
-    for name, text, fs in (("回放.png","牌局回顾",21),("奖池.png","奖池",18),("战局详情.png","战局详情",24),
+    for name, text, fs in (("回放.png","牌局回顾",21),("奖池.png","奖池",18),
                            ("本局总带入.png","本局总带入",20),("本局总手数.png","本局总手数",20)):
         out.append(label(DETAIL/name, text, Image.open(DETAIL/name).size, fs))
 
+    # The title is a miniature bronze plaque rather than floating text.
+    title_path = DETAIL/"战局详情.png"; title_size = Image.open(title_path).size
+    title = lacquer_panel(title_size, radius=4, inset=1); td = ImageDraw.Draw(title)
+    td.rectangle((5*S,6*S,(title_size[0]-5)*S,(title_size[1]-6)*S), outline=(164,105,33,180), width=S)
+    td.rectangle((title_size[0]*S//2-4*S,(title_size[1]-8)*S,title_size[0]*S//2+4*S,title_size[1]*S),fill=RED)
+    center(td,(0,0,title_size[0]*S,title_size[1]*S),"战局详情",ft(24),GOLD_HI,1)
+    out.append(save(title_path,title.resize(title_size,Image.Resampling.LANCZOS)))
+
     for name in ("战绩数据底框.png", "房间信息底板.png", "数据底框.png", "时间框.png"):
-        p=DETAIL/name; out.append(save(p, lacquer_panel(Image.open(p).size, radius=10).resize(Image.open(p).size, Image.Resampling.LANCZOS)))
+        p=DETAIL/name; sz=Image.open(p).size; panel=lacquer_panel(sz, radius=10)
+        d=ImageDraw.Draw(panel)
+        if name == "房间信息底板.png":
+            for x in (sz[0]//4,sz[0]//2,sz[0]*3//4):
+                d.line((x*S,22*S,x*S,(sz[1]-22)*S),fill=(128,80,28,180),width=S)
+                d.ellipse((x*S-2*S,sz[1]*S//2-2*S,x*S+2*S,sz[1]*S//2+2*S),fill=GOLD)
+            d.rectangle((sz[0]*S//2-8*S,(sz[1]-13)*S,sz[0]*S//2+8*S,(sz[1]-3)*S),fill=RED,outline=GOLD)
+        elif name in ("战绩数据底框.png","数据底框.png"):
+            d.line((18*S,12*S,(sz[0]-18)*S,12*S),fill=(232,190,102,80),width=S)
+            for x in range(35,sz[0]-30,90): d.polygon(((x*S,(sz[1]-6)*S),((x+4)*S,(sz[1]-10)*S),((x+8)*S,(sz[1]-6)*S),((x+4)*S,(sz[1]-2)*S)),outline=(122,76,25,140))
+        out.append(save(p, panel.resize(sz, Image.Resampling.LANCZOS)))
 
     # Atlas/helper art still belongs to this panel's package even when not directly serialized.
     out.append(label(DETAIL/"数字.png", "0 1 2 3 4 5 6 7 8 9", (195,56), 16))
@@ -155,7 +217,13 @@ def build() -> list[Path]:
                                  ("文字牌谱未选中.png","文字牌谱",False),("文字牌谱选中.png","文字牌谱",True)):
         out.append(tab(PAIPU/name, text, selected))
 
-    # Runtime-style sheet for quick visual QA.
+    # Runtime-style sheet for quick visual QA. Prefer the approved art-direction
+    # concept when present so future rebuilds retain the intended visual target.
+    concept = ART/"qin_record_info_main_source.png"
+    if concept.exists():
+        preview = Image.open(concept).convert("RGB").resize((750,1334),Image.Resampling.LANCZOS)
+        preview.save(ART/"qin_record_info_runtime_preview.png", optimize=True)
+        return out
     preview = Image.new("RGB", (750, 1334), (8, 7, 5)); pd=ImageDraw.Draw(preview)
     pd.rectangle((0,0,749,91), fill=(16,13,9)); pd.text((315,30), "战局详情", font=ImageFont.truetype(str(FONT),26), fill=(235,190,105))
     pd.rounded_rectangle((18,112,732,245), 12, fill=(12,10,7), outline=(145,92,31), width=2)
