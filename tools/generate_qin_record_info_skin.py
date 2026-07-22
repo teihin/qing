@@ -163,6 +163,92 @@ def tab(path: Path, text: str, selected: bool) -> Path:
     return save(path, im.resize(size, Image.Resampling.LANCZOS))
 
 
+def compact_state(path: Path, text: str, size: tuple[int, int]) -> Path:
+    """Small semantic state badge: clean lacquer, thin gold edge, unchanged text."""
+    im = canvas(size)
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((S, S, size[0] * S - S - 1, size[1] * S - S - 1),
+                        radius=5 * S, fill=(11, 10, 8, 250),
+                        outline=(92, 55, 18, 255), width=2 * S)
+    d.rounded_rectangle((3 * S, 3 * S, (size[0] - 3) * S - 1, (size[1] - 3) * S - 1),
+                        radius=3 * S, outline=(221, 170, 77, 230), width=S)
+    center(d, (0, 0, size[0] * S, size[1] * S), text,
+           ft(15 if size[1] < 30 else 18), GOLD_HI, 1)
+    return save(path, im.resize(size, Image.Resampling.LANCZOS))
+
+
+def clean_checkerboard(path: Path, size: tuple[int, int]) -> Image.Image:
+    """Remove the preview checkerboard around an otherwise finished UI frame."""
+    im = Image.open(path).convert("RGB").resize(size, Image.Resampling.LANCZOS)
+    out = im.convert("RGBA")
+    pix = out.load()
+    for yy in range(out.height):
+        for xx in range(out.width):
+            r, g, b, _ = pix[xx, yy]
+            neutral = max(r, g, b) - min(r, g, b) < 12
+            alpha = 0 if neutral and min(r, g, b) > 185 else 255
+            pix[xx, yy] = (r, g, b, alpha)
+    return out
+
+
+def paste_center(base: Image.Image, item: Image.Image, center_xy: tuple[float, float], size: tuple[int, int]) -> None:
+    item = item.convert("RGBA").resize(size, Image.Resampling.LANCZOS)
+    x = round(center_xy[0] - size[0] / 2)
+    y = round(center_xy[1] - size[1] / 2)
+    base.alpha_composite(item, (x, y))
+
+
+def build_runtime_preview(out_path: Path) -> None:
+    """Compose the unchanged Prefab layout from the actual runtime PNG files."""
+    preview = Image.open(ROOT / "assets" / "ImagesLuck" / "公用" / "背景.png").convert("RGBA")
+    d = ImageDraw.Draw(preview)
+    warm = (232, 188, 103, 255)
+    ivory = (239, 222, 181, 255)
+    font20 = ImageFont.truetype(str(FONT), 20)
+    font18 = ImageFont.truetype(str(FONT), 18)
+    font16 = ImageFont.truetype(str(FONT), 16)
+
+    paste_center(preview, Image.open(ROOT / "assets" / "ImagesLuck" / "公用1" / "顶部.png"), (375, 50), (750, 100))
+    paste_center(preview, Image.open(DETAIL / "战局详情.png"), (375, 48), (129, 40))
+    paste_center(preview, Image.open(ROOT / "assets" / "ImagesLuck" / "公用" / "皇冠框.png"), (375, 282), (664, 367))
+
+    avatar_frame = Image.open(ROOT / "assets" / "ImagesLuck" / "公用" / "头像2.png")
+    avatar = Image.open(ROOT / "assets" / "resources" / "other" / "默认头像.png")
+    honor_data = (
+        (155, 274, "土豪.png", "秦风玩家"),
+        (292, 331, "MVP.png", "玄甲将军"),
+        (458, 331, "大鱼.png", "关中客"),
+        (593, 274, "劳模.png", "咸阳士"),
+    )
+    for x, y, badge_name, player in honor_data:
+        paste_center(preview, avatar_frame, (x, y), (126, 115))
+        paste_center(preview, avatar, (x, y + 4), (96, 96))
+        paste_center(preview, Image.open(DETAIL / badge_name), (x, y + 43), (120, 59))
+        bb = d.textbbox((0, 0), player, font=font18)
+        d.text((x - (bb[2] - bb[0]) / 2, y + 66), player, font=font18, fill=warm)
+
+    paste_center(preview, Image.open(DETAIL / "时间框.png"), (375, 464), (561, 78))
+    d.text((318, 446), "秦·103685", font=font20, fill=warm)
+    d.text((305, 474), "07-22 18:46  至  19:11", font=font16, fill=ivory)
+    paste_center(preview, Image.open(ROOT / "assets" / "ImagesLuck" / "公用" / "表格标题头.png"), (375, 556), (750, 96))
+    d.text((130, 548), "奖池 8888", font=font18, fill=warm)
+    d.text((323, 548), "总手数 25", font=font18, fill=warm)
+    d.text((525, 548), "总带入 12000", font=font18, fill=warm)
+
+    row = Image.open(DETAIL / "战绩数据底框.png")
+    for i in range(6):
+        y = 650 + i * 119
+        preview.alpha_composite(row.resize((749, 119), Image.Resampling.LANCZOS), (0, y))
+        paste_center(preview, avatar_frame, (160, y + 55), (92, 84))
+        paste_center(preview, avatar, (160, y + 57), (70, 70))
+        d.text((201, y + 22), f"玩家{i + 1}", font=font18, fill=warm)
+        d.text((201, y + 49), f"ID:10368{i}", font=font16, fill=(167, 145, 101, 255))
+        d.text((201, y + 76), "带入:1200", font=font16, fill=ivory)
+        d.text((390, y + 44), "手数:25", font=font18, fill=ivory)
+        d.text((555, y + 44), "+320", font=font18, fill=(202, 88, 59, 255))
+    preview.convert("RGB").save(out_path, optimize=True)
+
+
 def build() -> list[Path]:
     ART.mkdir(parents=True, exist_ok=True)
     out: list[Path] = []
@@ -213,26 +299,47 @@ def build() -> list[Path]:
     chip=canvas((50,44)); cd=ImageDraw.Draw(chip); cd.ellipse((5*S,2*S,45*S,42*S), fill=(8,8,7,255), outline=GOLD, width=3*S); cd.ellipse((13*S,10*S,37*S,34*S), outline=GOLD_HI, width=S); center(cd,(13*S,10*S,37*S,34*S),"秦",ft(14),GOLD_HI,1)
     out.append(save(DETAIL/"筹码.png", chip.resize((50,44), Image.Resampling.LANCZOS)))
 
-    for name, text, selected in (("牌局回顾未选中.png","牌局回顾",False),("牌局回顾选中.png","牌局回顾",True),
-                                 ("文字牌谱未选中.png","文字牌谱",False),("文字牌谱选中.png","文字牌谱",True)):
-        out.append(tab(PAIPU/name, text, selected))
+    for name, text, selected in (("牌局回顾未选中.png", "牌局回顾", False),
+                                 ("牌局回顾选中.png", "牌局回顾", True),
+                                 ("文字牌谱未选中.png", "文字牌谱", False),
+                                 ("文字牌谱选中.png", "文字牌谱", True)):
+        out.append(tab(PAIPU / name, text, selected))
 
-    # Runtime-style sheet for quick visual QA. Prefer the approved art-direction
-    # concept when present so future rebuilds retain the intended visual target.
-    concept = ART/"qin_record_info_main_source.png"
-    if concept.exists():
-        preview = Image.open(concept).convert("RGB").resize((750,1334),Image.Resampling.LANCZOS)
-        preview.save(ART/"qin_record_info_runtime_preview.png", optimize=True)
-        return out
-    preview = Image.new("RGB", (750, 1334), (8, 7, 5)); pd=ImageDraw.Draw(preview)
-    pd.rectangle((0,0,749,91), fill=(16,13,9)); pd.text((315,30), "战局详情", font=ImageFont.truetype(str(FONT),26), fill=(235,190,105))
-    pd.rounded_rectangle((18,112,732,245), 12, fill=(12,10,7), outline=(145,92,31), width=2)
-    pd.text((42,135), "房间信息  ·  时长  ·  底皮  ·  奖池", font=ImageFont.truetype(str(FONT),20), fill=(242,226,188))
-    for i,(name,text) in enumerate((("土豪.png","土豪"),("MVP.png","MVP"),("大鱼.png","大鱼"),("劳模.png","劳模"))):
-        x=28+i*180; preview.paste(Image.open(DETAIL/name),(x,275),Image.open(DETAIL/name)); pd.text((x+8,343),"玩家昵称",font=ImageFont.truetype(str(FONT),17),fill=(242,226,188))
-    pd.rounded_rectangle((18,390,732,1140),12,fill=(10,9,7),outline=(145,92,31),width=2)
-    for y in range(460,1090,82): pd.line((34,y,716,y),fill=(91,57,23),width=1)
-    preview.save(ART/"qin_record_info_runtime_preview.png", optimize=True)
+    honor_source = ART / "qin_record_info_honor_frame_clean_source.png"
+    out.append(save(ROOT / "assets" / "ImagesLuck" / "公用" / "皇冠框.png",
+                    clean_checkerboard(honor_source, (612, 367))))
+
+    for name in ("开牌", "弃牌", "休牌"):
+        out.append(compact_state(ROOT / "assets" / "resources" / "other" / f"{name}.png", name, (67, 27)))
+    for name in ("丢", "休", "大", "挨-", "挨", "敲", "跟"):
+        out.append(compact_state(ROOT / "assets" / "resources" / "other" / "牌谱" / f"{name}.png", name, (49, 36)))
+    divider = Image.new("RGBA", (727, 4), (0, 0, 0, 0))
+    dd = ImageDraw.Draw(divider)
+    dd.line((0, 1, 726, 1), fill=(95, 59, 20, 150), width=1)
+    dd.line((52, 2, 674, 2), fill=(214, 158, 65, 190), width=1)
+    out.append(save(ROOT / "assets" / "ImagesLuck" / "公用" / "分隔线.png", divider))
+
+    build_runtime_preview(ART / "qin_record_info_runtime_preview.png")
+
+    # Rebuild the runtime card back from the approved Qin source while preserving
+    # the existing 348x480 canvas and its historical 317x479 trim rectangle.
+    card_source = Image.open(ART / "qin_card_back_source.png").convert("RGB")
+    non_black = Image.new("L", card_source.size, 0)
+    src_px = card_source.load()
+    mask_px = non_black.load()
+    for yy in range(card_source.height):
+        for xx in range(card_source.width):
+            mask_px[xx, yy] = 255 if max(src_px[xx, yy]) > 18 else 0
+    bounds = non_black.getbbox()
+    if bounds is None:
+        raise ValueError("Qin card-back source has no visible card")
+    card = card_source.crop(bounds).resize((317, 479), Image.Resampling.LANCZOS).convert("RGBA")
+    rounded = Image.new("L", card.size, 0)
+    ImageDraw.Draw(rounded).rounded_rectangle((0, 0, 316, 478), radius=19, fill=255)
+    card.putalpha(rounded)
+    card_runtime = Image.new("RGBA", (348, 480), (0, 0, 0, 0))
+    card_runtime.alpha_composite(card, (16, 1))
+    out.append(save(ROOT / "assets" / "resources" / "pk2" / "bigbig.png", card_runtime))
     return out
 
 
