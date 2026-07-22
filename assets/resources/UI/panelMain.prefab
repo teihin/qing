@@ -2830,7 +2830,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        365.995,
+        400.27,
         0,
         0,
         0,
@@ -2867,7 +2867,7 @@
     "_alignFlags": 1,
     "_left": 0,
     "_right": 0,
-    "_top": 126.49999999999994,
+    "_top": 92.22500000000002,
     "_bottom": 0,
     "_verticalCenter": 0,
     "_horizontalCenter": 0,
@@ -2882,7 +2882,7 @@
     "_id": ""
   },
   {
-    "__type__": "dragonBones.ArmatureDisplay",
+    "__type__": "cc.Sprite",
     "_name": "",
     "_objFlags": 0,
     "node": {
@@ -2894,31 +2894,23 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_armatureName": "Armature",
-    "_animationName": "newAnimation",
-    "_preCacheMode": 0,
-    "_cacheMode": 0,
-    "playTimes": -1,
-    "premultipliedAlpha": false,
-    "_armatureKey": "9dbaa11f-522f-480a-9217-c3260f8b8742#21ba0405-03f9-4a92-88bd-dabd69fe566b",
-    "_accTime": 0,
-    "_playCount": 0,
-    "_frameCache": null,
-    "_curFrame": null,
-    "_playing": false,
-    "_armatureCache": null,
-    "_N$dragonAsset": {
-      "__uuid__": "9dbaa11f-522f-480a-9217-c3260f8b8742"
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_spriteFrame": {
+      "__uuid__": "b6c3ca3e-c543-5402-938f-c7e725c10355"
     },
-    "_N$dragonAtlasAsset": {
-      "__uuid__": "21ba0405-03f9-4a92-88bd-dabd69fe566b"
+    "_type": 0,
+    "_sizeMode": 0,
+    "_fillType": 0,
+    "_fillCenter": {
+      "__type__": "cc.Vec2",
+      "x": 0,
+      "y": 0
     },
-    "_N$_defaultArmatureIndex": 0,
-    "_N$_animationIndex": 1,
-    "_N$_defaultCacheMode": 0,
-    "_N$timeScale": 1,
-    "_N$debugBones": false,
-    "_N$enableBatch": false,
+    "_fillStart": 0,
+    "_fillRange": 0,
+    "_isTrimmedMode": false,
+    "_atlas": null,
     "_id": ""
   },
   {
@@ -3369,7 +3361,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -3866,9 +3858,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 140,
-      "g": 221,
-      "b": 255,
+      "r": 255,
+      "g": 222,
+      "b": 201,
       "a": 255
     },
     "_contentSize": {
@@ -5167,7 +5159,7 @@
       "ctor": "Float64Array",
       "array": [
         -257,
-        5.873,
+        2.104,
         0,
         0,
         0,
@@ -20116,7 +20108,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -77.97,
+        -4.295,
         0,
         0,
         0,
@@ -20141,7 +20133,7 @@
     "_id": ""
   },
   {
-    "__type__": "dragonBones.ArmatureDisplay",
+    "__type__": "cc.Sprite",
     "_name": "",
     "_objFlags": 0,
     "node": {
@@ -20153,31 +20145,23 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_armatureName": "Armature",
-    "_animationName": "MainInterfaceButtonAnimation",
-    "_preCacheMode": 0,
-    "_cacheMode": 0,
-    "playTimes": -1,
-    "premultipliedAlpha": false,
-    "_armatureKey": "ed404482-945f-4bd1-b025-001e655f93e1#4015478f-c91f-4431-9d0e-c574ca3ec165",
-    "_accTime": 0,
-    "_playCount": 0,
-    "_frameCache": null,
-    "_curFrame": null,
-    "_playing": false,
-    "_armatureCache": null,
-    "_N$dragonAsset": {
-      "__uuid__": "ed404482-945f-4bd1-b025-001e655f93e1"
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_spriteFrame": {
+      "__uuid__": "90c2ae60-7b47-55ce-8491-c301323e96c7"
     },
-    "_N$dragonAtlasAsset": {
-      "__uuid__": "4015478f-c91f-4431-9d0e-c574ca3ec165"
+    "_type": 0,
+    "_sizeMode": 0,
+    "_fillType": 0,
+    "_fillCenter": {
+      "__type__": "cc.Vec2",
+      "x": 0,
+      "y": 0
     },
-    "_N$_defaultArmatureIndex": 0,
-    "_N$_animationIndex": 1,
-    "_N$_defaultCacheMode": 0,
-    "_N$timeScale": 1,
-    "_N$debugBones": false,
-    "_N$enableBatch": false,
+    "_fillStart": 0,
+    "_fillRange": 0,
+    "_isTrimmedMode": false,
+    "_atlas": null,
     "_id": ""
   },
   {

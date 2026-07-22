@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "4daa0397-0c31-55d0-809c-bd04bc20c461",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 672,
+  "height": 349,
+  "platformSettings": {},
+  "subMetas": {
+    "秦_大厅主视觉": {
+      "ver": "1.0.6",
+      "uuid": "b6c3ca3e-c543-5402-938f-c7e725c10355",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "4daa0397-0c31-55d0-809c-bd04bc20c461",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 672,
+      "height": 349,
+      "rawWidth": 672,
+      "rawHeight": 349,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

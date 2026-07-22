@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "087e8cec-394e-5530-a782-aa760948f519",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 209,
+  "height": 146,
+  "platformSettings": {},
+  "subMetas": {
+    "秦_发现按钮": {
+      "ver": "1.0.6",
+      "uuid": "90c2ae60-7b47-55ce-8491-c301323e96c7",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "087e8cec-394e-5530-a782-aa760948f519",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 209,
+      "height": 146,
+      "rawWidth": 209,
+      "rawHeight": 146,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}
