@@ -102,8 +102,20 @@ def draw_letterspaced(draw: ImageDraw.ImageDraw, text: str, text_font: ImageFont
         x += width + spacing
 
 
-def make_background(source_path: Path) -> Path:
+def prepare_background(source_path: Path, clean_source_path: Path | None = None) -> Image.Image:
     source = Image.open(source_path).convert("RGB")
+    if clean_source_path is not None:
+        clean = Image.open(clean_source_path).convert("RGB")
+        if clean.size != source.size:
+            clean = ImageOps.fit(clean, source.size, method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+
+        # Only inpaint the original medallion area.  Everything outside this
+        # feathered mask remains byte-for-byte sourced from the approved image.
+        patch_mask = Image.new("L", source.size, 0)
+        ImageDraw.Draw(patch_mask).ellipse((120, 20, 820, 760), fill=255)
+        patch_mask = patch_mask.filter(ImageFilter.GaussianBlur(42))
+        source = Image.composite(clean, source, patch_mask)
+
     background = ImageOps.fit(source, (750, 1334), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5)).convert("RGBA")
     work = background.resize((sc(750), sc(1334)), Image.Resampling.LANCZOS)
 
@@ -115,16 +127,43 @@ def make_background(source_path: Path) -> Path:
         alpha = max(0, round(76 - distance * 0.12))
         d.line((0, y, work.width, y), fill=(0, 0, 0, alpha))
     work.alpha_composite(dark)
+    return work
 
-    # Accurate, controllable game mark; the generated background contains no text.
+
+def make_background(source_path: Path, clean_source_path: Path) -> Path:
+    work = prepare_background(source_path, clean_source_path)
+
+    result = work.resize((750, 1334), Image.Resampling.LANCZOS).convert("RGB")
+    target = LOGIN_DIR / "秦_登录背景.png"
+    result.save(target, optimize=True, quality=95)
+    return target
+
+
+def make_logo(source_path: Path) -> Path:
+    work = prepare_background(source_path)
+
+    # Accurate, controllable game mark.  The circle comes from the approved
+    # source while the Qin glyph and QIN lettering remain deterministic.
     logo_center = (sc(375), sc(300))
     paste_metal_text(work, "秦", font(SONGTI_FONT, 232), logo_center, stroke=3)
     draw = ImageDraw.Draw(work)
     draw_letterspaced(draw, "QIN", font(LATIN_FONT, 25), sc(375), sc(425), sc(14), (225, 190, 116, 235))
 
-    result = work.resize((750, 1334), Image.Resampling.LANCZOS).convert("RGB")
-    target = LOGIN_DIR / "秦_登录背景.png"
-    result.save(target, optimize=True, quality=95)
+    logo = work.crop((sc(175), sc(118), sc(575), sc(518)))
+    mask = Image.new("L", logo.size, 0)
+    ImageDraw.Draw(mask).ellipse((sc(12), sc(16), sc(388), sc(392)), fill=255)
+    mask = mask.filter(ImageFilter.GaussianBlur(sc(6)))
+    logo.putalpha(mask)
+    result = logo.resize((400, 400), Image.Resampling.LANCZOS).convert("RGBA")
+
+    # Keep Creator's serialized 400x400 untrimmed frame stable while the four
+    # almost-transparent corner pixels remain visually invisible.
+    pixels = result.load()
+    for point in ((0, 0), (399, 0), (0, 399), (399, 399)):
+        pixels[point] = (32, 22, 10, 8)
+
+    target = LOGIN_DIR / "秦_登录LOGO.png"
+    result.save(target, optimize=True)
     return target
 
 
@@ -249,14 +288,16 @@ def make_login_button() -> Path:
     return target
 
 
-def make_preview(background: Path, input_frame: Path, account: Path, password: Path, clear: Path, button: Path) -> Path:
+def make_preview(background: Path, logo: Path, input_frame: Path, account: Path, password: Path, clear: Path, button: Path) -> Path:
     preview = Image.open(background).convert("RGBA")
+    logo_img = Image.open(logo).convert("RGBA")
     frame = Image.open(input_frame).convert("RGBA")
     account_img = Image.open(account).convert("RGBA")
     password_img = Image.open(password).convert("RGBA")
     clear_img = Image.open(clear).convert("RGBA").resize((37, 37), Image.Resampling.LANCZOS)
     button_img = Image.open(button).convert("RGBA")
 
+    preview.alpha_composite(logo_img, (175, 118))
     input_x = 75
     phone_y = 525
     password_y = 643
@@ -286,17 +327,23 @@ def main() -> None:
         type=Path,
         default=ART_DIR / "qin_login_background_source.png",
     )
+    parser.add_argument(
+        "--clean-background-source",
+        type=Path,
+        default=ART_DIR / "qin_login_background_clean_source.png",
+    )
     args = parser.parse_args()
 
     LOGIN_DIR.mkdir(parents=True, exist_ok=True)
-    background = make_background(args.background_source)
+    background = make_background(args.background_source, args.clean_background_source)
+    logo = make_logo(args.background_source)
     input_frame = make_input_frame()
     account = make_account_label()
     password = make_password_label()
     clear = make_clear_button()
     button = make_login_button()
-    preview = make_preview(background, input_frame, account, password, clear, button)
-    for path in (background, input_frame, account, password, clear, button, preview):
+    preview = make_preview(background, logo, input_frame, account, password, clear, button)
+    for path in (background, logo, input_frame, account, password, clear, button, preview):
         print(path.relative_to(ROOT))
 
 

@@ -132,6 +132,7 @@ login.fire
 - Creator 协作约束：如果项目已经在 Cocos Creator 中打开，不得再次启动新的 Creator 实例；后续换皮任务只修改美术文件及必要的序列化资源引用，Creator 的打开、预览、保存和运行操作全部交由用户完成。
 - 登录换皮已生成并接入：新增 `秦_登录背景.png`（750×1334）、`秦_输入框.png`（573×86）和 `秦_清除.png`（45×45），原位替换登录专用的 `账号.png`、`密码.png`、`手机登陆.png`；`panelLogin.prefab` 保持节点结构和节点名不变，只更新对应 SpriteFrame 引用及输入/占位文字颜色。
 - 登录背景、输入框和清除按钮原资源均被其他界面共用，因此本次采用新增登录专用资源并只重绑 `panelLogin`，没有覆盖 `背景.png`、`公用/输入框.png`、`CHACHA.png`。新 UUID 已被 Creator 资源库识别，静态尺寸和引用检查通过；实际运行显示与交互由用户在现有 Creator 实例中验证。
+- 登录页顶部LOGO已从会被四边Widget非等比拉伸的`秦_登录背景.png`中完整分离：圆环、“秦”和`QIN`现合并为新增的400×400 RGBA资源`秦_登录LOGO.png`，`panelLogin`新增同级节点`登录LOGO`，Sprite使用SIMPLE/CUSTOM且trimmed=false，Widget只启用TOP+HORIZONTAL_CENTER（alignFlags=17、top=118），固定宽高与1:1比例；背景仍保持750×1334 RGB及原UUID，只在原LOGO区域补回宫阙暗纹。生成脚本`tools/generate_qin_login_skin.py`使用原始带环源图生成独立LOGO，并用`art_sources/login/qin_login_background_clean_source.png`局部修复无LOGO背景；输入框、按钮、业务节点与逻辑均未改。实际多设备显示仍由用户在现有Creator实例中验证。
 - 当前 `assets/resources/project.manifest` 仍是旧热更新清单；换皮资源进入 Native 热更新或发布包前必须重新构建生成清单。
 - 登录换皮已以提交 `c0859bc` 推送到 `origin/main`；提交正文使用中文详细记录了资源、结构、验证结果和待验证风险。
 - 共享弹窗背景 `assets/imagesKK/公用/框.png` 已经用户确认并替换为黑曜石、暗金多层边框、秦纹标题栏和底部秦印收口风格。图片保持635×680 RGBA，`.meta`、纹理UUID、SpriteFrame UUID及九宫格边距左83/右81/上106/下42均未改变；12个场景或Prefab共34处原引用继续生效。PNG、尺寸、透明通道和引用数静态检查通过，Creator实际显示仍由用户验证。
@@ -143,6 +144,9 @@ login.fire
 - 大厅换皮可由`tools/generate_qin_hall_skin.py`从`art_sources/hall/`源图确定性重建，当前脚本输出31张基础图片和2张静态主视觉图片；静态合成预览为`art_sources/hall/qin_hall_runtime_preview.png`。两张静态图尺寸、RGBA、透明裁剪、UUID及Prefab引用检查通过，实际显示与点击仍由用户在现有Creator实例中验证。
 - `assets/resources/Prefabs/排行榜.prefab`已按同一黑金秦风完成美术原位替换：排行榜目录16张专用PNG全部覆盖，准确保留“排行榜”“开始时间/结束时间”“玩家手数排行榜”“名次/玩家信息/手数/奖励”及`1皮/2皮/5皮/10皮/20皮`规则文字；节点、Toggle、动态Label、服务端字段和两个排行榜条目模板均未改动。
 - 排行榜同时覆盖12张其引用的共用PNG，包括通用背景、垫底、表格标题头、金币、列表分割线、返回、四个分页箭头、栏目标题框和提示底框；这些图片会按用户确认的共用资源原则同步影响其他界面。`tools/generate_qin_ranking_skin.py`可从`art_sources/ranking/qin_ranking_trophy_source.png`确定性重建28张运行图片，静态合成预览为`art_sources/ranking/qin_ranking_runtime_preview.png`。28张图片的尺寸、RGBA/RGB模式和自动裁剪范围均与现有`.meta`一致，强蓝色像素检查为0，`.meta`/UUID未修改；Creator实际布局和交互仍由用户在现有实例中验证。
+- `panelMain/Main/我的`主页面已完成黑金秦风换皮：原位覆盖18张“我的”专用PNG及2张共享头像PNG，包含页面标题、头像框、默认头像、上传按钮、金币框、VIP垫/三种VIP卡、五个隐藏统计标题和六个功能选择条；六个入口继续准确保留“战绩、代理、交易明细、赠送/受赠、个人数据、设置”文字及原业务节点名、顺序、SpriteFrame UUID和点击逻辑。
+- 旧默认头像中的`BATTLE`品牌已移除，改为无文字的秦将头像。共享`resources/other/默认头像.png`会同步影响31处/10个文件，`ImagesLuck/公用/头像2.png`会同步影响26处/7个文件；这是按用户确认的共享图片直接覆盖原则处理。昵称、ID、金币、VIP到期时间及隐藏统计数据仍由原动态Label显示，只把相关文字颜色统一为暖金/象牙金，未修改数据字段、显隐逻辑或头像层级。
+- “我的”换皮可由`tools/generate_qin_mine_skin.py`从`art_sources/mine/qin_default_avatar_source.png`确定性重建，静态合成预览为`art_sources/mine/qin_mine_runtime_preview.png`。20张运行图片的尺寸、`.meta`宽高/裁剪范围和UUID均保持不变，强蓝/青像素检查为0；独立点击子面板`panelRecordList`、`panelHongli`、`panelVipInfo`及其专用图片未修改，后续需单独换皮。Creator实际布局、动态数据和点击交互仍由用户在现有实例中验证。
 
 ## 修改项目时的约束
 
