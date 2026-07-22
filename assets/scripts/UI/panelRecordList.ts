@@ -157,11 +157,11 @@ export default class panelRecordList extends UIPanelViewBase {
 
         if(Number(jItem["score"])>0)
         {
-            node.getChildByName("输赢").color = cc.Color.RED;
+            node.getChildByName("输赢").color = cc.color(196,86,66,255);
         }
         else if(Number(jItem["score"])<0)
         {
-            node.getChildByName("输赢").color = cc.Color.GREEN;
+            node.getChildByName("输赢").color = cc.color(92,156,111,255);
         }
 
         let btn = node.getComponent(cc.Button);

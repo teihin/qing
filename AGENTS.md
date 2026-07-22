@@ -130,6 +130,7 @@ login.fire
 - 已确认主风格为黑金、高档、克制的东方帝王风；曾尝试“未来东方奢华”科技版，但用户否定该方向并确定回到第一版风格。
 - 第一阶段从竖屏登录界面开始，采用秦代宫阙、黑曜石、暗金纹样与鎏金品牌字，保留账号、密码、登录按钮的原交互层级；品牌字已使用可控字体重绘为准确的“秦”。
 - Creator 协作约束：如果项目已经在 Cocos Creator 中打开，不得再次启动新的 Creator 实例；后续换皮任务只修改美术文件及必要的序列化资源引用，Creator 的打开、预览、保存和运行操作全部交由用户完成。
+- 效果图落地约束：用户确认后的效果图就是实际运行资源的视觉基准，后续切图和替换必须完整保留其构图、纹样、材质、层次与装饰细节，不得为了便于生成而自行简化；若现有节点尺寸或结构确实无法原样承载，必须先说明限制并确认处理方式，不能先做简化版。
 - 登录换皮已生成并接入：新增 `秦_登录背景.png`（750×1334）、`秦_输入框.png`（573×86）和 `秦_清除.png`（45×45），原位替换登录专用的 `账号.png`、`密码.png`、`手机登陆.png`；`panelLogin.prefab` 保持节点结构和节点名不变，只更新对应 SpriteFrame 引用及输入/占位文字颜色。
 - 登录背景、输入框和清除按钮原资源均被其他界面共用，因此本次采用新增登录专用资源并只重绑 `panelLogin`，没有覆盖 `背景.png`、`公用/输入框.png`、`CHACHA.png`。新 UUID 已被 Creator 资源库识别，静态尺寸和引用检查通过；实际运行显示与交互由用户在现有 Creator 实例中验证。
 - 登录页顶部LOGO已从会被四边Widget非等比拉伸的`秦_登录背景.png`中完整分离：圆环、“秦”和`QIN`现合并为新增的400×400 RGBA资源`秦_登录LOGO.png`，`panelLogin`新增同级节点`登录LOGO`，Sprite使用SIMPLE/CUSTOM且trimmed=false，Widget只启用TOP+HORIZONTAL_CENTER（alignFlags=17、top=118），固定宽高与1:1比例；背景仍保持750×1334 RGB及原UUID，只在原LOGO区域补回宫阙暗纹。生成脚本`tools/generate_qin_login_skin.py`使用原始带环源图生成独立LOGO，并用`art_sources/login/qin_login_background_clean_source.png`局部修复无LOGO背景；输入框、按钮、业务节点与逻辑均未改。实际多设备显示仍由用户在现有Creator实例中验证。
@@ -144,9 +145,18 @@ login.fire
 - 大厅换皮可由`tools/generate_qin_hall_skin.py`从`art_sources/hall/`源图确定性重建，当前脚本输出31张基础图片和2张静态主视觉图片；静态合成预览为`art_sources/hall/qin_hall_runtime_preview.png`。两张静态图尺寸、RGBA、透明裁剪、UUID及Prefab引用检查通过，实际显示与点击仍由用户在现有Creator实例中验证。
 - `assets/resources/Prefabs/排行榜.prefab`已按同一黑金秦风完成美术原位替换：排行榜目录16张专用PNG全部覆盖，准确保留“排行榜”“开始时间/结束时间”“玩家手数排行榜”“名次/玩家信息/手数/奖励”及`1皮/2皮/5皮/10皮/20皮`规则文字；节点、Toggle、动态Label、服务端字段和两个排行榜条目模板均未改动。
 - 排行榜同时覆盖12张其引用的共用PNG，包括通用背景、垫底、表格标题头、金币、列表分割线、返回、四个分页箭头、栏目标题框和提示底框；这些图片会按用户确认的共用资源原则同步影响其他界面。`tools/generate_qin_ranking_skin.py`可从`art_sources/ranking/qin_ranking_trophy_source.png`确定性重建28张运行图片，静态合成预览为`art_sources/ranking/qin_ranking_runtime_preview.png`。28张图片的尺寸、RGBA/RGB模式和自动裁剪范围均与现有`.meta`一致，强蓝色像素检查为0，`.meta`/UUID未修改；Creator实际布局和交互仍由用户在现有实例中验证。
+- `assets/resources/zuotype/1.jpg`至`5.jpg`五张竖屏牌桌背景已按用户确认的候选图原位替换，依次为克制黑金、皇家深蓝、经典翡翠绿、低饱和酒红和暖灰胡桃木风格。五图均保持原文件名、750×1334 JPEG规格及原`.meta`/UUID，中央牌面操作区无文字和品牌标记；静态格式和画面检查通过，Creator中的实际遮挡、缩放与牌局UI叠加效果仍待用户在现有实例中验证。
 - `panelMain/Main/我的`主页面已完成黑金秦风换皮：原位覆盖18张“我的”专用PNG及2张共享头像PNG，包含页面标题、头像框、默认头像、上传按钮、金币框、VIP垫/三种VIP卡、五个隐藏统计标题和六个功能选择条；六个入口继续准确保留“战绩、代理、交易明细、赠送/受赠、个人数据、设置”文字及原业务节点名、顺序、SpriteFrame UUID和点击逻辑。
 - 旧默认头像中的`BATTLE`品牌已移除，改为无文字的秦将头像。共享`resources/other/默认头像.png`会同步影响31处/10个文件，`ImagesLuck/公用/头像2.png`会同步影响26处/7个文件；这是按用户确认的共享图片直接覆盖原则处理。昵称、ID、金币、VIP到期时间及隐藏统计数据仍由原动态Label显示，只把相关文字颜色统一为暖金/象牙金，未修改数据字段、显隐逻辑或头像层级。
-- “我的”换皮可由`tools/generate_qin_mine_skin.py`从`art_sources/mine/qin_default_avatar_source.png`确定性重建，静态合成预览为`art_sources/mine/qin_mine_runtime_preview.png`。20张运行图片的尺寸、`.meta`宽高/裁剪范围和UUID均保持不变，强蓝/青像素检查为0；独立点击子面板`panelRecordList`、`panelHongli`、`panelVipInfo`及其专用图片未修改，后续需单独换皮。Creator实际布局、动态数据和点击交互仍由用户在现有实例中验证。
+- “我的”换皮可由`tools/generate_qin_mine_skin.py`从`art_sources/mine/qin_default_avatar_source.png`确定性重建，静态合成预览为`art_sources/mine/qin_mine_runtime_preview.png`。20张运行图片的尺寸、`.meta`宽高/裁剪范围和UUID均保持不变，强蓝/青像素检查为0；独立点击子面板`panelRecordList`现已单独完成换皮，`panelHongli`、`panelVipInfo`及其专用图片仍未修改。Creator实际布局、动态数据和点击交互仍由用户在现有实例中验证。
+- `panelRecordList`战绩界面已完成黑金秦风换皮：原位覆盖`assets/ImagesLuck/战绩`目录19张PNG及共享`assets/ImagesLuck/公用/我的战绩框.png`，包含标题、统计框、今天/昨天/前一天选中与未选中态、列表栏目文字及房间/底皮/时间/输赢条目图标；准确保留原业务文字、Toggle状态、分页按钮、节点名和查询逻辑。
+- 战绩动态文字已同步匹配黑金风：`panelRecordList.prefab`的总局数、总手数和页码改为暖金；`战绩对象.prefab`的房间号为暖金、底皮/时间为象牙金、默认输赢为铜红；`panelRecordList.ts`仍按正负分支动态着色，但纯红/纯绿分别收敛为铜红RGB(196,86,66)和沉稳绿RGB(92,156,111)，没有修改字段、分页、Toggle或点击逻辑。生成脚本`tools/generate_qin_record_list_skin.py`使用已确认的完整战绩框源图`art_sources/record_list/qin_record_header_final_source.png`确定性重建20张运行图片，静态预览为`art_sources/record_list/qin_record_list_runtime_preview.png`；全部图片保持原尺寸、模式、自动裁剪边界、`.meta`和UUID，3张索引色图片也已固定透明裁剪边界，强蓝/青像素检查为0，Prefab JSON校验通过。共享背景、顶部、表格标题头、分割线、返回及分页箭头继续复用此前完成的黑金资源；Creator实际布局、Toggle切换、动态列表和点击进入详情仍待用户在现有实例中验证。
+- 用户在Creator预览中反馈战绩统计框上半部留白过大、右上徽章过小且失衡，并明确要求实际资源不得简化效果图。`我的战绩框.png`现已直接按确认稿完整保留大型秦卷轴、圆形回纹、月桂、云纹、两侧精细装饰线、黑曜石纹理、分隔线和多层圆角金框，只去除预览棋盘格并适配为原612×279 RGBA；为避免独立统计条遮挡徽章底部，`局数手数`及两个动态数字节点整体下移20像素进入效果图预留的下方区域，节点名、引用和数据逻辑不变。
+- `panelRecordInfo`战局详情界面已完成黑金秦风换皮：原位覆盖`assets/ImagesLuck/战绩详情`目录20张PNG及其使用的4张“牌局回顾/文字牌谱”选中与未选中图，旧`POKER STAR`标识已替换为无外部品牌的“秦”印；土豪、MVP、大鱼、劳模、奖池、总带入、总手数、名次、列表底框、筹码和双状态页签均统一为黑曜石暗金风，准确保留原文字语义。
+- `panelRecordInfo.prefab`本身及运行时加载的`战绩玩家对象`、`回顾对象2`、`文字牌谱对象2`节点结构、业务脚本和SpriteFrame引用未改；主面板4处旧青色动态数据文字改为暖金RGB(232,193,111)。`tools/generate_qin_record_info_skin.py`可确定性重建24张运行图片，静态预览为`art_sources/record_info/qin_record_info_runtime_preview.png`。24张图片的像素尺寸、透明裁剪范围和`.meta`均检查一致，强蓝色像素为0，四份Prefab JSON解析通过；Creator中的实际动态数据、滚动列表、回顾切换和分页点击仍待用户在现有实例中验证。
+- `assets/resources/Prefabs/钱包.prefab`及钱包内部动态条目`交易查询对象.prefab`、`银行对象.prefab`已完成黑金秦风换皮，覆盖充值、提现、记录、充值信息、实名认证、订单详情和选择银行等全部内嵌状态；原位重绘51张现有运行图片，并新增214×58的`钱包/支付宝提现.png`，补齐原Prefab缺失的支付宝提现背景/选中态。充值渠道中的银联、支付宝、微信、VIP及通用选择Tab按用户要求保留原图，不参与本轮重绘。
+- 钱包新增支付宝提现SpriteFrame只绑定到原Toggle的Background和checkMark，节点名、Toggle target/checkMark引用、初始选中状态及脚本路径均保持不变；为使原零宽节点可显示和点击，仅把`支付宝提现`父节点宽度由0修正为201，并将其两层图片恢复为与银行卡/USDT相同的214×58布局。动态金额、输入值、提示、实名、订单和两个列表模板文字统一为暖金、象牙金、灰金与克制铜红，没有修改字符串、服务端字段或业务分支。
+- 钱包换皮可由`tools/generate_qin_wallet_skin.py`从`art_sources/wallet/qin_wallet_emblem_source.png`确定性重建，六状态静态预览为`art_sources/wallet/qin_wallet_runtime_preview.png`。52张输出图片的尺寸和透明裁剪范围均与`.meta`一致，既有`.meta`/UUID未改，新增资源使用独立UUID，强蓝/青像素检查为0；共用`公用/btn_4.png`会按共享覆盖原则同步影响8个文件中的18处关闭按钮。外部`panelKefu`、`panelMsgView`和`panelLoading`未纳入，Creator中的服务端动态渠道、三种提现方式、EditBox、列表和点击交互仍待用户在现有实例中验证。
 
 ## 修改项目时的约束
 
