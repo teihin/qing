@@ -1,6 +1,5 @@
 import UIManager from "../common/UIManager";
 import { ShowPanelMode, ClosePanelMode } from "../common/GameDef";
-import GameDataManager from "../GameDataManager";
 import Debug from "../common/Debug";
 
 var KBEngine = require("kbengine");
@@ -11,26 +10,6 @@ const {ccclass, property} = cc._decorator;
 
 @ccclass
 export default class MobileManager extends cc.Component {
-
-    //微信配置
-    private APP_ID:string = "";
-    private APP_SECRET:string = "";
-    //GCLOUD配置
-    private GCLOUD_ID:string = "";
-    private GCLOUD_KEY:string = "";
-    //TALKINGDATA配置
-    private TALKING_DATA_ID:string = "";
-
-    private code:string = "";
-    private access_token:string = "";
-    private refresh_token:string = "";
-    private openid:string = "";
-    private unionid:string = "";  //登陆ID
-    private username:string = "";
-    private sex:string = "";
-
-    private bInitGVoice:boolean = false; 
-
 
     private nodeCap:cc.Node = null;
     private camera:cc.Camera = null;
@@ -55,172 +34,23 @@ export default class MobileManager extends cc.Component {
     }
 
     update (dt) {
-        
-        if (cc.sys.isNative && this.bInitGVoice) {
-            if( cc.sys.os == cc.sys.OS_ANDROID)
-            {
-                // 处理语音回调
-                jsb.reflection.callStaticMethod('org/cocos2dx/javascript/AppActivity', 'GVoicePoll', '()V');  
-            }
-            else if(cc.sys.os == cc.sys.OS_IOS)
-            {
-                jsb.reflection.callStaticMethod("AppController","GVoicePoll");
-            }
-          
-        }
+        // 历史 GCloudVoice 插件已停用，不再轮询原生语音引擎。
     }
 
-    //微信登陆开始
+    // 历史微信登录已停用，保留方法以兼容旧按钮绑定。
     wxLogin()
     {
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {
-            console.log("开始准备android微信登陆");
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "WXLogin", "()V");
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {
-            console.log("开始准备ios微信登陆");
-            jsb.reflection.callStaticMethod("AppController","wxLogin");
-        
-        }
-        else
-        {
-            console.log("非手机平台不支持微信登陆");
-        }
+        console.log("微信登录已停用");
     }
 
     //底层返回消息
     public static onMsgReturn(type:string,msg:string)
     {
         //UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,type+msg);
-        if(type === "微信授权成功")
-        {
-            //启动获取微信登录用户信息流程；游戏头像不再使用微信头像地址。
-            MobileManager.getInstance().code = msg;
-            MobileManager.getInstance().getWXUserToken(msg);
-        }
-        else if(type === "语音上传成功")
-        {
-            //UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,msg);
-            //通知服务器语音上传成功
-            GameDataManager.getAccount().reqSay("@@语音@@" + msg, GameDataManager.getInstance().nSelfPlayerSit);
-        }
-        else if(type === "语音播放结束")
-        {
-            KBEngine.Event.fire("OnPlayNextAudio"); 
-        }
-        else if(type === "error")
-        {
-            //UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,msg);
-            KBEngine.Event.fire("OnPlayNextAudio"); 
-        }
-        else if(type === "粘贴")
+        if(type === "粘贴")
         {
             KBEngine.Event.fire("onPasteData",msg);
         }
-    }
-
-    
-
-    //获取用户token和ID
-    getWXUserToken(code:string)
-    {
-        let web = new XMLHttpRequest();
-        web.onreadystatechange = ()=>{
-            if (web.readyState == 4 && (web.status >= 200 && web.status < 400)) {
-                var response = web.responseText;               
-                let json = JSON.parse(web.responseText);
-                console.log("WEB返回:"+web.responseText);  
-
-                if(json.hasOwnProperty("errcode"))
-                {
-                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,json.errmsg);
-                    return;
-                }
-                
-                this.access_token = json.access_token;
-                this.refresh_token = json.refresh_token;
-                this.openid = json.openid;
-                this.unionid = json.unionid;
-
-                //获取用户微信个人信息
-                this.getWXUserInfo();                
-            }
-            else
-            {
-
-            }            
-            
-        };
-        web.onerror = ()=>{
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"web error");
-        };
-        web.ontimeout = ()=>{
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"web time out");
-        };
-
-        let random = new Date().getTime();
-        let strUrl = "https://api.weixin.qq.com/sns/oauth2/access_token?appid="+this.APP_ID+"&secret="+this.APP_SECRET+"&code="+this.code+"&grant_type=authorization_code";
-        console.log(strUrl);
-        web.open("GET",strUrl);
-        web.send();
-    }
-    
-    //获取微信用户个人信息
-    getWXUserInfo()
-    {
-        let web = new XMLHttpRequest();
-        web.onreadystatechange = ()=>{
-            if (web.readyState == 4 && (web.status >= 200 && web.status < 400)) {
-                var response = web.responseText;               
-                let json = JSON.parse(web.responseText);
-                console.log("WEB返回:"+web.responseText);  
-
-                if(json.hasOwnProperty("errcode"))
-                {
-                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,json.errmsg);
-                    return;
-                }
-                
-                this.username = json.nickname;
-                this.sex = json.sex;
-
-                
-                this.updateUserInfo();
-
-                //登陆服务器
-                //UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,json.nickname);
-                Debug.Log("登陆的用户名:"+this.unionid);
-                GameDataManager.getInstance().loginGame(this.unionid,"111","登陆");
-
-            }
-            else
-            {
-
-            }            
-            
-        };
-        web.onerror = ()=>{
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"web error");
-        };
-        web.ontimeout = ()=>{
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"web time out");
-        };
-
-        let random = new Date().getTime();
-        let strUrl = "https://api.weixin.qq.com/sns/userinfo?access_token="+this.access_token+"&openid="+this.openid+"";
-        console.log(strUrl);
-        web.open("GET",strUrl);
-        web.send();
-    }
-
-    //更新本地用户信息缓存
-    updateUserInfo()
-    {
-        cc.sys.localStorage.setItem("unionid",this.unionid);
-        cc.sys.localStorage.setItem("username",this.username);
-        cc.sys.localStorage.setItem("sex",this.sex);
     }
 
     public static test(msg:string)
@@ -237,139 +67,43 @@ export default class MobileManager extends cc.Component {
     //语音初始化
     public InitGvoice()
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "GVoiceInit", "(Ljava/lang/String;Ljava/lang/String;)V",this.GCLOUD_ID,this.GCLOUD_KEY);
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","GVoiceInit:andKey:",this.GCLOUD_ID,this.GCLOUD_KEY);         
-        }
-        else
-        {
-            console.log("非手机平台不支持语音");
-        }
-        this.bInitGVoice = true;
+        // 历史 GCloudVoice 插件已停用。
     }
     //开始录制
     public StartRecord()
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "StartRecord", "()V");
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","StartRecord");        
-        }
-        else
-        {
-            console.log("非手机平台不支持语音");
-        }
+        // 历史 GCloudVoice 插件已停用。
     }
     //结束录制
     public StopRecord()
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "StopRecord", "()V");
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","StopRecord");        
-        }
-        else
-        {
-            console.log("非手机平台不支持语音");
-        }
+        // 历史 GCloudVoice 插件已停用。
     }
     //下载录音
     public DownLoadRecord(strFile:string)
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "DownLoadFile", "(Ljava/lang/String;)V",strFile);
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","DownLoadFile:",strFile);        
-        }
-        else
-        {
-            console.log("非手机平台不支持语音");
-        }
+        // 历史 GCloudVoice 插件已停用。
     }
     //播放录音(不允许外面调用)
     private PlayRecord()
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "PlayRecord", "()V");
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","PlayRecord");        
-        }
-        else
-        {
-            console.log("非手机平台不支持语音");
-        }
+        // 历史 GCloudVoice 插件已停用。
     }
 
     //------------------------------talkingdata------------------------------------
     public InitTalkingData()
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            Debug.Log("初始化TALKINGDATA!!");
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "InitTalkingData", "(Ljava/lang/String;)V",this.TALKING_DATA_ID);
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","InitTalkingData:",this.TALKING_DATA_ID);        
-        }
+        // 历史 TalkingData SDK 已停用。
     }
     //设置账号信息
     public SetAccount()
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            Debug.Log("设置账号信息！！！！！！！！！！！");
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "SetAccount", "(Ljava/lang/String;Ljava/lang/String;)V",GameDataManager.getAccount().guuid,GameDataManager.getAccount().name);
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","SetAccount:andName:",GameDataManager.getAccount().guuid,GameDataManager.getAccount().name);        
-        }
+        // 历史 TalkingData SDK 已停用。
     }
     //设置自定义信息
     public OnTalkingEvent(strEvent:string,strParam:string)
     {
-        if(cc.sys.isBrowser)
-            return;
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            Debug.Log("设置房间信息！！！！！！！！！！！");
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "OnTalkingEvent", "(Ljava/lang/String;Ljava/lang/String;)V",strEvent,strParam);
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","OnTalkingEvent:andParam:",strEvent,strParam);        
-        }
+        // 历史 TalkingData SDK 已停用。
     }
     //-----------------------------------其他-------------------------------------------
     public GetCurGps():string
