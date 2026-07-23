@@ -35,6 +35,10 @@ Widev*/*
 .DS_Store
 ._*
 
+# Python tool caches
+__pycache__/
+*.py[cod]
+
 # Local signing credentials and archived native project
 *.keystore
 *.jks

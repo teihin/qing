@@ -3,7 +3,7 @@ import Debug from "../common/Debug";
 import Tool from "../common/Tool";
 import GameDataManager from "../GameDataManager";
 import ScrollViewEx from "../common/ScrollViewEx";
-import { ScrollEvent, ShowPanelMode, RoomType, ClosePanelMode, WEB_IP, SERVER_IP, PIC_UPDATE_URL, WEB_PORT, WEB_IP_PIC, WEB_PORT_PIC, WEB_TX_IP } from "../common/GameDef";
+import { ScrollEvent, ShowPanelMode, RoomType, ClosePanelMode, WEB_TX_IP } from "../common/GameDef";
 import UIManager from "../common/UIManager";
 import ImageManager from "../logic/ImageManager";
 import MobileManager from "../mobile/MobileManager";
@@ -22,8 +22,6 @@ const {ccclass, property} = cc._decorator;
 export default class panelMain extends UIPanelViewBase {
 
     private PAGE_PER_COUNT:number = 15;
-    private IMG_URL:string = WEB_IP_PIC+":"+WEB_PORT_PIC+"/server/pp/";
-    
     @property(ScrollViewNoEnd)
     scrollRoom:ScrollViewNoEnd = null; //房间列表控件
     @property(cc.RawAsset)
@@ -53,6 +51,7 @@ export default class panelMain extends UIPanelViewBase {
     private scrollCFNotify:ScrollViewEx = null; //惩罚公告列表
 
     private strFirstModifyName = "" //是否修改过头像名字
+    private pendingAvatarIndex:string = ""; //等待服务端回写的首次/兼容头像序号
     onLoad () {
         super.onLoad();
         
@@ -88,7 +87,6 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_client_status", this, "set_client_status");
 
         KBEngine.Event.register("AccountProp", this, "AccountProp"); //查询玩家属性
-        KBEngine.Event.register("onGetPic", this, "onGetPic"); //图片选择返回
         KBEngine.Event.register("openGG8", this, "openGG8");
         this.initUserInfo();
 
@@ -223,16 +221,7 @@ export default class panelMain extends UIPanelViewBase {
 
     initUserInfo()
     {
- 
-        //新用户弹出设置信息界面
-        if(GameDataManager.getAccount().photo === "")
-        {
-            // this.node.getChildByName("修改个人信息").active = true;
-            // this.RandHeadList();
-            //没有头像的给他设置默认头像
-            GameDataManager.getAccount().reqSetProperty("photo",this.IMG_URL+"001.jpg");
-        }
-        
+        this.EnsureAccountAvatar();
 
         this.set_gold(0);
         this.set_name("");
@@ -240,109 +229,54 @@ export default class panelMain extends UIPanelViewBase {
 
         this.set_photo(null);
     }
-    private nCurPageHead:number = 0;
-    private MAX_PAGE:number = 22;  //从0开始需要比真实扫一夜
-    private MAX_COUNT:number = 367;
+
+    /**
+     * 新账号头像字段为空时随机写入1～20；旧网址、文件名或越界值统一迁移为1。
+     * pendingAvatarIndex用于服务端属性事件返回前的即时显示，避免重复随机。
+     */
+    private EnsureAccountAvatar():string
+    {
+        let account = GameDataManager.getAccount();
+        let rawValue = account.photo;
+        if(ImageManager.IsAvatarIndex(rawValue))
+        {
+            this.pendingAvatarIndex = "";
+            return ImageManager.NormalizeAvatarIndex(rawValue);
+        }
+
+        if(this.pendingAvatarIndex != "")
+            return this.pendingAvatarIndex;
+
+        let rawText = rawValue === null || rawValue === undefined ? "" : rawValue.toString().trim();
+        this.pendingAvatarIndex = rawText == "" ? ImageManager.RandomAvatarIndex() : "1";
+        account.reqSetProperty("photo", this.pendingAvatarIndex);
+        return this.pendingAvatarIndex;
+    }
+
+    private GetActiveEditInfoNode():cc.Node
+    {
+        if(Tool.GetChild(this.node,"修改个人信息").active)
+            return Tool.GetChild(this.node,"修改个人信息");
+        if(Tool.GetChild(this.node,"修改个人信息2").active)
+            return Tool.GetChild(this.node,"修改个人信息2");
+        return null;
+    }
+
+    private PreviewEditAvatar(avatarValue:any)
+    {
+        let editNode = this.GetActiveEditInfoNode();
+        if(editNode == null)
+            return;
+        let avatarIndex = ImageManager.NormalizeAvatarIndex(avatarValue);
+        Tool.GetChild(editNode,"头像/name").getComponent(cc.Label).string = avatarIndex;
+        let img = Tool.GetChild(editNode,"头像/mask/img").getComponent(cc.Sprite);
+        ImageManager.getInstance().SetLocalAvatar(img, avatarIndex);
+    }
+
+    //保留原按钮入口：每次点击随机展示一张本地头像，不再刷新网络头像列表。
     public RandHeadList()
     {
-        return
-        let headList = null;
-        if(this.nCurPageHead>this.MAX_PAGE)
-        {
-            this.nCurPageHead = this.MAX_PAGE;
-        }
-
-        if(Tool.GetChild(this.node,"修改个人信息").active)
-        {
-            headList = Tool.GetChild(this.node,"修改个人信息/头像列表/view/content1");
-            Tool.GetChild(this.node,"修改个人信息/分页/页码").getComponent(cc.Label).string = (this.nCurPageHead+1).toString();
-        }
-        else
-        {
-            headList = Tool.GetChild(this.node,"修改个人信息2/头像列表/view/content1");
-            Tool.GetChild(this.node,"修改个人信息2/分页/页码").getComponent(cc.Label).string = (this.nCurPageHead+1).toString();
-        }
-
-
-
-        
-
-        let start = 100+(this.nCurPageHead)*12;
-        for(let i=0;i<12;i++)
-        {
-            let strRand = "";
-            let strUrl = "";
-
-            strRand =(start++).toString();//this.GetRandImgID();
-            strUrl = this.IMG_URL+strRand+".jpg";
-
-            if(Number(strRand)>this.MAX_COUNT)
-            {
-                if(i<headList.childrenCount)
-                {
-                    headList.children[i].active = false;
-                }
-                continue;
-            }
-        
-            if(i>=headList.childrenCount)
-            {
-                cc.loader.loadRes("Prefabs/头像",(err,obj)=>{
-                    if(err)
-                    {
-                        cc.error(err.message || err);
-                        Debug.Log("错误！！！！！！！！！");
-                        return null;
-                    }
-                    let node = cc.instantiate(obj);
-                    node.active = true;
-                    node.name = strRand;
-                    node.parent =headList;
-                    //设置图片
-                    let img = Tool.GetChild(node,"mask/img").getComponent(cc.Sprite);
-                    node.getComponent(cc.Sprite).enabled = false;
-                    cc.loader.load({url:strUrl},function (err,tex) {
-                        var spriteFrame = new cc.SpriteFrame(tex);
-                        if(cc.isValid(img))
-                            img.spriteFrame = spriteFrame;
-                    });
-                    let btn = node.getComponent(cc.Button);
-                    btn.node.on("click",()=>{
-                        this.onButtonClick(btn);
-                    })
-                });
-            }
-            else
-            {
-                let node = headList.children[i];
-                node.active = true;
-                node.name = strRand;
-                //设置图片
-                let img = Tool.GetChild(node,"mask/img").getComponent(cc.Sprite);
-                node.getComponent(cc.Sprite).enabled = false;
-                Tool.LoadImg(img,"other/head",()=>{
-                    cc.loader.load({url:strUrl},function (err,tex) {
-                        var spriteFrame = new cc.SpriteFrame(tex);
-                        if(cc.isValid(img))
-                            img.spriteFrame = spriteFrame;
-                    });
-                });
-                
-
-            }
-        }
-    }
-    public GetRandImgID():string
-    {
-        let strPass = "";
-        let max:number = 5800;
-        let min:number = 1001;
-
-        let x = Math.floor(Math.random() * (max - min + 1)) + min;
-         
-        strPass = x.toString().padStart(4,"0");
-
-        return strPass;
+        this.PreviewEditAvatar(ImageManager.RandomAvatarIndex());
     }
 
     set_gold(num:number)
@@ -418,12 +352,9 @@ export default class panelMain extends UIPanelViewBase {
     }
     public set_photo(old)
     {
-        //Debug.Error("进入更新头像");
         let img = Tool.GetChild(this.node,"Main/我的/信息/头像/mask/img").getComponent(cc.Sprite);
-        //if(!ImageManager.getInstance().GetImageByName(KBEngine.app.player().guuid,"",img))
-        //{
-            ImageManager.getInstance().AddWaitFreshImage2Catch(KBEngine.app.player().guuid, img);
-        //}
+        let avatarIndex = this.EnsureAccountAvatar();
+        ImageManager.getInstance().SetLocalAvatar(img, avatarIndex, KBEngine.app.player().guuid);
     }
 
     //代金券
@@ -684,8 +615,8 @@ export default class panelMain extends UIPanelViewBase {
             this.node.getChildByName("修改个人信息").active = false;
             this.node.getChildByName("修改个人信息2").active = false;
 
-            let random = Math.floor(Math.random() * (1012 - 1001 + 1)) + 1001;
-            GameDataManager.getAccount().reqSetProperty("photo",this.IMG_URL+random+".jpg");
+            let random = ImageManager.RandomAvatarIndex();
+            GameDataManager.getAccount().reqSetProperty("photo",random);
             GameDataManager.getAccount().reqSetProperty("name",strName);
         }
         else if(button.node.name === "修改个人信息")
@@ -758,7 +689,7 @@ export default class panelMain extends UIPanelViewBase {
             let imgName = Tool.GetChild(this.node,"修改个人信息2/头像/name").getComponent(cc.Label).string;
             if(imgName != "")
             {
-                GameDataManager.getAccount().reqSetProperty("photo",this.IMG_URL+imgName+".jpg");
+                GameDataManager.getAccount().reqSetProperty("photo",ImageManager.NormalizeAvatarIndex(imgName));
             }
             else
             {
@@ -884,14 +815,10 @@ export default class panelMain extends UIPanelViewBase {
                 if(button.node.name === item.name)
                 {
                     item.getComponent(cc.Sprite).enabled = true;
-                    Tool.GetChild(headList.parent.parent.parent,"头像/name").getComponent(cc.Label).string = item.name;
+                    let avatarIndex = ImageManager.NormalizeAvatarIndex(item.name);
+                    Tool.GetChild(headList.parent.parent.parent,"头像/name").getComponent(cc.Label).string = avatarIndex;
                     let img = Tool.GetChild(headList.parent.parent.parent,"头像/mask/img").getComponent(cc.Sprite);
-                    let strUrl = this.IMG_URL+item.name+".jpg";
-                    cc.loader.load({url:strUrl},function (err,tex) {
-                        var spriteFrame = new cc.SpriteFrame(tex);
-                        if(cc.isValid(img))
-                            img.spriteFrame = spriteFrame;
-                    });
+                    ImageManager.getInstance().SetLocalAvatar(img, avatarIndex);
                 }
                 else
                 {
@@ -903,15 +830,7 @@ export default class panelMain extends UIPanelViewBase {
         {
             this.node.getChildByName("修改个人信息2").active = true;
             Tool.GetChild(this.node,"修改个人信息2/昵称").getComponent(cc.EditBox).string = GameDataManager.getAccount().name;
-            let img = Tool.GetChild(this.node,"修改个人信息2/头像/mask/img").getComponent(cc.Sprite);
-            
-            cc.loader.load({url:GameDataManager.getAccount().photo},function (err,tex) {
-                var spriteFrame = new cc.SpriteFrame(tex);
-                if(cc.isValid(img))
-                    img.spriteFrame = spriteFrame;
-            });
-
-           this.RandHeadList();
+            this.PreviewEditAvatar(this.EnsureAccountAvatar());
 
            //查询是否第一次修改
            ConfigManager.getInstance().GetOneHashKey("免费头像_"+GameDataManager.getAccount().guuid,"查询免费修改昵称")
@@ -940,18 +859,13 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name == "选择头像")
         {
-            if(cc.sys.os == cc.sys.OS_ANDROID)
-            {
-                jsb.reflection.callStaticMethod('org/cocos2dx/javascript/AppActivity', 'OpenGally', '()V');  
-            } 
-            else if(cc.sys.os == cc.sys.OS_IOS)
-            {
-                jsb.reflection.callStaticMethod("AppController","OpenGally");
-            }
-            else
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只支持手机");
-            }
+            let editNode = this.GetActiveEditInfoNode();
+            if(editNode == null)
+                return;
+            let current = Tool.GetChild(editNode,"头像/name").getComponent(cc.Label).string;
+            let currentIndex = Number(ImageManager.NormalizeAvatarIndex(current));
+            let nextIndex = currentIndex >= ImageManager.AVATAR_COUNT ? 1 : currentIndex + 1;
+            this.PreviewEditAvatar(nextIndex.toString());
         }
         else if(button.node.name == "上一页")
         {
@@ -2268,7 +2182,7 @@ export default class panelMain extends UIPanelViewBase {
                     }
         
         
-                    GameDataManager.getAccount().reqSetProperty("photo",this.IMG_URL+imgName+".jpg");
+                    GameDataManager.getAccount().reqSetProperty("photo",ImageManager.NormalizeAvatarIndex(imgName));
                     GameDataManager.getAccount().reqSetProperty("name",strName);
         
                     Tool.GetChild(this.node,"修改个人信息").active = false;
@@ -2296,7 +2210,7 @@ export default class panelMain extends UIPanelViewBase {
                     let imgName = Tool.GetChild(this.node,"修改个人信息2/头像/name").getComponent(cc.Label).string;
                     if(imgName != "")
                     {
-                        GameDataManager.getAccount().reqSetProperty("photo",this.IMG_URL+imgName+".jpg");
+                        GameDataManager.getAccount().reqSetProperty("photo",ImageManager.NormalizeAvatarIndex(imgName));
                     }
                     else
                     {
@@ -2317,108 +2231,6 @@ export default class panelMain extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"名字已被占用！");
             }
         }
-    }
-
-    //图片选择返回
-    public fileCut:string = "";
-    public onGetPic(strMsg:string)
-    {
-        this.fileCut = strMsg;
-       // UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,strMsg);
-        cc.loader.load(strMsg,(err,texture)=>{
-            if(err)
-            {
-                cc.error(err.message || err);
-                return null;
-            }
-            let frame = new cc.SpriteFrame(texture);
-            if(Tool.GetChild(this.node,"修改个人信息").active)
-            {
-                Tool.GetChild(this.node,"修改个人信息/头像/mask/img").getComponent(cc.Sprite).spriteFrame = frame;
-            }
-            if(Tool.GetChild(this.node,"修改个人信息2").active)
-            {
-                Tool.GetChild(this.node,"修改个人信息2/头像/mask/img").getComponent(cc.Sprite).spriteFrame = frame;
-            }
-
-            //上传头像
-            this.uploadImage(strMsg);
-        });
-
-        
-    }
-    //图片上传
-    public uploadImage(strPath:string)
-    {
-        let file = jsb.fileUtils.getDataFromFile(strPath);
-
-        var xhr = new XMLHttpRequest();
-        xhr.onreadystatechange = function () {
-            if (xhr.readyState === 4 ) {
-                if(xhr.status === 200){    
-                    Debug.Log("上传成功!");
-                    console.log(xhr.response);
-
-                    var json = JSON.parse(xhr.response);
-                    if(json.msg == "OK")
-                    {
-                        let img:cc.Sprite = null;
-                        if(Tool.GetChild(this.node,"修改个人信息").active)
-                        {
-                            Tool.GetChild(this.node,"修改个人信息/头像/name").getComponent(cc.Label).string = json.filename.replace(".jpg","");
-                            img = Tool.GetChild(this.node,"修改个人信息/头像/mask/img").getComponent(cc.Sprite);
-                        }
-                        if(Tool.GetChild(this.node,"修改个人信息2").active)
-                        {
-                            Tool.GetChild(this.node,"修改个人信息2/头像/name").getComponent(cc.Label).string = json.filename.replace(".jpg","");
-                            img = Tool.GetChild(this.node,"修改个人信息2/头像/mask/img").getComponent(cc.Sprite);
-                        }
-
-                        let strUrl = this.IMG_URL+json.filename;
-                        cc.loader.load({url:strUrl},function (err,tex) {
-                            var spriteFrame = new cc.SpriteFrame(tex);
-                            if(cc.isValid(img))
-                                img.spriteFrame = spriteFrame;
-                        });
-                       // UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"上传成功");
-                    }
-
-
-
-                    
-                    // let json = JSON.parse(xhr.response);
-                    // let strName = json["filename"];
-                    // let random = new Date().getTime();
-                    // let path = "http://47.108.130.105:8888/web/test.jpg?v="+random;
-                    // cc.loader.load(path,(err,texture)=>{
-                    //     if(err)
-                    //     {
-                    //         cc.error(err.message || err);
-                    //         return null;
-                    //     }
-                    //     let frame = new cc.SpriteFrame(texture);
-                    //     this.node.getChildByName("img2").getComponent(cc.Sprite).spriteFrame = frame;
-                    // });
-                }
-            }
-        }.bind(this);
-
-        xhr.onabort = (event1:ProgressEvent<EventTarget>)=>{
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"上传头像异常1");
-        };
-        xhr.onerror = (event1:ProgressEvent<EventTarget>)=>{
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"上传头像异常2");
-        };
-        xhr.ontimeout = (event1:ProgressEvent<EventTarget>)=>{
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"上传头像超时");
-        };
-  
-        //xhr.responseType = 'arraybuffer';
-        let strFileName = GameDataManager.getAccount().guuid+"_"+new Date().getTime()+".jpg";
-        xhr.open("POST", PIC_UPDATE_URL+"/upload?name="+strFileName, true);
-        
-        xhr.send(file)
-    
     }
 
     //----------------------测试分布代码-------------------

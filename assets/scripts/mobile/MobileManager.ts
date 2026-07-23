@@ -27,7 +27,6 @@ export default class MobileManager extends cc.Component {
     private openid:string = "";
     private unionid:string = "";  //登陆ID
     private username:string = "";
-    private headimgurl:string = "";
     private sex:string = "";
 
     private bInitGVoice:boolean = false; 
@@ -97,7 +96,7 @@ export default class MobileManager extends cc.Component {
         //UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,type+msg);
         if(type === "微信授权成功")
         {
-            //启动获取微信ID及头像流程
+            //启动获取微信登录用户信息流程；游戏头像不再使用微信头像地址。
             MobileManager.getInstance().code = msg;
             MobileManager.getInstance().getWXUserToken(msg);
         }
@@ -115,10 +114,6 @@ export default class MobileManager extends cc.Component {
         {
             //UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,msg);
             KBEngine.Event.fire("OnPlayNextAudio"); 
-        }
-        else if(type === "选择图片")
-        {
-            KBEngine.Event.fire("onGetPic",msg);
         }
         else if(type === "粘贴")
         {
@@ -190,7 +185,6 @@ export default class MobileManager extends cc.Component {
                 
                 this.username = json.nickname;
                 this.sex = json.sex;
-                this.headimgurl = json.headimgurl;
 
                 
                 this.updateUserInfo();
@@ -226,7 +220,6 @@ export default class MobileManager extends cc.Component {
     {
         cc.sys.localStorage.setItem("unionid",this.unionid);
         cc.sys.localStorage.setItem("username",this.username);
-        cc.sys.localStorage.setItem("headimgurl",this.headimgurl);
         cc.sys.localStorage.setItem("sex",this.sex);
     }
 

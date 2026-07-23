@@ -1958,8 +1958,9 @@ export default class panelGameView extends UIPanelViewBase {
     {
         node.active = true;
         node.getChildByName("name").getComponent(cc.Label).string = jItem["name"];
-        let img = Tool.GetChild(node,"head/img").getComponent(cc.Sprite);        
-        if (!ImageManager.getInstance().GetImageByName(jItem["id"], "", img))
+        let img = Tool.GetChild(node,"head/img").getComponent(cc.Sprite);
+        let avatarIndex = jItem.hasOwnProperty("photo") ? jItem["photo"].toString() : "";
+        if (!ImageManager.getInstance().GetImageByName(jItem["id"], avatarIndex, img))
         {
             ImageManager.getInstance().AddWaitFreshImage2Catch(jItem["id"], img);
         }

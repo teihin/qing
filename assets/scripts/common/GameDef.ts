@@ -43,13 +43,6 @@ export const IS_USE_WSS:boolean = false;
 export const SERVER_URL:string = "";
 
 
-//头像服务器相关配置
-export const WEB_IP_PIC:string = "http://154.37.155.17"    //
-export const WEB_PORT_PIC:number = 7338; //WEB端口
-export const PIC_UPDATE_URL:string = WEB_IP_PIC+":3390";  //头像上传地址
-
-
-
 export const SERVER_IP_TEST:string = "192.168.2.96";
 export const LOCAL_HOT_UPDATE:string = "192.168.2.250";
 
@@ -172,6 +165,7 @@ export class PlayerInfoBase
         this.strUserName = "";
         this.strSex = "male";
         this.strLang = "pt";
+        this.strPhoto = "";
         this.nGoldNum = 0;
         this.nTableNum = 0;
         this.nDiamondNum = 0;

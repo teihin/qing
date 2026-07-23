@@ -49,7 +49,7 @@ export default class panelUserInfo extends UIPanelViewBase {
         Tool.GetChild(this.node,"数据/id").getComponent(cc.Label).string = this.player.info.strUserID;
         Tool.GetChild(this.node,"数据/name").getComponent(cc.Label).string = this.player.info.strUserName;
         let img = Tool.GetChild(this.node,"数据/头像/mask/img").getComponent(cc.Sprite);
-        if (!ImageManager.getInstance().GetImageByName(this.player.info.strUserID, "", img))
+        if (!ImageManager.getInstance().GetImageByName(this.player.info.strUserID, this.player.info.strPhoto, img))
         {
             ImageManager.getInstance().AddWaitFreshImage2Catch(this.player.info.strUserID, img);
         }

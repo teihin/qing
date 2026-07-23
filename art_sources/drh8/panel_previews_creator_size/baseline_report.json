@@ -1,0 +1,2495 @@
+{
+  "purpose": "drh8 隐藏弹层 Creator Sprite SizeMode 预加载问题基线预览",
+  "scene": "/Volumes/CB/qing/assets/Scenes/drh8.fire",
+  "scene_sha256": "a20c8722c93081ae3ea64a91a2ffb182b36750cebc89c201af9287f80508ea7f",
+  "canvas": [
+    750,
+    1334
+  ],
+  "isolation": "只保留 panelGameView/BK、目标弹层及其必要子状态",
+  "simulate_creator_size_mode": true,
+  "sprite_size_mode_behavior": "RAW 使用 SpriteFrame rawWidth/rawHeight，TRIMMED 使用 meta width/height，CUSTOM 保持 drh8.fire 序列化 contentSize。",
+  "widget_handling": "使用 Creator 在 750x1334 设计分辨率下已序列化的 Widget 对齐后坐标；Sprite SizeMode 只覆盖节点 contentSize，并沿用序列化锚点和位置。",
+  "known_limitations": [
+    "ScrollView 中由业务脚本运行时创建的数据条目不会出现在静态场景基线图中。",
+    "非矩形、椭圆或反向 cc.Mask 仍按轴对齐矩形近似裁剪。",
+    "粒子、Graphics、Spine 和运行时动画状态不由离线渲染器复现。",
+    "动态 Label 只显示 drh8.fire 当前序列化的占位值。"
+  ],
+  "outputs": [
+    {
+      "key": "realtime_record",
+      "title": "实时战绩",
+      "file": "01_实时战绩.png",
+      "target": "Canvas/Normal/panelGameView/实时战绩",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 44,
+        "nodes_inactive": 1073,
+        "sprites_total": 19,
+        "sprites_rendered": 19,
+        "sprites_inactive": 588,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 9,
+        "labels_rendered": 5,
+        "labels_empty": 4,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 3,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 2765,
+          "component_id": 2766,
+          "path": "Canvas/Normal/panelGameView/实时战绩/搓牌开关/Background",
+          "uuid": "9b02cd7a-c772-4cc1-b748-803f964c8392",
+          "asset": "assets/ImagesLuck/设置/关.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            92.0,
+            39.0
+          ],
+          "applied_size": [
+            157.0,
+            75.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 2765,
+          "component_id": 2766,
+          "path": "Canvas/Normal/panelGameView/实时战绩/搓牌开关/Background",
+          "uuid": "9b02cd7a-c772-4cc1-b748-803f964c8392",
+          "asset": "assets/ImagesLuck/设置/关.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            92.0,
+            39.0
+          ],
+          "applied_size": [
+            157.0,
+            75.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2768,
+          "component_id": 2769,
+          "path": "Canvas/Normal/panelGameView/实时战绩/搓牌开关/checkmark",
+          "uuid": "7475ee2c-daf5-4835-90b5-0f6abfd6383b",
+          "asset": "assets/ImagesLuck/设置/开.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            93.0,
+            39.0
+          ],
+          "applied_size": [
+            158.0,
+            75.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "buy_in",
+      "title": "带入窗口",
+      "file": "02_带入窗口.png",
+      "target": "Canvas/Normal/panelGameView/带入窗口",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 30,
+        "nodes_inactive": 1087,
+        "sprites_total": 14,
+        "sprites_rendered": 14,
+        "sprites_inactive": 594,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 5,
+        "labels_rendered": 4,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 2824,
+          "component_id": 2825,
+          "path": "Canvas/Normal/panelGameView/带入窗口/确认带入",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2828,
+          "component_id": 2829,
+          "path": "Canvas/Normal/panelGameView/带入窗口/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 2824,
+          "component_id": 2825,
+          "path": "Canvas/Normal/panelGameView/带入窗口/确认带入",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2828,
+          "component_id": 2829,
+          "path": "Canvas/Normal/panelGameView/带入窗口/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2840,
+          "component_id": 2841,
+          "path": "Canvas/Normal/panelGameView/带入窗口/余额不足提示/关闭上上层/btn_4",
+          "uuid": "4b0b32f6-1d5b-431a-9999-b22e3a7e9604",
+          "asset": "assets/ImagesLuck/公用/btn_4.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            51.0,
+            51.0
+          ],
+          "applied_size": [
+            45.0,
+            45.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "buy_in_insufficient",
+      "title": "带入窗口－余额不足",
+      "file": "03_带入窗口_余额不足.png",
+      "target": "Canvas/Normal/panelGameView/带入窗口",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "嵌套在带入窗口内的二级提示状态。",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 37,
+        "nodes_inactive": 1080,
+        "sprites_total": 19,
+        "sprites_rendered": 19,
+        "sprites_inactive": 589,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 6,
+        "labels_rendered": 5,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 2824,
+          "component_id": 2825,
+          "path": "Canvas/Normal/panelGameView/带入窗口/确认带入",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2828,
+          "component_id": 2829,
+          "path": "Canvas/Normal/panelGameView/带入窗口/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2840,
+          "component_id": 2841,
+          "path": "Canvas/Normal/panelGameView/带入窗口/余额不足提示/关闭上上层/btn_4",
+          "uuid": "4b0b32f6-1d5b-431a-9999-b22e3a7e9604",
+          "asset": "assets/ImagesLuck/公用/btn_4.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            51.0,
+            51.0
+          ],
+          "applied_size": [
+            45.0,
+            45.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 2824,
+          "component_id": 2825,
+          "path": "Canvas/Normal/panelGameView/带入窗口/确认带入",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2828,
+          "component_id": 2829,
+          "path": "Canvas/Normal/panelGameView/带入窗口/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2840,
+          "component_id": 2841,
+          "path": "Canvas/Normal/panelGameView/带入窗口/余额不足提示/关闭上上层/btn_4",
+          "uuid": "4b0b32f6-1d5b-431a-9999-b22e3a7e9604",
+          "asset": "assets/ImagesLuck/公用/btn_4.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            51.0,
+            51.0
+          ],
+          "applied_size": [
+            45.0,
+            45.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "round_review",
+      "title": "牌局回顾",
+      "file": "04_牌局回顾.png",
+      "target": "Canvas/Normal/panelGameView/牌局回顾",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "回顾列表由运行时数据填充，基线图只显示场景中已序列化内容。",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 47,
+        "nodes_inactive": 1070,
+        "sprites_total": 18,
+        "sprites_rendered": 17,
+        "sprites_inactive": 590,
+        "sprites_unresolved": 0,
+        "sprites_empty": 1,
+        "labels_total": 9,
+        "labels_rendered": 6,
+        "labels_empty": 3,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 2,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 2990,
+          "component_id": 2991,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/首页/11",
+          "uuid": "a873f3fc-c964-4522-85de-6a6d6979e81d",
+          "asset": "assets/imagesKK/公用/11.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2996,
+          "component_id": 2997,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/上一页/11",
+          "uuid": "36511112-f751-4951-8a57-a38dd5ee22ed",
+          "asset": "assets/imagesKK/公用/左2.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3002,
+          "component_id": 3003,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/下一页/11",
+          "uuid": "83ea2bce-167e-4415-ab22-f5b749fbb719",
+          "asset": "assets/imagesKK/公用/右1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3008,
+          "component_id": 3009,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/尾页/11",
+          "uuid": "ad3a61a3-d9f5-487b-9a76-eb4d38f4b877",
+          "asset": "assets/imagesKK/公用/22.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3030,
+          "component_id": 3031,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/牌局回顾/Background",
+          "uuid": "9840dd1c-c5bc-4b17-9cf3-3f10a10c0019",
+          "asset": "assets/ImagesLuck/游戏内/牌普/牌局回顾未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3033,
+          "component_id": 3034,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/牌局回顾/checkmark",
+          "uuid": "1557874f-d169-4a0d-8c1f-7c5b2ea06ba9",
+          "asset": "assets/ImagesLuck/游戏内/牌普/牌局回顾选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3039,
+          "component_id": 3040,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/文字牌谱/Background",
+          "uuid": "f4abf21c-cd50-4dac-bc58-6e32683eb5e3",
+          "asset": "assets/ImagesLuck/游戏内/牌普/文字牌谱未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 2990,
+          "component_id": 2991,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/首页/11",
+          "uuid": "a873f3fc-c964-4522-85de-6a6d6979e81d",
+          "asset": "assets/imagesKK/公用/11.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2996,
+          "component_id": 2997,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/上一页/11",
+          "uuid": "36511112-f751-4951-8a57-a38dd5ee22ed",
+          "asset": "assets/imagesKK/公用/左2.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3002,
+          "component_id": 3003,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/下一页/11",
+          "uuid": "83ea2bce-167e-4415-ab22-f5b749fbb719",
+          "asset": "assets/imagesKK/公用/右1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3008,
+          "component_id": 3009,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/尾页/11",
+          "uuid": "ad3a61a3-d9f5-487b-9a76-eb4d38f4b877",
+          "asset": "assets/imagesKK/公用/22.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3030,
+          "component_id": 3031,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/牌局回顾/Background",
+          "uuid": "9840dd1c-c5bc-4b17-9cf3-3f10a10c0019",
+          "asset": "assets/ImagesLuck/游戏内/牌普/牌局回顾未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3033,
+          "component_id": 3034,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/牌局回顾/checkmark",
+          "uuid": "1557874f-d169-4a0d-8c1f-7c5b2ea06ba9",
+          "asset": "assets/ImagesLuck/游戏内/牌普/牌局回顾选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3039,
+          "component_id": 3040,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/文字牌谱/Background",
+          "uuid": "f4abf21c-cd50-4dac-bc58-6e32683eb5e3",
+          "asset": "assets/ImagesLuck/游戏内/牌普/文字牌谱未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3042,
+          "component_id": 3043,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/文字牌谱/checkmark",
+          "uuid": "5843af23-4792-4591-b05b-b86c8fd048fc",
+          "asset": "assets/ImagesLuck/游戏内/牌普/文字牌谱选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "text_record",
+      "title": "文字牌谱",
+      "file": "05_文字牌谱.png",
+      "target": "Canvas/Normal/panelGameView/牌局回顾",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 62,
+        "nodes_inactive": 1055,
+        "sprites_total": 21,
+        "sprites_rendered": 20,
+        "sprites_inactive": 587,
+        "sprites_unresolved": 0,
+        "sprites_empty": 1,
+        "labels_total": 15,
+        "labels_rendered": 12,
+        "labels_empty": 3,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 2,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 2990,
+          "component_id": 2991,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/首页/11",
+          "uuid": "a873f3fc-c964-4522-85de-6a6d6979e81d",
+          "asset": "assets/imagesKK/公用/11.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2996,
+          "component_id": 2997,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/上一页/11",
+          "uuid": "36511112-f751-4951-8a57-a38dd5ee22ed",
+          "asset": "assets/imagesKK/公用/左2.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3002,
+          "component_id": 3003,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/下一页/11",
+          "uuid": "83ea2bce-167e-4415-ab22-f5b749fbb719",
+          "asset": "assets/imagesKK/公用/右1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3008,
+          "component_id": 3009,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/尾页/11",
+          "uuid": "ad3a61a3-d9f5-487b-9a76-eb4d38f4b877",
+          "asset": "assets/imagesKK/公用/22.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3030,
+          "component_id": 3031,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/牌局回顾/Background",
+          "uuid": "9840dd1c-c5bc-4b17-9cf3-3f10a10c0019",
+          "asset": "assets/ImagesLuck/游戏内/牌普/牌局回顾未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3039,
+          "component_id": 3040,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/文字牌谱/Background",
+          "uuid": "f4abf21c-cd50-4dac-bc58-6e32683eb5e3",
+          "asset": "assets/ImagesLuck/游戏内/牌普/文字牌谱未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3042,
+          "component_id": 3043,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/文字牌谱/checkmark",
+          "uuid": "5843af23-4792-4591-b05b-b86c8fd048fc",
+          "asset": "assets/ImagesLuck/游戏内/牌普/文字牌谱选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 2990,
+          "component_id": 2991,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/首页/11",
+          "uuid": "a873f3fc-c964-4522-85de-6a6d6979e81d",
+          "asset": "assets/imagesKK/公用/11.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 2996,
+          "component_id": 2997,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/上一页/11",
+          "uuid": "36511112-f751-4951-8a57-a38dd5ee22ed",
+          "asset": "assets/imagesKK/公用/左2.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3002,
+          "component_id": 3003,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/下一页/11",
+          "uuid": "83ea2bce-167e-4415-ab22-f5b749fbb719",
+          "asset": "assets/imagesKK/公用/右1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            37.0,
+            37.0
+          ],
+          "applied_size": [
+            44.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3008,
+          "component_id": 3009,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/分页/尾页/11",
+          "uuid": "ad3a61a3-d9f5-487b-9a76-eb4d38f4b877",
+          "asset": "assets/imagesKK/公用/22.png",
+          "mode": "RAW",
+          "serialized_size": [
+            52.0,
+            37.0
+          ],
+          "applied_size": [
+            55.0,
+            47.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3030,
+          "component_id": 3031,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/牌局回顾/Background",
+          "uuid": "9840dd1c-c5bc-4b17-9cf3-3f10a10c0019",
+          "asset": "assets/ImagesLuck/游戏内/牌普/牌局回顾未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3033,
+          "component_id": 3034,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/牌局回顾/checkmark",
+          "uuid": "1557874f-d169-4a0d-8c1f-7c5b2ea06ba9",
+          "asset": "assets/ImagesLuck/游戏内/牌普/牌局回顾选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3039,
+          "component_id": 3040,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/文字牌谱/Background",
+          "uuid": "f4abf21c-cd50-4dac-bc58-6e32683eb5e3",
+          "asset": "assets/ImagesLuck/游戏内/牌普/文字牌谱未选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3042,
+          "component_id": 3043,
+          "path": "Canvas/Normal/panelGameView/牌局回顾/操作/文字牌谱/checkmark",
+          "uuid": "5843af23-4792-4591-b05b-b86c8fd048fc",
+          "asset": "assets/ImagesLuck/游戏内/牌普/文字牌谱选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            235.0,
+            70.0
+          ],
+          "applied_size": [
+            221.0,
+            56.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "hand_type_tip",
+      "title": "牌型提示",
+      "file": "06_牌型提示.png",
+      "target": "Canvas/Normal/panelGameView/牌型提示",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 18,
+        "nodes_inactive": 1099,
+        "sprites_total": 6,
+        "sprites_rendered": 6,
+        "sprites_inactive": 603,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 3,
+        "labels_rendered": 2,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [],
+      "creator_size_mode_changes_including_inactive": [],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "settings",
+      "title": "系统设置",
+      "file": "07_系统设置.png",
+      "target": "Canvas/Normal/panelGameView/系统设置",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 54,
+        "nodes_inactive": 1063,
+        "sprites_total": 25,
+        "sprites_rendered": 25,
+        "sprites_inactive": 584,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 3,
+        "labels_rendered": 2,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3125,
+          "component_id": 3126,
+          "path": "Canvas/Normal/panelGameView/系统设置/关闭上层/btn_4",
+          "uuid": "4b0b32f6-1d5b-431a-9999-b22e3a7e9604",
+          "asset": "assets/ImagesLuck/公用/btn_4.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            51.0,
+            51.0
+          ],
+          "applied_size": [
+            45.0,
+            45.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3251,
+          "component_id": 3252,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/音效/音效开关/Background",
+          "uuid": "9b02cd7a-c772-4cc1-b748-803f964c8392",
+          "asset": "assets/ImagesLuck/设置/关.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            101.0,
+            41.0
+          ],
+          "applied_size": [
+            157.0,
+            75.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3254,
+          "component_id": 3255,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/音效/音效开关/checkmark",
+          "uuid": "7475ee2c-daf5-4835-90b5-0f6abfd6383b",
+          "asset": "assets/ImagesLuck/设置/开.png",
+          "mode": "RAW",
+          "serialized_size": [
+            103.0,
+            41.0
+          ],
+          "applied_size": [
+            160.0,
+            77.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3266,
+          "component_id": 3267,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/语音/语音开关/Background",
+          "uuid": "9b02cd7a-c772-4cc1-b748-803f964c8392",
+          "asset": "assets/ImagesLuck/设置/关.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            101.0,
+            41.0
+          ],
+          "applied_size": [
+            157.0,
+            75.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3269,
+          "component_id": 3270,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/语音/语音开关/checkmark",
+          "uuid": "7475ee2c-daf5-4835-90b5-0f6abfd6383b",
+          "asset": "assets/ImagesLuck/设置/开.png",
+          "mode": "RAW",
+          "serialized_size": [
+            103.0,
+            41.0
+          ],
+          "applied_size": [
+            160.0,
+            77.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3125,
+          "component_id": 3126,
+          "path": "Canvas/Normal/panelGameView/系统设置/关闭上层/btn_4",
+          "uuid": "4b0b32f6-1d5b-431a-9999-b22e3a7e9604",
+          "asset": "assets/ImagesLuck/公用/btn_4.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            51.0,
+            51.0
+          ],
+          "applied_size": [
+            45.0,
+            45.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3151,
+          "component_id": 3152,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/桌面/桌面2/checkmark",
+          "uuid": "3d90001f-0c05-4f41-80a7-e6343b6d81d7",
+          "asset": "assets/ImagesLuck/游戏内/桌面选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            90.0,
+            169.0
+          ],
+          "applied_size": [
+            95.0,
+            174.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3162,
+          "component_id": 3163,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/桌面/桌面3/checkmark",
+          "uuid": "3d90001f-0c05-4f41-80a7-e6343b6d81d7",
+          "asset": "assets/ImagesLuck/游戏内/桌面选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            90.0,
+            169.0
+          ],
+          "applied_size": [
+            95.0,
+            174.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3173,
+          "component_id": 3174,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/桌面/桌面4/checkmark",
+          "uuid": "3d90001f-0c05-4f41-80a7-e6343b6d81d7",
+          "asset": "assets/ImagesLuck/游戏内/桌面选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            90.0,
+            169.0
+          ],
+          "applied_size": [
+            95.0,
+            174.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3184,
+          "component_id": 3185,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/桌面/桌面5/checkmark",
+          "uuid": "3d90001f-0c05-4f41-80a7-e6343b6d81d7",
+          "asset": "assets/ImagesLuck/游戏内/桌面选中.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            90.0,
+            169.0
+          ],
+          "applied_size": [
+            95.0,
+            174.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3251,
+          "component_id": 3252,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/音效/音效开关/Background",
+          "uuid": "9b02cd7a-c772-4cc1-b748-803f964c8392",
+          "asset": "assets/ImagesLuck/设置/关.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            101.0,
+            41.0
+          ],
+          "applied_size": [
+            157.0,
+            75.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3254,
+          "component_id": 3255,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/音效/音效开关/checkmark",
+          "uuid": "7475ee2c-daf5-4835-90b5-0f6abfd6383b",
+          "asset": "assets/ImagesLuck/设置/开.png",
+          "mode": "RAW",
+          "serialized_size": [
+            103.0,
+            41.0
+          ],
+          "applied_size": [
+            160.0,
+            77.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3266,
+          "component_id": 3267,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/语音/语音开关/Background",
+          "uuid": "9b02cd7a-c772-4cc1-b748-803f964c8392",
+          "asset": "assets/ImagesLuck/设置/关.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            101.0,
+            41.0
+          ],
+          "applied_size": [
+            157.0,
+            75.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3269,
+          "component_id": 3270,
+          "path": "Canvas/Normal/panelGameView/系统设置/设置/声音/语音/语音开关/checkmark",
+          "uuid": "7475ee2c-daf5-4835-90b5-0f6abfd6383b",
+          "asset": "assets/ImagesLuck/设置/开.png",
+          "mode": "RAW",
+          "serialized_size": [
+            103.0,
+            41.0
+          ],
+          "applied_size": [
+            160.0,
+            77.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "config_menu",
+      "title": "配置菜单",
+      "file": "08_配置菜单.png",
+      "target": "Canvas/Normal/panelGameView/ConfigMain",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 22,
+        "nodes_inactive": 1095,
+        "sprites_total": 11,
+        "sprites_rendered": 11,
+        "sprites_inactive": 598,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 3,
+        "labels_rendered": 2,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3363,
+          "component_id": 3364,
+          "path": "Canvas/Normal/panelGameView/ConfigMain/解散房间",
+          "uuid": "213d8e8a-2ca3-4f30-9924-f49d830a6c3d",
+          "asset": "assets/ImagesLuck/游戏内/解散房间.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            216.0,
+            57.0
+          ],
+          "applied_size": [
+            300.0,
+            100.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3363,
+          "component_id": 3364,
+          "path": "Canvas/Normal/panelGameView/ConfigMain/解散房间",
+          "uuid": "213d8e8a-2ca3-4f30-9924-f49d830a6c3d",
+          "asset": "assets/ImagesLuck/游戏内/解散房间.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            216.0,
+            57.0
+          ],
+          "applied_size": [
+            300.0,
+            100.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "report",
+      "title": "举报窗口",
+      "file": "09_举报窗口.png",
+      "target": "Canvas/Normal/panelGameView/举报窗口",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 62,
+        "nodes_inactive": 1055,
+        "sprites_total": 26,
+        "sprites_rendered": 10,
+        "sprites_inactive": 582,
+        "sprites_unresolved": 0,
+        "sprites_empty": 16,
+        "labels_total": 14,
+        "labels_rendered": 13,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 10,
+        "masks_approximate": 8,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3407,
+          "component_id": 3408,
+          "path": "Canvas/Normal/panelGameView/举报窗口/bk/line",
+          "uuid": "6b589ef4-c638-425d-9bd0-c112b346f36a",
+          "asset": "assets/imagesKK/公用/分割线.png",
+          "mode": "RAW",
+          "serialized_size": [
+            624.0,
+            2.0
+          ],
+          "applied_size": [
+            750.0,
+            1.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3423,
+          "component_id": 3424,
+          "path": "Canvas/Normal/panelGameView/举报窗口/关闭上层/gb",
+          "uuid": "4b0b32f6-1d5b-431a-9999-b22e3a7e9604",
+          "asset": "assets/ImagesLuck/公用/btn_4.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            51.0,
+            51.0
+          ],
+          "applied_size": [
+            45.0,
+            45.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3407,
+          "component_id": 3408,
+          "path": "Canvas/Normal/panelGameView/举报窗口/bk/line",
+          "uuid": "6b589ef4-c638-425d-9bd0-c112b346f36a",
+          "asset": "assets/imagesKK/公用/分割线.png",
+          "mode": "RAW",
+          "serialized_size": [
+            624.0,
+            2.0
+          ],
+          "applied_size": [
+            750.0,
+            1.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3423,
+          "component_id": 3424,
+          "path": "Canvas/Normal/panelGameView/举报窗口/关闭上层/gb",
+          "uuid": "4b0b32f6-1d5b-431a-9999-b22e3a7e9604",
+          "asset": "assets/ImagesLuck/公用/btn_4.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            51.0,
+            51.0
+          ],
+          "applied_size": [
+            45.0,
+            45.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "jackpot_overview",
+      "title": "奖池－总览",
+      "file": "10_奖池_总览.png",
+      "target": "Canvas/Normal/panelGameView/奖池面板",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 51,
+        "nodes_inactive": 1066,
+        "sprites_total": 18,
+        "sprites_rendered": 17,
+        "sprites_inactive": 591,
+        "sprites_unresolved": 0,
+        "sprites_empty": 1,
+        "labels_total": 17,
+        "labels_rendered": 16,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3633,
+          "component_id": 3634,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池总览/checkmark",
+          "uuid": "f8091361-d773-4885-bf33-9d03bce989cd",
+          "asset": "assets/ImagesLuck/奖池/1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3633,
+          "component_id": 3634,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池总览/checkmark",
+          "uuid": "f8091361-d773-4885-bf33-9d03bce989cd",
+          "asset": "assets/ImagesLuck/奖池/1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3651,
+          "component_id": 3652,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池记录/checkmark",
+          "uuid": "f160ba76-9993-4735-85ea-907c71317349",
+          "asset": "assets/ImagesLuck/奖池/3.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "jackpot_current",
+      "title": "奖池－当前奖池",
+      "file": "11_奖池_当前奖池.png",
+      "target": "Canvas/Normal/panelGameView/奖池面板",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 30,
+        "nodes_inactive": 1087,
+        "sprites_total": 11,
+        "sprites_rendered": 11,
+        "sprites_inactive": 598,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 3,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3633,
+          "component_id": 3634,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池总览/checkmark",
+          "uuid": "f8091361-d773-4885-bf33-9d03bce989cd",
+          "asset": "assets/ImagesLuck/奖池/1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3651,
+          "component_id": 3652,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池记录/checkmark",
+          "uuid": "f160ba76-9993-4735-85ea-907c71317349",
+          "asset": "assets/ImagesLuck/奖池/3.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "jackpot_record",
+      "title": "奖池－奖池记录",
+      "file": "12_奖池_奖池记录.png",
+      "target": "Canvas/Normal/panelGameView/奖池面板",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "奖池记录列表由运行时数据填充。",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 37,
+        "nodes_inactive": 1080,
+        "sprites_total": 11,
+        "sprites_rendered": 11,
+        "sprites_inactive": 597,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 7,
+        "labels_rendered": 6,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 2,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3651,
+          "component_id": 3652,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池记录/checkmark",
+          "uuid": "f160ba76-9993-4735-85ea-907c71317349",
+          "asset": "assets/ImagesLuck/奖池/3.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3633,
+          "component_id": 3634,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池总览/checkmark",
+          "uuid": "f8091361-d773-4885-bf33-9d03bce989cd",
+          "asset": "assets/ImagesLuck/奖池/1.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3651,
+          "component_id": 3652,
+          "path": "Canvas/Normal/panelGameView/奖池面板/条件/奖池记录/checkmark",
+          "uuid": "f160ba76-9993-4735-85ea-907c71317349",
+          "asset": "assets/ImagesLuck/奖池/3.png",
+          "mode": "RAW",
+          "serialized_size": [
+            171.0,
+            52.0
+          ],
+          "applied_size": [
+            188.0,
+            67.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "generic_tip",
+      "title": "通用提示",
+      "file": "13_通用提示.png",
+      "target": "Canvas/Normal/panelGameView/提示",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 16,
+        "nodes_inactive": 1101,
+        "sprites_total": 4,
+        "sprites_rendered": 4,
+        "sprites_inactive": 605,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 2,
+        "labels_empty": 2,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [],
+      "creator_size_mode_changes_including_inactive": [],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "start_tip",
+      "title": "开局提示",
+      "file": "14_开局提示.png",
+      "target": "Canvas/Normal/panelGameView/开局提示",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 16,
+        "nodes_inactive": 1101,
+        "sprites_total": 4,
+        "sprites_rendered": 4,
+        "sprites_inactive": 605,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 2,
+        "labels_empty": 2,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3061,
+          "component_id": 3066,
+          "path": "Canvas/Normal/panelGameView/开局提示",
+          "uuid": "764f2ce7-2125-45cc-9e03-f14a92e7f1a9",
+          "asset": "assets/imagesKK/公用/tishibg.png",
+          "mode": "RAW",
+          "serialized_size": [
+            750.0,
+            71.0
+          ],
+          "applied_size": [
+            745.0,
+            70.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3061,
+          "component_id": 3066,
+          "path": "Canvas/Normal/panelGameView/开局提示",
+          "uuid": "764f2ce7-2125-45cc-9e03-f14a92e7f1a9",
+          "asset": "assets/imagesKK/公用/tishibg.png",
+          "mode": "RAW",
+          "serialized_size": [
+            750.0,
+            71.0
+          ],
+          "applied_size": [
+            745.0,
+            70.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "charge_tip",
+      "title": "扣费提示",
+      "file": "15_扣费提示.png",
+      "target": "Canvas/Normal/panelGameView/扣费提示",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 19,
+        "nodes_inactive": 1098,
+        "sprites_total": 6,
+        "sprites_rendered": 6,
+        "sprites_inactive": 603,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 2,
+        "labels_empty": 2,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3292,
+          "component_id": 3293,
+          "path": "Canvas/Normal/panelGameView/扣费提示/确认延时",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3296,
+          "component_id": 3297,
+          "path": "Canvas/Normal/panelGameView/扣费提示/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3292,
+          "component_id": 3293,
+          "path": "Canvas/Normal/panelGameView/扣费提示/确认延时",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3296,
+          "component_id": 3297,
+          "path": "Canvas/Normal/panelGameView/扣费提示/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "mango_tip",
+      "title": "芒果提示",
+      "file": "16_芒果提示.png",
+      "target": "Canvas/Normal/panelGameView/芒果提示",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 19,
+        "nodes_inactive": 1098,
+        "sprites_total": 6,
+        "sprites_rendered": 6,
+        "sprites_inactive": 603,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 2,
+        "labels_empty": 2,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3313,
+          "component_id": 3314,
+          "path": "Canvas/Normal/panelGameView/芒果提示/确认芒果",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3317,
+          "component_id": 3318,
+          "path": "Canvas/Normal/panelGameView/芒果提示/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3313,
+          "component_id": 3314,
+          "path": "Canvas/Normal/panelGameView/芒果提示/确认芒果",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3317,
+          "component_id": 3318,
+          "path": "Canvas/Normal/panelGameView/芒果提示/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "dissolve",
+      "title": "解散房间",
+      "file": "17_解散房间.png",
+      "target": "Canvas/Normal/panelGameView/解散房间",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 19,
+        "nodes_inactive": 1098,
+        "sprites_total": 6,
+        "sprites_rendered": 6,
+        "sprites_inactive": 603,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 3,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3331,
+          "component_id": 3332,
+          "path": "Canvas/Normal/panelGameView/解散房间/确认解散",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3335,
+          "component_id": 3336,
+          "path": "Canvas/Normal/panelGameView/解散房间/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3331,
+          "component_id": 3332,
+          "path": "Canvas/Normal/panelGameView/解散房间/确认解散",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3335,
+          "component_id": 3336,
+          "path": "Canvas/Normal/panelGameView/解散房间/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "gps_warning",
+      "title": "GPS警告",
+      "file": "18_GPS警告.png",
+      "target": "Canvas/Normal/panelGameView/GPS警告",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 18,
+        "nodes_inactive": 1099,
+        "sprites_total": 5,
+        "sprites_rendered": 5,
+        "sprites_inactive": 604,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 3,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3382,
+          "component_id": 3383,
+          "path": "Canvas/Normal/panelGameView/GPS警告/返回大厅",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            152.0,
+            54.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3382,
+          "component_id": 3383,
+          "path": "Canvas/Normal/panelGameView/GPS警告/返回大厅",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            152.0,
+            54.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "report_charge_tip",
+      "title": "举报扣费提示",
+      "file": "19_举报扣费提示.png",
+      "target": "Canvas/Normal/panelGameView/举报扣费提示",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 20,
+        "nodes_inactive": 1097,
+        "sprites_total": 7,
+        "sprites_rendered": 7,
+        "sprites_inactive": 602,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 2,
+        "labels_empty": 2,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3609,
+          "component_id": 3610,
+          "path": "Canvas/Normal/panelGameView/举报扣费提示/确认举报",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3613,
+          "component_id": 3614,
+          "path": "Canvas/Normal/panelGameView/举报扣费提示/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3609,
+          "component_id": 3610,
+          "path": "Canvas/Normal/panelGameView/举报扣费提示/确认举报",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        },
+        {
+          "node_id": 3613,
+          "component_id": 3614,
+          "path": "Canvas/Normal/panelGameView/举报扣费提示/关闭上层",
+          "uuid": "9cfb1894-48f6-40c0-a051-9bf7e8a8814b",
+          "asset": "assets/ImagesLuck/公用/取消.png",
+          "mode": "RAW",
+          "serialized_size": [
+            198.0,
+            66.0
+          ],
+          "applied_size": [
+            260.0,
+            84.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "rub_card",
+      "title": "搓牌窗口",
+      "file": "20_搓牌窗口.png",
+      "target": "Canvas/Normal/panelGameView/搓牌窗口",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1117,
+        "nodes_active": 21,
+        "nodes_inactive": 1096,
+        "sprites_total": 9,
+        "sprites_rendered": 9,
+        "sprites_inactive": 600,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 3,
+        "labels_rendered": 2,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 184,
+        "sprite_size_nodes_changed": 75,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [
+        {
+          "node_id": 3104,
+          "component_id": 3105,
+          "path": "Canvas/Normal/panelGameView/搓牌窗口/看牌",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            152.0,
+            54.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_changes_including_inactive": [
+        {
+          "node_id": 3104,
+          "component_id": 3105,
+          "path": "Canvas/Normal/panelGameView/搓牌窗口/看牌",
+          "uuid": "51b0da6f-6189-47d8-8f72-b94fa7996a30",
+          "asset": "assets/imagesKK/公用/确定.png",
+          "mode": "TRIMMED",
+          "serialized_size": [
+            152.0,
+            54.0
+          ],
+          "applied_size": [
+            295.0,
+            85.0
+          ],
+          "changed": true
+        }
+      ],
+      "creator_size_mode_errors": []
+    }
+  ],
+  "errors": []
+}

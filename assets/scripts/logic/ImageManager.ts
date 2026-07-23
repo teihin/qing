@@ -1,26 +1,29 @@
 import Debug from "../common/Debug";
 import GameDataManager from "../GameDataManager";
 import Tool from "../common/Tool";
-import GameDef, { SERVER_IP, WEB_IP, WEB_PORT, WEB_IP_PIC, WEB_PORT_PIC } from "../common/GameDef";
 
 
 var KBEngine = require("kbengine");
-const {ccclass, property} = cc._decorator;
+const {ccclass} = cc._decorator;
 
 @ccclass
 export default class ImageManager extends cc.Component {
 
-    private mapID2Sprite = new Map<string, cc.SpriteFrame>();  //名字到图片缓存
-    private mapID2ImageSave = new Map<string, Array<cc.Sprite>>();   //缓存等待刷新图片结果返回的控件
-    //private mapID2Url = new Map<string, string>(); //ID到URL缓存
+    public static readonly AVATAR_COUNT:number = 20;
+    private static readonly AVATAR_ROOT:string = "avatars/头像";
+
+    // 本地头像只按序号缓存；用户ID只保存其当前头像序号，不再缓存网络图片。
+    private mapAvatar2Sprite = new Map<string, cc.SpriteFrame>();
+    private mapAvatar2Wait = new Map<string, Array<cc.Sprite>>();
+    private mapID2Avatar = new Map<string, string>();
+    private mapID2ImageSave = new Map<string, Array<cc.Sprite>>();
 
     static instance: ImageManager
     static getInstance() {
-        if (!ImageManager.instance) {            
+        if (!ImageManager.instance) {
             let node = new cc.Node("ImageManager");
             cc.game.addPersistRootNode(node);
-            this.instance = node.addComponent(ImageManager);       
-            
+            this.instance = node.addComponent(ImageManager);
             this.instance.intiEvent();
         }
         return ImageManager.instance;
@@ -33,140 +36,131 @@ export default class ImageManager extends cc.Component {
 
     intiEvent()
     {
-        KBEngine.Event.register("UserList", this, "OnAccountList"); 
+        KBEngine.Event.register("UserList", this, "OnAccountList");
     }
 
-    public GetImageByName(strImgName:string,strImgUrl:string,imgSrc:cc.Sprite):boolean
+    /** 只有纯数字1～20才是新头像字段；旧网址、文件名和其他字符串都视为无效。 */
+    public static IsAvatarIndex(value:any):boolean
     {
-        // if(cc.sys.isBrowser)
-        //     return true;
+        if(value === null || value === undefined)
+            return false;
+        let text = value.toString().trim();
+        if(!text.match(/^\d+$/))
+            return false;
+        let index = Number(text);
+        return index >= 1 && index <= ImageManager.AVATAR_COUNT;
+    }
 
-        
-        if(strImgName.length>4 && cc.isValid(imgSrc))
+    /** 显示层的兼容规则：任何无效值统一回退头像1。 */
+    public static NormalizeAvatarIndex(value:any):string
+    {
+        if(!ImageManager.IsAvatarIndex(value))
+            return "1";
+        return Number(value.toString().trim()).toString();
+    }
+
+    public static RandomAvatarIndex():string
+    {
+        return (Math.floor(Math.random() * ImageManager.AVATAR_COUNT) + 1).toString();
+    }
+
+    public static GetAvatarResourcePath(value:any):string
+    {
+        let index = ImageManager.NormalizeAvatarIndex(value).padStart(2,"0");
+        return ImageManager.AVATAR_ROOT + index;
+    }
+
+    /**
+     * 直接把头像序号对应的resources本地图片设置到Sprite。
+     * userID非空时同时刷新“用户 -> 头像序号”缓存，供后续界面复用。
+     */
+    public SetLocalAvatar(img:cc.Sprite, avatarValue:any, userID:string = ""):string
+    {
+        let avatarIndex = ImageManager.NormalizeAvatarIndex(avatarValue);
+        if(userID != null && userID != "")
+            this.mapID2Avatar.set(userID, avatarIndex);
+
+        if(img == null || !cc.isValid(img))
+            return avatarIndex;
+
+        if(this.mapAvatar2Sprite.has(avatarIndex))
         {
-            //先找缓存
-            if(this.mapID2Sprite.has(strImgName) && !cc.sys.isBrowser)
-            {
-                let cash = this.mapID2Sprite.get(strImgName);
-                if(cash != null)
-                {
-                    imgSrc.spriteFrame = cash;
-                }
-                else
-                {
-                    Debug.Log("@@@@@@@@@@@@@@@@@@@@@@@找到头像问题！！！！！：" + strImgName);
-                }
-            }
-            else
-            {
-                //缓存没有尝试打开文件
-                if(!cc.sys.isBrowser) //缓存只支持移动平台
-                {
-                    var writeable_path = jsb.fileUtils.getWritablePath();
-                    Debug.Log("缓存路径:"+writeable_path);
-                    let filePath = writeable_path +"Image/"+strImgName+".png";
+            let frame = this.mapAvatar2Sprite.get(avatarIndex);
+            if(frame != null)
+                img.spriteFrame = frame;
+            return avatarIndex;
+        }
 
-                    //校验文件是否存在
-                    if( !jsb.fileUtils.isFileExist(filePath)){                        
-                        Debug.Log("本地图片不存在!");
-                    }
+        let waitList:Array<cc.Sprite> = null;
+        if(this.mapAvatar2Wait.has(avatarIndex))
+        {
+            waitList = this.mapAvatar2Wait.get(avatarIndex);
+            if(waitList.indexOf(img) < 0)
+                waitList.push(img);
+            return avatarIndex;
+        }
+
+        waitList = new Array<cc.Sprite>();
+        waitList.push(img);
+        this.mapAvatar2Wait.set(avatarIndex, waitList);
+
+        cc.loader.loadRes(ImageManager.GetAvatarResourcePath(avatarIndex), cc.SpriteFrame, (err,frame:cc.SpriteFrame)=>{
+            let targets = this.mapAvatar2Wait.get(avatarIndex) || [];
+            this.mapAvatar2Wait.delete(avatarIndex);
+            if(err || frame == null)
+            {
+                Debug.Error("本地头像加载失败:" + ImageManager.GetAvatarResourcePath(avatarIndex));
+                targets.forEach((target)=>{
+                    if(target == null || !cc.isValid(target))
+                        return;
+                    if(avatarIndex != "1")
+                        this.SetLocalAvatar(target, "1");
                     else
-                    {
-                        cc.loader.load(filePath,(err,texture)=>{
-                            if(err)
-                            {
-                                cc.error(err.message || err);
-                                return null;
-                            }
-                            let frame = new cc.SpriteFrame(texture);
-                            imgSrc.spriteFrame = frame;
-    
-                            this.mapID2Sprite.set(strImgName,frame);
-                        });
-                    }
-
-
-                }
-            }
-            
-
-            if (strImgUrl.indexOf("http")<0||strImgUrl == "")
-            {
-                return false;                
+                        Tool.LoadImg(target,"other/Default_Man_Head");
+                });
+                return;
             }
 
-            
+            this.mapAvatar2Sprite.set(avatarIndex, frame);
+            targets.forEach((target)=>{
+                if(target != null && cc.isValid(target))
+                    target.spriteFrame = frame;
+            });
+        });
 
-            //重新获取下网络图片文件
-            var xhr = new XMLHttpRequest();
-            xhr.onreadystatechange = function () {
-                if (xhr.readyState === 4 ) {
-                    if(xhr.status === 200){    
+        return avatarIndex;
+    }
 
-                        if(!cc.sys.isBrowser)
-                        {
-                            var writeable_path = jsb.fileUtils.getWritablePath();
-                            Debug.Log("缓存路径:"+writeable_path);
-                            let dirpath = writeable_path+"Image";
-                            let filePath = writeable_path +"Image/"+strImgName+".png";
-                            if( !jsb.fileUtils.isDirectoryExist(dirpath) ){                        
-                                jsb.fileUtils.createDirectory(dirpath);
-                            }
-        
-                            if( jsb.fileUtils.writeDataToFile( new Uint8Array(xhr.response) , filePath) )
-                            {
-                                Debug.Log('Remote write file succeed.');
-                                cc.loader.load({url:strImgUrl,type:"png"},function (err,tex) {
-                                    var spriteFrame = new cc.SpriteFrame(tex);
-                                    this.mapID2Sprite.set(strImgName,spriteFrame);
-                                    if(cc.isValid(imgSrc))
-                                        imgSrc.spriteFrame = spriteFrame;
-                                }.bind(this));
-                            }else{
-                                Debug.Log('Remote write file failed.');
-                            }
-                        }
-                        else
-                        {
-                            cc.loader.load({url:strImgUrl,type:"png"},function (err,tex) {
-                                var spriteFrame = new cc.SpriteFrame(tex);
-                                if(cc.isValid(imgSrc))
-                                    imgSrc.spriteFrame = spriteFrame;
-                            });
-                        }
+    /**
+     * 保留旧方法签名以兼容所有现有头像显示入口。
+     * 第二个参数现在是头像序号，不再接受或下载URL。
+     */
+    public GetImageByName(strImgName:string,strAvatarValue:string,imgSrc:cc.Sprite):boolean
+    {
+        if(imgSrc == null || !cc.isValid(imgSrc))
+            return false;
 
-                    }
-                }
-            }.bind(this);
-            //responseType一定要在外面设置
-
-            xhr.onerror = ()=>{
-                Debug.Log("异常！！！！onerror")
-                if(cc.isValid(imgSrc))
-                {
-                    Tool.LoadImg(imgSrc,"other/Default_Man_Head"); 
-                }
-            };
-            xhr.ontimeout = ()=>{
-                Debug.Log("异常！！！！ontimeout")
-                if(cc.isValid(imgSrc))
-                {
-                    Tool.LoadImg(imgSrc,"other/Default_Man_Head"); 
-                }
-            };
-            
-           // xhr.setRequestHeader("Access-Control-Allow-Origin", "*");
-            xhr.responseType = 'arraybuffer';
-            xhr.open("GET", strImgUrl, true);
-            xhr.send();
-
+        if(strAvatarValue != null && strAvatarValue.toString().trim() != "")
+        {
+            this.SetLocalAvatar(imgSrc, strAvatarValue, strImgName);
             return true;
         }
+
+        if(strImgName != null && this.mapID2Avatar.has(strImgName))
+        {
+            this.SetLocalAvatar(imgSrc, this.mapID2Avatar.get(strImgName), strImgName);
+            return true;
+        }
+
         return false;
     }
 
+    /** 未拿到序号时先显示头像1，只向服务器查询字段值，不请求任何图片。 */
     public AddWaitFreshImage2Catch(strID:string, img:cc.Sprite)
     {
+        if(img != null && cc.isValid(img))
+            this.SetLocalAvatar(img, "1");
+
         let bNeedGet = false;
         let arrayList:Array<cc.Sprite> = null;
         if (!this.mapID2ImageSave.has(strID))
@@ -179,19 +173,10 @@ export default class ImageManager extends cc.Component {
         {
             arrayList = this.mapID2ImageSave.get(strID);
         }
-        let bFind = false;
-        for (let i = 0; i < arrayList.length; i++)
-        {
-            if (img === arrayList[i])
-            {
-                bFind = true;
-                break;
-            }
-        }
-        if (!bFind)
-        {
+
+        if(img != null && cc.isValid(img) && arrayList.indexOf(img) < 0)
             arrayList.push(img);
-        }
+
         if(bNeedGet)
         {
             let strParam = "{\"header\":\"查询_用户_头像\",\"user_id\":\"" + strID + "\"}";
@@ -201,34 +186,34 @@ export default class ImageManager extends cc.Component {
 
     public OnAccountList(strMsg:string)
     {
-        Debug.Log("img"+strMsg);
-        let data = JSON.parse(strMsg);        
+        Debug.Log("avatar field:"+strMsg);
+        let data:any = null;
+        try
+        {
+            data = JSON.parse(strMsg);
+        }
+        catch(err)
+        {
+            Debug.Error("头像字段解析失败");
+            return;
+        }
+        if(data == null || !data.hasOwnProperty("id"))
+            return;
 
         let strID = data["id"].toString();
-        let strPhoto:string = data["photo"].toString();
+        let strPhoto = data.hasOwnProperty("photo") ? data["photo"] : "";
+        let avatarIndex = ImageManager.NormalizeAvatarIndex(strPhoto);
+        this.mapID2Avatar.set(strID, avatarIndex);
 
         if (this.mapID2ImageSave.has(strID))
         {
             let arrayList:Array<cc.Sprite> = this.mapID2ImageSave.get(strID);
-            if (strPhoto != "")
-            {
-                //处理带本地的特殊图片地址
-                if(strPhoto.indexOf("localhost")>=0)
-                {
-                   strPhoto = strPhoto.replace("localhost",WEB_IP_PIC+":"+WEB_PORT_PIC);
-                }
-                
-                arrayList.forEach((img,idx,array)=>{
-                    if (img != null && cc.isValid(img))
-                    {
-                        ImageManager.getInstance().GetImageByName(strID, strPhoto, img);
-                    }
-                },this);
-
-            }
+            arrayList.forEach((img)=>{
+                if (img != null && cc.isValid(img))
+                    this.SetLocalAvatar(img, avatarIndex, strID);
+            });
             Tool.ClearArray(arrayList);
-            this.mapID2ImageSave.delete(strID);           
+            this.mapID2ImageSave.delete(strID);
         }
-        
     }
 }

@@ -374,6 +374,10 @@ export default class DrhLogicMgr extends cc.Component {
             //解析基本用户信息
             player.strUserName = one["name"].toString();
             player.strSex = one["sex"].toString();
+            if(one.hasOwnProperty("photo"))
+            {
+                player.strPhoto = ImageManager.NormalizeAvatarIndex(one["photo"]);
+            }
             player.nGoldNum = Number(one["gold"].toString());
             player.nDiamondNum = Number(one["stone"].toString());
             if (one.hasOwnProperty("ip"))
@@ -454,7 +458,19 @@ export default class DrhLogicMgr extends cc.Component {
             //如果已经绑定过数据且是同一个人则只更新基本信息
             if (this.arrayPlayer[i].info != null && this.arrayPlayer[i].info.strUserID == this.arrayInfo[nTemp].strUserID)
             {
+                let oldAvatarIndex = this.arrayPlayer[i].info.strPhoto;
+                //部分旧版PlayerList不带photo，保留已经查询到的头像序号。
+                if(this.arrayInfo[nTemp].strPhoto == "")
+                    this.arrayInfo[nTemp].strPhoto = oldAvatarIndex;
                 this.arrayPlayer[i].info.BaseClone(this.arrayInfo[nTemp]);
+                if(this.arrayPlayer[i].info.strPhoto != "" && this.arrayPlayer[i].info.strPhoto != oldAvatarIndex)
+                {
+                    ImageManager.getInstance().SetLocalAvatar(
+                        this.arrayPlayer[i].GetImgCtl(),
+                        this.arrayPlayer[i].info.strPhoto,
+                        this.arrayPlayer[i].info.strUserID
+                    );
+                }
             }
             else
             {
@@ -462,10 +478,10 @@ export default class DrhLogicMgr extends cc.Component {
                 this.arrayPlayer[i].info.bClone = false;
                 let img = this.arrayPlayer[i].GetImgCtl();
 
-                //先复位头像
-                Tool.LoadImg(img,"other/Default_Man_Head");               
+                //先显示本地头像1，收到字段序号后再切换到对应本地头像。
+                ImageManager.getInstance().SetLocalAvatar(img,"1");
                 
-                if (!ImageManager.getInstance().GetImageByName(this.arrayPlayer[i].info.strUserID, "", img))
+                if (!ImageManager.getInstance().GetImageByName(this.arrayPlayer[i].info.strUserID, this.arrayPlayer[i].info.strPhoto, img))
                 {
                     ImageManager.getInstance().AddWaitFreshImage2Catch(this.arrayPlayer[i].info.strUserID, img);
                 }

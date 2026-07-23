@@ -138,10 +138,11 @@ export default class panelGivePad extends UIPanelViewBase {
 
         let strID:string = data["id"].toString();        
         let strName:string = data["name"];
+        let avatarIndex:string = data.hasOwnProperty("photo") ? data["photo"].toString() : "";
 
         Tool.GetChild(this.node,"bk/name").getComponent(cc.Label).string  = strName;
         let img = Tool.GetChild(this.node,"bk/头像/mask/img").getComponent(cc.Sprite);
-        if (!ImageManager.getInstance().GetImageByName(strID, "", img))
+        if (!ImageManager.getInstance().GetImageByName(strID, avatarIndex, img))
         {
             ImageManager.getInstance().AddWaitFreshImage2Catch(strID, img);
         }

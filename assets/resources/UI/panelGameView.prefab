@@ -432,9 +432,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 136,
-      "g": 140,
-      "b": 245,
+      "r": 232,
+      "g": 205,
+      "b": 139,
       "a": 255
     },
     "_contentSize": {
@@ -4578,9 +4578,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 190,
-      "g": 224,
-      "b": 247,
+      "r": 232,
+      "g": 205,
+      "b": 139,
       "a": 255
     },
     "_contentSize": {
@@ -5132,9 +5132,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 190,
-      "g": 224,
-      "b": 247,
+      "r": 232,
+      "g": 205,
+      "b": 139,
       "a": 255
     },
     "_contentSize": {
@@ -7373,7 +7373,7 @@
       "ctor": "Float64Array",
       "array": [
         -50.519,
-        -79.434,
+        15,
         0,
         0,
         0,
@@ -7480,7 +7480,7 @@
       "ctor": "Float64Array",
       "array": [
         -9,
-        -79.122,
+        15,
         0,
         0,
         0,
@@ -7591,7 +7591,7 @@
       "ctor": "Float64Array",
       "array": [
         -1,
-        -167.122,
+        -75,
         0,
         0,
         0,
@@ -7662,7 +7662,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        190.393,
+        150,
         0,
         0,
         0,
@@ -7958,8 +7958,8 @@
     "_useOriginalSize": false,
     "_string": "底皮1/3\n芒果1/3\n芒果1/3",
     "_N$string": "底皮1/3\n芒果1/3\n芒果1/3",
-    "_fontSize": 22,
-    "_lineHeight": 30,
+    "_fontSize": 18,
+    "_lineHeight": 24,
     "_enableWrapText": true,
     "_N$file": {
       "__uuid__": "fd7307b2-666e-4c26-963d-59f787cad6fb"
@@ -91390,7 +91390,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        65.709,
+        -62,
         0,
         0,
         0,
@@ -95427,9 +95427,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 255,
-      "g": 0,
-      "b": 0,
+      "r": 196,
+      "g": 86,
+      "b": 66,
       "a": 255
     },
     "_contentSize": {
@@ -102727,9 +102727,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 236,
-      "g": 255,
-      "b": 20,
+      "r": 218,
+      "g": 177,
+      "b": 79,
       "a": 255
     },
     "_contentSize": {
@@ -102975,9 +102975,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 255,
-      "g": 79,
-      "b": 49,
+      "r": 196,
+      "g": 86,
+      "b": 66,
       "a": 255
     },
     "_contentSize": {
@@ -120882,7 +120882,7 @@
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
     "_spriteFrame": {
-      "__uuid__": "e1e6dae8-c305-4d1b-8415-0649a1e61f93"
+      "__uuid__": "213d8e8a-2ca3-4f30-9924-f49d830a6c3d"
     },
     "_type": 0,
     "_sizeMode": 1,
@@ -122745,9 +122745,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 255,
-      "g": 0,
-      "b": 0,
+      "r": 196,
+      "g": 86,
+      "b": 66,
       "a": 255
     },
     "_contentSize": {
@@ -122805,8 +122805,8 @@
     "_useOriginalSize": false,
     "_string": "*举报内容将提交到后台由工作人员根据牌局真实情况进行审核，\n若举报属实，将对作弊玩家进行处罚，并奖励举报者",
     "_N$string": "*举报内容将提交到后台由工作人员根据牌局真实情况进行审核，\n若举报属实，将对作弊玩家进行处罚，并奖励举报者",
-    "_fontSize": 20,
-    "_lineHeight": 30,
+    "_fontSize": 18,
+    "_lineHeight": 27,
     "_enableWrapText": true,
     "_N$file": {
       "__uuid__": "fd7307b2-666e-4c26-963d-59f787cad6fb"
@@ -135975,9 +135975,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 0,
-      "g": 223,
-      "b": 255,
+      "r": 232,
+      "g": 205,
+      "b": 139,
       "a": 255
     },
     "_contentSize": {
