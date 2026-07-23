@@ -338,12 +338,12 @@ def main() -> None:
     parser.add_argument(
         "--background-source",
         type=Path,
-        default=ART_DIR / "qin_login_background_source.png",
+        default=ART_DIR / "qin_login_background_minimal_source.png",
     )
     parser.add_argument(
         "--clean-background-source",
         type=Path,
-        default=ART_DIR / "qin_login_background_clean_source.png",
+        default=ART_DIR / "qin_login_background_minimal_source.png",
     )
     args = parser.parse_args()
 

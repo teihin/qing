@@ -230,7 +230,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "dbg9ajQ2tPALNUW4pVwXa/",
     "sync": false
@@ -428,7 +428,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -482,7 +482,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "901TJ81AVA/6+f/ujp3fq/",
     "sync": false
@@ -563,7 +563,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "45MUfCPmxPjYbdo4dXN8Bd",
     "sync": false
@@ -684,7 +684,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -738,7 +738,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "96dpFVrw1AlYbYXAIfZraR",
     "sync": false
@@ -821,7 +821,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0b+e8FWvhNJZ/KWCfBGDOf",
     "sync": false
@@ -928,7 +928,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "daKPTRcFpC6LJtUBiLfokv",
     "sync": false
@@ -998,7 +998,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a0FrZM98hBv4ToMoUy+KNJ",
     "sync": false
@@ -1256,7 +1256,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "07zgtkPcpLlJz30W7SxKxK",
     "sync": false
@@ -1363,7 +1363,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "beZOfB/K5C5JeJXuaxARFh",
     "sync": false
@@ -1452,7 +1452,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "97HljWw5FBVL+4TCtxF6sC",
     "sync": false
@@ -1630,7 +1630,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "6fh/v6s5RMHIdy9XJ1dHsd",
     "sync": false
@@ -1737,7 +1737,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "00gC91745LPZdlwvEYn3Yc",
     "sync": false
@@ -1826,7 +1826,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "2bBVC6o05DpYQLUdInc6rO",
     "sync": false
@@ -2004,7 +2004,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c40XostSJGDr7pCaDspTin",
     "sync": false
@@ -2111,7 +2111,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "87Rk6Ix81H0ISUSNF0mmdL",
     "sync": false
@@ -2200,7 +2200,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "6eiS0akLJAfaXmw/XaT70S",
     "sync": false
@@ -2247,7 +2247,6 @@
     },
     "_resize": 0,
     "_N$layoutType": 1,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -2283,7 +2282,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "54X7MtgwJHuLQ4IDEXCYKf",
     "sync": false
@@ -2799,7 +2798,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e8wIsdVAJGK4Lkh8VV2Vtm",
     "sync": false
@@ -2906,7 +2905,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "38a+f6HOpEFY0RQVY/TpyA",
     "sync": false
@@ -2988,7 +2987,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "支付宝",
     "_N$string": "支付宝",
     "_fontSize": 20,
@@ -2998,6 +2998,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -3011,7 +3013,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e5VXHR9shF0qJYZPJNZkXm",
     "sync": false
@@ -3100,7 +3102,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ceYbHdNhVD0L3RcRjRXTx0",
     "sync": false
@@ -3281,7 +3283,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f0W7885GRK65jVa2/sbMsk",
     "sync": false
@@ -3388,7 +3390,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e0qZU4w0pPGaYXDA2e9Bdo",
     "sync": false
@@ -3470,7 +3472,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "支付宝",
     "_N$string": "支付宝",
     "_fontSize": 20,
@@ -3480,6 +3483,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -3493,7 +3498,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c1nid77RdI2r98DsCvui9k",
     "sync": false
@@ -3582,7 +3587,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4b+tfVATBE0KdWU0dxVBEu",
     "sync": false
@@ -3763,7 +3768,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "24cJgzzGhNZ4Isv+x4qUGR",
     "sync": false
@@ -3870,7 +3875,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a0SQ89yjtHP7sFn6gRvPpR",
     "sync": false
@@ -3952,7 +3957,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "支付宝",
     "_N$string": "支付宝",
     "_fontSize": 20,
@@ -3962,6 +3968,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -3975,7 +3983,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7ec55As0pGcrTFKBdtODYX",
     "sync": false
@@ -4064,7 +4072,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "45/ESony9De5CZvAlEbGxK",
     "sync": false
@@ -4245,7 +4253,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3c91jNIqxAF4but4mo2htA",
     "sync": false
@@ -4352,7 +4360,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "24aMgwVRhL1Z0DTFV9NB3z",
     "sync": false
@@ -4434,7 +4442,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "银联",
     "_N$string": "银联",
     "_fontSize": 20,
@@ -4444,6 +4453,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -4457,7 +4468,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "6557fEyj9JO5EtQVEE9NJI",
     "sync": false
@@ -4546,7 +4557,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5c+CnCRLpIGIbwpC22c+DP",
     "sync": false
@@ -4727,7 +4738,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0bClKm/MNKJKWVlSlts1NN",
     "sync": false
@@ -4834,7 +4845,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "03mM+TGm5NSoKpVEyos5ug",
     "sync": false
@@ -4916,7 +4927,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "银联",
     "_N$string": "银联",
     "_fontSize": 20,
@@ -4926,6 +4938,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -4939,7 +4953,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c0ZRWKK2ZLLorDCRt4cNaP",
     "sync": false
@@ -5028,7 +5042,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "89aGAF2HlNsZRd5y1TEHA1",
     "sync": false
@@ -5209,7 +5223,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4bE7PcljlJIZnuLqYxfZnz",
     "sync": false
@@ -5316,7 +5330,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3dGVyKIxRP26v9FcTJyCRB",
     "sync": false
@@ -5398,7 +5412,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "微信",
     "_N$string": "微信",
     "_fontSize": 20,
@@ -5408,6 +5423,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -5421,7 +5438,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "66SwP7xqVJY5Lr2B4bddw2",
     "sync": false
@@ -5510,7 +5527,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8b/KpfOSZEnrpgQuoiLUrX",
     "sync": false
@@ -5691,7 +5708,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "b5hIwudARPv6ly8SpHgefA",
     "sync": false
@@ -5798,7 +5815,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "652/eO7WNPJ5eOnqa0tsnu",
     "sync": false
@@ -5880,7 +5897,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "微信",
     "_N$string": "微信",
     "_fontSize": 20,
@@ -5890,6 +5908,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -5903,7 +5923,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5e9Zry8RBFj5pbvWfcMwZ7",
     "sync": false
@@ -5992,7 +6012,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3ccydUIItBTIbVbQ+PHDui",
     "sync": false
@@ -6173,7 +6193,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "61tmJwUENCRKQjtYnSeQ01",
     "sync": false
@@ -6280,7 +6300,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "1b7I82cU5MqL7Eo0riDU0m",
     "sync": false
@@ -6362,7 +6382,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "VIP充值1",
     "_N$string": "VIP充值1",
     "_fontSize": 20,
@@ -6372,6 +6393,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -6385,7 +6408,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "6efXc4VxpOI6PKjtjtQ3CC",
     "sync": false
@@ -6474,7 +6497,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3an8tQUlVGIqhEm04ddgcV",
     "sync": false
@@ -6655,7 +6678,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9c2TjNm7pFb5X9fPyvWE7k",
     "sync": false
@@ -6762,7 +6785,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f5/3glNa5OaJth5KLoimbo",
     "sync": false
@@ -6844,7 +6867,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "VIP充值2",
     "_N$string": "VIP充值2",
     "_fontSize": 20,
@@ -6854,6 +6878,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -6867,7 +6893,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "69HRw891FEI7q/g2MaGNHV",
     "sync": false
@@ -6956,7 +6982,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "fabbZks2hKQrF7oSoIJ05g",
     "sync": false
@@ -6976,7 +7002,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 3,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -7071,7 +7096,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "03RLJlCodKA6plcH9+KHDC",
     "sync": false
@@ -7341,7 +7366,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "2fSgq8lqFDeaTEr6RN9RAI",
     "sync": false
@@ -7448,7 +7473,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9cBBOzsjRPMJ8uc3/RBmrP",
     "sync": false
@@ -7530,7 +7555,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "50元",
     "_N$string": "50元",
     "_fontSize": 25,
@@ -7542,6 +7568,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -7555,7 +7583,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d1+Ncw1NVDSLNWLQAs3u7Y",
     "sync": false
@@ -7644,7 +7672,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "b9sZD/OGtHALm3IQ4gtfQs",
     "sync": false
@@ -7825,7 +7853,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "48fqhQO4NG1ZsUYfWOhDIO",
     "sync": false
@@ -7932,7 +7960,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "fd53zWsMlNZZCirkvli9YN",
     "sync": false
@@ -8014,7 +8042,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "100元",
     "_N$string": "100元",
     "_fontSize": 25,
@@ -8026,6 +8055,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -8039,7 +8070,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "461Nq4tXtMSKJzDC9He0e/",
     "sync": false
@@ -8128,7 +8159,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c0bZ0BF8lMd5uNfc4I719q",
     "sync": false
@@ -8309,7 +8340,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "46E7IzdV1ASogh3WBbVbkQ",
     "sync": false
@@ -8416,7 +8447,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ea/1g349BNR5y6sVAX5t0A",
     "sync": false
@@ -8498,7 +8529,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "500元",
     "_N$string": "500元",
     "_fontSize": 25,
@@ -8510,6 +8542,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -8523,7 +8557,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e0jByMa7tGJrQS04dP+/yb",
     "sync": false
@@ -8612,7 +8646,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f0qpjMvnhACLuGsXcQZVgg",
     "sync": false
@@ -8793,7 +8827,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "adIn7xjOBDAoi9RTlh4CvY",
     "sync": false
@@ -8900,7 +8934,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "07NZI8VSFIp4oX739AhWu0",
     "sync": false
@@ -8982,7 +9016,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "1000元",
     "_N$string": "1000元",
     "_fontSize": 25,
@@ -8994,6 +9029,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -9007,7 +9044,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7060ZrcIlNPp7PRIJNr/GY",
     "sync": false
@@ -9096,7 +9133,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a6KJm8S7RDUKPdqn9108M0",
     "sync": false
@@ -9277,7 +9314,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "94b2Y4QfRClK/lbBljUPQD",
     "sync": false
@@ -9384,7 +9421,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8eeztcEeFJf6aheqBQWE5k",
     "sync": false
@@ -9466,7 +9503,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "2000元",
     "_N$string": "2000元",
     "_fontSize": 25,
@@ -9478,6 +9516,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -9491,7 +9531,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "971TV7a5ZA9LZtraFK//h9",
     "sync": false
@@ -9580,7 +9620,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e51iEHj4JEL6h7CksUoGyK",
     "sync": false
@@ -9761,7 +9801,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a0QJJ3gZRIJq8gcO3f8wef",
     "sync": false
@@ -9868,7 +9908,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a7fYj7vUlA1ru8tIsO3BGj",
     "sync": false
@@ -9950,7 +9990,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "5000元",
     "_N$string": "5000元",
     "_fontSize": 25,
@@ -9962,6 +10003,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -9975,7 +10018,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "64uV5C8VRO/bA0eN7jR26d",
     "sync": false
@@ -10064,7 +10107,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0apvxWEjdJ6beyJJB2ef1L",
     "sync": false
@@ -10084,7 +10127,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 3,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -10147,7 +10189,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "94dmUKXFVB9ZiVPWMzV6+V",
     "sync": false
@@ -10357,7 +10399,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0bilbQKBNMCJKbFu39Mkkf",
     "sync": false
@@ -10567,7 +10609,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "02KkjIecVGmYuo7YD76h+I",
     "sync": false
@@ -10626,7 +10668,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -10777,7 +10819,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "cc0JskhHhPgLFbtuw6M5EC",
     "sync": false
@@ -10862,7 +10904,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "1.请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n2.每个订单时间微120分钟，120分钟内必须完成才能生成心订单，例如您下了一个500订单，但是并没有充值，您不能在下其他金额订单，更换金额必须完成500这个订单，也可等待120分钟该订单自动关闭后重新下单。\n3.每个玩家一天最多自动关闭三个订单，如果有三个订单未充值而自动关闭，您的账号将被封禁24小时。",
     "_N$string": "1.请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n2.每个订单时间微120分钟，120分钟内必须完成才能生成心订单，例如您下了一个500订单，但是并没有充值，您不能在下其他金额订单，更换金额必须完成500这个订单，也可等待120分钟该订单自动关闭后重新下单。\n3.每个玩家一天最多自动关闭三个订单，如果有三个订单未充值而自动关闭，您的账号将被封禁24小时。",
     "_fontSize": 24,
@@ -10874,6 +10917,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 0,
     "_N$fontFamily": "Arial",
@@ -10914,7 +10959,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "58/l9z8GBMm5oAFcygcH3b",
     "sync": false
@@ -10950,7 +10995,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 670,
-      "height": 277.8
+      "height": 127.8
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -10999,9 +11044,10 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
-    "_string": "1.请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n2.每个订单时间为120分钟，120分钟内必须完成才能生成新订单，例如您下了一个500订单，但是并没有充值，您不能在下其他金额订单，更换金额必须完成500这个订单，也可等待120分钟该订单自动关闭后重新下单。\n3.每个玩家一天最多自动关闭三个订单，如果有三个订单未充值而自动关闭，您的账号将被封禁24小时。",
-    "_N$string": "1.请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n2.每个订单时间为120分钟，120分钟内必须完成才能生成新订单，例如您下了一个500订单，但是并没有充值，您不能在下其他金额订单，更换金额必须完成500这个订单，也可等待120分钟该订单自动关闭后重新下单。\n3.每个玩家一天最多自动关闭三个订单，如果有三个订单未充值而自动关闭，您的账号将被封禁24小时。",
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n",
+    "_N$string": "请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n",
     "_fontSize": 24,
     "_lineHeight": 30,
     "_enableWrapText": true,
@@ -11011,6 +11057,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 0,
     "_N$fontFamily": "Arial",
@@ -11051,7 +11099,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a8a3fKHn5JK6e/z5loM7nK",
     "sync": false
@@ -11087,7 +11135,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 670,
-      "height": 277.8
+      "height": 127.8
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -11136,9 +11184,10 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
-    "_string": "1.请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n2.每个订单时间为120分钟，120分钟内必须完成才能生成新订单，例如您下了一个500订单，但是并没有充值，您不能在下其他金额订单，更换金额必须完成500这个订单，也可等待120分钟该订单自动关闭后重新下单。\n3.每个玩家一天最多自动关闭三个订单，如果有三个订单未充值而自动关闭，您的账号将被封禁24小时。",
-    "_N$string": "1.请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n2.每个订单时间为120分钟，120分钟内必须完成才能生成新订单，例如您下了一个500订单，但是并没有充值，您不能在下其他金额订单，更换金额必须完成500这个订单，也可等待120分钟该订单自动关闭后重新下单。\n3.每个玩家一天最多自动关闭三个订单，如果有三个订单未充值而自动关闭，您的账号将被封禁24小时。",
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n",
+    "_N$string": "请使用实名认证名下的银行卡充值，准确按照订单金额进行转账，如果因姓名或者金额不对造成充值延误或资金损失玩家自行承担后果。\n",
     "_fontSize": 24,
     "_lineHeight": 30,
     "_enableWrapText": true,
@@ -11148,6 +11197,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 0,
     "_N$fontFamily": "Arial",
@@ -11188,7 +11239,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f4vqAroitPQp/HCGnpnAPY",
     "sync": false
@@ -11226,7 +11277,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7fbVYDJCZFOYOkr33d1h0d",
     "sync": false
@@ -11434,7 +11485,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "98vGs+eepDMpQ3a6SVs6ig",
     "sync": false
@@ -11880,7 +11931,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "54xJO27YRHra7ea0ijYKpO",
     "sync": false
@@ -11965,7 +12016,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 20,
@@ -11975,6 +12027,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -12015,7 +12069,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0ckVb48MFKAJ5PVPiikm++",
     "sync": false
@@ -12100,7 +12154,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入银行",
     "_N$string": "请输入银行",
     "_fontSize": 20,
@@ -12110,6 +12165,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -12150,7 +12207,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "2biQxJMFtI4odqwR4F7JvK",
     "sync": false
@@ -12287,7 +12344,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a2p971R0pLmYi5+rGSEcKv",
     "sync": false
@@ -12369,7 +12426,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "银行:",
     "_N$string": "银行:",
     "_fontSize": 30,
@@ -12379,6 +12437,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -12392,7 +12452,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "26Xj5g8hNL0qFm2LYlg69Q",
     "sync": false
@@ -12529,7 +12589,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f7mflEHspHWrcYnCYi5POl",
     "sync": false
@@ -12542,7 +12602,6 @@
       "__id__": 288
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 6,
@@ -12569,7 +12628,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "60Xh3rWKlFFYARX9iqcCoB",
     "sync": false
@@ -12684,7 +12743,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "21lJU9HR5H1pKOhVo/B7XV",
     "sync": false
@@ -12722,7 +12781,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "1fxnShc7xBM5ErkZGeWkfs",
     "sync": false
@@ -13008,7 +13067,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "fd3Fzqam1GX7Gb3efJZfJt",
     "sync": false
@@ -13093,7 +13152,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 20,
@@ -13103,6 +13163,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -13143,7 +13205,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "00TgsOT2JMVI6U2TeP4hox",
     "sync": false
@@ -13228,7 +13290,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入姓名",
     "_N$string": "请输入姓名",
     "_fontSize": 20,
@@ -13238,6 +13301,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -13278,7 +13343,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e3X3iWpCVKvKKb79ZAKxRw",
     "sync": false
@@ -13415,7 +13480,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "50id02v4BAKrLGHp4hPQA6",
     "sync": false
@@ -13497,7 +13562,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "姓名:",
     "_N$string": "姓名:",
     "_fontSize": 30,
@@ -13507,6 +13573,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -13520,7 +13588,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c2JfNXxFZMibg5u9HSdzrm",
     "sync": false
@@ -13657,7 +13725,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "042SELMShPq71KOUVFyYN6",
     "sync": false
@@ -13670,7 +13738,6 @@
       "__id__": 321
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 6,
@@ -13697,7 +13764,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ccbzev+LtGhKpIz+AfJit3",
     "sync": false
@@ -13735,7 +13802,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5fhbytwbZEEqZbHlv+MTyc",
     "sync": false
@@ -14021,7 +14088,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d6MmMQDJNLBK3bC7E8E5Sj",
     "sync": false
@@ -14106,7 +14173,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 20,
@@ -14116,6 +14184,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -14156,7 +14226,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "cfTa/DrANBE7f9Bx5TNiz5",
     "sync": false
@@ -14241,7 +14311,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入卡号",
     "_N$string": "请输入卡号",
     "_fontSize": 20,
@@ -14251,6 +14322,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -14291,7 +14364,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4f7g/V8BxCDr4k9WXH1Zzc",
     "sync": false
@@ -14428,7 +14501,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bayfacSIdJPqNJ6V6roOGd",
     "sync": false
@@ -14510,7 +14583,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "卡号:",
     "_N$string": "卡号:",
     "_fontSize": 30,
@@ -14520,6 +14594,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -14533,7 +14609,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5dbEXTBsNB85eh7U2JLble",
     "sync": false
@@ -14670,7 +14746,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "67lGbKzvZBXpVcApQHqRyO",
     "sync": false
@@ -14683,7 +14759,6 @@
       "__id__": 350
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 6,
@@ -14710,7 +14785,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "daRnD7KvJP4ZUbO89vmuQd",
     "sync": false
@@ -14748,7 +14823,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c2XKfpaHFELZSRtV7vx2mW",
     "sync": false
@@ -15034,7 +15109,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e0jMEu6IBAvpagnU75UKqR",
     "sync": false
@@ -15119,7 +15194,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 20,
@@ -15129,6 +15205,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -15169,7 +15247,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c4PY4yigRJI4NZ4rsY9fMr",
     "sync": false
@@ -15254,7 +15332,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入开户手机号",
     "_N$string": "请输入开户手机号",
     "_fontSize": 20,
@@ -15264,6 +15343,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -15304,7 +15385,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bfUpG28aVFYpW45Pp1hJQO",
     "sync": false
@@ -15441,7 +15522,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0fNryigRJN+pGJXHbRUA1L",
     "sync": false
@@ -15523,7 +15604,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "手机号:",
     "_N$string": "手机号:",
     "_fontSize": 30,
@@ -15533,6 +15615,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -15546,7 +15630,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "50DOT/bepFx6Wjq3D3RO6I",
     "sync": false
@@ -15683,7 +15767,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "b5SMihKz9ApZshF6gjrekQ",
     "sync": false
@@ -15696,7 +15780,6 @@
       "__id__": 379
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 6,
@@ -15723,7 +15806,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ccJ0pc3xtHXLC4oD0gRnel",
     "sync": false
@@ -15761,7 +15844,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e70qXy5k5PdagIzwZdj4cj",
     "sync": false
@@ -15914,7 +15997,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "*身份证仅用于银联验证,平台不保存.",
     "_N$string": "*身份证仅用于银联验证,平台不保存.",
     "_fontSize": 20,
@@ -15924,6 +16008,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -15937,7 +16023,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "48dQLe+f9CV4SflJrbh5sJ",
     "sync": false
@@ -16155,7 +16241,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "77dJgtm6JB3LJrolASkPxT",
     "sync": false
@@ -16240,7 +16326,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 20,
@@ -16250,6 +16337,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -16290,7 +16379,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "1fOHhWV+VJ7JoQtFb7jNIO",
     "sync": false
@@ -16375,7 +16464,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入开户身份证号",
     "_N$string": "请输入开户身份证号",
     "_fontSize": 20,
@@ -16385,6 +16475,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -16425,7 +16517,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "60cDnftntGV6cM05LDa3ms",
     "sync": false
@@ -16562,7 +16654,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "56h6JNbU5EPYqyF60yO5vK",
     "sync": false
@@ -16644,7 +16736,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "身份证:",
     "_N$string": "身份证:",
     "_fontSize": 30,
@@ -16654,6 +16747,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -16667,7 +16762,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "44g2BhjBNJRJGZQOUaJGyM",
     "sync": false
@@ -16804,7 +16899,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "222OFP5hlKQIOaWQrE1KUQ",
     "sync": false
@@ -16817,7 +16912,6 @@
       "__id__": 411
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 6,
@@ -16844,7 +16938,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8b/xHzMsRO+5OMHPFaJYoG",
     "sync": false
@@ -16882,7 +16976,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8ayb2OMlhOCrKcTw7XOQiB",
     "sync": false
@@ -16929,7 +17023,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 2,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -16953,7 +17046,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "02rGw993FKDb2n45Stc10F",
     "sync": false
@@ -17133,7 +17226,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "82Ssj8Nm1G7oIvV/YyU24o",
     "sync": false
@@ -17186,7 +17279,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0aIkMeP3tOQLhAHKwO0P6C",
     "sync": false
@@ -17224,7 +17317,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4fBGrvgW1PUZNOjRRQe0tX",
     "sync": false
@@ -17262,7 +17355,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "32DL1dqIpJlaK4KMSYRSUT",
     "sync": false
@@ -17482,7 +17575,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "adP5yIYQJIyrkwiOzsb60q",
     "sync": false
@@ -17666,7 +17759,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "efgEMGp7RCGL6Xc7v4d+0W",
     "sync": false
@@ -17841,7 +17934,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9fo6eJxFFNLLitDxwLy44L",
     "sync": false
@@ -17859,7 +17952,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 24,
@@ -17871,6 +17965,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -17884,7 +17980,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "deLLoLFTZGAJb/BJKefEjh",
     "sync": false
@@ -17966,7 +18062,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "0",
     "_N$string": "0",
     "_fontSize": 24,
@@ -17978,6 +18075,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -17991,7 +18090,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "91e702LlJP4ZOPDMOqfYqn",
     "sync": false
@@ -18061,7 +18160,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bdN1bDdUBNkqrcX9I+Jj3x",
     "sync": false
@@ -18220,7 +18319,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "全部提现",
     "_N$string": "全部提现",
     "_fontSize": 28,
@@ -18230,6 +18330,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -18243,7 +18345,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a4TLU2ZDRIH7QFvBiQHLrk",
     "sync": false
@@ -18350,7 +18452,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "b5y3LJiI9Lk5bwM5O0mhdM",
     "sync": false
@@ -18488,7 +18590,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "acjmjiyQ5HR4Q3pcLHkmPA",
     "sync": false
@@ -18746,7 +18848,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "26p414KiJGtZzSR/ITSD9s",
     "sync": false
@@ -18883,7 +18985,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bdP+uNArFMTItdHUFW2wnJ",
     "sync": false
@@ -18972,7 +19074,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "cc8Io9dNVIEKpAQylFZ8ZF",
     "sync": false
@@ -19150,7 +19252,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bfrmWVrEVMFKFvxrVFkfQ8",
     "sync": false
@@ -19287,7 +19389,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "55klidgBdMS7p07/geBEY1",
     "sync": false
@@ -19376,7 +19478,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8cWtZKlv5DqIVr3ACF1REm",
     "sync": false
@@ -19554,7 +19656,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "35Inu8cKVB14g/bH/2/erx",
     "sync": false
@@ -19691,7 +19793,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "92jtcjRLFDfYfE4Oc+ZS5c",
     "sync": false
@@ -19780,7 +19882,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "294X83LWNJO5HG/VRZISce",
     "sync": false
@@ -19839,7 +19941,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 1,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -19863,7 +19964,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "035+gRVuZIJbAOMJgg4bFk",
     "sync": false
@@ -20118,7 +20219,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e2S05AwWlO7qNb8aBxKogl",
     "sync": false
@@ -20255,7 +20356,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "32v2XrnydJ2ZmSvsW5W4nj",
     "sync": false
@@ -20344,7 +20445,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d00QuPvvxN5o1YpuAHZ162",
     "sync": false
@@ -20525,7 +20626,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f9tpJid5BGRIdRbfX4sxl8",
     "sync": false
@@ -20662,7 +20763,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "dcc9/pklhK6KQdmgzKoYof",
     "sync": false
@@ -20744,7 +20845,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "2%",
     "_N$string": "2%",
     "_fontSize": 20,
@@ -20754,6 +20856,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -20767,7 +20871,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4aghhQGGdKf4lKtuMP97o7",
     "sync": false
@@ -20856,7 +20960,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c2qoyfGY5I1pkKaTLMyCpx",
     "sync": false
@@ -20915,7 +21019,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 1,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -20939,7 +21042,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d4h+lP+HRKd7hbD3sX4yE3",
     "sync": false
@@ -21207,7 +21310,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "今日汇率:",
     "_N$string": "今日汇率:",
     "_fontSize": 25,
@@ -21217,6 +21321,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -21230,7 +21336,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a6soetTFhOmpzvIvG1KZNY",
     "sync": false
@@ -21312,7 +21418,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 25,
@@ -21322,6 +21429,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -21335,7 +21444,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "61YcNywBBEe5Myt3eiNzq2",
     "sync": false
@@ -21346,7 +21455,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "61i7sVdIFKt4Vth+dxbjRB",
     "sync": false
@@ -21632,7 +21741,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "16Rkjtn9JAAp5u1jHJ1JIB",
     "sync": false
@@ -21717,7 +21826,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -21727,6 +21837,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -21767,7 +21879,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a6RdUnNtRETqtV/tLz9yWz",
     "sync": false
@@ -21852,7 +21964,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入金额",
     "_N$string": "请输入金额",
     "_fontSize": 20,
@@ -21862,6 +21975,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -21902,7 +22017,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "cfweZANAlCVZbE7XsEpwgG",
     "sync": false
@@ -21915,7 +22030,6 @@
       "__id__": 558
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 20,
@@ -21969,7 +22083,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "897OmPR3tCJ6peqTDEphJs",
     "sync": false
@@ -22076,7 +22190,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3bq/VVPfVF56E6J8GFkBbN",
     "sync": false
@@ -22146,7 +22260,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "57zqLnvJhL5LDY+cUObwSh",
     "sync": false
@@ -22435,7 +22549,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "6aXNsINEhGT6HoRfTMG5vf",
     "sync": false
@@ -22520,7 +22634,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -22530,6 +22645,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -22570,7 +22687,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "05VVY24IJPHbGPmuc9vSkR",
     "sync": false
@@ -22655,7 +22772,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入姓名",
     "_N$string": "请输入姓名",
     "_fontSize": 20,
@@ -22665,6 +22783,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -22705,7 +22825,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7e6zSjTIxDuaqK8jX8SpkW",
     "sync": false
@@ -22718,7 +22838,6 @@
       "__id__": 581
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 11,
@@ -22772,7 +22891,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "fcgkqcztBDerHun8wnHTBB",
     "sync": false
@@ -22945,7 +23064,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3bktODi7FMeaCudu486GiA",
     "sync": false
@@ -23052,7 +23171,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "49RyFKCetLy4DPOyduhQp+",
     "sync": false
@@ -23122,7 +23241,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "97qUNk1pNNIqAfMeXyzpzN",
     "sync": false
@@ -23411,7 +23530,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f1lgX6yQFNDb69LZDJo+Zi",
     "sync": false
@@ -23496,7 +23615,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -23506,6 +23626,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -23546,7 +23668,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bdQNcYSxZAZ54InkMiAjkQ",
     "sync": false
@@ -23631,7 +23753,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入银行",
     "_N$string": "请输入银行",
     "_fontSize": 20,
@@ -23641,6 +23764,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -23681,7 +23806,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "81k4wpwvZHhKbqB0oby0Jl",
     "sync": false
@@ -23694,7 +23819,6 @@
       "__id__": 608
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 20,
@@ -23748,7 +23872,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "1aMF/0ZKBOY4rlkZ0O5t2G",
     "sync": false
@@ -23850,7 +23974,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "214JajMldKfJFRCFXVps2S",
     "sync": false
@@ -23957,7 +24081,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "acikPWHN5B3owwaQdptiry",
     "sync": false
@@ -24027,7 +24151,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a2QBuXVeBLY4OTSKiuL1yC",
     "sync": false
@@ -24310,7 +24434,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5daS9YMCRKgqyyy4S9z4cY",
     "sync": false
@@ -24395,7 +24519,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -24405,6 +24530,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -24445,7 +24572,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "6aO+yAuxNLDYTZ5STCoFM/",
     "sync": false
@@ -24530,7 +24657,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入支行",
     "_N$string": "请输入支行",
     "_fontSize": 20,
@@ -24540,6 +24668,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -24580,7 +24710,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4ea52dt3hBUrsFpe01ENWI",
     "sync": false
@@ -24593,7 +24723,6 @@
       "__id__": 634
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 30,
@@ -24647,7 +24776,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "eect3KtAhKa4Xn9mIUjt8g",
     "sync": false
@@ -24717,7 +24846,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "b4GyUr9rhFpqFA/WAci8Dy",
     "sync": false
@@ -25000,7 +25129,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "28eV02DKBEBKsVSCnrtcAl",
     "sync": false
@@ -25085,7 +25214,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -25095,6 +25225,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -25135,7 +25267,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "473jAewZVPoLbZJEnxojM1",
     "sync": false
@@ -25220,7 +25352,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入支付宝",
     "_N$string": "请输入支付宝",
     "_fontSize": 20,
@@ -25230,6 +25363,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -25270,7 +25405,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a8ExPkq2tOHaYRcTg9V/0/",
     "sync": false
@@ -25283,7 +25418,6 @@
       "__id__": 654
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 30,
@@ -25337,7 +25471,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5dlkRvzidFRrplsyUlbU1Q",
     "sync": false
@@ -25407,7 +25541,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "30oyW7g3dOXbCt9zbB2O6f",
     "sync": false
@@ -25693,7 +25827,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9bBc2lfLRGjKqdC4j/azC/",
     "sync": false
@@ -25778,7 +25912,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -25788,6 +25923,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -25828,7 +25965,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ddP9gL3X1Mdarn/RCReJ51",
     "sync": false
@@ -25913,7 +26050,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入卡号",
     "_N$string": "请输入卡号",
     "_fontSize": 20,
@@ -25923,6 +26061,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -25963,7 +26103,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "74aD2DZqtFMro7/UBm1/2Y",
     "sync": false
@@ -25976,7 +26116,6 @@
       "__id__": 674
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 30,
@@ -26030,7 +26169,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e7nGhQhrRDAoTBy9j68sXa",
     "sync": false
@@ -26137,7 +26276,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "fbfxiL+atEw4DJ1sV6l5ly",
     "sync": false
@@ -26207,7 +26346,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "2fa12VShhDG5XRQgSqJGn0",
     "sync": false
@@ -26493,7 +26632,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "57miDtSGhN8ZJ6u8AbYkMK",
     "sync": false
@@ -26578,7 +26717,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -26588,6 +26728,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -26628,7 +26770,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "b5xGdctppA47IZbfiqfQ8/",
     "sync": false
@@ -26713,7 +26855,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入提现金额",
     "_N$string": "请输入提现金额",
     "_fontSize": 20,
@@ -26723,6 +26866,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -26763,7 +26908,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "eaQ1tJ76dLrL6t5w1lvjbZ",
     "sync": false
@@ -26776,7 +26921,6 @@
       "__id__": 697
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 20,
@@ -26830,7 +26974,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "86lzUV0DVIl652JtgEdTlt",
     "sync": false
@@ -26937,7 +27081,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "97cI7d+YpOTr7UjHXq/o8o",
     "sync": false
@@ -27007,7 +27151,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9eslvKpmBAcrTP4fnzD/Jv",
     "sync": false
@@ -27293,7 +27437,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "96T4i6KBlL+bkamKtTiJ9c",
     "sync": false
@@ -27378,7 +27522,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -27388,6 +27533,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -27428,7 +27575,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7f2CG+EbtLqpBmn4sCngOK",
     "sync": false
@@ -27513,7 +27660,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "提现金额兑换成USDT的数量",
     "_N$string": "提现金额兑换成USDT的数量",
     "_fontSize": 20,
@@ -27523,6 +27671,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -27563,7 +27713,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "71JmqojiZETqxew8sOvckL",
     "sync": false
@@ -27576,7 +27726,6 @@
       "__id__": 720
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 20,
@@ -27630,7 +27779,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5aANQ1TixBz4nE+CqVBWcc",
     "sync": false
@@ -27737,7 +27886,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ceah3ePwlCFbmYzx3mOV8W",
     "sync": false
@@ -27807,7 +27956,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d7CdaLB39KLLV/FdqgkAVZ",
     "sync": false
@@ -28096,7 +28245,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9fX8858rRKurRhEkqoNvAz",
     "sync": false
@@ -28181,7 +28330,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -28191,6 +28341,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -28231,7 +28383,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "caxxSSNLNIE7iOg7kQ3WIC",
     "sync": false
@@ -28316,7 +28468,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请正确输入TRC20地址",
     "_N$string": "请正确输入TRC20地址",
     "_fontSize": 20,
@@ -28326,6 +28479,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -28366,7 +28521,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "aae/MKIHVL0p5HR7Oi4Jq5",
     "sync": false
@@ -28379,7 +28534,6 @@
       "__id__": 743
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 20,
@@ -28433,7 +28587,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d09alwKXNBrIsQ1zU1EEzH",
     "sync": false
@@ -28540,7 +28694,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "94noa+Q9VJoqVP9ZOzv8P/",
     "sync": false
@@ -28718,7 +28872,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "29QaVzK3RLOa8/a194/Wew",
     "sync": false
@@ -28788,7 +28942,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "94VmXdnrFEZKD2RCSAvHIx",
     "sync": false
@@ -29074,7 +29228,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f921DjL2dM8pbbeAxNW7Ha",
     "sync": false
@@ -29159,7 +29313,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -29169,6 +29324,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -29209,7 +29366,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "08yNFxhjFCwKP5aS8/acmi",
     "sync": false
@@ -29294,7 +29451,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入交易密码",
     "_N$string": "请输入交易密码",
     "_fontSize": 20,
@@ -29304,6 +29462,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -29344,7 +29504,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "07dHGUY0BJg5FRieul0n6B",
     "sync": false
@@ -29357,7 +29517,6 @@
       "__id__": 770
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 20,
@@ -29411,7 +29570,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a55SvvrLlKu5Wr1HXrm8T7",
     "sync": false
@@ -29518,7 +29677,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "72eszPzc5N65VrXiyGvp6D",
     "sync": false
@@ -29588,7 +29747,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "36MOUNk5xBgJRWnoMJWuXv",
     "sync": false
@@ -29761,7 +29920,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "52XIeZOxZD9oqcKUzmcXqT",
     "sync": false
@@ -29941,7 +30100,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "610Aoz3zRD85MAnjWBwHgN",
     "sync": false
@@ -30114,7 +30273,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "28FOm/3MNCeL5z/+PJ3dmI",
     "sync": false
@@ -30294,7 +30453,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "63fnL4CPtK07jG8YzgpQyF",
     "sync": false
@@ -30467,7 +30626,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "cf0qJIXbtLPIkqMeEELU5H",
     "sync": false
@@ -30555,7 +30714,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 22,
@@ -30567,6 +30727,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -30675,7 +30837,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ddWT7LhGBMZqSc+fpKjy+F",
     "sync": false
@@ -30722,7 +30884,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 2,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -30746,7 +30907,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "77raFcsWxBwYO7Ok0Qp/Lm",
     "sync": false
@@ -30784,7 +30945,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "16QtpGU61ImKMDgp1m0wH7",
     "sync": false
@@ -31113,7 +31274,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8fT/uxaUdJZbE7SnuLbCYm",
     "sync": false
@@ -31131,7 +31292,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 24,
@@ -31143,6 +31305,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -31156,7 +31320,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "227++OChZDJKqr8uf9I1e3",
     "sync": false
@@ -31331,7 +31495,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "aeROzcAd1G7bq4xY6ggf8m",
     "sync": false
@@ -31349,7 +31513,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 24,
@@ -31361,6 +31526,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -31374,7 +31541,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "19xThD/TVN+5pOPtlT+bAQ",
     "sync": false
@@ -31549,7 +31716,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "49J7gYng5JsKhN0os0N+Fa",
     "sync": false
@@ -31567,7 +31734,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 24,
@@ -31579,6 +31747,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -31592,7 +31762,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "33PJ4nGAdOtZpvICQjtWqG",
     "sync": false
@@ -31767,7 +31937,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c849A59ExABZmLVaWsyrTX",
     "sync": false
@@ -31785,7 +31955,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 24,
@@ -31797,6 +31968,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -31810,7 +31983,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d5FUmxGfZJuZFUe3kQpF4R",
     "sync": false
@@ -31880,7 +32053,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bcRAT3/tFORagiHuPcfVgp",
     "sync": false
@@ -32139,7 +32312,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 2,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -32163,7 +32335,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "27cx53Iu9NzK5cMDMZIWY4",
     "sync": false
@@ -32221,7 +32393,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "35fZ/LMOlFqK2DVqZEMs3d",
     "sync": false
@@ -32320,7 +32492,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "470a/iUyhHaaNwhzNQJM0E",
     "sync": false
@@ -32584,7 +32756,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "42YVgLk29HvoTmYNKOWVu8",
     "sync": false
@@ -32667,7 +32839,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c6UQ5Fn3ZNNpFKcMA25IHx",
     "sync": false
@@ -32842,7 +33014,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8agO/v2khHuJn15ZENJfGV",
     "sync": false
@@ -32925,7 +33097,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a0lPJnqU5N7K0SYfa1XLNI",
     "sync": false
@@ -33100,7 +33272,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "caA6QHdSBNwaHtDxtI7ZVO",
     "sync": false
@@ -33183,7 +33355,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5azsvYflJDBbZxJH21JI2v",
     "sync": false
@@ -33358,7 +33530,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5ahwKGFkxEK53is+3rF/0b",
     "sync": false
@@ -33441,7 +33613,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c9zfnXEWJO0Ir9CFaTu5gj",
     "sync": false
@@ -33523,7 +33695,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "-",
     "_N$string": "-",
     "_fontSize": 30,
@@ -33533,6 +33706,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -33546,7 +33721,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "fetqzl9FRAg7s8SbzV601l",
     "sync": false
@@ -33623,7 +33798,6 @@
     },
     "_resize": 0,
     "_N$layoutType": 1,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -33658,7 +33832,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "393MLJDz9JLbkd5X/m2uCb",
     "sync": false
@@ -33696,7 +33870,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7afKIaFZ5FIp01TIxAKqpn",
     "sync": false
@@ -33734,7 +33908,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3eUQV7MmBJfpu3BlkWwWos",
     "sync": false
@@ -33945,7 +34119,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d9uB7BJ95H9JEWofZjodW6",
     "sync": false
@@ -34197,7 +34371,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "12PBzOW7dElb4l5+uSvR/C",
     "sync": false
@@ -34278,7 +34452,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "78+GvPQapLJZyht0OAOPqg",
     "sync": false
@@ -34453,7 +34627,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5f013b6etIYouu0bfQNbEN",
     "sync": false
@@ -34536,7 +34710,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "55L4SUfwFIeIk81rw6gnZR",
     "sync": false
@@ -34643,7 +34817,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e8V0qEaIpGZZhC4gmhj8Ew",
     "sync": false
@@ -34713,7 +34887,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7c0qfbIN1NnIIHLovjzLgb",
     "sync": false
@@ -34921,7 +35095,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "91PZT9ThdN/YszdjVipnSo",
     "sync": false
@@ -34992,7 +35166,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4cpA6CggZBGpCPgbLArFhe",
     "sync": false
@@ -35278,7 +35452,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "93Q0U5toZO76lBRZ9Erbq/",
     "sync": false
@@ -35363,7 +35537,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -35373,6 +35548,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -35413,7 +35590,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5co3+fOb5GRLdB35UcPSel",
     "sync": false
@@ -35498,7 +35675,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入姓名",
     "_N$string": "请输入姓名",
     "_fontSize": 20,
@@ -35508,6 +35686,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -35548,7 +35728,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d2byr0tDlEdpHLUVo4TNok",
     "sync": false
@@ -35561,7 +35741,6 @@
       "__id__": 932
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 11,
@@ -35615,7 +35794,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "fbyuTvPZNArpmEnkqcVTpT",
     "sync": false
@@ -35722,7 +35901,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "09U5wnWNtHHJc/2ymEchEE",
     "sync": false
@@ -35792,7 +35971,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8elDvaLc5GYJ8CUpI+qN/2",
     "sync": false
@@ -36081,7 +36260,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c6N6mf7OhC1arYWEVZQx28",
     "sync": false
@@ -36166,7 +36345,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -36176,6 +36356,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -36216,7 +36398,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "df/4CFZxhLppOIirlsnPWz",
     "sync": false
@@ -36301,7 +36483,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入银行",
     "_N$string": "请输入银行",
     "_fontSize": 20,
@@ -36311,6 +36494,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -36351,7 +36536,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a5HfDc8Z9Dt4EIhw6miLeB",
     "sync": false
@@ -36364,7 +36549,6 @@
       "__id__": 955
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 20,
@@ -36418,7 +36602,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "bcqOIi78FHDLkLexP0dqkW",
     "sync": false
@@ -36520,7 +36704,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "92LBwG+VdGepwa2yyvfTNJ",
     "sync": false
@@ -36627,7 +36811,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ceE+gBWLlBv60waE9Ep222",
     "sync": false
@@ -36697,7 +36881,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f6KtSZvVVDCpaFRPwGNWvu",
     "sync": false
@@ -36983,7 +37167,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "2c4RdRQcZE8a9/nwLpUl/D",
     "sync": false
@@ -37068,7 +37252,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -37078,6 +37263,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -37118,7 +37305,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "3cu6tdTNBGTJemXCwa4Lqo",
     "sync": false
@@ -37203,7 +37390,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入卡号",
     "_N$string": "请输入卡号",
     "_fontSize": 20,
@@ -37213,6 +37401,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -37253,7 +37443,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "babrIKZPJPP7qxdx6UtVky",
     "sync": false
@@ -37266,7 +37456,6 @@
       "__id__": 981
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 30,
@@ -37320,7 +37509,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "29MW/pMe5Af6FbQeH8K/D7",
     "sync": false
@@ -37427,7 +37616,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ebKqBrqaZIKK78VeXRT445",
     "sync": false
@@ -37497,7 +37686,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9dZKlkKbdPvZniyrO4M01/",
     "sync": false
@@ -37783,7 +37972,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "40CuNzmu9Lf51WZjKP0qFE",
     "sync": false
@@ -37868,7 +38057,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -37878,6 +38068,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -37918,7 +38110,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7fDbeRbOlKNptPjTY8VfyH",
     "sync": false
@@ -38003,7 +38195,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请输入交易密码",
     "_N$string": "请输入交易密码",
     "_fontSize": 20,
@@ -38013,6 +38206,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -38053,7 +38248,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4cE9RJeKNKz561BtSwyfXQ",
     "sync": false
@@ -38066,7 +38261,6 @@
       "__id__": 1004
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 30,
@@ -38120,7 +38314,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "10eyaY4ZxE8aeU2ISDrLGh",
     "sync": false
@@ -38227,7 +38421,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "694he4lglHBrxayWMHMDob",
     "sync": false
@@ -38297,7 +38491,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d8TB/vgKFP+6kg//d41aDA",
     "sync": false
@@ -38583,7 +38777,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "dbdb6J0q5OOrtpk9SV+Nke",
     "sync": false
@@ -38668,7 +38862,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 23,
@@ -38678,6 +38873,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -38718,7 +38915,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "2edXTUjXxHXqkV0nBYdsyj",
     "sync": false
@@ -38803,7 +39000,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": true,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "请确认交易密码",
     "_N$string": "请确认交易密码",
     "_fontSize": 20,
@@ -38813,6 +39011,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -38853,7 +39053,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "67YFu3RixJDLTxFpdCK3kl",
     "sync": false
@@ -38866,7 +39066,6 @@
       "__id__": 1027
     },
     "_enabled": true,
-    "_useOriginalSize": true,
     "_string": "",
     "returnType": 0,
     "maxLength": 30,
@@ -38920,7 +39119,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "601FxQZ5FNs6MhpbOj3Wqo",
     "sync": false
@@ -39027,7 +39226,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "64nsqCVgxJcIRETZWA8xTA",
     "sync": false
@@ -39097,7 +39296,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "6egpL858xPE7O3kN9wJKSO",
     "sync": false
@@ -39277,7 +39476,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9bi+pVqQRPbIZOXA+r6goh",
     "sync": false
@@ -39450,7 +39649,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "02wJWmM3BKZ7WZp+95R111",
     "sync": false
@@ -39538,7 +39737,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "",
     "_N$string": "",
     "_fontSize": 22,
@@ -39550,6 +39750,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -39658,7 +39860,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "533yQiGLlMHqMIzw/bazzh",
     "sync": false
@@ -39817,7 +40019,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "\n1.请填写真实姓名且保证名字准确，设置后名字不能修改。名字错误充值可能损失，同时无法提现。\n2.只能添加实名对应名下银行卡，其他姓名银行卡无法提现，损失自负。\n3.交易密码请牢记，一旦忘记无法重置。\n4.交易密码需和登录密码不相同。",
     "_N$string": "\n1.请填写真实姓名且保证名字准确，设置后名字不能修改。名字错误充值可能损失，同时无法提现。\n2.只能添加实名对应名下银行卡，其他姓名银行卡无法提现，损失自负。\n3.交易密码请牢记，一旦忘记无法重置。\n4.交易密码需和登录密码不相同。",
     "_fontSize": 20,
@@ -39829,6 +40032,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -39937,7 +40142,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a09QtOzTdB+rswOjyLETX1",
     "sync": false
@@ -40025,7 +40230,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "\n1.请填写真实姓名且保证名字准确，设置后名字不能修改。名字错误充值可能损失，同时无法提现。\n2.只能添加实名对应名下银行卡，其他姓名银行卡无法提现，损失自负。\n3.交易密码请牢记，一旦忘记无法重置。\n4.交易密码需和登录密码不相同。",
     "_N$string": "\n1.请填写真实姓名且保证名字准确，设置后名字不能修改。名字错误充值可能损失，同时无法提现。\n2.只能添加实名对应名下银行卡，其他姓名银行卡无法提现，损失自负。\n3.交易密码请牢记，一旦忘记无法重置。\n4.交易密码需和登录密码不相同。",
     "_fontSize": 20,
@@ -40037,6 +40243,8 @@
     "_isSystemFontUsed": false,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 0,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -40145,7 +40353,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c3i611p+5Kwb7PczPCqkgi",
     "sync": false
@@ -40183,7 +40391,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "649JqfFdlMxJNwVSj7U7gB",
     "sync": false
@@ -40230,7 +40438,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 2,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -40254,7 +40461,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "85ixeVBsND0ZHMVJ5Z2Zpj",
     "sync": false
@@ -40292,7 +40499,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "a1YYmdvRlEU43f5IPfGRi4",
     "sync": false
@@ -40503,7 +40710,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9a0o90AaBDJruyrFzn1Y/G",
     "sync": false
@@ -40755,7 +40962,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e7EmagmchLDIRl/hahR5Q5",
     "sync": false
@@ -40836,7 +41043,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f7xcrj09tL+KEiVBqW47ns",
     "sync": false
@@ -41011,7 +41218,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5dE6HPj9NJiaObltT+3P9W",
     "sync": false
@@ -41094,7 +41301,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "159GDaXkVCq6yE3QaH7ipC",
     "sync": false
@@ -41201,7 +41408,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "516OUoAxdIlLO7n4tR+5ZJ",
     "sync": false
@@ -41271,7 +41478,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "87SXyMaB9G4asLRp8rYS/H",
     "sync": false
@@ -41522,7 +41729,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "该笔订单关闭还剩时间：",
     "_N$string": "该笔订单关闭还剩时间：",
     "_fontSize": 24,
@@ -41532,6 +41740,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -41545,7 +41755,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f9r6pA1AVApbA/BVIDhkyb",
     "sync": false
@@ -41627,7 +41837,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "-",
     "_N$string": "-",
     "_fontSize": 24,
@@ -41637,6 +41848,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -41650,7 +41863,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "356QaczPpI2rJuAsAjGvLi",
     "sync": false
@@ -41693,7 +41906,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d4yA7TJJRPKI7PG9Biz3Q6",
     "sync": false
@@ -41764,7 +41977,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ea5+vYfmBNorfokHowQy8o",
     "sync": false
@@ -41948,7 +42161,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0aDYsFf5JM36yNpfyrH9Wj",
     "sync": false
@@ -42030,7 +42243,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "000000000000000000",
     "_N$string": "000000000000000000",
     "_fontSize": 24,
@@ -42040,6 +42254,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -42053,7 +42269,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "f18C9LxStOnLKYwXuI3d30",
     "sync": false
@@ -42231,7 +42447,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "dbRvNJVH1C3I3L2ei4etpl",
     "sync": false
@@ -42301,7 +42517,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "32eFSF7UdOc5Ngrp14KLsU",
     "sync": false
@@ -42485,7 +42701,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "cbIvnlZ+xMlI2okY7nyXP3",
     "sync": false
@@ -42567,7 +42783,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "美女",
     "_N$string": "美女",
     "_fontSize": 24,
@@ -42577,6 +42794,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -42590,7 +42809,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "9e9MEUU4FKloCjb/biD7b6",
     "sync": false
@@ -42768,7 +42987,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "39DBShCINM14qx8VeGHFa9",
     "sync": false
@@ -42838,7 +43057,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "8eEFwH9zRC3qp5xQA3W4J8",
     "sync": false
@@ -43022,7 +43241,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "4d00onFL5Cd5+jmNK0tENO",
     "sync": false
@@ -43104,7 +43323,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "XX银行",
     "_N$string": "XX银行",
     "_fontSize": 24,
@@ -43114,6 +43334,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -43127,7 +43349,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e8Q6zbCFNNX7sX+RjwphXS",
     "sync": false
@@ -43305,7 +43527,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "c53GhOIthInIUwSMJPDP3w",
     "sync": false
@@ -43375,7 +43597,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e7Ew7MMuNEz4c5+gUoN8KJ",
     "sync": false
@@ -43559,7 +43781,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "83G6Y7mxJOPbac6+AfKkDH",
     "sync": false
@@ -43641,7 +43863,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "00000000000000",
     "_N$string": "00000000000000",
     "_fontSize": 24,
@@ -43651,6 +43874,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -43664,7 +43889,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "beFHS9Fo9LhLZiRRWf/dpM",
     "sync": false
@@ -43842,7 +44067,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "ec5RvC+lxOu59idXgCH/p1",
     "sync": false
@@ -43912,7 +44137,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "41/kLMRmRASL4evhXBjZtG",
     "sync": false
@@ -44096,7 +44321,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7fkQyrru1Mqb4+z+DK+QjC",
     "sync": false
@@ -44178,7 +44403,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "0",
     "_N$string": "0",
     "_fontSize": 24,
@@ -44188,6 +44414,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -44201,7 +44429,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "dem5hQzfBDx7a0eBLqmy4t",
     "sync": false
@@ -44379,7 +44607,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e0KPfsOG5PIJOKLymppLte",
     "sync": false
@@ -44449,7 +44677,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "41jSm8eQpKKLbjJ1Nv/j+T",
     "sync": false
@@ -44595,7 +44823,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "正在处理中",
     "_N$string": "正在处理中",
     "_fontSize": 20,
@@ -44605,6 +44834,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -44618,7 +44849,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "48FPd2PKNHv7xFtRodHU0c",
     "sync": false
@@ -44629,7 +44860,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "85gTxx76hMKoHo4kxL43k+",
     "sync": false
@@ -44803,7 +45034,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "60OTuisZFGW4PnDdLsTGJi",
     "sync": false
@@ -44885,7 +45116,8 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
     "_string": "0",
     "_N$string": "0",
     "_fontSize": 20,
@@ -44895,6 +45127,8 @@
     "_isSystemFontUsed": true,
     "_spacingX": 0,
     "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
@@ -44908,7 +45142,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "63qkxP30VLR5T67U1dKk9y",
     "sync": false
@@ -44919,7 +45153,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "0ctfJIrshDn4KQlS3JdFYX",
     "sync": false
@@ -45097,7 +45331,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "97YFx7QBRH7KftG7ciBbWj",
     "sync": false
@@ -45144,7 +45378,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 2,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -45168,7 +45401,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "86zmQCqTBHJL/DJBIOlk2r",
     "sync": false
@@ -45206,7 +45439,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "b9O0iuKulDabHK8PoTgJzM",
     "sync": false
@@ -45414,7 +45647,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "40fvUmi+tF24dmWTJXainn",
     "sync": false
@@ -45747,7 +45980,6 @@
     },
     "_resize": 1,
     "_N$layoutType": 2,
-    "_N$padding": 0,
     "_N$cellSize": {
       "__type__": "cc.Size",
       "width": 40,
@@ -45771,7 +46003,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "5caoX45+5J3ZAI8LmRfPVO",
     "sync": false
@@ -45829,7 +46061,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "7em2xbA2pO4otd7dFiK6vL",
     "sync": false
@@ -45928,7 +46160,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "d0tnNkV0RDMLm76fIxpT4i",
     "sync": false
@@ -46106,7 +46338,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "95SQ1GkOFNgIFqMSyzFq7O",
     "sync": false
@@ -46216,7 +46448,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "e5CvQ06spL6q9vID57NSlp",
     "sync": false
@@ -46269,7 +46501,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "dfLEoOo35PdbcosfCZnTIY",
     "sync": false
@@ -46307,7 +46539,7 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
     "fileId": "19r0Xh8QZCe746t6f4sjoK",
     "sync": false
@@ -46355,9 +46587,9 @@
       "__id__": 1
     },
     "asset": {
-      "__uuid__": "63b8486c-bfea-44c2-bfb8-87ca448bad73"
+      "__id__": 0
     },
-    "fileId": "03rriELPxGA7JTCfbmuAv/",
+    "fileId": "",
     "sync": false
   }
 ]

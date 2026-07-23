@@ -210,11 +210,9 @@ def build() -> list[Path]:
         p=join/"弹窗.png"; sz=Image.open(p).size; im=texture(sz,248); frame(im,12); out.append(save(p,im))
 
     promo=ROOT/"assets/ImagesXYPK/推广"
-    out += [title(promo/"推广.png","推广",24),button(promo/"分享二维码.png","分享二维码",20)]
-    for name in ("二维码框底.png","背景.png"):
-        p=promo/name
-        if p.exists():
-            sz=Image.open(p).size; im=texture(sz,247); frame(im,10); out.append(save(p,im))
+    # The Hongli promotion page has its own cleaner, layout-aware generator.
+    # Do not overwrite its background, QR frame or action button here.
+    out += [title(promo/"推广.png","推广",24)]
 
     common=ROOT/"assets/ImagesLuck/公用"
     out += [input_frame(common/"输入框.png"), button(common/"取消.png","取消",25)]

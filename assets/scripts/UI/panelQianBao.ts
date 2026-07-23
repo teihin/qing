@@ -178,6 +178,8 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(button.node.name === "确认充值")
         {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"暂未开通，后续处理");
+            return;
 
             //是否有历史订单，如果有直接弹出历史订单
             if(this.dataHisDD != null)
