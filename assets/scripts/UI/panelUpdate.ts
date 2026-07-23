@@ -469,7 +469,19 @@ export default class panelUpdate extends UIPanelViewBase {
             Debug.Log("????????????");  
  
            this.scheduleOnce((dt)=>{
-               console.log("游戏复位！");
+               console.log("热更新完成，重新启动客户端以刷新 Asset Bundle 配置");
+               if (cc.sys.os === cc.sys.OS_ANDROID && jsb.reflection) {
+                   try {
+                       jsb.reflection.callStaticMethod(
+                           "org/cocos2dx/javascript/AppActivity",
+                           "RestartApplication",
+                           "()V"
+                       );
+                       return;
+                   } catch (error) {
+                       console.error("原生重启客户端失败，回退到 cc.game.restart()", error);
+                   }
+               }
                cc.game.restart();
            },0.3);
         }

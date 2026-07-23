@@ -31,6 +31,68 @@ PNG_SIGNATURE = bytes((0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))
 PNG_IEND = bytes((0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82))
 LEGACY_PNG_MARKER = b"q" * 7
 LEGACY_PNG_KEY = b"test" + b"0" * 6
+MAIN_JS_PATCH_BEGIN = "// QING_HOT_UPDATE_SEARCH_PATHS_BEGIN"
+MAIN_JS_PATCH_END = "// QING_HOT_UPDATE_SEARCH_PATHS_END"
+MAIN_JS_BUNDLE_PATCH_BEGIN = "    // QING_HOT_UPDATE_RESOURCES_BUNDLE_BEGIN"
+MAIN_JS_BUNDLE_PATCH_END = "    // QING_HOT_UPDATE_RESOURCES_BUNDLE_END"
+MAIN_JS_PATCH = f"""{MAIN_JS_PATCH_BEGIN}
+(function () {{
+    if (!window.jsb) {{
+        return;
+    }}
+
+    var value = localStorage.getItem('HotUpdateSearchPaths');
+    if (!value) {{
+        return;
+    }}
+
+    try {{
+        var paths = JSON.parse(value);
+        if (Array.isArray(paths) && paths.length > 0) {{
+            jsb.fileUtils.setSearchPaths(paths);
+            for (var i = 0; i < paths.length; i++) {{
+                if (typeof paths[i] === 'string' && paths[i].indexOf('@assets') !== 0) {{
+                    var root = paths[i].replace(/[\\\\/]+$/, '');
+                    var resourcesDir = root + '/assets/resources/';
+                    var files = jsb.fileUtils.listFiles(resourcesDir) || [];
+                    for (var j = 0; j < files.length; j++) {{
+                        var match = /config\\.([^.\\\\/]+)\\.json$/.exec(files[j]);
+                        if (!match) {{
+                            continue;
+                        }}
+                        var indexJs = resourcesDir + 'index.' + match[1] + '.js';
+                        var indexJsc = resourcesDir + 'index.' + match[1] + '.jsc';
+                        if (jsb.fileUtils.isFileExist(indexJs) || jsb.fileUtils.isFileExist(indexJsc)) {{
+                            window.__qingHotUpdateRoot = root;
+                            window.__qingResourcesBundleVersion = match[1];
+                            break;
+                        }}
+                    }}
+                    break;
+                }}
+            }}
+            console.log('[main.js] 恢复热更新搜索路径:', paths);
+        }}
+    }} catch (error) {{
+        console.error('[main.js] 搜索路径解析失败:', error);
+    }}
+}})();
+{MAIN_JS_PATCH_END}
+
+"""
+MAIN_JS_BUNDLE_PATCH = f"""{MAIN_JS_BUNDLE_PATCH_BEGIN}
+    if (settings.hasResourcesBundle) {{
+        if (window.__qingResourcesBundleVersion) {{
+            settings.bundleVers[RESOURCES] = window.__qingResourcesBundleVersion;
+        }}
+        var resourcesBundlePath = window.__qingHotUpdateRoot
+            ? window.__qingHotUpdateRoot + '/assets/resources'
+            : RESOURCES;
+        console.log('[main.js] resources Bundle 路径和版本:',
+            resourcesBundlePath, settings.bundleVers[RESOURCES]);
+        bundleRoot.push(resourcesBundlePath);
+    }}
+{MAIN_JS_BUNDLE_PATCH_END}"""
 
 
 def prompt_value(label: str, current: str | None = None) -> str:
@@ -108,6 +170,59 @@ def sync_native_build_manifests(build_dir: Path, manifests: dict[str, dict]) -> 
         write_json(candidates[0], manifests[file_name], compact=True)
         updated.append(candidates[0])
     return updated
+
+
+def patch_native_main_js(build_dir: Path) -> str:
+    """Restore persisted hot-update paths before Cocos loads settings or bundles."""
+    main_js = build_dir / "main.js"
+    if not main_js.is_file():
+        raise RuntimeError(f"Native 构建目录缺少 main.js: {main_js}")
+
+    source = main_js.read_text(encoding="utf-8")
+    has_begin = MAIN_JS_PATCH_BEGIN in source
+    has_end = MAIN_JS_PATCH_END in source
+    if has_begin != has_end:
+        raise RuntimeError(f"main.js 中的热更新搜索路径标记不完整，拒绝自动修改: {main_js}")
+
+    changed = False
+    if has_begin:
+        if source.index(MAIN_JS_PATCH_BEGIN) > source.find("window.boot"):
+            raise RuntimeError(f"main.js 搜索路径恢复代码位置过晚，必须位于 window.boot 之前: {main_js}")
+        patch_start = source.index(MAIN_JS_PATCH_BEGIN)
+        patch_end = source.index(MAIN_JS_PATCH_END) + len(MAIN_JS_PATCH_END)
+        source = MAIN_JS_PATCH.rstrip() + source[patch_end:]
+        changed = True
+    else:
+        boot_index = source.find("window.boot")
+        if boot_index < 0:
+            raise RuntimeError(f"main.js 中未找到 window.boot，无法确认安全插入位置: {main_js}")
+        source = MAIN_JS_PATCH + source
+        changed = True
+
+    has_bundle_begin = MAIN_JS_BUNDLE_PATCH_BEGIN in source
+    has_bundle_end = MAIN_JS_BUNDLE_PATCH_END in source
+    if has_bundle_begin != has_bundle_end:
+        raise RuntimeError(f"main.js 中的 resources Bundle 标记不完整，拒绝自动修改: {main_js}")
+    if has_bundle_begin:
+        bundle_start = source.index(MAIN_JS_BUNDLE_PATCH_BEGIN)
+        bundle_end = source.index(MAIN_JS_BUNDLE_PATCH_END) + len(MAIN_JS_BUNDLE_PATCH_END)
+        source = source[:bundle_start] + MAIN_JS_BUNDLE_PATCH + source[bundle_end:]
+        changed = True
+    else:
+        old_line = "    settings.hasResourcesBundle && bundleRoot.push(RESOURCES);"
+        if old_line not in source:
+            raise RuntimeError(f"main.js 中未找到 resources Bundle 加载入口: {main_js}")
+        source = source.replace(old_line, MAIN_JS_BUNDLE_PATCH, 1)
+        changed = True
+
+    temporary = main_js.with_suffix(main_js.suffix + ".tmp")
+    try:
+        temporary.write_text(source, encoding="utf-8")
+        os.replace(temporary, main_js)
+    finally:
+        if temporary.exists():
+            temporary.unlink()
+    return "已更新搜索路径恢复和 resources Bundle 绝对路径加载"
 
 
 def should_ignore(path: Path) -> bool:
@@ -288,6 +403,8 @@ def main() -> int:
     if final_version_dir.exists():
         raise RuntimeError(f"版本输出已存在，拒绝覆盖: {final_version_dir}")
 
+    main_js_patch_status = patch_native_main_js(build_dir)
+
     stage = Path(tempfile.mkdtemp(prefix=f".hot-update-{version}-", dir=output_dir))
     try:
         copy_stats = copy_runtime_files(build_dir, stage, encrypt_images)
@@ -335,6 +452,8 @@ def main() -> int:
     print(f"  服务器地址: {server_url}")
     print(f"  ZIP: {zip_path}")
     print(f"  解压目录: {final_version_dir}")
+    print(f"  main.js 搜索路径恢复: {main_js_patch_status}")
+    print("  注意: main.js 不进入热更新 ZIP，只对之后打出的基础原生包生效")
     if encrypt_images:
         print(
             f"  PNG 加密: 新加密 {copy_stats['encrypted']} 张"
