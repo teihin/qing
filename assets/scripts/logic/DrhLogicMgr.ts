@@ -481,7 +481,18 @@ export default class DrhLogicMgr extends cc.Component {
                 //先显示本地头像1，收到字段序号后再切换到对应本地头像。
                 ImageManager.getInstance().SetLocalAvatar(img,"1");
                 
-                if (!ImageManager.getInstance().GetImageByName(this.arrayPlayer[i].info.strUserID, this.arrayPlayer[i].info.strPhoto, img))
+                let hasAvatar = ImageManager.getInstance().GetImageByName(
+                    this.arrayPlayer[i].info.strUserID,
+                    this.arrayPlayer[i].info.strPhoto,
+                    img
+                );
+                if (this.arrayPlayer[i].info.strPhoto == "")
+                {
+                    // PlayerList没有photo时，即使本地缓存命中也必须刷新一次。
+                    // 否则用户ID曾缓存为头像1后，新入座将永远跳过服务端查询。
+                    ImageManager.getInstance().AddWaitFreshImage2Catch(this.arrayPlayer[i].info.strUserID, img);
+                }
+                else if (!hasAvatar)
                 {
                     ImageManager.getInstance().AddWaitFreshImage2Catch(this.arrayPlayer[i].info.strUserID, img);
                 }

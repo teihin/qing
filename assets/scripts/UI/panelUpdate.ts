@@ -313,6 +313,13 @@ export default class panelUpdate extends UIPanelViewBase {
     }
 
     //检查更新
+    private getLocalManifestUrl(): string
+    {
+        if(!this.mainifestUrl)
+            return "";
+        return (this.mainifestUrl as any).nativeUrl || (this.mainifestUrl as any).url || String(this.mainifestUrl);
+    }
+
     checkUpdate()
     {
         console.log("开始检查更新");
@@ -325,8 +332,8 @@ export default class panelUpdate extends UIPanelViewBase {
         this.info.string = "开始检查更新";
         //读取本地配置
         if ( this._am.getState() == jsb.AssetsManager.State.UNINITED){
-                let url = this.mainifestUrl;    
-                cc.log(`mainifestUrl : ${this.mainifestUrl}`);    
+                let url = this.getLocalManifestUrl();
+                cc.log(`mainifestUrl : ${url}`);
                 this._am.loadLocalManifest(url);    
         }
 
@@ -349,7 +356,7 @@ export default class panelUpdate extends UIPanelViewBase {
         if ( this._am && !this._updating ){    
             this._am.setEventCallback(this.updateCb.bind(this));    
             if ( this._am.getState() === jsb.AssetsManager.State.UNINITED){    
-                this._am.loadLocalManifest(this.mainifestUrl);    
+                this._am.loadLocalManifest(this.getLocalManifestUrl());
             }    
             //this._updating = true;    
             this._am.update();    
@@ -583,9 +590,14 @@ export default class panelUpdate extends UIPanelViewBase {
 
 
             Debug.Log("开始获取列表:temp:"+tempver +" local:"+local);
-            
 
-            if(tempver != local) //缓存过旧，需要清除后重启
+            if(tempver === null || tempver === "") //首次安装，没有旧热更新缓存
+            {
+                Debug.Log("首次安装，记录当前版本并进入登录页");
+                cc.sys.localStorage.setItem("tempver",local);
+                UIManager.getInstance().showPanel("panelLogin",ShowPanelMode.CloseOther);
+            }
+            else if(tempver != local) //缓存过旧，需要清除后重启
             {
                 Debug.Log("缓存版本过旧，需要删除！");
                 this.DeleteAllFiles(this._storagePath);

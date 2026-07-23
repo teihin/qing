@@ -44,7 +44,10 @@ export default class GameDataManager extends cc.Component {
 
     onDestroy(){
         KBEngine.Event.deregisterAll(this);
-        KBEngine.Event.fire("logout"); 
+        // GameDataManager 是常驻节点，热更新完成调用 cc.game.restart() 时也会被销毁。
+        // 此时 KBEngine 的消息表可能已经开始清理，继续触发 logout 会让
+        // Bundle.newMessage 收到 undefined，并阻断 Cocos 的重启销毁流程。
+        // Native 重启会直接关闭旧连接，不需要在 onDestroy 中再发送登出包。
         GameDataManager.instance = null;
     }
 

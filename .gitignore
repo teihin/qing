@@ -46,3 +46,6 @@ __pycache__/
 *.p12
 *.pfx
 runtime-src.zip
+.hot-update-config.json
+.hot-update-upload-config.json
+hot-update-output/

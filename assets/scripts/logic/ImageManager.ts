@@ -17,6 +17,8 @@ export default class ImageManager extends cc.Component {
     // 本地头像只按序号缓存；用户ID只保存其当前头像序号，不再缓存网络图片。
     private mapAvatar2Sprite = new Map<string, cc.SpriteFrame>();
     private mapAvatar2Wait = new Map<string, Array<cc.Sprite>>();
+    // 同一个Sprite可能先等头像1、随后又等真实头像；只允许最新请求写回。
+    private mapSprite2Avatar = new Map<cc.Sprite, string>();
     private mapID2Avatar = new Map<string, string>();
     private mapID2ImageSave = new Map<string, Array<cc.Sprite>>();
 
@@ -85,10 +87,12 @@ export default class ImageManager extends cc.Component {
         if(img == null || !cc.isValid(img))
             return avatarIndex;
 
+        this.mapSprite2Avatar.set(img, avatarIndex);
+
         if(this.mapAvatar2Sprite.has(avatarIndex))
         {
             let frame = this.mapAvatar2Sprite.get(avatarIndex);
-            if(frame != null)
+            if(frame != null && this.mapSprite2Avatar.get(img) == avatarIndex)
                 img.spriteFrame = frame;
             return avatarIndex;
         }
@@ -114,6 +118,11 @@ export default class ImageManager extends cc.Component {
                 Debug.Error("本地头像加载失败:" + this.GetAvatarResourcePath(avatarIndex));
                 targets.forEach((target)=>{
                     if(target == null || !cc.isValid(target))
+                    {
+                        this.mapSprite2Avatar.delete(target);
+                        return;
+                    }
+                    if(this.mapSprite2Avatar.get(target) != avatarIndex)
                         return;
                     if(avatarIndex != "1")
                         this.SetLocalAvatar(target, "1");
@@ -125,7 +134,8 @@ export default class ImageManager extends cc.Component {
 
             this.mapAvatar2Sprite.set(avatarIndex, frame);
             targets.forEach((target)=>{
-                if(target != null && cc.isValid(target))
+                if(target != null && cc.isValid(target) &&
+                    this.mapSprite2Avatar.get(target) == avatarIndex)
                     target.spriteFrame = frame;
             });
         });
@@ -160,7 +170,9 @@ export default class ImageManager extends cc.Component {
     /** 未拿到序号时先显示头像1，只向服务器查询字段值，不请求任何图片。 */
     public AddWaitFreshImage2Catch(strID:string, img:cc.Sprite)
     {
-        if(img != null && cc.isValid(img))
+        // 已有缓存时保留当前头像等待服务端刷新；只有完全没有缓存时
+        // 才先显示头像1，避免新入座查询期间把旧头像闪回默认图。
+        if(img != null && cc.isValid(img) && !this.mapID2Avatar.has(strID))
             this.SetLocalAvatar(img, "1");
 
         let bNeedGet = false;

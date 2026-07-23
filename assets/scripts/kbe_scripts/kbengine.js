@@ -4096,6 +4096,14 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 	
 	this.logout = function()
 	{
+		// 引擎重启或连接尚未完成时，消息定义可能不存在。
+		// 登出属于尽力通知，不能因为构造不了登出包而阻断场景/引擎销毁。
+		if(!KBEngine.app || !KBEngine.messages || !KBEngine.messages.Baseapp_logoutBaseapp)
+		{
+			KBEngine.WARNING_MSG("KBEngineApp::logout: logout message is unavailable, skip.");
+			return;
+		}
+
 		var bundle = new KBEngine.Bundle();
 		bundle.newMessage(KBEngine.messages.Baseapp_logoutBaseapp);
 		bundle.writeUint64(KBEngine.app.entity_uuid);
@@ -5430,5 +5438,4 @@ catch(e)
 {
 	
 }
-
 
