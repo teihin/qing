@@ -376,7 +376,7 @@ export default class DrhLogicMgr extends cc.Component {
             player.strSex = one["sex"].toString();
             if(one.hasOwnProperty("photo"))
             {
-                player.strPhoto = ImageManager.NormalizeAvatarIndex(one["photo"]);
+                player.strPhoto = ImageManager.getInstance().NormalizeAvatarIndex(one["photo"]);
             }
             player.nGoldNum = Number(one["gold"].toString());
             player.nDiamondNum = Number(one["stone"].toString());

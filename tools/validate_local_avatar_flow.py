@@ -66,9 +66,17 @@ def validate_code() -> None:
     require('AVATAR_COUNT:number = 20' in image_manager, "avatar count is not fixed at 20")
     require('AVATAR_ROOT:string = "avatars/头像"' in image_manager, "local avatar resource root missing")
     require('return "1";' in image_manager, "invalid-field fallback to avatar 1 missing")
-    require('Math.random() * ImageManager.AVATAR_COUNT' in image_manager, "random 1-20 initialization missing")
-    require('cc.loader.loadRes(ImageManager.GetAvatarResourcePath' in image_manager, "resources avatar load missing")
-    require('rawText == "" ? ImageManager.RandomAvatarIndex() : "1"' in panel_main, "empty/random and legacy/fallback split missing")
+    require('Math.random() * this.AVATAR_COUNT' in image_manager, "random 1-20 initialization missing")
+    require('cc.loader.loadRes(this.GetAvatarResourcePath' in image_manager, "resources avatar load missing")
+    require('rawText == "" ? imageManager.RandomAvatarIndex() : "1"' in panel_main, "empty/random and legacy/fallback split missing")
+    require('new cc.Node("本地头像列表")' in panel_main, "20-avatar selector container missing")
+    require('index <= ImageManager.getInstance().AVATAR_COUNT' in panel_main, "avatar selector does not cover all local avatars")
+    require('item.on("click"' in panel_main and 'this.SetEditAvatar(editNode, avatarIndex)' in panel_main,
+            "avatar selector click-to-preview flow missing")
+    require('currentIndex >= ImageManager.getInstance().AVATAR_COUNT' not in panel_main,
+            "legacy click-to-cycle avatar flow still remains")
+    require('ImageManager.IsAvatarIndex' not in panel_main and 'ImageManager.NormalizeAvatarIndex' not in panel_main,
+            "Creator-incompatible avatar static method call remains")
     require('this.strPhoto = "";' in game_def, "PlayerInfoBase.ResetAll does not clear avatar index")
     require('one.hasOwnProperty("photo")' in drh_logic, "PlayerList avatar-index parsing missing")
 

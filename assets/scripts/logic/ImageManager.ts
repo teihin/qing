@@ -9,8 +9,10 @@ const {ccclass} = cc._decorator;
 @ccclass
 export default class ImageManager extends cc.Component {
 
-    public static readonly AVATAR_COUNT:number = 20;
-    private static readonly AVATAR_ROOT:string = "avatars/头像";
+    // Creator 2.4.13快速编译对已注册ccclass新增静态成员可能保留旧构造器，
+    // 因此除既有getInstance外，头像工具统一使用组件实例成员。
+    public readonly AVATAR_COUNT:number = 20;
+    private readonly AVATAR_ROOT:string = "avatars/头像";
 
     // 本地头像只按序号缓存；用户ID只保存其当前头像序号，不再缓存网络图片。
     private mapAvatar2Sprite = new Map<string, cc.SpriteFrame>();
@@ -40,7 +42,7 @@ export default class ImageManager extends cc.Component {
     }
 
     /** 只有纯数字1～20才是新头像字段；旧网址、文件名和其他字符串都视为无效。 */
-    public static IsAvatarIndex(value:any):boolean
+    public IsAvatarIndex(value:any):boolean
     {
         if(value === null || value === undefined)
             return false;
@@ -48,26 +50,26 @@ export default class ImageManager extends cc.Component {
         if(!text.match(/^\d+$/))
             return false;
         let index = Number(text);
-        return index >= 1 && index <= ImageManager.AVATAR_COUNT;
+        return index >= 1 && index <= this.AVATAR_COUNT;
     }
 
     /** 显示层的兼容规则：任何无效值统一回退头像1。 */
-    public static NormalizeAvatarIndex(value:any):string
+    public NormalizeAvatarIndex(value:any):string
     {
-        if(!ImageManager.IsAvatarIndex(value))
+        if(!this.IsAvatarIndex(value))
             return "1";
         return Number(value.toString().trim()).toString();
     }
 
-    public static RandomAvatarIndex():string
+    public RandomAvatarIndex():string
     {
-        return (Math.floor(Math.random() * ImageManager.AVATAR_COUNT) + 1).toString();
+        return (Math.floor(Math.random() * this.AVATAR_COUNT) + 1).toString();
     }
 
-    public static GetAvatarResourcePath(value:any):string
+    public GetAvatarResourcePath(value:any):string
     {
-        let index = ImageManager.NormalizeAvatarIndex(value).padStart(2,"0");
-        return ImageManager.AVATAR_ROOT + index;
+        let index = this.NormalizeAvatarIndex(value).padStart(2,"0");
+        return this.AVATAR_ROOT + index;
     }
 
     /**
@@ -76,7 +78,7 @@ export default class ImageManager extends cc.Component {
      */
     public SetLocalAvatar(img:cc.Sprite, avatarValue:any, userID:string = ""):string
     {
-        let avatarIndex = ImageManager.NormalizeAvatarIndex(avatarValue);
+        let avatarIndex = this.NormalizeAvatarIndex(avatarValue);
         if(userID != null && userID != "")
             this.mapID2Avatar.set(userID, avatarIndex);
 
@@ -104,12 +106,12 @@ export default class ImageManager extends cc.Component {
         waitList.push(img);
         this.mapAvatar2Wait.set(avatarIndex, waitList);
 
-        cc.loader.loadRes(ImageManager.GetAvatarResourcePath(avatarIndex), cc.SpriteFrame, (err,frame:cc.SpriteFrame)=>{
+        cc.loader.loadRes(this.GetAvatarResourcePath(avatarIndex), cc.SpriteFrame, (err,frame:cc.SpriteFrame)=>{
             let targets = this.mapAvatar2Wait.get(avatarIndex) || [];
             this.mapAvatar2Wait.delete(avatarIndex);
             if(err || frame == null)
             {
-                Debug.Error("本地头像加载失败:" + ImageManager.GetAvatarResourcePath(avatarIndex));
+                Debug.Error("本地头像加载失败:" + this.GetAvatarResourcePath(avatarIndex));
                 targets.forEach((target)=>{
                     if(target == null || !cc.isValid(target))
                         return;
@@ -202,7 +204,7 @@ export default class ImageManager extends cc.Component {
 
         let strID = data["id"].toString();
         let strPhoto = data.hasOwnProperty("photo") ? data["photo"] : "";
-        let avatarIndex = ImageManager.NormalizeAvatarIndex(strPhoto);
+        let avatarIndex = this.NormalizeAvatarIndex(strPhoto);
         this.mapID2Avatar.set(strID, avatarIndex);
 
         if (this.mapID2ImageSave.has(strID))

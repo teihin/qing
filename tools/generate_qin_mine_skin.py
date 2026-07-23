@@ -110,7 +110,7 @@ def make_upload() -> Path:
     draw.polygon(((25 * S, 28 * S), (25 * S, 18 * S), (31 * S, 18 * S),
                   (31 * S, 13 * S), (39 * S, 21 * S), (31 * S, 29 * S),
                   (31 * S, 24 * S), (28 * S, 24 * S)), fill=GOLD_HI)
-    center_text(draw, (126 * S, 23.5 * S), "点击上传头像", font(PING, 18), IVORY,
+    center_text(draw, (126 * S, 23.5 * S), "修改个人资料", font(PING, 18), IVORY,
                 stroke_width=S, stroke_fill=(47, 25, 7, 255))
     return save(MINE / "点击上传.png", image.resize(size, Image.Resampling.LANCZOS))
 

@@ -237,18 +237,19 @@ export default class panelMain extends UIPanelViewBase {
     private EnsureAccountAvatar():string
     {
         let account = GameDataManager.getAccount();
+        let imageManager = ImageManager.getInstance();
         let rawValue = account.photo;
-        if(ImageManager.IsAvatarIndex(rawValue))
+        if(imageManager.IsAvatarIndex(rawValue))
         {
             this.pendingAvatarIndex = "";
-            return ImageManager.NormalizeAvatarIndex(rawValue);
+            return imageManager.NormalizeAvatarIndex(rawValue);
         }
 
         if(this.pendingAvatarIndex != "")
             return this.pendingAvatarIndex;
 
         let rawText = rawValue === null || rawValue === undefined ? "" : rawValue.toString().trim();
-        this.pendingAvatarIndex = rawText == "" ? ImageManager.RandomAvatarIndex() : "1";
+        this.pendingAvatarIndex = rawText == "" ? imageManager.RandomAvatarIndex() : "1";
         account.reqSetProperty("photo", this.pendingAvatarIndex);
         return this.pendingAvatarIndex;
     }
@@ -267,16 +268,126 @@ export default class panelMain extends UIPanelViewBase {
         let editNode = this.GetActiveEditInfoNode();
         if(editNode == null)
             return;
-        let avatarIndex = ImageManager.NormalizeAvatarIndex(avatarValue);
+        this.SetEditAvatar(editNode, avatarValue);
+    }
+
+    private SetEditAvatar(editNode:cc.Node, avatarValue:any)
+    {
+        this.EnsureLocalAvatarSelector(editNode);
+        let avatarIndex = ImageManager.getInstance().NormalizeAvatarIndex(avatarValue);
         Tool.GetChild(editNode,"头像/name").getComponent(cc.Label).string = avatarIndex;
         let img = Tool.GetChild(editNode,"头像/mask/img").getComponent(cc.Sprite);
         ImageManager.getInstance().SetLocalAvatar(img, avatarIndex);
+
+        let listNode = editNode.getChildByName("本地头像列表");
+        if(listNode == null)
+            return;
+        for(let item of listNode.children)
+        {
+            let selected = item.getChildByName("选中");
+            if(selected != null)
+                selected.active = item.name == "头像选项" + avatarIndex.padStart(2,"0");
+        }
     }
 
-    //保留原按钮入口：每次点击随机展示一张本地头像，不再刷新网络头像列表。
+    /**
+     * 把20张本地头像一次性铺在修改资料页中；列表只创建一次，重复打开时更新选中态。
+     * 节点由代码创建，避免把20份重复Sprite结构写进panelMain.prefab。
+     */
+    private EnsureLocalAvatarSelector(editNode:cc.Node)
+    {
+        let avatarNode = Tool.GetChild(editNode,"头像");
+        let chooseTitle = Tool.GetChild(editNode,"选择头像");
+        let nicknameNode = Tool.GetChild(editNode,"昵称");
+        let submitNode = Tool.GetChild(editNode,editNode.name);
+
+        // 原Widget按旧布局定位，关闭后改用头像列表版固定坐标。
+        for(let node of [avatarNode,chooseTitle,nicknameNode,submitNode])
+        {
+            if(node == null)
+                continue;
+            let widget = node.getComponent(cc.Widget);
+            if(widget != null)
+                widget.enabled = false;
+        }
+        avatarNode.setPosition(0,450);
+        nicknameNode.setPosition(32.861,285);
+        chooseTitle.setPosition(0,185);
+        submitNode.setPosition(-2.187,-410);
+
+        // “选择头像”图片现在作为列表标题，不再按一下切换一张。
+        let chooseButton = chooseTitle.getComponent(cc.Button);
+        if(chooseButton != null)
+            chooseButton.interactable = false;
+
+        let listNode = editNode.getChildByName("本地头像列表");
+        if(listNode != null)
+            return;
+
+        listNode = new cc.Node("本地头像列表");
+        listNode.setContentSize(640,430);
+        listNode.setPosition(0,-90);
+        editNode.addChild(listNode);
+
+        for(let index = 1; index <= ImageManager.getInstance().AVATAR_COUNT; index++)
+        {
+            let avatarIndex = index.toString();
+            let item = new cc.Node("头像选项" + avatarIndex.padStart(2,"0"));
+            item.setContentSize(104,104);
+            let col = (index - 1) % 5;
+            let row = Math.floor((index - 1) / 5);
+            item.setPosition((col - 2) * 124,165 - row * 110);
+            listNode.addChild(item);
+
+            let base = item.addComponent(cc.Graphics);
+            base.fillColor = cc.color(10,8,5,245);
+            base.circle(0,0,50);
+            base.fill();
+            base.lineWidth = 2;
+            base.strokeColor = cc.color(126,79,31,230);
+            base.circle(0,0,49);
+            base.stroke();
+
+            let imageNode = new cc.Node("头像");
+            imageNode.setContentSize(90,90);
+            item.addChild(imageNode);
+            let sprite = imageNode.addComponent(cc.Sprite);
+            sprite.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+            ImageManager.getInstance().SetLocalAvatar(sprite, avatarIndex);
+
+            let selectedNode = new cc.Node("选中");
+            selectedNode.setContentSize(104,104);
+            selectedNode.active = false;
+            item.addChild(selectedNode);
+            let selected = selectedNode.addComponent(cc.Graphics);
+            selected.lineWidth = 5;
+            selected.strokeColor = cc.color(248,204,112,255);
+            selected.circle(0,0,50);
+            selected.stroke();
+            selected.fillColor = cc.color(238,187,82,255);
+            selected.circle(38,38,13);
+            selected.fill();
+            selected.lineWidth = 3;
+            selected.strokeColor = cc.color(42,24,7,255);
+            selected.moveTo(32,38);
+            selected.lineTo(37,33);
+            selected.lineTo(45,43);
+            selected.stroke();
+
+            let button = item.addComponent(cc.Button);
+            button.transition = cc.Button.Transition.SCALE;
+            button.zoomScale = 0.92;
+            item.on("click",()=>{
+                if(cc.isValid(editNode))
+                    this.SetEditAvatar(editNode, avatarIndex);
+            },this);
+        }
+    }
+
+    //兼容旧事件入口：若仍有外部调用，则只随机预览一张本地头像。
     public RandHeadList()
     {
-        this.PreviewEditAvatar(ImageManager.RandomAvatarIndex());
+        this.PreviewEditAvatar(ImageManager.getInstance().RandomAvatarIndex());
     }
 
     set_gold(num:number)
@@ -615,7 +726,7 @@ export default class panelMain extends UIPanelViewBase {
             this.node.getChildByName("修改个人信息").active = false;
             this.node.getChildByName("修改个人信息2").active = false;
 
-            let random = ImageManager.RandomAvatarIndex();
+            let random = ImageManager.getInstance().RandomAvatarIndex();
             GameDataManager.getAccount().reqSetProperty("photo",random);
             GameDataManager.getAccount().reqSetProperty("name",strName);
         }
@@ -689,7 +800,7 @@ export default class panelMain extends UIPanelViewBase {
             let imgName = Tool.GetChild(this.node,"修改个人信息2/头像/name").getComponent(cc.Label).string;
             if(imgName != "")
             {
-                GameDataManager.getAccount().reqSetProperty("photo",ImageManager.NormalizeAvatarIndex(imgName));
+                GameDataManager.getAccount().reqSetProperty("photo",ImageManager.getInstance().NormalizeAvatarIndex(imgName));
             }
             else
             {
@@ -815,7 +926,7 @@ export default class panelMain extends UIPanelViewBase {
                 if(button.node.name === item.name)
                 {
                     item.getComponent(cc.Sprite).enabled = true;
-                    let avatarIndex = ImageManager.NormalizeAvatarIndex(item.name);
+                    let avatarIndex = ImageManager.getInstance().NormalizeAvatarIndex(item.name);
                     Tool.GetChild(headList.parent.parent.parent,"头像/name").getComponent(cc.Label).string = avatarIndex;
                     let img = Tool.GetChild(headList.parent.parent.parent,"头像/mask/img").getComponent(cc.Sprite);
                     ImageManager.getInstance().SetLocalAvatar(img, avatarIndex);
@@ -859,13 +970,8 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name == "选择头像")
         {
-            let editNode = this.GetActiveEditInfoNode();
-            if(editNode == null)
-                return;
-            let current = Tool.GetChild(editNode,"头像/name").getComponent(cc.Label).string;
-            let currentIndex = Number(ImageManager.NormalizeAvatarIndex(current));
-            let nextIndex = currentIndex >= ImageManager.AVATAR_COUNT ? 1 : currentIndex + 1;
-            this.PreviewEditAvatar(nextIndex.toString());
+            // 头像已全部列在当前页面，此节点仅作为列表标题保留。
+            return;
         }
         else if(button.node.name == "上一页")
         {
@@ -2182,7 +2288,7 @@ export default class panelMain extends UIPanelViewBase {
                     }
         
         
-                    GameDataManager.getAccount().reqSetProperty("photo",ImageManager.NormalizeAvatarIndex(imgName));
+                    GameDataManager.getAccount().reqSetProperty("photo",ImageManager.getInstance().NormalizeAvatarIndex(imgName));
                     GameDataManager.getAccount().reqSetProperty("name",strName);
         
                     Tool.GetChild(this.node,"修改个人信息").active = false;
@@ -2210,7 +2316,7 @@ export default class panelMain extends UIPanelViewBase {
                     let imgName = Tool.GetChild(this.node,"修改个人信息2/头像/name").getComponent(cc.Label).string;
                     if(imgName != "")
                     {
-                        GameDataManager.getAccount().reqSetProperty("photo",ImageManager.NormalizeAvatarIndex(imgName));
+                        GameDataManager.getAccount().reqSetProperty("photo",ImageManager.getInstance().NormalizeAvatarIndex(imgName));
                     }
                     else
                     {

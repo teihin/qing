@@ -19,6 +19,16 @@ SIZE = 256
 COLS = 5
 ROWS = 4
 
+# 源母版的分隔线和外框并不是严格等宽网格，不能按sheet.width / 5硬切。
+# 以下坐标是逐张拟合金色圆形头像框得到的真实圆心；固定以圆心裁256×256，
+# 可确保头像框、透明圆形Mask及运行时选中圈三者完全同心。
+CROP_CENTERS: tuple[tuple[int, int], ...] = (
+    (171, 143), (469, 143), (767, 144), (1064, 143), (1360, 143),
+    (169, 388), (468, 387), (764, 387), (1060, 388), (1360, 389),
+    (170, 633), (468, 634), (765, 632), (1061, 633), (1358, 633),
+    (168, 878), (467, 878), (764, 881), (1060, 878), (1357, 878),
+)
+
 
 def deterministic_uuid(name: str, kind: str) -> str:
     return str(uuid.uuid5(uuid.NAMESPACE_URL, f"qing-avatar-library/{kind}/{name}"))
@@ -85,29 +95,25 @@ def build() -> list[Path]:
     )
     paths: list[Path] = []
 
-    for row in range(ROWS):
-        y0 = round(row * sheet.height / ROWS)
-        y1 = round((row + 1) * sheet.height / ROWS)
-        for col in range(COLS):
-            x0 = round(col * sheet.width / COLS)
-            x1 = round((col + 1) * sheet.width / COLS)
-            cell = sheet.crop((x0, y0, x1, y1))
-            side = min(cell.size)
-            left = (cell.width - side) // 2
-            cell = cell.crop((left, 0, left + side, side)).resize(
-                (SIZE, SIZE), Image.Resampling.LANCZOS
-            ).convert("RGBA")
+    assert len(CROP_CENTERS) == COLS * ROWS
+    half = SIZE // 2
+    for index, (center_x, center_y) in enumerate(CROP_CENTERS, start=1):
+        box = (center_x - half, center_y - half, center_x + half, center_y + half)
+        if box[0] < 0 or box[1] < 0 or box[2] > sheet.width or box[3] > sheet.height:
+            raise ValueError(f"avatar crop {index:02d} is outside source sheet: {box}")
+        cell = sheet.crop(box).convert("RGBA")
 
-            mask = Image.new("L", (SIZE, SIZE), 0)
-            ImageDraw.Draw(mask).ellipse((5, 5, 250, 250), fill=255)
-            mask = mask.filter(ImageFilter.GaussianBlur(0.7))
-            cell.putalpha(mask)
+        mask = Image.new("L", (SIZE, SIZE), 0)
+        ImageDraw.Draw(mask).ellipse((5, 5, 250, 250), fill=255)
+        mask = mask.filter(ImageFilter.GaussianBlur(0.7))
+        cell.putalpha(mask)
 
-            index = row * COLS + col + 1
-            path = OUTPUT / f"头像{index:02d}.png"
-            cell.save(path, optimize=True)
+        path = OUTPUT / f"头像{index:02d}.png"
+        cell.save(path, optimize=True)
+        # 已有资源必须保留Creator生成的.meta字节和UUID；只为首次新增文件补meta。
+        if not path.with_suffix(path.suffix + ".meta").exists():
             write_meta(path)
-            paths.append(path)
+        paths.append(path)
 
     preview = Image.new("RGB", (1100, 900), (13, 10, 7))
     font = ImageFont.truetype(str(FONT), 24)
