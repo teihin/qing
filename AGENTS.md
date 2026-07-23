@@ -1,6 +1,6 @@
 # 项目记忆（Codex 自动读取）
 
-最后更新：2026-07-22
+最后更新：2026-07-23
 
 本文件保存跨对话需要持续使用的项目事实与工作约束。涉及服务端行为、线上配置或原生包状态时，仍应在当前环境重新验证。
 
@@ -163,6 +163,8 @@ login.fire
 - 钱包换皮可由`tools/generate_qin_wallet_skin.py`从`art_sources/wallet/qin_wallet_emblem_source.png`确定性重建，六状态静态预览为`art_sources/wallet/qin_wallet_runtime_preview.png`。52张输出图片的尺寸和透明裁剪范围均与`.meta`一致，既有`.meta`/UUID未改，新增资源使用独立UUID，强蓝/青像素检查为0；共用`公用/btn_4.png`会按共享覆盖原则同步影响8个文件中的18处关闭按钮。外部`panelKefu`、`panelMsgView`和`panelLoading`未纳入，Creator中的服务端动态渠道、三种提现方式、EditBox、列表和点击交互仍待用户在现有实例中验证。
 
 - `assets/resources/UI/panelGivePad.prefab`赠送确认弹窗已完成黑金秦风换皮：原位重绘仅本页引用的`赠送金币.png`、`名字垫底.png`、`金额.png`、`交易密码.png`和`赠送按钮1.png`，形成鎏金标题、秦印玩家信息条、象牙金表单文字及强调型主按钮；共享的弹窗框、输入框、头像/头像框、透明EditBox底图和取消按钮均未覆盖。Prefab仅统一昵称、ID、输入值和占位文字的暖金/灰金配色，并把原本位于弹窗外的固定金额Label从`(-604.72,-170.626)`校正到输入值区域`(3.617,-1.454)`，同时调整到输入框之后绘制，避免被黑色输入底遮挡；脚本依赖的节点路径、按钮名、圆形Mask及赠送业务逻辑未改。`tools/generate_qin_give_pad_skin.py`可确定性重建5张运行图片，真实资源按Prefab坐标合成的预览为`art_sources/give_pad/qin_give_pad_runtime_preview.png`；尺寸、RGBA、`.meta`/UUID、强蓝像素、Prefab JSON、SpriteFrame解析及重复生成哈希检查通过，从玩家资料进入的手输金额模式和大厅预填金额模式仍待用户在现有Creator实例中实际验证。
+- `assets/resources/UI/panelUserInfo.prefab`玩家资料弹窗已完成清爽黑金秦风换皮：新增623×880的专用`assets/ImagesLuck/互动/用户信息框.png`并只重绑本页，原位重绘玩家信息标题、开通VIP、语音回放、赠送、语音聊天、九宫统计框、六个道具卡底框及九张统计标题，共17张本页UI图片。上半区使用大面积暖黑漆留白和细金边组织头像/身份/操作，统计区改为克制三行三列信息卡；头像、头像框、充值按钮和已换皮开关继续复用现有资源。
+- 用户明确要求`panelUserInfo`的道具图片不用改；本轮已对亲嘴、鸡、啤酒、拇指、炸弹、枪及5张隐藏道具图做SHA-256保护校验，11张均保持逐字节不变，只替换其外层`表情框.png`。Prefab除专用大框SpriteFrame绑定与动态Label暖金/象牙金/铜红色板外，没有修改任何节点名、层级、尺寸、坐标、Button、Toggle或`panelUserInfo.ts`业务逻辑。`tools/generate_qin_user_info_skin.py`可确定性重建17张运行PNG和`art_sources/user_info/qin_user_info_runtime_preview.png`，`tools/patch_qin_user_info_prefab.py`可重复应用绑定，`tools/validate_qin_user_info_skin.py`已验证尺寸、RGBA、透明裁剪、UUID、道具哈希、关键布局及交互契约；Creator实际头像数据、VIP/赠送/语音和道具点击仍待用户在现有实例中验证。
 
 ## 修改项目时的约束
 
