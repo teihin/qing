@@ -1,0 +1,43 @@
+{
+  "server": {
+    "http_address": ":8080",
+    "https_address": "",
+    "tls_cert_file": "",
+    "tls_key_file": "",
+    "allowed_origins": [
+      "http://localhost:7456",
+      "https://game.example.com"
+    ],
+    "read_header_timeout_seconds": 5,
+    "idle_timeout_seconds": 60,
+    "shutdown_timeout_seconds": 10,
+    "websocket_read_timeout_seconds": 20,
+    "websocket_write_timeout_seconds": 5
+  },
+  "audio": {
+    "ffmpeg_path": "ffmpeg",
+    "sample_rate": 16000,
+    "channels": 1,
+    "bitrate": "24k",
+    "min_duration_ms": 300,
+    "max_duration_ms": 10000,
+    "max_frame_bytes": 32768
+  },
+  "storage": {
+    "root_directory": "./data",
+    "retention_hours": 168,
+    "cleanup_interval_minutes": 10,
+    "partial_max_age_minutes": 15,
+    "metadata_directory_name": "metadata"
+  },
+  "auth": {
+    "hmac_secret": "",
+    "max_token_lifetime_seconds": 900,
+    "allowed_clock_skew_seconds": 30,
+    "allow_token_in_query": false
+  },
+  "limits": {
+    "max_connections": 1000,
+    "max_active_recordings": 100
+  }
+}

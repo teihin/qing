@@ -1,0 +1,28 @@
+{
+  "@id": "qing_audio_proxy",
+  "match": [
+    {
+      "host": [
+        "154.37.155.17"
+      ],
+      "path": [
+        "/audio/*"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "rewrite",
+      "strip_path_prefix": "/audio"
+    },
+    {
+      "handler": "reverse_proxy",
+      "upstreams": [
+        {
+          "dial": "127.0.0.1:18080"
+        }
+      ]
+    }
+  ],
+  "terminal": true
+}

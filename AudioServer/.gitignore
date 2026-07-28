@@ -1,0 +1,6 @@
+/audioserver
+/audio-token
+/config.json
+/data/
+/*.log
+._*

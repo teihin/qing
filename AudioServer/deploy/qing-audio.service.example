@@ -1,0 +1,23 @@
+[Unit]
+Description=Qing Audio Message Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=qing-audio
+Group=qing-audio
+WorkingDirectory=/opt/qing-audio
+EnvironmentFile=-/etc/qing-audio/environment
+ExecStart=/opt/qing-audio/audioserver -config /etc/qing-audio/config.json
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/qing-audio
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,6 +1,6 @@
 # 项目记忆（Codex 自动读取）
 
-最后更新：2026-07-23
+最后更新：2026-07-28
 
 本文件保存跨对话需要持续使用的项目事实与工作约束。涉及服务端行为、线上配置或原生包状态时，仍应在当前环境重新验证。
 
@@ -118,6 +118,21 @@ login.fire
 - Android权限兼容按系统版本分流：API 23以下定位无需运行时申请，API 23以上同时请求精确/粗略定位且任一获批即可工作，以兼容只授予大致位置；只使用前台定位，不申请后台定位。API 29以上保存本应用生成图片通过MediaStore的pending/publish流程，不申请读取相册、媒体位置或广泛存储权限；API 23～28仅在实际保存时请求`WRITE_EXTERNAL_STORAGE`并在授权后自动继续，Manifest将该权限限制到`maxSdkVersion=28`；API 22以下使用安装时权限。`INTERNET`和`ACCESS_NETWORK_STATE`属于安装时普通权限，不做运行时弹窗。该调整再次通过Android Debug完整编译，仍待Android 6/9/10/12/13+代表设备或模拟器分版本验证。
 - 2026-07-23 Android 真机复现“键盘上方输入内容/完成栏瞬间消失”：系统输入法实际保持显示（`mInputShown=true`），Cocos 原生 `Cocos2dxEditBox` 也仍持有输入连接，但输入栏定位异常。根因是 Creator 2.4.13 的 `registKeyboardVisible()` 不适配新版 Android 全屏/inset 行为；与本轮合并的 `AppActivity` 定位、相册和剪贴板桥接无关。已排除：只改内部EditText的`topMargin`会压缩输入框；用当前根布局高度判断会在`ADJUST_RESIZE`动画中误判关闭；从被平移控件或窗口可视矩形反推高度会受系统平移影响并产生过量位移，真机曾记录输入栏跳到`y=104–238`。当前第五版全局2.4.13 `Cocos2dxEditBox.java`在Android 11及以上直接使用系统`WindowInsets.Type.ime()`给出的IME底部inset定位，不再反推键盘高度；若父布局已被`ADJUST_RESIZE`缩小则不重复平移，否则按IME inset整体上移“输入框+完成按钮”。Android 10及以下继续用稳定物理屏幕高度差兜底，不写死机型、分辨率或键盘高度。原版备份为同目录`Cocos2dxEditBox.java.qing-before-ime-fix-20260723`，第五版`:qing:assembleDebug`已成功并重新编译`libcocos2dx` Java；仍需正式签名包真机复测，并建议补测Android 10及以下、另一台正常resize设备、横屏和切换输入法。Creator升级或重装会覆盖该全局补丁。
 - 后续真机日志进一步确认，“闪一下后关闭”的直接调用源不是inset定位：每次`onShown`后，`Cocos2dxGLSurfaceView`收到新的`ACTION_DOWN`，其2.4.13默认分支在`mStopHandleTouchAndKeyEvents`期间立即调用`Cocos2dxEditBox.complete()`，随后出现`HIDE_SOFT_INPUT`和JS `editing-did-ended`。现已最小修改全局`Cocos2dxGLSurfaceView.java`：编辑期间GL画布的单指/多指按下只拦截，不再隐式确认关闭；“完成”按钮、IME动作和系统返回键仍可结束输入。原版备份为同目录`Cocos2dxGLSurfaceView.java.qing-before-editbox-touch-fix-20260723`，`:libcocos2dx:compileDebugJavaWithJavac`已通过；待用户从Android Studio直接运行真机验证。
+
+## 自研房间语音替换（服务端已实现，客户端待实施）
+
+- 2026-07-28 静态确认当前房间语音 UI 与消息链仍保留：`panelGameView.ts`在按下/松开时调用`MobileManager.StartRecord/StopRecord`，上传成功后原设计通过`reqSay("@@语音@@"+文件ID)`广播，`DrhLogicMgr`负责排队，`DrhPlayerLogic`触发下载与播放；因此可以保持现有界面和`@@语音@@`房间消息外壳不变，只替换媒体通道。
+- 当前`MobileManager.ts`中的初始化、录音、停止、下载和播放均为空实现；Android生成工程没有`RECORD_AUDIO`声明，iOS `Info.plist`没有`NSMicrophoneUsageDescription`，网页版旧逻辑也直接返回。三端接入时必须分别补齐系统/浏览器麦克风授权；网页生产环境必须使用HTTPS/WSS。
+- 客户端待实施方案：Android用`AudioRecord`、iOS用`AVAudioEngine`、Web用`getUserMedia + AudioWorklet`统一采集16kHz单声道PCM，通过自有WS语音网关边录边传；网关实时编码为AAC-LC/M4A，松手后只提交尾包并返回不透明语音ID，KBEngine继续只广播ID。接收端收到消息即预取并使用本地缓存，仍按现有队列串行播放。
+- 语音网关应使用游戏服务端签发的短期房间令牌，不得把长期密钥放进客户端；限制单条时长、大小和发送频率，失败时保留短时本地PCM并退化为松手后HTTP补传。当前仓库不含游戏服务端实现，正式接入前需要取得服务端代码或明确令牌签发接口、语音服务部署地址、留存期限和目标浏览器范围。
+- 用户要求考虑无法申请SSL证书的环境，语音网关核心实现应默认提供HTTP/WS监听，Android和iOS可直接使用；但公网浏览器在HTTP页面中无法调用`getUserMedia`，因此“纯HTTP/WS且网页版可按住录音”在标准浏览器中不可实现。若网页版语音仍是硬性要求，应在网关外层增加可选HTTPS/WSS反向代理，核心语音服务内部仍保持HTTP/WS；只有localhost测试或由用户设备预先信任证书的受控环境属于例外。该取舍待用户确认。
+- 2026-07-28 用户确认语音实现必须同时兼容带证书和不带证书的部署。计划采用服务端`plain/secure/proxy`三种传输配置：始终可提供HTTP/WS，可选直接加载证书提供HTTPS/WSS，或由外层反向代理终止TLS；客户端按环境使用`plain/secure/auto`配置，但不得因证书校验失败静默降级或信任无效证书。公网网页版录音仍必须处于可信HTTPS环境，不带证书模式只保证Android、iOS及localhost网页录音。该传输决定已确认，业务实现尚未开始。
+- 2026-07-28 已在根目录`AudioServer`实现第一版独立Go语音服务器：16kHz单声道PCM通过WS直接送入FFmpeg，不长期落盘；编码结果先写随机后缀的`.m4a.part`，完成后按日期和语音ID前缀分片原子移动为正式M4A。元数据当前使用同样分片的原子JSON文件索引，记录`voiceId`、用户、房间、时长、大小、SHA-256、存储键和过期时间，不保存音频BLOB；默认保留7天，过期语音和未完成临时文件均自动清理。多实例部署前仍需把文件索引和本地磁盘适配为共享数据库/自建MinIO。
+- `AudioServer`已实现HTTP/WS无证书监听、HTTPS/WSS直接证书监听及Nginx代理示例，两种监听可同时开启且不会自动降级；提供WS边录边传、HTTP PCM补传、HMAC短期房间令牌、幂等请求ID、房间授权下载、ETag/Range、并发限制、健康检查和Prometheus文本指标。协议、配置、systemd与Nginx示例见`AudioServer/README.md`和`PROTOCOL.md`。
+- 服务端验证结果：`go test -race ./...`、`go vet ./...`、Go模块校验和macOS arm64及Linux amd64/arm64无CGO构建均通过；已真实同时启动HTTP与HTTPS监听，用HTTP上传0.5秒PCM并从HTTPS下载，`ffprobe`确认输出为0.5秒M4A。
+- 2026-07-28 已把AudioServer部署到现有热更新服务器`154.37.155.17`。服务器是CentOS 7 x86_64，`client_update`没有免密sudo且系统无FFmpeg，因此使用Linux amd64静态Go二进制和校验后的FFmpeg 7.0.2静态版，私有部署目录为`/www/html/.audio-server`且权限`0700`；AudioServer内部监听`18080`，公网不直接开放该端口，而是经现有Caddy提供`http://154.37.155.17/audio`和`ws://154.37.155.17/audio/v1/stream`。Caddy原配置已备份到部署私有目录，新增路由带唯一ID且不覆盖热更新路由。
+- 当前服务器采用普通用户守护脚本，异常退出3秒后重启；`client_update`的crontab在服务器重启时启动服务，并每分钟只读确认Caddy语音路由，只有路由丢失时才重新插入。停止/启动、路由幂等和公网健康检查均已验证。公网WS已完成鉴权、连续10个PCM帧、松手完成、生成1秒M4A及授权下载闭环；HTTP补传也完成1秒PCM转码和下载，但当前公网HTTP链路必须发送`Expect: 100-continue`，否则实测部分网络直接推送32KB请求体会在到达Caddy前被关闭。部署测试音频已清理，正式数据目录初始为空。
+- 当前公网入口仍是无证书HTTP/WS，Android和iOS可以接入，但标准公网浏览器无法在此环境申请麦克风；要支持网页版录音仍需可信HTTPS/WSS。尚未完成生产负载测试、游戏服务端令牌签发接入以及Android/iOS/Web客户端联调。
 
 ## Cocos Creator 2.2.1 项目定制引擎审查
 
