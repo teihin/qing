@@ -90,6 +90,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         KBEngine.Event.register("RewardPoolRec", this, "RewardPoolRec");
         KBEngine.Event.register("Paipu", this, "Paipu"); //文字牌谱
+        KBEngine.Event.register("VoiceRecordStopped", this, "OnVoiceRecordStopped");
 
         this.scrollGuanZhan = Tool.GetChild(this.node,"实时战绩/围观列表").getComponent(ScrollViewEx);
         this.scrollGuanZhan.callBackFresh = this.GetWatchList.bind(this);
@@ -98,6 +99,7 @@ export default class panelGameView extends UIPanelViewBase {
         this.scrollHuiGu.callBackFresh = this.ShowHistoryInfo.bind(this);
 
         this.setRoomInfo();
+        MobileManager.getInstance().PrepareVoice();
 
         this.node.on(cc.Node.EventType.TOUCH_END,(event:cc.Event.EventTouch)=>{
             this.OnPointDown(event);        
@@ -290,6 +292,14 @@ export default class panelGameView extends UIPanelViewBase {
         this.scrollJCList = Tool.GetChild(this.node,"奖池面板/容器/奖池记录/记录列表").getComponent(ScrollViewEx);
         this.scrollJCList.callBackFresh = this.GetAllJiangDetal.bind(this);
     }
+    public OnVoiceRecordStopped()
+    {
+        let talkShow = this.node.getChildByName("TalkShow");
+        if(talkShow != null)
+            talkShow.active = false;
+        KBEngine.Event.fire("OnPlayNextAudio");
+    }
+
     public CloseAllShow()
     {
         Tool.GetChild(this.node,"ConfigMain").active = false;

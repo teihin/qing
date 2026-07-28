@@ -42,6 +42,12 @@ export const LOGIN_BY_IP:boolean = true;
 export const IS_USE_WSS:boolean = false;
 export const SERVER_URL:string = "";
 
+// 自研语音服务。HTTPS网页会自动改用当前网页同源的 /audio HTTPS/WSS
+// 入口，绝不静默降级到下面的明文地址。
+export const AUDIO_SERVER_HTTP_BASE:string = "http://154.37.155.17/audio";
+export const AUDIO_SERVER_WS_URL:string = "ws://154.37.155.17/audio/v1/stream";
+export const AUDIO_SERVER_PROXY_PATH:string = "/audio";
+
 
 export const SERVER_IP_TEST:string = "192.168.2.96";
 export const LOCAL_HOT_UPDATE:string = "192.168.2.250";

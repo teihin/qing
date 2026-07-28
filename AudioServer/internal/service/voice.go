@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"qing-audio-server/internal/audio"
-	"qing-audio-server/internal/auth"
 	"qing-audio-server/internal/metrics"
 	"qing-audio-server/internal/model"
 	"qing-audio-server/internal/store"
@@ -23,14 +22,12 @@ import (
 var (
 	ErrBusy             = errors.New("voice server is busy")
 	ErrConflict         = errors.New("recording request is already active")
-	ErrUserRecording    = errors.New("user already has an active recording")
 	ErrInvalidRequestID = errors.New("invalid request ID")
 	ErrInvalidPCM       = errors.New("invalid PCM audio")
 	ErrTooShort         = errors.New("recording is too short")
 	ErrTooLong          = errors.New("recording exceeds maximum duration")
 	ErrSequence         = errors.New("audio frame sequence mismatch")
 	ErrTimestamp        = errors.New("audio frame timestamp moved backwards")
-	ErrForbidden        = errors.New("voice does not belong to this room")
 )
 
 type Config struct {
@@ -54,7 +51,6 @@ type VoiceService struct {
 
 	mu          sync.Mutex
 	activeVoice map[string]struct{}
-	activeUser  map[string]struct{}
 }
 
 type StartResult struct {
@@ -86,15 +82,14 @@ func NewVoiceService(
 		metrics:      serviceMetrics,
 		recordingSem: make(chan struct{}, config.MaxActiveRecordings),
 		activeVoice:  make(map[string]struct{}),
-		activeUser:   make(map[string]struct{}),
 	}, nil
 }
 
-func (s *VoiceService) Start(ctx context.Context, claims auth.Claims, requestID string) (StartResult, error) {
+func (s *VoiceService) Start(ctx context.Context, requestID string) (StartResult, error) {
 	if err := validateRequestID(requestID); err != nil {
 		return StartResult{}, err
 	}
-	voiceID := s.deriveVoiceID(claims.UserID, claims.RoomID, requestID)
+	voiceID := s.deriveVoiceID(requestID)
 
 	existing, err := s.metadata.Get(voiceID)
 	if err == nil {
@@ -113,20 +108,20 @@ func (s *VoiceService) Start(ctx context.Context, claims auth.Claims, requestID 
 		return StartResult{}, ErrBusy
 	}
 
-	if err := s.acquire(voiceID, claims.UserID); err != nil {
+	if err := s.acquire(voiceID); err != nil {
 		<-s.recordingSem
 		return StartResult{}, err
 	}
 
 	tempPath, err := s.files.NewTempPath(voiceID)
 	if err != nil {
-		s.release(voiceID, claims.UserID)
+		s.release(voiceID)
 		<-s.recordingSem
 		return StartResult{}, err
 	}
 	encoder, err := s.encoder.Start(ctx, tempPath)
 	if err != nil {
-		s.release(voiceID, claims.UserID)
+		s.release(voiceID)
 		<-s.recordingSem
 		s.files.RemoveTemp(tempPath)
 		return StartResult{}, err
@@ -136,7 +131,6 @@ func (s *VoiceService) Start(ctx context.Context, claims auth.Claims, requestID 
 	return StartResult{
 		Recording: &Recording{
 			service:   s,
-			claims:    claims,
 			requestID: requestID,
 			voiceID:   voiceID,
 			tempPath:  tempPath,
@@ -146,16 +140,13 @@ func (s *VoiceService) Start(ctx context.Context, claims auth.Claims, requestID 
 	}, nil
 }
 
-func (s *VoiceService) GetForRoom(voiceID, roomID string) (model.VoiceMetadata, error) {
+func (s *VoiceService) Get(voiceID string) (model.VoiceMetadata, error) {
 	metadata, err := s.metadata.Get(voiceID)
 	if err != nil {
 		return model.VoiceMetadata{}, err
 	}
 	if metadata.Status != model.VoiceStatusReady || !metadata.ExpiresAt.After(time.Now().UTC()) {
 		return model.VoiceMetadata{}, store.ErrMetadataNotFound
-	}
-	if metadata.RoomID != roomID {
-		return model.VoiceMetadata{}, ErrForbidden
 	}
 	return metadata, nil
 }
@@ -199,34 +190,25 @@ func (s *VoiceService) Cleanup(now time.Time, partialMaxAge time.Duration) (dele
 	return deletedVoices, deletedPartials, err
 }
 
-func (s *VoiceService) acquire(voiceID, userID string) error {
+func (s *VoiceService) acquire(voiceID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, exists := s.activeVoice[voiceID]; exists {
 		return ErrConflict
 	}
-	if _, exists := s.activeUser[userID]; exists {
-		return ErrUserRecording
-	}
 	s.activeVoice[voiceID] = struct{}{}
-	s.activeUser[userID] = struct{}{}
 	return nil
 }
 
-func (s *VoiceService) release(voiceID, userID string) {
+func (s *VoiceService) release(voiceID string) {
 	s.mu.Lock()
 	delete(s.activeVoice, voiceID)
-	delete(s.activeUser, userID)
 	s.mu.Unlock()
 }
 
-func (s *VoiceService) deriveVoiceID(userID, roomID, requestID string) string {
+func (s *VoiceService) deriveVoiceID(requestID string) string {
 	mac := hmac.New(sha256.New, []byte(s.config.IDSecret))
 	_, _ = io.WriteString(mac, "qing-voice-v1\x00")
-	_, _ = io.WriteString(mac, userID)
-	_, _ = io.WriteString(mac, "\x00")
-	_, _ = io.WriteString(mac, roomID)
-	_, _ = io.WriteString(mac, "\x00")
 	_, _ = io.WriteString(mac, requestID)
 	return hex.EncodeToString(mac.Sum(nil))
 }
@@ -251,7 +233,6 @@ func validateRequestID(requestID string) error {
 type Recording struct {
 	mu            sync.Mutex
 	service       *VoiceService
-	claims        auth.Claims
 	requestID     string
 	voiceID       string
 	tempPath      string
@@ -344,8 +325,8 @@ func (r *Recording) Finish() (metadata model.VoiceMetadata, err error) {
 	metadata = model.VoiceMetadata{
 		VoiceID:    r.voiceID,
 		RequestID:  r.requestID,
-		UserID:     r.claims.UserID,
-		RoomID:     r.claims.RoomID,
+		UserID:     "",
+		RoomID:     "",
 		DurationMS: durationMS,
 		FileSize:   fileSize,
 		SHA256:     checksum,
@@ -380,7 +361,7 @@ func (r *Recording) Abort() {
 }
 
 func (r *Recording) release() {
-	r.service.release(r.voiceID, r.claims.UserID)
+	r.service.release(r.voiceID)
 	<-r.service.recordingSem
 	r.service.metrics.RecordingStopped()
 }
@@ -420,6 +401,5 @@ func IsClientError(err error) bool {
 		errors.Is(err, ErrSequence) ||
 		errors.Is(err, ErrTimestamp) ||
 		errors.Is(err, ErrConflict) ||
-		errors.Is(err, ErrUserRecording) ||
 		strings.Contains(err.Error(), "recording is closed")
 }

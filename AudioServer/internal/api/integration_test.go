@@ -14,14 +14,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/gorilla/websocket"
 
 	"qing-audio-server/internal/audio"
-	"qing-audio-server/internal/auth"
 	"qing-audio-server/internal/config"
 	"qing-audio-server/internal/metrics"
 	"qing-audio-server/internal/model"
@@ -31,7 +29,6 @@ import (
 
 type integrationFixture struct {
 	server   *httptest.Server
-	tokens   *auth.Manager
 	voices   *service.VoiceService
 	metadata *store.FileMetadataStore
 	root     string
@@ -40,19 +37,11 @@ type integrationFixture struct {
 func newIntegrationFixture(t *testing.T, tlsEnabled bool) integrationFixture {
 	t.Helper()
 	cfg := config.Default()
-	cfg.Auth.HMACSecret = strings.Repeat("integration-secret-", 2)
+	cfg.Security.VoiceIDSecret = "integration-secret-integration-secret"
 	cfg.Storage.RootDirectory = t.TempDir()
 	cfg.Server.AllowedOrigins = []string{"*"}
 	cfg.Audio.FFmpegPath = "ffmpeg"
 
-	tokenManager, err := auth.NewManager(
-		cfg.Auth.HMACSecret,
-		time.Duration(cfg.Auth.MaxTokenLifetimeSecs)*time.Second,
-		0,
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
 	files, err := store.NewFileStorage(cfg.Storage.RootDirectory)
 	if err != nil {
 		t.Fatal(err)
@@ -74,12 +63,12 @@ func newIntegrationFixture(t *testing.T, tlsEnabled bool) integrationFixture {
 		MaxFrameBytes:       32768,
 		Retention:           time.Hour,
 		MaxActiveRecordings: 4,
-		IDSecret:            cfg.Auth.HMACSecret,
+		IDSecret:            cfg.Security.VoiceIDSecret,
 	}, encoderFactory, files, metadataStore, serviceMetrics)
 	if err != nil {
 		t.Fatal(err)
 	}
-	apiServer := NewServer(cfg, tokenManager, voiceService, serviceMetrics, log.New(io.Discard, "", 0))
+	apiServer := NewServer(cfg, voiceService, serviceMetrics, log.New(io.Discard, "", 0))
 	var server *httptest.Server
 	if tlsEnabled {
 		server = httptest.NewTLSServer(apiServer.Handler())
@@ -89,35 +78,23 @@ func newIntegrationFixture(t *testing.T, tlsEnabled bool) integrationFixture {
 	t.Cleanup(server.Close)
 	return integrationFixture{
 		server:   server,
-		tokens:   tokenManager,
 		voices:   voiceService,
 		metadata: metadataStore,
 		root:     cfg.Storage.RootDirectory,
 	}
 }
 
-func (f integrationFixture) token(t *testing.T, userID, roomID string) string {
-	t.Helper()
-	token, _, err := f.tokens.Issue(userID, roomID, 5*time.Minute)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return token
-}
-
-func TestHTTPUploadIdempotencyAndRoomDownload(t *testing.T) {
+func TestHTTPUploadIdempotencyAndPublicDownload(t *testing.T) {
 	fixture := newIntegrationFixture(t, false)
-	token := fixture.token(t, "user-1", "room-1")
 	pcm := sinePCM(500*time.Millisecond, 440)
 
-	first := uploadPCM(t, fixture.server.Client(), fixture.server.URL, token, "request_http_0001", pcm)
-	second := uploadPCM(t, fixture.server.Client(), fixture.server.URL, token, "request_http_0001", pcm)
+	first := uploadPCM(t, fixture.server.Client(), fixture.server.URL, "request_http_0001", pcm)
+	second := uploadPCM(t, fixture.server.Client(), fixture.server.URL, "request_http_0001", pcm)
 	if first.VoiceID != second.VoiceID {
 		t.Fatalf("idempotent upload returned different IDs: %s != %s", first.VoiceID, second.VoiceID)
 	}
 
 	request, _ := http.NewRequest(http.MethodGet, fixture.server.URL+"/v1/files/"+first.VoiceID, nil)
-	request.Header.Set("Authorization", "Bearer "+token)
 	response, err := fixture.server.Client().Do(request)
 	if err != nil {
 		t.Fatal(err)
@@ -131,18 +108,6 @@ func TestHTTPUploadIdempotencyAndRoomDownload(t *testing.T) {
 		t.Fatalf("unexpected downloaded audio: type=%q size=%d", response.Header.Get("Content-Type"), len(body))
 	}
 
-	otherRoomToken := fixture.token(t, "user-2", "room-2")
-	request, _ = http.NewRequest(http.MethodGet, fixture.server.URL+"/v1/files/"+first.VoiceID, nil)
-	request.Header.Set("Authorization", "Bearer "+otherRoomToken)
-	response, err = fixture.server.Client().Do(request)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = response.Body.Close()
-	if response.StatusCode != http.StatusForbidden {
-		t.Fatalf("cross-room download status = %d, want 403", response.StatusCode)
-	}
-
 	matches, err := filepath.Glob(filepath.Join(fixture.root, "voices", "*", "*", "*", "*", "*", "*.m4a"))
 	if err != nil || len(matches) != 1 {
 		t.Fatalf("stored voice files = %#v error=%v", matches, err)
@@ -151,7 +116,6 @@ func TestHTTPUploadIdempotencyAndRoomDownload(t *testing.T) {
 
 func TestWebSocketStreamingUpload(t *testing.T) {
 	fixture := newIntegrationFixture(t, false)
-	token := fixture.token(t, "user-ws", "room-ws")
 
 	serverURL, _ := url.Parse(fixture.server.URL)
 	serverURL.Scheme = "ws"
@@ -162,11 +126,6 @@ func TestWebSocketStreamingUpload(t *testing.T) {
 	}
 	defer connection.Close()
 
-	writeJSONMessage(t, connection, clientControl{Type: "auth", Token: token})
-	authResponse := readServerControl(t, connection)
-	if authResponse.Type != "authenticated" {
-		t.Fatalf("auth response = %#v", authResponse)
-	}
 	writeJSONMessage(t, connection, clientControl{Type: "start", RequestID: "request_ws_000001"})
 	startResponse := readServerControl(t, connection)
 	if startResponse.Type != "started" {
@@ -198,11 +157,9 @@ func TestWebSocketStreamingUpload(t *testing.T) {
 
 func TestShortUploadIsRejectedAndTemporaryFileIsRemoved(t *testing.T) {
 	fixture := newIntegrationFixture(t, false)
-	token := fixture.token(t, "user-short", "room-short")
 	pcm := sinePCM(100*time.Millisecond, 440)
 
 	request, _ := http.NewRequest(http.MethodPost, fixture.server.URL+"/v1/voices", bytes.NewReader(pcm))
-	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/octet-stream")
 	request.Header.Set("X-Request-ID", "request_short_0001")
 	response, err := fixture.server.Client().Do(request)
@@ -225,12 +182,10 @@ func TestShortUploadIsRejectedAndTemporaryFileIsRemoved(t *testing.T) {
 
 func TestCleanupDeletesExpiredVoiceAndMetadata(t *testing.T) {
 	fixture := newIntegrationFixture(t, false)
-	token := fixture.token(t, "user-cleanup", "room-cleanup")
 	voice := uploadPCM(
 		t,
 		fixture.server.Client(),
 		fixture.server.URL,
-		token,
 		"request_cleanup_0001",
 		sinePCM(400*time.Millisecond, 440),
 	)
@@ -266,10 +221,9 @@ func TestHandlerWorksThroughTLS(t *testing.T) {
 	}
 }
 
-func uploadPCM(t *testing.T, client *http.Client, baseURL, token, requestID string, pcm []byte) model.PublicVoice {
+func uploadPCM(t *testing.T, client *http.Client, baseURL, requestID string, pcm []byte) model.PublicVoice {
 	t.Helper()
 	request, _ := http.NewRequest(http.MethodPost, baseURL+"/v1/voices", bytes.NewReader(pcm))
-	request.Header.Set("Authorization", "Bearer "+token)
 	request.Header.Set("Content-Type", "application/octet-stream")
 	request.Header.Set("X-Request-ID", requestID)
 	response, err := client.Do(request)

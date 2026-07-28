@@ -16,7 +16,6 @@ import (
 
 	"qing-audio-server/internal/api"
 	"qing-audio-server/internal/audio"
-	"qing-audio-server/internal/auth"
 	"qing-audio-server/internal/config"
 	"qing-audio-server/internal/metrics"
 	"qing-audio-server/internal/service"
@@ -43,15 +42,6 @@ func main() {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		logger.Fatalf("load configuration: %v", err)
-	}
-
-	tokenManager, err := auth.NewManager(
-		cfg.Auth.HMACSecret,
-		time.Duration(cfg.Auth.MaxTokenLifetimeSecs)*time.Second,
-		time.Duration(cfg.Auth.AllowedClockSkewSecs)*time.Second,
-	)
-	if err != nil {
-		logger.Fatalf("initialize token manager: %v", err)
 	}
 
 	fileStorage, err := store.NewFileStorage(cfg.Storage.RootDirectory)
@@ -84,7 +74,7 @@ func main() {
 			MaxFrameBytes:       cfg.Audio.MaxFrameBytes,
 			Retention:           cfg.Retention(),
 			MaxActiveRecordings: cfg.Limits.MaxActiveRecordings,
-			IDSecret:            cfg.Auth.HMACSecret,
+			IDSecret:            cfg.Security.VoiceIDSecret,
 		},
 		encoderFactory,
 		fileStorage,
@@ -95,7 +85,7 @@ func main() {
 		logger.Fatalf("initialize voice service: %v", err)
 	}
 
-	apiServer := api.NewServer(cfg, tokenManager, voiceService, serviceMetrics, logger)
+	apiServer := api.NewServer(cfg, voiceService, serviceMetrics, logger)
 	handler := apiServer.Handler()
 
 	rootContext, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"qing-audio-server/internal/auth"
 	"qing-audio-server/internal/config"
 	"qing-audio-server/internal/metrics"
 	"qing-audio-server/internal/model"
@@ -23,7 +22,6 @@ import (
 
 type Server struct {
 	config         config.Config
-	tokens         *auth.Manager
 	voices         *service.VoiceService
 	metrics        *metrics.Metrics
 	logger         *log.Logger
@@ -34,14 +32,12 @@ type Server struct {
 
 func NewServer(
 	cfg config.Config,
-	tokens *auth.Manager,
 	voices *service.VoiceService,
 	serviceMetrics *metrics.Metrics,
 	logger *log.Logger,
 ) *Server {
 	server := &Server{
 		config:        cfg,
-		tokens:        tokens,
 		voices:        voices,
 		metrics:       serviceMetrics,
 		logger:        logger,
@@ -85,19 +81,13 @@ func (s *Server) handleMetrics(writer http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleFallbackUpload(writer http.ResponseWriter, request *http.Request) {
-	claims, err := s.authenticateHTTP(request)
-	if err != nil {
-		writeAPIError(writer, http.StatusUnauthorized, "unauthorized", "invalid or expired access token")
-		return
-	}
-
 	mediaType, _, err := mime.ParseMediaType(request.Header.Get("Content-Type"))
 	if err != nil || mediaType != "application/octet-stream" {
 		writeAPIError(writer, http.StatusUnsupportedMediaType, "unsupported_media_type", "Content-Type must be application/octet-stream")
 		return
 	}
 	requestID := request.Header.Get("X-Request-ID")
-	startResult, err := s.voices.Start(request.Context(), claims, requestID)
+	startResult, err := s.voices.Start(request.Context(), requestID)
 	if err != nil {
 		s.writeServiceError(writer, err)
 		return
@@ -165,23 +155,14 @@ func (s *Server) handleFallbackUpload(writer http.ResponseWriter, request *http.
 }
 
 func (s *Server) handleDownload(writer http.ResponseWriter, request *http.Request) {
-	claims, err := s.authenticateHTTP(request)
-	if err != nil {
-		writeAPIError(writer, http.StatusUnauthorized, "unauthorized", "invalid or expired access token")
-		return
-	}
 	voiceID := request.PathValue("voiceID")
 	if err := store.ValidateVoiceID(voiceID); err != nil {
 		writeAPIError(writer, http.StatusNotFound, "not_found", "voice was not found")
 		return
 	}
-	metadata, err := s.voices.GetForRoom(voiceID, claims.RoomID)
+	metadata, err := s.voices.Get(voiceID)
 	if errors.Is(err, store.ErrMetadataNotFound) {
 		writeAPIError(writer, http.StatusNotFound, "not_found", "voice was not found")
-		return
-	}
-	if errors.Is(err, service.ErrForbidden) {
-		writeAPIError(writer, http.StatusForbidden, "forbidden", "voice does not belong to this room")
 		return
 	}
 	if err != nil {
@@ -215,27 +196,11 @@ func (s *Server) handleDownload(writer http.ResponseWriter, request *http.Reques
 	http.ServeContent(writer, request, path.Base(info.Name()), metadata.CreatedAt, file)
 }
 
-func (s *Server) authenticateHTTP(request *http.Request) (auth.Claims, error) {
-	header := request.Header.Get("Authorization")
-	const prefix = "Bearer "
-	var token string
-	if strings.HasPrefix(header, prefix) {
-		token = strings.TrimSpace(strings.TrimPrefix(header, prefix))
-	}
-	if token == "" && s.config.Auth.AllowTokenInQuery {
-		token = request.URL.Query().Get("access_token")
-	}
-	if token == "" {
-		return auth.Claims{}, auth.ErrInvalidToken
-	}
-	return s.tokens.Verify(token)
-}
-
 func (s *Server) writeServiceError(writer http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrBusy):
 		writeAPIError(writer, http.StatusServiceUnavailable, "server_busy", "too many active recordings")
-	case errors.Is(err, service.ErrConflict), errors.Is(err, service.ErrUserRecording):
+	case errors.Is(err, service.ErrConflict):
 		writeAPIError(writer, http.StatusConflict, "recording_conflict", err.Error())
 	case errors.Is(err, service.ErrInvalidRequestID):
 		writeAPIError(writer, http.StatusBadRequest, "invalid_request_id", "X-Request-ID must contain 8 to 128 URL-safe characters")
@@ -259,7 +224,7 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 		if origin != "" && s.originAllowed(origin) {
 			writer.Header().Set("Access-Control-Allow-Origin", origin)
 			writer.Header().Set("Vary", "Origin")
-			writer.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID")
+			writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Request-ID")
 			writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 			writer.Header().Set("Access-Control-Expose-Headers", "ETag, Content-Length, Content-Range")
 			writer.Header().Set("Access-Control-Max-Age", "600")

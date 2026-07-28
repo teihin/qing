@@ -10,7 +10,6 @@ import (
 
 	"github.com/gorilla/websocket"
 
-	"qing-audio-server/internal/auth"
 	"qing-audio-server/internal/model"
 	"qing-audio-server/internal/service"
 )
@@ -23,7 +22,6 @@ const (
 
 type clientControl struct {
 	Type      string `json:"type"`
-	Token     string `json:"token,omitempty"`
 	RequestID string `json:"requestId,omitempty"`
 }
 
@@ -80,9 +78,7 @@ func (s *Server) handleWebSocket(writer http.ResponseWriter, request *http.Reque
 	go s.pingConnection(connection, stopPing)
 
 	var (
-		claims        auth.Claims
-		authenticated bool
-		recording     *service.Recording
+		recording *service.Recording
 	)
 	defer func() {
 		if recording != nil {
@@ -111,50 +107,14 @@ func (s *Server) handleWebSocket(writer http.ResponseWriter, request *http.Reque
 			}
 			control.Type = strings.ToLower(strings.TrimSpace(control.Type))
 			switch control.Type {
-			case "auth":
-				if authenticated {
-					if !s.writeWSError(connection, "already_authenticated", "connection is already authenticated", false) {
-						return
-					}
-					continue
-				}
-				verified, err := s.tokens.Verify(control.Token)
-				if err != nil {
-					_ = s.writeWSError(connection, "unauthorized", "invalid or expired access token", false)
-					_ = connection.WriteControl(
-						websocket.CloseMessage,
-						websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "unauthorized"),
-						time.Now().Add(s.config.WebSocketWriteTimeout()),
-					)
-					return
-				}
-				claims = verified
-				authenticated = true
-				if !s.writeWSJSON(connection, serverControl{Type: "authenticated"}) {
-					return
-				}
-
 			case "start":
-				if !authenticated {
-					if !s.writeWSError(connection, "unauthorized", "authenticate before starting a recording", false) {
-						return
-					}
-					continue
-				}
-				if time.Now().UTC().Unix() > claims.ExpiresAt+s.config.Auth.AllowedClockSkewSecs {
-					authenticated = false
-					if !s.writeWSError(connection, "token_expired", "access token expired; reconnect and authenticate again", false) {
-						return
-					}
-					continue
-				}
 				if recording != nil {
 					if !s.writeWSError(connection, "recording_active", "this connection already has an active recording", false) {
 						return
 					}
 					continue
 				}
-				result, err := s.voices.Start(request.Context(), claims, control.RequestID)
+				result, err := s.voices.Start(request.Context(), control.RequestID)
 				if err != nil {
 					if !s.writeWSServiceError(connection, err) {
 						return
@@ -225,12 +185,6 @@ func (s *Server) handleWebSocket(writer http.ResponseWriter, request *http.Reque
 			}
 
 		case websocket.BinaryMessage:
-			if !authenticated {
-				if !s.writeWSError(connection, "unauthorized", "authenticate before sending audio", false) {
-					return
-				}
-				continue
-			}
 			if recording == nil {
 				if !s.writeWSError(connection, "no_recording", "start a recording before sending audio", false) {
 					return
@@ -299,7 +253,7 @@ func (s *Server) writeWSServiceError(connection *websocket.Conn, err error) bool
 	switch {
 	case errors.Is(err, service.ErrBusy):
 		return s.writeWSError(connection, "server_busy", "too many active recordings", true)
-	case errors.Is(err, service.ErrConflict), errors.Is(err, service.ErrUserRecording):
+	case errors.Is(err, service.ErrConflict):
 		return s.writeWSError(connection, "recording_conflict", err.Error(), true)
 	case errors.Is(err, service.ErrInvalidRequestID):
 		return s.writeWSError(connection, "invalid_request_id", "requestId must contain 8 to 128 URL-safe characters", false)

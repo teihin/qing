@@ -13,7 +13,7 @@ func TestLoadMergesDefaultsAndResolvesPaths(t *testing.T) {
 	content := `{
 	  "server":{"http_address":"127.0.0.1:0"},
 	  "storage":{"root_directory":"voice-data"},
-	  "auth":{"hmac_secret":"` + strings.Repeat("x", 32) + `"}
+	  "security":{"voice_id_secret":"` + strings.Repeat("x", 32) + `"}
 	}`
 	if err := os.WriteFile(configPath, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
@@ -35,16 +35,16 @@ func TestEnvironmentSecretOverridesFile(t *testing.T) {
 	directory := t.TempDir()
 	configPath := filepath.Join(directory, "config.json")
 	if err := os.WriteFile(configPath, []byte(`{
-	  "auth":{"hmac_secret":"`+strings.Repeat("a", 32)+`"}
+	  "security":{"voice_id_secret":"`+strings.Repeat("a", 32)+`"}
 	}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("AUDIO_SERVER_TOKEN_SECRET", strings.Repeat("b", 32))
+	t.Setenv("AUDIO_SERVER_ID_SECRET", strings.Repeat("b", 32))
 	cfg, err := Load(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Auth.HMACSecret != strings.Repeat("b", 32) {
+	if cfg.Security.VoiceIDSecret != strings.Repeat("b", 32) {
 		t.Fatal("environment secret did not override file")
 	}
 }

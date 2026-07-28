@@ -11,11 +11,11 @@ import (
 )
 
 type Config struct {
-	Server  ServerConfig  `json:"server"`
-	Audio   AudioConfig   `json:"audio"`
-	Storage StorageConfig `json:"storage"`
-	Auth    AuthConfig    `json:"auth"`
-	Limits  LimitsConfig  `json:"limits"`
+	Server   ServerConfig   `json:"server"`
+	Audio    AudioConfig    `json:"audio"`
+	Storage  StorageConfig  `json:"storage"`
+	Security SecurityConfig `json:"security"`
+	Limits   LimitsConfig   `json:"limits"`
 }
 
 type ServerConfig struct {
@@ -49,11 +49,8 @@ type StorageConfig struct {
 	MetadataDirectoryName string `json:"metadata_directory_name"`
 }
 
-type AuthConfig struct {
-	HMACSecret           string `json:"hmac_secret"`
-	MaxTokenLifetimeSecs int64  `json:"max_token_lifetime_seconds"`
-	AllowedClockSkewSecs int64  `json:"allowed_clock_skew_seconds"`
-	AllowTokenInQuery    bool   `json:"allow_token_in_query"`
+type SecurityConfig struct {
+	VoiceIDSecret string `json:"voice_id_secret"`
 }
 
 type LimitsConfig struct {
@@ -87,10 +84,6 @@ func Default() Config {
 			CleanupIntervalMins:   10,
 			PartialMaxAgeMinutes:  15,
 			MetadataDirectoryName: "metadata",
-		},
-		Auth: AuthConfig{
-			MaxTokenLifetimeSecs: 15 * 60,
-			AllowedClockSkewSecs: 30,
 		},
 		Limits: LimitsConfig{
 			MaxConnections:      1000,
@@ -133,7 +126,7 @@ func Load(path string) (Config, error) {
 }
 
 func applyEnvironment(cfg *Config) {
-	setStringFromEnv(&cfg.Auth.HMACSecret, "AUDIO_SERVER_TOKEN_SECRET")
+	setStringFromEnv(&cfg.Security.VoiceIDSecret, "AUDIO_SERVER_ID_SECRET")
 	setStringFromEnv(&cfg.Server.HTTPAddress, "AUDIO_SERVER_HTTP_ADDR")
 	setStringFromEnv(&cfg.Server.HTTPSAddress, "AUDIO_SERVER_HTTPS_ADDR")
 	setStringFromEnv(&cfg.Server.TLSCertFile, "AUDIO_SERVER_TLS_CERT_FILE")
@@ -197,11 +190,8 @@ func (cfg Config) Validate() error {
 	if cfg.Storage.CleanupIntervalMins <= 0 || cfg.Storage.PartialMaxAgeMinutes <= 0 {
 		problems = append(problems, "storage cleanup intervals must be positive")
 	}
-	if len(cfg.Auth.HMACSecret) < 32 {
-		problems = append(problems, "auth.hmac_secret must contain at least 32 characters")
-	}
-	if cfg.Auth.MaxTokenLifetimeSecs <= 0 {
-		problems = append(problems, "auth.max_token_lifetime_seconds must be positive")
+	if len(cfg.Security.VoiceIDSecret) < 32 {
+		problems = append(problems, "security.voice_id_secret must contain at least 32 characters")
 	}
 	if cfg.Limits.MaxConnections <= 0 || cfg.Limits.MaxActiveRecordings <= 0 {
 		problems = append(problems, "connection and recording limits must be positive")

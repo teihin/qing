@@ -1,28 +1,15 @@
 # Qing Audio Protocol v1
 
 The service accepts 16 kHz, mono, signed 16-bit little-endian PCM and stores
-AAC-LC audio in an M4A container. A client must possess a short-lived token
-bound to its game user and room.
+AAC-LC audio in an M4A container. Upload and download do not require a token.
 
 ## WebSocket recording
 
 Connect to `/v1/stream` with WS or WSS, then exchange messages in this order.
 
-1. Authenticate:
-
-```json
-{"type":"auth","token":"v1.payload.signature"}
-```
-
-Successful response:
-
-```json
-{"type":"authenticated"}
-```
-
-2. Start a recording. `requestId` must contain 8 to 128 ASCII letters, digits,
-hyphens or underscores. Retrying the same user, room and `requestId` returns the
-same voice rather than creating a duplicate.
+1. Start a recording. `requestId` must contain 8 to 128 ASCII letters, digits,
+hyphens or underscores. Retrying the same `requestId` returns the same voice
+rather than creating a duplicate.
 
 ```json
 {"type":"start","requestId":"client_generated_request_0001"}
@@ -34,7 +21,7 @@ Response:
 {"type":"started","sessionId":"64_hex_character_voice_id","maxDurationMs":10000}
 ```
 
-3. Send PCM as binary WebSocket messages. Every message has a 14-byte header.
+2. Send PCM as binary WebSocket messages. Every message has a 14-byte header.
 
 | Offset | Size | Field |
 |---|---:|---|
@@ -47,7 +34,7 @@ Response:
 WebSocket delivery is ordered, but sequence numbers make accidental loss or
 client framing bugs explicit. The payload must contain complete 16-bit samples.
 
-4. Finish:
+3. Finish:
 
 ```json
 {"type":"finish"}
@@ -78,7 +65,6 @@ more than one recording, but only one recording may be active at a time.
 Headers:
 
 ```text
-Authorization: Bearer <token>
 Content-Type: application/octet-stream
 X-Request-ID: <same idempotency request ID used for WS>
 ```
@@ -94,28 +80,6 @@ streaming path does not use this header.
 
 `GET /v1/files/<voiceId>`
 
-Send `Authorization: Bearer <token>`. The token room must match the stored voice
-room. The endpoint supports HTTP range requests and ETag validation.
-
-## Token format
-
-The game server issues tokens; clients must never contain the signing secret.
-
-```text
-v1.<base64url(JSON claims)>.<base64url(HMAC-SHA256("v1."+payload))>
-```
-
-Claims:
-
-```json
-{
-  "sub":"game-user-id",
-  "room":"game-room-id",
-  "iat":1753696800,
-  "exp":1753697100,
-  "nonce":"random-base64url"
-}
-```
-
-The bundled `audio-token` command is only a deployment and local-integration
-utility. Production game servers should generate the same token themselves.
+No authorization header is required. The endpoint supports HTTP range requests
+and ETag validation. After upload, pass `voiceId` through the existing KB
+`say` message; KB does not upload or proxy the audio file.

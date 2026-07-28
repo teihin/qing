@@ -131,6 +131,8 @@ export default class DrhLogicMgr extends cc.Component {
     }
 
     onDestroy(){
+        if(MobileManager.instance != null)
+            MobileManager.instance.LeaveVoiceRoom();
         KBEngine.Event.deregisterAll(this);
     }
 
@@ -1050,6 +1052,7 @@ export default class DrhLogicMgr extends cc.Component {
 
         if (strWord.indexOf("@@语音@@") >= 0) //语音需要排队
         {
+            MobileManager.getInstance().PreloadRecord(strWord.substr(6));
             this.Add2SayTemp(strMsg);
             return;
         }

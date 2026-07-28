@@ -29,11 +29,6 @@ func main() {
 	flag.StringVar(&origin, "origin", "", "optional Origin header")
 	flag.Parse()
 
-	token := os.Getenv("AUDIO_SERVER_TEST_TOKEN")
-	if token == "" {
-		exitError("AUDIO_SERVER_TEST_TOKEN is required")
-	}
-
 	headers := http.Header{}
 	if origin != "" {
 		headers.Set("Origin", origin)
@@ -49,12 +44,6 @@ func main() {
 	deadline := time.Now().Add(20 * time.Second)
 	_ = connection.SetReadDeadline(deadline)
 	_ = connection.SetWriteDeadline(deadline)
-
-	writeJSON(connection, map[string]string{
-		"type":  "auth",
-		"token": token,
-	})
-	expectType(connection, "authenticated")
 
 	requestID := fmt.Sprintf("smoke_%d", time.Now().UnixNano())
 	writeJSON(connection, map[string]string{
