@@ -239,17 +239,32 @@ export default class panelMain extends UIPanelViewBase {
         let account = GameDataManager.getAccount();
         let imageManager = ImageManager.getInstance();
         let rawValue = account.photo;
+        let loginName = Tool.GetConfigString("unionid","").trim();
+        let registrationAvatarKey = loginName == "" ? "" : "registrationAvatar_" + loginName;
+        let registeredAvatar = registrationAvatarKey == "" ? "" : cc.sys.localStorage.getItem(registrationAvatarKey);
         if(imageManager.IsAvatarIndex(rawValue))
         {
+            let serverAvatar = imageManager.NormalizeAvatarIndex(rawValue);
+            if(imageManager.IsAvatarIndex(registeredAvatar) && serverAvatar != imageManager.NormalizeAvatarIndex(registeredAvatar))
+            {
+                this.pendingAvatarIndex = imageManager.NormalizeAvatarIndex(registeredAvatar);
+                account.reqSetProperty("photo", this.pendingAvatarIndex);
+                return this.pendingAvatarIndex;
+            }
             this.pendingAvatarIndex = "";
-            return imageManager.NormalizeAvatarIndex(rawValue);
+            if(registrationAvatarKey != "")
+                cc.sys.localStorage.removeItem(registrationAvatarKey);
+            return serverAvatar;
         }
 
         if(this.pendingAvatarIndex != "")
             return this.pendingAvatarIndex;
 
         let rawText = rawValue === null || rawValue === undefined ? "" : rawValue.toString().trim();
-        this.pendingAvatarIndex = rawText == "" ? imageManager.RandomAvatarIndex() : "1";
+        if(rawText == "" && imageManager.IsAvatarIndex(registeredAvatar))
+            this.pendingAvatarIndex = imageManager.NormalizeAvatarIndex(registeredAvatar);
+        else
+            this.pendingAvatarIndex = rawText == "" ? imageManager.RandomAvatarIndex() : "1";
         account.reqSetProperty("photo", this.pendingAvatarIndex);
         return this.pendingAvatarIndex;
     }

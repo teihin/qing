@@ -1,0 +1,5 @@
+# 多个主页/弹层共用的无装饰圆背景
+assets/ImagesLuck/公用/背景.png
+assets/ImagesLuck/我的/我的背景.png
+assets/ImagesXYPK/推广/背景.png
+assets/imagesKK/公用/背景1.png

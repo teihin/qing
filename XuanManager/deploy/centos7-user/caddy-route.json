@@ -1,0 +1,28 @@
+{
+  "@id": "qing_xuanmanager_proxy",
+  "match": [
+    {
+      "host": [
+        "154.37.155.17"
+      ],
+      "path": [
+        "/xuanmanager/*"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "rewrite",
+      "strip_path_prefix": "/xuanmanager"
+    },
+    {
+      "handler": "reverse_proxy",
+      "upstreams": [
+        {
+          "dial": "127.0.0.1:8891"
+        }
+      ]
+    }
+  ],
+  "terminal": true
+}

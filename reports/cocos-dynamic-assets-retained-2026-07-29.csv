@@ -1,0 +1,440 @@
+﻿状态,源文件,类型,源文件字节,当前构建归属字节,构建分包,判定说明
+动态保留,assets/resources/Audio/道具声音/鲨鱼.wav,audio,483884,484004,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Audio/eff/喜金.wav,audio,482352,482472,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/project.manifest,data,431211,431311,resources,UUID 引用自 assets/resources/UI/panelUpdate.prefab；动态字面量 project，来自 assets/scripts/UI/panelUpdate.ts
+动态保留,assets/resources/pk2/0_11d.png,image,387664,387932,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/道具声音/机枪.wav,audio,387116,387236,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/pk2/2_11d.png,image,379701,379969,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_12d.png,image,372627,372895,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_13d.png,image,372340,372608,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/1.jpg,image,369485,369751,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_13d.png,image,368152,368420,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/4.jpg,image,365094,365360,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/5.jpg,image,364794,365060,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_12d.png,image,358728,358996,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_13d.png,image,353427,353695,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/3.jpg,image,351215,351481,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_13d.png,image,336207,336475,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/bigbig.png,image,331726,332001,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/Prefabs/丢牌对象.prefab；UUID 引用自 assets/resources/Prefabs/回顾对象.prefab；UUID 引用自 assets/resources/Prefabs/回顾对象2.prefab；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/牌背2.png,image,317426,317699,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/搓背2.png,image,317426,317699,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/牌背1.png,image,312588,312859,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/牌背0.png,image,312588,312859,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/搓背1.png,image,312588,312859,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/搓背0.png,image,312588,312859,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/牌背3.png,image,312319,312592,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/搓背3.png,image,312319,312592,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_11d.png,image,302996,303264,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_12d.png,image,296187,296455,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/2.jpg,image,292558,292824,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_12d.png,image,291940,292208,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_11d.png,image,275342,275610,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/道具声音/Nice.wav,audio,262700,262818,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Audio/eff/切牌.wav,audio,253304,253424,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/UI/panelGameView.prefab,prefab,2449239,200810,resources,UUID 引用自 assets/Scenes/drh8.fire；动态 prefab 名 panelGameView，来自 assets/scripts/PlayGameManager.ts；动态 prefab 名 panelGameView，来自 assets/scripts/UI/panelTalk.ts；审计入口
+动态保留,assets/resources/Audio/eff/送金币.wav,audio,194356,194479,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/4_1d.png,image,190830,191097,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/道具声音/钓鱼.wav,audio,168236,168356,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Audio/道具声音/大拇指.wav,audio,161324,161447,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Audio/道具声音/亲嘴.wav,audio,154412,154532,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/avatars/头像10.png,image,149944,150215,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/Audio/eff/提醒.wav,audio,150044,150163,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/avatars/头像12.png,image,146447,146718,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像20.png,image,145917,146188,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像18.png,image,143583,143854,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像07.png,image,143447,143718,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像19.png,image,143381,143652,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像16.png,image,143225,143496,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像15.png,image,142885,143156,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像08.png,image,142456,142727,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像13.png,image,142314,142585,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像14.png,image,142064,142335,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像06.png,image,141843,142114,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像11.png,image,141057,141328,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像03.png,image,138928,139199,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像17.png,image,138363,138634,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像09.png,image,138124,138395,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像05.png,image,137449,137720,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像04.png,image,136615,136886,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/avatars/头像02.png,image,136571,136842,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/Audio/道具声音/炸弹.wav,audio,135980,136100,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/avatars/头像01.png,image,129217,129488,resources,头像编号动态加载，来自 assets/scripts/logic/ImageManager.ts
+动态保留,assets/resources/Audio/eff/敲.wav,audio,125580,125697,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/UI/panelManager.prefab,prefab,1569882,118940,resources,动态 prefab 名 panelManager，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/pk2/bigbig2.png,image,114903,115176,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/倒计时结束.wav,audio,111964,112093,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/UI/panelMain.prefab,prefab,1237792,102370,resources,动态 prefab 名 panelMain，来自 assets/scripts/StartGameManager.ts；动态 prefab 名 panelMain，来自 assets/scripts/UI/panelLogin.ts；动态 prefab 名 panelMain，来自 assets/scripts/logic/DrhLogicMgr.ts；审计入口
+动态保留,assets/resources/pk2/bigbig1.png,image,101710,101983,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/坐下.wav,audio,101420,101540,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/2_10d.png,image,100577,100845,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/烟花.mp3,audio,96695,96815,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/2_8d.png,image,84888,85155,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_8d.png,image,81780,82047,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_10d.png,image,80753,81021,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_7d.png,image,75502,75769,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/道具声音/屎.wav,audio,74924,75041,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/pk2/2_7d.png,image,74077,74344,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_10d.png,image,73125,73393,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_6d.png,image,72449,72716,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/bigbi2.png,image,71747,72019,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/bigbi1.png,image,71647,71919,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_10d.png,image,71188,71456,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/UI/panelHongli.prefab,prefab,832070,70327,resources,动态 prefab 名 panelHongli，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/Prefabs/钱包.prefab,prefab,827668,70252,resources,动态 prefab 名 钱包，来自 assets/scripts/UI/panelGameView.ts；动态 prefab 名 钱包，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 钱包，来自 assets/scripts/UI/panelUserInfo.ts
+动态保留,assets/resources/pk2/3_8d.png,image,69651,69918,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_9d.png,image,69574,69841,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_10.png,image,67060,67330,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_9d.png,image,66710,66977,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_8d.png,image,66626,66893,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_6d.png,image,59072,59339,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_7d.png,image,56870,57137,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_6d.png,image,53434,53701,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_7d.png,image,53414,53681,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/4_1a.png,image,52782,53052,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_6d.png,image,50730,50997,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_9d.png,image,48454,48721,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_5d.png,image,48341,48608,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_12a.png,image,47762,48033,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_4d.png,image,46353,46620,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/扯牌.wav,audio,46124,46240,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/2_12a.png,image,45886,46159,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_4d.png,image,45112,45379,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_11a.png,image,45107,45378,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_11a.png,image,45095,45368,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/other/Default_Man_Head.png,image,44970,45249,resources,动态字面量 other/Default_Man_Head，来自 assets/scripts/logic/ImageManager.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/默认头像.png,image,44970,45245,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/Prefabs/回顾对象.prefab；UUID 引用自 assets/resources/Prefabs/回顾对象2.prefab；UUID 引用自 assets/resources/Prefabs/战绩玩家对象.prefab；UUID 引用自 assets/resources/Prefabs/观战对象.prefab；UUID 引用自 assets/resources/UI/panelGameView.prefab；UUID 引用自 assets/resources/UI/panelGivePad.prefab；UUID 引用自 assets/resources/UI/panelMain.prefab；UUID 引用自 assets/resources/UI/panelRecordInfo.prefab；UUID 引用自 assets/resources/UI/panelUserInfo.prefab；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/head.png,image,44970,45237,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Audio/道具声音/抓鸡.wav,audio,44972,45092,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/pk2/0_9d.png,image,44818,45085,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_5d.png,image,43851,44118,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/道具声音/干杯.wav,audio,43820,43940,resources,道具名称动态音效，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/pk2/2_3d.png,image,42085,42352,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_4d.png,image,40892,41159,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_4d.png,image,39139,39406,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/入池.mp3,audio,39008,39128,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/2_2d.png,image,37879,38146,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_2d.png,image,34496,34763,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_5d.png,image,32677,32944,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_3a.png,image,31246,31516,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_2a.png,image,30980,31250,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_1a.png,image,30854,31124,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_5d.png,image,30657,30924,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_8a.png,image,30519,30786,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/时间到.wav,audio,30438,30561,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/0_11a.png,image,30187,30458,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_12a.png,image,30096,30367,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_6a.png,image,29895,30167,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_12a.png,image,29890,30161,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_10a.png,image,29853,30121,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_9a.png,image,29535,29805,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_3a.png,image,29506,29776,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_2a.png,image,29336,29608,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_3a.png,image,29334,29604,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_2a.png,image,29157,29427,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_9a.png,image,29140,29410,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_5a.png,image,29116,29386,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_10a.png,image,29093,29361,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_1a.png,image,29005,29275,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_5a.png,image,28930,29200,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_1a.png,image,28865,29135,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_3d.png,image,28861,29128,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_7a.png,image,28739,29007,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_1a.png,image,28657,28927,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_6a.png,image,28474,28744,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_8a.png,image,28091,28363,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_13a.png,image,28054,28325,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_13a.png,image,28040,28311,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_4a.png,image,28035,28305,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_3d.png,image,27937,28204,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_4a.png,image,27786,28053,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_2a.png,image,27768,28038,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_8a.png,image,27744,28011,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_7a.png,image,27712,27980,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_3a.png,image,27520,27788,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_13a.png,image,27448,27719,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_11a.png,image,27340,27611,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_4a.png,image,27271,27538,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_8a.png,image,27237,27504,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_13a.png,image,27225,27496,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_5a.png,image,27223,27490,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_7a.png,image,27022,27289,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_6a.png,image,26816,27083,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_6a.png,image,26553,26820,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_7a.png,image,25797,26069,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Prefabs/排行榜.prefab,prefab,299176,25847,resources,动态 prefab 名 排行榜，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/pk2/3_5a.png,image,25386,25653,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_9a.png,image,25320,25587,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_10a.png,image,24879,25147,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_3d.png,image,24794,25061,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_9a.png,image,24791,25058,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_10a.png,image,24464,24732,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_4a.png,image,24094,24361,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_2d.png,image,23959,24226,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/other/请求中.png,image,23444,23714,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/pk2/3_1d.png,image,23332,23599,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_2d.png,image,23306,23573,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_3b.png,image,23040,23308,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_2b.png,image,22925,23193,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_1b.png,image,22877,23145,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/other/失败.png,image,22720,22987,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/pk2/3_3b.png,image,22209,22477,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/4_2d.png,image,22096,22366,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/4_2a.png,image,22096,22366,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_2b.png,image,22083,22351,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_1d.png,image,22026,22293,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_1b.png,image,21986,22254,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/整理.mp3,audio,22106,22226,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/Audio/eff/下注.mp3,audio,22106,22226,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/0_3b.png,image,21936,22204,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_9b.png,image,21911,22179,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/4_1b.png,image,21881,22146,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_9b.png,image,21812,22080,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_5b.png,image,21774,22042,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/4_1ab.png,image,21737,22006,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_5b.png,image,21683,21951,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_1b.png,image,21624,21892,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_1b.png,image,21325,21593,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_1d.png,image,20917,21184,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/休牌.mp3,audio,20854,20973,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/Audio/eff/丢牌.mp3,audio,20854,20973,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/0_1d.png,image,20623,20890,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/UI/panelRecordInfo.prefab,prefab,216015,19696,resources,动态 prefab 名 panelRecordInfo，来自 assets/scripts/UI/panelManager.ts；动态 prefab 名 panelRecordInfo，来自 assets/scripts/UI/panelRecordList.ts；动态 prefab 名 panelRecordInfo，来自 assets/scripts/logic/DrhLogicMgr.ts
+动态保留,assets/resources/pk2/0_12b.png,image,19322,19591,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_12b.png,image,18720,18991,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/other/自动休1.png,image,18491,18764,resources,动态字面量 other/自动休1，来自 assets/scripts/UI/panelGameView.ts；动态字面量 other/自动休1，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/pk2/3_11b.png,image,18481,18752,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_11b.png,image,18461,18732,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/other/自动休0.png,image,18224,18497,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；动态字面量 other/自动休0，来自 assets/scripts/UI/panelGameView.ts；动态字面量 other/自动休0，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/休或丢1.png,image,17746,18019,resources,动态字面量 other/休或丢1，来自 assets/scripts/UI/panelGameView.ts；动态字面量 other/休或丢1，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/休或丢0.png,image,17389,17662,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；动态字面量 other/休或丢0，来自 assets/scripts/UI/panelGameView.ts；动态字面量 other/休或丢0，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Audio/按键.wav,audio,16172,16289,resources,通用按钮音效，来自 assets/scripts/common/UIViewBase.ts
+动态保留,assets/resources/pk2/3_12b.png,image,15099,15368,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_12b.png,image,15076,15345,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/other/成功.png,image,15052,15319,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/pk2/0_11b.png,image,14908,15177,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Audio/eff/发牌.wav,audio,15020,15140,resources,牌局动作名称动态音效，来自 assets/scripts/logic/DrhLogicMgr.ts；牌局动作名称动态音效，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/pk2/2_13b.png,image,14529,14798,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_13b.png,image,14462,14731,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_13b.png,image,14325,14594,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_13b.png,image,14277,14546,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_11b.png,image,14138,14407,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/UI/panelUserInfo.prefab,prefab,154067,13957,resources,动态 prefab 名 panelUserInfo，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/pk2/0_8b.png,image,12653,12923,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_6b.png,image,12574,12842,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_2b.png,image,12370,12640,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_10b.png,image,12134,12403,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/4_2b.png,image,12038,12307,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_2b.png,image,12002,12273,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_6b.png,image,11969,12240,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_8b.png,image,11935,12200,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_7b.png,image,11910,12175,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_10b.png,image,11857,12128,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_4b.png,image,11791,12061,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_5b.png,image,11775,12045,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_8b.png,image,11699,11967,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/0_4b.png,image,11662,11930,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_8b.png,image,11631,11901,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_3b.png,image,11605,11870,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_4b.png,image,11592,11859,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_6b.png,image,11493,11761,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/2_7b.png,image,11477,11742,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_7b.png,image,11284,11552,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/Prefabs/丢牌对象.prefab；UUID 引用自 assets/resources/Prefabs/回顾对象.prefab；UUID 引用自 assets/resources/Prefabs/回顾对象2.prefab；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_6b.png,image,11245,11513,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/zhiwen.png,image,11213,11482,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/zhiwen_a.png,image,11049,11320,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_7b.png,image,11038,11303,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_9b.png,image,10991,11261,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_5b.png,image,10975,11245,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_9b.png,image,10937,11205,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/1_10b.png,image,10586,10852,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_10b.png,image,10548,10817,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/pk2/3_4b.png,image,10536,10804,resources,牌值动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌值动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/1-2.png,image,10207,10469,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/UI/panelUpdate.prefab,prefab,89720,10067,resources,动态 prefab 名 panelUpdate，来自 assets/scripts/StartGameManager.ts
+动态保留,assets/resources/UI/panelRecordList.prefab,prefab,90617,8829,resources,动态 prefab 名 panelRecordList，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/UI/panelVipInfo.prefab,prefab,90188,8463,resources,动态 prefab 名 panelVipInfo，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 panelVipInfo，来自 assets/scripts/UI/panelUserInfo.ts
+动态保留,assets/resources/UI/panelLogin.prefab,prefab,79139,8054,resources,动态 prefab 名 panelLogin，来自 assets/scripts/UI/panelUpdate.ts
+动态保留,assets/resources/UI/panelGivePad.prefab,prefab,62194,6893,resources,动态 prefab 名 panelGivePad，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 panelGivePad，来自 assets/scripts/UI/panelUserInfo.ts
+动态保留,assets/resources/Prefabs/回顾对象2.prefab,prefab,70105,6848,resources,动态字面量 Prefabs/回顾对象2，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/回顾对象.prefab,prefab,70129,6802,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；动态字面量 Prefabs/回顾对象，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/other/drh/搓牌中.png,image,6373,6641,resources,动态字面量 other/drh/搓牌中，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/other/drh/分.png,image,6221,6483,resources,动态字面量 other/drh/分，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/other/游戏中.png,image,6062,6330,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/惩罚公告对象.prefab,prefab,63640,6068,resources,动态 prefab 名 惩罚公告对象，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/other/提交订单.png,image,5335,5608,resources,UUID 引用自 assets/resources/Prefabs/交易查询对象.prefab；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/离线.png,image,5052,5317,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/地九王.png,image,4589,4857,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；UUID 引用自 assets/resources/UI/panelRecordInfo.prefab；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/drh/敲.png,image,4499,4761,resources,牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/other/drh/跟.png,image,4400,4662,resources,牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/other/drh/休.png,image,4301,4563,resources,牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/other/drh/丢.png,image,4234,4496,resources,牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/other/观众.png,image,4127,4392,resources,动态字面量 other/观众，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/drh/大.png,image,4063,4325,resources,牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/other/状态_游戏中.png,image,3893,4171,resources,房间状态动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/UI/panelTalk.prefab,prefab,48437,4143,resources,动态 prefab 名 panelTalk，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/other/状态_参与过.png,image,3813,4088,resources,动态字面量 other/状态_参与过，来自 assets/scripts/UI/panelMain.ts；动态字面量 other/状态_参与过，来自 assets/scripts/common/ScrollItem.ts；房间状态动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/状态_等待中.png,image,3782,4060,resources,房间状态动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/状态_准备.png,image,3782,4057,resources,UUID 引用自 assets/resources/UI/panelMain.prefab；房间状态动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/zuotype/tb/2-2.png,image,3733,3998,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/3-2.png,image,3627,3892,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/2-3.png,image,3613,3878,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/1-3.png,image,3569,3834,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/3-3.png,image,3502,3767,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/2-4.png,image,3439,3704,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/1-4.png,image,3431,3696,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Prefabs/战绩玩家对象.prefab,prefab,30043,3679,resources,动态字面量 Prefabs/战绩玩家对象，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/UI/panelKefu.prefab,prefab,29685,3662,resources,动态 prefab 名 panelKefu，来自 assets/scripts/GameDataManager.ts；动态 prefab 名 panelKefu，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 panelKefu，来自 assets/scripts/UI/panelPaihangbang.ts；动态 prefab 名 panelKefu，来自 assets/scripts/UI/panelQianBao.ts
+动态保留,assets/resources/zuotype/tb/2-1.png,image,3383,3648,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/1-1.png,image,3340,3605,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/other/drh/滚.png,image,3335,3597,resources,牌桌操作名称动态图片，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/zuotype/tb/3-4.png,image,3323,3588,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/zuotype/tb/3-1.png,image,3210,3475,resources,牌型/牌背动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌型/牌背动态加载，来自 assets/scripts/logic/PKCardInfoScript.ts
+动态保留,assets/resources/Prefabs/房间对象.prefab,prefab,27457,3301,resources,动态 prefab 名 房间对象，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 房间对象，来自 assets/scripts/UI/panelUpdate.ts
+动态保留,assets/resources/UI/panelNotifyView.prefab,prefab,25829,3159,resources,动态 prefab 名 panelNotifyView，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 panelNotifyView，来自 assets/scripts/UI/panelMsgView.ts
+动态保留,assets/resources/UI/panelNotifyViewHD.prefab,prefab,26202,3137,resources,动态 prefab 名 panelNotifyViewHD，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/UI/panelNotifyViewCZ.prefab,prefab,26202,3137,resources,动态 prefab 名 panelNotifyViewCZ，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/UI/panelCloudNotify.prefab,prefab,17636,2855,resources,动态 prefab 名 panelCloudNotify，来自 assets/scripts/GameDataManager.ts；动态 prefab 名 panelCloudNotify，来自 assets/scripts/common/UIViewBase.ts
+动态保留,assets/resources/Prefabs/交易查询对象.prefab,prefab,21166,2812,resources,动态 prefab 名 交易查询对象，来自 assets/scripts/UI/panelQianBao.ts
+动态保留,assets/resources/Prefabs/战绩对象.prefab,prefab,21256,2783,resources,动态字面量 Prefabs/战绩对象，来自 assets/scripts/UI/panelRecordList.ts
+动态保留,assets/resources/other/观战.png,image,2497,2762,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；动态字面量 other/观战，来自 assets/scripts/logic/DrhPlayerLogic.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/盟主对象.prefab,prefab,21656,2661,resources,动态 prefab 名 盟主对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/other/弃牌.png,image,2348,2613,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/休牌.png,image,2304,2569,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/玩家奖池贡献明细对象.prefab,prefab,20803,2546,resources,动态 prefab 名 玩家奖池贡献明细对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/other/开牌.png,image,2263,2528,resources,UUID 引用自 assets/resources/Prefabs/回顾对象.prefab；UUID 引用自 assets/resources/Prefabs/回顾对象2.prefab；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/奖池贡献对象.prefab,prefab,19010,2412,resources,动态 prefab 名 奖池贡献对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/Prefabs/玩家对象.prefab,prefab,17456,2348,resources,动态 prefab 名 玩家对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/UI/panelVertion.prefab,prefab,16023,2313,resources,动态 prefab 名 panelVertion，来自 assets/scripts/UI/panelUpdate.ts；动态 prefab 名 panelVertion，来自 assets/scripts/logic/UpdateManager.ts
+动态保留,assets/resources/Prefabs/分红提取记录.prefab,prefab,20932,2298,resources,动态 prefab 名 分红提取记录，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/UI/panelLoginErrorEx.prefab,prefab,15721,2290,resources,动态 prefab 名 panelLoginErrorEx，来自 assets/scripts/GameDataManager.ts；动态 prefab 名 panelLoginErrorEx，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/UI/panelMsgView.prefab,prefab,15889,2272,resources,动态 prefab 名 panelMsgView，来自 assets/scripts/GameDataManager.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelGameView.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelGivePad.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelHongli.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelLogin.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelManager.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelPaihangbang.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelQianBao.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelTalk.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelUpdate.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelUserInfo.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/UI/panelVipInfo.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/common/Tool.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/logic/DrhLogicMgr.ts；动态 prefab 名 panelMsgView，来自 assets/scripts/mobile/MobileManager.ts
+动态保留,assets/resources/other/牌谱/挨-.png,image,1991,2254,resources,牌谱状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌谱状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/排行榜对象.prefab,prefab,16305,2188,resources,动态 prefab 名 排行榜对象，来自 assets/scripts/UI/panelPaihangbang.ts
+动态保留,assets/resources/other/牌谱/敲.png,image,1926,2188,resources,牌谱状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌谱状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/牌谱/挨.png,image,1901,2163,resources,牌谱状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌谱状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/资金明细对象.prefab,prefab,14721,2156,resources,动态 prefab 名 资金明细对象，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/other/喜牌.png,image,1846,2111,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/牌谱/跟.png,image,1827,2089,resources,UUID 引用自 assets/resources/Prefabs/文字牌谱对象.prefab；UUID 引用自 assets/resources/Prefabs/文字牌谱对象2.prefab；牌谱状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌谱状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/YH对象.prefab,prefab,16557,2083,resources,动态 prefab 名 YH对象，来自 assets/scripts/UI/panelManager.ts
+动态保留,assets/resources/Prefabs/贡献对象.prefab,prefab,14669,2045,resources,动态 prefab 名 贡献对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/Prefabs/丢牌对象.prefab,prefab,14298,2028,resources,动态字面量 Prefabs/丢牌对象，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/UI/panelLoading.prefab,prefab,11903,2013,resources,动态 prefab 名 panelLoading，来自 assets/scripts/GameDataManager.ts；动态 prefab 名 panelLoading，来自 assets/scripts/UI/panelGameView.ts；动态 prefab 名 panelLoading，来自 assets/scripts/UI/panelMain.ts；动态 prefab 名 panelLoading，来自 assets/scripts/UI/panelQianBao.ts；动态 prefab 名 panelLoading，来自 assets/scripts/UI/panelRecordInfo.ts；动态 prefab 名 panelLoading，来自 assets/scripts/logic/DrhLogicMgr.ts；动态 prefab 名 panelLoading，来自 assets/scripts/mobile/MobileManager.ts
+动态保留,assets/resources/other/牌谱/丢.png,image,1732,1994,resources,牌谱状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌谱状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/总业绩对象.prefab,prefab,13679,1977,resources,动态 prefab 名 总业绩对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/Prefabs/赠送记录对象.prefab,prefab,12836,1943,resources,动态 prefab 名 赠送记录对象，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/other/牌谱/休.png,image,1642,1904,resources,牌谱状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌谱状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/合伙人对象.prefab,prefab,14303,1822,resources,动态 prefab 名 合伙人对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/other/牌谱/大.png,image,1503,1765,resources,牌谱状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌谱状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/奖池记录对象.prefab,prefab,12453,1740,resources,动态字面量 Prefabs/奖池记录对象，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/道具/鲨鱼2.anim,animation,3604,1719,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/Nice3.anim,animation,3458,1678,resources,动态字面量 道具/Nice3，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Prefabs/转盘记录对象.prefab,prefab,10222,1665,resources,动态字面量 Prefabs/转盘记录对象，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/Prefabs/红利提取记录对象.prefab,prefab,10263,1632,resources,动态 prefab 名 红利提取记录对象，来自 assets/scripts/UI/panelHongli.ts
+动态保留,assets/resources/Prefabs/InputBK.prefab,prefab,8433,1608,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/Scenes/login.fire；动态 prefab 名 InputBK，来自 assets/scripts/logic/InputManager.ts
+动态保留,assets/resources/道具/钓鱼1.anim,animation,3149,1531,resources,动态字面量 道具/钓鱼1，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/抓鸡2.anim,animation,3147,1529,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Prefabs/银行对象.prefab,prefab,7985,1452,resources,动态字面量 Prefabs/银行对象，来自 assets/scripts/UI/panelQianBao.ts
+动态保留,assets/resources/Prefabs/观战对象.prefab,prefab,7554,1415,resources,UUID 引用自 assets/Scenes/drh8.fire；UUID 引用自 assets/resources/UI/panelGameView.prefab；动态 prefab 名 观战对象，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/Prefabs/文字牌谱对象2.prefab,prefab,9114,1373,resources,动态字面量 Prefabs/文字牌谱对象2，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/文字牌谱对象.prefab,prefab,9109,1367,resources,动态字面量 Prefabs/文字牌谱对象，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/道具/大拇指2.anim,animation,2729,1289,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/亲嘴2.anim,animation,2726,1286,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/机枪3.anim,animation,2471,1225,resources,动态字面量 道具/机枪3，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/机枪1.anim,animation,2471,1225,resources,动态字面量 道具/机枪1，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Prefabs/带入记录.prefab,prefab,7959,1224,resources,动态字面量 Prefabs/带入记录，来自 assets/scripts/UI/panelGameView.ts
+动态保留,assets/resources/道具/机枪2.anim,animation,2473,1149,resources,动态字面量 道具/机枪2，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/other/支付完成.png,image,856,1129,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/Prefabs/头像.prefab,prefab,7446,957,resources,动态 prefab 名 头像，来自 assets/scripts/UI/panelMain.ts
+动态保留,assets/resources/other/已完成.png,image,673,941,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/审核中.png,image,636,904,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/other/处理中.png,image,632,900,resources,牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/道具/钓鱼3.anim,animation,1793,889,resources,动态字面量 道具/钓鱼3，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/炸弹2.anim,animation,1812,817,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/干杯2.anim,animation,1811,816,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/屎2.anim,animation,1805,810,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/钓鱼2.anim,animation,1460,738,resources,动态字面量 道具/钓鱼2，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/炸弹1.anim,animation,1516,719,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/屎1.anim,animation,1508,711,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/Prefabs/聊天对象.prefab,prefab,2734,706,resources,动态字面量 Prefabs/聊天对象，来自 assets/scripts/UI/panelTalk.ts；动态字面量 Prefabs/聊天对象，来自 assets/scripts/logic/DrhLogicMgr.ts
+动态保留,assets/resources/道具/抓鸡1.anim,animation,1516,703,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/干杯1.anim,animation,1511,698,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/亲嘴1.anim,animation,1511,698,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/Nice2.anim,animation,1509,696,resources,动态字面量 道具/Nice2，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/Nice1.anim,animation,1664,635,resources,动态字面量 道具/Nice1，来自 assets/scripts/logic/DaojuManager.ts；道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/other/nameconfig.txt,data,479,590,resources,动态字面量 other/nameconfig，来自 assets/scripts/logic/DrhNameManager.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelGameView.ts；牌局记录状态值动态图片，来自 assets/scripts/UI/panelRecordInfo.ts
+动态保留,assets/resources/表情2/10.prefab,prefab,2393,550,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/9.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/8.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/7.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/6.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/5.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/4.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/3.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/2.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/表情2/1.prefab,prefab,2393,549,resources,表情编号动态加载，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/Prefabs/drh/coin.prefab,prefab,2074,521,resources,动态字面量 Prefabs/drh/coin，来自 assets/scripts/logic/DrhLogicMgr.ts；动态字面量 Prefabs/drh/coin，来自 assets/scripts/logic/DrhPlayerLogic.ts
+动态保留,assets/resources/Prefabs/道具对象.prefab,prefab,2264,492,resources,动态字面量 Prefabs/道具对象，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/大拇指1.anim,animation,769,427,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/道具/鲨鱼1.anim,animation,583,332,resources,道具名称动态加载，来自 assets/scripts/logic/DaojuManager.ts
+动态保留,assets/resources/version.manifest,data,184,284,resources,动态字面量 version.manifest已存在!，来自 assets/scripts/UI/panelUpdate.ts
+动态保留,assets/scripts/test/crypto-js.js,script,198114,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/kbe_scripts/kbengine.js,script,132156,0,,KBEngine 实体类型按名称动态装载，来自 assets/scripts/GameDataManager.ts；KBEngine 实体类型按名称动态装载，来自 assets/scripts/kbe_scripts/kbengine.js；脚本导入自 assets/scripts/GameDataManager.ts；脚本导入自 assets/scripts/UI/panelCloudNotify.ts；脚本导入自 assets/scripts/UI/panelGameView.ts；脚本导入自 assets/scripts/UI/panelGivePad.ts；脚本导入自 assets/scripts/UI/panelHongli.ts；脚本导入自 assets/scripts/UI/panelLogin.ts；脚本导入自 assets/scripts/UI/panelMain.ts；脚本导入自 assets/scripts/UI/panelManager.ts；脚本导入自 assets/scripts/UI/panelPaihangbang.ts；脚本导入自 assets/scripts/UI/panelQianBao.ts；脚本导入自 assets/scripts/UI/panelRecordInfo.ts；脚本导入自 assets/scripts/UI/panelRecordList.ts；脚本导入自 assets/scripts/UI/panelTalk.ts；脚本导入自 assets/scripts/UI/panelUserInfo.ts；脚本导入自 assets/scripts/UI/panelVipInfo.ts；脚本导入自 assets/scripts/common/UIViewBase.ts；脚本导入自 assets/scripts/kbe_scripts/Account.js；脚本导入自 assets/scripts/kbe_scripts/Item.js；脚本导入自 assets/scripts/logic/ConfigManager.ts；脚本导入自 assets/scripts/logic/DrhLogicMgr.ts；脚本导入自 assets/scripts/logic/DrhPlayerLogic.ts；脚本导入自 assets/scripts/logic/ImageManager.ts；脚本导入自 assets/scripts/mobile/MobileManager.ts
+动态保留,assets/scripts/UI/panelJiangli.ts,script,37906,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/cipher-core.js,script,29650,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/UI/qrcode.js,script,27239,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/tripledes.js,script,24878,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/kbe_scripts/Account.js,script,22057,0,,KBEngine 实体类型按名称动态装载，来自 assets/scripts/GameDataManager.ts；KBEngine 实体类型按名称动态装载，来自 assets/scripts/kbe_scripts/kbengine.js
+动态保留,assets/scripts/test/sha512.js,script,13469,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/UI/panelSJB.ts,script,11727,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/sha3.js,script,10645,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/md5.js,script,9418,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/ripemd160.js,script,9387,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/UI/testcc.js,script,9000,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/x64-core.js,script,8888,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/UI/panelCreateRoom.ts,script,8857,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/aes.js,script,8649,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/rabbit-legacy.js,script,6714,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/rabbit.js,script,6678,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/sha256.js,script,5538,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/UI/panelYLinfo.ts,script,4687,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/pbkdf2.js,script,4536,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/enc-base64url.js,script,4435,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/enc-utf16.js,script,4086,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/enc-base64.js,script,4081,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/sha1.js,script,4063,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/evpkdf.js,script,3993,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac.js,script,3984,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/rc4.js,script,3569,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/mode-ctr-gladman.js,script,2335,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/sha384.js,script,2264,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/lib-typedarrays.js,script,2228,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/mode-cfb.js,script,2115,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/common/EditBoxEx.ts,script,2038,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/sha224.js,script,1915,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/format-hex.js,script,1822,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/UI/panelSJBWeb.ts,script,1681,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/index.js,script,1631,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/mode-ctr.js,script,1467,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/mode-ofb.js,script,1330,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/pad-ansix923.js,script,1265,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/pad-iso10126.js,script,1118,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/pad-zeropadding.js,script,1110,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/migration/use_v2.1-2.2.1_cc.Toggle_event.js,script,962,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/pad-iso97971.js,script,918,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/mode-ecb.js,script,893,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/migration/use_reversed_rotateTo.js,script,738,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/pad-nopadding.js,script,554,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac-sha384.js,script,501,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/kbe_scripts/Item.js,script,498,0,,KBEngine 实体类型按名称动态装载，来自 assets/scripts/GameDataManager.ts；KBEngine 实体类型按名称动态装载，来自 assets/scripts/kbe_scripts/kbengine.js
+动态保留,assets/scripts/test/hmac-sha512.js,script,468,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac-sha224.js,script,464,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac-sha3.js,script,462,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac-ripemd160.js,script,440,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac-sha256.js,script,431,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac-sha1.js,script,425,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/hmac-md5.js,script,422,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/format-openssl.js,script,416,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/pad-pkcs7.js,script,411,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/enc-latin1.js,script,362,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/enc-utf8.js,script,360,0,,Cocos 脚本合包或全局模块，保守保留
+动态保留,assets/scripts/test/enc-hex.js,script,359,0,,Cocos 脚本合包或全局模块，保守保留

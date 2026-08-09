@@ -1,0 +1,11 @@
+web/node_modules/
+web/dist/
+web/.vite/
+server/bin/
+deploy/centos7-user/runtime.env
+deploy/centos7-user/logs/
+deploy/centos7-user/run/
+*.log
+.env
+.env.*
+!.env.example

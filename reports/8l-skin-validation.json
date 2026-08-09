@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "passed": true,
+  "base_version": "qing",
+  "target_count": 730,
+  "archive_count": 730,
+  "modified_runtime_images": 730,
+  "checks": {
+    "missing_targets": [],
+    "extra_archive": [],
+    "missing_current": [],
+    "archive_hash_errors": [],
+    "meta_hash_errors": [],
+    "dimension_errors": [],
+    "alpha_bbox_errors": [],
+    "unreadable": [],
+    "modified_images_outside_targets": [],
+    "modified_meta": [],
+    "modified_layout_or_code": [],
+    "modified_standard_poker_faces": [],
+    "modified_payment_brand_icons": []
+  },
+  "palette": {
+    "visible_pixels": 40741574,
+    "strong_red_pixels": 0,
+    "strong_purple_pixels": 0,
+    "strong_red_purple_ratio": 0.0,
+    "top_residual_images": []
+  }
+}

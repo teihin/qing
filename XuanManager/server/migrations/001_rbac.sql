@@ -1,0 +1,109 @@
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_schema_migration (
+  version VARCHAR(128) NOT NULL PRIMARY KEY,
+  applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_role (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  code VARCHAR(64) NOT NULL UNIQUE,
+  name VARCHAR(64) NOT NULL,
+  description VARCHAR(255) NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'enabled',
+  is_system TINYINT(1) NOT NULL DEFAULT 0,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_mgr_role_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_module (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  parent_id BIGINT UNSIGNED NULL,
+  code VARCHAR(64) NOT NULL UNIQUE,
+  name VARCHAR(64) NOT NULL,
+  route VARCHAR(128) NOT NULL DEFAULT '',
+  icon VARCHAR(32) NOT NULL DEFAULT '',
+  sort_order INT NOT NULL DEFAULT 0,
+  visible TINYINT(1) NOT NULL DEFAULT 1,
+  status VARCHAR(20) NOT NULL DEFAULT 'enabled',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_mgr_module_parent_sort (parent_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_permission (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  module_id BIGINT UNSIGNED NOT NULL,
+  code VARCHAR(96) NOT NULL UNIQUE,
+  name VARCHAR(64) NOT NULL,
+  action VARCHAR(32) NOT NULL,
+  description VARCHAR(255) NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'enabled',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_mgr_permission_module (module_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_user (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(64) NOT NULL UNIQUE,
+  password_hash VARCHAR(255) NOT NULL,
+  display_name VARCHAR(64) NOT NULL DEFAULT '',
+  role_id BIGINT UNSIGNED NOT NULL,
+  is_super TINYINT(1) NOT NULL DEFAULT 0,
+  status VARCHAR(20) NOT NULL DEFAULT 'enabled',
+  login_fail_count INT NOT NULL DEFAULT 0,
+  locked_until DATETIME NULL,
+  last_login_at DATETIME NULL,
+  password_changed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_by BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_mgr_user_role_status (role_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_role_permission (
+  role_id BIGINT UNSIGNED NOT NULL,
+  permission_id BIGINT UNSIGNED NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (role_id, permission_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_session (
+  token_hash CHAR(64) NOT NULL PRIMARY KEY,
+  user_id BIGINT UNSIGNED NOT NULL,
+  csrf_hash CHAR(64) NOT NULL,
+  ip VARCHAR(64) NOT NULL DEFAULT '',
+  user_agent VARCHAR(255) NOT NULL DEFAULT '',
+  expires_at DATETIME NOT NULL,
+  last_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_mgr_session_user (user_id),
+  INDEX idx_mgr_session_expire (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+
+-- +xuan Statement
+CREATE TABLE IF NOT EXISTS mgr_audit_log (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  operator_id BIGINT UNSIGNED NULL,
+  operator_name VARCHAR(64) NOT NULL DEFAULT '',
+  action VARCHAR(128) NOT NULL,
+  target_type VARCHAR(64) NOT NULL DEFAULT '',
+  target_id VARCHAR(64) NOT NULL DEFAULT '',
+  request_json LONGTEXT NULL,
+  before_json LONGTEXT NULL,
+  after_json LONGTEXT NULL,
+  result_code INT NOT NULL DEFAULT 0,
+  result_message VARCHAR(512) NOT NULL DEFAULT '',
+  ip VARCHAR(64) NOT NULL DEFAULT '',
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_mgr_audit_action_time (action, created_at),
+  INDEX idx_mgr_audit_target (target_type, target_id),
+  INDEX idx_mgr_audit_operator_time (operator_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

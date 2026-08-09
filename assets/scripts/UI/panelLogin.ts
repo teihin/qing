@@ -1,23 +1,54 @@
 import UIPanelViewBase from "../common/UIPanelViewBase";
 import UIManager from "../common/UIManager";
-import { ShowPanelMode, CardInfo, WEB_IP, SERVER_IP, SERVER_IP_TEST, WEB_RESET_PASS } from "../common/GameDef";
+import { ShowPanelMode, CardInfo } from "../common/GameDef";
 import GameDataManager from "../GameDataManager";
 import MobileManager from "../mobile/MobileManager";
 import Debug from "../common/Debug";
 import Tool from "../common/Tool";
 import ConfigManager from "../logic/ConfigManager";
+import ImageManager from "../logic/ImageManager";
 
 var KBEngine = require("kbengine");
 
 const {ccclass, property} = cc._decorator;
 
+interface RegisterFormData {
+    invitationCode:string;
+    nickname:string;
+    loginName:string;
+    password:string;
+    confirmPassword:string;
+    avatarIndex:string;
+}
+
+interface RegistrationResponse {
+    ok?:boolean;
+    data?:{
+        message?:string;
+    };
+    error?:{
+        code?:string;
+        message?:string;
+    };
+}
+
 @ccclass
 export default class panelLogin extends UIPanelViewBase {
 
-
+    // 注册界面布局全部维护在 panelLogin.prefab；本脚本只处理交互、校验和接口请求。
     private _loginUserName:string = "";
     private _loginPass:string = "";
     private strLastMMSMask:string = "";
+    private _registerPanel:cc.Node = null;
+    private _registerDialog:cc.Node = null;
+    private _registerInputs:{[key:string]:cc.EditBox} = {};
+    private _registerStatus:cc.Label = null;
+    private _registerAvatarSprite:cc.Sprite = null;
+    private _registerAvatarLabel:cc.Label = null;
+    private _registerAvatarPicker:cc.Node = null;
+    private _registerAvatarIndex:string = "1";
+    private _registerSubmitting:boolean = false;
+    private _registerRequest:XMLHttpRequest = null;
     onLoad(){
         super.onLoad();
 
@@ -54,10 +85,260 @@ export default class panelLogin extends UIPanelViewBase {
         this.node.getChildByName("手机号").getComponent(cc.EditBox).string = this._loginUserName;
         this.node.getChildByName("密码").getComponent(cc.EditBox).string = this._loginPass;
 
+        this.initRegisterUI();
+
 
         //Debug.Error("https://mcybde.com/chat/text/chat_04RAVp.html?extradata="+Tool.encrypt("{\"vipid\":\"999999\",\"name\":\"黄澄澄\"}"))
 
         
+    }
+
+    private initRegisterUI()
+    {
+        this._registerPanel = this.node.getChildByName("注册弹窗");
+        this._registerDialog = Tool.GetChild(this._registerPanel,"注册资料框");
+        this._registerStatus = Tool.GetChild(this._registerDialog,"注册状态").getComponent(cc.Label);
+        this._registerInputs["invitationCode"] = Tool.GetChild(this._registerDialog,"邀请码/输入").getComponent(cc.EditBox);
+        this._registerInputs["nickname"] = Tool.GetChild(this._registerDialog,"昵称/输入").getComponent(cc.EditBox);
+        this._registerInputs["loginName"] = Tool.GetChild(this._registerDialog,"账号/输入").getComponent(cc.EditBox);
+        this._registerInputs["password"] = Tool.GetChild(this._registerDialog,"密码/输入").getComponent(cc.EditBox);
+        this._registerInputs["confirmPassword"] = Tool.GetChild(this._registerDialog,"确认密码/输入").getComponent(cc.EditBox);
+        this._registerAvatarSprite = Tool.GetChild(this._registerDialog,"头像选择/头像预览").getComponent(cc.Sprite);
+        this._registerAvatarLabel = Tool.GetChild(this._registerDialog,"头像选择/头像序号").getComponent(cc.Label);
+        this._registerAvatarPicker = Tool.GetChild(this._registerPanel,"头像选择弹窗");
+        this._registerAvatarPicker.active = false;
+        this.setRegisterAvatar("1");
+
+        for(let key in this._registerInputs)
+            this._registerInputs[key].node.on("text-changed",()=>this.onRegisterInputChanged(key),this);
+    }
+
+    private setRegisterAvatar(avatarValue:any)
+    {
+        this._registerAvatarIndex = ImageManager.getInstance().NormalizeAvatarIndex(avatarValue);
+        ImageManager.getInstance().SetLocalAvatar(this._registerAvatarSprite,this._registerAvatarIndex);
+        this._registerAvatarLabel.string = "点击选择头像";
+        this.refreshRegisterAvatarPickerSelection();
+        if(!this._registerSubmitting)
+            this.showRegisterStatus("已选择头像 " + this._registerAvatarIndex,false);
+    }
+
+    private openRegisterAvatarPicker()
+    {
+        this.blurRegisterInputs();
+        this.refreshRegisterAvatarPickerSelection();
+        this._registerAvatarPicker.active = true;
+        let dialog = Tool.GetChild(this._registerAvatarPicker,"头像选择框");
+        dialog.stopAllActions();
+        dialog.opacity = 0;
+        dialog.scale = 0.96;
+        cc.tween(dialog).to(0.16,{opacity:255,scale:1},{easing:"backOut"}).start();
+    }
+
+    private closeRegisterAvatarPicker()
+    {
+        this._registerAvatarPicker.active = false;
+    }
+
+    private refreshRegisterAvatarPickerSelection()
+    {
+        if(this._registerAvatarPicker == null)
+            return;
+        let list = Tool.GetChild(this._registerAvatarPicker,"头像选择框/头像列表");
+        if(list == null)
+            return;
+        let selectedName = "头像选项" + this._registerAvatarIndex.padStart(2,"0");
+        for(let item of list.children)
+        {
+            let selected = item.getChildByName("选中");
+            if(selected != null)
+                selected.active = item.name === selectedName;
+        }
+    }
+
+    private onRegisterInputChanged(key:string)
+    {
+        let editBox = this._registerInputs[key];
+        let filtered = editBox.string;
+        if(key === "invitationCode")
+            filtered = filtered.replace(/[^0-9]/g,"");
+        else if(key === "nickname")
+            filtered = filtered.replace(/[^A-Za-z\u3400-\u4DBF\u4E00-\u9FFF]/g,"");
+        else if(key === "loginName")
+            filtered = filtered.replace(/[^A-Za-z0-9]/g,"");
+        if(filtered !== editBox.string)
+            editBox.string = filtered;
+
+        if(!this._registerSubmitting)
+            this.showRegisterStatus("请完整填写注册资料",false);
+    }
+
+    private openRegisterPanel()
+    {
+        this._registerSubmitting = false;
+        this.showRegisterStatus("请完整填写注册资料",false);
+        this._registerAvatarPicker.active = false;
+        this._registerPanel.active = true;
+        this._registerDialog.stopAllActions();
+        this._registerDialog.opacity = 0;
+        this._registerDialog.scale = 0.96;
+        cc.tween(this._registerDialog).to(0.18,{opacity:255,scale:1},{easing:"backOut"}).start();
+    }
+
+    private closeRegisterPanel()
+    {
+        if(this._registerRequest != null)
+        {
+            this._registerRequest.abort();
+            this._registerRequest = null;
+        }
+        for(let key in this._registerInputs)
+        {
+            this._registerInputs[key].blur();
+            if(key === "password" || key === "confirmPassword")
+                this._registerInputs[key].string = "";
+        }
+        this._registerSubmitting = false;
+        this._registerAvatarPicker.active = false;
+        this._registerPanel.active = false;
+    }
+
+    private onRegisterSubmit()
+    {
+        if(this._registerSubmitting)
+            return;
+
+        this.blurRegisterInputs();
+        let data:RegisterFormData = {
+            invitationCode:this._registerInputs["invitationCode"].string.trim(),
+            nickname:this._registerInputs["nickname"].string.trim(),
+            loginName:this._registerInputs["loginName"].string.trim(),
+            password:this._registerInputs["password"].string,
+            confirmPassword:this._registerInputs["confirmPassword"].string,
+            avatarIndex:this._registerAvatarIndex
+        };
+
+        if(!/^\d{6}$/.test(data.invitationCode))
+        {
+            this.showRegisterError("邀请码必须是6位数字",this._registerInputs["invitationCode"]);
+            return;
+        }
+        if(data.nickname.length < 1 || data.nickname.length > 32)
+        {
+            this.showRegisterError("昵称需为1–32个字符",this._registerInputs["nickname"]);
+            return;
+        }
+        if(!/^[A-Za-z\u3400-\u4DBF\u4E00-\u9FFF]+$/.test(data.nickname))
+        {
+            this.showRegisterError("昵称只能使用中文或英文字母",this._registerInputs["nickname"]);
+            return;
+        }
+        if(!/^[A-Za-z0-9]{6}$/.test(data.loginName))
+        {
+            this.showRegisterError("登录账号必须是6位英文字母或数字",this._registerInputs["loginName"]);
+            return;
+        }
+        if(data.password.length < 6 || data.password.length > 32 || data.password.trim() !== data.password)
+        {
+            this.showRegisterError("密码需为6–32位，首尾不能有空格",this._registerInputs["password"]);
+            return;
+        }
+        if(data.password !== data.confirmPassword)
+        {
+            this.showRegisterError("两次输入的密码不一致",this._registerInputs["confirmPassword"]);
+            return;
+        }
+
+        this.requestRegister(data);
+    }
+
+    private showRegisterError(message:string,editBox:cc.EditBox)
+    {
+        this.showRegisterStatus(message,true);
+        this.scheduleOnce(()=>{
+            if(this._registerPanel.active)
+                editBox.focus();
+        },0.05);
+    }
+
+    private blurRegisterInputs()
+    {
+        for(let key in this._registerInputs)
+            this._registerInputs[key].blur();
+    }
+
+    private showRegisterStatus(message:string,isHighlight:boolean)
+    {
+        this._registerStatus.string = message;
+        this._registerStatus.node.color = isHighlight ? new cc.Color(218,187,112,255) : new cc.Color(131,157,170,255);
+    }
+
+    private requestRegister(data:RegisterFormData)
+    {
+        this._registerSubmitting = true;
+        this.showRegisterStatus("正在提交注册资料…",true);
+
+        let request = new XMLHttpRequest();
+        let completed = false;
+        this._registerRequest = request;
+
+        let finish = (networkError:boolean = false)=>{
+            if(completed)
+                return;
+            completed = true;
+            this._registerRequest = null;
+            this._registerSubmitting = false;
+
+            let response:RegistrationResponse = null;
+            if(!networkError && request.responseText != null && request.responseText !== "")
+            {
+                try
+                {
+                    response = JSON.parse(request.responseText);
+                }
+                catch(error)
+                {
+                    response = null;
+                }
+            }
+
+            if(!networkError && request.status === 201 && response != null && response.ok)
+            {
+                let message = response.data != null && response.data.message != null ? response.data.message : "注册成功，请使用登录账号和密码进入游戏";
+                this._loginUserName = data.loginName;
+                cc.sys.localStorage.setItem("registrationAvatar_" + data.loginName,data.avatarIndex);
+                this.node.getChildByName("手机号").getComponent(cc.EditBox).string = data.loginName;
+                this.node.getChildByName("密码").getComponent(cc.EditBox).string = "";
+                this.closeRegisterPanel();
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+                return;
+            }
+
+            let errorMessage = "注册失败，请稍后再试";
+            if(networkError || request.status === 0)
+                errorMessage = "无法连接注册服务器，请检查网络后重试";
+            else if(response != null && response.error != null && response.error.message != null)
+                errorMessage = response.error.message;
+            this.showRegisterStatus(errorMessage,true);
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,errorMessage);
+        };
+
+        request.onreadystatechange = ()=>{
+            if(request.readyState === 4)
+                finish(false);
+        };
+        request.onerror = ()=>finish(true);
+        request.ontimeout = ()=>finish(true);
+        request.open("POST",ConfigManager.getInstance().registrationUrl,true);
+        request.timeout = 12000;
+        request.setRequestHeader("Content-Type","application/json");
+        request.send(JSON.stringify({
+            invitationCode:data.invitationCode,
+            nickname:data.nickname,
+            loginName:data.loginName,
+            password:data.password,
+            avatarIndex:data.avatarIndex
+        }));
     }
 
 
@@ -94,6 +375,31 @@ export default class panelLogin extends UIPanelViewBase {
                 this.onLoginSystem();
             }
 
+        }
+        else if(button.node.name === "注册账号")
+        {
+            this.openRegisterPanel();
+        }
+        else if(button.node.name === "关闭注册")
+        {
+            this.closeRegisterPanel();
+        }
+        else if(button.node.name === "确认注册")
+        {
+            this.onRegisterSubmit();
+        }
+        else if(button.node.name === "头像预览")
+        {
+            this.openRegisterAvatarPicker();
+        }
+        else if(button.node.name === "关闭头像选择")
+        {
+            this.closeRegisterAvatarPicker();
+        }
+        else if(button.node.name.indexOf("头像选项") === 0)
+        {
+            this.setRegisterAvatar(button.node.name.substr("头像选项".length));
+            this.closeRegisterAvatarPicker();
         }
         else if(button.node.name === "内网" && cc.sys.isBrowser)
         {
