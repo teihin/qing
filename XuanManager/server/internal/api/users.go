@@ -30,21 +30,24 @@ type passwordRequest struct {
 	Password string `json:"password"`
 }
 
-func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, p principal) {
 	page, size := pageParams(r)
 	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
 	like := "%" + keyword + "%"
+	canSeeSuper := canSeeSuperFlag(p)
 	var total int64
 	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM mgr_user u
-WHERE (? = '' OR u.username LIKE ? OR u.display_name LIKE ?)`, keyword, like, like).Scan(&total); err != nil {
+WHERE (? = 1 OR u.is_super = 0)
+  AND (? = '' OR u.username LIKE ? OR u.display_name LIKE ?)`, canSeeSuper, keyword, like, like).Scan(&total); err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取用户数量失败")
 		return
 	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 u.id, u.username, u.display_name, u.role_id, r.code, r.name, u.is_super, u.status, u.last_login_at, u.created_at
 FROM mgr_user u JOIN mgr_role r ON r.id = u.role_id
-WHERE (? = '' OR u.username LIKE ? OR u.display_name LIKE ?)
-ORDER BY u.is_super DESC, u.id DESC LIMIT ? OFFSET ?`, keyword, like, like, size, (page-1)*size)
+WHERE (? = 1 OR u.is_super = 0)
+  AND (? = '' OR u.username LIKE ? OR u.display_name LIKE ?)
+ORDER BY u.is_super DESC, u.id DESC LIMIT ? OFFSET ?`, canSeeSuper, keyword, like, like, size, (page-1)*size)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取用户列表失败")
 		return
@@ -63,10 +66,10 @@ ORDER BY u.is_super DESC, u.id DESC LIMIT ? OFFSET ?`, keyword, like, like, size
 	writeData(w, http.StatusOK, map[string]any{"items": items, "page": page, "pageSize": size, "total": total})
 }
 
-func (s *Server) handleRoleOptions(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleRoleOptions(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, code, name, description, status, is_system,
-(SELECT COUNT(*) FROM mgr_user u WHERE u.role_id = mgr_role.id)
-FROM mgr_role WHERE status = 'enabled' ORDER BY is_system DESC, id`)
+(SELECT COUNT(*) FROM mgr_user u WHERE u.role_id = mgr_role.id AND (? = 1 OR u.is_super = 0))
+FROM mgr_role WHERE status = 'enabled' ORDER BY is_system DESC, id`, canSeeSuperFlag(p))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取可用角色失败")
 		return
@@ -160,6 +163,10 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request, p prin
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
+	if hideSuperUserFrom(p, isSuper) {
+		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
+		return
+	}
 	if isSuper && input.RoleID != 1 {
 		writeError(w, http.StatusForbidden, "SUPER_PROTECTED", "超级管理员不能被降权")
 		return
@@ -199,6 +206,10 @@ func (s *Server) handleUserStatus(w http.ResponseWriter, r *http.Request, p prin
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
+	if hideSuperUserFrom(p, isSuper) {
+		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
+		return
+	}
 	if isSuper {
 		writeError(w, http.StatusForbidden, "SUPER_PROTECTED", "超级管理员不能被停用")
 		return
@@ -232,6 +243,10 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request, p p
 	}
 	var isSuper bool
 	if err := s.db.QueryRowContext(r.Context(), "SELECT is_super FROM mgr_user WHERE id = ?", id).Scan(&isSuper); err != nil {
+		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
+		return
+	}
+	if hideSuperUserFrom(p, isSuper) {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}

@@ -61,7 +61,6 @@ func main() {
 		logger.Error("bootstrap administrator failed", "error", err)
 		os.Exit(1)
 	}
-
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.NewWithGameDB(db, gameDB, cfg, logger),

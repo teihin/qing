@@ -24,22 +24,8 @@ func ValidateUsername(value string) error {
 
 func ValidatePassword(value string) error {
 	length := utf8.RuneCountInString(value)
-	if length < 8 || len(value) > 72 {
-		return errors.New("密码长度须为 8-72 个字符")
-	}
-	var hasLetter, hasNumber, hasSymbol bool
-	for _, r := range value {
-		switch {
-		case r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z':
-			hasLetter = true
-		case r >= '0' && r <= '9':
-			hasNumber = true
-		default:
-			hasSymbol = true
-		}
-	}
-	if !hasNumber || !hasSymbol || (!hasLetter && length < 10) {
-		return errors.New("密码需包含数字和特殊字符；不含字母时至少 10 位")
+	if length < 6 || len(value) > 72 {
+		return errors.New("密码长度至少为 6 位，且不能超过 72 个字节")
 	}
 	return nil
 }
@@ -54,8 +40,8 @@ func HashPassword(value string) (string, error) {
 // HashBootstrapPassword only exists for the one-time, user-selected initial
 // super administrator credential. All later passwords use HashPassword.
 func HashBootstrapPassword(value string) (string, error) {
-	if utf8.RuneCountInString(value) < 8 || len(value) > 72 {
-		return "", errors.New("初始超级管理员密码长度须为 8-72 个字符")
+	if err := ValidatePassword(value); err != nil {
+		return "", err
 	}
 	return hashPassword(value)
 }

@@ -63,17 +63,17 @@
     "_active": true,
     "_components": [
       {
-        "__id__": 446
+        "__id__": 464
       },
       {
-        "__id__": 447
+        "__id__": 465
       },
       {
-        "__id__": 448
+        "__id__": 466
       }
     ],
     "_prefab": {
-      "__id__": 449
+      "__id__": 467
     },
     "_opacity": 255,
     "_color": {
@@ -2012,7 +2012,7 @@
     "_enabled": true,
     "_string": "",
     "returnType": 0,
-    "maxLength": 12,
+    "maxLength": 14,
     "_tabIndex": 0,
     "editingDidBegan": [],
     "textChanged": [],
@@ -4765,17 +4765,17 @@
         "__id__": 129
       },
       {
-        "__id__": 278
+        "__id__": 295
       }
     ],
     "_active": false,
     "_components": [
       {
-        "__id__": 444
+        "__id__": 462
       }
     ],
     "_prefab": {
-      "__id__": 445
+      "__id__": 463
     },
     "_opacity": 255,
     "_color": {
@@ -4973,20 +4973,23 @@
         "__id__": 263
       },
       {
-        "__id__": 270
+        "__id__": 280
       },
       {
-        "__id__": 273
+        "__id__": 287
+      },
+      {
+        "__id__": 290
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 276
+        "__id__": 293
       }
     ],
     "_prefab": {
-      "__id__": 277
+      "__id__": 294
     },
     "_opacity": 255,
     "_color": {
@@ -4999,7 +5002,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 650,
-      "height": 1011
+      "height": 1240
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -5011,7 +5014,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        19.572,
+        0,
         0,
         0,
         0,
@@ -5075,7 +5078,7 @@
       "ctor": "Float64Array",
       "array": [
         -250,
-        448,
+        563.061,
         0,
         0,
         0,
@@ -5181,8 +5184,8 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        15,
-        455,
+        0,
+        563.061,
         0,
         0,
         0,
@@ -5290,7 +5293,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        380,
+        499.061,
         0,
         0,
         0,
@@ -5402,7 +5405,7 @@
       "ctor": "Float64Array",
       "array": [
         248.402,
-        455,
+        563.061,
         0,
         0,
         0,
@@ -5671,7 +5674,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        260,
+        378.982,
         0,
         0,
         0,
@@ -6800,7 +6803,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        105,
+        212.982,
         0,
         0,
         0,
@@ -7459,7 +7462,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        5,
+        110.982,
         0,
         0,
         0,
@@ -8118,7 +8121,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -95,
+        8.982,
         0,
         0,
         0,
@@ -8616,8 +8619,8 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "请输入6位英文或数字账号",
-    "_N$string": "请输入6位英文或数字账号",
+    "_string": "请输入7–14位英文或数字账号",
+    "_N$string": "请输入7–14位英文或数字账号",
     "_fontSize": 22,
     "_lineHeight": 30,
     "_enableWrapText": false,
@@ -8655,7 +8658,7 @@
     "_enabled": true,
     "_string": "",
     "returnType": 0,
-    "maxLength": 6,
+    "maxLength": 14,
     "_tabIndex": 0,
     "editingDidBegan": [],
     "textChanged": [],
@@ -8777,7 +8780,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -195,
+        -93.018,
         0,
         0,
         0,
@@ -9436,7 +9439,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -295,
+        -195.018,
         0,
         0,
         0,
@@ -10047,7 +10050,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "确认注册",
+    "_name": "防盗号",
     "_objFlags": 0,
     "_parent": {
       "__id__": 129
@@ -10055,19 +10058,688 @@
     "_children": [
       {
         "__id__": 264
+      },
+      {
+        "__id__": 267
+      },
+      {
+        "__id__": 276
+      }
+    ],
+    "_active": true,
+    "_components": [],
+    "_prefab": {
+      "__id__": 279
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 574,
+      "height": 90
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        -294.318,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "防盗号文字",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 263
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 265
+      }
+    ],
+    "_prefab": {
+      "__id__": 266
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 203,
+      "g": 224,
+      "b": 231,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 350,
+      "height": 42
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        -95,
+        18,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Label",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 264
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "防盗号保护",
+    "_N$string": "防盗号保护",
+    "_fontSize": 24,
+    "_lineHeight": 32,
+    "_enableWrapText": false,
+    "_N$file": null,
+    "_isSystemFontUsed": true,
+    "_spacingX": 0,
+    "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
+    "_N$horizontalAlign": 0,
+    "_N$verticalAlign": 1,
+    "_N$fontFamily": "Arial",
+    "_N$overflow": 2,
+    "_N$cacheMode": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "registerAntiTheftLabel",
+    "sync": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "防盗号开关",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 263
+    },
+    "_children": [
+      {
+        "__id__": 268
+      },
+      {
+        "__id__": 271
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 267
-      },
-      {
-        "__id__": 268
+        "__id__": 274
       }
     ],
     "_prefab": {
-      "__id__": 269
+      "__id__": 275
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 107,
+      "height": 58
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        220,
+        18,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        0.82
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "Background",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 267
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 269
+      }
+    ],
+    "_prefab": {
+      "__id__": 270
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 157,
+      "height": 75
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Sprite",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 268
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_spriteFrame": {
+      "__uuid__": "9b02cd7a-c772-4cc1-b748-803f964c8392"
+    },
+    "_type": 0,
+    "_sizeMode": 1,
+    "_fillType": 0,
+    "_fillCenter": {
+      "__type__": "cc.Vec2",
+      "x": 0,
+      "y": 0
+    },
+    "_fillStart": 0,
+    "_fillRange": 0,
+    "_isTrimmedMode": true,
+    "_atlas": null,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "registerAntiTheftBackground",
+    "sync": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "checkmark",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 267
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 272
+      }
+    ],
+    "_prefab": {
+      "__id__": 273
+    },
+    "_opacity": 0,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 160,
+      "height": 77
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Sprite",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 271
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_spriteFrame": {
+      "__uuid__": "7475ee2c-daf5-4835-90b5-0f6abfd6383b"
+    },
+    "_type": 0,
+    "_sizeMode": 2,
+    "_fillType": 0,
+    "_fillCenter": {
+      "__type__": "cc.Vec2",
+      "x": 0,
+      "y": 0
+    },
+    "_fillStart": 0,
+    "_fillRange": 0,
+    "_isTrimmedMode": false,
+    "_atlas": null,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "registerAntiTheftCheckmark",
+    "sync": false
+  },
+  {
+    "__type__": "f49ccxsd8lA+5tGrW3trDb8",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 267
+    },
+    "_enabled": true,
+    "_normalMaterial": null,
+    "_grayMaterial": null,
+    "duration": 0.1,
+    "zoomScale": 1.2,
+    "clickEvents": [],
+    "_N$interactable": true,
+    "_N$enableAutoGrayEffect": false,
+    "_N$transition": 0,
+    "transition": 0,
+    "_N$normalColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_N$pressedColor": {
+      "__type__": "cc.Color",
+      "r": 211,
+      "g": 211,
+      "b": 211,
+      "a": 255
+    },
+    "pressedColor": {
+      "__type__": "cc.Color",
+      "r": 211,
+      "g": 211,
+      "b": 211,
+      "a": 255
+    },
+    "_N$hoverColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "hoverColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_N$disabledColor": {
+      "__type__": "cc.Color",
+      "r": 124,
+      "g": 124,
+      "b": 124,
+      "a": 255
+    },
+    "_N$normalSprite": null,
+    "_N$pressedSprite": null,
+    "pressedSprite": null,
+    "_N$hoverSprite": null,
+    "hoverSprite": null,
+    "_N$disabledSprite": null,
+    "_N$target": {
+      "__id__": 268
+    },
+    "_N$isChecked": false,
+    "toggleGroup": null,
+    "checkMark": {
+      "__id__": 272
+    },
+    "checkEvents": [],
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "registerAntiTheftToggle",
+    "sync": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "防盗号说明",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 263
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 277
+      }
+    ],
+    "_prefab": {
+      "__id__": 278
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 205,
+      "g": 177,
+      "b": 108,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 570,
+      "height": 30
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        -28,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Label",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 276
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "开启后仅当前设备可登录",
+    "_N$string": "开启后仅当前设备可登录",
+    "_fontSize": 17,
+    "_lineHeight": 24,
+    "_enableWrapText": false,
+    "_N$file": null,
+    "_isSystemFontUsed": true,
+    "_spacingX": 0,
+    "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
+    "_N$horizontalAlign": 1,
+    "_N$verticalAlign": 1,
+    "_N$fontFamily": "Arial",
+    "_N$overflow": 2,
+    "_N$cacheMode": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "registerAntiTheftHint",
+    "sync": false
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "registerAntiTheftRow",
+    "sync": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "确认注册",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 129
+    },
+    "_children": [
+      {
+        "__id__": 281
+      }
+    ],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 284
+      },
+      {
+        "__id__": 285
+      }
+    ],
+    "_prefab": {
+      "__id__": 286
     },
     "_opacity": 255,
     "_color": {
@@ -10092,7 +10764,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -375,
+        -395.058,
         0,
         0,
         0,
@@ -10121,17 +10793,17 @@
     "_name": "确认注册文字",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 263
+      "__id__": 280
     },
     "_children": [],
     "_active": true,
     "_components": [
       {
-        "__id__": 265
+        "__id__": 282
       }
     ],
     "_prefab": {
-      "__id__": 266
+      "__id__": 283
     },
     "_opacity": 255,
     "_color": {
@@ -10185,7 +10857,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 264
+      "__id__": 281
     },
     "_enabled": true,
     "_materials": [
@@ -10229,7 +10901,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 263
+      "__id__": 280
     },
     "_enabled": true,
     "_materials": [
@@ -10261,7 +10933,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 263
+      "__id__": 280
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -10346,11 +11018,11 @@
     "_active": true,
     "_components": [
       {
-        "__id__": 271
+        "__id__": 288
       }
     ],
     "_prefab": {
-      "__id__": 272
+      "__id__": 289
     },
     "_opacity": 255,
     "_color": {
@@ -10363,7 +11035,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 570,
-      "height": 42
+      "height": 34
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -10375,7 +11047,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -435,
+        -479.939,
         0,
         0,
         0,
@@ -10404,7 +11076,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 270
+      "__id__": 287
     },
     "_enabled": true,
     "_materials": [
@@ -10454,11 +11126,11 @@
     "_active": true,
     "_components": [
       {
-        "__id__": 274
+        "__id__": 291
       }
     ],
     "_prefab": {
-      "__id__": 275
+      "__id__": 292
     },
     "_opacity": 255,
     "_color": {
@@ -10471,7 +11143,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 570,
-      "height": 38
+      "height": 34
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -10483,7 +11155,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -481,
+        -525.939,
         0,
         0,
         0,
@@ -10512,7 +11184,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 273
+      "__id__": 290
     },
     "_enabled": true,
     "_materials": [
@@ -10603,20 +11275,20 @@
     },
     "_children": [
       {
-        "__id__": 279
+        "__id__": 296
       },
       {
-        "__id__": 282
+        "__id__": 299
       }
     ],
     "_active": false,
     "_components": [
       {
-        "__id__": 442
+        "__id__": 460
       }
     ],
     "_prefab": {
-      "__id__": 443
+      "__id__": 461
     },
     "_opacity": 255,
     "_color": {
@@ -10670,17 +11342,17 @@
     "_name": "头像弹窗遮罩",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 278
+      "__id__": 295
     },
     "_children": [],
     "_active": true,
     "_components": [
       {
-        "__id__": 280
+        "__id__": 297
       }
     ],
     "_prefab": {
-      "__id__": 281
+      "__id__": 298
     },
     "_opacity": 210,
     "_color": {
@@ -10734,7 +11406,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 279
+      "__id__": 296
     },
     "_enabled": true,
     "_materials": [
@@ -10777,33 +11449,33 @@
     "_name": "头像选择框",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 278
+      "__id__": 295
     },
     "_children": [
       {
-        "__id__": 283
+        "__id__": 300
       },
       {
-        "__id__": 286
+        "__id__": 303
       },
       {
-        "__id__": 289
+        "__id__": 306
       },
       {
-        "__id__": 295
+        "__id__": 312
       },
       {
-        "__id__": 437
+        "__id__": 454
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 440
+        "__id__": 458
       }
     ],
     "_prefab": {
-      "__id__": 441
+      "__id__": 459
     },
     "_opacity": 255,
     "_color": {
@@ -10857,17 +11529,17 @@
     "_name": "头像弹窗标题",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 282
+      "__id__": 299
     },
     "_children": [],
     "_active": true,
     "_components": [
       {
-        "__id__": 284
+        "__id__": 301
       }
     ],
     "_prefab": {
-      "__id__": 285
+      "__id__": 302
     },
     "_opacity": 255,
     "_color": {
@@ -10921,7 +11593,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 283
+      "__id__": 300
     },
     "_enabled": true,
     "_materials": [
@@ -10965,17 +11637,17 @@
     "_name": "头像弹窗副标题",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 282
+      "__id__": 299
     },
     "_children": [],
     "_active": true,
     "_components": [
       {
-        "__id__": 287
+        "__id__": 304
       }
     ],
     "_prefab": {
-      "__id__": 288
+      "__id__": 305
     },
     "_opacity": 255,
     "_color": {
@@ -11029,7 +11701,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 286
+      "__id__": 303
     },
     "_enabled": true,
     "_materials": [
@@ -11073,21 +11745,21 @@
     "_name": "关闭头像选择",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 282
+      "__id__": 299
     },
     "_children": [
       {
-        "__id__": 290
+        "__id__": 307
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 293
+        "__id__": 310
       }
     ],
     "_prefab": {
-      "__id__": 294
+      "__id__": 311
     },
     "_opacity": 255,
     "_color": {
@@ -11141,17 +11813,17 @@
     "_name": "关闭符号",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 289
+      "__id__": 306
     },
     "_children": [],
     "_active": true,
     "_components": [
       {
-        "__id__": 291
+        "__id__": 308
       }
     ],
     "_prefab": {
-      "__id__": 292
+      "__id__": 309
     },
     "_opacity": 255,
     "_color": {
@@ -11205,7 +11877,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 290
+      "__id__": 307
     },
     "_enabled": true,
     "_materials": [
@@ -11249,7 +11921,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 289
+      "__id__": 306
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -11328,74 +12000,74 @@
     "_name": "头像列表",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 282
+      "__id__": 299
     },
     "_children": [
       {
-        "__id__": 296
+        "__id__": 313
       },
       {
-        "__id__": 303
+        "__id__": 320
       },
       {
-        "__id__": 310
+        "__id__": 327
       },
       {
-        "__id__": 317
+        "__id__": 334
       },
       {
-        "__id__": 324
+        "__id__": 341
       },
       {
-        "__id__": 331
+        "__id__": 348
       },
       {
-        "__id__": 338
+        "__id__": 355
       },
       {
-        "__id__": 345
+        "__id__": 362
       },
       {
-        "__id__": 352
+        "__id__": 369
       },
       {
-        "__id__": 359
+        "__id__": 376
       },
       {
-        "__id__": 366
+        "__id__": 383
       },
       {
-        "__id__": 373
+        "__id__": 390
       },
       {
-        "__id__": 380
+        "__id__": 397
       },
       {
-        "__id__": 387
+        "__id__": 404
       },
       {
-        "__id__": 394
+        "__id__": 411
       },
       {
-        "__id__": 401
+        "__id__": 418
       },
       {
-        "__id__": 408
+        "__id__": 425
       },
       {
-        "__id__": 415
+        "__id__": 432
       },
       {
-        "__id__": 422
+        "__id__": 439
       },
       {
-        "__id__": 429
+        "__id__": 446
       }
     ],
     "_active": true,
     "_components": [],
     "_prefab": {
-      "__id__": 436
+      "__id__": 453
     },
     "_opacity": 255,
     "_color": {
@@ -11449,24 +12121,24 @@
     "_name": "头像选项01",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 297
+        "__id__": 314
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 300
+        "__id__": 317
       },
       {
-        "__id__": 301
+        "__id__": 318
       }
     ],
     "_prefab": {
-      "__id__": 302
+      "__id__": 319
     },
     "_opacity": 255,
     "_color": {
@@ -11520,17 +12192,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 296
+      "__id__": 313
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 298
+        "__id__": 315
       }
     ],
     "_prefab": {
-      "__id__": 299
+      "__id__": 316
     },
     "_opacity": 255,
     "_color": {
@@ -11584,7 +12256,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 297
+      "__id__": 314
     },
     "_enabled": true,
     "_materials": [
@@ -11628,7 +12300,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 296
+      "__id__": 313
     },
     "_enabled": true,
     "_materials": [
@@ -11660,7 +12332,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 296
+      "__id__": 313
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -11739,24 +12411,24 @@
     "_name": "头像选项02",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 304
+        "__id__": 321
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 307
+        "__id__": 324
       },
       {
-        "__id__": 308
+        "__id__": 325
       }
     ],
     "_prefab": {
-      "__id__": 309
+      "__id__": 326
     },
     "_opacity": 255,
     "_color": {
@@ -11810,17 +12482,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 303
+      "__id__": 320
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 305
+        "__id__": 322
       }
     ],
     "_prefab": {
-      "__id__": 306
+      "__id__": 323
     },
     "_opacity": 255,
     "_color": {
@@ -11874,7 +12546,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 304
+      "__id__": 321
     },
     "_enabled": true,
     "_materials": [
@@ -11918,7 +12590,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 303
+      "__id__": 320
     },
     "_enabled": true,
     "_materials": [
@@ -11950,7 +12622,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 303
+      "__id__": 320
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -12029,24 +12701,24 @@
     "_name": "头像选项03",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 311
+        "__id__": 328
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 314
+        "__id__": 331
       },
       {
-        "__id__": 315
+        "__id__": 332
       }
     ],
     "_prefab": {
-      "__id__": 316
+      "__id__": 333
     },
     "_opacity": 255,
     "_color": {
@@ -12100,17 +12772,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 310
+      "__id__": 327
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 312
+        "__id__": 329
       }
     ],
     "_prefab": {
-      "__id__": 313
+      "__id__": 330
     },
     "_opacity": 255,
     "_color": {
@@ -12164,7 +12836,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 311
+      "__id__": 328
     },
     "_enabled": true,
     "_materials": [
@@ -12208,7 +12880,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 310
+      "__id__": 327
     },
     "_enabled": true,
     "_materials": [
@@ -12240,7 +12912,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 310
+      "__id__": 327
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -12319,24 +12991,24 @@
     "_name": "头像选项04",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 318
+        "__id__": 335
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 321
+        "__id__": 338
       },
       {
-        "__id__": 322
+        "__id__": 339
       }
     ],
     "_prefab": {
-      "__id__": 323
+      "__id__": 340
     },
     "_opacity": 255,
     "_color": {
@@ -12390,17 +13062,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 317
+      "__id__": 334
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 319
+        "__id__": 336
       }
     ],
     "_prefab": {
-      "__id__": 320
+      "__id__": 337
     },
     "_opacity": 255,
     "_color": {
@@ -12454,7 +13126,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 318
+      "__id__": 335
     },
     "_enabled": true,
     "_materials": [
@@ -12498,7 +13170,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 317
+      "__id__": 334
     },
     "_enabled": true,
     "_materials": [
@@ -12530,7 +13202,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 317
+      "__id__": 334
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -12609,24 +13281,24 @@
     "_name": "头像选项05",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 325
+        "__id__": 342
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 328
+        "__id__": 345
       },
       {
-        "__id__": 329
+        "__id__": 346
       }
     ],
     "_prefab": {
-      "__id__": 330
+      "__id__": 347
     },
     "_opacity": 255,
     "_color": {
@@ -12680,17 +13352,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 324
+      "__id__": 341
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 326
+        "__id__": 343
       }
     ],
     "_prefab": {
-      "__id__": 327
+      "__id__": 344
     },
     "_opacity": 255,
     "_color": {
@@ -12744,7 +13416,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 325
+      "__id__": 342
     },
     "_enabled": true,
     "_materials": [
@@ -12788,7 +13460,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 324
+      "__id__": 341
     },
     "_enabled": true,
     "_materials": [
@@ -12820,7 +13492,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 324
+      "__id__": 341
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -12899,24 +13571,24 @@
     "_name": "头像选项06",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 332
+        "__id__": 349
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 335
+        "__id__": 352
       },
       {
-        "__id__": 336
+        "__id__": 353
       }
     ],
     "_prefab": {
-      "__id__": 337
+      "__id__": 354
     },
     "_opacity": 255,
     "_color": {
@@ -12970,17 +13642,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 331
+      "__id__": 348
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 333
+        "__id__": 350
       }
     ],
     "_prefab": {
-      "__id__": 334
+      "__id__": 351
     },
     "_opacity": 255,
     "_color": {
@@ -13034,7 +13706,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 332
+      "__id__": 349
     },
     "_enabled": true,
     "_materials": [
@@ -13078,7 +13750,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 331
+      "__id__": 348
     },
     "_enabled": true,
     "_materials": [
@@ -13110,7 +13782,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 331
+      "__id__": 348
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -13189,24 +13861,24 @@
     "_name": "头像选项07",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 339
+        "__id__": 356
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 342
+        "__id__": 359
       },
       {
-        "__id__": 343
+        "__id__": 360
       }
     ],
     "_prefab": {
-      "__id__": 344
+      "__id__": 361
     },
     "_opacity": 255,
     "_color": {
@@ -13260,17 +13932,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 338
+      "__id__": 355
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 340
+        "__id__": 357
       }
     ],
     "_prefab": {
-      "__id__": 341
+      "__id__": 358
     },
     "_opacity": 255,
     "_color": {
@@ -13324,7 +13996,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 339
+      "__id__": 356
     },
     "_enabled": true,
     "_materials": [
@@ -13368,7 +14040,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 338
+      "__id__": 355
     },
     "_enabled": true,
     "_materials": [
@@ -13400,7 +14072,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 338
+      "__id__": 355
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -13479,24 +14151,24 @@
     "_name": "头像选项08",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 346
+        "__id__": 363
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 349
+        "__id__": 366
       },
       {
-        "__id__": 350
+        "__id__": 367
       }
     ],
     "_prefab": {
-      "__id__": 351
+      "__id__": 368
     },
     "_opacity": 255,
     "_color": {
@@ -13550,17 +14222,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 345
+      "__id__": 362
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 347
+        "__id__": 364
       }
     ],
     "_prefab": {
-      "__id__": 348
+      "__id__": 365
     },
     "_opacity": 255,
     "_color": {
@@ -13614,7 +14286,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 346
+      "__id__": 363
     },
     "_enabled": true,
     "_materials": [
@@ -13658,7 +14330,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 345
+      "__id__": 362
     },
     "_enabled": true,
     "_materials": [
@@ -13690,7 +14362,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 345
+      "__id__": 362
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -13769,24 +14441,24 @@
     "_name": "头像选项09",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 353
+        "__id__": 370
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 356
+        "__id__": 373
       },
       {
-        "__id__": 357
+        "__id__": 374
       }
     ],
     "_prefab": {
-      "__id__": 358
+      "__id__": 375
     },
     "_opacity": 255,
     "_color": {
@@ -13840,17 +14512,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 352
+      "__id__": 369
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 354
+        "__id__": 371
       }
     ],
     "_prefab": {
-      "__id__": 355
+      "__id__": 372
     },
     "_opacity": 255,
     "_color": {
@@ -13904,7 +14576,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 353
+      "__id__": 370
     },
     "_enabled": true,
     "_materials": [
@@ -13948,7 +14620,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 352
+      "__id__": 369
     },
     "_enabled": true,
     "_materials": [
@@ -13980,7 +14652,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 352
+      "__id__": 369
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -14059,24 +14731,24 @@
     "_name": "头像选项10",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 360
+        "__id__": 377
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 363
+        "__id__": 380
       },
       {
-        "__id__": 364
+        "__id__": 381
       }
     ],
     "_prefab": {
-      "__id__": 365
+      "__id__": 382
     },
     "_opacity": 255,
     "_color": {
@@ -14130,17 +14802,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 359
+      "__id__": 376
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 361
+        "__id__": 378
       }
     ],
     "_prefab": {
-      "__id__": 362
+      "__id__": 379
     },
     "_opacity": 255,
     "_color": {
@@ -14194,7 +14866,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 360
+      "__id__": 377
     },
     "_enabled": true,
     "_materials": [
@@ -14238,7 +14910,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 359
+      "__id__": 376
     },
     "_enabled": true,
     "_materials": [
@@ -14270,7 +14942,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 359
+      "__id__": 376
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -14349,24 +15021,24 @@
     "_name": "头像选项11",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 367
+        "__id__": 384
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 370
+        "__id__": 387
       },
       {
-        "__id__": 371
+        "__id__": 388
       }
     ],
     "_prefab": {
-      "__id__": 372
+      "__id__": 389
     },
     "_opacity": 255,
     "_color": {
@@ -14420,17 +15092,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 366
+      "__id__": 383
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 368
+        "__id__": 385
       }
     ],
     "_prefab": {
-      "__id__": 369
+      "__id__": 386
     },
     "_opacity": 255,
     "_color": {
@@ -14484,7 +15156,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 367
+      "__id__": 384
     },
     "_enabled": true,
     "_materials": [
@@ -14528,7 +15200,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 366
+      "__id__": 383
     },
     "_enabled": true,
     "_materials": [
@@ -14560,7 +15232,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 366
+      "__id__": 383
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -14639,24 +15311,24 @@
     "_name": "头像选项12",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 374
+        "__id__": 391
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 377
+        "__id__": 394
       },
       {
-        "__id__": 378
+        "__id__": 395
       }
     ],
     "_prefab": {
-      "__id__": 379
+      "__id__": 396
     },
     "_opacity": 255,
     "_color": {
@@ -14710,17 +15382,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 373
+      "__id__": 390
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 375
+        "__id__": 392
       }
     ],
     "_prefab": {
-      "__id__": 376
+      "__id__": 393
     },
     "_opacity": 255,
     "_color": {
@@ -14774,7 +15446,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 374
+      "__id__": 391
     },
     "_enabled": true,
     "_materials": [
@@ -14818,7 +15490,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 373
+      "__id__": 390
     },
     "_enabled": true,
     "_materials": [
@@ -14850,7 +15522,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 373
+      "__id__": 390
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -14929,24 +15601,24 @@
     "_name": "头像选项13",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 381
+        "__id__": 398
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 384
+        "__id__": 401
       },
       {
-        "__id__": 385
+        "__id__": 402
       }
     ],
     "_prefab": {
-      "__id__": 386
+      "__id__": 403
     },
     "_opacity": 255,
     "_color": {
@@ -15000,17 +15672,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 380
+      "__id__": 397
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 382
+        "__id__": 399
       }
     ],
     "_prefab": {
-      "__id__": 383
+      "__id__": 400
     },
     "_opacity": 255,
     "_color": {
@@ -15064,7 +15736,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 381
+      "__id__": 398
     },
     "_enabled": true,
     "_materials": [
@@ -15108,7 +15780,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 380
+      "__id__": 397
     },
     "_enabled": true,
     "_materials": [
@@ -15140,7 +15812,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 380
+      "__id__": 397
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -15219,24 +15891,24 @@
     "_name": "头像选项14",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 388
+        "__id__": 405
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 391
+        "__id__": 408
       },
       {
-        "__id__": 392
+        "__id__": 409
       }
     ],
     "_prefab": {
-      "__id__": 393
+      "__id__": 410
     },
     "_opacity": 255,
     "_color": {
@@ -15290,17 +15962,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 387
+      "__id__": 404
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 389
+        "__id__": 406
       }
     ],
     "_prefab": {
-      "__id__": 390
+      "__id__": 407
     },
     "_opacity": 255,
     "_color": {
@@ -15354,7 +16026,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 388
+      "__id__": 405
     },
     "_enabled": true,
     "_materials": [
@@ -15398,7 +16070,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 387
+      "__id__": 404
     },
     "_enabled": true,
     "_materials": [
@@ -15430,7 +16102,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 387
+      "__id__": 404
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -15509,24 +16181,24 @@
     "_name": "头像选项15",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 395
+        "__id__": 412
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 398
+        "__id__": 415
       },
       {
-        "__id__": 399
+        "__id__": 416
       }
     ],
     "_prefab": {
-      "__id__": 400
+      "__id__": 417
     },
     "_opacity": 255,
     "_color": {
@@ -15580,17 +16252,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 394
+      "__id__": 411
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 396
+        "__id__": 413
       }
     ],
     "_prefab": {
-      "__id__": 397
+      "__id__": 414
     },
     "_opacity": 255,
     "_color": {
@@ -15644,7 +16316,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 395
+      "__id__": 412
     },
     "_enabled": true,
     "_materials": [
@@ -15688,7 +16360,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 394
+      "__id__": 411
     },
     "_enabled": true,
     "_materials": [
@@ -15720,7 +16392,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 394
+      "__id__": 411
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -15799,24 +16471,24 @@
     "_name": "头像选项16",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 402
+        "__id__": 419
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 405
+        "__id__": 422
       },
       {
-        "__id__": 406
+        "__id__": 423
       }
     ],
     "_prefab": {
-      "__id__": 407
+      "__id__": 424
     },
     "_opacity": 255,
     "_color": {
@@ -15870,17 +16542,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 401
+      "__id__": 418
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 403
+        "__id__": 420
       }
     ],
     "_prefab": {
-      "__id__": 404
+      "__id__": 421
     },
     "_opacity": 255,
     "_color": {
@@ -15934,7 +16606,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 402
+      "__id__": 419
     },
     "_enabled": true,
     "_materials": [
@@ -15978,7 +16650,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 401
+      "__id__": 418
     },
     "_enabled": true,
     "_materials": [
@@ -16010,7 +16682,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 401
+      "__id__": 418
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -16089,24 +16761,24 @@
     "_name": "头像选项17",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 409
+        "__id__": 426
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 412
+        "__id__": 429
       },
       {
-        "__id__": 413
+        "__id__": 430
       }
     ],
     "_prefab": {
-      "__id__": 414
+      "__id__": 431
     },
     "_opacity": 255,
     "_color": {
@@ -16160,17 +16832,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 408
+      "__id__": 425
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 410
+        "__id__": 427
       }
     ],
     "_prefab": {
-      "__id__": 411
+      "__id__": 428
     },
     "_opacity": 255,
     "_color": {
@@ -16224,7 +16896,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 409
+      "__id__": 426
     },
     "_enabled": true,
     "_materials": [
@@ -16268,7 +16940,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 408
+      "__id__": 425
     },
     "_enabled": true,
     "_materials": [
@@ -16300,7 +16972,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 408
+      "__id__": 425
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -16379,24 +17051,24 @@
     "_name": "头像选项18",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 416
+        "__id__": 433
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 419
+        "__id__": 436
       },
       {
-        "__id__": 420
+        "__id__": 437
       }
     ],
     "_prefab": {
-      "__id__": 421
+      "__id__": 438
     },
     "_opacity": 255,
     "_color": {
@@ -16450,17 +17122,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 415
+      "__id__": 432
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 417
+        "__id__": 434
       }
     ],
     "_prefab": {
-      "__id__": 418
+      "__id__": 435
     },
     "_opacity": 255,
     "_color": {
@@ -16514,7 +17186,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 416
+      "__id__": 433
     },
     "_enabled": true,
     "_materials": [
@@ -16558,7 +17230,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 415
+      "__id__": 432
     },
     "_enabled": true,
     "_materials": [
@@ -16590,7 +17262,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 415
+      "__id__": 432
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -16669,24 +17341,24 @@
     "_name": "头像选项19",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 423
+        "__id__": 440
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 426
+        "__id__": 443
       },
       {
-        "__id__": 427
+        "__id__": 444
       }
     ],
     "_prefab": {
-      "__id__": 428
+      "__id__": 445
     },
     "_opacity": 255,
     "_color": {
@@ -16740,17 +17412,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 422
+      "__id__": 439
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 424
+        "__id__": 441
       }
     ],
     "_prefab": {
-      "__id__": 425
+      "__id__": 442
     },
     "_opacity": 255,
     "_color": {
@@ -16804,7 +17476,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 423
+      "__id__": 440
     },
     "_enabled": true,
     "_materials": [
@@ -16848,7 +17520,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 422
+      "__id__": 439
     },
     "_enabled": true,
     "_materials": [
@@ -16880,7 +17552,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 422
+      "__id__": 439
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -16959,24 +17631,24 @@
     "_name": "头像选项20",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 295
+      "__id__": 312
     },
     "_children": [
       {
-        "__id__": 430
+        "__id__": 447
       }
     ],
     "_active": true,
     "_components": [
       {
-        "__id__": 433
+        "__id__": 450
       },
       {
-        "__id__": 434
+        "__id__": 451
       }
     ],
     "_prefab": {
-      "__id__": 435
+      "__id__": 452
     },
     "_opacity": 255,
     "_color": {
@@ -17030,17 +17702,17 @@
     "_name": "选中",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 429
+      "__id__": 446
     },
     "_children": [],
     "_active": false,
     "_components": [
       {
-        "__id__": 431
+        "__id__": 448
       }
     ],
     "_prefab": {
-      "__id__": 432
+      "__id__": 449
     },
     "_opacity": 255,
     "_color": {
@@ -17094,7 +17766,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 430
+      "__id__": 447
     },
     "_enabled": true,
     "_materials": [
@@ -17138,7 +17810,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 429
+      "__id__": 446
     },
     "_enabled": true,
     "_materials": [
@@ -17170,7 +17842,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 429
+      "__id__": 446
     },
     "_enabled": true,
     "_normalMaterial": null,
@@ -17260,20 +17932,20 @@
     "_name": "换一批头像",
     "_objFlags": 0,
     "_parent": {
-      "__id__": 282
+      "__id__": 299
     },
     "_children": [],
     "_active": true,
     "_components": [
       {
-        "__id__": 438
+        "__id__": 455
       },
       {
-        "__id__": 450
+        "__id__": 456
       }
     ],
     "_prefab": {
-      "__id__": 439
+      "__id__": 457
     },
     "_opacity": 255,
     "_color": {
@@ -17327,7 +17999,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 437
+      "__id__": 454
     },
     "_enabled": true,
     "_materials": [
@@ -17356,6 +18028,74 @@
     "_id": ""
   },
   {
+    "__type__": "cc.Button",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 454
+    },
+    "_enabled": true,
+    "_normalMaterial": null,
+    "_grayMaterial": null,
+    "duration": 0.08,
+    "zoomScale": 0.92,
+    "clickEvents": [],
+    "_N$interactable": true,
+    "_N$enableAutoGrayEffect": false,
+    "_N$transition": 2,
+    "transition": 2,
+    "_N$normalColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_N$pressedColor": {
+      "__type__": "cc.Color",
+      "r": 155,
+      "g": 230,
+      "b": 232,
+      "a": 255
+    },
+    "pressedColor": {
+      "__type__": "cc.Color",
+      "r": 155,
+      "g": 230,
+      "b": 232,
+      "a": 255
+    },
+    "_N$hoverColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "hoverColor": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 255,
+      "b": 255,
+      "a": 255
+    },
+    "_N$disabledColor": {
+      "__type__": "cc.Color",
+      "r": 124,
+      "g": 124,
+      "b": 124,
+      "a": 255
+    },
+    "_N$normalSprite": null,
+    "_N$pressedSprite": null,
+    "pressedSprite": null,
+    "_N$hoverSprite": null,
+    "hoverSprite": null,
+    "_N$disabledSprite": null,
+    "_N$target": null,
+    "_id": ""
+  },
+  {
     "__type__": "cc.PrefabInfo",
     "root": {
       "__id__": 1
@@ -17371,7 +18111,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 282
+      "__id__": 299
     },
     "_enabled": true,
     "_materials": [
@@ -17414,7 +18154,7 @@
     "_name": "",
     "_objFlags": 0,
     "node": {
-      "__id__": 278
+      "__id__": 295
     },
     "_enabled": true,
     "_id": ""
@@ -17530,73 +18270,5 @@
     },
     "fileId": "",
     "sync": false
-  },
-  {
-    "__type__": "cc.Button",
-    "_name": "",
-    "_objFlags": 0,
-    "node": {
-      "__id__": 437
-    },
-    "_enabled": true,
-    "_normalMaterial": null,
-    "_grayMaterial": null,
-    "duration": 0.08,
-    "zoomScale": 0.92,
-    "clickEvents": [],
-    "_N$interactable": true,
-    "_N$enableAutoGrayEffect": false,
-    "_N$transition": 2,
-    "transition": 2,
-    "_N$normalColor": {
-      "__type__": "cc.Color",
-      "r": 255,
-      "g": 255,
-      "b": 255,
-      "a": 255
-    },
-    "_N$pressedColor": {
-      "__type__": "cc.Color",
-      "r": 155,
-      "g": 230,
-      "b": 232,
-      "a": 255
-    },
-    "pressedColor": {
-      "__type__": "cc.Color",
-      "r": 155,
-      "g": 230,
-      "b": 232,
-      "a": 255
-    },
-    "_N$hoverColor": {
-      "__type__": "cc.Color",
-      "r": 255,
-      "g": 255,
-      "b": 255,
-      "a": 255
-    },
-    "hoverColor": {
-      "__type__": "cc.Color",
-      "r": 255,
-      "g": 255,
-      "b": 255,
-      "a": 255
-    },
-    "_N$disabledColor": {
-      "__type__": "cc.Color",
-      "r": 124,
-      "g": 124,
-      "b": 124,
-      "a": 255
-    },
-    "_N$normalSprite": null,
-    "_N$pressedSprite": null,
-    "pressedSprite": null,
-    "_N$hoverSprite": null,
-    "hoverSprite": null,
-    "_N$disabledSprite": null,
-    "_N$target": null,
-    "_id": ""
   }
 ]

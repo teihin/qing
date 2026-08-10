@@ -1,6 +1,9 @@
 package security
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestPasswordAndTokenSecurity(t *testing.T) {
 	password := "safe-password-123!"
@@ -28,14 +31,19 @@ func TestValidation(t *testing.T) {
 	if ValidateUsername("a") == nil {
 		t.Fatal("过短账号未被拒绝")
 	}
-	if ValidatePassword("246813~!#") == nil {
-		t.Fatal("不含字母且不足 10 位的弱密码不应通过通用用户策略")
+	if ValidatePassword("12345") == nil {
+		t.Fatal("5 位密码不应通过")
 	}
-	if ValidatePassword("246813~!#A") != nil {
-		t.Fatal("满足复杂度的密码应通过")
+	for _, password := range []string{"123123", "abcdef", "!@#$%^", "中文密码六字"} {
+		if ValidatePassword(password) != nil {
+			t.Fatalf("至少 6 位的密码被拒绝: %q", password)
+		}
 	}
-	bootstrapHash, err := HashBootstrapPassword("246813~!#")
-	if err != nil || !VerifyPassword(bootstrapHash, "246813~!#") {
+	if ValidatePassword(strings.Repeat("1", 73)) == nil {
+		t.Fatal("超过 bcrypt 72 字节上限的密码不应通过")
+	}
+	bootstrapHash, err := HashBootstrapPassword("123123")
+	if err != nil || !VerifyPassword(bootstrapHash, "123123") {
 		t.Fatal("初始超级管理员密码必须按用户提供的原值生成摘要")
 	}
 }

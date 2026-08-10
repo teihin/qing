@@ -14,17 +14,18 @@ import (
 )
 
 type playerOptimizationItem struct {
-	PlayerID         string `json:"playerId"`
-	LoginName        string `json:"loginName"`
-	Name             string `json:"name"`
-	ManagerID        string `json:"managerId"`
-	ManagerName      string `json:"managerName"`
-	ConfiguredBy     string `json:"configuredBy"`
-	ConfiguredSource string `json:"configuredSource"`
-	RemainingCount   int64  `json:"remainingCount"`
-	Chance           int64  `json:"chance"`
-	Active           bool   `json:"active"`
-	LastConfiguredAt string `json:"lastConfiguredAt"`
+	PlayerID          string `json:"playerId"`
+	LoginName         string `json:"loginName"`
+	Name              string `json:"name"`
+	ManagerID         string `json:"managerId"`
+	ManagerName       string `json:"managerName"`
+	ConfiguredBy      string `json:"configuredBy"`
+	ConfiguredSource  string `json:"configuredSource"`
+	ConfiguredBySuper bool   `json:"-"`
+	RemainingCount    int64  `json:"remainingCount"`
+	Chance            int64  `json:"chance"`
+	Active            bool   `json:"active"`
+	LastConfiguredAt  string `json:"lastConfiguredAt"`
 }
 
 type playerOptimizationSummary struct {
@@ -34,17 +35,18 @@ type playerOptimizationSummary struct {
 }
 
 type playerOptimizationState struct {
-	PlayerID         string `json:"playerId"`
-	LoginName        string `json:"loginName"`
-	Name             string `json:"name"`
-	ManagerID        string `json:"managerId"`
-	ManagerName      string `json:"managerName"`
-	ConfiguredBy     string `json:"configuredBy"`
-	ConfiguredSource string `json:"configuredSource"`
-	RemainingCount   int64  `json:"remainingCount"`
-	Chance           int64  `json:"chance"`
-	Active           bool   `json:"active"`
-	LastConfiguredAt string `json:"lastConfiguredAt"`
+	PlayerID          string `json:"playerId"`
+	LoginName         string `json:"loginName"`
+	Name              string `json:"name"`
+	ManagerID         string `json:"managerId"`
+	ManagerName       string `json:"managerName"`
+	ConfiguredBy      string `json:"configuredBy"`
+	ConfiguredSource  string `json:"configuredSource"`
+	ConfiguredBySuper bool   `json:"-"`
+	RemainingCount    int64  `json:"remainingCount"`
+	Chance            int64  `json:"chance"`
+	Active            bool   `json:"active"`
+	LastConfiguredAt  string `json:"lastConfiguredAt"`
 }
 
 type createPlayerOptimizationRequest struct {
@@ -82,7 +84,7 @@ func (e *playerOptimizationConflict) Error() string {
 	return e.message
 }
 
-func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Request, p principal) {
 	page, size := pageParams(r)
 	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
 	if utf8.RuneCountInString(keyword) > 100 {
@@ -102,7 +104,7 @@ func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
-	where, args := buildPlayerOptimizationWhere(keyword, status, minChance, maxChance)
+	where, args := buildPlayerOptimizationWhere(keyword, status, minChance, maxChance, p)
 
 	var total int64
 	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*)
@@ -123,6 +125,12 @@ COALESCE((SELECT log.operator_name FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
     AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
   ORDER BY log.id DESC LIMIT 1), ''),
+COALESCE((SELECT operator_user.is_super
+  FROM mgr_audit_log audit_row
+  LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
+  WHERE audit_row.target_type = 'game_player' AND audit_row.target_id = a.sm_guuid AND audit_row.result_code = 0
+    AND audit_row.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')
+  ORDER BY audit_row.id DESC LIMIT 1), 0),
 a.sm_optimize01_count, a.sm_optimize01_chance,
 COALESCE((SELECT DATE_FORMAT(MAX(log.created_at), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
@@ -146,13 +154,13 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	for rows.Next() {
 		var item playerOptimizationItem
 		if err := rows.Scan(&item.PlayerID, &item.LoginName, &item.Name, &item.ManagerID, &item.ManagerName,
-			&item.ConfiguredBy, &item.RemainingCount, &item.Chance, &item.LastConfiguredAt); err != nil {
+			&item.ConfiguredBy, &item.ConfiguredBySuper, &item.RemainingCount, &item.Chance, &item.LastConfiguredAt); err != nil {
 			s.logger.Error("scan player optimization", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化玩家数据失败")
 			return
 		}
 		item.Active = item.RemainingCount > 0
-		item.ConfiguredSource = playerOptimizationConfiguredSource(item.ConfiguredBy, item.ManagerID)
+		applyPlayerOptimizationVisibility(p, &item.ConfiguredBy, &item.ConfiguredSource, &item.LastConfiguredAt, item.ConfiguredBySuper, item.ManagerID)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -175,13 +183,13 @@ FROM kbedm.tbl_Account`).Scan(&summary.ActivePlayers, &summary.TotalRemaining, &
 	})
 }
 
-func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
 	playerID, err := normalizeGamePlayerID(r.PathValue("playerId"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
-	state, err := s.readPlayerOptimizationState(r.Context(), playerID)
+	state, err := s.readPlayerOptimizationState(r.Context(), playerID, p)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
 		return
@@ -195,10 +203,6 @@ func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
-	if !p.IsSuper {
-		writeError(w, http.StatusForbidden, "SUPER_ADMIN_REQUIRED", "发牌优化属于高风险游戏参数，仅允许超级管理员新增")
-		return
-	}
 	var input createPlayerOptimizationRequest
 	if !decodeJSON(w, r, &input) {
 		return
@@ -215,7 +219,7 @@ func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.R
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	before, err := s.readPlayerOptimizationState(ctx, playerID)
+	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
 		return
@@ -268,7 +272,7 @@ func parseOptimizationChanceRange(r *http.Request) (*int64, *int64, error) {
 	return minimum, maximum, nil
 }
 
-func buildPlayerOptimizationWhere(keyword, status string, minChance, maxChance *int64) (string, []any) {
+func buildPlayerOptimizationWhere(keyword, status string, minChance, maxChance *int64, p principal) (string, []any) {
 	clauses := []string{"1=1"}
 	args := []any{}
 	switch status {
@@ -283,8 +287,10 @@ func buildPlayerOptimizationWhere(keyword, status string, minChance, maxChance *
 OR EXISTS (SELECT 1 FROM mgr_audit_log operator_log
   WHERE operator_log.target_type = 'game_player' AND operator_log.target_id = a.sm_guuid AND operator_log.result_code = 0
     AND operator_log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
+    AND (? = 1 OR NOT EXISTS (SELECT 1 FROM mgr_user hidden_super
+      WHERE hidden_super.is_super = 1 AND hidden_super.id = operator_log.operator_id))
     AND operator_log.operator_name LIKE ?))`)
-		args = append(args, keyword, keyword, keyword, like, keyword, like, like)
+		args = append(args, keyword, keyword, keyword, like, keyword, like, canSeeSuperFlag(p), like)
 	}
 	if minChance != nil {
 		clauses = append(clauses, "a.sm_optimize01_chance >= ?")
@@ -298,10 +304,6 @@ OR EXISTS (SELECT 1 FROM mgr_audit_log operator_log
 }
 
 func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
-	if !p.IsSuper {
-		writeError(w, http.StatusForbidden, "SUPER_ADMIN_REQUIRED", "发牌优化属于高风险游戏参数，仅允许超级管理员修改")
-		return
-	}
 	playerID, err := normalizeGamePlayerID(r.PathValue("playerId"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
@@ -318,7 +320,7 @@ func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.R
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	before, err := s.readPlayerOptimizationState(ctx, playerID)
+	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
 		return
@@ -408,10 +410,6 @@ func normalizeOptimizationReason(reason *string) error {
 }
 
 func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
-	if !p.IsSuper {
-		writeError(w, http.StatusForbidden, "SUPER_ADMIN_REQUIRED", "发牌优化属于高风险游戏参数，仅允许超级管理员删除")
-		return
-	}
 	playerID, err := normalizeGamePlayerID(r.PathValue("playerId"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
@@ -440,7 +438,7 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	before, err := s.readPlayerOptimizationState(ctx, playerID)
+	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
 		return
@@ -487,7 +485,7 @@ func (s *Server) completePlayerOptimizationMutation(w http.ResponseWriter, r *ht
 	writeData(w, http.StatusOK, map[string]any{"player": after, "message": message})
 }
 
-func (s *Server) readPlayerOptimizationState(ctx context.Context, playerID string) (playerOptimizationState, error) {
+func (s *Server) readPlayerOptimizationState(ctx context.Context, playerID string, p principal) (playerOptimizationState, error) {
 	var state playerOptimizationState
 	err := s.db.QueryRowContext(ctx, `SELECT
 a.sm_guuid, COALESCE(k.accountName, a.sm_wxID, ''), a.sm_name,
@@ -496,6 +494,12 @@ COALESCE((SELECT log.operator_name FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
     AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
   ORDER BY log.id DESC LIMIT 1), ''),
+COALESCE((SELECT operator_user.is_super
+  FROM mgr_audit_log audit_row
+  LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
+  WHERE audit_row.target_type = 'game_player' AND audit_row.target_id = a.sm_guuid AND audit_row.result_code = 0
+    AND audit_row.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')
+  ORDER BY audit_row.id DESC LIMIT 1), 0),
 a.sm_optimize01_count, a.sm_optimize01_chance,
 COALESCE((SELECT DATE_FORMAT(MAX(log.created_at), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
@@ -508,11 +512,21 @@ LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 	LEFT JOIN kbedm.tbl_Account manager ON manager.sm_guuid = a.sm_optimize01_man
 WHERE a.sm_guuid = ? LIMIT 1`, playerID).Scan(
 		&state.PlayerID, &state.LoginName, &state.Name, &state.ManagerID, &state.ManagerName,
-		&state.ConfiguredBy, &state.RemainingCount, &state.Chance, &state.LastConfiguredAt,
+		&state.ConfiguredBy, &state.ConfiguredBySuper, &state.RemainingCount, &state.Chance, &state.LastConfiguredAt,
 	)
 	state.Active = state.RemainingCount > 0
-	state.ConfiguredSource = playerOptimizationConfiguredSource(state.ConfiguredBy, state.ManagerID)
+	applyPlayerOptimizationVisibility(p, &state.ConfiguredBy, &state.ConfiguredSource, &state.LastConfiguredAt, state.ConfiguredBySuper, state.ManagerID)
 	return state, err
+}
+
+func applyPlayerOptimizationVisibility(p principal, configuredBy, configuredSource, configuredAt *string, configuredBySuper bool, managerID string) {
+	if hideSuperUserFrom(p, configuredBySuper) {
+		*configuredBy = ""
+		*configuredSource = "hidden"
+		*configuredAt = ""
+		return
+	}
+	*configuredSource = playerOptimizationConfiguredSource(*configuredBy, managerID)
 }
 
 func playerOptimizationConfiguredSource(configuredBy, managerID string) string {
@@ -609,7 +623,7 @@ FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, target.PlayerID).Scan(
 		return lockedBefore, playerOptimizationState{}, err
 	}
 
-	after, err := s.readPlayerOptimizationState(ctx, target.PlayerID)
+	after, err := s.readPlayerOptimizationState(ctx, target.PlayerID, principal{IsSuper: true})
 	if err != nil {
 		after = verified
 		after.LastConfiguredAt = time.Now().Format("2006-01-02 15:04:05")

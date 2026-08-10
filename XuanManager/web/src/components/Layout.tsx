@@ -14,6 +14,7 @@ const iconText: Record<string, string> = {
   transactions: "账",
   "room-records": "绩",
   bans: "封",
+  "anti-theft": "盾",
   "room-maintenance": "房",
   "player-optimization": "优",
   configuration: "配",

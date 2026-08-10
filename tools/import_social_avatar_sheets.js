@@ -28,6 +28,59 @@ const avatarSize = 256;
 const columns = 5;
 const rows = 4;
 
+/*
+ * ImageGen did not export the four source sheets as strict, equally-sized
+ * grids. Several separator rows are uneven, the last row of batch 01 is
+ * shorter, and batch 03 contains tall oval portraits with large white gaps.
+ * Dividing width/5 and height/4 therefore drifts farther off-center on each
+ * row. These bounds follow the real content area of every source cell.
+ *
+ * Batch 03 uses per-cell bounds because its oval edges vary by a few pixels.
+ * Resizing the complete oval back to a square also corrects the sheet's
+ * accidental vertical stretch without cutting off hair, hands, or shoulders.
+ */
+const cropLayouts = [
+  {
+    columns: [
+      [4, 280], [283, 560], [563, 839], [842, 1119], [1122, 1398],
+    ],
+    rows: [[4, 289], [292, 575], [578, 860], [863, 1118]],
+  },
+  {
+    columns: [
+      [7, 279], [283, 557], [560, 835], [839, 1114], [1118, 1392],
+    ],
+    rows: [[7, 282], [286, 560], [564, 838], [842, 1116]],
+  },
+  {
+    cells: [
+      [8, 9, 242, 267], [257, 9, 239, 267], [504, 9, 245, 267], [754, 9, 244, 269], [1005, 9, 241, 268],
+      [6, 325, 243, 269], [255, 325, 242, 270], [503, 326, 245, 269], [754, 325, 244, 269], [1005, 325, 242, 270],
+      [6, 642, 242, 269], [255, 642, 242, 270], [504, 642, 244, 269], [754, 642, 243, 269], [1005, 642, 241, 270],
+      [6, 958, 243, 270], [255, 959, 242, 270], [503, 958, 245, 271], [754, 958, 250, 271], [1003, 959, 243, 270],
+    ],
+  },
+  {
+    columns: [
+      [4, 281], [284, 560], [563, 838], [841, 1117], [1119, 1398],
+    ],
+    rows: [[4, 287], [289, 566], [568, 841], [844, 1118]],
+  },
+];
+
+function cropRect(batch, slot) {
+  const layout = cropLayouts[batch];
+  if (layout.cells) {
+    const [left, top, width, height] = layout.cells[slot];
+    return { left, top, width, height };
+  }
+  const column = slot % columns;
+  const row = Math.floor(slot / columns);
+  const [left, right] = layout.columns[column];
+  const [top, bottom] = layout.rows[row];
+  return { left, top, width: right - left, height: bottom - top };
+}
+
 function uuidV5(name) {
   const namespace = Buffer.from("6ba7b8119dad11d180b400c04fd430c8", "hex");
   const hash = crypto.createHash("sha1").update(namespace).update(name).digest();
@@ -43,6 +96,7 @@ function avatarFileName(index) {
 }
 
 function writeMeta(imagePath, index) {
+  if (fs.existsSync(`${imagePath}.meta`)) return;
   const name = avatarFileName(index);
   const textureUuid = uuidV5(`qing-social-avatar/texture/${name}`);
   const frameUuid = uuidV5(`qing-social-avatar/sprite-frame/${name}`);
@@ -100,21 +154,22 @@ async function importSheets() {
   for (let batch = 0; batch < sheets.length; batch += 1) {
     const sheetPath = sheets[batch];
     const metadata = await sharp(sheetPath).metadata();
-    const cellWidth = metadata.width / columns;
-    const cellHeight = metadata.height / rows;
-    const side = Math.floor(Math.min(cellWidth, cellHeight)) - 4;
 
     for (let slot = 0; slot < columns * rows; slot += 1) {
-      const column = slot % columns;
-      const row = Math.floor(slot / columns);
-      const left = Math.round(column * cellWidth + (cellWidth - side) / 2);
-      const top = Math.round(row * cellHeight + (cellHeight - side) / 2);
+      const rect = cropRect(batch, slot);
+      if (
+        rect.left < 0 || rect.top < 0 ||
+        rect.left + rect.width > metadata.width ||
+        rect.top + rect.height > metadata.height
+      ) {
+        throw new Error(`invalid crop for batch ${batch + 1}, slot ${slot + 1}: ${JSON.stringify(rect)}`);
+      }
       const index = 21 + batch * columns * rows + slot;
       const imagePath = path.join(outputDir, `${avatarFileName(index)}.png`);
 
       await sharp(sheetPath)
-        .extract({ left, top, width: side, height: side })
-        .resize(avatarSize, avatarSize, { fit: "cover" })
+        .extract(rect)
+        .resize(avatarSize, avatarSize, { fit: "fill" })
         .ensureAlpha()
         .composite([{ input: circleMask(), blend: "dest-in" }])
         .png({ compressionLevel: 9 })
@@ -143,6 +198,13 @@ async function buildPreview() {
       input,
       left: margin + (slot % columnsInPreview) * (tileSize + gap),
       top: margin + Math.floor(slot / columnsInPreview) * (tileSize + gap),
+    });
+    composites.push({
+      input: Buffer.from(
+        `<svg width="28" height="22"><rect width="28" height="22" rx="7" fill="#00131c" fill-opacity="0.86"/><text x="14" y="16" text-anchor="middle" font-family="Arial, sans-serif" font-size="13" font-weight="700" fill="#ffffff">${index}</text></svg>`
+      ),
+      left: margin + (slot % columnsInPreview) * (tileSize + gap) + 32,
+      top: margin + Math.floor(slot / columnsInPreview) * (tileSize + gap) + 68,
     });
   }
 

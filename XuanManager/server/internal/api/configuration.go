@@ -51,8 +51,8 @@ type storedAnnouncementRow struct {
 	Content string
 }
 
-func (s *Server) handleGetGameAnnouncement(w http.ResponseWriter, r *http.Request, _ principal) {
-	state, err := s.queryGameAnnouncement(r.Context())
+func (s *Server) handleGetGameAnnouncement(w http.ResponseWriter, r *http.Request, p principal) {
+	state, err := s.queryGameAnnouncement(r.Context(), p)
 	if err != nil {
 		s.logger.Error("read game announcement", "error", err)
 		writeError(w, http.StatusInternalServerError, "ANNOUNCEMENT_QUERY_FAILED", "读取游戏公告失败")
@@ -179,7 +179,7 @@ func (s *Server) restoreStoredAnnouncementRows(ctx context.Context, beforeRows [
 	return errors.Join(restoreErrors...)
 }
 
-func (s *Server) queryGameAnnouncement(ctx context.Context) (gameAnnouncementState, error) {
+func (s *Server) queryGameAnnouncement(ctx context.Context, p principal) (gameAnnouncementState, error) {
 	state := gameAnnouncementState{StorageKey: systemAnnouncementKey, Encoding: "client-base64"}
 	rows, err := s.db.QueryContext(ctx, `SELECT COALESCE(hash_content, '')
 FROM kbedm.usr_hash_info WHERE hash_key = ? ORDER BY id`, systemAnnouncementKey)
@@ -211,16 +211,12 @@ FROM kbedm.usr_hash_info WHERE hash_key = ? ORDER BY id`, systemAnnouncementKey)
 	state.ContentLength = utf8.RuneCountInString(content)
 	state.DuplicateRows = max(0, count-1)
 
-	var updatedBy string
-	var updatedAt time.Time
-	err = s.db.QueryRowContext(ctx, `SELECT operator_name, created_at FROM mgr_audit_log
-WHERE action = 'game.announcement.update' AND result_code = 0 ORDER BY id DESC LIMIT 1`).Scan(&updatedBy, &updatedAt)
-	if err == nil {
-		state.LastUpdatedBy = updatedBy
-		state.LastUpdatedAt = &updatedAt
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	updatedBy, updatedAt, err := s.latestAuditAttribution(ctx, "game.announcement.update", p)
+	if err != nil {
 		return state, err
 	}
+	state.LastUpdatedBy = updatedBy
+	state.LastUpdatedAt = updatedAt
 	return state, nil
 }
 
@@ -271,7 +267,7 @@ func (s *Server) handleSendGameNotification(w http.ResponseWriter, r *http.Reque
 	})
 }
 
-func (s *Server) handleListGameNotifications(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleListGameNotifications(w http.ResponseWriter, r *http.Request, p principal) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit < 1 {
 		limit = 20
@@ -281,7 +277,10 @@ func (s *Server) handleListGameNotifications(w http.ResponseWriter, r *http.Requ
 	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, operator_name, COALESCE(request_json, ''), COALESCE(after_json, ''),
 result_code, result_message, created_at
-FROM mgr_audit_log WHERE action = 'game.notification.send' ORDER BY id DESC LIMIT ?`, limit)
+FROM mgr_audit_log audit_row
+WHERE audit_row.action = 'game.notification.send'
+  AND (? = 1 OR `+nonSuperAuditVisibilitySQL+`)
+ORDER BY audit_row.id DESC LIMIT ?`, canSeeSuperFlag(p), limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "NOTIFICATION_HISTORY_FAILED", "读取通知记录失败")
 		return

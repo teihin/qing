@@ -1,7 +1,16 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import { EmptyState, formatDate, LoadingBlock, PageHeader } from "../components/ui";
 import type { AuditItem } from "../types";
+
+interface DashboardGameMetrics {
+  available: boolean;
+  message?: string;
+  totalPlayers: number;
+  todayNewPlayers: number;
+  todayLoggedInPlayers: number;
+  collectedAt: string;
+}
 
 interface DashboardData {
   userCount: number;
@@ -10,6 +19,7 @@ interface DashboardData {
   moduleCount: number;
   todayAuditCount: number;
   recentAudits: AuditItem[];
+  gameMetrics: DashboardGameMetrics;
 }
 
 const actionNames: Record<string, string> = {
@@ -34,19 +44,50 @@ const actionNames: Record<string, string> = {
 
 export default function DashboardPage({ notify }: { notify: (message: string, kind?: "success" | "error") => void }) {
   const [data, setData] = useState<DashboardData | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    api<DashboardData>("/api/dashboard/summary")
-      .then(setData)
-      .catch((reason) => notify(reason instanceof ApiError ? reason.message : "工作台加载失败", "error"));
+  const load = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true);
+    try {
+      setData(await api<DashboardData>("/api/dashboard/summary"));
+    } catch (reason) {
+      if (!quiet) notify(reason instanceof ApiError ? reason.message : "工作台加载失败", "error");
+    } finally {
+      if (!quiet) setRefreshing(false);
+    }
   }, [notify]);
 
+  useEffect(() => {
+    void load();
+    const timer = window.setInterval(() => void load(true), 60_000);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  const metrics = data?.gameMetrics;
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="OVERVIEW" title="运营工作台" description="后台用户、角色和权限体系的实时概览。" />
-      {!data ? <LoadingBlock /> : (
+      <PageHeader
+        eyebrow="GAME OPERATIONS"
+        title="运营工作台"
+        description="玩家增长与活跃情况的准确经营概览。"
+        actions={<button className="dashboard-refresh" type="button" onClick={() => void load()} disabled={refreshing}><i />{refreshing ? "正在刷新…" : "刷新数据"}</button>}
+      />
+      {!data ? <LoadingBlock label="正在汇总游戏运营数据" /> : (
         <>
-          <section className="metric-grid">
+          {metrics?.available ? (
+            <section className="game-metric-grid" aria-label="游戏运营指标">
+              <Metric icon="新" label="今日新增玩家" value={metrics.todayNewPlayers} note="中国运营日 00:00 起注册" tone="cyan" />
+              <Metric icon="活" label="今日登录玩家" value={metrics.todayLoggedInPlayers} note="按玩家去重，不重复累计登录次数" tone="blue" />
+              <Metric icon="总" label="累计游戏玩家" value={metrics.totalPlayers} note={`更新于 ${formatDate(metrics.collectedAt)}`} tone="slate" />
+            </section>
+          ) : (
+            <section className="panel dashboard-unavailable">
+              <span>!</span><div><strong>游戏统计暂时不可用</strong><p>{metrics?.message || "无法读取游戏数据库，请稍后刷新。"}</p></div>
+            </section>
+          )}
+
+          <div className="dashboard-section-title"><div><span className="eyebrow">SYSTEM ADMINISTRATION</span><h2>后台系统状态</h2></div><p>管理账号、角色权限和审计运行情况</p></div>
+          <section className="metric-grid metric-grid--compact">
             <Metric icon="人" label="后台用户" value={data.userCount} note={`${data.enabledUserCount} 个账号正常启用`} tone="cyan" />
             <Metric icon="权" label="有效角色" value={data.roleCount} note="角色权限由服务端实时校验" tone="blue" />
             <Metric icon="模" label="功能模块" value={data.moduleCount} note="菜单与操作权限独立控制" tone="green" />

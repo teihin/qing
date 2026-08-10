@@ -90,7 +90,7 @@ function UserForm({ roles, user, onClose, onSaved }: { roles: RoleItem[]; user?:
         {error && <div className="form-error form-grid__full"><span>!</span>{error}</div>}
         <Field label="后台账号" hint={user ? "账号创建后不可修改" : "4-32 位字母、数字、点、下划线或短横线"}><input disabled={Boolean(user)} value={username} onChange={(event) => setUsername(event.target.value)} placeholder="例如 ops_manager" /></Field>
         <Field label="显示名称"><input value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="例如 运营管理员" /></Field>
-        {!user && <Field label="初始密码" hint="至少 8 位，包含数字、特殊字符，并建议包含字母"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="设置安全的初始密码" /></Field>}
+        {!user && <Field label="初始密码" hint="至少 6 位，不限制字符组合"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="设置初始密码" /></Field>}
         <Field label="所属角色"><select value={roleId} onChange={(event) => setRoleId(Number(event.target.value))}>{roles.filter((role) => role.status === "enabled").map((role) => <option key={role.id} value={role.id}>{role.name}{role.isSystem ? "（系统）" : ""}</option>)}</select></Field>
         {!user && <Field label="账号状态"><select value={status} onChange={(event) => setStatus(event.target.value as "enabled" | "disabled")}><option value="enabled">立即启用</option><option value="disabled">暂不启用</option></select></Field>}
         <div className="form-grid__full"><FormActions onCancel={onClose} busy={busy} submitText={user ? "保存修改" : "创建用户"} /></div>
@@ -117,7 +117,7 @@ function PasswordForm({ user, onClose, onSaved }: { user: UserItem; onClose: () 
       <form className="form-grid form-grid--single" onSubmit={submitGuard(submit)}>
         {error && <div className="form-error"><span>!</span>{error}</div>}
         <div className="info-banner">重置后，该用户当前的所有登录会话会立即失效。</div>
-        <Field label="新密码" hint="至少 8 位，包含数字、特殊字符，并建议包含字母"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
+        <Field label="新密码" hint="至少 6 位，不限制字符组合"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
         <Field label="确认新密码"><input type="password" autoComplete="new-password" value={confirm} onChange={(event) => setConfirm(event.target.value)} /></Field>
         <FormActions onCancel={onClose} busy={busy} submitText="确认重置" />
       </form>

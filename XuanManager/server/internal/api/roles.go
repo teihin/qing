@@ -20,12 +20,12 @@ type rolePermissionRequest struct {
 	PermissionIDs []int64 `json:"permissionIds"`
 }
 
-func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 r.id, r.code, r.name, r.description, r.status, r.is_system, COUNT(u.id)
-FROM mgr_role r LEFT JOIN mgr_user u ON u.role_id = r.id
+FROM mgr_role r LEFT JOIN mgr_user u ON u.role_id = r.id AND (? = 1 OR u.is_super = 0)
 GROUP BY r.id, r.code, r.name, r.description, r.status, r.is_system
-ORDER BY r.is_system DESC, r.id`)
+ORDER BY r.is_system DESC, r.id`, canSeeSuperFlag(p))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取角色失败")
 		return

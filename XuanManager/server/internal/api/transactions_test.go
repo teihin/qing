@@ -56,6 +56,30 @@ func TestMatchBalanceAdjustmentAuditsDoesNotAttachUnrelatedAudit(t *testing.T) {
 	}
 }
 
+func TestMatchBalanceAdjustmentAuditsDoesNotFallBackPastHiddenSuperAudit(t *testing.T) {
+	createdAt := time.Date(2026, 8, 10, 8, 14, 36, 0, time.Local)
+	items := []transactionItem{{
+		ID: 943, OccurredAt: "2026-08-10 08:14:36", OptionType: "补分",
+		OldBalance: 2000, NewBalance: 3000, Change: 1000,
+	}}
+	matching := balanceAdjustmentAuditRecord{
+		CreatedAt: createdAt,
+		Request:   balanceAdjustmentAuditRequest{Action: "add", Amount: 1000, Reason: "维护原因"},
+		Before:    balanceAdjustmentAuditSnapshot{Balance: 2000}, After: balanceAdjustmentAuditSnapshot{Balance: 3000},
+	}
+	hidden := matching
+	hidden.OperatorName = "hidden-super"
+	hidden.Hidden = true
+	older := matching
+	older.OperatorName = "ordinary-admin"
+	older.CreatedAt = createdAt.Add(-time.Second)
+
+	matchBalanceAdjustmentAudits(items, []balanceAdjustmentAuditRecord{hidden, older})
+	if items[0].MaintenanceReason != "" || items[0].MaintenanceOperator != "" {
+		t.Fatalf("hidden super audit fell back to an older operator: %#v", items[0])
+	}
+}
+
 func TestParseTransactionFiltersRejectsInvalidValues(t *testing.T) {
 	for _, target := range []string{
 		"/api/game/transactions",

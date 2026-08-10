@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -55,14 +54,14 @@ type rewardPoolSnapshot struct {
 	UnexpectedKeys []string
 }
 
-func (s *Server) handleGetRewardPools(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleGetRewardPools(w http.ResponseWriter, r *http.Request, p principal) {
 	snapshot, err := s.fetchRewardPools(r.Context(), gameOperationContext("pool-read"))
 	if err != nil {
 		s.logger.Error("read reward pools", "error", err)
 		writeError(w, http.StatusBadGateway, "REWARD_POOL_QUERY_FAILED", "读取各皮池奖池失败")
 		return
 	}
-	state, err := s.rewardPoolState(r.Context(), snapshot)
+	state, err := s.rewardPoolState(r.Context(), snapshot, p)
 	if err != nil {
 		s.logger.Error("read reward pool metadata", "error", err)
 		writeError(w, http.StatusInternalServerError, "REWARD_POOL_QUERY_FAILED", "读取奖池修改记录失败")
@@ -191,18 +190,14 @@ func (s *Server) fetchRewardPools(ctx context.Context, operationContext string) 
 	return rewardPoolSnapshot{Values: values, UnexpectedKeys: unexpected}, nil
 }
 
-func (s *Server) rewardPoolState(ctx context.Context, snapshot rewardPoolSnapshot) (rewardPoolState, error) {
+func (s *Server) rewardPoolState(ctx context.Context, snapshot rewardPoolSnapshot, p principal) (rewardPoolState, error) {
 	state := rewardPoolStateFromSnapshot(snapshot)
-	var updatedBy string
-	var updatedAt time.Time
-	err := s.db.QueryRowContext(ctx, `SELECT operator_name, created_at FROM mgr_audit_log
-WHERE action = 'game.reward_pool.update' AND result_code = 0 ORDER BY id DESC LIMIT 1`).Scan(&updatedBy, &updatedAt)
-	if err == nil {
-		state.LastUpdatedBy = updatedBy
-		state.LastUpdatedAt = &updatedAt
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	updatedBy, updatedAt, err := s.latestAuditAttribution(ctx, "game.reward_pool.update", p)
+	if err != nil {
 		return state, err
 	}
+	state.LastUpdatedBy = updatedBy
+	state.LastUpdatedAt = updatedAt
 	return state, nil
 }
 

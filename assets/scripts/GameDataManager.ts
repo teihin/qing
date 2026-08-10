@@ -4,6 +4,7 @@ import UIManager from "./common/UIManager";
 import DrhNameManager from "./logic/DrhNameManager";
 import MobileManager from "./mobile/MobileManager";
 import Tool from "./common/Tool";
+import DeviceIdentityManager from "./logic/DeviceIdentityManager";
 
 var KBEngine = require("kbengine");
 
@@ -20,6 +21,8 @@ export default class GameDataManager extends cc.Component {
     public strLastUserName:string = ""; //最后一次登陆的id
     public strLastPass:string = ""; //最后一次密码
     public bLoginSuccess:boolean = false; //是否已经成功连接到服务器，成功则发送心跳
+    private _loginAttempt:number = 0;
+    private _antiTheftLoginStopped:boolean = false;
 
     public dtLastSend = new Date().getTime() + 1000*10; //最后一次发送心跳时间
     public dtLastSuccess = new Date().getTime() + 1000*10; //最后一次成功时间;
@@ -78,6 +81,8 @@ export default class GameDataManager extends cc.Component {
         DrhNameManager.getInstance().initManager();
         MobileManager.getInstance().InitGvoice();
         MobileManager.getInstance().InitTalkingData();
+        // 提前准备设备标识，减少用户点击登录后的等待时间。
+        DeviceIdentityManager.getInstance().prepare();
 
         
         
@@ -149,9 +154,11 @@ export default class GameDataManager extends cc.Component {
     }
 
     loginDelay(){
+        if(this._antiTheftLoginStopped)
+            return;
         this.scheduleOnce(()=>{
-
-
+            if(this._antiTheftLoginStopped)
+                return;
             this.loginGame(this.strLastUserName,this.strLastPass,"重连");
         },3);
     }
@@ -183,7 +190,22 @@ export default class GameDataManager extends cc.Component {
         KBEngine.INFO_MSG(logStr);	
 
 
-        if(failedcode>=3 && failedcode<=6)
+        if(this.isAntiTheftLoginError(failedcode))
+        {
+            this._antiTheftLoginStopped = true;
+            UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,this.antiTheftLoginMessage(failedcode));
+        }
+        else if(!this.hasServerErrorDefinition(failedcode))
+        {
+            // 未登记的服务端错误不能自动重试，否则会反复登录、反复报错。
+            // 数字错误码只保留在引擎日志中，不向玩家界面展示。
+            this._antiTheftLoginStopped = true;
+            UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                "登录失败，服务端拒绝了本次登录，请联系客服");
+        }
+        else if(failedcode>=3 && failedcode<=6)
         {
             UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,KBEngine.app.serverErrDes(failedcode));
@@ -231,6 +253,7 @@ export default class GameDataManager extends cc.Component {
         //登陆成功，启动心跳校验
         this.dtLastSuccess = new Date().getTime();
         this.bLoginSuccess = true;
+        this._antiTheftLoginStopped = false;
         UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
 
         //恢复重连校验        
@@ -297,12 +320,59 @@ export default class GameDataManager extends cc.Component {
 
     
     //登陆游戏
-    loginGame(strUserName:string,strPass:string,other:string)
+    async loginGame(strUserName:string,strPass:string,other:string)
     {
         this.strLastUserName = strUserName;
         this.strLastPass = strPass;
-        KBEngine.Event.fire("login", strUserName, strPass, "登陆"); 
+        if(other !== "重连")
+            this._antiTheftLoginStopped = false;
+        if(this._antiTheftLoginStopped)
+            return;
+        let attempt = ++this._loginAttempt;
         UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
+        let loginData = await DeviceIdentityManager.getInstance().createLoginData(other === "重连" ? "reconnect" : "login");
+        if(attempt !== this._loginAttempt || this._antiTheftLoginStopped)
+            return;
+        KBEngine.Event.fire("login", strUserName, strPass, loginData);
+    }
+
+    private hasServerErrorDefinition(failedcode:number):boolean
+    {
+        return KBEngine.app != null &&
+            KBEngine.app.serverErrs != null &&
+            KBEngine.app.serverErrs[failedcode] != null;
+    }
+
+    private isAntiTheftLoginError(failedcode:number):boolean
+    {
+        let code = "";
+        let description = "";
+        try { code = (KBEngine.app.serverErr(failedcode) || "").toString(); } catch(error) {}
+        try { description = (KBEngine.app.serverErrDes(failedcode) || "").toString(); } catch(error) {}
+        let text = (code + " " + description).toUpperCase();
+        return text.indexOf("ANTI_THEFT_DEVICE_REQUIRED") >= 0 ||
+            text.indexOf("ANTI_THEFT_DEVICE_INVALID") >= 0 ||
+            text.indexOf("ANTI_THEFT_DEVICE_MISMATCH") >= 0 ||
+            text.indexOf("ANTI_THEFT_VERIFY_UNAVAILABLE") >= 0 ||
+            text.indexOf("当前设备不是绑定设备") >= 0 ||
+            text.indexOf("防盗号校验暂不可用") >= 0;
+    }
+
+    private antiTheftLoginMessage(failedcode:number):string
+    {
+        let code = "";
+        let description = "";
+        try { code = (KBEngine.app.serverErr(failedcode) || "").toString().toUpperCase(); } catch(error) {}
+        try { description = (KBEngine.app.serverErrDes(failedcode) || "").toString(); } catch(error) {}
+        if(code.indexOf("ANTI_THEFT_DEVICE_REQUIRED") >= 0)
+            return "防盗号已开启，请升级或重新打开最新版客户端";
+        if(code.indexOf("ANTI_THEFT_DEVICE_INVALID") >= 0)
+            return "当前设备信息获取失败，请重启游戏后再试";
+        if(code.indexOf("ANTI_THEFT_DEVICE_MISMATCH") >= 0 || description.indexOf("当前设备不是绑定设备") >= 0)
+            return "当前设备不是绑定设备，请在原设备关闭防盗号或联系客服解绑";
+        if(code.indexOf("ANTI_THEFT_VERIFY_UNAVAILABLE") >= 0 || description.indexOf("防盗号校验暂不可用") >= 0)
+            return "防盗号校验暂不可用，请稍后再试或联系客服";
+        return description == "" ? "防盗号校验失败，请联系客服" : description;
     }
 
     //回到大厅

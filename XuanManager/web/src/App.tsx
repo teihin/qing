@@ -14,6 +14,7 @@ import GameAnnouncementPage from "./pages/GameAnnouncementPage";
 import GameNotificationsPage from "./pages/GameNotificationsPage";
 import RewardPoolsPage from "./pages/RewardPoolsPage";
 import BansPage from "./pages/BansPage";
+import AntiTheftPage from "./pages/AntiTheftPage";
 import RoomMaintenancePage from "./pages/RoomMaintenancePage";
 import PaymentConfigurationPage from "./pages/PaymentConfigurationPage";
 import ActivityConfigurationPage from "./pages/ActivityConfigurationPage";
@@ -85,8 +86,9 @@ export default function App() {
     if (route === "/game/transactions" && can("game.transaction.view")) return <TransactionsPage notify={notify} />;
     if (route === "/game/room-records" && can("game.room_record.view")) return <RoomRecordsPage notify={notify} />;
     if (route === "/game/bans" && can("game.ban.view")) return <BansPage can={can} notify={notify} />;
+    if (route === "/game/anti-theft" && can("game.anti_theft.view")) return <AntiTheftPage can={can} notify={notify} />;
     if (route === "/game/room-maintenance" && can("game.room_maintenance.view")) return <RoomMaintenancePage can={can} notify={notify} />;
-    if (route === "/game/player-optimization" && can("game.player_optimization.view")) return <PlayerOptimizationPage can={can} isSuper={Boolean(session?.user.isSuper)} notify={notify} />;
+    if (route === "/game/player-optimization" && can("game.player_optimization.view")) return <PlayerOptimizationPage can={can} notify={notify} />;
     if (route === "/configuration/announcement" && can("configuration.announcement.view")) return <GameAnnouncementPage can={can} notify={notify} />;
     if (route === "/configuration/notifications" && can("configuration.notification.view")) return <GameNotificationsPage can={can} notify={notify} />;
     if (route === "/configuration/reward-pools" && can("configuration.reward_pool.view")) return <RewardPoolsPage can={can} notify={notify} />;
@@ -98,7 +100,7 @@ export default function App() {
     if (route === "/audit" && can("audit.view")) return <AuditPage notify={notify} />;
     if (can("dashboard.view")) return <DashboardPage notify={notify} />;
     return <div className="panel"><LoadingBlock label="当前角色没有可访问的功能模块" /></div>;
-  }, [route, can, notify, session]);
+  }, [route, can, notify]);
 
   if (session === undefined) return <div className="boot-screen"><span className="brand__mark brand__mark--large"><i>X</i></span><LoadingBlock label="正在建立安全会话" /></div>;
   if (session === null) return <LoginPage onSuccess={refreshSession} />;
@@ -126,5 +128,5 @@ function ChangePasswordModal({ onClose, onSaved }: { onClose: () => void; onSave
       onSaved(result.message);
     } catch (reason) { setError(reason instanceof ApiError ? reason.message : "修改密码失败"); } finally { setBusy(false); }
   };
-  return <Modal title="修改登录密码" eyebrow="ACCOUNT SECURITY" onClose={onClose}><form className="form-grid form-grid--single" onSubmit={submitGuard(submit)}>{error && <div className="form-error"><span>!</span>{error}</div>}<Field label="当前密码"><input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></Field><Field label="新密码" hint="至少 8 位，包含数字、特殊字符，并建议包含字母"><input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></Field><Field label="确认新密码"><input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></Field><FormActions onCancel={onClose} busy={busy} submitText="修改密码" /></form></Modal>;
+  return <Modal title="修改登录密码" eyebrow="ACCOUNT SECURITY" onClose={onClose}><form className="form-grid form-grid--single" onSubmit={submitGuard(submit)}>{error && <div className="form-error"><span>!</span>{error}</div>}<Field label="当前密码"><input type="password" autoComplete="current-password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} /></Field><Field label="新密码" hint="至少 6 位，不限制字符组合"><input type="password" autoComplete="new-password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></Field><Field label="确认新密码"><input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} /></Field><FormActions onCancel={onClose} busy={busy} submitText="修改密码" /></form></Modal>;
 }

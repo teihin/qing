@@ -97,6 +97,29 @@ export interface BannedPlayersResponse {
   total: number;
 }
 
+export interface AntiTheftAccountItem {
+  registrationId: number;
+  playerId: string;
+  loginName: string;
+  name: string;
+  enabled: boolean;
+  deviceMasked: string;
+  devicePlatform: "android" | "ios" | "web" | "";
+  deviceVersion: number;
+  boundAt: string | null;
+  bindingRevision: number;
+  registrationAt: string;
+  lastLoginAt: string | null;
+  stateHealthy: boolean;
+}
+
+export interface AntiTheftAccountsResponse {
+  items: AntiTheftAccountItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface PlayerBalanceAdjustmentResult {
   player: { playerId: string; name: string; gold: number; gold2: number; balance: number; roomId: number };
   delta: number;
@@ -135,7 +158,7 @@ export interface PlayerOptimizationItem {
   managerId: string;
   managerName: string;
   configuredBy: string;
-  configuredSource: "admin" | "game" | "";
+  configuredSource: "admin" | "game" | "hidden" | "";
   remainingCount: number;
   chance: number;
   active: boolean;

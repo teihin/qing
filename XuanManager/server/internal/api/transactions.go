@@ -97,12 +97,13 @@ type balanceAdjustmentAuditSnapshot struct {
 type balanceAdjustmentAuditRecord struct {
 	OperatorName string
 	CreatedAt    time.Time
+	Hidden       bool
 	Request      balanceAdjustmentAuditRequest
 	Before       balanceAdjustmentAuditSnapshot
 	After        balanceAdjustmentAuditSnapshot
 }
 
-func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request, p principal) {
 	page, size := pageParams(r)
 	filters, err := parseTransactionFilters(r)
 	if err != nil {
@@ -191,7 +192,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取金币变化数据失败")
 		return
 	}
-	if err := s.attachBalanceAdjustmentAudit(r.Context(), filters.PlayerID, items); err != nil {
+	if err := s.attachBalanceAdjustmentAudit(r.Context(), p, filters.PlayerID, items); err != nil {
 		s.logger.Error("attach balance adjustment audit", "error", err, "playerId", filters.PlayerID)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取客服维护原因失败")
 		return
@@ -209,7 +210,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	})
 }
 
-func (s *Server) attachBalanceAdjustmentAudit(ctx context.Context, playerID string, items []transactionItem) error {
+func (s *Server) attachBalanceAdjustmentAudit(ctx context.Context, p principal, playerID string, items []transactionItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -222,11 +223,13 @@ func (s *Server) attachBalanceAdjustmentAudit(ctx context.Context, playerID stri
 			endDate = item.Date
 		}
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT operator_name, request_json, before_json, after_json, created_at
-FROM mgr_audit_log
-WHERE action = 'game.player.balance_adjust' AND target_type = 'game_player' AND target_id = ?
-  AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
-ORDER BY created_at DESC, id DESC`, playerID, startDate, endDate)
+	rows, err := s.db.QueryContext(ctx, `SELECT audit_row.operator_name, audit_row.request_json, audit_row.before_json,
+audit_row.after_json, audit_row.created_at, COALESCE(operator_user.is_super, 0)
+FROM mgr_audit_log audit_row
+LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
+WHERE audit_row.action = 'game.player.balance_adjust' AND audit_row.target_type = 'game_player' AND audit_row.target_id = ?
+  AND audit_row.created_at >= ? AND audit_row.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+ORDER BY audit_row.created_at DESC, audit_row.id DESC`, playerID, startDate, endDate)
 	if err != nil {
 		return err
 	}
@@ -236,9 +239,11 @@ ORDER BY created_at DESC, id DESC`, playerID, startDate, endDate)
 		var audit balanceAdjustmentAuditRecord
 		var requestJSON string
 		var beforeJSON, afterJSON sql.NullString
-		if err := rows.Scan(&audit.OperatorName, &requestJSON, &beforeJSON, &afterJSON, &audit.CreatedAt); err != nil {
+		var operatorIsSuper bool
+		if err := rows.Scan(&audit.OperatorName, &requestJSON, &beforeJSON, &afterJSON, &audit.CreatedAt, &operatorIsSuper); err != nil {
 			return err
 		}
+		audit.Hidden = hideSuperUserFrom(p, operatorIsSuper)
 		if json.Unmarshal([]byte(requestJSON), &audit.Request) != nil ||
 			!beforeJSON.Valid || json.Unmarshal([]byte(beforeJSON.String), &audit.Before) != nil ||
 			strings.TrimSpace(audit.Request.Reason) == "" {
@@ -292,6 +297,9 @@ func matchBalanceAdjustmentAudits(items []transactionItem, audits []balanceAdjus
 			continue
 		}
 		used[bestIndex] = true
+		if audit.Hidden {
+			continue
+		}
 		items[bestIndex].MaintenanceReason = audit.Request.Reason
 		items[bestIndex].MaintenanceOperator = audit.OperatorName
 		items[bestIndex].MaintenanceWorkOrder = audit.Request.WorkOrder

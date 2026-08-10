@@ -7,6 +7,7 @@ import Debug from "../common/Debug";
 import Tool from "../common/Tool";
 import ConfigManager from "../logic/ConfigManager";
 import ImageManager from "../logic/ImageManager";
+import DeviceIdentityManager from "../logic/DeviceIdentityManager";
 
 var KBEngine = require("kbengine");
 
@@ -19,6 +20,10 @@ interface RegisterFormData {
     password:string;
     confirmPassword:string;
     avatarIndex:string;
+    antiTheftEnabled:boolean;
+    deviceId?:string;
+    devicePlatform?:"android"|"ios"|"web";
+    deviceVersion?:number;
 }
 
 interface RegistrationResponse {
@@ -47,6 +52,7 @@ export default class panelLogin extends UIPanelViewBase {
     private _registerAvatarLabel:cc.Label = null;
     private _registerAvatarPicker:cc.Node = null;
     private _registerAvatarIndex:string = "1";
+    private _registerAntiTheftToggle:cc.Toggle = null;
     private _registerAvatarBatch:Array<string> = [];
     private _registerAvatarBySlot:{[slotName:string]:string} = {};
     private _registerSubmitting:boolean = false;
@@ -108,8 +114,11 @@ export default class panelLogin extends UIPanelViewBase {
         this._registerAvatarSprite = Tool.GetChild(this._registerDialog,"头像选择/头像预览").getComponent(cc.Sprite);
         this._registerAvatarLabel = Tool.GetChild(this._registerDialog,"头像选择/头像序号").getComponent(cc.Label);
         this._registerAvatarPicker = Tool.GetChild(this._registerPanel,"头像选择弹窗");
+        this._registerAntiTheftToggle = Tool.GetChild(this._registerDialog,"防盗号/防盗号开关").getComponent(cc.Toggle);
+        this._registerAntiTheftToggle.isChecked = false;
         this._registerAvatarPicker.active = false;
         this.setRegisterAvatar("1");
+        DeviceIdentityManager.getInstance().prepare();
 
         for(let key in this._registerInputs)
             this._registerInputs[key].node.on("text-changed",()=>this.onRegisterInputChanged(key),this);
@@ -198,6 +207,7 @@ export default class panelLogin extends UIPanelViewBase {
     private openRegisterPanel()
     {
         this._registerSubmitting = false;
+        this._registerAntiTheftToggle.isChecked = false;
         this.showRegisterStatus("请完整填写注册资料",false);
         this._registerAvatarPicker.active = false;
         this._registerPanel.active = true;
@@ -221,6 +231,7 @@ export default class panelLogin extends UIPanelViewBase {
                 this._registerInputs[key].string = "";
         }
         this._registerSubmitting = false;
+        this._registerAntiTheftToggle.isChecked = false;
         this._registerAvatarPicker.active = false;
         this._registerPanel.active = false;
     }
@@ -237,7 +248,8 @@ export default class panelLogin extends UIPanelViewBase {
             loginName:this._registerInputs["loginName"].string.trim(),
             password:this._registerInputs["password"].string,
             confirmPassword:this._registerInputs["confirmPassword"].string,
-            avatarIndex:this._registerAvatarIndex
+            avatarIndex:this._registerAvatarIndex,
+            antiTheftEnabled:this._registerAntiTheftToggle.isChecked
         };
 
         if(!/^\d{6}$/.test(data.invitationCode))
@@ -255,9 +267,9 @@ export default class panelLogin extends UIPanelViewBase {
             this.showRegisterError("昵称只能使用中文或英文字母",this._registerInputs["nickname"]);
             return;
         }
-        if(!/^[A-Za-z0-9]{6}$/.test(data.loginName))
+        if(!/^[A-Za-z0-9]{7,14}$/.test(data.loginName))
         {
-            this.showRegisterError("登录账号必须是6位英文字母或数字",this._registerInputs["loginName"]);
+            this.showRegisterError("登录账号必须是7–14位英文字母或数字",this._registerInputs["loginName"]);
             return;
         }
         if(data.password.length < 6 || data.password.length > 32 || data.password.trim() !== data.password)
@@ -271,7 +283,51 @@ export default class panelLogin extends UIPanelViewBase {
             return;
         }
 
-        this.requestRegister(data);
+        if(!data.antiTheftEnabled)
+        {
+            this.requestRegister(data);
+            return;
+        }
+
+        this._registerSubmitting = true;
+        this.showRegisterStatus("正在检查当前设备…",true);
+        DeviceIdentityManager.getInstance().prepare().then((identity)=>{
+            if(!this._registerPanel.active)
+                return;
+            if(!identity.available || !identity.persistent)
+            {
+                this._registerSubmitting = false;
+                this._registerAntiTheftToggle.isChecked = false;
+                let message = identity.message || "当前设备无法稳定保存设备标识，不能开启防盗号";
+                this.showRegisterStatus(message,true);
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+                return;
+            }
+            data.deviceId = identity.deviceId;
+            data.devicePlatform = identity.platform;
+            data.deviceVersion = identity.version;
+            let submit = ()=>{
+                if(!this._registerPanel.active)
+                    return;
+                this.requestRegister(data);
+            };
+            if(identity.platform === "web")
+            {
+                let warning = "开启防盗号后，账号将绑定当前浏览器。清除网站数据、更换浏览器或更换访问地址后将无法直接登录，需要联系客服解绑。确认继续注册吗？";
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,warning,[(confirmed:boolean)=>{
+                    if(confirmed)
+                    {
+                        submit();
+                        return;
+                    }
+                    this._registerSubmitting = false;
+                    this._registerAntiTheftToggle.isChecked = false;
+                    this.showRegisterStatus("已取消开启防盗号",false);
+                }]);
+                return;
+            }
+            submit();
+        });
     }
 
     private showRegisterError(message:string,editBox:cc.EditBox)
@@ -359,8 +415,21 @@ export default class panelLogin extends UIPanelViewBase {
             nickname:data.nickname,
             loginName:data.loginName,
             password:data.password,
-            avatarIndex:data.avatarIndex
+            avatarIndex:data.avatarIndex,
+            antiTheftEnabled:data.antiTheftEnabled,
+            deviceId:data.antiTheftEnabled ? data.deviceId : undefined,
+            devicePlatform:data.antiTheftEnabled ? data.devicePlatform : undefined,
+            deviceVersion:data.antiTheftEnabled ? data.deviceVersion : undefined
         }));
+    }
+
+    onToggleClick(toggle:cc.Toggle)
+    {
+        if(toggle.node.name !== "防盗号开关")
+            return;
+        if(this._registerSubmitting)
+            return;
+        this.showRegisterStatus(toggle.isChecked ? "已选择绑定当前设备，注册后仅本机可登录" : "防盗号默认关闭，可注册后在设置中开启",false);
     }
 
 

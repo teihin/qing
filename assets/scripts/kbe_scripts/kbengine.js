@@ -1902,6 +1902,10 @@ KBEngine.Entity = KBEngine.Class.extend(
 	{
 		KBEngine.Event.fire("set_client_status");
 	},
+	set_anti_theft_on(old)
+	{
+		KBEngine.Event.fire("set_anti_theft_on", this.anti_theft_on);
+	},
 	set_guuid(old)
 	{
 		KBEngine.Event.fire("set_guuid", this.guuid);
@@ -4280,7 +4284,11 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 	{
 		var failedcode = args.readUint16();
 		KBEngine.app.serverdatas = args.readBlob();
-		KBEngine.ERROR_MSG("KBEngineApp::Client_onLoginFailed: failedcode(" + KBEngine.app.serverErrs[failedcode].name + "), datas(" + KBEngine.app.serverdatas.length + ")!");
+		// 自定义服务端错误码可能早于 server_errors.xml 下发到客户端。
+		// 登录失败事件必须继续派发，否则业务层无法关闭 loading，也会不断自动重试。
+		var serverError = KBEngine.app.serverErrs[failedcode];
+		var errorName = serverError == undefined ? "UNKNOWN_SERVER_ERROR_" + failedcode : serverError.name;
+		KBEngine.ERROR_MSG("KBEngineApp::Client_onLoginFailed: failedcode(" + errorName + "), datas(" + KBEngine.app.serverdatas.length + ")!");
 		KBEngine.Event.fire(KBEngine.EventTypes.onLoginFailed, failedcode);
 	}
 	
@@ -5438,4 +5446,3 @@ catch(e)
 {
 	
 }
-

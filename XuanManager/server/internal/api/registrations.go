@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,25 +17,35 @@ import (
 )
 
 type gameRegistrationRequest struct {
-	InvitationCode string `json:"invitationCode"`
-	Nickname       string `json:"nickname"`
-	LoginName      string `json:"loginName"`
-	Username       string `json:"username"`
-	Password       string `json:"password"`
-	AvatarIndex    string `json:"avatarIndex"`
-	Photo          string `json:"photo"`
-	UpperGUID      string `json:"upper_guuid"`
-	PlayerWXID     string `json:"player_wxid"`
-	PlayerWXName   string `json:"player_wxname"`
+	InvitationCode   string `json:"invitationCode"`
+	Nickname         string `json:"nickname"`
+	LoginName        string `json:"loginName"`
+	Username         string `json:"username"`
+	Password         string `json:"password"`
+	AvatarIndex      string `json:"avatarIndex"`
+	Photo            string `json:"photo"`
+	UpperGUID        string `json:"upper_guuid"`
+	PlayerWXID       string `json:"player_wxid"`
+	PlayerWXName     string `json:"player_wxname"`
+	AntiTheftEnabled bool   `json:"antiTheftEnabled"`
+	DeviceID         string `json:"deviceId"`
+	DevicePlatform   string `json:"devicePlatform"`
+	DeviceVersion    int    `json:"deviceVersion"`
 }
 
 type normalizedGameRegistration struct {
-	InvitationCode string
-	Nickname       string
-	LoginName      string
-	Password       string
-	AvatarIndex    string
+	InvitationCode   string
+	Nickname         string
+	LoginName        string
+	Password         string
+	AvatarIndex      string
+	AntiTheftEnabled bool
+	DeviceID         string
+	DevicePlatform   string
+	DeviceVersion    int
 }
+
+var registrationDeviceIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{8,255}$`)
 
 type registrationRateEntry struct {
 	StartedAt time.Time
@@ -138,10 +149,22 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 
 	// 旧游戏登录链路要求 third_marketing_info.player_wxpwd 保存 MySQL MD5。
 	// 明文密码只作为 SQL 参数传入，不记录日志、审计或接口响应。
+	antiTheftValue := 0
+	deviceID := ""
+	var devicePlatform any
+	bindingRevision := int64(0)
+	if registration.AntiTheftEnabled {
+		antiTheftValue = 1
+		deviceID = registration.DeviceID
+		devicePlatform = registration.DevicePlatform
+		bindingRevision = 1
+	}
 	result, err := s.db.ExecContext(r.Context(), `INSERT INTO kbedm.third_marketing_info
-(date, time, upper_guuid, player_wxid, player_wxname, player_wxpwd, status, level)
-VALUES (CURDATE(), CURTIME(), ?, ?, ?, MD5(?), '', 0)`,
-		registration.InvitationCode, registration.LoginName, registration.Nickname, registration.Password)
+(date, time, upper_guuid, player_wxid, player_wxname, player_wxpwd, status, level,
+ anti_theft_on, device_id, device_platform, device_version, device_bound_at, binding_revision)
+VALUES (CURDATE(), CURTIME(), ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1, NOW(), NULL), ?)`,
+		registration.InvitationCode, registration.LoginName, registration.Nickname, registration.Password,
+		antiTheftValue, deviceID, devicePlatform, registration.DeviceVersion, antiTheftValue, bindingRevision)
 	if err != nil {
 		if isDuplicateKey(err) {
 			writeError(w, http.StatusConflict, "LOGIN_NAME_EXISTS", "该登录账号已被使用")
@@ -160,19 +183,23 @@ VALUES (CURDATE(), CURTIME(), ?, ?, ?, MD5(?), '', 0)`,
 
 	s.audit(r.Context(), nil, "game.registration.create", "third_marketing_info", numericID(id),
 		map[string]any{
-			"invitationCode": registration.InvitationCode,
-			"loginName":      registration.LoginName,
-			"nickname":       registration.Nickname,
-			"avatarIndex":    registration.AvatarIndex,
+			"invitationCode":   registration.InvitationCode,
+			"loginName":        registration.LoginName,
+			"nickname":         registration.Nickname,
+			"avatarIndex":      registration.AvatarIndex,
+			"antiTheftEnabled": registration.AntiTheftEnabled,
+			"devicePlatform":   registration.DevicePlatform,
+			"deviceVersion":    registration.DeviceVersion,
 		}, nil, map[string]any{"registrationId": id}, 0, "游戏账号注册成功", clientIP(r))
 	go s.applyRegistrationAvatar(id, registration.AvatarIndex)
 	writeData(w, http.StatusCreated, map[string]any{
-		"registrationId": id,
-		"invitationCode": registration.InvitationCode,
-		"loginName":      registration.LoginName,
-		"nickname":       registration.Nickname,
-		"avatarIndex":    registration.AvatarIndex,
-		"message":        "注册成功，请使用登录账号和密码进入游戏",
+		"registrationId":   id,
+		"invitationCode":   registration.InvitationCode,
+		"loginName":        registration.LoginName,
+		"nickname":         registration.Nickname,
+		"avatarIndex":      registration.AvatarIndex,
+		"antiTheftEnabled": registration.AntiTheftEnabled,
+		"message":          registrationSuccessMessage(registration.AntiTheftEnabled),
 	})
 }
 
@@ -198,11 +225,13 @@ func normalizeGameRegistration(input gameRegistrationRequest) (normalizedGameReg
 	}
 
 	registration := normalizedGameRegistration{
-		InvitationCode: strings.TrimSpace(invitationCode),
-		Nickname:       strings.TrimSpace(nickname),
-		LoginName:      strings.TrimSpace(loginName),
-		Password:       input.Password,
-		AvatarIndex:    strings.TrimSpace(input.AvatarIndex),
+		InvitationCode:   strings.TrimSpace(invitationCode),
+		Nickname:         strings.TrimSpace(nickname),
+		LoginName:        strings.TrimSpace(loginName),
+		Password:         input.Password,
+		AvatarIndex:      strings.TrimSpace(input.AvatarIndex),
+		AntiTheftEnabled: input.AntiTheftEnabled,
+		DeviceVersion:    1,
 	}
 	photo := strings.TrimSpace(input.Photo)
 	if registration.AvatarIndex == "" {
@@ -216,8 +245,8 @@ func normalizeGameRegistration(input gameRegistrationRequest) (normalizedGameReg
 	if !isSixDigitCode(registration.InvitationCode) {
 		return normalizedGameRegistration{}, errors.New("邀请码必须是 6 位数字")
 	}
-	if !isSixCharacterLoginName(registration.LoginName) {
-		return normalizedGameRegistration{}, errors.New("登录账号必须是 6 位英文字母或数字")
+	if !isRegistrationLoginName(registration.LoginName) {
+		return normalizedGameRegistration{}, errors.New("登录账号必须是 7 到 14 位英文字母或数字")
 	}
 	if err := validateRegistrationText(registration.Nickname, 1, 32, "昵称"); err != nil {
 		return normalizedGameRegistration{}, err
@@ -234,7 +263,33 @@ func normalizeGameRegistration(input gameRegistrationRequest) (normalizedGameReg
 	if err := validateRegistrationText(registration.Password, 6, 32, "登录密码"); err != nil {
 		return normalizedGameRegistration{}, err
 	}
+	deviceFieldsProvided := input.DeviceID != "" || input.DevicePlatform != "" || input.DeviceVersion != 0
+	if registration.AntiTheftEnabled || deviceFieldsProvided {
+		if input.DeviceID != strings.TrimSpace(input.DeviceID) {
+			return normalizedGameRegistration{}, errors.New("设备标识首尾不能包含空格")
+		}
+		if !registrationDeviceIDPattern.MatchString(input.DeviceID) {
+			return normalizedGameRegistration{}, errors.New("设备标识格式不正确")
+		}
+		if input.DevicePlatform != "android" && input.DevicePlatform != "ios" && input.DevicePlatform != "web" {
+			return normalizedGameRegistration{}, errors.New("设备平台必须是 android、ios 或 web")
+		}
+		if input.DeviceVersion != 1 {
+			return normalizedGameRegistration{}, errors.New("设备协议版本必须为 1")
+		}
+	}
+	if registration.AntiTheftEnabled {
+		registration.DeviceID = input.DeviceID
+		registration.DevicePlatform = input.DevicePlatform
+	}
 	return registration, nil
+}
+
+func registrationSuccessMessage(antiTheftEnabled bool) string {
+	if antiTheftEnabled {
+		return "注册成功，防盗号已开启，请使用当前设备登录"
+	}
+	return "注册成功，请使用登录账号和密码进入游戏"
 }
 
 func registrationAlias(label string, values ...string) (string, error) {
@@ -264,8 +319,8 @@ func isSixDigitCode(value string) bool {
 	return true
 }
 
-func isSixCharacterLoginName(value string) bool {
-	if len(value) != 6 {
+func isRegistrationLoginName(value string) bool {
+	if len(value) < 7 || len(value) > 14 {
 		return false
 	}
 	for _, char := range value {

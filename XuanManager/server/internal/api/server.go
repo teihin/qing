@@ -88,6 +88,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/bans", s.authorized("game.ban.view", false, s.handleListBannedPlayers))
 	s.mux.Handle("POST /api/game/bans", s.authorized("game.ban.create", true, s.handleCreatePlayerBan))
 	s.mux.Handle("POST /api/game/bans/{playerId}/unban", s.authorized("game.ban.remove", true, s.handleRemovePlayerBan))
+	s.mux.Handle("GET /api/game/anti-theft", s.authorized("game.anti_theft.view", false, s.handleListAntiTheftAccounts))
+	s.mux.Handle("POST /api/game/anti-theft/{playerId}/unbind", s.authorized("game.anti_theft.unbind", true, s.handleUnbindAntiTheftAccount))
 	s.mux.Handle("GET /api/game/room-maintenance", s.authorized("game.room_maintenance.view", false, s.handleListCurrentRooms))
 	s.mux.Handle("POST /api/game/room-maintenance/dissolve-all", s.authorized("game.room_maintenance.dissolve_all", true, s.handleDissolveAllRooms))
 	s.mux.Handle("POST /api/game/room-maintenance/{roomId}/dissolve", s.authorized("game.room_maintenance.dissolve", true, s.handleDissolveRoom))

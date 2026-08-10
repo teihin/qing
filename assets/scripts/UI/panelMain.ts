@@ -13,6 +13,7 @@ import UpdateManager from "../logic/UpdateManager";
 import ScrollViewNoEnd from "../common/ScrollViewNoEnd";
 import ObjPoolManager from "../logic/ObjPoolManager";
 import scrollview2 from "../common/scrollview2";
+import DeviceIdentityManager from "../logic/DeviceIdentityManager";
 
 var KBEngine = require("kbengine");
 
@@ -56,6 +57,19 @@ export default class panelMain extends UIPanelViewBase {
     private pendingPaidAvatarIndex:string = "";
     private pendingPaidProfileName:string = "";
     private readonly AVATAR_CHANGE_COST:number = 1000; // 服务端消费命令使用“分”，1000分=10元
+    private antiTheftToggle:cc.Toggle = null;
+    private antiTheftStatus:cc.Label = null;
+    private antiTheftBusy:boolean = false;
+    private antiTheftSyncing:boolean = false;
+    private antiTheftRequestId:string = "";
+    private antiTheftDesired:boolean = false;
+    private antiTheftTimeoutHandler = ()=>{
+        if(!this.antiTheftBusy)
+            return;
+        this.antiTheftBusy = false;
+        this.antiTheftRequestId = "";
+        this.RefreshAntiTheftSetting("操作超时，请刷新设置后重试",true);
+    };
     onLoad () {
         super.onLoad();
         
@@ -66,6 +80,12 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_level", this, "set_level");
         KBEngine.Event.register("set_role", this, "set_role");
         KBEngine.Event.register("set_photo", this, "set_photo");
+        KBEngine.Event.register("set_anti_theft_on", this, "set_anti_theft_on");
+        KBEngine.Event.register("onAccountCommand", this, "onAccountCommand");
+
+        this.antiTheftToggle = Tool.GetChild(this.node,"设置/列表/item/防盗号/防盗号开关").getComponent(cc.Toggle);
+        this.antiTheftStatus = Tool.GetChild(this.node,"设置/列表/item/防盗号状态").getComponent(cc.Label);
+        DeviceIdentityManager.getInstance().prepare();
 
         
         
@@ -699,6 +719,7 @@ export default class panelMain extends UIPanelViewBase {
 
             Tool.GetChild(this.node,"设置/列表/item/聊天语音/聊天语音").getComponent(cc.Toggle).isChecked = nLiaoAudio == 1?true:false;
             Tool.GetChild(this.node,"设置/列表/item/游戏音效/游戏音效").getComponent(cc.Toggle).isChecked = nGameAudio >=1?true:false;
+            this.RefreshAntiTheftSetting();
            // Tool.GetChild(this.node,"设置/列表/特殊开关/特殊开关").getComponent(cc.Toggle).isChecked = nSpecial == 1?true:false;
         
             // if(GameDataManager.getAccount().role == "董事长" || GameDataManager.getAccount().role == "总裁" || GameDataManager.getAccount().level == "99")
@@ -1502,6 +1523,10 @@ export default class panelMain extends UIPanelViewBase {
         {
             cc.sys.localStorage.setItem("AudioEff",toggle.isChecked?100:0);
         }
+        else if(toggle.node.name === "防盗号开关")
+        {
+            this.OnAntiTheftToggleChanged(toggle);
+        }
         else if(toggle.node.name === "特殊开关")
         {
             cc.sys.localStorage.setItem("特殊开关",toggle.isChecked?1:0);
@@ -1517,6 +1542,121 @@ export default class panelMain extends UIPanelViewBase {
             //     Tool.GetChild(this.node ,"Main/我的/操作/奖励").active = false;
             // }
         }
+    }
+
+    private IsAntiTheftEnabled():boolean
+    {
+        let account = GameDataManager.getAccount();
+        return account != null && Number(account.anti_theft_on || 0) === 1;
+    }
+
+    private RefreshAntiTheftSetting(message:string = "",isError:boolean = false)
+    {
+        if(this.antiTheftToggle == null || this.antiTheftStatus == null)
+            return;
+        let enabled = this.IsAntiTheftEnabled();
+        this.antiTheftSyncing = true;
+        this.antiTheftToggle.isChecked = enabled;
+        this.antiTheftToggle.interactable = !this.antiTheftBusy;
+        this.antiTheftSyncing = false;
+        this.antiTheftStatus.string = message != "" ? message : (enabled ? "已开启：仅当前绑定设备可登录" : "未开启：可在其他设备使用账号密码登录");
+        this.antiTheftStatus.node.color = isError ? new cc.Color(218,187,112,255) : (enabled ? new cc.Color(66,204,190,255) : new cc.Color(139,161,171,255));
+    }
+
+    private OnAntiTheftToggleChanged(toggle:cc.Toggle)
+    {
+        if(this.antiTheftSyncing)
+            return;
+        let current = this.IsAntiTheftEnabled();
+        let desired = toggle.isChecked;
+        this.antiTheftSyncing = true;
+        toggle.isChecked = current;
+        this.antiTheftSyncing = false;
+        if(this.antiTheftBusy || desired === current)
+            return;
+
+        DeviceIdentityManager.getInstance().prepare().then((identity)=>{
+            if(!identity.available || (desired && !identity.persistent))
+            {
+                let message = identity.message || "当前设备无法稳定保存设备标识，不能开启防盗号";
+                this.RefreshAntiTheftSetting(message,true);
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+                return;
+            }
+            let message = desired ?
+                (identity.platform === "web" ? "开启后账号将绑定当前浏览器。清除网站数据、更换浏览器或更换访问地址后将无法直接登录，需要联系客服解绑。确认开启吗？" : "开启后只有当前设备可以登录。设备丢失或更换手机前，请先关闭防盗号；否则需要联系客服解绑。确认开启吗？") :
+                "关闭后，其他设备可直接使用账号密码登录。确认关闭防盗号吗？";
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message,[(confirmed:boolean)=>{
+                if(confirmed)
+                    this.SendAntiTheftSetting(desired,identity.deviceId,identity.platform,identity.version);
+                else
+                    this.RefreshAntiTheftSetting("已取消修改",false);
+            }]);
+        });
+    }
+
+    private SendAntiTheftSetting(enabled:boolean,deviceId:string,platform:string,version:number)
+    {
+        if(this.antiTheftBusy)
+            return;
+        this.antiTheftBusy = true;
+        this.antiTheftDesired = enabled;
+        this.antiTheftRequestId = DeviceIdentityManager.getInstance().createRequestId();
+        this.RefreshAntiTheftSetting(enabled ? "正在绑定当前设备…" : "正在关闭防盗号…",false);
+        let param = JSON.stringify({
+            header:"设置_防盗号_开关",
+            anti_theft_on:enabled ? 1 : 0,
+            device_id:deviceId,
+            device_platform:platform,
+            device_version:version,
+            request_id:this.antiTheftRequestId
+        });
+        GameDataManager.getAccount().reqAccountCommand(param,"P@设置_防盗号_开关");
+        this.unschedule(this.antiTheftTimeoutHandler);
+        this.scheduleOnce(this.antiTheftTimeoutHandler,12);
+    }
+
+    public onAccountCommand(nCode:number,param:string)
+    {
+        if(this.antiTheftRequestId == "" || param == null || param.indexOf("设置_防盗号_开关") < 0)
+            return;
+        let payload:any = null;
+        try { payload = JSON.parse(param); } catch(error) {}
+        let result = payload != null && payload.result != null ? payload.result : payload;
+        if(result != null && result.request_id != null && result.request_id !== this.antiTheftRequestId)
+            return;
+        let success = nCode === 0x200 && (result == null || result.success !== false);
+        if(!success)
+        {
+            let message = result != null && result.message ? result.message : "防盗号设置失败，请稍后重试";
+            this.FinishAntiTheftSetting(message,true);
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+            return;
+        }
+        if(this.IsAntiTheftEnabled() === this.antiTheftDesired)
+        {
+            this.FinishAntiTheftSetting(result != null && result.message ? result.message : (this.antiTheftDesired ? "防盗号已开启" : "防盗号已关闭"),false);
+            return;
+        }
+        this.RefreshAntiTheftSetting("服务器已受理，正在同步最终状态…",false);
+    }
+
+    public set_anti_theft_on(value:any = null)
+    {
+        if(this.antiTheftBusy && this.IsAntiTheftEnabled() === this.antiTheftDesired)
+        {
+            this.FinishAntiTheftSetting(this.antiTheftDesired ? "防盗号已开启" : "防盗号已关闭",false);
+            return;
+        }
+        this.RefreshAntiTheftSetting();
+    }
+
+    private FinishAntiTheftSetting(message:string,isError:boolean)
+    {
+        this.unschedule(this.antiTheftTimeoutHandler);
+        this.antiTheftBusy = false;
+        this.antiTheftRequestId = "";
+        this.RefreshAntiTheftSetting(message,isError);
     }
 
     switchTabSel(strName:string)

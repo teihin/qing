@@ -1,9 +1,24 @@
 package api
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
+
+func TestCreatePlayerOptimizationDoesNotRequireSuperAdministrator(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/api/game/player-optimization", strings.NewReader("{"))
+	response := httptest.NewRecorder()
+	server := &Server{}
+	server.handleCreatePlayerOptimization(response, request, principal{IsSuper: false})
+	if response.Code == http.StatusForbidden {
+		t.Fatal("ordinary role with create permission was still blocked by a super-administrator-only check")
+	}
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("expected request validation after permission middleware, got %d", response.Code)
+	}
+}
 
 func TestNormalizeAndValidateOptimizationRequest(t *testing.T) {
 	valid := updatePlayerOptimizationRequest{
@@ -97,8 +112,8 @@ func TestParseOptimizationChanceRange(t *testing.T) {
 
 func TestBuildPlayerOptimizationWhereUsesDealOptimizationOnly(t *testing.T) {
 	minimum, maximum := int64(10), int64(90)
-	where, args := buildPlayerOptimizationWhere("292989", "active", &minimum, &maximum)
-	if len(args) != 9 {
+	where, args := buildPlayerOptimizationWhere("292989", "active", &minimum, &maximum, principal{})
+	if len(args) != 10 {
 		t.Fatalf("args = %#v", args)
 	}
 	if !containsAll(where, "sm_optimize01_count > 0", "sm_optimize01_chance >= ?", "sm_optimize01_chance <= ?", "operator_log.operator_name LIKE ?") {
@@ -106,6 +121,20 @@ func TestBuildPlayerOptimizationWhereUsesDealOptimizationOnly(t *testing.T) {
 	}
 	if containsAll(where, "optimize02") {
 		t.Fatalf("unused optimize02 leaked into query: %s", where)
+	}
+}
+
+func TestApplyPlayerOptimizationVisibilityHidesSuperAttribution(t *testing.T) {
+	configuredBy, configuredSource, configuredAt := "admin999", "", "2026-08-10 12:00:00"
+	applyPlayerOptimizationVisibility(principal{}, &configuredBy, &configuredSource, &configuredAt, true, "648425")
+	if configuredBy != "" || configuredSource != "hidden" || configuredAt != "" {
+		t.Fatalf("non-super attribution leaked: %q %q %q", configuredBy, configuredSource, configuredAt)
+	}
+
+	configuredBy, configuredSource, configuredAt = "admin999", "", "2026-08-10 12:00:00"
+	applyPlayerOptimizationVisibility(principal{IsSuper: true}, &configuredBy, &configuredSource, &configuredAt, true, "648425")
+	if configuredBy != "admin999" || configuredSource != "admin" || configuredAt == "" {
+		t.Fatalf("super attribution was hidden from super: %q %q %q", configuredBy, configuredSource, configuredAt)
 	}
 }
 

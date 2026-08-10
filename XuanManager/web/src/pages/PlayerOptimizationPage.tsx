@@ -5,9 +5,8 @@ import type { PlayerOptimizationItem, PlayerOptimizationsResponse } from "../typ
 
 type OptimizationStatus = "active" | "inactive" | "all";
 
-export default function PlayerOptimizationPage({ can, isSuper, notify }: {
+export default function PlayerOptimizationPage({ can, notify }: {
   can: (permission: string) => boolean;
-  isSuper: boolean;
   notify: (message: string, kind?: "success" | "error") => void;
 }) {
   const [data, setData] = useState<PlayerOptimizationsResponse | null>(null);
@@ -70,9 +69,9 @@ export default function PlayerOptimizationPage({ can, isSuper, notify }: {
     setPage(1);
   };
 
-  const canCreate = isSuper && can("game.player_optimization.create");
-  const canUpdate = isSuper && can("game.player_optimization.update");
-  const canDelete = isSuper && can("game.player_optimization.delete");
+  const canCreate = can("game.player_optimization.create");
+  const canUpdate = can("game.player_optimization.update");
+  const canDelete = can("game.player_optimization.delete");
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
@@ -86,7 +85,7 @@ export default function PlayerOptimizationPage({ can, isSuper, notify }: {
       <article><span>当前启用玩家</span><strong>{data?.summary.activePlayers ?? "—"}</strong><p>剩余次数大于 0</p></article>
       <article><span>剩余优化总次数</span><strong>{data?.summary.totalRemaining.toLocaleString("zh-CN") ?? "—"}</strong><p>所有启用玩家合计</p></article>
       <article><span>平均触发概率</span><strong>{data ? `${data.summary.averageChance.toFixed(1)}%` : "—"}</strong><p>仅统计当前启用玩家</p></article>
-      <article className="optimization-risk"><span>操作权限</span><strong>超级管理员</strong><p>新增、调整、删除均需确认并审计</p></article>
+      <article className="optimization-risk"><span>操作权限</span><strong>按角色授权</strong><p>新增、调整、删除可分别配置权限</p></article>
     </section>
 
     <section className="panel optimization-filter-panel">
@@ -116,7 +115,7 @@ export default function PlayerOptimizationPage({ can, isSuper, notify }: {
                 <td><span className={`optimization-status ${item.active ? "is-active" : ""}`}><i />{item.active ? "已启用" : "未启用"}</span></td>
                 <td><strong className="optimization-number">{item.remainingCount.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">次</small></td>
                 <td><div className="optimization-chance"><strong>{item.chance}%</strong><span><i style={{ width: `${Math.max(0, Math.min(100, item.chance))}%` }} /></span></div></td>
-                <td>{item.configuredSource === "admin" ? <><strong>{item.configuredBy}</strong><small className="cell-subtitle">后台账号</small></> : item.managerId ? <><strong>{item.managerName || "游戏历史设置"}</strong><small className="cell-subtitle">历史游戏ID：{item.managerId}</small></> : <span>—</span>}</td>
+                <td>{item.configuredSource === "hidden" ? <span>—</span> : item.configuredSource === "admin" ? <><strong>{item.configuredBy}</strong><small className="cell-subtitle">后台账号</small></> : item.managerId ? <><strong>{item.managerName || "游戏历史设置"}</strong><small className="cell-subtitle">历史游戏ID：{item.managerId}</small></> : <span>—</span>}</td>
                 <td>{formatOptimizationDate(item.lastConfiguredAt)}</td>
                 <td><div className="row-actions row-actions--right">
                   {!item.active && canCreate && <button type="button" onClick={() => setAdding(item)}>新增优化</button>}

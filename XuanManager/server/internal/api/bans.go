@@ -54,9 +54,10 @@ type removePlayerBanRequest struct {
 type banAuditMetadata struct {
 	OperatorName string
 	CreatedAt    time.Time
+	Hidden       bool
 }
 
-func (s *Server) handleListBannedPlayers(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleListBannedPlayers(w http.ResponseWriter, r *http.Request, p principal) {
 	page, size := pageParams(r)
 	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
 	if utf8.RuneCountInString(keyword) > 100 {
@@ -115,7 +116,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取已封账号数据失败")
 		return
 	}
-	if err := s.enrichBanAuditMetadata(r.Context(), items); err != nil {
+	if err := s.enrichBanAuditMetadata(r.Context(), p, items); err != nil {
 		s.logger.Warn("read ban audit metadata", "error", err)
 	}
 
@@ -135,7 +136,7 @@ func buildBannedPlayerWhere(keyword string) (string, []any) {
 	return strings.Join(clauses, " AND "), args
 }
 
-func (s *Server) enrichBanAuditMetadata(ctx context.Context, items []bannedPlayerItem) error {
+func (s *Server) enrichBanAuditMetadata(ctx context.Context, p principal, items []bannedPlayerItem) error {
 	if len(items) == 0 {
 		return nil
 	}
@@ -146,11 +147,13 @@ func (s *Server) enrichBanAuditMetadata(ctx context.Context, items []bannedPlaye
 		placeholders[index] = "?"
 		args = append(args, item.PlayerID)
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT target_id, operator_name, created_at
-FROM mgr_audit_log
-WHERE action = ? AND target_type = ? AND result_code = 0
-  AND target_id IN (`+strings.Join(placeholders, ",")+`)
-ORDER BY id DESC`, args...)
+	rows, err := s.db.QueryContext(ctx, `SELECT audit_row.target_id, audit_row.operator_name, audit_row.created_at,
+COALESCE(operator_user.is_super, 0)
+FROM mgr_audit_log audit_row
+LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
+WHERE audit_row.action = ? AND audit_row.target_type = ? AND audit_row.result_code = 0
+  AND audit_row.target_id IN (`+strings.Join(placeholders, ",")+`)
+ORDER BY audit_row.id DESC`, args...)
 	if err != nil {
 		return err
 	}
@@ -159,9 +162,11 @@ ORDER BY id DESC`, args...)
 	for rows.Next() {
 		var playerID string
 		var item banAuditMetadata
-		if err := rows.Scan(&playerID, &item.OperatorName, &item.CreatedAt); err != nil {
+		var operatorIsSuper bool
+		if err := rows.Scan(&playerID, &item.OperatorName, &item.CreatedAt, &operatorIsSuper); err != nil {
 			return err
 		}
+		item.Hidden = hideSuperUserFrom(p, operatorIsSuper)
 		if _, exists := metadata[playerID]; !exists {
 			metadata[playerID] = item
 		}
@@ -170,7 +175,7 @@ ORDER BY id DESC`, args...)
 		return err
 	}
 	for index := range items {
-		if audit, ok := metadata[items[index].PlayerID]; ok {
+		if audit, ok := metadata[items[index].PlayerID]; ok && !audit.Hidden {
 			items[index].BannedBy = audit.OperatorName
 			createdAt := audit.CreatedAt
 			items[index].BannedAt = &createdAt

@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -67,8 +66,8 @@ type updateActivityConfigurationRequest struct {
 	Confirm       bool                `json:"confirm"`
 }
 
-func (s *Server) handleGetActivityConfiguration(w http.ResponseWriter, r *http.Request, _ principal) {
-	state, err := s.queryActivityConfiguration(r.Context())
+func (s *Server) handleGetActivityConfiguration(w http.ResponseWriter, r *http.Request, p principal) {
+	state, err := s.queryActivityConfiguration(r.Context(), p)
 	if err != nil {
 		s.logger.Error("read activity configuration", "error", err)
 		writeError(w, http.StatusBadGateway, "ACTIVITY_CONFIGURATION_QUERY_FAILED", "读取游戏活动配置失败")
@@ -94,7 +93,7 @@ func (s *Server) handleUpdateActivityConfiguration(w http.ResponseWriter, r *htt
 	defer activityConfigurationMutationMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 35*time.Second)
 	defer cancel()
-	before, err := s.queryActivityConfiguration(ctx)
+	before, err := s.queryActivityConfiguration(ctx, p)
 	if err != nil {
 		writeError(w, http.StatusBadGateway, "ACTIVITY_CONFIGURATION_QUERY_FAILED", "读取当前游戏活动配置失败")
 		return
@@ -135,7 +134,7 @@ func (s *Server) handleUpdateActivityConfiguration(w http.ResponseWriter, r *htt
 		writeError(w, http.StatusInternalServerError, "ACTIVITY_CONFIGURATION_UPDATE_FAILED", "活动展示文字保存失败，已尝试恢复原值")
 		return
 	}
-	after, verifyErr := s.queryActivityConfiguration(ctx)
+	after, verifyErr := s.queryActivityConfiguration(ctx, p)
 	expected := activityConfigurationState{Enabled: input.Enabled, Activities: input.Activities, HandRankPower: input.HandRankPower}
 	if verifyErr != nil || activityStateRevision(after) != activityStateRevision(expected) {
 		s.restoreBossConfigurations(ctx, beforeConfig, changedConfig)
@@ -147,7 +146,7 @@ func (s *Server) handleUpdateActivityConfiguration(w http.ResponseWriter, r *htt
 	writeData(w, http.StatusOK, after)
 }
 
-func (s *Server) queryActivityConfiguration(ctx context.Context) (activityConfigurationState, error) {
+func (s *Server) queryActivityConfiguration(ctx context.Context, p principal) (activityConfigurationState, error) {
 	keys := []string{"activity_on", "activity3_list_power"}
 	for _, definition := range activityDefinitions {
 		keys = append(keys, definition.StartDateKey, definition.StartTimeKey, definition.EndDateKey, definition.EndTimeKey, definition.RewardKey, definition.ClaimKey, definition.LimitKey)
@@ -185,14 +184,11 @@ func (s *Server) queryActivityConfiguration(ctx context.Context) (activityConfig
 	}
 	state.HandRankPower = parseActivityPowers(values["activity3_list_power"])
 	state.Revision = activityStateRevision(state)
-	var updatedBy string
-	var updatedAt time.Time
-	if err := s.db.QueryRowContext(ctx, `SELECT operator_name, created_at FROM mgr_audit_log
-WHERE action = 'configuration.activity.update' AND result_code = 0 ORDER BY id DESC LIMIT 1`).Scan(&updatedBy, &updatedAt); err == nil {
-		state.LastUpdatedBy, state.LastUpdatedAt = updatedBy, &updatedAt
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	updatedBy, updatedAt, err := s.latestAuditAttribution(ctx, "configuration.activity.update", p)
+	if err != nil {
 		return state, err
 	}
+	state.LastUpdatedBy, state.LastUpdatedAt = updatedBy, updatedAt
 	return state, nil
 }
 

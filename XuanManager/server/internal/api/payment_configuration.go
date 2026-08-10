@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -89,8 +88,8 @@ type storedHashRow struct {
 	Content string
 }
 
-func (s *Server) handleGetPaymentConfiguration(w http.ResponseWriter, r *http.Request, _ principal) {
-	state, err := s.queryPaymentConfiguration(r.Context())
+func (s *Server) handleGetPaymentConfiguration(w http.ResponseWriter, r *http.Request, p principal) {
+	state, err := s.queryPaymentConfiguration(r.Context(), p)
 	if err != nil {
 		s.logger.Error("read payment configuration", "error", err)
 		writeError(w, http.StatusInternalServerError, "PAYMENT_CONFIGURATION_QUERY_FAILED", "读取支付通道配置失败")
@@ -116,7 +115,7 @@ func (s *Server) handleUpdatePaymentConfiguration(w http.ResponseWriter, r *http
 	defer paymentConfigurationMutationMu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	before, err := s.queryPaymentConfiguration(ctx)
+	before, err := s.queryPaymentConfiguration(ctx, p)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "PAYMENT_CONFIGURATION_QUERY_FAILED", "读取当前支付配置失败")
 		return
@@ -148,7 +147,7 @@ func (s *Server) handleUpdatePaymentConfiguration(w http.ResponseWriter, r *http
 		writeError(w, http.StatusInternalServerError, "PAYMENT_CONFIGURATION_UPDATE_FAILED", "支付配置保存失败，已尝试恢复原配置")
 		return
 	}
-	after, verifyErr := s.queryPaymentConfiguration(ctx)
+	after, verifyErr := s.queryPaymentConfiguration(ctx, p)
 	if verifyErr != nil || !paymentStateMatchesRequest(after, input) {
 		restoreErr := s.restoreStoredHashRows(ctx, beforeRows, insertedIDs, keys)
 		s.logger.Error("verify payment configuration", "error", verifyErr, "restoreError", restoreErr)
@@ -159,7 +158,7 @@ func (s *Server) handleUpdatePaymentConfiguration(w http.ResponseWriter, r *http
 	writeData(w, http.StatusOK, after)
 }
 
-func (s *Server) queryPaymentConfiguration(ctx context.Context) (paymentConfigurationState, error) {
+func (s *Server) queryPaymentConfiguration(ctx context.Context, p principal) (paymentConfigurationState, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT hash_key, COALESCE(hash_content, '')
 FROM kbedm.usr_hash_info
 WHERE hash_key IN (?, ?, ?, ?, ?, ?)
@@ -227,14 +226,11 @@ ORDER BY id`, paymentListKey, paymentDomainKey, paymentBranchKey, paymentAlipayT
 		state.Channels = append(state.Channels, channel)
 	}
 	state.Revision = paymentStateRevision(state)
-	var updatedBy string
-	var updatedAt time.Time
-	if err := s.db.QueryRowContext(ctx, `SELECT operator_name, created_at FROM mgr_audit_log
-WHERE action = 'configuration.payment.update' AND result_code = 0 ORDER BY id DESC LIMIT 1`).Scan(&updatedBy, &updatedAt); err == nil {
-		state.LastUpdatedBy, state.LastUpdatedAt = updatedBy, &updatedAt
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	updatedBy, updatedAt, err := s.latestAuditAttribution(ctx, "configuration.payment.update", p)
+	if err != nil {
 		return state, err
 	}
+	state.LastUpdatedBy, state.LastUpdatedAt = updatedBy, updatedAt
 	return state, nil
 }
 
