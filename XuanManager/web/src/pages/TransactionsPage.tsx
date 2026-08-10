@@ -177,7 +177,7 @@ function TransactionRow({ item, onSelect }: { item: TransactionItem; onSelect: (
 function TransactionDescription({ item }: { item: TransactionItem }) {
   const fields = readableTransactionFields(item, false);
   if (fields.length === 0) return <span className="transaction-description transaction-description--empty">无关联信息</span>;
-  return <span className="transaction-description">{fields.map((field, index) => <span className="transaction-description__item" key={`${field.label}-${index}`}><small>{field.label}</small><strong>{field.value}</strong></span>)}</span>;
+  return <span className="transaction-description">{fields.map((field, index) => <span className={`transaction-description__item ${field.label === "维护原因" ? "is-maintenance" : ""}`} key={`${field.label}-${index}`}><small>{field.label}</small><strong>{field.value}</strong></span>)}</span>;
 }
 
 function TransactionDetail({ item, onClose }: { item: TransactionItem; onClose: () => void }) {
@@ -186,6 +186,7 @@ function TransactionDetail({ item, onClose }: { item: TransactionItem; onClose: 
     <div className="transaction-detail-heading"><CategoryBadge category={item.category} /><div><strong className={`gold-change gold-change--${item.direction}`}>{formatSigned(item.change)} 金币</strong><p>{item.occurredAt} · 流水ID {item.id}</p></div></div>
     <section className="player-detail-section"><h3>金币余额变化</h3><div className="transaction-balance-flow"><div><span>变更前</span><strong>{goldFormatter.format(item.oldBalance)}</strong></div><i>→</i><div className="is-final"><span>变更后</span><strong>{goldFormatter.format(item.newBalance)}</strong></div><div><span>原始业务金额</span><strong>{formatSigned(item.businessAmount)}</strong></div></div></section>
     <section className="player-detail-section"><h3>业务信息</h3><div className="player-detail-grid"><Detail label="玩家" value={`${item.playerName || "未设置昵称"}（${item.playerId}）`} /><Detail label="交易分类" value={categoryLabels[item.category]} /><Detail label="原始业务类型" value={item.optionType} /><Detail label="实际方向" value={item.direction === "in" ? "金币增加" : item.direction === "out" ? "金币减少" : "余额未变化"} /></div></section>
+    {item.maintenanceReason && <section className="player-detail-section transaction-maintenance-section"><h3>客服维护信息</h3><div className="transaction-maintenance-reason"><span>维护原因</span><strong>{item.maintenanceReason}</strong></div><div className="player-detail-grid"><Detail label="后台操作人" value={item.maintenanceOperator || "—"} /><Detail label="维护工单号" value={item.maintenanceWorkOrder || "—"} /></div></section>}
     <section className="player-detail-section"><h3>业务关联信息</h3><div className="transaction-remarks">{fields.length > 0 ? fields.map((field, index) => <div key={`${field.label}-${index}`}><span>{field.label}</span><strong>{field.value}</strong></div>) : <div><span>关联信息</span><strong>无</strong></div>}</div><p className="transaction-detail-note">后台已根据交易类型解释服务器参数；结算场景同时保留原始码，便于运营核对。</p></section>
   </Modal>;
 }
@@ -199,10 +200,16 @@ function readableTransactionFields(item: TransactionItem, detailed: boolean): Re
   const extraDetail = item.remark5.trim();
   const add = (label: string, value: string) => { if (value) fields.push({ label, value }); };
 
-  add("房间", roomId);
-  if (detailed) add("房间名称", roomName);
-  if (round && round !== "0") add("牌局", `第 ${round} 局`);
-  if (item.optionType === "结算" && (!round || round === "0")) add("牌局", "未产生有效牌局");
+
+  if (!detailed) add("维护原因", item.maintenanceReason);
+
+  const isRoomTransaction = ["带入", "打局", "芒皮", "揍芒", "休芒", "结算"].includes(item.optionType);
+  if (isRoomTransaction) {
+    add("房间", roomId);
+    if (detailed) add("房间名称", roomName);
+    if (round && round !== "0") add("牌局", `第 ${round} 局`);
+    if (item.optionType === "结算" && (!round || round === "0")) add("牌局", "未产生有效牌局");
+  }
 
   switch (item.optionType) {
     case "带入":
@@ -224,6 +231,12 @@ function readableTransactionFields(item: TransactionItem, detailed: boolean): Re
     case "消费":
       add("消费项目", businessDetail);
       add("消费说明", readableConsumptionNote(extraDetail));
+      break;
+    case "补分":
+    case "扣分":
+    case "退款":
+      add("服务记录金额", readableGoldValue(roomId));
+      if (detailed) add("服务记录余额", readableGoldValue(roomName));
       break;
     default:
       add("业务说明", businessDetail);

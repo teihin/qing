@@ -32,7 +32,7 @@ def png_size(path: Path) -> tuple[int, int]:
 
 def validate_assets() -> None:
     frame_uuids: set[str] = set()
-    for index in range(1, 21):
+    for index in range(1, 101):
         stem = f"头像{index:02d}"
         png = AVATAR_DIR / f"{stem}.png"
         meta_path = AVATAR_DIR / f"{stem}.png.meta"
@@ -63,15 +63,17 @@ def validate_code() -> None:
     for token in ("onGetPic", "headimgurl"):
         require(token not in mobile, f"obsolete native/network avatar bridge remains: {token}")
 
-    require('AVATAR_COUNT:number = 20' in image_manager, "avatar count is not fixed at 20")
+    require('AVATAR_COUNT:number = 100' in image_manager, "avatar count is not fixed at 100")
     require('AVATAR_ROOT:string = "avatars/头像"' in image_manager, "local avatar resource root missing")
     require('return "1";' in image_manager, "invalid-field fallback to avatar 1 missing")
-    require('Math.random() * this.AVATAR_COUNT' in image_manager, "random 1-20 initialization missing")
+    require('Math.random() * this.AVATAR_COUNT' in image_manager, "random 1-100 initialization missing")
+    require('RandomAvatarBatch(count:number = 20' in image_manager, "random 20-avatar batch helper missing")
     require('cc.loader.loadRes(this.GetAvatarResourcePath' in image_manager, "resources avatar load missing")
     require('rawText == "" ? imageManager.RandomAvatarIndex() : "1"' in panel_main, "empty/random and legacy/fallback split missing")
-    require('new cc.Node("本地头像列表")' in panel_main, "20-avatar selector container missing")
-    require('index <= ImageManager.getInstance().AVATAR_COUNT' in panel_main, "avatar selector does not cover all local avatars")
-    require('item.on("click"' in panel_main and 'this.SetEditAvatar(editNode, avatarIndex)' in panel_main,
+    require('new cc.Node("本地头像列表")' in panel_main, "20-slot avatar selector container missing")
+    require('let batch = imageManager.RandomAvatarBatch(20,previousBatch)' in panel_main,
+            "in-game selector does not refresh a random batch of 20")
+    require('item.on("click"' in panel_main and 'this.SetEditAvatar(editNode, slotMap[slotName])' in panel_main,
             "avatar selector click-to-preview flow missing")
     require('currentIndex >= ImageManager.getInstance().AVATAR_COUNT' not in panel_main,
             "legacy click-to-cycle avatar flow still remains")
@@ -97,7 +99,7 @@ def validate_normalization_contract() -> None:
         if not re.fullmatch(r"\d+", text):
             return "1"
         number = int(text)
-        return str(number) if 1 <= number <= 20 else "1"
+        return str(number) if 1 <= number <= 100 else "1"
 
     cases = {
         None: "1",
@@ -105,9 +107,10 @@ def validate_normalization_contract() -> None:
         "old-avatar.jpg": "1",
         "https://legacy/avatar.png": "1",
         "0": "1",
-        "21": "1",
+        "101": "1",
         "01": "1",
         "20": "20",
+        "100": "100",
     }
     for value, expected in cases.items():
         require(normalize(value) == expected, f"normalization contract failed: {value!r}")
@@ -117,7 +120,7 @@ def main() -> None:
     validate_assets()
     validate_code()
     validate_normalization_contract()
-    print("PASS: 20 local avatars and numbered-avatar flow validated")
+    print("PASS: 100 local avatars and random-20 numbered-avatar flow validated")
 
 
 if __name__ == "__main__":

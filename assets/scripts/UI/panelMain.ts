@@ -50,8 +50,12 @@ export default class panelMain extends UIPanelViewBase {
     private bNeedInitJYPwd:boolean = false;  //是否需要初始化交易密码
     private scrollCFNotify:ScrollViewEx = null; //惩罚公告列表
 
-    private strFirstModifyName = "" //是否修改过头像名字
     private pendingAvatarIndex:string = ""; //等待服务端回写的首次/兼容头像序号
+    private editAvatarBatch:{[panelName:string]:Array<string>} = {};
+    private editAvatarBySlot:{[panelName:string]:{[slotName:string]:string}} = {};
+    private pendingPaidAvatarIndex:string = "";
+    private pendingPaidProfileName:string = "";
+    private readonly AVATAR_CHANGE_COST:number = 1000; // 服务端消费命令使用“分”，1000分=10元
     onLoad () {
         super.onLoad();
         
@@ -231,7 +235,7 @@ export default class panelMain extends UIPanelViewBase {
     }
 
     /**
-     * 新账号头像字段为空时随机写入1～20；旧网址、文件名或越界值统一迁移为1。
+     * 新账号头像字段为空时随机写入1～100；旧网址、文件名或越界值统一迁移为1。
      * pendingAvatarIndex用于服务端属性事件返回前的即时显示，避免重复随机。
      */
     private EnsureAccountAvatar():string
@@ -301,12 +305,13 @@ export default class panelMain extends UIPanelViewBase {
         {
             let selected = item.getChildByName("选中");
             if(selected != null)
-                selected.active = item.name == "头像选项" + avatarIndex.padStart(2,"0");
+                selected.active = this.editAvatarBySlot[editNode.name] != null &&
+                    this.editAvatarBySlot[editNode.name][item.name] == avatarIndex;
         }
     }
 
     /**
-     * 把20张本地头像一次性铺在修改资料页中；列表只创建一次，重复打开时更新选中态。
+     * 修改资料页保留20个固定头像槽位；图片内容每次打开或点“换一批”时随机刷新。
      * 节点由代码创建，避免把20份重复Sprite结构写进panelMain.prefab。
      */
     private EnsureLocalAvatarSelector(editNode:cc.Node)
@@ -344,10 +349,10 @@ export default class panelMain extends UIPanelViewBase {
         listNode.setPosition(0,-90);
         editNode.addChild(listNode);
 
-        for(let index = 1; index <= ImageManager.getInstance().AVATAR_COUNT; index++)
+        for(let index = 1; index <= 20; index++)
         {
-            let avatarIndex = index.toString();
-            let item = new cc.Node("头像选项" + avatarIndex.padStart(2,"0"));
+            let slotName = "头像槽位" + index.toString().padStart(2,"0");
+            let item = new cc.Node(slotName);
             item.setContentSize(104,104);
             let col = (index - 1) % 5;
             let row = Math.floor((index - 1) / 5);
@@ -368,7 +373,6 @@ export default class panelMain extends UIPanelViewBase {
             item.addChild(imageNode);
             let sprite = imageNode.addComponent(cc.Sprite);
             sprite.sizeMode = cc.Sprite.SizeMode.CUSTOM;
-            ImageManager.getInstance().SetLocalAvatar(sprite, avatarIndex);
 
             let selectedNode = new cc.Node("选中");
             selectedNode.setContentSize(104,104);
@@ -394,15 +398,95 @@ export default class panelMain extends UIPanelViewBase {
             button.zoomScale = 0.92;
             item.on("click",()=>{
                 if(cc.isValid(editNode))
-                    this.SetEditAvatar(editNode, avatarIndex);
+                {
+                    let slotMap = this.editAvatarBySlot[editNode.name];
+                    if(slotMap != null && ImageManager.getInstance().IsAvatarIndex(slotMap[slotName]))
+                        this.SetEditAvatar(editNode, slotMap[slotName]);
+                }
             },this);
         }
+        this.RefreshEditAvatarBatch(editNode);
     }
 
-    //兼容旧事件入口：若仍有外部调用，则只随机预览一张本地头像。
+    private RefreshEditAvatarBatch(editNode:cc.Node)
+    {
+        let listNode = editNode == null ? null : editNode.getChildByName("本地头像列表");
+        if(listNode == null)
+            return;
+
+        let imageManager = ImageManager.getInstance();
+        let previousBatch = this.editAvatarBatch[editNode.name] || [];
+        let batch = imageManager.RandomAvatarBatch(20,previousBatch);
+        let slotMap:{[slotName:string]:string} = {};
+        this.editAvatarBatch[editNode.name] = batch;
+        this.editAvatarBySlot[editNode.name] = slotMap;
+
+        for(let index = 0; index < listNode.children.length && index < batch.length; index++)
+        {
+            let item = listNode.children[index];
+            let avatarIndex = batch[index];
+            slotMap[item.name] = avatarIndex;
+            let sprite = Tool.GetChild(item,"头像").getComponent(cc.Sprite);
+            imageManager.SetLocalAvatar(sprite,avatarIndex);
+        }
+
+        let selectedAvatar = Tool.GetChild(editNode,"头像/name").getComponent(cc.Label).string;
+        if(imageManager.IsAvatarIndex(selectedAvatar))
+            this.SetEditAvatar(editNode,selectedAvatar);
+    }
+
+    //兼容旧事件入口：现在刷新当前资料页中的20张随机头像，不改变已选头像。
     public RandHeadList()
     {
-        this.PreviewEditAvatar(ImageManager.getInstance().RandomAvatarIndex());
+        let editNode = this.GetActiveEditInfoNode();
+        if(editNode == null)
+            return;
+        this.EnsureLocalAvatarSelector(editNode);
+        this.RefreshEditAvatarBatch(editNode);
+    }
+
+    private ApplyProfileChange(strName:string,avatarIndex:string,chargeAvatar:boolean)
+    {
+        let normalizedAvatar = ImageManager.getInstance().NormalizeAvatarIndex(avatarIndex);
+        if(chargeAvatar)
+        {
+            let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"换头像\",\"money\":" + this.AVATAR_CHANGE_COST + "}";
+            GameDataManager.getAccount().reqHallCommand(strParam,"玩家_消费_命令");
+        }
+        GameDataManager.getAccount().reqSetProperty("photo",normalizedAvatar);
+        GameDataManager.getAccount().reqSetProperty("name",strName);
+        Tool.GetChild(this.node,"修改个人信息").active = false;
+        Tool.GetChild(this.node,"修改个人信息2").active = false;
+        Tool.GetChild(this.node,"确定修改个人信息").active = false;
+    }
+
+    private QueuePaidAvatarChange(strName:string,avatarIndex:string)
+    {
+        this.pendingPaidProfileName = strName;
+        this.pendingPaidAvatarIndex = ImageManager.getInstance().NormalizeAvatarIndex(avatarIndex);
+        Tool.GetChild(this.node,"确定修改个人信息").active = true;
+    }
+
+    private ConfirmPaidAvatarChange()
+    {
+        if(!ImageManager.getInstance().IsAvatarIndex(this.pendingPaidAvatarIndex))
+        {
+            Tool.GetChild(this.node,"确定修改个人信息").active = false;
+            return;
+        }
+
+        let account = GameDataManager.getAccount();
+        let balance = Number(account.gold) + Number(account.gold2 || 0) / 100;
+        if(balance < this.AVATAR_CHANGE_COST / 100)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"余额不足10元，无法更换头像！");
+            Tool.GetChild(this.node,"确定修改个人信息").active = false;
+            return;
+        }
+
+        this.ApplyProfileChange(this.pendingPaidProfileName,this.pendingPaidAvatarIndex,true);
+        this.pendingPaidProfileName = "";
+        this.pendingPaidAvatarIndex = "";
     }
 
     set_gold(num:number)
@@ -804,31 +888,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "确认修改个人信息")
         {
-            if(GameDataManager.getAccount().gold<5)
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"金币不足！");
-                Tool.GetChild(this.node,"确定修改个人信息").active = false;
-                return;
-            }
-            let strName = Tool.GetChild(this.node,"修改个人信息2/昵称").getComponent(cc.EditBox).string;
-            //是否选择头像
-            let imgName = Tool.GetChild(this.node,"修改个人信息2/头像/name").getComponent(cc.Label).string;
-            if(imgName != "")
-            {
-                GameDataManager.getAccount().reqSetProperty("photo",ImageManager.getInstance().NormalizeAvatarIndex(imgName));
-            }
-            else
-            {
-
-            }
-            
-            GameDataManager.getAccount().reqSetProperty("name",strName);
-
-            Tool.GetChild(this.node,"修改个人信息2").active = false;
-            Tool.GetChild(this.node,"确定修改个人信息").active = false;
-            let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"换头像\",\"money\":500}";
-            GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
-            ConfigManager.getInstance().SetOneHashKey("免费头像_"+GameDataManager.getAccount().guuid,"ok")
+            this.ConfirmPaidAvatarChange();
         }
         else if(button.node.name === "创建房间")
         {
@@ -954,12 +1014,12 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "头像")
         {
-            this.node.getChildByName("修改个人信息2").active = true;
-            Tool.GetChild(this.node,"修改个人信息2/昵称").getComponent(cc.EditBox).string = GameDataManager.getAccount().name;
+            let editNode = this.node.getChildByName("修改个人信息2");
+            editNode.active = true;
+            Tool.GetChild(editNode,"昵称").getComponent(cc.EditBox).string = GameDataManager.getAccount().name;
+            this.EnsureLocalAvatarSelector(editNode);
+            this.RefreshEditAvatarBatch(editNode);
             this.PreviewEditAvatar(this.EnsureAccountAvatar());
-
-           //查询是否第一次修改
-           ConfigManager.getInstance().GetOneHashKey("免费头像_"+GameDataManager.getAccount().guuid,"查询免费修改昵称")
         }
         else if(button.node.name.indexOf("公告")>=0)
         {
@@ -2208,10 +2268,6 @@ export default class panelMain extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,strContent);
             }
         }
-        else if(context === "查询免费修改昵称")
-        {
-            this.strFirstModifyName = strContent
-        }
     }
     public UserHash2Info(strMsg:string)
     {
@@ -2303,48 +2359,20 @@ export default class panelMain extends UIPanelViewBase {
                     }
         
         
-                    GameDataManager.getAccount().reqSetProperty("photo",ImageManager.getInstance().NormalizeAvatarIndex(imgName));
-                    GameDataManager.getAccount().reqSetProperty("name",strName);
-        
-                    Tool.GetChild(this.node,"修改个人信息").active = false;
-
-                    ConfigManager.getInstance().SetOneHashKey("免费头像_"+GameDataManager.getAccount().guuid,"ok")
+                    this.ApplyProfileChange(strName,imgName,false);
                 }
                 else if(Tool.GetChild(this.node,"修改个人信息2").active)
                 {
-                   // this.node.getChildByName("确定修改个人信息").active = true;
-
-                   if(this.strFirstModifyName !="") //是否是第一次设置头像
-                   {
-                        this.node.getChildByName("确定修改个人信息").active = true;
-                        return;
-                        // if(GameDataManager.getAccount().gold<5)
-                        // {
-                        //     UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"金币不足！");
-                        //     Tool.GetChild(this.node,"确定修改个人信息").active = false;
-                        //     return;
-                        // }
-                   }
-
                     let strName = Tool.GetChild(this.node,"修改个人信息2/昵称").getComponent(cc.EditBox).string;
-                    //是否选择头像
                     let imgName = Tool.GetChild(this.node,"修改个人信息2/头像/name").getComponent(cc.Label).string;
-                    if(imgName != "")
+                    let selectedAvatar = ImageManager.getInstance().NormalizeAvatarIndex(imgName);
+                    let currentAvatar = this.EnsureAccountAvatar();
+                    if(selectedAvatar != currentAvatar)
                     {
-                        GameDataManager.getAccount().reqSetProperty("photo",ImageManager.getInstance().NormalizeAvatarIndex(imgName));
+                        this.QueuePaidAvatarChange(strName,selectedAvatar);
+                        return;
                     }
-                    else
-                    {
-
-                    }
-                    
-                    GameDataManager.getAccount().reqSetProperty("name",strName);
-
-                    Tool.GetChild(this.node,"修改个人信息2").active = false;
-                    Tool.GetChild(this.node,"确定修改个人信息").active = false;
-                    let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"换头像\",\"money\":500}";
-                    GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
-                    ConfigManager.getInstance().SetOneHashKey("免费头像_"+GameDataManager.getAccount().guuid,"ok")
+                    this.ApplyProfileChange(strName,selectedAvatar,false);
                 }
             }
             else

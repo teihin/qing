@@ -47,6 +47,8 @@ export default class panelLogin extends UIPanelViewBase {
     private _registerAvatarLabel:cc.Label = null;
     private _registerAvatarPicker:cc.Node = null;
     private _registerAvatarIndex:string = "1";
+    private _registerAvatarBatch:Array<string> = [];
+    private _registerAvatarBySlot:{[slotName:string]:string} = {};
     private _registerSubmitting:boolean = false;
     private _registerRequest:XMLHttpRequest = null;
     onLoad(){
@@ -126,7 +128,7 @@ export default class panelLogin extends UIPanelViewBase {
     private openRegisterAvatarPicker()
     {
         this.blurRegisterInputs();
-        this.refreshRegisterAvatarPickerSelection();
+        this.refreshRegisterAvatarBatch();
         this._registerAvatarPicker.active = true;
         let dialog = Tool.GetChild(this._registerAvatarPicker,"头像选择框");
         dialog.stopAllActions();
@@ -147,13 +149,33 @@ export default class panelLogin extends UIPanelViewBase {
         let list = Tool.GetChild(this._registerAvatarPicker,"头像选择框/头像列表");
         if(list == null)
             return;
-        let selectedName = "头像选项" + this._registerAvatarIndex.padStart(2,"0");
         for(let item of list.children)
         {
             let selected = item.getChildByName("选中");
             if(selected != null)
-                selected.active = item.name === selectedName;
+                selected.active = this._registerAvatarBySlot[item.name] === this._registerAvatarIndex;
         }
+    }
+
+    private refreshRegisterAvatarBatch()
+    {
+        if(this._registerAvatarPicker == null)
+            return;
+        let list = Tool.GetChild(this._registerAvatarPicker,"头像选择框/头像列表");
+        if(list == null)
+            return;
+
+        let imageManager = ImageManager.getInstance();
+        this._registerAvatarBatch = imageManager.RandomAvatarBatch(20,this._registerAvatarBatch);
+        this._registerAvatarBySlot = {};
+        for(let index = 0; index < list.children.length && index < this._registerAvatarBatch.length; index++)
+        {
+            let item = list.children[index];
+            let avatarIndex = this._registerAvatarBatch[index];
+            this._registerAvatarBySlot[item.name] = avatarIndex;
+            imageManager.SetLocalAvatar(item.getComponent(cc.Sprite),avatarIndex);
+        }
+        this.refreshRegisterAvatarPickerSelection();
     }
 
     private onRegisterInputChanged(key:string)
@@ -396,10 +418,18 @@ export default class panelLogin extends UIPanelViewBase {
         {
             this.closeRegisterAvatarPicker();
         }
+        else if(button.node.name === "换一批头像")
+        {
+            this.refreshRegisterAvatarBatch();
+        }
         else if(button.node.name.indexOf("头像选项") === 0)
         {
-            this.setRegisterAvatar(button.node.name.substr("头像选项".length));
-            this.closeRegisterAvatarPicker();
+            let avatarIndex = this._registerAvatarBySlot[button.node.name];
+            if(ImageManager.getInstance().IsAvatarIndex(avatarIndex))
+            {
+                this.setRegisterAvatar(avatarIndex);
+                this.closeRegisterAvatarPicker();
+            }
         }
         else if(button.node.name === "内网" && cc.sys.isBrowser)
         {

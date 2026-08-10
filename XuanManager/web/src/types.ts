@@ -97,6 +97,123 @@ export interface BannedPlayersResponse {
   total: number;
 }
 
+export interface PlayerBalanceAdjustmentResult {
+  player: { playerId: string; name: string; gold: number; gold2: number; balance: number; roomId: number };
+  delta: number;
+  workOrder: string;
+  message: string;
+}
+
+export interface CurrentRoomPlayer {
+  playerId: string;
+  name: string;
+  balance: number;
+  clientStatus: string;
+}
+
+export interface CurrentRoomItem {
+  roomId: number;
+  roomType: string;
+  playerCount: number;
+  players: CurrentRoomPlayer[];
+}
+
+export interface CurrentRoomsResponse {
+  available: boolean;
+  items: CurrentRoomItem[];
+  total: number;
+  playerCount: number;
+  source: string;
+  message: string;
+  refreshedAt: string;
+}
+
+export interface PlayerOptimizationItem {
+  playerId: string;
+  loginName: string;
+  name: string;
+  managerId: string;
+  managerName: string;
+  configuredBy: string;
+  configuredSource: "admin" | "game" | "";
+  remainingCount: number;
+  chance: number;
+  active: boolean;
+  lastConfiguredAt: string;
+}
+
+export interface PlayerOptimizationSummary {
+  activePlayers: number;
+  totalRemaining: number;
+  averageChance: number;
+}
+
+export interface PlayerOptimizationsResponse {
+  items: PlayerOptimizationItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+  summary: PlayerOptimizationSummary;
+}
+
+export interface PaymentChannelConfig {
+  name: string;
+  enabled: boolean;
+  needsInfo: boolean;
+  infoFields: string[];
+  presetAmounts: string;
+  displayText: string;
+  banks: string;
+  allowCustom: boolean;
+  customMin: string;
+  customMax: string;
+  configured: boolean;
+  encodingError: boolean;
+}
+
+export interface PaymentConfigurationState {
+  channels: PaymentChannelConfig[];
+  paymentDomain: string;
+  requireBankBranch: boolean;
+  alipayWithdrawalText: string;
+  unionWithdrawalText: string;
+  usdtWithdrawalText: string;
+  revision: string;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string | null;
+}
+
+export interface ActivityItemState {
+  code: string;
+  name: string;
+  enabled: boolean;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  rewardRule: string;
+  allowClaim: boolean;
+  rankLimit: number;
+  playerText: string;
+}
+
+export interface ActivityPowerState {
+  one: string;
+  two: string;
+  five: string;
+  ten: string;
+  twenty: string;
+}
+
+export interface ActivityConfigurationState {
+  enabled: boolean;
+  activities: ActivityItemState[];
+  handRankPower: ActivityPowerState;
+  revision: string;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string | null;
+}
+
 export interface UserItem {
   id: number;
   username: string;
@@ -392,6 +509,9 @@ export interface TransactionItem {
   remark3: string;
   remark4: string;
   remark5: string;
+  maintenanceReason: string;
+  maintenanceOperator: string;
+  maintenanceWorkOrder: string;
 }
 
 export interface TransactionResponse {

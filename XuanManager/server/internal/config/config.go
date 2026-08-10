@@ -21,7 +21,13 @@ type Config struct {
 	DBName             string
 	DBUser             string
 	DBPassword         string
+	GameDBHost         string
+	GameDBPort         string
+	GameDBName         string
+	GameDBUser         string
+	GameDBPassword     string
 	GameAdminURL       string
+	GameExchangeSign   string
 	BootstrapAdminUser string
 	BootstrapAdminPass string
 	BootstrapAdminName string
@@ -48,7 +54,13 @@ func Load() (Config, error) {
 		DBName:             env("XUAN_DB_NAME", "webcm"),
 		DBUser:             strings.TrimSpace(os.Getenv("XUAN_DB_USER")),
 		DBPassword:         os.Getenv("XUAN_DB_PASSWORD"),
+		GameDBHost:         env("XUAN_GAME_DB_HOST", "127.0.0.1"),
+		GameDBPort:         env("XUAN_GAME_DB_PORT", "3306"),
+		GameDBName:         env("XUAN_GAME_DB_NAME", "kbedm"),
+		GameDBUser:         strings.TrimSpace(os.Getenv("XUAN_GAME_DB_USER")),
+		GameDBPassword:     os.Getenv("XUAN_GAME_DB_PASSWORD"),
 		GameAdminURL:       env("XUAN_GAME_ADMIN_URL", "http://127.0.0.1:8890"),
+		GameExchangeSign:   strings.TrimSpace(os.Getenv("XUAN_GAME_EXCHANGE_SIGN")),
 		BootstrapAdminUser: strings.TrimSpace(os.Getenv("XUAN_BOOTSTRAP_ADMIN_USERNAME")),
 		BootstrapAdminPass: os.Getenv("XUAN_BOOTSTRAP_ADMIN_PASSWORD"),
 		BootstrapAdminName: env("XUAN_BOOTSTRAP_ADMIN_NAME", "超级管理员"),
@@ -62,6 +74,15 @@ func Load() (Config, error) {
 	}
 	if cfg.DBName != "webcm" {
 		return Config{}, fmt.Errorf("XUAN_DB_NAME 必须是 webcm")
+	}
+	if cfg.GameDBUser == "" || cfg.GameDBPassword == "" {
+		return Config{}, fmt.Errorf("必须通过运行环境提供 XUAN_GAME_DB_USER 和 XUAN_GAME_DB_PASSWORD")
+	}
+	if cfg.GameDBHost != "127.0.0.1" && cfg.GameDBHost != "localhost" {
+		return Config{}, fmt.Errorf("XUAN_GAME_DB_HOST 只允许 127.0.0.1 或 localhost")
+	}
+	if cfg.GameDBName != "kbedm" {
+		return Config{}, fmt.Errorf("XUAN_GAME_DB_NAME 必须是 kbedm")
 	}
 	if err := validateGameAdminURL(cfg.GameAdminURL); err != nil {
 		return Config{}, err
@@ -84,12 +105,20 @@ func validateGameAdminURL(raw string) error {
 }
 
 func (c Config) MySQLDSN() string {
+	return mysqlDSN(c.DBUser, c.DBPassword, c.DBHost, c.DBPort, c.DBName)
+}
+
+func (c Config) GameMySQLDSN() string {
+	return mysqlDSN(c.GameDBUser, c.GameDBPassword, c.GameDBHost, c.GameDBPort, c.GameDBName)
+}
+
+func mysqlDSN(user, password, host, port, name string) string {
 	mc := mysql.NewConfig()
-	mc.User = c.DBUser
-	mc.Passwd = c.DBPassword
+	mc.User = user
+	mc.Passwd = password
 	mc.Net = "tcp"
-	mc.Addr = c.DBHost + ":" + c.DBPort
-	mc.DBName = c.DBName
+	mc.Addr = host + ":" + port
+	mc.DBName = name
 	mc.ParseTime = true
 	mc.Loc = time.Local
 	mc.Timeout = 5 * time.Second

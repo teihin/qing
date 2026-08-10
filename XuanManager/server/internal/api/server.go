@@ -32,6 +32,7 @@ const principalKey contextKey = "xuan-principal"
 
 type Server struct {
 	db                  *sql.DB
+	gameDB              *sql.DB
 	cfg                 config.Config
 	mux                 *http.ServeMux
 	logger              *slog.Logger
@@ -42,8 +43,13 @@ type Server struct {
 type handlerFunc func(http.ResponseWriter, *http.Request, principal)
 
 func New(db *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
+	return NewWithGameDB(db, db, cfg, logger)
+}
+
+func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 	s := &Server{
 		db:                  db,
+		gameDB:              gameDB,
 		cfg:                 cfg,
 		mux:                 http.NewServeMux(),
 		logger:              logger,
@@ -65,7 +71,13 @@ func (s *Server) routes() {
 
 	s.mux.Handle("GET /api/dashboard/summary", s.authorized("dashboard.view", false, s.handleDashboard))
 	s.mux.Handle("GET /api/game/players", s.authorized("game.player.view", false, s.handleListPlayers))
+	s.mux.Handle("POST /api/game/players/{playerId}/balance-adjustments", s.authorized("game.player.balance_adjust", true, s.handleAdjustPlayerBalance))
 	s.mux.Handle("GET /api/game/players/{playerId}/rooms", s.authorized("game.room_record.view", false, s.handlePlayerRoomHistory))
+	s.mux.Handle("GET /api/game/player-optimization", s.authorized("game.player_optimization.view", false, s.handleListPlayerOptimizations))
+	s.mux.Handle("GET /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.view", false, s.handleGetPlayerOptimization))
+	s.mux.Handle("POST /api/game/player-optimization", s.authorized("game.player_optimization.create", true, s.handleCreatePlayerOptimization))
+	s.mux.Handle("PUT /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.update", true, s.handleUpdatePlayerOptimization))
+	s.mux.Handle("DELETE /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.delete", true, s.handleDeletePlayerOptimization))
 	s.mux.Handle("GET /api/game/agents", s.authorized("game.agent.view", false, s.handleListAgents))
 	s.mux.Handle("GET /api/game/agents/{agentId}/relationship", s.authorized("game.agent.view", false, s.handleAgentRelationship))
 	s.mux.Handle("GET /api/game/agents/{agentId}/children", s.authorized("game.agent.view", false, s.handleAgentChildren))
@@ -76,12 +88,19 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/bans", s.authorized("game.ban.view", false, s.handleListBannedPlayers))
 	s.mux.Handle("POST /api/game/bans", s.authorized("game.ban.create", true, s.handleCreatePlayerBan))
 	s.mux.Handle("POST /api/game/bans/{playerId}/unban", s.authorized("game.ban.remove", true, s.handleRemovePlayerBan))
+	s.mux.Handle("GET /api/game/room-maintenance", s.authorized("game.room_maintenance.view", false, s.handleListCurrentRooms))
+	s.mux.Handle("POST /api/game/room-maintenance/dissolve-all", s.authorized("game.room_maintenance.dissolve_all", true, s.handleDissolveAllRooms))
+	s.mux.Handle("POST /api/game/room-maintenance/{roomId}/dissolve", s.authorized("game.room_maintenance.dissolve", true, s.handleDissolveRoom))
 	s.mux.Handle("GET /api/configuration/announcement", s.authorized("configuration.announcement.view", false, s.handleGetGameAnnouncement))
 	s.mux.Handle("PUT /api/configuration/announcement", s.authorized("configuration.announcement.update", true, s.handleUpdateGameAnnouncement))
 	s.mux.Handle("GET /api/configuration/notifications", s.authorized("configuration.notification.view", false, s.handleListGameNotifications))
 	s.mux.Handle("POST /api/configuration/notifications", s.authorized("configuration.notification.send", true, s.handleSendGameNotification))
 	s.mux.Handle("GET /api/configuration/reward-pools", s.authorized("configuration.reward_pool.view", false, s.handleGetRewardPools))
 	s.mux.Handle("PUT /api/configuration/reward-pools", s.authorized("configuration.reward_pool.update", true, s.handleUpdateRewardPools))
+	s.mux.Handle("GET /api/configuration/payments", s.authorized("configuration.payment.view", false, s.handleGetPaymentConfiguration))
+	s.mux.Handle("PUT /api/configuration/payments", s.authorized("configuration.payment.update", true, s.handleUpdatePaymentConfiguration))
+	s.mux.Handle("GET /api/configuration/activities", s.authorized("configuration.activity.view", false, s.handleGetActivityConfiguration))
+	s.mux.Handle("PUT /api/configuration/activities", s.authorized("configuration.activity.update", true, s.handleUpdateActivityConfiguration))
 	s.mux.Handle("GET /api/users", s.authorized("user.view", false, s.handleListUsers))
 	s.mux.Handle("GET /api/users/role-options", s.authorized("user.view", false, s.handleRoleOptions))
 	s.mux.Handle("POST /api/users", s.authorized("user.create", true, s.handleCreateUser))
@@ -193,6 +212,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 	if err := s.db.PingContext(ctx); err != nil {
 		writeError(w, http.StatusServiceUnavailable, "DB_UNAVAILABLE", "数据库暂不可用")
+		return
+	}
+	if err := s.gameDB.PingContext(ctx); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "GAME_DB_UNAVAILABLE", "游戏数据库暂不可用")
 		return
 	}
 	writeData(w, http.StatusOK, map[string]any{"status": "ok", "service": "XuanManager"})

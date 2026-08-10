@@ -4,6 +4,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseTransactionFilters(t *testing.T) {
@@ -21,6 +22,37 @@ func TestParseTransactionFilters(t *testing.T) {
 	}
 	if !strings.Contains(where, "w.user_guuid = ?") || !strings.Contains(where, "ROUND(w.new_money - w.old_money, 2) < 0") || len(args) != 11 {
 		t.Fatalf("unexpected where clause or args: %s %#v", where, args)
+	}
+}
+
+func TestMatchBalanceAdjustmentAuditsAddsMaintenanceReason(t *testing.T) {
+	createdAt := time.Date(2026, 8, 10, 8, 14, 36, 0, time.Local)
+	items := []transactionItem{{
+		ID: 943, OccurredAt: "2026-08-10 08:14:36", OptionType: "补分",
+		OldBalance: 2000, NewBalance: 3000, Change: 1000,
+	}}
+	audits := []balanceAdjustmentAuditRecord{{
+		OperatorName: "admin999", CreatedAt: createdAt,
+		Request: balanceAdjustmentAuditRequest{Action: "add", Amount: 1000, Reason: "客服核对后补发金币", WorkOrder: "BFXM2026081008143631ab31"},
+		Before:  balanceAdjustmentAuditSnapshot{Balance: 2000}, After: balanceAdjustmentAuditSnapshot{Balance: 3000},
+	}}
+
+	matchBalanceAdjustmentAudits(items, audits)
+	if items[0].MaintenanceReason != "客服核对后补发金币" || items[0].MaintenanceOperator != "admin999" || items[0].MaintenanceWorkOrder == "" {
+		t.Fatalf("maintenance fields were not attached: %#v", items[0])
+	}
+}
+
+func TestMatchBalanceAdjustmentAuditsDoesNotAttachUnrelatedAudit(t *testing.T) {
+	items := []transactionItem{{ID: 1, OccurredAt: "2026-08-10 08:14:36", OldBalance: 2000, NewBalance: 3000, Change: 1000}}
+	audits := []balanceAdjustmentAuditRecord{{
+		OperatorName: "admin999", CreatedAt: time.Date(2026, 8, 10, 8, 14, 36, 0, time.Local),
+		Request: balanceAdjustmentAuditRequest{Action: "subtract", Reason: "不应关联"},
+		Before:  balanceAdjustmentAuditSnapshot{Balance: 2000}, After: balanceAdjustmentAuditSnapshot{Balance: 3000},
+	}}
+	matchBalanceAdjustmentAudits(items, audits)
+	if items[0].MaintenanceReason != "" {
+		t.Fatalf("unrelated audit was attached: %#v", items[0])
 	}
 }
 

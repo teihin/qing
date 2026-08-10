@@ -226,7 +226,7 @@ func normalizeGameRegistration(input gameRegistrationRequest) (normalizedGameReg
 		return normalizedGameRegistration{}, errors.New("昵称只能使用中文或英文字母")
 	}
 	if !isRegistrationAvatarIndex(registration.AvatarIndex) {
-		return normalizedGameRegistration{}, errors.New("头像编号必须为 1 到 20")
+		return normalizedGameRegistration{}, errors.New("头像编号必须为 1 到 100")
 	}
 	if strings.TrimSpace(registration.Password) != registration.Password {
 		return normalizedGameRegistration{}, errors.New("登录密码首尾不能包含空格")
@@ -291,7 +291,7 @@ func isChineseOrEnglishNickname(value string) bool {
 
 func isRegistrationAvatarIndex(value string) bool {
 	index, err := strconv.Atoi(value)
-	return err == nil && strconv.Itoa(index) == value && index >= 1 && index <= 20
+	return err == nil && strconv.Itoa(index) == value && index >= 1 && index <= 100
 }
 
 func (s *Server) applyRegistrationAvatar(registrationID int64, avatarIndex string) {

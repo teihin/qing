@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -13,7 +16,7 @@ const (
 	transactionItemCondition        = `(w.option_type LIKE '%道具%' OR w.option_type LIKE '%商城%' OR w.option_type LIKE '%购买%' OR CONCAT_WS(' ', w.remark1, w.remark2, w.remark3, w.remark4, w.remark5) LIKE '%道具%' OR CONCAT_WS(' ', w.remark1, w.remark2, w.remark3, w.remark4, w.remark5) LIKE '%商城%')`
 	transactionGameCondition        = `(w.option_type IN ('带入', '打局', '结算', '芒皮', '揍芒', '休芒') OR w.option_type LIKE '%输赢%' OR w.option_type LIKE '%战绩%' OR w.option_type LIKE '%下注%' OR w.option_type LIKE '%游戏%')`
 	transactionConsumptionCondition = `(w.option_type LIKE '%消费%' OR w.option_type LIKE '%支付%' OR w.option_type LIKE '%扣费%')`
-	transactionAdjustmentCondition  = `(w.option_type LIKE '%充值%' OR w.option_type LIKE '%补分%' OR w.option_type LIKE '%退款%' OR w.option_type LIKE '%赠送%' OR w.option_type LIKE '%红包%' OR w.option_type LIKE '%转账%' OR w.option_type LIKE '%提现%')`
+	transactionAdjustmentCondition  = `(w.option_type LIKE '%充值%' OR w.option_type LIKE '%补分%' OR w.option_type LIKE '%扣分%' OR w.option_type LIKE '%退款%' OR w.option_type LIKE '%赠送%' OR w.option_type LIKE '%红包%' OR w.option_type LIKE '%转账%' OR w.option_type LIKE '%提现%')`
 	transactionCategorySQL          = `CASE
 WHEN ` + transactionItemCondition + ` THEN 'item'
 WHEN ` + transactionGameCondition + ` THEN 'game'
@@ -57,24 +60,46 @@ type transactionOptionType struct {
 }
 
 type transactionItem struct {
-	ID             int64   `json:"id"`
-	OccurredAt     string  `json:"occurredAt"`
-	Date           string  `json:"date"`
-	Time           string  `json:"time"`
-	PlayerName     string  `json:"playerName"`
-	PlayerID       string  `json:"playerId"`
-	OptionType     string  `json:"optionType"`
-	Category       string  `json:"category"`
-	Direction      string  `json:"direction"`
-	OldBalance     float64 `json:"oldBalance"`
-	BusinessAmount float64 `json:"businessAmount"`
-	NewBalance     float64 `json:"newBalance"`
-	Change         float64 `json:"change"`
-	Remark1        string  `json:"remark1"`
-	Remark2        string  `json:"remark2"`
-	Remark3        string  `json:"remark3"`
-	Remark4        string  `json:"remark4"`
-	Remark5        string  `json:"remark5"`
+	ID                   int64   `json:"id"`
+	OccurredAt           string  `json:"occurredAt"`
+	Date                 string  `json:"date"`
+	Time                 string  `json:"time"`
+	PlayerName           string  `json:"playerName"`
+	PlayerID             string  `json:"playerId"`
+	OptionType           string  `json:"optionType"`
+	Category             string  `json:"category"`
+	Direction            string  `json:"direction"`
+	OldBalance           float64 `json:"oldBalance"`
+	BusinessAmount       float64 `json:"businessAmount"`
+	NewBalance           float64 `json:"newBalance"`
+	Change               float64 `json:"change"`
+	Remark1              string  `json:"remark1"`
+	Remark2              string  `json:"remark2"`
+	Remark3              string  `json:"remark3"`
+	Remark4              string  `json:"remark4"`
+	Remark5              string  `json:"remark5"`
+	MaintenanceReason    string  `json:"maintenanceReason"`
+	MaintenanceOperator  string  `json:"maintenanceOperator"`
+	MaintenanceWorkOrder string  `json:"maintenanceWorkOrder"`
+}
+
+type balanceAdjustmentAuditRequest struct {
+	Action    string `json:"action"`
+	Amount    int64  `json:"amount"`
+	Reason    string `json:"reason"`
+	WorkOrder string `json:"workOrder"`
+}
+
+type balanceAdjustmentAuditSnapshot struct {
+	Balance float64 `json:"balance"`
+}
+
+type balanceAdjustmentAuditRecord struct {
+	OperatorName string
+	CreatedAt    time.Time
+	Request      balanceAdjustmentAuditRequest
+	Before       balanceAdjustmentAuditSnapshot
+	After        balanceAdjustmentAuditSnapshot
 }
 
 func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request, _ principal) {
@@ -166,6 +191,11 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取金币变化数据失败")
 		return
 	}
+	if err := s.attachBalanceAdjustmentAudit(r.Context(), filters.PlayerID, items); err != nil {
+		s.logger.Error("attach balance adjustment audit", "error", err, "playerId", filters.PlayerID)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取客服维护原因失败")
+		return
+	}
 
 	optionTypes, err := s.queryTransactionOptionTypes(r, filters.PlayerID)
 	if err != nil {
@@ -177,6 +207,95 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		"player": player, "summary": summary, "optionTypes": optionTypes,
 		"items": items, "page": page, "pageSize": size, "total": summary.RecordCount,
 	})
+}
+
+func (s *Server) attachBalanceAdjustmentAudit(ctx context.Context, playerID string, items []transactionItem) error {
+	if len(items) == 0 {
+		return nil
+	}
+	startDate, endDate := items[0].Date, items[0].Date
+	for _, item := range items[1:] {
+		if item.Date < startDate {
+			startDate = item.Date
+		}
+		if item.Date > endDate {
+			endDate = item.Date
+		}
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT operator_name, request_json, before_json, after_json, created_at
+FROM mgr_audit_log
+WHERE action = 'game.player.balance_adjust' AND target_type = 'game_player' AND target_id = ?
+  AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)
+ORDER BY created_at DESC, id DESC`, playerID, startDate, endDate)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	audits := make([]balanceAdjustmentAuditRecord, 0)
+	for rows.Next() {
+		var audit balanceAdjustmentAuditRecord
+		var requestJSON string
+		var beforeJSON, afterJSON sql.NullString
+		if err := rows.Scan(&audit.OperatorName, &requestJSON, &beforeJSON, &afterJSON, &audit.CreatedAt); err != nil {
+			return err
+		}
+		if json.Unmarshal([]byte(requestJSON), &audit.Request) != nil ||
+			!beforeJSON.Valid || json.Unmarshal([]byte(beforeJSON.String), &audit.Before) != nil ||
+			strings.TrimSpace(audit.Request.Reason) == "" {
+			continue
+		}
+		if !afterJSON.Valid || json.Unmarshal([]byte(afterJSON.String), &audit.After) != nil {
+			audit.After.Balance = audit.Before.Balance
+			if audit.Request.Action == "add" {
+				audit.After.Balance += float64(audit.Request.Amount)
+			} else if audit.Request.Action == "subtract" {
+				audit.After.Balance -= float64(audit.Request.Amount)
+			} else {
+				continue
+			}
+		}
+		audits = append(audits, audit)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	matchBalanceAdjustmentAudits(items, audits)
+	return nil
+}
+
+func matchBalanceAdjustmentAudits(items []transactionItem, audits []balanceAdjustmentAuditRecord) {
+	used := make([]bool, len(items))
+	for _, audit := range audits {
+		bestIndex := -1
+		bestDistance := 31 * time.Second
+		for index := range items {
+			item := &items[index]
+			if used[index] || math.Abs(item.OldBalance-audit.Before.Balance) > 0.005 || math.Abs(item.NewBalance-audit.After.Balance) > 0.005 {
+				continue
+			}
+			if audit.Request.Action == "add" && item.Change <= 0 || audit.Request.Action == "subtract" && item.Change >= 0 {
+				continue
+			}
+			occurredAt, err := time.ParseInLocation("2006-01-02 15:04:05", item.OccurredAt, audit.CreatedAt.Location())
+			if err != nil {
+				continue
+			}
+			distance := audit.CreatedAt.Sub(occurredAt)
+			if distance < 0 {
+				distance = -distance
+			}
+			if distance <= 30*time.Second && distance < bestDistance {
+				bestIndex, bestDistance = index, distance
+			}
+		}
+		if bestIndex < 0 {
+			continue
+		}
+		used[bestIndex] = true
+		items[bestIndex].MaintenanceReason = audit.Request.Reason
+		items[bestIndex].MaintenanceOperator = audit.OperatorName
+		items[bestIndex].MaintenanceWorkOrder = audit.Request.WorkOrder
+	}
 }
 
 func parseTransactionFilters(r *http.Request) (transactionFilters, error) {

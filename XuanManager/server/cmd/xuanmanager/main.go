@@ -40,6 +40,19 @@ func main() {
 		logger.Error("database unavailable", "error", err)
 		os.Exit(1)
 	}
+	gameDB, err := sql.Open("mysql", cfg.GameMySQLDSN())
+	if err != nil {
+		logger.Error("open game database", "error", err)
+		os.Exit(1)
+	}
+	defer gameDB.Close()
+	gameDB.SetMaxOpenConns(5)
+	gameDB.SetMaxIdleConns(2)
+	gameDB.SetConnMaxLifetime(5 * time.Minute)
+	if err := gameDB.PingContext(ctx); err != nil {
+		logger.Error("game database unavailable", "error", err)
+		os.Exit(1)
+	}
 	if err := migrations.Apply(ctx, db); err != nil {
 		logger.Error("database migration failed", "error", err)
 		os.Exit(1)
@@ -51,7 +64,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.New(db, cfg, logger),
+		Handler:           api.NewWithGameDB(db, gameDB, cfg, logger),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

@@ -11,7 +11,7 @@ export default class ImageManager extends cc.Component {
 
     // Creator 2.4.13快速编译对已注册ccclass新增静态成员可能保留旧构造器，
     // 因此除既有getInstance外，头像工具统一使用组件实例成员。
-    public readonly AVATAR_COUNT:number = 20;
+    public readonly AVATAR_COUNT:number = 100;
     private readonly AVATAR_ROOT:string = "avatars/头像";
 
     // 本地头像只按序号缓存；用户ID只保存其当前头像序号，不再缓存网络图片。
@@ -43,7 +43,7 @@ export default class ImageManager extends cc.Component {
         KBEngine.Event.register("UserList", this, "OnAccountList");
     }
 
-    /** 只有纯数字1～20才是新头像字段；旧网址、文件名和其他字符串都视为无效。 */
+    /** 只有纯数字1～100才是新头像字段；旧网址、文件名和其他字符串都视为无效。 */
     public IsAvatarIndex(value:any):boolean
     {
         if(value === null || value === undefined)
@@ -66,6 +66,47 @@ export default class ImageManager extends cc.Component {
     public RandomAvatarIndex():string
     {
         return (Math.floor(Math.random() * this.AVATAR_COUNT) + 1).toString();
+    }
+
+    /**
+     * 返回不重复的随机头像批次。刷新时可传入上一批序号，优先做到整批不重复；
+     * 当排除后的可选数量不足时，再从完整头像池补齐。
+     */
+    public RandomAvatarBatch(count:number = 20, exclude:Array<string> = []):Array<string>
+    {
+        let targetCount = Math.max(0,Math.min(Math.floor(count),this.AVATAR_COUNT));
+        let excluded = new Set<string>();
+        for(let value of exclude)
+        {
+            if(this.IsAvatarIndex(value))
+                excluded.add(this.NormalizeAvatarIndex(value));
+        }
+
+        let candidates:Array<string> = [];
+        for(let index = 1; index <= this.AVATAR_COUNT; index++)
+        {
+            let avatarIndex = index.toString();
+            if(!excluded.has(avatarIndex))
+                candidates.push(avatarIndex);
+        }
+        if(candidates.length < targetCount)
+        {
+            for(let index = 1; index <= this.AVATAR_COUNT; index++)
+            {
+                let avatarIndex = index.toString();
+                if(excluded.has(avatarIndex))
+                    candidates.push(avatarIndex);
+            }
+        }
+
+        for(let index = candidates.length - 1; index > 0; index--)
+        {
+            let randomIndex = Math.floor(Math.random() * (index + 1));
+            let temp = candidates[index];
+            candidates[index] = candidates[randomIndex];
+            candidates[randomIndex] = temp;
+        }
+        return candidates.slice(0,targetCount);
     }
 
     public GetAvatarResourcePath(value:any):string

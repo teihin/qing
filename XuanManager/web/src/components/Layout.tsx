@@ -14,10 +14,14 @@ const iconText: Record<string, string> = {
   transactions: "账",
   "room-records": "绩",
   bans: "封",
+  "room-maintenance": "房",
+  "player-optimization": "优",
   configuration: "配",
   announcement: "公",
   notifications: "通",
   "reward-pools": "池",
+  payments: "支",
+  activities: "活",
 };
 
 export default function Layout({ session, route, onNavigate, onChangePassword, onLogout, children }: {

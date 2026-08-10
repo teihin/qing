@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError } from "../api";
+import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
-import type { PlayerItem, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, TransactionItem, TransactionResponse } from "../types";
+import type { PlayerBalanceAdjustmentResult, PlayerItem, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, TransactionItem, TransactionResponse } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -57,6 +57,7 @@ export default function PlayersPage({ can, notify }: { can: (permission: string)
   const [loading, setLoading] = useState(true);
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<PlayerItem | null>(null);
+  const [adjusting, setAdjusting] = useState<PlayerItem | null>(null);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -99,8 +100,8 @@ export default function PlayersPage({ can, notify }: { can: (permission: string)
       <PageHeader
         eyebrow="GAME PLAYERS"
         title="玩家管理"
-        description="从游戏数据库只读查询玩家账号、余额、代理关系和客户端状态。"
-        actions={<span className="readonly-badge"><i />只读数据</span>}
+        description="查询玩家账号、余额、代理关系和客户端状态；客服可按独立权限执行金币加减分。"
+        actions={<span className="readonly-badge"><i />资金操作全程审计</span>}
       />
 
       <section className="panel player-filter-panel">
@@ -160,7 +161,7 @@ export default function PlayersPage({ can, notify }: { can: (permission: string)
                     <td>{player.agentId ? <><strong>{player.agentName || "未知代理"}</strong><small className="cell-subtitle">ID：{player.agentId}</small></> : <span className="muted">无直属代理</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
                     <td>{formatDate(player.registrationTime)}<small className="cell-subtitle">最近：{formatDate(player.lastLoginAt)}</small></td>
-                    <td><div className="row-actions"><button onClick={() => setSelected(player)}>查看详情</button></div></td>
+                    <td><div className="row-actions">{can("game.player.balance_adjust") && <button className="success-link" onClick={() => setAdjusting(player)}>加减分</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -179,8 +180,29 @@ export default function PlayersPage({ can, notify }: { can: (permission: string)
       </section>
 
       {selected && <PlayerDetail player={selected} can={can} notify={notify} onClose={() => setSelected(null)} />}
+      {adjusting && <BalanceAdjustmentModal player={adjusting} onClose={() => setAdjusting(null)} onDone={(result) => { setAdjusting(null); notify(result.message); void load(); }} />}
     </div>
   );
+}
+
+function BalanceAdjustmentModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (result: PlayerBalanceAdjustmentResult) => void }) {
+  const [action, setAction] = useState<"add" | "subtract">("add");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const numericAmount = Number(amount);
+  const targetBalance = player.balance + (action === "add" ? numericAmount || 0 : -(numericAmount || 0));
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await api<PlayerBalanceAdjustmentResult>(`/api/game/players/${encodeURIComponent(player.playerId)}/balance-adjustments`, { method: "POST", ...jsonBody({ action, amount: numericAmount, reason, expectedBalance: player.balance, confirm: confirmed }) });
+      onDone(result);
+    } catch (reasonValue) { setError(reasonValue instanceof ApiError ? reasonValue.message : "玩家加减分失败"); } finally { setBusy(false); }
+  };
+  const invalid = !Number.isInteger(numericAmount) || numericAmount < 1 || numericAmount > 1000000 || reason.trim().length < 2 || !confirmed || (action === "subtract" && numericAmount > player.balance);
+  return <Modal title={`玩家加减分 · ${player.name || player.playerId}`} eyebrow="CUSTOMER SERVICE ADJUSTMENT" onClose={onClose}><div className="balance-adjust-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>ID {player.playerId} · 当前金币 {balanceFormatter.format(player.balance)}</p></div>{player.roomId > 0 && <em>房间 {player.roomId}</em>}</div>{player.roomId > 0 && <div className="form-error"><span>!</span>玩家当前正在房间中。为避免桌上金币与账号金币不同步，服务端会拒绝提交。</div>}{error && <div className="form-error"><span>!</span>{error}</div>}<div className="balance-action-tabs"><button type="button" className={action === "add" ? "is-active" : ""} onClick={() => setAction("add")}>增加金币</button><button type="button" className={action === "subtract" ? "is-active is-danger" : ""} onClick={() => setAction("subtract")}>扣减金币</button></div><div className="form-grid form-grid--single"><Field label="本次金币数量" hint="只支持整数金币；单次 1 到 1,000,000"><input type="number" min="1" max="1000000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入数量" /></Field><Field label="客服维护原因" hint="原因会显示在玩家资金情况和交易记录中，并同时进入操作审计"><textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：客服工单补偿，核对编号……" /></Field></div><div className={`balance-change-preview ${action === "subtract" ? "is-subtract" : ""}`}><div><span>操作前</span><strong>{balanceFormatter.format(player.balance)}</strong></div><i>→</i><div><span>预计操作后</span><strong>{balanceFormatter.format(targetBalance)}</strong></div></div><label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID、操作方向、金币数量和维护原因</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={action === "subtract" ? "danger" : "primary"} disabled={invalid || busy || player.roomId > 0} onClick={() => void submit()}>{busy ? "正在提交并回读…" : action === "add" ? "确认增加金币" : "确认扣减金币"}</Button></div></Modal>;
 }
 
 type PlayerDetailTab = "profile" | "finance" | "rooms";
@@ -297,7 +319,7 @@ function PlayerFinanceTab({ player, data, page, loading, onPage }: { player: Pla
       <ProfileMetric label="金币净变化" value={formatPlayerScore(data.summary.netChange)} note={`游戏相关 ${formatPlayerScore(data.summary.gameNet)}`} tone={data.summary.netChange >= 0 ? "win" : "loss"} />
     </section>
     <section className="player-profile-data-section">
-      <div className="player-profile-section-title"><div><h3>全部金币流水</h3><p>显示每笔金币变更前后余额、实际增减和关联房间</p></div><button type="button" onClick={() => { window.location.hash = `/game/transactions?playerId=${encodeURIComponent(player.playerId)}`; }}>进入交易记录模块</button></div>
+      <div className="player-profile-section-title"><div><h3>全部金币流水</h3><p>显示每笔金币变更前后余额、实际增减、关联内容和客服维护原因</p></div><button type="button" onClick={() => { window.location.hash = `/game/transactions?playerId=${encodeURIComponent(player.playerId)}`; }}>进入交易记录模块</button></div>
       {data.items.length === 0 ? <EmptyState title="该玩家没有金币流水" description="服务器主金币流水中暂时没有这个玩家的记录。" /> : <div className="table-wrap"><table className="player-finance-table"><thead><tr><th>时间</th><th>业务类型</th><th>实际变化</th><th>变更前 → 变更后</th><th>关联内容</th></tr></thead><tbody>{data.items.map((item) => <PlayerFinanceRow key={item.id} item={item} />)}</tbody></table></div>}
       <ProfilePagination page={page} totalPages={totalPages} total={data.total} loading={loading} onPage={onPage} unit="条流水" />
     </section>
@@ -305,8 +327,9 @@ function PlayerFinanceTab({ player, data, page, loading, onPage }: { player: Pla
 }
 
 function PlayerFinanceRow({ item }: { item: TransactionItem }) {
-  const context = [item.remark1 ? `房间 ${item.remark1}` : "", item.remark3 && item.remark3 !== "0" ? `第 ${item.remark3} 局` : "", item.remark4].filter(Boolean).join(" · ");
-  return <tr><td><strong>{item.date}</strong><small className="cell-subtitle">{item.time}</small></td><td><strong>{item.optionType}</strong><small className="cell-subtitle">{financeCategoryLabel(item.category)}</small></td><td><strong className={`room-score room-score--${item.change > 0 ? "win" : item.change < 0 ? "loss" : "draw"}`}>{formatPlayerScore(item.change)}</strong></td><td><span className="balance-route">{balanceFormatter.format(item.oldBalance)}<i>→</i><strong>{balanceFormatter.format(item.newBalance)}</strong></span></td><td><span className="player-history-context">{context || "无关联说明"}</span></td></tr>;
+  const roomContext = [item.remark1 ? `房间 ${item.remark1}` : "", item.remark3 && item.remark3 !== "0" ? `第 ${item.remark3} 局` : "", item.remark4].filter(Boolean).join(" · ");
+  const context = item.maintenanceReason ? `维护原因：${item.maintenanceReason}${item.maintenanceOperator ? ` · 操作人：${item.maintenanceOperator}` : ""}` : roomContext;
+  return <tr><td><strong>{item.date}</strong><small className="cell-subtitle">{item.time}</small></td><td><strong>{item.optionType}</strong><small className="cell-subtitle">{financeCategoryLabel(item.category)}</small></td><td><strong className={`room-score room-score--${item.change > 0 ? "win" : item.change < 0 ? "loss" : "draw"}`}>{formatPlayerScore(item.change)}</strong></td><td><span className="balance-route">{balanceFormatter.format(item.oldBalance)}<i>→</i><strong>{balanceFormatter.format(item.newBalance)}</strong></span></td><td><span className={`player-history-context ${item.maintenanceReason ? "is-maintenance" : ""}`} title={context || undefined}>{context || "无关联说明"}</span></td></tr>;
 }
 
 function PlayerRoomsTab({ player, data, page, loading, onPage }: { player: PlayerItem; data: PlayerRoomHistoryResponse | null; page: number; loading: boolean; onPage: (page: number) => void }) {

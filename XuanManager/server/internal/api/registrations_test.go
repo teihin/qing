@@ -20,13 +20,13 @@ func TestNormalizeGameRegistration(t *testing.T) {
 		Nickname:       " 测试Player ",
 		LoginName:      "User01",
 		Password:       "abc123!",
-		AvatarIndex:    "12",
+		AvatarIndex:    "100",
 	}
 	got, err := normalizeGameRegistration(input)
 	if err != nil {
 		t.Fatalf("normalize registration: %v", err)
 	}
-	if got.InvitationCode != "648425" || got.Nickname != "测试Player" || got.LoginName != "User01" || got.Password != "abc123!" || got.AvatarIndex != "12" {
+	if got.InvitationCode != "648425" || got.Nickname != "测试Player" || got.LoginName != "User01" || got.Password != "abc123!" || got.AvatarIndex != "100" {
 		t.Fatalf("unexpected registration: %#v", got)
 	}
 }
@@ -62,7 +62,7 @@ func TestNormalizeGameRegistrationRejectsInvalidInput(t *testing.T) {
 		{InvitationCode: "648425", Nickname: "玩家", LoginName: "900101", Password: " 111111"},
 		{InvitationCode: "648425", UpperGUID: "648426", Nickname: "玩家", LoginName: "900101", Password: "111111"},
 		{InvitationCode: "648425", Nickname: "玩家", LoginName: "900101", Password: "111111", AvatarIndex: "0"},
-		{InvitationCode: "648425", Nickname: "玩家", LoginName: "900101", Password: "111111", AvatarIndex: "21"},
+		{InvitationCode: "648425", Nickname: "玩家", LoginName: "900101", Password: "111111", AvatarIndex: "101"},
 		{InvitationCode: "648425", Nickname: "玩家", LoginName: "900101", Password: "111111", AvatarIndex: "01"},
 		{InvitationCode: "648425", Nickname: "玩家", LoginName: "900101", Password: "111111", AvatarIndex: "2", Photo: "3"},
 	}

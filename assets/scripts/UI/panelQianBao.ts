@@ -1154,38 +1154,6 @@ export default class panelQianBao extends UIPanelViewBase {
             //Tool.GetChild(this.node,"容器/充值/根/自行输入").active = data["bOpenInput"];
             //Tool.GetChild(this.node,"容器/充值/根/自行输入/inputrange").getComponent(cc.Label).string = data["inputrange"];
 
-            //校验是否有历史订单
-            Tool.HTTP_GET("http://"+WEB_TX_IP+"/api/JsonPay/getLastOrder?uuid="+GameDataManager.getAccount().guuid,(ret)=>{
-                if(ret.status == 200)
-                {
-                    let jRet = JSON.parse(ret.response)
-                    Debug.Log(jRet)
-                    let arrayToggle = Tool.GetChild(this.node,"容器/充值/根/金额").getComponentsInChildren(cc.Toggle);
-                    
-                    let data = jRet["data"]
-                    if(data["HAS_ORDER"]) //有订单，则不允许拉起新订单
-                    {
-                        for(let i=0;i<arrayToggle.length;i++)
-                        {
-                            arrayToggle[i].interactable = false
-                        }
-                        //显示最近订单按钮
-                        Tool.GetChild(this.node,"容器/充值/根/进入未完成订单").active = true
-                        this.dataHisDD = data
-                    }
-                    else
-                    {
-                        for(let i=0;i<arrayToggle.length;i++)
-                        {
-                            arrayToggle[i].interactable = true
-                        }
-                        Tool.GetChild(this.node,"容器/充值/根/进入未完成订单").active = false
-                        this.dataHisDD = null
-                    }
-                }
-            },(err)=>{
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！"+err)
-            })
         }
         else if(context === "存储支付域名")
         {
