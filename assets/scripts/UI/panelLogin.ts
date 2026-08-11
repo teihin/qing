@@ -208,8 +208,9 @@ export default class panelLogin extends UIPanelViewBase {
     {
         this._registerSubmitting = false;
         this._registerAntiTheftToggle.isChecked = false;
-        this.showRegisterStatus("请完整填写注册资料",false);
         this._registerAvatarPicker.active = false;
+        this.setRegisterAvatar(ImageManager.getInstance().RandomAvatarIndex());
+        this.showRegisterStatus("请完整填写注册资料",false);
         this._registerPanel.active = true;
         this._registerDialog.stopAllActions();
         this._registerDialog.opacity = 0;
@@ -262,14 +263,14 @@ export default class panelLogin extends UIPanelViewBase {
             this.showRegisterError("昵称需为1–32个字符",this._registerInputs["nickname"]);
             return;
         }
-        if(!/^[A-Za-z\u3400-\u4DBF\u4E00-\u9FFF]+$/.test(data.nickname))
+        if(!/^[A-Za-z0-9\u3400-\u4DBF\u4E00-\u9FFF]+$/.test(data.nickname))
         {
-            this.showRegisterError("昵称只能使用中文或英文字母",this._registerInputs["nickname"]);
+            this.showRegisterError("昵称只能使用中文、英文字母或数字",this._registerInputs["nickname"]);
             return;
         }
-        if(!/^[A-Za-z0-9]{7,14}$/.test(data.loginName))
+        if(!/^[A-Za-z0-9]{6,16}$/.test(data.loginName))
         {
-            this.showRegisterError("登录账号必须是7–14位英文字母或数字",this._registerInputs["loginName"]);
+            this.showRegisterError("登录账号必须是6–16位英文字母或数字",this._registerInputs["loginName"]);
             return;
         }
         if(data.password.length < 6 || data.password.length > 32 || data.password.trim() !== data.password)
@@ -333,10 +334,9 @@ export default class panelLogin extends UIPanelViewBase {
     private showRegisterError(message:string,editBox:cc.EditBox)
     {
         this.showRegisterStatus(message,true);
-        this.scheduleOnce(()=>{
-            if(this._registerPanel.active)
-                editBox.focus();
-        },0.05);
+        if(editBox != null)
+            editBox.blur();
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
     }
 
     private blurRegisterInputs()

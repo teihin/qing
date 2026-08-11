@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
-import type { PlayerBalanceAdjustmentResult, PlayerItem, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, TransactionItem, TransactionResponse } from "../types";
+import type { PlayerBalanceAdjustmentResult, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, TransactionItem, TransactionResponse } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -46,18 +46,25 @@ const emptyFilters: PlayerFilters = {
   registeredTo: "",
 };
 
+function playerFiltersFromHash(): PlayerFilters {
+  const query = window.location.hash.split("?")[1] || "";
+  const playerId = (new URLSearchParams(query).get("playerId") || "").trim().slice(0, 64);
+  return playerId ? { ...emptyFilters, playerId } : { ...emptyFilters };
+}
+
 const balanceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PlayersPage({ can, notify }: { can: (permission: string) => boolean; notify: (message: string, kind?: "success" | "error") => void }) {
+export default function PlayersPage({ can, isSuper, notify }: { can: (permission: string) => boolean; isSuper: boolean; notify: (message: string, kind?: "success" | "error") => void }) {
   const [data, setData] = useState<PlayerResponse | null>(null);
-  const [draft, setDraft] = useState<PlayerFilters>(emptyFilters);
-  const [applied, setApplied] = useState<PlayerFilters>(emptyFilters);
+  const [draft, setDraft] = useState<PlayerFilters>(playerFiltersFromHash);
+  const [applied, setApplied] = useState<PlayerFilters>(playerFiltersFromHash);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<PlayerItem | null>(null);
   const [adjusting, setAdjusting] = useState<PlayerItem | null>(null);
+  const [resettingPassword, setResettingPassword] = useState<PlayerItem | null>(null);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -100,8 +107,8 @@ export default function PlayersPage({ can, notify }: { can: (permission: string)
       <PageHeader
         eyebrow="GAME PLAYERS"
         title="玩家管理"
-        description="查询玩家账号、余额、代理关系和客户端状态；客服可按独立权限执行金币加减分。"
-        actions={<span className="readonly-badge"><i />资金操作全程审计</span>}
+        description="查询玩家账号、余额、代理关系和客户端状态；按权限执行加减分和登录密码重置。"
+        actions={<span className="readonly-badge"><i />敏感操作全程审计</span>}
       />
 
       <section className="panel player-filter-panel">
@@ -161,7 +168,7 @@ export default function PlayersPage({ can, notify }: { can: (permission: string)
                     <td>{player.agentId ? <><strong>{player.agentName || "未知代理"}</strong><small className="cell-subtitle">ID：{player.agentId}</small></> : <span className="muted">无直属代理</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
                     <td>{formatDate(player.registrationTime)}<small className="cell-subtitle">最近：{formatDate(player.lastLoginAt)}</small></td>
-                    <td><div className="row-actions">{can("game.player.balance_adjust") && <button className="success-link" onClick={() => setAdjusting(player)}>加减分</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
+                    <td><div className="row-actions">{can("game.player.balance_adjust") && <button className="success-link" onClick={() => setAdjusting(player)}>加减分</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -179,10 +186,46 @@ export default function PlayersPage({ can, notify }: { can: (permission: string)
         )}
       </section>
 
-      {selected && <PlayerDetail player={selected} can={can} notify={notify} onClose={() => setSelected(null)} />}
+      {selected && <PlayerDetail player={selected} can={can} isSuper={isSuper} notify={notify} onClose={() => setSelected(null)} />}
       {adjusting && <BalanceAdjustmentModal player={adjusting} onClose={() => setAdjusting(null)} onDone={(result) => { setAdjusting(null); notify(result.message); void load(); }} />}
+      {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
     </div>
   );
+}
+
+function ResetPlayerPasswordModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (result: PlayerPasswordResetResult) => void }) {
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [reason, setReason] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const passwordLength = Array.from(password).length;
+  const invalid = passwordLength < 6 || passwordLength > 32 || password !== password.trim() || password !== confirmPassword || !confirmed;
+  const submit = async () => {
+    if (password !== confirmPassword) { setError("两次输入的新密码不一致"); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await api<PlayerPasswordResetResult>(`/api/game/players/${encodeURIComponent(player.playerId)}/password`, {
+        method: "POST", ...jsonBody({ password, reason, confirm: confirmed }),
+      });
+      onDone(result);
+    } catch (reasonValue) {
+      setError(reasonValue instanceof ApiError ? reasonValue.message : "玩家密码重置失败");
+    } finally { setBusy(false); }
+  };
+  return <Modal title={`重置玩家密码 · ${player.name || player.playerId}`} eyebrow="PLAYER LOGIN SECURITY" onClose={onClose}>
+    <div className="password-reset-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>游戏ID {player.playerId} · 登录账号 {player.loginName || "—"}</p></div></div>
+    <div className="sensitive-operation-notice"><strong>这是游戏玩家的登录密码</strong><p>不会显示或读取原密码。重置后，玩家下次登录必须使用新密码；防盗号设备绑定不会自动解除。</p></div>
+    {error && <div className="form-error"><span>!</span>{error}</div>}
+    <div className="form-grid form-grid--single">
+      <Field label="新登录密码" hint="6～32个字符，不限制字符组合，首尾不能有空格"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="输入玩家的新密码" /></Field>
+      <Field label="确认新密码"><input type="password" autoComplete="new-password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} placeholder="再次输入新密码" /></Field>
+      <Field label="操作备注（选填）" hint="最多120个字符，只进入操作审计，不会发送给玩家"><input value={reason} maxLength={120} onChange={(event) => setReason(event.target.value)} placeholder="例如：玩家完成身份核验后申请重置" /></Field>
+    </div>
+    <label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID和登录账号，并确认重置该玩家的登录密码</span></label>
+    <div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在重置并校验…" : "确认重置密码"}</Button></div>
+  </Modal>;
 }
 
 function BalanceAdjustmentModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (result: PlayerBalanceAdjustmentResult) => void }) {
@@ -207,7 +250,7 @@ function BalanceAdjustmentModal({ player, onClose, onDone }: { player: PlayerIte
 
 type PlayerDetailTab = "profile" | "finance" | "rooms";
 
-function PlayerDetail({ player, can, notify, onClose }: { player: PlayerItem; can: (permission: string) => boolean; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void }) {
+function PlayerDetail({ player, can, isSuper, notify, onClose }: { player: PlayerItem; can: (permission: string) => boolean; isSuper: boolean; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void }) {
   const [tab, setTab] = useState<PlayerDetailTab>("profile");
   const [finance, setFinance] = useState<TransactionResponse | null>(null);
   const [financePage, setFinancePage] = useState(1);
@@ -215,8 +258,23 @@ function PlayerDetail({ player, can, notify, onClose }: { player: PlayerItem; ca
   const [rooms, setRooms] = useState<PlayerRoomHistoryResponse | null>(null);
   const [roomPage, setRoomPage] = useState(1);
   const [roomLoading, setRoomLoading] = useState(false);
+  const [sensitive, setSensitive] = useState<PlayerSensitiveInfo | null>(null);
+  const [sensitiveLoading, setSensitiveLoading] = useState(isSuper);
+  const [sensitiveError, setSensitiveError] = useState("");
   const canViewFinance = can("game.transaction.view");
   const canViewRooms = can("game.room_record.view");
+
+  const loadSensitive = useCallback(async () => {
+    if (!isSuper) return;
+    setSensitiveLoading(true); setSensitiveError("");
+    try {
+      setSensitive(await api<PlayerSensitiveInfo>(`/api/game/players/${encodeURIComponent(player.playerId)}/sensitive`));
+    } catch (reason) {
+      const message = reason instanceof ApiError ? reason.message : "玩家IP和GPS加载失败";
+      setSensitiveError(message);
+      notify(message, "error");
+    } finally { setSensitiveLoading(false); }
+  }, [isSuper, notify, player.playerId]);
 
   const loadFinance = useCallback(async () => {
     if (!canViewFinance) return;
@@ -240,6 +298,7 @@ function PlayerDetail({ player, can, notify, onClose }: { player: PlayerItem; ca
 
   useEffect(() => { if (tab === "finance") void loadFinance(); }, [loadFinance, tab]);
   useEffect(() => { if (tab === "rooms") void loadRooms(); }, [loadRooms, tab]);
+  useEffect(() => { if (tab === "profile" && isSuper && !sensitive && !sensitiveError) void loadSensitive(); }, [isSuper, loadSensitive, sensitive, sensitiveError, tab]);
 
   return (
     <Modal wide title={player.name || `玩家 ${player.playerId}`} eyebrow="PLAYER PROFILE" onClose={onClose}>
@@ -253,14 +312,14 @@ function PlayerDetail({ player, can, notify, onClose }: { player: PlayerItem; ca
         <button type="button" className={tab === "finance" ? "is-active" : ""} disabled={!canViewFinance} onClick={() => setTab("finance")}><span>资金情况</span><small>{canViewFinance ? "完整金币流水" : "当前角色无权限"}</small></button>
         <button type="button" className={tab === "rooms" ? "is-active" : ""} disabled={!canViewRooms} onClick={() => setTab("rooms")}><span>房间战绩</span><small>{canViewRooms ? "参战房间与输赢" : "当前角色无权限"}</small></button>
       </nav>
-      {tab === "profile" && <PlayerProfileTab player={player} />}
+      {tab === "profile" && <PlayerProfileTab player={player} isSuper={isSuper} sensitive={sensitive} sensitiveLoading={sensitiveLoading} sensitiveError={sensitiveError} onRetrySensitive={() => void loadSensitive()} />}
       {tab === "finance" && canViewFinance && <PlayerFinanceTab player={player} data={finance} page={financePage} loading={financeLoading} onPage={setFinancePage} />}
       {tab === "rooms" && canViewRooms && <PlayerRoomsTab player={player} data={rooms} page={roomPage} loading={roomLoading} onPage={setRoomPage} />}
     </Modal>
   );
 }
 
-function PlayerProfileTab({ player }: { player: PlayerItem }) {
+function PlayerProfileTab({ player, isSuper, sensitive, sensitiveLoading, sensitiveError, onRetrySensitive }: { player: PlayerItem; isSuper: boolean; sensitive: PlayerSensitiveInfo | null; sensitiveLoading: boolean; sensitiveError: string; onRetrySensitive: () => void }) {
   return <div className="player-profile-tab-content">
       <section className="player-detail-section">
         <h3>账号与游戏状态</h3>
@@ -304,7 +363,31 @@ function PlayerProfileTab({ player }: { player: PlayerItem }) {
           <Detail label="备注" value={player.remark} wide />
         </div>
       </section>
+      {isSuper && <PlayerSensitiveSection player={player} data={sensitive} loading={sensitiveLoading} error={sensitiveError} onRetry={onRetrySensitive} />}
     </div>;
+}
+
+function PlayerSensitiveSection({ player, data, loading, error, onRetry }: { player: PlayerItem; data: PlayerSensitiveInfo | null; loading: boolean; error: string; onRetry: () => void }) {
+  const openMap = () => {
+    if (!data?.locationAvailable || data.latitude === null || data.longitude === null) return;
+    const url = new URL("https://uri.amap.com/marker");
+    url.searchParams.set("position", `${data.longitude},${data.latitude}`);
+    url.searchParams.set("name", `${player.name || "玩家"}（${player.playerId}）`);
+    url.searchParams.set("src", "XuanManager");
+    url.searchParams.set("coordinate", "wgs84");
+    url.searchParams.set("callnative", "0");
+    window.open(url.toString(), "_blank", "noopener,noreferrer");
+  };
+  return <section className="player-detail-section player-sensitive-section">
+    <div className="player-sensitive-heading"><div><span>SUPER ADMIN ONLY</span><h3>网络与GPS定位</h3><p>仅超级管理员可见；每次读取都会写入操作审计。</p></div>{data?.locationAvailable && <Button type="button" onClick={openMap}>在高德地图中定位</Button>}</div>
+    {loading ? <LoadingBlock label="正在读取玩家IP和GPS" /> : error ? <div className="sensitive-load-error"><span>{error}</span><button type="button" onClick={onRetry}>重新读取</button></div> : <div className="player-detail-grid">
+      <Detail label="最近上报 IP" value={data?.ip || "未上报"} mono />
+      <Detail label="GPS 原始值（纬度,经度）" value={data?.gps || "未上报"} mono />
+      <Detail label="纬度" value={data?.latitude === null || data?.latitude === undefined ? "—" : data.latitude.toFixed(6)} mono />
+      <Detail label="经度" value={data?.longitude === null || data?.longitude === undefined ? "—" : data.longitude.toFixed(6)} mono />
+      <Detail label="定位状态" value={data?.locationMessage || "玩家尚未上报有效坐标"} wide />
+    </div>}
+  </section>;
 }
 
 function PlayerFinanceTab({ player, data, page, loading, onPage }: { player: PlayerItem; data: TransactionResponse | null; page: number; loading: boolean; onPage: (page: number) => void }) {

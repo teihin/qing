@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"net/http"
@@ -136,7 +139,40 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	exists, err := s.gameLoginNameExists(r, registration.LoginName)
+	registrationConn, err := s.db.Conn(r.Context())
+	if err != nil {
+		s.logger.Error("reserve game registration database connection", "error", err)
+		writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "暂时无法检查注册资料，请稍后再试")
+		return
+	}
+	defer registrationConn.Close()
+
+	nicknameLockName := registrationNicknameLockName(registration.Nickname)
+	locked, err := acquireRegistrationNicknameLock(r.Context(), registrationConn, nicknameLockName)
+	if err != nil {
+		s.logger.Error("acquire game registration nickname lock", "error", err)
+		writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "暂时无法检查昵称，请稍后再试")
+		return
+	}
+	if !locked {
+		w.Header().Set("Retry-After", "1")
+		writeError(w, http.StatusServiceUnavailable, "REGISTRATION_BUSY", "注册请求较多，请稍后再试")
+		return
+	}
+	defer s.releaseRegistrationNicknameLock(registrationConn, nicknameLockName)
+
+	exists, err := gameNicknameExists(r.Context(), registrationConn, registration.Nickname)
+	if err != nil {
+		s.logger.Error("check game registration nickname", "error", err)
+		writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "暂时无法检查昵称，请稍后再试")
+		return
+	}
+	if exists {
+		writeError(w, http.StatusConflict, "NICKNAME_EXISTS", "该昵称已被使用")
+		return
+	}
+
+	exists, err = gameLoginNameExists(r.Context(), registrationConn, registration.LoginName)
 	if err != nil {
 		s.logger.Error("check game registration login name", "error", err)
 		writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "暂时无法检查登录账号，请稍后再试")
@@ -159,7 +195,7 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		devicePlatform = registration.DevicePlatform
 		bindingRevision = 1
 	}
-	result, err := s.db.ExecContext(r.Context(), `INSERT INTO kbedm.third_marketing_info
+	result, err := registrationConn.ExecContext(r.Context(), `INSERT INTO kbedm.third_marketing_info
 (date, time, upper_guuid, player_wxid, player_wxname, player_wxpwd, status, level,
  anti_theft_on, device_id, device_platform, device_version, device_bound_at, binding_revision)
 VALUES (CURDATE(), CURTIME(), ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1, NOW(), NULL), ?)`,
@@ -246,13 +282,13 @@ func normalizeGameRegistration(input gameRegistrationRequest) (normalizedGameReg
 		return normalizedGameRegistration{}, errors.New("邀请码必须是 6 位数字")
 	}
 	if !isRegistrationLoginName(registration.LoginName) {
-		return normalizedGameRegistration{}, errors.New("登录账号必须是 7 到 14 位英文字母或数字")
+		return normalizedGameRegistration{}, errors.New("登录账号必须是 6 到 16 位英文字母或数字")
 	}
 	if err := validateRegistrationText(registration.Nickname, 1, 32, "昵称"); err != nil {
 		return normalizedGameRegistration{}, err
 	}
-	if !isChineseOrEnglishNickname(registration.Nickname) {
-		return normalizedGameRegistration{}, errors.New("昵称只能使用中文或英文字母")
+	if !isChineseEnglishOrDigitNickname(registration.Nickname) {
+		return normalizedGameRegistration{}, errors.New("昵称只能使用中文、英文字母或数字")
 	}
 	if !isRegistrationAvatarIndex(registration.AvatarIndex) {
 		return normalizedGameRegistration{}, errors.New("头像编号必须为 1 到 100")
@@ -320,7 +356,7 @@ func isSixDigitCode(value string) bool {
 }
 
 func isRegistrationLoginName(value string) bool {
-	if len(value) < 7 || len(value) > 14 {
+	if len(value) < 6 || len(value) > 16 {
 		return false
 	}
 	for _, char := range value {
@@ -331,12 +367,12 @@ func isRegistrationLoginName(value string) bool {
 	return true
 }
 
-func isChineseOrEnglishNickname(value string) bool {
+func isChineseEnglishOrDigitNickname(value string) bool {
 	if value == "" {
 		return false
 	}
 	for _, char := range value {
-		if unicode.Is(unicode.Han, char) || (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') {
+		if unicode.Is(unicode.Han, char) || (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z') || (char >= '0' && char <= '9') {
 			continue
 		}
 		return false
@@ -419,14 +455,53 @@ WHERE a.sm_guuid = ? AND `+agentCandidateSQL+`
 	return exists, err
 }
 
-func (s *Server) gameLoginNameExists(r *http.Request, loginName string) (bool, error) {
+func gameNicknameExists(ctx context.Context, conn *sql.Conn, nickname string) (bool, error) {
 	var exists bool
-	err := s.db.QueryRowContext(r.Context(), `SELECT
-EXISTS(SELECT 1 FROM kbedm.third_marketing_info WHERE player_wxid = ?) OR
-EXISTS(SELECT 1 FROM kbedm.tbl_Account WHERE sm_wxID = ?) OR
-EXISTS(SELECT 1 FROM kbedm.kbe_accountinfos WHERE accountName = ?)`,
+	err := conn.QueryRowContext(ctx, `SELECT
+EXISTS(SELECT 1 FROM kbedm.third_marketing_info WHERE LOWER(TRIM(player_wxname)) = LOWER(?)) OR
+EXISTS(SELECT 1 FROM kbedm.tbl_Account WHERE LOWER(TRIM(sm_name)) = LOWER(?))`,
+		nickname, nickname).Scan(&exists)
+	return exists, err
+}
+
+func gameLoginNameExists(ctx context.Context, conn *sql.Conn, loginName string) (bool, error) {
+	var exists bool
+	err := conn.QueryRowContext(ctx, `SELECT
+EXISTS(SELECT 1 FROM kbedm.third_marketing_info WHERE LOWER(TRIM(player_wxid)) = LOWER(?)) OR
+EXISTS(SELECT 1 FROM kbedm.tbl_Account WHERE LOWER(TRIM(sm_wxID)) = LOWER(?)) OR
+EXISTS(SELECT 1 FROM kbedm.kbe_accountinfos WHERE LOWER(TRIM(accountName)) = LOWER(?))`,
 		loginName, loginName, loginName).Scan(&exists)
 	return exists, err
+}
+
+func registrationNicknameLockName(nickname string) string {
+	normalized := strings.ToLower(strings.TrimSpace(nickname))
+	digest := sha256.Sum256([]byte("xuanmanager:registration:nickname:" + normalized))
+	return fmt.Sprintf("%x", digest)
+}
+
+func acquireRegistrationNicknameLock(ctx context.Context, conn *sql.Conn, lockName string) (bool, error) {
+	var acquired sql.NullInt64
+	if err := conn.QueryRowContext(ctx, `SELECT GET_LOCK(?, 5)`, lockName).Scan(&acquired); err != nil {
+		return false, err
+	}
+	return acquired.Valid && acquired.Int64 == 1, nil
+}
+
+func (s *Server) releaseRegistrationNicknameLock(conn *sql.Conn, lockName string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	var released sql.NullInt64
+	if err := conn.QueryRowContext(ctx, `SELECT RELEASE_LOCK(?)`, lockName).Scan(&released); err == nil && released.Valid && released.Int64 == 1 {
+		return
+	} else if err != nil {
+		s.logger.Error("release game registration nickname lock", "error", err)
+	} else {
+		s.logger.Error("release game registration nickname lock", "released", released)
+	}
+
+	// 释放失败时丢弃底层连接，避免带着命名锁回到连接池。
+	_ = conn.Raw(func(any) error { return driver.ErrBadConn })
 }
 
 func isDuplicateKey(err error) bool {

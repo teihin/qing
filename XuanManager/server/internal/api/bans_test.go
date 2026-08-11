@@ -51,6 +51,46 @@ func TestBuildBannedPlayerWhereIsParameterized(t *testing.T) {
 	}
 }
 
+func TestBuildPlayerBanHistoryWhereUsesFiltersAndSuperVisibility(t *testing.T) {
+	where, args := buildPlayerBanHistoryWhere(playerBanHistoryFilter{Keyword: "565923", Operation: "unban", Result: "failed"}, principal{})
+	for _, expected := range []string{"audit_row.action IN (?, ?)", "audit_row.action = ?", "audit_row.result_code <> 0", nonSuperAuditVisibilitySQL} {
+		if !strings.Contains(where, expected) {
+			t.Fatalf("history where missing %q: %s", expected, where)
+		}
+	}
+	if strings.Contains(where, "565923") || len(args) != 13 {
+		t.Fatalf("history query is not parameterized correctly: where=%s args=%#v", where, args)
+	}
+	if args[3] != 0 {
+		t.Fatalf("ordinary user visibility flag = %#v", args[3])
+	}
+}
+
+func TestEnrichPlayerBanHistoryItemUsesAuditSnapshots(t *testing.T) {
+	ban := playerBanHistoryItem{PlayerID: "565923", Operation: "ban"}
+	enrichPlayerBanHistoryItem(&ban,
+		`{"playerId":"565923","reason":"恶意赠送金币"}`,
+		`{"playerId":"565923","loginName":"old-login","accountName":"kbe-login","name":"玩家甲","clientStatus":""}`,
+		`{"playerId":"565923","loginName":"old-login","accountName":"kbe-login","name":"玩家甲","clientStatus":"恶意赠送金币"}`,
+	)
+	if ban.Reason != "恶意赠送金币" || ban.LoginName != "old-login" || ban.AccountName != "kbe-login" || ban.Name != "玩家甲" {
+		t.Fatalf("unexpected ban history enrichment: %#v", ban)
+	}
+
+	unban := playerBanHistoryItem{PlayerID: "565923", Operation: "unban"}
+	enrichPlayerBanHistoryItem(&unban, `{}`, `{"clientStatus":"恶意赠送金币"}`, `{"clientStatus":""}`)
+	if unban.Reason != "恶意赠送金币" {
+		t.Fatalf("unban reason = %q", unban.Reason)
+	}
+}
+
+func TestParsePlayerBanHistoryFilterRejectsUnknownValues(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/game/bans/history?operation=remove&result=maybe", nil)
+	if _, err := parsePlayerBanHistoryFilter(request); err == nil {
+		t.Fatal("unknown history operation/result should be rejected")
+	}
+}
+
 func TestSetPlayerClientStatusUsesOfficialGameCommand(t *testing.T) {
 	client := fakeGameHTTPClient(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Query().Get("header") != "异步_设置_玩家_属性" {

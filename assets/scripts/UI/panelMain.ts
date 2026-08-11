@@ -525,7 +525,7 @@ export default class panelMain extends UIPanelViewBase {
     }
     set_level(id:string)
     {
-        let strLevel =GameDataManager.getAccount().level;
+        this.RefreshAgentMenuVisibility();
         // if (Number(strLevel) > 50)
         // {
         //     Tool.GetChild(this.node,"Main/我的/操作/推广二维码").active = true;
@@ -564,6 +564,7 @@ export default class panelMain extends UIPanelViewBase {
     }
     public set_role(old)
     {
+        this.RefreshAgentMenuVisibility();
         // let nShowJL = Tool.GetConfigNumber("特殊开关",1);
         // if((GameDataManager.getAccount().role == "董事长" || GameDataManager.getAccount().role == "总裁") && nShowJL == 1)
         // {
@@ -579,6 +580,23 @@ export default class panelMain extends UIPanelViewBase {
         //     Tool.GetChild(this.node ,"Main/我的/操作/奖励").active = true;
         // }
 
+    }
+
+    private IsCurrentUserAgent():boolean
+    {
+        let account = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+
+        let level = Number(account.level || 0);
+        let role = account.role == null ? "" : account.role.toString();
+        return level > 0 || role.indexOf("盟主") >= 0 || role.indexOf("合伙人") >= 0 ||
+            role.indexOf("总裁") >= 0 || role.indexOf("老板") >= 0;
+    }
+
+    private RefreshAgentMenuVisibility()
+    {
+        Tool.GetChild(this.node,"Main/我的/操作/代理").active = this.IsCurrentUserAgent();
     }
     public set_photo(old)
     {
@@ -811,8 +829,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "代理")
         {
-            let strLevel = GameDataManager.getAccount().level;
-            if(Number(strLevel)>50)
+            if(this.IsCurrentUserAgent())
             {
                 UIManager.getInstance().showPanel("panelHongli",ShowPanelMode.Cover);
             }
@@ -836,9 +853,9 @@ export default class panelMain extends UIPanelViewBase {
             }
 
             //名字只能是中文数字英文
-            if(!strName.match(new RegExp('^[A-Za-z0-9\u4E00-\u9FA5]+$')))
+            if(!strName.match(new RegExp('^[A-Za-z0-9\u3400-\u4DBF\u4E00-\u9FFF]+$')))
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能包含中英文和数字！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能使用中文、英文字母或数字！");
                 return; 
             }
 
@@ -867,9 +884,9 @@ export default class panelMain extends UIPanelViewBase {
 
 
             //名字只能是中文数字英文
-            if(!strName.match(new RegExp('^[A-Za-z0-9\u4E00-\u9FA5]+$')))
+            if(!strName.match(new RegExp('^[A-Za-z0-9\u3400-\u4DBF\u4E00-\u9FFF]+$')))
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能包含中英文和数字！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能使用中文、英文字母或数字！");
                 return; 
             }
 
@@ -894,9 +911,9 @@ export default class panelMain extends UIPanelViewBase {
             }
 
             //名字只能是中文数字英文
-            if(!strName.match(new RegExp('^[A-Za-z0-9\u4E00-\u9FA5]+$')))
+            if(!strName.match(new RegExp('^[A-Za-z0-9\u3400-\u4DBF\u4E00-\u9FFF]+$')))
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能包含中英文和数字！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能使用中文、英文字母或数字！");
                 return; 
             }
 
@@ -1377,6 +1394,23 @@ export default class panelMain extends UIPanelViewBase {
     private arrayDHN:string[] = ["Animation_MoneyFlow_1","Animation_Give_1","Animation_Record_1","Animation_Agent_1","Animation_Set_1"] //所有动画 逆时针
     private arrayBTNName:string[] = ["资金明细","设置","代理","战绩","赠送"]
     private strLastMMSMask:string = "";
+
+    private ClearTransactionPasswordInputs()
+    {
+        let inputPaths = [
+            "修改交易密码/列表/原有密码/txt",
+            "修改交易密码/列表/新密码1/txt",
+            "修改交易密码/列表/新密码2/txt",
+            "初始化交易密码/列表/新密码1/txt",
+            "初始化交易密码/列表/新密码2/txt"
+        ];
+        for(let path of inputPaths)
+        {
+            let editBox = Tool.GetChild(this.node,path).getComponent(cc.EditBox);
+            editBox.string = "";
+            editBox.blur();
+        }
+    }
 
     onToggleClick(toggle:cc.Toggle)
     {        
@@ -2244,6 +2278,11 @@ export default class panelMain extends UIPanelViewBase {
         {
             if (nCode == 0x200)
             {
+                if(param.indexOf("修改_玩家_交易密码")>=0)
+                {
+                    this.ClearTransactionPasswordInputs();
+                    this.bNeedInitJYPwd = false;
+                }
                 UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "修改密码成功！");                
             }
             else
@@ -2341,18 +2380,38 @@ export default class panelMain extends UIPanelViewBase {
         node.active = true;
 
         node.getChildByName("type").getComponent(cc.Label).string = jItem["option_type"];
-        node.getChildByName("count").getComponent(cc.Label).string = jItem["add_money"];
-        node.getChildByName("now").getComponent(cc.Label).string = jItem["new_money"];
+        let oldBalance = Number(jItem["old_money"]);
+        let newBalance = Number(jItem["new_money"]);
+        let change = Number(jItem["add_money"]);
+        if(!isNaN(oldBalance) && isFinite(oldBalance) && !isNaN(newBalance) && isFinite(newBalance))
+            change = newBalance - oldBalance;
+
+        let countNode = node.getChildByName("count");
+        let countText = this.FormatCashWaterNumber(change);
+        countNode.getComponent(cc.Label).string = change > 0 ? "+" + countText : countText;
+        node.getChildByName("now").getComponent(cc.Label).string = this.FormatCashWaterNumber(newBalance);
         node.getChildByName("time").getComponent(cc.Label).string = jItem["date"];
 
-        if(Number(jItem["add_money"])>0)
+        if(change > 0)
         {
-            node.getChildByName("count").color = cc.Color.RED;
+            countNode.color = cc.Color.RED;
         }
-        else if(Number(jItem["add_money"])<0)
+        else if(change < 0)
         {
-            node.getChildByName("count").color = cc.Color.GREEN;
+            countNode.color = cc.Color.GREEN;
         }
+        else
+            countNode.color = new cc.Color(239,225,194,255);
+    }
+
+    private FormatCashWaterNumber(value:number):string
+    {
+        if(isNaN(value) || !isFinite(value))
+            return "--";
+        let rounded = Math.round(value * 100) / 100;
+        if(Math.abs(rounded) < 0.005)
+            rounded = 0;
+        return rounded.toString();
     }
 
     public OnUserHashInfo(strMsg:string)
@@ -2481,9 +2540,9 @@ export default class panelMain extends UIPanelViewBase {
                     }
 
                     //名字只能是中文数字英文
-                    if(!strName.match(new RegExp('^[A-Za-z0-9\u4E00-\u9FA5]+$')))
+                    if(!strName.match(new RegExp('^[A-Za-z0-9\u3400-\u4DBF\u4E00-\u9FFF]+$')))
                     {
-                        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能包含中英文和数字！");
+                        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"昵称只能使用中文、英文字母或数字！");
                         return; 
                     }
 

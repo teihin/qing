@@ -207,24 +207,19 @@ export default class Tool extends cc.Component{
         if(passkey == "")
         {
             passkey = "b2R1o7o3c5e23T48mRl2rhC9o5ao039F"
-            Debug.Log("使用:"+passkey)
-        }
-        else{
-            Debug.Log("使用:"+passkey)
         }
         
-        var keyBytes = CryptoJS.SHA1(passkey).toString().substring(0, 16); console.log("key = "+keyBytes);
+        var keyBytes = CryptoJS.SHA1(passkey).toString().substring(0, 16);
         return keyBytes;
     }
     public static encrypt(str,passkey = "")  //passkey是密钥，不同平台密钥不一样
     {
         // 字符串类型的key用之前需要用uft8先parse一下才能用 
-        var key = CryptoJS.enc.Utf8.parse(Tool.aesKeyBytes(passkey)); console.log("utf-i-key = "+key);
+        var key = CryptoJS.enc.Utf8.parse(Tool.aesKeyBytes(passkey));
         // 加密
         var encryptedData = CryptoJS.AES.encrypt(str, key, { mode: CryptoJS.mode.ECB,
         padding: CryptoJS.pad.Pkcs7
         });
-        var encryptedBase64Str = encryptedData.toString(); console.log(encryptedBase64Str);
         return encryptedData.ciphertext.toString();
     }
 
@@ -304,5 +299,4 @@ export default class Tool extends cc.Component{
         return nSpan;
     }
 }
-
 

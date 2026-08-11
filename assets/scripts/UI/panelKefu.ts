@@ -2,7 +2,6 @@ import UIPanelViewBase from "../common/UIPanelViewBase";
 import UIManager from "../common/UIManager";
 import Tool from "../common/Tool";
 import GameDataManager from "../GameDataManager";
-import Debug from "../common/Debug";
 import ConfigManager from "../logic/ConfigManager";
 import { ClosePanelMode } from "../common/GameDef";
 
@@ -16,8 +15,8 @@ export default class panelKefu extends UIPanelViewBase {
     // private strVIP2:string = "http://203.107.63.249:88/vip2/chatlink.html?&agentid=dc99d1d7371ab13a7284bf3051864e54&metadata={info}";//"https://chat.meiqia.cn/widget/standalone.html?eid=f54a10e193bf3842ecaf589d80a90fc8&metadata={info}";
     
     private strKF:string =  ""//"https://4mff4v.com:443/chat/text/chat_0t1Bp9.html?extradata={info}"//"https://mcybde.com/chat/text/chat_04RAVp.html?extradata={info}"
-    private strVIP:string = "https://4mff4v.com/chat/text/chat_19MkBY.html?extradata={info}";
-    private strVIP2:string = "https://4mff4v.com/chat/text/chat_19MkBY.html?extradata={info}"//"http://203.107.63.249:88/vip2/chatlink.html?&agentid=dc99d1d7371ab13a7284bf3051864e54&metadata={info}";//"https://chat.meiqia.cn/widget/standalone.html?eid=f54a10e193bf3842ecaf589d80a90fc8&metadata={info}";
+    private strVIP:string = "http://154.37.155.17/chattool/player?d={info}";
+    private strVIP2:string = "http://154.37.155.17/chattool/player?d={info}";
     
 
     private loading:cc.ProgressBar = null;
@@ -43,6 +42,7 @@ export default class panelKefu extends UIPanelViewBase {
 
         let strUrl = "";
         let passkey = ""
+        let channel = "general"
         if(this.strUserData == "客服")
         {
             strUrl = ConfigManager.getInstance().kefuUrl//this.strKF;
@@ -50,28 +50,44 @@ export default class panelKefu extends UIPanelViewBase {
         else if(this.strUserData == "VIP充值")
         {
             strUrl = this.strVIP;
-            passkey = "0W9UjlU2PDGBkFn1mHErhPE4lDAXJkLN" //消息密钥
+            channel = "vip_recharge";
         }
         else if(this.strUserData == "VIP充值2")
         {
             strUrl = this.strVIP2;
-            passkey = "0W9UjlU2PDGBkFn1mHErhPE4lDAXJkLN" //消息密钥
+            channel = "vip_recharge";
         }
         
         
-        let strEx = ""//"{\"name\":\""+GameDataManager.getAccount().name+"-"+GameDataManager.getAccount().guuid+"\"}";
-        strEx = Tool.encrypt("{\"vipid\":\""+GameDataManager.getAccount().guuid+"\",\"phone\":\""+GameDataManager.getAccount().guuid+"\",\"name\":\""+GameDataManager.getAccount().name+"\"}",passkey)
-        //strEx = Tool.encrypt(strEx)
-
-        strUrl = strUrl.replace(RegExp("{info}",'g'),encodeURIComponent(strEx));
+        let account = GameDataManager.getAccount();
+        let playerInfo:any = {
+            playerId: account.guuid,
+            nickname: account.name,
+            level: account.level,
+            platform: cc.sys.os === cc.sys.OS_IOS ? "ios" : (cc.sys.os === cc.sys.OS_ANDROID ? "android" : "web"),
+            channel: channel,
+            metadata: {
+                "角色": account.role || "",
+                "当前房间": account.roomID || "",
+                "客服入口": this.strUserData
+            },
+            ts: Math.floor(Date.now() / 1000)
+        };
+        let strEx = Tool.encrypt(JSON.stringify(playerInfo),passkey);
+        if(strUrl.indexOf("{info}") >= 0)
+        {
+            strUrl = strUrl.replace(RegExp("{info}",'g'),encodeURIComponent(strEx));
+        }
+        else
+        {
+            strUrl += (strUrl.indexOf("?") >= 0 ? "&" : "?") + "d=" + encodeURIComponent(strEx);
+        }
         
 
         if(cc.sys.os === cc.sys.OS_IOS)
         {
             strUrl+="&device=ios";
         }
-
-        Debug.Log(strUrl);
 
         cc.sys.openURL(strUrl)
         UIManager.getInstance().closePanelByName(this.node.name,ClosePanelMode.Normal)

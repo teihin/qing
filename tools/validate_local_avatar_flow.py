@@ -49,6 +49,7 @@ def validate_assets() -> None:
 
 def validate_code() -> None:
     image_manager = read("assets/scripts/logic/ImageManager.ts")
+    panel_login = read("assets/scripts/UI/panelLogin.ts")
     panel_main = read("assets/scripts/UI/panelMain.ts")
     game_def = read("assets/scripts/common/GameDef.ts")
     mobile = read("assets/scripts/mobile/MobileManager.ts")
@@ -68,6 +69,19 @@ def validate_code() -> None:
     require('return "1";' in image_manager, "invalid-field fallback to avatar 1 missing")
     require('Math.random() * this.AVATAR_COUNT' in image_manager, "random 1-100 initialization missing")
     require('RandomAvatarBatch(count:number = 20' in image_manager, "random 20-avatar batch helper missing")
+    require('this.setRegisterAvatar(ImageManager.getInstance().RandomAvatarIndex());' in panel_login,
+            "registration dialog does not choose a random default avatar whenever it opens")
+    require('showRegisterError(message:string,editBox:cc.EditBox)' in panel_login and
+            'showPanel("panelMsgView",ShowPanelMode.Cover,message);' in panel_login,
+            "registration validation errors are not shown in the message dialog")
+    require('/^[A-Za-z0-9]{6,16}$/' in panel_login and
+            '登录账号必须是6–16位英文字母或数字' in panel_login,
+            "registration login-name rule is not 6-16 ASCII letters or digits")
+    require('/^[A-Za-z0-9\\u3400-\\u4DBF\\u4E00-\\u9FFF]+$/' in panel_login and
+            '昵称只能使用中文、英文字母或数字' in panel_login,
+            "registration nickname rule does not allow Chinese, ASCII letters, and digits")
+    require(panel_main.count("^[A-Za-z0-9\\u3400-\\u4DBF\\u4E00-\\u9FFF]+$") >= 4,
+            "in-game nickname validation is not consistent with registration character rules")
     require('cc.loader.loadRes(this.GetAvatarResourcePath' in image_manager, "resources avatar load missing")
     require('rawText == "" ? imageManager.RandomAvatarIndex() : "1"' in panel_main, "empty/random and legacy/fallback split missing")
     require('new cc.Node("本地头像列表")' in panel_main, "20-slot avatar selector container missing")

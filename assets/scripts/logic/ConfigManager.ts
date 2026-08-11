@@ -14,7 +14,7 @@ export default class ConfigManager extends cc.Component {
     public user_promission:string = "";
     public downloadurl:string = "http://www.baidu.com";
     public resetPwdUrl:string = "http://www.163.com";
-    public kefuUrl:string = "http://www.163.com";
+    public kefuUrl:string = "http://154.37.155.17/chattool/player?d={info}";
     public registrationUrl:string = "http://154.37.155.17/xuanmanager/api/game/registrations";
 
     static instance: ConfigManager

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -55,6 +56,27 @@ type banAuditMetadata struct {
 	OperatorName string
 	CreatedAt    time.Time
 	Hidden       bool
+}
+
+type playerBanHistoryItem struct {
+	ID            int64     `json:"id"`
+	PlayerID      string    `json:"playerId"`
+	LoginName     string    `json:"loginName"`
+	AccountName   string    `json:"accountName"`
+	Name          string    `json:"name"`
+	Operation     string    `json:"operation"`
+	Reason        string    `json:"reason"`
+	OperatorName  string    `json:"operatorName"`
+	Success       bool      `json:"success"`
+	ResultCode    int       `json:"resultCode"`
+	ResultMessage string    `json:"resultMessage"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type playerBanHistoryFilter struct {
+	Keyword   string
+	Operation string
+	Result    string
 }
 
 func (s *Server) handleListBannedPlayers(w http.ResponseWriter, r *http.Request, p principal) {
@@ -123,6 +145,162 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "page": page, "pageSize": size, "total": total,
 	})
+}
+
+func (s *Server) handleListPlayerBanHistory(w http.ResponseWriter, r *http.Request, p principal) {
+	page, size := pageParams(r)
+	filter, err := parsePlayerBanHistoryFilter(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
+		return
+	}
+	where, args := buildPlayerBanHistoryWhere(filter, p)
+
+	var total int64
+	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*)
+FROM mgr_audit_log audit_row
+LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
+LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
+WHERE `+where, args...).Scan(&total); err != nil {
+		s.logger.Error("count player ban history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取封号历史数量失败")
+		return
+	}
+
+	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
+	rows, err := s.db.QueryContext(r.Context(), `SELECT
+audit_row.id, audit_row.target_id,
+COALESCE(game_player.sm_wxID, ''), COALESCE(game_login.accountName, ''), COALESCE(game_player.sm_name, ''),
+audit_row.action, audit_row.operator_name, audit_row.request_json, audit_row.before_json, audit_row.after_json,
+audit_row.result_code, audit_row.result_message, audit_row.created_at
+FROM mgr_audit_log audit_row
+LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
+LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
+WHERE `+where+`
+ORDER BY audit_row.id DESC
+LIMIT ? OFFSET ?`, queryArgs...)
+	if err != nil {
+		s.logger.Error("list player ban history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取封号历史失败")
+		return
+	}
+	defer rows.Close()
+
+	items := make([]playerBanHistoryItem, 0, size)
+	for rows.Next() {
+		var item playerBanHistoryItem
+		var action string
+		var requestJSON, beforeJSON, afterJSON sql.NullString
+		if err := rows.Scan(
+			&item.ID, &item.PlayerID, &item.LoginName, &item.AccountName, &item.Name,
+			&action, &item.OperatorName, &requestJSON, &beforeJSON, &afterJSON,
+			&item.ResultCode, &item.ResultMessage, &item.CreatedAt,
+		); err != nil {
+			s.logger.Error("scan player ban history", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取封号历史数据失败")
+			return
+		}
+		item.Operation = playerBanHistoryOperation(action)
+		item.Success = item.ResultCode == 0
+		enrichPlayerBanHistoryItem(&item, requestJSON.String, beforeJSON.String, afterJSON.String)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		s.logger.Error("iterate player ban history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取封号历史数据失败")
+		return
+	}
+
+	writeData(w, http.StatusOK, map[string]any{
+		"items": items, "page": page, "pageSize": size, "total": total,
+	})
+}
+
+func parsePlayerBanHistoryFilter(r *http.Request) (playerBanHistoryFilter, error) {
+	filter := playerBanHistoryFilter{
+		Keyword:   strings.TrimSpace(r.URL.Query().Get("keyword")),
+		Operation: strings.TrimSpace(r.URL.Query().Get("operation")),
+		Result:    strings.TrimSpace(r.URL.Query().Get("result")),
+	}
+	if utf8.RuneCountInString(filter.Keyword) > 100 {
+		return playerBanHistoryFilter{}, errors.New("查询内容不能超过 100 个字符")
+	}
+	if filter.Operation != "" && filter.Operation != "ban" && filter.Operation != "unban" {
+		return playerBanHistoryFilter{}, errors.New("操作类型不正确")
+	}
+	if filter.Result != "" && filter.Result != "success" && filter.Result != "failed" {
+		return playerBanHistoryFilter{}, errors.New("操作结果不正确")
+	}
+	return filter, nil
+}
+
+func buildPlayerBanHistoryWhere(filter playerBanHistoryFilter, p principal) (string, []any) {
+	clauses := []string{
+		"audit_row.target_type = ?",
+		"audit_row.action IN (?, ?)",
+		"(? = 1 OR " + nonSuperAuditVisibilitySQL + ")",
+	}
+	args := []any{"game_player", "game.player.ban", "game.player.unban", canSeeSuperFlag(p)}
+	if filter.Operation != "" {
+		clauses = append(clauses, "audit_row.action = ?")
+		args = append(args, "game.player."+filter.Operation)
+	}
+	if filter.Result == "success" {
+		clauses = append(clauses, "audit_row.result_code = 0")
+	} else if filter.Result == "failed" {
+		clauses = append(clauses, "audit_row.result_code <> 0")
+	}
+	if filter.Keyword != "" {
+		like := "%" + filter.Keyword + "%"
+		clauses = append(clauses, `(audit_row.target_id LIKE ? OR game_player.sm_wxID LIKE ? OR game_login.accountName LIKE ?
+OR game_player.sm_name LIKE ? OR audit_row.operator_name LIKE ? OR COALESCE(audit_row.request_json, '') LIKE ?
+OR COALESCE(audit_row.before_json, '') LIKE ? OR COALESCE(audit_row.after_json, '') LIKE ?)`)
+		for range 8 {
+			args = append(args, like)
+		}
+	}
+	return strings.Join(clauses, " AND "), args
+}
+
+func playerBanHistoryOperation(action string) string {
+	if action == "game.player.unban" {
+		return "unban"
+	}
+	return "ban"
+}
+
+func enrichPlayerBanHistoryItem(item *playerBanHistoryItem, requestJSON, beforeJSON, afterJSON string) {
+	var request createPlayerBanRequest
+	var before, after playerBanState
+	_ = json.Unmarshal([]byte(requestJSON), &request)
+	_ = json.Unmarshal([]byte(beforeJSON), &before)
+	_ = json.Unmarshal([]byte(afterJSON), &after)
+	if item.PlayerID == "" {
+		item.PlayerID = firstNonEmpty(after.PlayerID, before.PlayerID, request.PlayerID)
+	}
+	if item.LoginName == "" {
+		item.LoginName = firstNonEmpty(after.LoginName, before.LoginName)
+	}
+	if item.AccountName == "" {
+		item.AccountName = firstNonEmpty(after.AccountName, before.AccountName)
+	}
+	if item.Name == "" {
+		item.Name = firstNonEmpty(after.Name, before.Name)
+	}
+	if item.Operation == "unban" {
+		item.Reason = strings.TrimSpace(before.ClientStatus)
+	} else {
+		item.Reason = firstNonEmpty(request.Reason, after.ClientStatus, before.ClientStatus)
+	}
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func buildBannedPlayerWhere(keyword string) (string, []any) {

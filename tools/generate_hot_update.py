@@ -304,6 +304,48 @@ def copy_runtime_files(build_dir: Path, destination: Path, encrypt_images: bool)
     return stats
 
 
+def encrypt_native_build_pngs(build_dir: Path) -> dict:
+    """Encrypt the Native PNG files that Gradle copies into the APK."""
+    assets_dir = build_dir / "assets"
+    if not assets_dir.is_dir():
+        raise RuntimeError(f"Native 构建目录缺少 assets/: {build_dir}")
+
+    stats = {"encrypted": 0, "already_encrypted": 0, "invalid_png": 0}
+    png_files = [
+        path
+        for path in sorted(assets_dir.rglob("*.png"))
+        if not any(
+            part in IGNORED_NAMES or part.startswith("._") or part.startswith(".")
+            for part in path.relative_to(build_dir).parts
+        )
+    ]
+    print(f"\n开始同步加密 Native 待打包 PNG，共 {len(png_files)} 张...")
+    for index, path in enumerate(png_files, 1):
+        source_data = path.read_bytes()
+        encrypted_data, status = encrypt_legacy_png(source_data)
+        stats[status] += 1
+        if status == "encrypted":
+            temporary = path.with_suffix(path.suffix + ".tmp")
+            try:
+                temporary.write_bytes(encrypted_data)
+                shutil.copystat(path, temporary)
+                os.replace(temporary, path)
+            finally:
+                if temporary.exists():
+                    temporary.unlink()
+        percent = index * 100 / len(png_files) if png_files else 100
+        relative = path.relative_to(build_dir).as_posix()
+        print(
+            f"\r  [{index}/{len(png_files)}  {percent:6.2f}%] {relative[:90]:<90}",
+            end="",
+            flush=True,
+        )
+    if png_files:
+        print()
+    print("Native 待打包 PNG 加密同步完成。", flush=True)
+    return stats
+
+
 def zip_directory(source: Path, zip_path: Path) -> None:
     temporary = zip_path.with_suffix(zip_path.suffix + ".tmp")
     if temporary.exists():
@@ -416,6 +458,7 @@ def main() -> int:
     if update_resources:
         write_json(RESOURCE_MANIFEST_DIR / "project.manifest", project_manifest, compact=True)
         write_json(RESOURCE_MANIFEST_DIR / "version.manifest", version_manifest, compact=True)
+        native_png_stats = encrypt_native_build_pngs(build_dir) if encrypt_images else None
         synced_build_manifests = sync_native_build_manifests(
             build_dir,
             {
@@ -424,6 +467,7 @@ def main() -> int:
             },
         )
     else:
+        native_png_stats = None
         synced_build_manifests = []
 
     next_version = increment_version(version)
@@ -456,6 +500,12 @@ def main() -> int:
     print(f"  resources 清单: {'已更新' if update_resources else '未更新'}")
     if synced_build_manifests:
         print("  Native 构建清单: 已同步，Android Studio 可直接重新打包")
+    if native_png_stats is not None:
+        print(
+            f"  Native 待打包 PNG: 新加密 {native_png_stats['encrypted']} 张"
+            f"，已是加密格式 {native_png_stats['already_encrypted']} 张"
+            f"，无效PNG跳过 {native_png_stats['invalid_png']} 张"
+        )
     return 0
 
 

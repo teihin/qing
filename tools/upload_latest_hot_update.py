@@ -27,7 +27,7 @@ DEFAULTS = {
     "port": 2233,
     "user": "client_update",
     "identity_file": "~/.ssh/id_ed25519_newserver",
-    "remote_dir": "/html/_incoming",
+    "remote_dir": "/www/html/_incoming",
 }
 VERSION_RE = re.compile(r"^\d+(?:\.\d+)*$")
 DEPLOY_VERIFY_TIMEOUT_SECONDS = 90
@@ -139,7 +139,7 @@ def build_sftp_batch(archive_path: Path, version: str, remote_dir: str) -> str:
     final_path = remote_root / remote_name
     temporary_path = remote_root / f".{remote_name}.uploading"
     lines = [
-        f"-mkdir {sftp_quote(str(remote_root))}",
+        f"ls {sftp_quote(str(remote_root))}",
         f"-rm {sftp_quote(str(temporary_path))}",
         f"put {sftp_quote(str(archive_path))} {sftp_quote(str(temporary_path))}",
         f"rename {sftp_quote(str(temporary_path))} {sftp_quote(str(final_path))}",
@@ -257,8 +257,8 @@ def main() -> int:
     user = args.user or prompt_value("SFTP 用户", str(stored["user"]))
     identity_text = args.identity_file or prompt_value("SSH 密钥", str(stored["identity_file"]))
     configured_remote_dir = str(stored["remote_dir"])
-    if args.remote_dir is None and configured_remote_dir in {"/up", "/_incoming"}:
-        configured_remote_dir = "/html/_incoming"
+    if args.remote_dir is None and configured_remote_dir in {"/up", "/_incoming", "/html/_incoming"}:
+        configured_remote_dir = "/www/html/_incoming"
     remote_dir = normalize_remote_dir(args.remote_dir or prompt_value("服务器上传目录", configured_remote_dir))
 
     try:

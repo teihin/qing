@@ -1,0 +1,29 @@
+{
+  "@id": "qing_chattool_proxy",
+  "match": [
+    {
+      "host": [
+        "154.37.155.17"
+      ],
+      "path": [
+        "/chattool/*"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "rewrite",
+      "strip_path_prefix": "/chattool"
+    },
+    {
+      "handler": "reverse_proxy",
+      "flush_interval": -1,
+      "upstreams": [
+        {
+          "dial": "127.0.0.1:8893"
+        }
+      ]
+    }
+  ],
+  "terminal": true
+}

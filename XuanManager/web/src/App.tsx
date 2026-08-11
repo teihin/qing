@@ -9,6 +9,7 @@ import ModulesPage from "./pages/ModulesPage";
 import AgentsPage from "./pages/AgentsPage";
 import PlayersPage from "./pages/PlayersPage";
 import TransactionsPage from "./pages/TransactionsPage";
+import TransactionBlacklistPage from "./pages/TransactionBlacklistPage";
 import RoomRecordsPage from "./pages/RoomRecordsPage";
 import GameAnnouncementPage from "./pages/GameAnnouncementPage";
 import GameNotificationsPage from "./pages/GameNotificationsPage";
@@ -81,9 +82,10 @@ export default function App() {
 
   const page = useMemo(() => {
     const props = { can, notify };
-    if (route === "/game/players" && can("game.player.view")) return <PlayersPage can={can} notify={notify} />;
+    if (route === "/game/players" && can("game.player.view")) return <PlayersPage can={can} isSuper={Boolean(session?.user.isSuper)} notify={notify} />;
     if (route === "/game/agents" && can("game.agent.view")) return <AgentsPage notify={notify} />;
     if (route === "/game/transactions" && can("game.transaction.view")) return <TransactionsPage notify={notify} />;
+    if (route === "/game/transaction-blacklist" && can("game.transaction_blacklist.view")) return <TransactionBlacklistPage can={can} notify={notify} />;
     if (route === "/game/room-records" && can("game.room_record.view")) return <RoomRecordsPage notify={notify} />;
     if (route === "/game/bans" && can("game.ban.view")) return <BansPage can={can} notify={notify} />;
     if (route === "/game/anti-theft" && can("game.anti_theft.view")) return <AntiTheftPage can={can} notify={notify} />;
@@ -100,7 +102,7 @@ export default function App() {
     if (route === "/audit" && can("audit.view")) return <AuditPage notify={notify} />;
     if (can("dashboard.view")) return <DashboardPage notify={notify} />;
     return <div className="panel"><LoadingBlock label="当前角色没有可访问的功能模块" /></div>;
-  }, [route, can, notify]);
+  }, [route, can, notify, session?.user.isSuper]);
 
   if (session === undefined) return <div className="boot-screen"><span className="brand__mark brand__mark--large"><i>X</i></span><LoadingBlock label="正在建立安全会话" /></div>;
   if (session === null) return <LoginPage onSuccess={refreshSession} />;

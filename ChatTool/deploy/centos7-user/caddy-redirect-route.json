@@ -1,0 +1,25 @@
+{
+  "@id": "qing_chattool_redirect",
+  "match": [
+    {
+      "host": [
+        "154.37.155.17"
+      ],
+      "path": [
+        "/chattool"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "static_response",
+      "headers": {
+        "Location": [
+          "/chattool/"
+        ]
+      },
+      "status_code": 308
+    }
+  ],
+  "terminal": true
+}

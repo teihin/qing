@@ -17,7 +17,7 @@ import (
 func TestNormalizeGameRegistration(t *testing.T) {
 	input := gameRegistrationRequest{
 		InvitationCode:   " 648425 ",
-		Nickname:         " 测试Player ",
+		Nickname:         " 测试Player7 ",
 		LoginName:        "User001",
 		Password:         "abc123!",
 		AvatarIndex:      "100",
@@ -30,7 +30,7 @@ func TestNormalizeGameRegistration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("normalize registration: %v", err)
 	}
-	if got.InvitationCode != "648425" || got.Nickname != "测试Player" || got.LoginName != "User001" || got.Password != "abc123!" || got.AvatarIndex != "100" || !got.AntiTheftEnabled || got.DevicePlatform != "web" {
+	if got.InvitationCode != "648425" || got.Nickname != "测试Player7" || got.LoginName != "User001" || got.Password != "abc123!" || got.AvatarIndex != "100" || !got.AntiTheftEnabled || got.DevicePlatform != "web" {
 		t.Fatalf("unexpected registration: %#v", got)
 	}
 }
@@ -57,10 +57,10 @@ func TestNormalizeGameRegistrationRejectsInvalidInput(t *testing.T) {
 		{InvitationCode: "12345", Nickname: "玩家", LoginName: "9001011", Password: "111111"},
 		{InvitationCode: "abc123", Nickname: "玩家", LoginName: "User001", Password: "111111"},
 		{InvitationCode: "648425", Nickname: "玩家", LoginName: "user_01", Password: "111111"},
-		{InvitationCode: "648425", Nickname: "玩家", LoginName: "user01", Password: "111111"},
-		{InvitationCode: "648425", Nickname: "玩家", LoginName: "abcdefghijklmno", Password: "111111"},
+		{InvitationCode: "648425", Nickname: "玩家", LoginName: "usr01", Password: "111111"},
+		{InvitationCode: "648425", Nickname: "玩家", LoginName: "abcdefghijklmnopq", Password: "111111"},
 		{InvitationCode: "648425", Nickname: "", LoginName: "9001011", Password: "111111"},
-		{InvitationCode: "648425", Nickname: "玩家1", LoginName: "9001011", Password: "111111"},
+		{InvitationCode: "648425", Nickname: "玩家_1", LoginName: "9001011", Password: "111111"},
 		{InvitationCode: "648425", Nickname: "玩家!", LoginName: "9001011", Password: "111111"},
 		{InvitationCode: "648425", Nickname: "玩\n家", LoginName: "9001011", Password: "111111"},
 		{InvitationCode: "648425", Nickname: "玩家", LoginName: "9001011", Password: "12345"},
@@ -83,15 +83,42 @@ func TestNormalizeGameRegistrationRejectsInvalidInput(t *testing.T) {
 }
 
 func TestRegistrationLoginNameLengthBounds(t *testing.T) {
-	for _, value := range []string{"A123456", "A1234567890123"} {
+	for _, value := range []string{"A12345", "A123456789012345"} {
 		if !isRegistrationLoginName(value) {
 			t.Fatalf("expected valid login name: %q", value)
 		}
 	}
-	for _, value := range []string{"A12345", "A12345678901234", "A123_456"} {
+	for _, value := range []string{"A1234", "A1234567890123456", "A123_456"} {
 		if isRegistrationLoginName(value) {
 			t.Fatalf("expected invalid login name: %q", value)
 		}
+	}
+}
+
+func TestRegistrationNicknameCharacters(t *testing.T) {
+	for _, value := range []string{"玩家1", "Player2026", "玩家A8"} {
+		if !isChineseEnglishOrDigitNickname(value) {
+			t.Fatalf("expected valid nickname: %q", value)
+		}
+	}
+	for _, value := range []string{"玩家_1", "玩家 1", "玩家!"} {
+		if isChineseEnglishOrDigitNickname(value) {
+			t.Fatalf("expected invalid nickname: %q", value)
+		}
+	}
+}
+
+func TestRegistrationNicknameLockNameIgnoresEnglishCaseAndOuterSpaces(t *testing.T) {
+	first := registrationNicknameLockName(" 玩家Player8 ")
+	second := registrationNicknameLockName("玩家player8")
+	if first != second {
+		t.Fatalf("equivalent nicknames must use the same lock: %q != %q", first, second)
+	}
+	if len(first) != 64 {
+		t.Fatalf("lock name length = %d, want 64", len(first))
+	}
+	if first == registrationNicknameLockName("玩家Player9") {
+		t.Fatal("different nicknames must not use the same lock")
 	}
 }
 

@@ -1,0 +1,18 @@
+# 将下面的规则合并到现有 http://154.37.155.17 站点块中；不要再创建同地址的第二个站点块。
+http://154.37.155.17 {
+    encode zstd gzip
+
+    @chattool_no_slash path /chattool
+    redir @chattool_no_slash /chattool/ 308
+
+    handle_path /chattool/* {
+        request_body {
+            max_size 110MB
+        }
+
+        reverse_proxy 127.0.0.1:8893 {
+            # SSE 必须立即刷新，不能由代理缓冲。
+            flush_interval -1
+        }
+    }
+}

@@ -108,28 +108,91 @@ func TestValidateDissolveAllRequiresExplicitScope(t *testing.T) {
 	}
 }
 
-func TestCurrentRoomListDoesNotUseStalePlayerRoomIDs(t *testing.T) {
+func TestCurrentRoomListUsesKBHallRoomCommand(t *testing.T) {
+	client := fakeGameHTTPClient(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/hall/command" || request.URL.Query().Get("header") != "查询_大厅_所有房间" {
+			t.Fatalf("unexpected request: %s", request.URL.String())
+		}
+		var params map[string]any
+		if err := json.Unmarshal([]byte(request.URL.Query().Get("param")), &params); err != nil {
+			t.Fatalf("decode params: %v", err)
+		}
+		if params["page"] != float64(1) || params["count"] != float64(200) || !strings.HasPrefix(params["context"].(string), "xuan-hall-room-list-") {
+			t.Fatalf("unexpected params: %#v", params)
+		}
+		body := `{"ret_code":512,"ret_result":{"number":1,"count":3,"result":[{"room_id":851724,"room_type":"Custom","room_name":"1-851724","room_status":"游戏中","game_status":"playing","play_mode":"传销扯旋","special_rule":["特牌","底皮1/3"],"round_count":3,"game_round":99999,"player_count":4,"watcher_count":1,"player_and_watcher_count":5,"inhold_count":2,"max_number":8,"club_id":"0","club_name":"","creator_guuid":"648425","creator_name":"boss","create_datetime":"2026-08-11 10:00:00","remark":"26分钟"}],"context":"admin-room-list"}}`
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+	})
 	recorder := httptest.NewRecorder()
-	request := httptest.NewRequest(http.MethodGet, "/api/game/room-maintenance", nil)
-	server := &Server{}
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/hall/rooms?page=2&page_size=999", nil)
+	server := &Server{cfg: config.Config{GameAdminURL: "http://127.0.0.1:8890"}, gameHTTPClient: client}
 	server.handleListCurrentRooms(recorder, request, principal{})
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
 	var response struct {
 		Data struct {
-			Available bool   `json:"available"`
-			Source    string `json:"source"`
-			Total     int    `json:"total"`
+			Available    bool           `json:"available"`
+			Source       string         `json:"source"`
+			Page         int            `json:"page"`
+			PageSize     int            `json:"pageSize"`
+			Total        int            `json:"total"`
+			PlayerCount  int            `json:"playerCount"`
+			WatcherCount int            `json:"watcherCount"`
+			InholdCount  int            `json:"inholdCount"`
+			Items        []hallRoomItem `json:"items"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if response.Data.Available || response.Data.Source != "unavailable" || response.Data.Total != 0 {
+	if !response.Data.Available || response.Data.Source != "kb_hall_active_rooms" || response.Data.Page != 2 || response.Data.PageSize != 200 || response.Data.Total != 3 {
 		t.Fatalf("unexpected live-room state: %#v", response.Data)
 	}
-	if strings.Contains(recorder.Body.String(), "\"source\":\"tbl_Account.sm_roomID\"") {
-		t.Fatal("stale player room IDs must not be exposed as current rooms")
+	if response.Data.PlayerCount != 4 || response.Data.WatcherCount != 1 || response.Data.InholdCount != 2 || len(response.Data.Items) != 1 || response.Data.Items[0].RoomID != 851724 {
+		t.Fatalf("unexpected room totals/items: %#v", response.Data)
+	}
+}
+
+func TestCurrentRoomListRejectsLegacyFailure(t *testing.T) {
+	client := fakeGameHTTPClient(func(request *http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"ret_code":769,"ret_result":{"error":"权限不足"}}`))}, nil
+	})
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/hall/rooms", nil)
+	server := &Server{cfg: config.Config{GameAdminURL: "http://127.0.0.1:8890"}, gameHTTPClient: client}
+	server.handleListCurrentRooms(recorder, request, principal{})
+	if recorder.Code != http.StatusBadGateway || !strings.Contains(recorder.Body.String(), "ROOM_LIST_REJECTED") || !strings.Contains(recorder.Body.String(), "权限不足") {
+		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestHallRoomPageParams(t *testing.T) {
+	request := httptest.NewRequest(http.MethodGet, "/api/admin/hall/rooms?page=3&page_size=201", nil)
+	page, size := hallRoomPageParams(request)
+	if page != 3 || size != 200 {
+		t.Fatalf("page params = %d, %d", page, size)
+	}
+	request = httptest.NewRequest(http.MethodGet, "/api/admin/hall/rooms?page=0&page_size=bad", nil)
+	page, size = hallRoomPageParams(request)
+	if page != 1 || size != 50 {
+		t.Fatalf("invalid params should use defaults, got %d, %d", page, size)
+	}
+}
+
+func TestDecodeHallRoomListRequiresResultArray(t *testing.T) {
+	for _, raw := range []string{`[]`, `{}`, `{"number":0,"count":0,"result":{}}`} {
+		if _, err := decodeHallRoomListResult(json.RawMessage(raw), 0); err == nil {
+			t.Fatalf("malformed result accepted: %s", raw)
+		}
+	}
+}
+
+func TestSafeHallRoomListErrorDoesNotExposeUnknownMessage(t *testing.T) {
+	if got := safeHallRoomListError(json.RawMessage(`{"error":"内部异常堆栈"}`)); got != "获取大厅房间列表失败" {
+		t.Fatalf("unsafe error exposed: %q", got)
+	}
+	if got := safeHallRoomListError(json.RawMessage(`{"error":"BOSS未初始化"}`)); got != "BOSS未初始化" {
+		t.Fatalf("safe error hidden: %q", got)
 	}
 }

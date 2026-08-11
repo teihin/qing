@@ -97,6 +97,28 @@ export interface BannedPlayersResponse {
   total: number;
 }
 
+export interface PlayerBanHistoryItem {
+  id: number;
+  playerId: string;
+  loginName: string;
+  accountName: string;
+  name: string;
+  operation: "ban" | "unban";
+  reason: string;
+  operatorName: string;
+  success: boolean;
+  resultCode: number;
+  resultMessage: string;
+  createdAt: string;
+}
+
+export interface PlayerBanHistoryResponse {
+  items: PlayerBanHistoryItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface AntiTheftAccountItem {
   registrationId: number;
   playerId: string;
@@ -127,28 +149,73 @@ export interface PlayerBalanceAdjustmentResult {
   message: string;
 }
 
-export interface CurrentRoomPlayer {
+export interface PlayerPasswordResetResult {
   playerId: string;
-  name: string;
-  balance: number;
-  clientStatus: string;
+  message: string;
+}
+
+export interface PlayerSensitiveInfo {
+  playerId: string;
+  ip: string;
+  gps: string;
+  latitude: number | null;
+  longitude: number | null;
+  locationAvailable: boolean;
+  locationMessage: string;
 }
 
 export interface CurrentRoomItem {
   roomId: number;
   roomType: string;
+  roomName: string;
+  roomStatus: string;
+  gameStatus: string;
+  playMode: string;
+  specialRule: string[];
+  roundCount: number;
+  gameRound: number;
   playerCount: number;
-  players: CurrentRoomPlayer[];
+  watcherCount: number;
+  playerAndWatcherCount: number;
+  inholdCount: number;
+  maxNumber: number;
+  clubId: string;
+  clubName: string;
+  creatorGuuid: string;
+  creatorName: string;
+  createDatetime: string;
+  remark: string;
 }
 
 export interface CurrentRoomsResponse {
   available: boolean;
   items: CurrentRoomItem[];
+  page: number;
+  pageSize: number;
   total: number;
   playerCount: number;
+  watcherCount: number;
+  inholdCount: number;
   source: string;
   message: string;
   refreshedAt: string;
+}
+
+export interface TransactionBlacklistItem {
+  playerId: string;
+  loginName: string;
+  name: string;
+  agentId: string;
+  roomId: number;
+  exists: boolean;
+}
+
+export interface TransactionBlacklistState {
+  enabled: boolean;
+  items: TransactionBlacklistItem[];
+  total: number;
+  revision: string;
+  warnings: string[];
 }
 
 export interface PlayerOptimizationItem {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, formatDate, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
-import type { BannedPlayerItem, BannedPlayersResponse } from "../types";
+import type { BannedPlayerItem, BannedPlayersResponse, PlayerBanHistoryResponse } from "../types";
 
 const defaultReason = "你的账号已被暂停使用！";
 
@@ -20,6 +20,7 @@ export default function BansPage({ can, notify }: {
   const [confirmed, setConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [unbanTarget, setUnbanTarget] = useState<BannedPlayerItem | null>(null);
+  const [historyRefreshVersion, setHistoryRefreshVersion] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -65,6 +66,7 @@ export default function BansPage({ can, notify }: {
       setAppliedKeyword("");
       setKeyword("");
       setPage(1);
+      setHistoryRefreshVersion((value) => value + 1);
       await load();
     } catch (cause) {
       notify(errorMessage(cause, "封号失败"), "error");
@@ -87,7 +89,7 @@ export default function BansPage({ can, notify }: {
 
   return (
     <div className="page-stack">
-      <PageHeader eyebrow="ACCOUNT ACCESS CONTROL" title="封号管理" description="按游戏玩家 ID 封禁账号，并集中查看和解除全部当前封号。" actions={<span className="configuration-status is-live"><i />游戏账号实时状态</span>} />
+      <PageHeader eyebrow="ACCOUNT ACCESS CONTROL" title="封号管理" description="按游戏玩家 ID 封禁账号，查看当前封号，并追溯每次封号与解封记录。" actions={<span className="configuration-status is-live"><i />游戏账号实时状态</span>} />
 
       <section className="panel ban-create-panel">
         <div className="ban-create-intro">
@@ -130,13 +132,93 @@ export default function BansPage({ can, notify }: {
         </>}
       </section>
 
-      {unbanTarget && <UnbanModal item={unbanTarget} notify={notify} onClose={() => setUnbanTarget(null)} onDone={async () => { setUnbanTarget(null); await load(); }} />}
+      <BanHistoryPanel refreshVersion={historyRefreshVersion} notify={notify} />
+
+      {unbanTarget && <UnbanModal item={unbanTarget} notify={notify} onClose={() => setUnbanTarget(null)} onDone={async () => { setUnbanTarget(null); setHistoryRefreshVersion((value) => value + 1); await load(); }} />}
     </div>
   );
 }
 
 function BanRow({ item, canRemove, onUnban }: { item: BannedPlayerItem; canRemove: boolean; onUnban: (item: BannedPlayerItem) => void }) {
   return <tr><td><div className="user-cell"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small></div></div></td><td><code>{item.loginName || "—"}</code>{item.accountName && item.accountName !== item.loginName && <small className="cell-subtitle">KBE：{item.accountName}</small>}</td><td><strong className="ban-reason">{item.reason}</strong></td><td><span>{item.roomId > 0 ? `房间 ${item.roomId}` : "未在房间"}</span><small className="cell-subtitle">{item.agentId ? `代理 ${item.agentId}` : "无直属代理"}{item.clientVersion ? ` · ${item.clientVersion}` : ""}</small></td><td>{item.bannedAt ? <><strong>{formatDate(item.bannedAt)}</strong><small className="cell-subtitle">操作者：{item.bannedBy || "后台"}</small></> : <><span>历史 / 外部操作</span><small className="cell-subtitle">最近登录：{formatDate(item.lastLoginAt)}</small></>}</td><td><div className="row-actions row-actions--right">{canRemove ? <button className="ban-unban-button" type="button" onClick={() => onUnban(item)}>解除封号</button> : <span className="readonly-badge"><i />仅查看</span>}</div></td></tr>;
+}
+
+function BanHistoryPanel({ refreshVersion, notify }: {
+  refreshVersion: number;
+  notify: (message: string, kind?: "success" | "error") => void;
+}) {
+  const [data, setData] = useState<PlayerBanHistoryResponse | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [operation, setOperation] = useState("all");
+  const [result, setResult] = useState("all");
+  const [applied, setApplied] = useState({ keyword: "", operation: "all", result: "all" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+      if (applied.keyword) params.set("keyword", applied.keyword);
+      if (applied.operation !== "all") params.set("operation", applied.operation);
+      if (applied.result !== "all") params.set("result", applied.result);
+      const response = await api<PlayerBanHistoryResponse>(`/api/game/bans/history?${params.toString()}`);
+      setData(response);
+      const pages = Math.max(1, Math.ceil(response.total / pageSize));
+      if (page > pages) setPage(pages);
+    } catch (cause) {
+      notify(errorMessage(cause, "封号历史加载失败"), "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [applied, notify, page, pageSize]);
+
+  useEffect(() => { void refreshVersion; void load(); }, [load, refreshVersion]);
+
+  const search = () => {
+    setApplied({ keyword: keyword.trim(), operation, result });
+    setPage(1);
+  };
+  const reset = () => {
+    setKeyword("");
+    setOperation("all");
+    setResult("all");
+    setApplied({ keyword: "", operation: "all", result: "all" });
+    setPage(1);
+  };
+  const filtersActive = Boolean(applied.keyword || applied.operation !== "all" || applied.result !== "all");
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
+  const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
+  const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
+
+  return <section className="panel ban-history-panel">
+    <header className="ban-history-header">
+      <div><span>BAN OPERATION HISTORY</span><h2>封号历史记录</h2><p>记录后台执行的封号和解封操作；失败记录也会保留，便于核查。</p></div>
+      <strong>{data?.total ?? "—"}<small>条记录</small></strong>
+    </header>
+    <form className="ban-history-filters" onSubmit={submitGuard(async () => search())}>
+      <label className="ban-history-search"><span>⌕</span><input value={keyword} maxLength={100} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家ID、昵称、账号、原因或操作人" /></label>
+      <label><span>操作类型</span><select value={operation} onChange={(event) => setOperation(event.target.value)}><option value="all">全部操作</option><option value="ban">封号</option><option value="unban">解封</option></select></label>
+      <label><span>操作结果</span><select value={result} onChange={(event) => setResult(event.target.value)}><option value="all">全部结果</option><option value="success">成功</option><option value="failed">失败</option></select></label>
+      <Button type="submit">查询记录</Button>
+      {filtersActive && <Button type="button" variant="secondary" onClick={reset}>重置</Button>}
+    </form>
+
+    {loading && !data ? <LoadingBlock label="正在读取封号历史记录" /> : !data || data.items.length === 0 ? <EmptyState title={filtersActive ? "没有匹配的封号记录" : "暂无封号历史记录"} description={filtersActive ? "可以修改或重置查询条件。" : "通过本后台执行封号或解封后，记录会显示在这里。"} /> : <>
+      <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
+        <table className="ban-history-table"><thead><tr><th>操作时间</th><th>玩家</th><th>操作</th><th>当时封号原因</th><th>操作人</th><th>结果</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
+          <td><strong>{formatBanHistoryDate(item.createdAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
+          <td><div className="ban-history-player"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small><small>账号：{item.loginName || item.accountName || "—"}</small></div></div></td>
+          <td><span className={`ban-history-operation is-${item.operation}`}><i />{item.operation === "ban" ? "封号" : "解除封号"}</span></td>
+          <td><strong className="ban-history-reason">{item.reason || "未记录原因"}</strong></td>
+          <td><strong>{item.operatorName || "系统 / 未知"}</strong><small className="cell-subtitle">后台管理账号</small></td>
+          <td><span className={`ban-history-result ${item.success ? "is-success" : "is-failed"}`}><i />{item.success ? "操作成功" : "操作失败"}</span><small className="cell-subtitle">{item.resultMessage || (item.success ? "已完成状态回读" : `错误码 ${item.resultCode}`)}</small></td>
+        </tr>)}</tbody></table>
+      </div>
+      <footer className="table-pagination"><span>显示 {firstRow}–{lastRow}，共 {data.total} 条历史记录</span><div><label>每页<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>下一页</button></div></footer>
+    </>}
+  </section>;
 }
 
 function UnbanModal({ item, notify, onClose, onDone }: { item: BannedPlayerItem; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void; onDone: () => Promise<void> }) {
@@ -160,4 +242,10 @@ function UnbanModal({ item, notify, onClose, onDone }: { item: BannedPlayerItem;
 
 function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof ApiError ? cause.message : fallback;
+}
+
+function formatBanHistoryDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "—";
+  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
 }
