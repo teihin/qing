@@ -51,6 +51,13 @@ export default class panelGameView extends UIPanelViewBase {
     public displayQP3:dragonBones.ArmatureDisplay = null; //切牌动画\
 
     private scrollJCList:ScrollViewEx = null;
+
+    // 新玩家坐下分两步处理：先预坐锁座，收到PlayerList确认后再选择带入。
+    private preSitState:string = "idle"; // idle / waiting / selecting / submitting
+    private preSitSite:number = -1;
+    private lastModalPrompt:string = "";
+    private lastModalPromptTime:number = 0;
+
     onEnable(){
        // Debug.Error("进入enable")
     }
@@ -302,6 +309,7 @@ export default class panelGameView extends UIPanelViewBase {
 
     public CloseAllShow()
     {
+        this.CancelPreSitReservation();
         Tool.GetChild(this.node,"ConfigMain").active = false;
         Tool.GetChild(this.node,"实时战绩").active = false;
         Tool.GetChild(this.node,"牌局回顾").active = false;
@@ -395,6 +403,7 @@ export default class panelGameView extends UIPanelViewBase {
     {
         if(event.getCurrentTarget().name === this.node.name)
         {
+            this.CancelPreSitReservation();
             Tool.GetChild(this.node,"ConfigMain").active = false;
             Tool.GetChild(this.node,"实时战绩").active = false;
             Tool.GetChild(this.node,"牌局回顾").active = false;
@@ -653,16 +662,18 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "关闭上层")
         {
+            if(button.node.parent.name === "带入窗口")
+                this.CancelPreSitReservation();
             button.node.parent.active = false;
         }
         else if(button.node.name === "关闭上上层")
         {
+            if(button.node.parent.parent.name === "带入窗口")
+                this.CancelPreSitReservation();
             button.node.parent.parent.active = false;
         }
         else if(button.node.name === "确认带入")
         {
-            let strName = Tool.GetChild(this.node,"带入窗口/sit").getComponent(cc.Label).string;
-            strName = strName.replace("坐下", "");
             let strMsg = Tool.GetChild(this.node,"带入窗口/msg").getComponent(cc.Label).string;
             strMsg = strMsg.replace("带入积分:", "");
 
@@ -687,23 +698,19 @@ export default class panelGameView extends UIPanelViewBase {
                 strClubID = this.gameLogic.GetPlayerCtlByID(0).info.req_club_id;
 
 
-            let nSitPos = 0;
-            //自己如果没有坐
-            
+            //预坐后确认带入，或者已经正式坐下后的普通补分，都不再传site。
             if (this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID)
             {
-                nSitPos = Number(strName);
-                GameDataManager.getAccount().reqRoomCommand("{\"header\":\"坐下_事件\",\"money\":" + strMsg + ",\"ready\":1,\"type\":\"申请\",\"club_id\":\"" + strClubID + "\"}", "坐下_事件1");
+                let strType = this.preSitState == "selecting" ? "直接" : "申请";
+                if(this.preSitState == "selecting")
+                    this.preSitState = "submitting";
+                GameDataManager.getAccount().reqRoomCommand("{\"header\":\"坐下_事件\",\"money\":" + strMsg + ",\"ready\":1,\"type\":\"" + strType + "\",\"club_id\":\"" + strClubID + "\"}", "坐下_事件1");
             }
             else
             {
-                //计算出真实坐下位置
-                nSitPos = this.gameLogic.nSelfIndex + Number(strName);
-                if (nSitPos > this.gameLogic.MAX_PLAYER - 1)
-                {
-                    nSitPos = nSitPos - this.gameLogic.MAX_PLAYER;
-                }
-                GameDataManager.getAccount().reqRoomCommand("{\"header\":\"坐下_事件\",\"site\":" + nSitPos.toString() + ",\"money\":" + strMsg + ",\"ready\":1,\"type\":\"申请\",\"club_id\":\"" + strClubID + "\"}", "坐下_事件");
+                this.ClearPreSitState(true);
+                this.ShowMsg("占座已失效，请重新选择座位！");
+                return;
             }
 
             button.node.parent.active = false;            
@@ -1608,10 +1615,35 @@ export default class panelGameView extends UIPanelViewBase {
         this.node.getChildByName("开局提示").active = false;
     }
 
+    private ParsePromptInfo(strMsg:string):any
+    {
+        try
+        {
+            // 兼容服务端历史消息中对象或数组末尾多余的逗号及空白。
+            return JSON.parse(strMsg.replace(/,\s*([}\]])/g, "$1"));
+        }
+        catch(error)
+        {
+            Debug.Error("PromptInfo Json 格式异常！");
+            return null;
+        }
+    }
+
+    private ShowModalPrompt(strMsg:string)
+    {
+        let nNow = Date.now();
+        // 同一错误可能同时从onRoomCommand和PromptInfo返回，短时间内只弹一次。
+        if(this.lastModalPrompt == strMsg && nNow - this.lastModalPromptTime < 1500)
+            return;
+
+        this.lastModalPrompt = strMsg;
+        this.lastModalPromptTime = nNow;
+        UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, strMsg);
+    }
+
     onPromptInfo(strMsg:string)
     {
-        strMsg = strMsg.replace(',}',"}");
-        let json = JSON.parse(strMsg);
+        let json = this.ParsePromptInfo(strMsg);
         if(json === null)
         {
             Debug.Log("Json 格式异常！");
@@ -1620,7 +1652,14 @@ export default class panelGameView extends UIPanelViewBase {
         let strWord = json["word"];
         if(strWord!=null && strWord != "")
         {
-            if (strWord == "房主同意坐下")
+            if(strWord.indexOf("带入金币不足") >= 0)
+            {
+                // 预坐失败由服务端释放座位，只清理客户端状态，不再额外发送起立。
+                this.ClearPreSitState(true);
+                this.ShowModalPrompt(strWord);
+                return;
+            }
+            else if (strWord == "房主同意坐下")
             {
                 //this.gameLogic.GetPlayerCtlByID(0).PlayAudio(0, "坐下");
             }
@@ -1649,8 +1688,7 @@ export default class panelGameView extends UIPanelViewBase {
     }
     onPromptInfo2(strMsg:string)
     {
-        strMsg = strMsg.replace(',}',"}");
-        let json = JSON.parse(strMsg);
+        let json = this.ParsePromptInfo(strMsg);
         if(json === null)
         {
             Debug.Log("Json 格式异常！");
@@ -1749,12 +1787,28 @@ export default class panelGameView extends UIPanelViewBase {
     }
     public onRoomCommand(nCode:number, param:string)
     {
+        if(param.indexOf("预坐_事件") >= 0)
+        {
+            if(nCode != 0x200)
+            {
+                let bWasPreSitting = this.preSitState != "idle";
+                this.ClearPreSitState(true);
+                if(bWasPreSitting)
+                {
+                    let strMsg = nCode == 0x302 ? "带入金币不足！" : "占座失败，请重新选择座位！";
+                    this.ShowModalPrompt(strMsg);
+                }
+            }
+            return;
+        }
+
         if (param.indexOf("坐下") >= 0)
         {
             if (nCode == 0x200)
             {
                 if(param == "坐下_事件1")
                 {
+                    this.ClearPreSitState(false);
                     this.ShowMsg("带入成功!");
                 }
                 else
@@ -1765,7 +1819,11 @@ export default class panelGameView extends UIPanelViewBase {
             }
             else
             {
-                
+                if(param == "坐下_事件1" && this.preSitState == "submitting")
+                {
+                    this.CancelPreSitReservation(true);
+                    this.ShowMsg("带入失败，请重新选择座位！");
+                }
             }
         }
     }
@@ -2483,8 +2541,12 @@ export default class panelGameView extends UIPanelViewBase {
     
     public onSitButton(param:string)
     {
-            //检测当前模式，根据模式走不同流程
-            let strSet:string = GameDataManager.getAccount().roomSetting;
+            if(this.preSitState != "idle")
+            {
+                this.ShowMsg("正在占座，请稍候！");
+                return;
+            }
+
             //检测当前是否已经坐下
             let strUserID = GameDataManager.getAccount().guuid;
             if (strUserID == this.gameLogic.GetPlayerCtlByID(0).info.strUserID)
@@ -2534,68 +2596,67 @@ export default class panelGameView extends UIPanelViewBase {
             }
 
 
-            //this.checkBuMang();
-            this.node.getChildByName("带入窗口").active = true;
-            Tool.GetChild(this.node,"带入窗口/sit").getComponent(cc.Label).string = param;
-        
+            //首次坐下先锁座；PlayerList确认占座成功后再自动打开带入窗口。
+            let strName = param.replace("坐下", "");
+            let nSitPos = this.gameLogic.nSelfIndex + Number(strName);
+            if (nSitPos > this.gameLogic.MAX_PLAYER - 1)
+                nSitPos = nSitPos - this.gameLogic.MAX_PLAYER;
 
+            this.preSitState = "waiting";
+            this.preSitSite = nSitPos;
+            GameDataManager.getAccount().reqRoomCommand("{\"header\":\"预坐_事件\",\"site\":" + nSitPos.toString() + "}", "预坐_事件");
+    }
 
-            let strGold = GameDataManager.getAccount().gold;
+    // DrhLogicMgr完成PlayerList渲染后调用，保证先显示占座状态，再弹出带入选择。
+    public OnPlayerListUpdatedForPreSit()
+    {
+        if(this.preSitState == "idle")
+            return;
 
+        let strUserID = GameDataManager.getAccount().guuid;
+        let isSelfSeated = this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID;
+        if(this.preSitState == "waiting")
+        {
+            if(!isSelfSeated)
+                return;
 
-            let nPos = strSet.indexOf("底皮");
-            let nEnd = strSet.indexOf(" ", nPos);
-            let strDi = strSet.substr(nPos, nEnd - nPos);
-
-            nPos = strSet.indexOf("最小带入");
-            nEnd = strSet.indexOf(" ", nPos);
-            let strMin = strSet.substr(nPos, nEnd - nPos);
-            strMin = strMin.replace("最小带入", "");
-
-            let strMaxIn = strGold;
-
-            let nCount = Number(strMaxIn) / Number(strMin);
-
-            let slider = Tool.GetChild(this.node,"带入窗口/Slider").getComponent(SliderEx);              
-            slider.maxValue = nCount-1;
-            
-
-            //找到自己的历史带入
-            let nHisIn = 0;
-            for (let one of this.gameLogic.arrayHisIn)
+            if(this.gameLogic.nSelfIndex != this.preSitSite)
             {
-                if (one.indexOf(strUserID) >= 0)
-                {
-                    nHisIn = Number(one.replace(strUserID + "@", ""));
-                    break;
-                }
+                this.CancelPreSitReservation();
+                this.ShowMsg("占座位置异常，请重新选择座位！");
+                return;
             }
 
-            Tool.GetChild(this.node,"带入窗口/gold").getComponent(cc.Label).string = strGold;
-            Tool.GetChild(this.node,"带入窗口/已带入").getComponent(cc.Label).string = this.CheckSmallPlay(nHisIn.toString()) + "/" + strMaxIn;
-            
+            this.preSitState = "selecting";
+            this.bFromTC = true;
+            let button = Tool.GetChild(this.node,"ConfigMain/补充钵钵").getComponent(cc.Button);
+            this.onButtonClick(button);
+            return;
+        }
 
-            if (Number(strMaxIn) < Number(strMin))
-            {
-                Tool.GetChild(this.node,"带入窗口/余额不足提示").active = true;
-                Tool.GetChild(this.node,"带入窗口/余额不足提示/txt").getComponent(cc.Label).string = "金币余额不足" + Number(strMin) + "，请先充值！";                
-            }
-            else
-            {
-                Tool.GetChild(this.node,"带入窗口/余额不足提示").active = false;                
-            }
+        // 选择期间服务端因超时释放座位时，PlayerList会移除当前玩家。
+        if(!isSelfSeated)
+        {
+            this.ClearPreSitState(true);
+            this.ShowMsg("占座已超时，请重新选择座位！");
+        }
+    }
 
-            Tool.GetChild(this.node,"带入窗口/msg").getComponent(cc.Label).string = strMin;
-            
-            
-            slider.progress = 0;
-            let callback = ()=>{                
-                let nBei = slider.curValue + 1;
-                let nNew = Number(strMin) * nBei;
-                Tool.GetChild(this.node,"带入窗口/msg").getComponent(cc.Label).string = nNew.toString();
-            };
-            slider.node.off("onValueChange",callback,this);
-            slider.node.on("onValueChange",callback,this);
+    private CancelPreSitReservation(includeSubmitting:boolean = false)
+    {
+        if(this.preSitState == "idle" || (this.preSitState == "submitting" && !includeSubmitting))
+            return;
+
+        this.ClearPreSitState(true);
+        GameDataManager.getAccount().reqRoomCommand("{\"header\":\"起立_事件\"}", "起立_事件");
+    }
+
+    private ClearPreSitState(closeBuyIn:boolean)
+    {
+        this.preSitState = "idle";
+        this.preSitSite = -1;
+        if(closeBuyIn)
+            Tool.GetChild(this.node,"带入窗口").active = false;
     }
     //在位置上检查是否补芒
     public checkBuMang(strType:string = "补分"){

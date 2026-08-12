@@ -194,7 +194,7 @@ export default class panelLogin extends UIPanelViewBase {
         if(key === "invitationCode")
             filtered = filtered.replace(/[^0-9]/g,"");
         else if(key === "nickname")
-            filtered = filtered.replace(/[^A-Za-z\u3400-\u4DBF\u4E00-\u9FFF]/g,"");
+            filtered = filtered.replace(/[^A-Za-z0-9\u3400-\u4DBF\u4E00-\u9FFF]/g,"");
         else if(key === "loginName")
             filtered = filtered.replace(/[^A-Za-z0-9]/g,"");
         if(filtered !== editBox.string)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, jsonBody } from "./api";
+import { api, ApiError, jsonBody, SESSION_EXPIRED_EVENT } from "./api";
 import Layout from "./components/Layout";
 import { Field, FormActions, LoadingBlock, Modal, submitGuard, Toast } from "./components/ui";
 import AuditPage from "./pages/AuditPage";
@@ -47,6 +47,26 @@ export default function App() {
   }, []);
 
   useEffect(() => { void refreshSession(); }, [refreshSession]);
+  useEffect(() => {
+    const expireSession = () => setSession(null);
+    window.addEventListener(SESSION_EXPIRED_EVENT, expireSession);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, expireSession);
+  }, []);
+  useEffect(() => {
+    if (!session) return;
+    const verifySession = () => {
+      void api<SessionData>("/api/auth/me").then(setSession).catch(() => {
+        // A 401 response already emits SESSION_EXPIRED_EVENT. Transient network
+        // failures must not sign an operator out of an otherwise valid session.
+      });
+    };
+    window.addEventListener("focus", verifySession);
+    const timer = window.setInterval(verifySession, 60_000);
+    return () => {
+      window.removeEventListener("focus", verifySession);
+      window.clearInterval(timer);
+    };
+  }, [session]);
   useEffect(() => {
     const onHash = () => setRoute(routeFromHash());
     window.addEventListener("hashchange", onHash);

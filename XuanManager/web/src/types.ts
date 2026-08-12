@@ -358,9 +358,6 @@ export interface PlayerItem {
   vipLevel: number;
   agentId: string;
   agentName: string;
-  bigAgentId: string;
-  partnerAgentId: string;
-  chiefAgentId: string;
   roomId: number;
   roomType: string;
   clientVersion: string;
@@ -371,10 +368,6 @@ export interface PlayerItem {
   lastLoginAt: string | null;
   loginCount: number;
   remark: string;
-  optimizeOneCount: number;
-  optimizeOneChance: number;
-  optimizeTwoCount: number;
-  optimizeTwoChance: number;
 }
 
 export interface PlayerRoomSummary {

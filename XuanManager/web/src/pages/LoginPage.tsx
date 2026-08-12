@@ -54,7 +54,7 @@ export default function LoginPage({ onSuccess }: { onSuccess: () => Promise<void
             <div className="input-wrap"><span>密</span><input type={showPassword ? "text" : "password"} autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="请输入登录密码" /><button type="button" onClick={() => setShowPassword((value) => !value)}>{showPassword ? "隐藏" : "显示"}</button></div>
           </Field>
           <Button className="login-submit" type="submit" disabled={busy || !username || !password}>{busy ? "正在安全验证…" : "进入管理后台"}<span>→</span></Button>
-          <div className="login-card__security"><span className="security-dot" />当前页面仅用于后台管理系统用户</div>
+          <div className="login-card__security"><span className="security-dot" />后台账号仅保留最近一次登录，旧设备会自动退出</div>
         </form>
         <p className="login-copyright">© 2026 XuanManager · Authorized access only</p>
       </section>

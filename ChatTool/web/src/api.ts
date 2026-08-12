@@ -4,6 +4,12 @@ let csrfToken = ''
 let playerSessionRef = ''
 const basePath = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '')
 
+export const agentSessionExpiredEvent = 'chattool:agent-session-expired'
+
+export function notifyAgentSessionExpired(message = '登录已失效，请重新登录') {
+	window.dispatchEvent(new CustomEvent(agentSessionExpiredEvent, { detail: { message } }))
+}
+
 export function appURL(path: string): string {
   const normalized = path.startsWith('/') ? path : `/${path}`
   return `${basePath}${normalized}`
@@ -38,8 +44,11 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 	if (csrfToken && init.method && init.method !== 'GET') headers.set('X-CSRF-Token', csrfToken)
-	if (playerSessionRef && path.startsWith('/api/player/')) headers.set('X-Player-Session-Ref', playerSessionRef)
+  if (playerSessionRef && path.startsWith('/api/player/')) headers.set('X-Player-Session-Ref', playerSessionRef)
   const response = await fetch(appURL(path), { ...init, headers, credentials: 'same-origin' })
+	if (response.status === 401 && path.startsWith('/api/agent/') && path !== '/api/agent/auth/login') {
+		notifyAgentSessionExpired()
+	}
   if (response.status === 204) return undefined as T
   let result: Envelope<T>
   try {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { api, ApiError, appURL, jsonBody, setCSRF } from './api'
+import { agentSessionExpiredEvent, api, ApiError, appURL, jsonBody, notifyAgentSessionExpired, setCSRF } from './api'
 import { createClientMessageID, gameAdminPlayerURL, playIncomingMessageSound, readAgentSoundPreference, writeAgentSoundPreference } from './client'
 import { Avatar, EmptyState, LoadingScreen, MessageBubble, StatusDot, formatAgo, formatDateTime } from './components'
 import type { Agent, Conversation, ConversationDetail, Message, ServiceChannel, TeamMember } from './types'
@@ -11,19 +11,34 @@ type PlayerMemo = { id: number; playerId: string; content: string; createdBy: nu
 export default function AgentApp() {
   const [agent, setAgent] = useState<Agent | null>(null)
   const [checking, setChecking] = useState(true)
+	const [sessionNotice, setSessionNotice] = useState('')
+	const agentRef = useRef<Agent | null>(null)
+
+	useEffect(() => {
+		const handleSessionExpired = (event: Event) => {
+			if (!agentRef.current) return
+			agentRef.current = null
+			const message = (event as CustomEvent<{ message?: string }>).detail?.message
+			setCSRF('')
+			setAgent(null)
+			setSessionNotice(message || '登录已失效，请重新登录')
+		}
+		window.addEventListener(agentSessionExpiredEvent, handleSessionExpired)
+		return () => window.removeEventListener(agentSessionExpiredEvent, handleSessionExpired)
+	}, [])
 
   useEffect(() => {
     void api<{ agent: Agent; csrfToken: string }>('/api/agent/auth/me').then((result) => {
-      setCSRF(result.csrfToken); setAgent(result.agent)
+	  agentRef.current = result.agent; setCSRF(result.csrfToken); setAgent(result.agent)
     }).catch(() => undefined).finally(() => setChecking(false))
   }, [])
 
   if (checking) return <LoadingScreen label="正在进入客服工作台" />
-  if (!agent) return <AgentLogin onLogin={(value, token) => { setCSRF(token); setAgent(value) }} />
-  return <AgentWorkspace agent={agent} onLogout={() => setAgent(null)} />
+	if (!agent) return <AgentLogin notice={sessionNotice} onLogin={(value, token) => { agentRef.current = value; setSessionNotice(''); setCSRF(token); setAgent(value) }} />
+	return <AgentWorkspace agent={agent} onLogout={() => { agentRef.current = null; setCSRF(''); setAgent(null) }} />
 }
 
-function AgentLogin({ onLogin }: { onLogin: (agent: Agent, token: string) => void }) {
+function AgentLogin({ notice, onLogin }: { notice: string; onLogin: (agent: Agent, token: string) => void }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -43,7 +58,7 @@ function AgentLogin({ onLogin }: { onLogin: (agent: Agent, token: string) => voi
       <header><span className="mobile-login-mark">8L</span><small>客服工作台</small><h2>欢迎回来</h2><p>登录后开始处理玩家咨询</p></header>
       <label><span>客服账号</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" maxLength={32} placeholder="请输入客服账号" autoFocus /></label>
       <label><span>登录密码</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" maxLength={72} placeholder="请输入登录密码" /></label>
-      {error && <div className="form-error">{error}</div>}
+	  {(error || notice) && <div className="form-error">{error || notice}</div>}
       <button type="submit" disabled={loading || !username || !password}>{loading ? '登录中…' : '登录工作台'}</button>
       <footer>账号由客服主管统一创建。如无法登录，请联系管理员。</footer>
     </form></section>
@@ -188,8 +203,16 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
       } catch { /* ignore malformed realtime event */ }
       void Promise.all([loadDashboard(), loadConversations()])
     })
-    source.addEventListener('team.changed', () => void Promise.all([loadTeam(), loadDashboard()]))
-    source.addEventListener('player.memo.changed', () => setMemoRevision((value) => value + 1))
+	  source.addEventListener('team.changed', () => void Promise.all([loadTeam(), loadDashboard()]))
+	  source.addEventListener('player.memo.changed', () => setMemoRevision((value) => value + 1))
+	  source.addEventListener('session.replaced', (event) => {
+		try {
+		  const data = JSON.parse((event as MessageEvent).data) as { payload?: { message?: string } }
+		  notifyAgentSessionExpired(data.payload?.message || '该账号已在其他设备登录，当前登录已退出')
+		} catch {
+		  notifyAgentSessionExpired('该账号已在其他设备登录，当前登录已退出')
+		}
+	  })
     source.addEventListener('typing', (event) => {
       try { const data = JSON.parse((event as MessageEvent).data) as { conversationId?: string; payload?: { actor?: string; typing?: boolean } }; if (data.conversationId === selectedID && data.payload?.actor === 'player') updatePlayerTyping(Boolean(data.payload.typing)) } catch { /* ignore */ }
     })

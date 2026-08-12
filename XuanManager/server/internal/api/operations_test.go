@@ -38,6 +38,28 @@ func TestCallBalanceExchangeUsesLegacySignedProtocol(t *testing.T) {
 	}
 }
 
+func TestBalanceAdjustmentAllowsPlayerInRoom(t *testing.T) {
+	state := playerBalanceState{PlayerID: "123456", Balance: 500, RoomID: 851724}
+	for _, input := range []adjustPlayerBalanceRequest{
+		{Action: "add", Amount: 100, ExpectedBalance: 500},
+		{Action: "subtract", Amount: 100, ExpectedBalance: 500},
+	} {
+		if code, message := balanceAdjustmentConflict(input, state); code != "" {
+			t.Fatalf("in-room %s rejected: %s %s", input.Action, code, message)
+		}
+	}
+}
+
+func TestBalanceAdjustmentStillChecksBalanceConflicts(t *testing.T) {
+	state := playerBalanceState{PlayerID: "123456", Balance: 500, RoomID: 851724}
+	if code, _ := balanceAdjustmentConflict(adjustPlayerBalanceRequest{Action: "add", Amount: 100, ExpectedBalance: 499}, state); code != "BALANCE_CHANGED" {
+		t.Fatalf("changed balance code = %q", code)
+	}
+	if code, _ := balanceAdjustmentConflict(adjustPlayerBalanceRequest{Action: "subtract", Amount: 501, ExpectedBalance: 500}, state); code != "INSUFFICIENT_BALANCE" {
+		t.Fatalf("insufficient balance code = %q", code)
+	}
+}
+
 func TestPaymentHashWritesMatchClientConfiguration(t *testing.T) {
 	input := updatePaymentConfigurationRequest{
 		Channels:      []paymentChannelConfig{{Name: "支付1", Enabled: true, NeedsInfo: true, InfoFields: []string{"姓名", "手机"}, PresetAmounts: "100,200", DisplayText: "测试", Banks: "中国银行#", AllowCustom: true, CustomMin: "50", CustomMax: "500"}},

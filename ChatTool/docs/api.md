@@ -19,7 +19,7 @@
 
 ## 客服接口
 
-- `POST /api/agent/auth/login`、`GET /api/agent/auth/me`、`POST /api/agent/auth/logout`。
+- `POST /api/agent/auth/login`、`GET /api/agent/auth/me`、`POST /api/agent/auth/logout`；同账号新登录会撤销旧会话并推送 `session.replaced`。
 - `POST /api/agent/presence`、`POST /api/agent/heartbeat`、`GET /api/agent/events`。
 - `GET /api/agent/dashboard`、`GET /api/agent/conversations`。
 - `GET /api/agent/conversations/{id}`、`GET /messages`。
@@ -34,4 +34,4 @@
 
 - `GET /api/media/{id}`：玩家只可访问当前标签页会话媒体；普通客服只可访问自己且同通道的会话；主管只可访问主管所属通道现存会话媒体。视频支持 HTTP Range。
 
-SSE 事件包括 `message.created`、`conversation.assigned`、`conversation.requeued`、`conversation.transferred`、`conversation.closed`、`conversation.cleared`、`conversation.changed`、`player.memo.changed`、`team.changed` 和 `typing`。玩家事件按会话、客服事件按通道分发；事件只用于刷新提示，数据库记录始终是权威数据。
+SSE 事件包括 `message.created`、`conversation.assigned`、`conversation.requeued`、`conversation.transferred`、`conversation.closed`、`conversation.cleared`、`conversation.changed`、`player.memo.changed`、`team.changed`、`typing` 和客服单点登录事件 `session.replaced`。玩家事件按会话、客服事件按通道分发；事件只用于刷新提示，数据库记录始终是权威数据。

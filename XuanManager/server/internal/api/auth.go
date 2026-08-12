@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
@@ -70,20 +71,55 @@ WHERE id = ?`, p.ID)
 		return
 	}
 	expires := time.Now().Add(s.cfg.SessionTTL)
-	_, err = s.db.ExecContext(r.Context(), `INSERT INTO mgr_session
-(token_hash, user_id, csrf_hash, ip, user_agent, expires_at)
-VALUES (?, ?, ?, ?, ?, ?)`, security.HashToken(sessionToken), p.ID, security.HashToken(csrfToken),
-		clientIP(r), truncate(r.UserAgent(), 255), expires)
+	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "SESSION_ERROR", "创建登录会话失败")
 		return
 	}
-	_, _ = s.db.ExecContext(r.Context(), `UPDATE mgr_user SET
-login_fail_count = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?`, p.ID)
+	defer tx.Rollback()
+	replacedSessions, err := replaceUserSession(r.Context(), tx, security.HashToken(sessionToken), p.ID,
+		security.HashToken(csrfToken), clientIP(r), truncate(r.UserAgent(), 255), expires)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "SESSION_ERROR", "创建登录会话失败")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "SESSION_ERROR", "创建登录会话失败")
+		return
+	}
 	s.setAuthCookies(w, sessionToken, csrfToken, expires)
 	s.audit(r.Context(), &p, "auth.login", "mgr_user", numericID(p.ID),
-		map[string]any{"username": p.Username}, nil, nil, 0, "登录成功", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"message": "登录成功"})
+		map[string]any{"username": p.Username}, nil,
+		map[string]any{"singleSession": true, "replacedSessionCount": replacedSessions},
+		0, "登录成功，其他设备会话已退出", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"message": "登录成功，同账号其他设备已退出"})
+}
+
+type sessionExecer interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
+
+func replaceUserSession(ctx context.Context, executor sessionExecer, tokenHash string, userID int64, csrfHash, ip, userAgent string, expires time.Time) (int64, error) {
+	// Updating the user row first serializes concurrent logins for the same account.
+	// The later login waits for the earlier transaction, then removes its session.
+	if _, err := executor.ExecContext(ctx, `UPDATE mgr_user SET
+login_fail_count = 0, locked_until = NULL, last_login_at = NOW() WHERE id = ?`, userID); err != nil {
+		return 0, fmt.Errorf("lock user for login: %w", err)
+	}
+	result, err := executor.ExecContext(ctx, "DELETE FROM mgr_session WHERE user_id = ?", userID)
+	if err != nil {
+		return 0, fmt.Errorf("clear previous sessions: %w", err)
+	}
+	replaced, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("count previous sessions: %w", err)
+	}
+	if _, err := executor.ExecContext(ctx, `INSERT INTO mgr_session
+(token_hash, user_id, csrf_hash, ip, user_agent, expires_at)
+VALUES (?, ?, ?, ?, ?, ?)`, tokenHash, userID, csrfHash, ip, userAgent, expires); err != nil {
+		return 0, fmt.Errorf("insert current session: %w", err)
+	}
+	return replaced, nil
 }
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, p principal) {

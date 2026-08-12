@@ -29,40 +29,33 @@ type playerFilters struct {
 }
 
 type playerItem struct {
-	ID                int64      `json:"id"`
-	PlayerID          string     `json:"playerId"`
-	LoginName         string     `json:"loginName"`
-	AccountName       string     `json:"accountName"`
-	Name              string     `json:"name"`
-	Photo             string     `json:"photo"`
-	Sex               string     `json:"sex"`
-	Role              string     `json:"role"`
-	Gold              int64      `json:"gold"`
-	Gold2             int64      `json:"gold2"`
-	Balance           float64    `json:"balance"`
-	Stone             int64      `json:"stone"`
-	Level             int64      `json:"level"`
-	VIP               int64      `json:"vip"`
-	VIPLevel          int64      `json:"vipLevel"`
-	AgentID           string     `json:"agentId"`
-	AgentName         string     `json:"agentName"`
-	BigAgentID        string     `json:"bigAgentId"`
-	PartnerAgentID    string     `json:"partnerAgentId"`
-	ChiefAgentID      string     `json:"chiefAgentId"`
-	RoomID            int64      `json:"roomId"`
-	RoomType          string     `json:"roomType"`
-	ClientVersion     string     `json:"clientVersion"`
-	ClientStatus      string     `json:"clientStatus"`
-	TotalRounds       int64      `json:"totalRounds"`
-	TotalScore        int64      `json:"totalScore"`
-	RegistrationTime  string     `json:"registrationTime"`
-	LastLoginAt       *time.Time `json:"lastLoginAt"`
-	LoginCount        int64      `json:"loginCount"`
-	Remark            string     `json:"remark"`
-	OptimizeOneCount  int64      `json:"optimizeOneCount"`
-	OptimizeOneChance int64      `json:"optimizeOneChance"`
-	OptimizeTwoCount  int64      `json:"optimizeTwoCount"`
-	OptimizeTwoChance int64      `json:"optimizeTwoChance"`
+	ID               int64      `json:"id"`
+	PlayerID         string     `json:"playerId"`
+	LoginName        string     `json:"loginName"`
+	AccountName      string     `json:"accountName"`
+	Name             string     `json:"name"`
+	Photo            string     `json:"photo"`
+	Sex              string     `json:"sex"`
+	Role             string     `json:"role"`
+	Gold             int64      `json:"gold"`
+	Gold2            int64      `json:"gold2"`
+	Balance          float64    `json:"balance"`
+	Stone            int64      `json:"stone"`
+	Level            int64      `json:"level"`
+	VIP              int64      `json:"vip"`
+	VIPLevel         int64      `json:"vipLevel"`
+	AgentID          string     `json:"agentId"`
+	AgentName        string     `json:"agentName"`
+	RoomID           int64      `json:"roomId"`
+	RoomType         string     `json:"roomType"`
+	ClientVersion    string     `json:"clientVersion"`
+	ClientStatus     string     `json:"clientStatus"`
+	TotalRounds      int64      `json:"totalRounds"`
+	TotalScore       int64      `json:"totalScore"`
+	RegistrationTime string     `json:"registrationTime"`
+	LastLoginAt      *time.Time `json:"lastLoginAt"`
+	LoginCount       int64      `json:"loginCount"`
+	Remark           string     `json:"remark"`
 }
 
 func (s *Server) handleListPlayers(w http.ResponseWriter, r *http.Request, _ principal) {
@@ -92,11 +85,9 @@ a.id, a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_photo,
 a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
 (a.sm_gold + a.sm_gold2 / 100.0) AS balance, a.sm_stone, a.sm_level,
 a.sm_vip, a.sm_vip_level, a.sm_agentID, COALESCE(agent.sm_name, ''),
-a.sm_bigAgentID, a.sm_supperAgentID, a.sm_chiefAgentID,
 a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status,
 a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
-FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
-a.sm_optimize01_count, a.sm_optimize01_chance, a.sm_optimize02_count, a.sm_optimize02_chance
+FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
@@ -118,11 +109,9 @@ LIMIT ? OFFSET ?`, queryArgs...)
 			&item.ID, &item.PlayerID, &item.LoginName, &item.AccountName, &item.Name, &item.Photo,
 			&item.Sex, &item.Role, &item.Gold, &item.Gold2, &item.Balance, &item.Stone, &item.Level,
 			&item.VIP, &item.VIPLevel, &item.AgentID, &item.AgentName,
-			&item.BigAgentID, &item.PartnerAgentID, &item.ChiefAgentID,
 			&item.RoomID, &item.RoomType, &item.ClientVersion, &item.ClientStatus,
 			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
 			&lastLogin, &item.LoginCount, &item.Remark,
-			&item.OptimizeOneCount, &item.OptimizeOneChance, &item.OptimizeTwoCount, &item.OptimizeTwoChance,
 		); err != nil {
 			s.logger.Error("scan game player", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")

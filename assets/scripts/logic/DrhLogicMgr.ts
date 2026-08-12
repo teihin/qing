@@ -564,6 +564,7 @@ export default class DrhLogicMgr extends cc.Component {
         //更新当前玩家基本信息
         this.UpdateAllUserShowInfo();
         this.UpdateSitInfo();
+        this.playingView.OnPlayerListUpdatedForPreSit();
 
         //准备阶段如果房间列表中没有自己则显示坐下
         let bFind = false;

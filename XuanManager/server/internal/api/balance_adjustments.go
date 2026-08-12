@@ -85,16 +85,8 @@ func (s *Server) handleAdjustPlayerBalance(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家金币失败")
 		return
 	}
-	if before.RoomID > 0 {
-		writeError(w, http.StatusConflict, "PLAYER_IN_ROOM", "玩家正在房间中，请离开房间后再加减分，避免桌上金币与账号金币不同步")
-		return
-	}
-	if math.Abs(before.Balance-input.ExpectedBalance) > 0.005 {
-		writeError(w, http.StatusConflict, "BALANCE_CHANGED", "玩家余额已变化，请刷新玩家列表后重新操作")
-		return
-	}
-	if input.Action == "subtract" && float64(input.Amount) > before.Balance {
-		writeError(w, http.StatusConflict, "INSUFFICIENT_BALANCE", "减分金额不能超过玩家当前金币")
+	if code, message := balanceAdjustmentConflict(input, before); code != "" {
+		writeError(w, http.StatusConflict, code, message)
 		return
 	}
 
@@ -120,8 +112,23 @@ func (s *Server) handleAdjustPlayerBalance(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	message := fmt.Sprintf("已为玩家 %s %s %d 金币", playerID, map[bool]string{true: "增加", false: "扣减"}[input.Action == "add"], input.Amount)
+	if before.RoomID > 0 {
+		message += "；玩家当前在房间，桌面已带入积分未直接变更"
+	}
 	s.audit(ctx, &p, "game.player.balance_adjust", "game_player", playerID, requestAudit, before, after, 0, message, clientIP(r))
 	writeData(w, http.StatusOK, map[string]any{"player": after, "delta": delta, "workOrder": workOrder, "message": message})
+}
+
+func balanceAdjustmentConflict(input adjustPlayerBalanceRequest, before playerBalanceState) (string, string) {
+	// sm_roomID 只用于操作提示和审计，不限制客服加减分。旧充值接口调整的是
+	// 玩家账号金币，当前牌桌已经带入的积分由房间服务独立管理。
+	if math.Abs(before.Balance-input.ExpectedBalance) > 0.005 {
+		return "BALANCE_CHANGED", "玩家余额已变化，请刷新玩家列表后重新操作"
+	}
+	if input.Action == "subtract" && float64(input.Amount) > before.Balance {
+		return "INSUFFICIENT_BALANCE", "减分金额不能超过玩家当前金币"
+	}
+	return "", ""
 }
 
 func normalizeAdjustmentReason(value string) (string, error) {

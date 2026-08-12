@@ -26,18 +26,6 @@ func (s *Server) handleAgentLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "LOGIN_RATE_LIMITED", "登录尝试过于频繁，请稍后再试")
 		return
 	}
-	var p agentPrincipal
-	var passwordHash string
-	var enabled bool
-	err := s.db.QueryRowContext(r.Context(), `SELECT a.id,a.username,a.password_hash,a.display_name,a.role,a.channel_code,channel.display_name,a.enabled,a.presence
-FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code AND channel.enabled=1 WHERE a.username=?`, req.Username).Scan(
-		&p.ID, &p.Username, &passwordHash, &p.DisplayName, &p.Role, &p.ChannelCode, &p.ChannelName, &enabled, &p.Presence,
-	)
-	if err != nil || !enabled || !security.CheckPassword(passwordHash, req.Password) {
-		s.audit(r.Context(), "agent", req.Username, "agent.login_failed", "agent", req.Username, map[string]any{"reason": "invalid_credentials"}, clientIP(r))
-		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "账号或密码不正确")
-		return
-	}
 	sessionToken, err := security.RandomToken()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "TOKEN_FAILED", "无法创建登录会话")
@@ -48,12 +36,39 @@ FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code AND c
 		writeError(w, http.StatusInternalServerError, "TOKEN_FAILED", "无法创建安全令牌")
 		return
 	}
+	var p agentPrincipal
+	var passwordHash string
+	var enabled bool
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "登录暂时不可用")
 		return
 	}
 	defer tx.Rollback()
+	// 锁定客服账号行，使同一账号的并发登录串行执行。最后完成的登录会删除
+	// 前一个会话，因此不会出现两个设备同时保持有效登录的竞态。
+	err = tx.QueryRowContext(r.Context(), `SELECT id,username,password_hash,display_name,role,channel_code,enabled,presence
+FROM chat_agent WHERE username=? FOR UPDATE`, req.Username).Scan(
+		&p.ID, &p.Username, &passwordHash, &p.DisplayName, &p.Role, &p.ChannelCode, &enabled, &p.Presence,
+	)
+	if err != nil || !enabled || !security.CheckPassword(passwordHash, req.Password) {
+		_ = tx.Rollback()
+		s.audit(r.Context(), "agent", req.Username, "agent.login_failed", "agent", req.Username, map[string]any{"reason": "invalid_credentials"}, clientIP(r))
+		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "账号或密码不正确")
+		return
+	}
+	if err = tx.QueryRowContext(r.Context(), `SELECT display_name FROM chat_channel WHERE code=? AND enabled=1`, p.ChannelCode).Scan(&p.ChannelName); err != nil {
+		_ = tx.Rollback()
+		s.audit(r.Context(), "agent", req.Username, "agent.login_failed", "agent", req.Username, map[string]any{"reason": "channel_unavailable"}, clientIP(r))
+		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "账号或密码不正确")
+		return
+	}
+	deleteResult, err := tx.ExecContext(r.Context(), `DELETE FROM chat_agent_session WHERE agent_id=?`, p.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "登录暂时不可用")
+		return
+	}
+	replacedSessions, _ := deleteResult.RowsAffected()
 	if _, err = tx.ExecContext(r.Context(), `INSERT INTO chat_agent_session
 (token_hash, agent_id, csrf_hash, expires_at, last_seen_at, created_at)
 VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), p.ID, security.HashToken(csrfToken), time.Now().Add(s.cfg.SessionTTL)); err != nil {
@@ -71,7 +86,13 @@ VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), p.ID, secu
 	p.Presence = "online"
 	setCookie(w, agentSessionCookie, sessionToken, s.cfg.CookiePath, true, s.cfg.CookieSecure, s.cfg.SessionTTL)
 	setCookie(w, agentCSRFCookie, csrfToken, s.cfg.CookiePath, false, s.cfg.CookieSecure, s.cfg.SessionTTL)
-	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "agent.login", "agent", strconv.FormatInt(p.ID, 10), map[string]any{}, clientIP(r))
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "agent.login", "agent", strconv.FormatInt(p.ID, 10), map[string]any{"replacedSessionCount": replacedSessions}, clientIP(r))
+	if replacedSessions > 0 {
+		s.hub.publish("agent:"+strconv.FormatInt(p.ID, 10), liveEvent{
+			Type:    "session.replaced",
+			Payload: map[string]any{"message": "该账号已在其他设备登录，当前登录已退出"},
+		})
+	}
 	s.hub.publish("team", liveEvent{Type: "team.changed"})
 	s.tryAssignQueued(r.Context(), "agent_login")
 	writeData(w, http.StatusOK, map[string]any{"agent": p, "csrfToken": csrfToken})

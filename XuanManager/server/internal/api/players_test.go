@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -35,5 +36,26 @@ func TestParsePlayerFiltersRejectsInvalidDate(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/game/players?registeredFrom=2026/08/01", nil)
 	if _, err := parsePlayerFilters(r); err == nil {
 		t.Fatal("expected invalid date")
+	}
+}
+
+func TestPlayerItemPayloadKeepsOnlyDirectAgentAndNoOptimization(t *testing.T) {
+	payload, err := json.Marshal(playerItem{AgentID: "123456", AgentName: "直属代理"})
+	if err != nil {
+		t.Fatalf("marshal player item: %v", err)
+	}
+	value := string(payload)
+	for _, expected := range []string{`"agentId":"123456"`, `"agentName":"直属代理"`} {
+		if !strings.Contains(value, expected) {
+			t.Fatalf("direct agent field missing from payload: %s", value)
+		}
+	}
+	for _, removed := range []string{
+		"bigAgentId", "partnerAgentId", "chiefAgentId",
+		"optimizeOneCount", "optimizeOneChance", "optimizeTwoCount", "optimizeTwoChance",
+	} {
+		if strings.Contains(value, removed) {
+			t.Fatalf("removed player detail field %q leaked into payload: %s", removed, value)
+		}
 	}
 }

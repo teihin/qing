@@ -1,6 +1,8 @@
 type ApiSuccess<T> = { ok: true; data: T };
 type ApiFailure = { ok: false; error: { code: string; message: string } };
 
+export const SESSION_EXPIRED_EVENT = "xuan:session-expired";
+
 export class ApiError extends Error {
   code: string;
   status: number;
@@ -40,6 +42,9 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   if (!response.ok || !payload.ok) {
     const failure = payload as ApiFailure;
+    if (response.status === 401 && failure.error?.code === "UNAUTHORIZED") {
+      window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+    }
     throw new ApiError(failure.error?.message || "请求失败", failure.error?.code, response.status);
   }
   return payload.data;
