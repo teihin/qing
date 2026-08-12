@@ -5,6 +5,7 @@ import DrhNameManager from "./logic/DrhNameManager";
 import MobileManager from "./mobile/MobileManager";
 import Tool from "./common/Tool";
 import DeviceIdentityManager from "./logic/DeviceIdentityManager";
+import QueueMatchManager from "./logic/QueueMatchManager";
 
 var KBEngine = require("kbengine");
 
@@ -85,6 +86,7 @@ export default class GameDataManager extends cc.Component {
         MobileManager.getInstance().InitTalkingData();
         // 提前准备设备标识，减少用户点击登录后的等待时间。
         DeviceIdentityManager.getInstance().prepare();
+        QueueMatchManager.getInstance();
 
         
         
@@ -406,6 +408,8 @@ export default class GameDataManager extends cc.Component {
     }
     onEnterRoom(nCode:number,nRoomID:number)
     {
+        if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+            return;
         if(nCode != 0x200 && cc.director.getScene().name != "login")
         {
             this.onGoToMain();

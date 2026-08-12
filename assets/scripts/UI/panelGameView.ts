@@ -14,6 +14,7 @@ import MobileManager from "../mobile/MobileManager";
 import ConfigManager from "../logic/ConfigManager";
 import DrhPlayerLogic from "../logic/DrhPlayerLogic";
 import ScrollViewEx from "../common/ScrollViewEx";
+import QueueMatchManager, { QueueMatchSnapshot } from "../logic/QueueMatchManager";
 
 var KBEngine = require("kbengine");
 
@@ -55,8 +56,23 @@ export default class panelGameView extends UIPanelViewBase {
     // 新玩家坐下分两步处理：先预坐锁座，收到PlayerList确认后再选择带入。
     private preSitState:string = "idle"; // idle / waiting / selecting / submitting
     private preSitSite:number = -1;
+    private preSitQueueId:string = "";
     private lastModalPrompt:string = "";
     private lastModalPromptTime:number = 0;
+
+    private queueEntryLabel:cc.Label = null;
+    private queueEntryNode:cc.Node = null;
+    private queuePanel:cc.Node = null;
+    private queueStatusLabel:cc.Label = null;
+    private queueActionLabel:cc.Label = null;
+    private queueActionButton:cc.Button = null;
+    private queueMemberRoot:cc.Node = null;
+    private queueMemberTitle:cc.Node = null;
+    private queueMemberContent:cc.Node = null;
+    private queueMemberTemplate:cc.Node = null;
+    private queueEmptyLabel:cc.Label = null;
+    private queueMemberRows:cc.Node[] = [];
+    private readonly queueListRefreshSeconds:number = 5;
 
     onEnable(){
        // Debug.Error("进入enable")
@@ -64,6 +80,8 @@ export default class panelGameView extends UIPanelViewBase {
 
     onLoad () {
         super.onLoad();
+
+        this.BindQueueMatchUI();
 
 
 
@@ -98,6 +116,11 @@ export default class panelGameView extends UIPanelViewBase {
         KBEngine.Event.register("RewardPoolRec", this, "RewardPoolRec");
         KBEngine.Event.register("Paipu", this, "Paipu"); //文字牌谱
         KBEngine.Event.register("VoiceRecordStopped", this, "OnVoiceRecordStopped");
+        KBEngine.Event.register("QueueMatchStateChanged", this, "OnQueueMatchStateChanged");
+        KBEngine.Event.register("QueueMatchNotice", this, "OnQueueMatchNotice");
+        KBEngine.Event.register("QueuePreSitReservation", this, "OnQueuePreSitReservation");
+        KBEngine.Event.register("QueuePreSitAccepted", this, "OnQueuePreSitAccepted");
+        KBEngine.Event.register("QueuePreSitFailed", this, "OnQueuePreSitFailed");
 
         this.scrollGuanZhan = Tool.GetChild(this.node,"实时战绩/围观列表").getComponent(ScrollViewEx);
         this.scrollGuanZhan.callBackFresh = this.GetWatchList.bind(this);
@@ -107,6 +130,8 @@ export default class panelGameView extends UIPanelViewBase {
 
         this.setRoomInfo();
         MobileManager.getInstance().PrepareVoice();
+        QueueMatchManager.getInstance().onRoomViewReady();
+        this.OnQueueMatchStateChanged(QueueMatchManager.getInstance().getSnapshot());
 
         this.node.on(cc.Node.EventType.TOUCH_END,(event:cc.Event.EventTouch)=>{
             this.OnPointDown(event);        
@@ -634,6 +659,23 @@ export default class panelGameView extends UIPanelViewBase {
             }
 
         }
+        else if(button.node.name === "排队")
+        {
+            this.OpenQueuePanel();
+        }
+        else if(button.node.name === "关闭排队")
+        {
+            this.CloseQueuePanel();
+        }
+        else if(button.node.name === "申请或取消排队")
+        {
+            let manager = QueueMatchManager.getInstance();
+            let snapshot = manager.getSnapshot();
+            if(snapshot.queueActive)
+                manager.requestCancel();
+            else
+                manager.requestApply(GameDataManager.getAccount().roomID);
+        }
         else if(button.node.name === "退出房间")
         {
             let strUserID = GameDataManager.getAccount().guuid;
@@ -641,6 +683,7 @@ export default class panelGameView extends UIPanelViewBase {
 
             if (this.gameLogic.round_count == "0" || this.gameLogic.round_count == ""  || this.gameLogic.GetPlayerCtlByID(0).info.strUserID != strUserID || this.gameLogic.strGameState == "end" || (strSet.indexOf("带分") >= 0 && this.gameLogic.GetPlayerCtlByID(0).info.emState != PlayerState.running && this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID))
             {                
+                this.gameLogic.PrepareLeaveRoom();
                 GameDataManager.getAccount().roomID = "";
                 GameDataManager.getAccount().reqStopGame();
                 GameDataManager.getAccount().reqLeaveRoom();
@@ -988,6 +1031,8 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name == "返回大厅")
         {
+            if(this.gameLogic != null)
+                this.gameLogic.PrepareLeaveRoom();
             KBEngine.Event.fire("onGoToMain");
         }
         else if(button.node.name ==="异常刷新")
@@ -1044,6 +1089,8 @@ export default class panelGameView extends UIPanelViewBase {
         else if(button.node.name == "充值")
         {
             cc.loader.loadRes("Prefabs/钱包",(err,obj)=>{
+                if(!cc.isValid(this.node))
+                    return;
                 if(err)
                 {
                     cc.error(err.message || err);
@@ -1466,6 +1513,10 @@ export default class panelGameView extends UIPanelViewBase {
 
     onLeaveRoom(nCode:number)
     {
+        if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+            return;
+        if(this.gameLogic != null)
+            this.gameLogic.PrepareLeaveRoom();
         if(nCode === 0x200)
         {
             cc.director.loadScene("login");
@@ -1477,6 +1528,8 @@ export default class panelGameView extends UIPanelViewBase {
     }
     onEnterRoom(nCode:number,nRoomID:number)
     {
+        if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+            return;
         //准备进入游戏
         if(nCode === 0x200 && GameDataManager.getAccount().bReSendFull) //进入房间成功！
         {
@@ -1787,6 +1840,10 @@ export default class panelGameView extends UIPanelViewBase {
     }
     public onRoomCommand(nCode:number, param:string)
     {
+        if(param == null)
+            return;
+        if(param.indexOf("queue_pre_site") >= 0 || param.indexOf("queue_id") >= 0)
+            return;
         if(param.indexOf("预坐_事件") >= 0)
         {
             if(nCode != 0x200)
@@ -1806,6 +1863,7 @@ export default class panelGameView extends UIPanelViewBase {
         {
             if (nCode == 0x200)
             {
+                this.RefreshQueueEntryVisibility(true);
                 if(param == "坐下_事件1")
                 {
                     this.ClearPreSitState(false);
@@ -1825,6 +1883,10 @@ export default class panelGameView extends UIPanelViewBase {
                     this.ShowMsg("带入失败，请重新选择座位！");
                 }
             }
+        }
+        else if(param.indexOf("起立_事件") >= 0 && nCode == 0x200)
+        {
+            this.RefreshQueueEntryVisibility(false);
         }
     }
     public PlayButtonAudio()
@@ -1931,6 +1993,8 @@ export default class panelGameView extends UIPanelViewBase {
             if(Number(strScore)>0)
                 nTotleScore += Number(strScore);
             cc.loader.loadRes("Prefabs/带入记录",(err,obj)=>{
+                if(!cc.isValid(this.node) || !cc.isValid(transParent))
+                    return;
                 if(err)
                 {
                     cc.error(err.message || err);
@@ -2089,6 +2153,8 @@ export default class panelGameView extends UIPanelViewBase {
                 if(i>=this.scrollHuiGu.content.childrenCount)
                 {
                     cc.loader.loadRes("Prefabs/回顾对象",(err,obj)=>{
+                        if(!cc.isValid(this.node) || !cc.isValid(this.scrollHuiGu.node))
+                            return;
                         if(err)
                         {
                             cc.error(err.message || err);
@@ -2457,6 +2523,8 @@ export default class panelGameView extends UIPanelViewBase {
             if (!this.CheckCanSitByGps())
             {
                 //退出房间，并取消所有房间内消息监听
+                if(this.gameLogic != null)
+                    this.gameLogic.PrepareLeaveRoom();
                 KBEngine.Event.deregisterOut(this);
                 GameDataManager.getAccount().setDefinedProperty("roomID", "");
                 GameDataManager.getAccount().reqStopGame();
@@ -2610,11 +2678,12 @@ export default class panelGameView extends UIPanelViewBase {
     // DrhLogicMgr完成PlayerList渲染后调用，保证先显示占座状态，再弹出带入选择。
     public OnPlayerListUpdatedForPreSit()
     {
+        let strUserID = GameDataManager.getAccount().guuid;
+        let isSelfSeated = this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID;
+        this.RefreshQueueEntryVisibility(isSelfSeated);
         if(this.preSitState == "idle")
             return;
 
-        let strUserID = GameDataManager.getAccount().guuid;
-        let isSelfSeated = this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID;
         if(this.preSitState == "waiting")
         {
             if(!isSelfSeated)
@@ -2628,6 +2697,8 @@ export default class panelGameView extends UIPanelViewBase {
             }
 
             this.preSitState = "selecting";
+            if(this.preSitQueueId != "")
+                QueueMatchManager.getInstance().consumeReservation(GameDataManager.getAccount().roomID, this.preSitSite);
             this.bFromTC = true;
             let button = Tool.GetChild(this.node,"ConfigMain/补充钵钵").getComponent(cc.Button);
             this.onButtonClick(button);
@@ -2655,9 +2726,371 @@ export default class panelGameView extends UIPanelViewBase {
     {
         this.preSitState = "idle";
         this.preSitSite = -1;
+        this.preSitQueueId = "";
         if(closeBuyIn)
             Tool.GetChild(this.node,"带入窗口").active = false;
     }
+
+    /**
+     * 排队界面全部预制在 drh8.fire 中，脚本只绑定和刷新，便于在 Creator 内直接调试。
+     */
+    private BindQueueMatchUI()
+    {
+        let entry = Tool.GetChild(this.node, "RoomFrame/排队");
+        this.queuePanel = Tool.GetChild(this.node, "排队弹窗");
+        if(entry == null || this.queuePanel == null)
+        {
+            cc.error("drh8 场景缺少排队界面节点");
+            return;
+        }
+        // 进入牌桌时先隐藏，等待首个PlayerList明确本人未坐下后再显示，
+        // 避免断线重回已坐座位时入口短暂闪现。
+        entry.active = false;
+        this.queueEntryNode = entry;
+        this.queueEntryLabel = Tool.GetChild(entry, "文字").getComponent(cc.Label);
+        this.queueStatusLabel = Tool.GetChild(this.queuePanel, "排队面板/排队状态").getComponent(cc.Label);
+        this.queueMemberTitle = Tool.GetChild(this.queuePanel, "排队面板/人员标题");
+        this.queueMemberRoot = Tool.GetChild(this.queuePanel, "排队面板/排队人员列表");
+        this.queueMemberContent = Tool.GetChild(this.queueMemberRoot, "列表视口/列表内容");
+        this.queueMemberTemplate = Tool.GetChild(this.queueMemberContent, "玩家行模板");
+        let emptyNode = Tool.GetChild(this.queueMemberContent, "空状态");
+        this.queueEmptyLabel = emptyNode == null ? null : emptyNode.getComponent(cc.Label);
+        if(this.queueMemberTemplate != null)
+            this.queueMemberTemplate.active = false;
+        this.queueActionButton = Tool.GetChild(this.queuePanel, "排队面板/申请或取消排队").getComponent(cc.Button);
+        this.queueActionLabel = Tool.GetChild(this.queueActionButton.node, "文字").getComponent(cc.Label);
+        this.ResizeQueueOverlay();
+    }
+
+    private RefreshQueueEntryVisibility(isSelfSeated:boolean)
+    {
+        if(this.queueEntryNode == null || !cc.isValid(this.queueEntryNode))
+            return;
+        let shouldShow = this.IsQueueSupportedRoom() && !isSelfSeated;
+        this.queueEntryNode.active = shouldShow;
+        if(!shouldShow)
+            this.CloseQueuePanel();
+    }
+
+    private IsQueueSupportedRoom():boolean
+    {
+        try
+        {
+            let setting = JSON.parse(GameDataManager.getAccount().roomSetting || "{}");
+            return setting.room_mode == "积分房卡房" && setting.play_mode == "传销扯旋";
+        }
+        catch(error)
+        {
+            return false;
+        }
+    }
+
+    private ResizeQueueOverlay()
+    {
+        if(this.queuePanel == null)
+            return;
+        let visibleSize = cc.view.getVisibleSize();
+        let width = Math.max(750, visibleSize.width + 20);
+        let height = Math.max(1334, visibleSize.height + 20);
+        let rootWidget = this.queuePanel.getComponent(cc.Widget);
+        if(rootWidget != null)
+            rootWidget.enabled = false;
+        this.queuePanel.setContentSize(width, height);
+
+        let mask = Tool.GetChild(this.queuePanel, "遮罩");
+        if(mask != null)
+        {
+            let maskWidget = mask.getComponent(cc.Widget);
+            if(maskWidget != null)
+                maskWidget.enabled = false;
+            mask.setContentSize(width, height);
+            mask.setPosition(0, 0);
+        }
+    }
+
+    private OpenQueuePanel()
+    {
+        if(this.queuePanel == null)
+            return;
+        this.ResizeQueueOverlay();
+        this.queuePanel.active = true;
+        let manager = QueueMatchManager.getInstance();
+        this.OnQueueMatchStateChanged(manager.getSnapshot());
+        manager.requestQuery(false);
+        manager.requestList(GameDataManager.getAccount().roomID);
+        this.StartQueueListAutoRefresh();
+    }
+
+    private CloseQueuePanel()
+    {
+        this.StopQueueListAutoRefresh();
+        if(this.queuePanel != null && cc.isValid(this.queuePanel))
+            this.queuePanel.active = false;
+    }
+
+    /** 弹窗打开期间每5秒向服务器对账一次名单，每秒只在本地推进时长显示。 */
+    private StartQueueListAutoRefresh()
+    {
+        this.StopQueueListAutoRefresh();
+        this.schedule(this.OnQueueListSecondTick, 1);
+        this.schedule(this.OnQueueListServerRefresh, this.queueListRefreshSeconds);
+    }
+
+    private StopQueueListAutoRefresh()
+    {
+        this.unschedule(this.OnQueueListSecondTick);
+        this.unschedule(this.OnQueueListServerRefresh);
+    }
+
+    private OnQueueListSecondTick()
+    {
+        if(this.queuePanel == null || !cc.isValid(this.queuePanel) || !this.queuePanel.active)
+            return;
+        this.RefreshQueueMemberTimes(QueueMatchManager.getInstance().getSnapshot());
+    }
+
+    private OnQueueListServerRefresh()
+    {
+        if(this.queuePanel == null || !cc.isValid(this.queuePanel) || !this.queuePanel.active)
+            return;
+        let account = GameDataManager.getAccount();
+        if(account != null)
+            QueueMatchManager.getInstance().requestList(account.roomID, true);
+    }
+
+    private GetQueueListElapsedSeconds(snapshot:QueueMatchSnapshot):number
+    {
+        if(snapshot == null || snapshot.listUpdatedAt <= 0)
+            return 0;
+        return Math.max(0, Math.floor((Date.now() - snapshot.listUpdatedAt) / 1000));
+    }
+
+    private FormatQueueDuration(seconds:number):string
+    {
+        let total = Math.max(0, Math.floor(seconds));
+        let minutes = Math.floor(total / 60);
+        let remain = total % 60;
+        return minutes.toString() + ":" + (remain < 10 ? "0" : "") + remain.toString();
+    }
+
+    private FormatQueueMemberStatus(status:string):string
+    {
+        let value = status == null ? "" : status.toString().trim();
+        let lower = value.toLowerCase();
+        if(lower == "queued" || lower == "waiting")
+            return "排队中";
+        if(lower == "assigning" || lower == "matched" || lower == "seating")
+            return "入座中";
+        return value == "" ? "排队中" : value;
+    }
+
+    private RefreshQueueMemberTimes(snapshot:QueueMatchSnapshot)
+    {
+        if(snapshot == null)
+            return;
+        let members = snapshot.members || [];
+        let elapsedSeconds = this.GetQueueListElapsedSeconds(snapshot);
+        let count = Math.min(members.length, this.queueMemberRows.length);
+        for(let index = 0; index < count; index++)
+        {
+            let row = this.queueMemberRows[index];
+            if(row == null || !cc.isValid(row) || !row.active)
+                continue;
+            let timeNode = Tool.GetChild(row, "排队时长");
+            if(timeNode != null)
+                timeNode.getComponent(cc.Label).string =
+                    this.FormatQueueDuration(members[index].queueSeconds + elapsedSeconds);
+        }
+    }
+
+    public OnQueueMatchStateChanged(snapshot:QueueMatchSnapshot)
+    {
+        if(snapshot == null)
+            return;
+        // 服务器已经分配房间/座位后立刻让出操作界面；后续离房、换场景和预坐
+        // 都不能继续被排队弹窗遮挡。预坐成功事件还会再兜底关闭一次。
+        if(snapshot.status == "assigning" || snapshot.status == "switching" || snapshot.status == "pre_sitting")
+            this.CloseQueuePanel();
+        if(this.queueEntryLabel != null && cc.isValid(this.queueEntryLabel))
+            this.queueEntryLabel.string = snapshot.queueActive ? "排队中" : "排队";
+        if(this.queueStatusLabel == null || !cc.isValid(this.queueStatusLabel))
+            return;
+
+        let statusText = "当前未申请排队";
+        if(snapshot.status == "applying")
+            statusText = "正在申请排队…";
+        else if(snapshot.status == "cancelling")
+            statusText = "正在取消排队…";
+        else if(snapshot.status == "queued")
+        {
+            statusText = "排队中";
+            if(snapshot.queueCount > 0)
+                statusText += "　当前人数：" + snapshot.queueCount.toString();
+            if(snapshot.rank > 0)
+                statusText += "　我的顺位：" + snapshot.rank.toString();
+            if(snapshot.assignFailCount > 0)
+                statusText += "　已重新匹配 " + snapshot.assignFailCount.toString() + " 次";
+        }
+        else if(snapshot.status == "assigning" || snapshot.status == "switching" || snapshot.status == "pre_sitting")
+            statusText = snapshot.message == "" ? "已匹配座位，正在快速进入房间" : snapshot.message;
+        else if(snapshot.status == "failed")
+            statusText = snapshot.message == "" ? "排队失败，请重新申请" : snapshot.message;
+        else if(snapshot.message != "")
+            statusText = snapshot.message;
+        this.queueStatusLabel.string = statusText;
+
+        if(this.queueActionLabel != null && cc.isValid(this.queueActionLabel))
+            this.queueActionLabel.string = snapshot.queueActive ? "取消排队" : "申请排队";
+        if(this.queueActionButton != null && cc.isValid(this.queueActionButton))
+            this.queueActionButton.interactable = !snapshot.busy && this.preSitState == "idle";
+        this.RefreshQueueMemberList(snapshot);
+    }
+
+    private RefreshQueueMemberList(snapshot:QueueMatchSnapshot)
+    {
+        if(this.queueMemberRoot == null || this.queueMemberTitle == null ||
+            this.queueMemberContent == null || this.queueMemberTemplate == null || this.queueEmptyLabel == null)
+            return;
+        let members = snapshot.members || [];
+        let elapsedSeconds = this.GetQueueListElapsedSeconds(snapshot);
+        this.queueMemberRoot.active = true;
+        this.queueMemberTitle.active = true;
+        let count = Math.max(snapshot.listCount || 0, members.length);
+        let playerHeader = Tool.GetChild(this.queueMemberTitle, "玩家信息");
+        if(playerHeader != null)
+            playerHeader.getComponent(cc.Label).string = "玩家信息（" + count.toString() + "）";
+
+        let emptyText = "";
+        if(snapshot.listLoading)
+            emptyText = "正在加载排队名单…";
+        else if(snapshot.listMessage != "")
+            emptyText = snapshot.listMessage;
+        else if(members.length == 0)
+            emptyText = "当前暂无排队玩家";
+        this.queueEmptyLabel.string = emptyText;
+        this.queueEmptyLabel.node.active = emptyText != "";
+
+        while(this.queueMemberRows.length < members.length)
+        {
+            let row = cc.instantiate(this.queueMemberTemplate);
+            row.name = "玩家行" + (this.queueMemberRows.length + 1).toString();
+            row.parent = this.queueMemberContent;
+            row.active = true;
+            this.queueMemberRows.push(row);
+        }
+
+        const rowHeight = 106;
+        for(let index = 0; index < this.queueMemberRows.length; index++)
+        {
+            let row = this.queueMemberRows[index];
+            if(index >= members.length)
+            {
+                row.active = false;
+                continue;
+            }
+            let member = members[index];
+            row.active = true;
+            row.setPosition(0, -index * rowHeight);
+
+            let background = Tool.GetChild(row, "卡片背景");
+            if(background != null)
+            {
+                background.color = member.isSelf ? cc.color(47, 126, 139) : cc.color(52, 84, 103);
+                background.opacity = member.isSelf ? 255 : 235;
+            }
+
+            let rankLabel = Tool.GetChild(row, "序号").getComponent(cc.Label);
+            rankLabel.string = (member.rank > 0 ? member.rank : index + 1).toString();
+
+            let avatar = Tool.GetChild(row, "玩家信息/头像/头像图片").getComponent(cc.Sprite);
+            ImageManager.getInstance().SetLocalAvatar(avatar, member.photo, member.id);
+
+            let nicknameLabel = Tool.GetChild(row, "玩家信息/昵称").getComponent(cc.Label);
+            nicknameLabel.string = member.name + (member.isSelf ? "（我）" : "");
+            nicknameLabel.node.color = member.isSelf ? cc.color(244, 216, 142) : cc.color(234, 230, 215);
+
+            let idLabel = Tool.GetChild(row, "玩家信息/玩家ID").getComponent(cc.Label);
+            idLabel.string = member.id == "" ? "ID:--" : "ID:" + member.id;
+            Tool.GetChild(row, "排队时长").getComponent(cc.Label).string =
+                this.FormatQueueDuration(member.queueSeconds + elapsedSeconds);
+            Tool.GetChild(row, "底皮").getComponent(cc.Label).string =
+                member.bottom == "" ? "--" : member.bottom;
+
+            let statusLabel = Tool.GetChild(row, "状态").getComponent(cc.Label);
+            statusLabel.string = this.FormatQueueMemberStatus(member.status);
+            statusLabel.node.color = statusLabel.string.indexOf("排队") >= 0 ?
+                cc.color(93, 219, 169) : cc.color(232, 205, 139);
+
+            let onlineNode = Tool.GetChild(row, "在线状态");
+            if(onlineNode != null)
+            {
+                let onlineLabel = onlineNode.getComponent(cc.Label);
+                onlineLabel.string = member.online == 1 ? "在线" : (member.online == 0 ? "离线" : "未知");
+                onlineNode.color = member.online == 1 ? cc.color(93, 219, 169) :
+                    (member.online == 0 ? cc.color(154, 183, 191) : cc.color(232, 205, 139));
+            }
+        }
+
+        let viewHeight = this.queueMemberRoot.height;
+        let contentHeight = Math.max(viewHeight, members.length * rowHeight);
+        this.queueMemberContent.setContentSize(this.queueMemberRoot.width, contentHeight);
+        let scrollView = this.queueMemberRoot.getComponent(cc.ScrollView);
+        if(scrollView != null)
+        {
+            scrollView.stopAutoScroll();
+            scrollView.scrollToTop(0);
+        }
+    }
+
+    public OnQueueMatchNotice(message:string)
+    {
+        if(message == null || message == "" || !cc.isValid(this.node))
+            return;
+        UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, message);
+    }
+
+    public OnQueuePreSitReservation(reservation:any)
+    {
+        if(reservation == null || reservation.queueId == null)
+            return;
+        if(Number(reservation.roomID) != Number(GameDataManager.getAccount().roomID))
+            return;
+        let queueId = reservation.queueId.toString();
+        let site = Number(reservation.site);
+        if(queueId == "" || !isFinite(site) || site < 0)
+            return;
+        if(this.preSitState != "idle")
+        {
+            if(this.preSitQueueId != queueId)
+                return;
+            // PlayerList 已经把流程推进到选分或提交时，迟到的预坐成功事件只能
+            // 确认服务端结果，不能把客户端状态倒退回 waiting。
+            if(this.preSitState == "selecting" || this.preSitState == "submitting")
+                return;
+        }
+        // 玩家在 PlayerList 先到后已经主动取消带入时，同样不能被迟到回包重新武装。
+        if(this.preSitState == "idle" && reservation.playerListConfirmed === true)
+            return;
+        this.preSitState = "waiting";
+        this.preSitSite = site;
+        this.preSitQueueId = queueId;
+    }
+
+    public OnQueuePreSitAccepted(reservation:any)
+    {
+        this.RefreshQueueEntryVisibility(true);
+        this.CloseQueuePanel();
+        this.OnQueuePreSitReservation(reservation);
+    }
+
+    public OnQueuePreSitFailed(message:string)
+    {
+        if(this.preSitQueueId == "")
+            return;
+        this.ClearPreSitState(true);
+        this.ShowModalPrompt(message == null || message == "" ? "占座失败，继续等待重新匹配" : message);
+    }
+
     //在位置上检查是否补芒
     public checkBuMang(strType:string = "补分"){
         let strParam = "{\"header\":\"玩家_补芒_查询\",\"context\":\""+strType+"\"}";
@@ -2843,6 +3276,8 @@ export default class panelGameView extends UIPanelViewBase {
                 for(let one of GetChoujiangRec["history_list"])
                 {
                     cc.loader.loadRes("Prefabs/转盘记录对象",(err,obj)=>{
+                        if(!cc.isValid(this.node) || !cc.isValid(transRoot))
+                            return;
                         if(err)
                         {
                             cc.error(err.message || err);
@@ -2878,6 +3313,8 @@ export default class panelGameView extends UIPanelViewBase {
         for(let one of msg["history_list"])
         {
             cc.loader.loadRes("Prefabs/奖池记录对象",(err,obj)=>{
+                if(!cc.isValid(this.node) || !cc.isValid(transRoot))
+                    return;
                 if(err)
                 {
                     cc.error(err.message || err);
@@ -2925,6 +3362,8 @@ export default class panelGameView extends UIPanelViewBase {
             if(jCurCount[nLun]>=curComplet.childrenCount)
             {
                 cc.loader.loadRes("Prefabs/文字牌谱对象",(err,obj)=>{
+                    if(!cc.isValid(this.node) || !cc.isValid(curComplet))
+                        return;
                     if(err)
                     {
                         cc.error(err.message || err);

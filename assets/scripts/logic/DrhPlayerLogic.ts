@@ -62,6 +62,9 @@ export default class DrhPlayerLogic extends cc.Component {
     onLoad(){
         this.transOverCount = Tool.GetChild(this.node,"PlayerInfo/小结分");
     }
+    onDestroy(){
+        this.PrepareLeaveRoom();
+    }
     start () {
         this.ShowHideLightBK(false);
         this.ShowHideZhuang(false);
@@ -2960,6 +2963,8 @@ export default class DrhPlayerLogic extends cc.Component {
     public DelayThrowFirstCard(arrayGet:Array<number>,bQiePai:boolean)
     {
         this.scheduleOnce(()=>{
+            if(!this.CanRunRoomAnimation())
+                return;
             if(bQiePai)
             {
                 let strName = Tool.GetConfigString("牌背","1");
@@ -2987,6 +2992,8 @@ export default class DrhPlayerLogic extends cc.Component {
 
                 this.gameLogic.PlayAudio("切牌");
                 this.scheduleOnce(()=>{
+                    if(!this.CanRunRoomAnimation())
+                        return;
                     this.gameLogic.ThrowCard2Player(this, arrayGet);
                 },2.5);
 
@@ -3001,24 +3008,22 @@ export default class DrhPlayerLogic extends cc.Component {
     }
     public AnimateMoveOneCard(nPos:number)
     {
-        // if(this.arrayHand == null)
-        //     this.arrayHand = this.transHand.getComponentsInChildren(PKCardInfoScript);
-        this.GetArrayHandList();
-        
-        let card = this.arrayHand[nPos];
-        
-
-        //如果当前这个人没有这张牌则跳过
-        if (nPos>=this.info.handCardEx.length)
+        if(!this.CanRunRoomAnimation() || nPos < 0 || this.info == null || !Array.isArray(this.info.handCardEx) || nPos >= this.info.handCardEx.length)
             return;
 
-        if (card != null)
-        {            
-            card.SetCardValue(this.info.handCardEx[nPos].nType, this.info.handCardEx[nPos].nNum, this.playerPos == PlayerPos.self ? 0 : 1, 1);
-        }
+        const arrayHand = this.GetArrayHandList();
+        if(nPos >= arrayHand.length)
+            return;
+        const card = arrayHand[nPos];
+        if(card == null || !cc.isValid(card.node))
+            return;
+
+        card.SetCardValue(this.info.handCardEx[nPos].nType, this.info.handCardEx[nPos].nNum, this.playerPos == PlayerPos.self ? 0 : 1, 1);
 
         //找到初始位置
         let transStartPos = this.gameLogic.node.getChildByName("发牌点");
+        if(!cc.isValid(transStartPos))
+            return;
         let vcSrc = transStartPos.convertToWorldSpaceAR(cc.v2(0,0));
 
         this.PlayAudio(0, "发牌");
@@ -3040,12 +3045,19 @@ export default class DrhPlayerLogic extends cc.Component {
                 let strPath = "pk2/"+this.info.handCardEx[nPos].nType+"_"+this.info.handCardEx[nPos].nNum+"d";    
                 //Tool.LoadImg(Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌").getComponent(cc.Sprite),strPath);
                 Tool.LoadImg(Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌").getComponent(cc.Sprite),strPath,()=>{
-
-                    Tool.GetChild(this.gameLogic.node,"搓牌窗口/遮罩").position = cc.Vec2.ZERO;
-                    Tool.GetChild(this.gameLogic.node,"搓牌窗口/遮罩").active = true;
-                    Tool.GetChild(this.gameLogic.node,"搓牌窗口").active = true;
-                    Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌/手1").active = true;
-                    Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌/手2").active = true;
+                    if(!this.CanRunRoomAnimation())
+                        return;
+                    const transMask = Tool.GetChild(this.gameLogic.node,"搓牌窗口/遮罩");
+                    const transWindow = Tool.GetChild(this.gameLogic.node,"搓牌窗口");
+                    const transHand1 = Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌/手1");
+                    const transHand2 = Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌/手2");
+                    if(!cc.isValid(transMask) || !cc.isValid(transWindow) || !cc.isValid(transHand1) || !cc.isValid(transHand2))
+                        return;
+                    transMask.position = cc.Vec2.ZERO;
+                    transMask.active = true;
+                    transWindow.active = true;
+                    transHand1.active = true;
+                    transHand2.active = true;
                 });
             }
             
@@ -3112,8 +3124,8 @@ export default class DrhPlayerLogic extends cc.Component {
     }
     public DelayShowCmd2(nPos:number,src:DrhPlayerLogic = null)
     {
-        //回调过来this为空了
-                
+        if(src == null || !src.CanRunRoomAnimation())
+            return;
         if (src.info.is_action == "True" && src.info.strServerState.indexOf("看牌") < 0)
         {
             if (src.info.role == "敲牌")
@@ -3466,69 +3478,89 @@ export default class DrhPlayerLogic extends cc.Component {
     //获取手牌控件根
     public GetTransHand():cc.Node
     {
+        if(!cc.isValid(this.node))
+        {
+            this.transHand = null;
+            return null;
+        }
+
+        let transFind:cc.Node = null;
         //根据观战或打牌切换手牌
         if(this.playerPos == PlayerPos.self)
         {
             //自己需要知道是在观战还是打牌
-            if(this.info.strUserID == this.gameLogic.strAccountUserID) //自己打牌
+            const accountUserID = this.gameLogic == null ? "" : this.gameLogic.strAccountUserID;
+            if(this.info.strUserID == accountUserID) //自己打牌
             {
-                if(this.transHand == null ||this.transHand.name != "handcardlist")
-                {
-                    this.transHand = Tool.GetChild(this.node,"handstop/handcardlist");
-                    this.transHand.active = true;
-                    Tool.GetChild(this.node,"handstop/handcardlist2").active = false;
-                }
-
+                transFind = Tool.GetChild(this.node,"handstop/handcardlist");
+                const transWatchHand = Tool.GetChild(this.node,"handstop/handcardlist2");
+                if(cc.isValid(transFind))
+                    transFind.active = true;
+                if(cc.isValid(transWatchHand))
+                    transWatchHand.active = false;
             }
             else //自己观战
             {
-                if(this.transHand == null || this.transHand.name != "handcardlist2")
-                {
-                    this.transHand = Tool.GetChild(this.node,"handstop/handcardlist2");
-                    this.transHand.active = true;
-                    Tool.GetChild(this.node,"handstop/handcardlist").active = false;
-                }
-
+                transFind = Tool.GetChild(this.node,"handstop/handcardlist2");
+                const transPlayHand = Tool.GetChild(this.node,"handstop/handcardlist");
+                if(cc.isValid(transFind))
+                    transFind.active = true;
+                if(cc.isValid(transPlayHand))
+                    transPlayHand.active = false;
             }
         }
         else
+            transFind = Tool.GetChild(this.node,"handstop/handcardlist");
+
+        if(!cc.isValid(transFind))
         {
-            if (this.transHand == null)
-                this.transHand = Tool.GetChild(this.node,"handstop/handcardlist");
+            this.transHand = null;
+            this.arrayHand = [];
+            return null;
         }
+        this.transHand = transFind;
         return this.transHand;
     }
     //获取手牌组件列表
-    public GetArrayHandList()
+    public GetArrayHandList():PKCardInfoScript[]
     {
-        //根据观战或打牌切换手牌
-        if(this.playerPos == PlayerPos.self)
+        const transHand = this.GetTransHand();
+        if(!cc.isValid(transHand))
         {
-            //自己需要知道是在观战还是打牌
-            if(this.info.strUserID == this.gameLogic.strAccountUserID) //自己打牌
-            {
-                if(this.arrayHand == null || this.arrayHand[0].node.parent.name !="handcardlist")
-                {
-                    this.GetTransHand();
-                    this.arrayHand =  this.transHand.getComponentsInChildren(PKCardInfoScript);
-                }
+            this.arrayHand = [];
+            return this.arrayHand;
+        }
 
-            }
-            else //自己观战
-            {
-                if(this.arrayHand == null || this.arrayHand[0].node.parent.name !="handcardlist2")
-                {
-                    this.GetTransHand();
-                    this.arrayHand =  this.transHand.getComponentsInChildren(PKCardInfoScript);
-                }
-            }
-        }
-        else
-        {
-            if(this.arrayHand == null)
-                this.arrayHand =  this.transHand.getComponentsInChildren(PKCardInfoScript);
-        }
-        return this.arrayHand;
+        const cachedHandValid = this.arrayHand != null && this.arrayHand.length > 0
+            && this.arrayHand[0] != null && cc.isValid(this.arrayHand[0].node)
+            && this.arrayHand[0].node.parent === transHand;
+        if(!cachedHandValid)
+            this.arrayHand = transHand.getComponentsInChildren(PKCardInfoScript);
+        return this.arrayHand || [];
+    }
+
+    public PrepareLeaveRoom()
+    {
+        this.unscheduleAllCallbacks();
+        this.StopNodeActions(this.node);
+    }
+
+    private StopNodeActions(root:cc.Node)
+    {
+        if(!cc.isValid(root))
+            return;
+        root.stopAllActions();
+        for(const child of root.children)
+            this.StopNodeActions(child);
+    }
+
+    private CanRunRoomAnimation():boolean
+    {
+        if(!cc.isValid(this.node) || this.gameLogic == null || !cc.isValid(this.gameLogic.node))
+            return false;
+        if(this.gameLogic.IsLeavingRoom())
+            return false;
+        return true;
     }
     //投钱入芒池动画
     public ThrowGold2Mang()

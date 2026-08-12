@@ -14,6 +14,7 @@ import ScrollViewNoEnd from "../common/ScrollViewNoEnd";
 import ObjPoolManager from "../logic/ObjPoolManager";
 import scrollview2 from "../common/scrollview2";
 import DeviceIdentityManager from "../logic/DeviceIdentityManager";
+import QueueMatchManager from "../logic/QueueMatchManager";
 
 var KBEngine = require("kbengine");
 
@@ -2105,6 +2106,8 @@ export default class panelMain extends UIPanelViewBase {
 
     onEnterRoom(nCode:number,nRoomID:number)
     {
+        if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+            return;
         //准备进入游戏
         if(nCode === 0x200) //进入房间成功！
         {

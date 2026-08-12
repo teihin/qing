@@ -7,6 +7,7 @@ import UIManager from "../common/UIManager";
 import { CardInfo, ShowPanelMode } from "../common/GameDef";
 import PKCardInfoScript from "../logic/PKCardInfoScript";
 import DrhNameManager from "../logic/DrhNameManager";
+import DrhLogicMgr from "../logic/DrhLogicMgr";
 import Debug from "../common/Debug";
 import MobileManager from "../mobile/MobileManager";
 import { resolve } from "path";
@@ -72,7 +73,10 @@ export default class panelRecordInfo extends UIPanelViewBase {
         if(button.node.name === "关闭")
         {
             if(cc.director.getScene().name == "drh8")
-            {  
+            {
+                const roomLogic = cc.director.getScene().getComponentInChildren(DrhLogicMgr);
+                if(roomLogic != null)
+                    roomLogic.PrepareLeaveRoom();
                 GameDataManager.getAccount().reqStopGame();
                 GameDataManager.getAccount().reqLeaveRoom();
     

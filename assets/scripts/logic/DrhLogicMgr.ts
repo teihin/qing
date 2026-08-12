@@ -59,6 +59,7 @@ export default class DrhLogicMgr extends cc.Component {
 
     public _CloseRoomTimmerCallBack = null;
     private bIsGamePlaying = false;    //玩家是非已经在游戏中
+    private bLeavingRoom = false;      //退出流程开始后停止房间动画和延迟回调
     public nTimeLeft = 0;  //时间倒计时
 
     public bGuanzhanFirst = false;
@@ -131,9 +132,33 @@ export default class DrhLogicMgr extends cc.Component {
     }
 
     onDestroy(){
+        this.PrepareLeaveRoom();
         if(MobileManager.instance != null)
             MobileManager.instance.LeaveVoiceRoom();
+        cc.game.targetOff(this);
         KBEngine.Event.deregisterAll(this);
+        this.unscheduleAllCallbacks();
+        this.node.stopAllActions();
+    }
+
+    public IsLeavingRoom():boolean
+    {
+        return this.bLeavingRoom;
+    }
+
+    public PrepareLeaveRoom()
+    {
+        if(this.bLeavingRoom)
+            return;
+        this.bLeavingRoom = true;
+        this.unscheduleAllCallbacks();
+        if(cc.isValid(this.node))
+            this.node.stopAllActions();
+        for(const player of this.arrayPlayer)
+        {
+            if(player != null)
+                player.PrepareLeaveRoom();
+        }
     }
 
     update (dt) {
@@ -205,6 +230,7 @@ export default class DrhLogicMgr extends cc.Component {
         else if (strRootState == "关闭_状态")
         {
             //直接返回大厅了，不用等
+            this.PrepareLeaveRoom();
             GameDataManager.getAccount().roomID = "";
             GameDataManager.getAccount().reqStopGame();
             GameDataManager.getAccount().reqLeaveRoom();
@@ -222,6 +248,8 @@ export default class DrhLogicMgr extends cc.Component {
 
     OnUpdatePlayerList(strMsg:string)
     {
+        if(this.bLeavingRoom)
+            return;
         let maxWinPlayer:DrhPlayerInfo = null;
         let data = JSON.parse(strMsg)
         if(data === null)
@@ -250,10 +278,11 @@ export default class DrhLogicMgr extends cc.Component {
         {
             this.strCreatorName = data["creator_name"];
         }
-        //消息来源房间号
+        //消息来源房间号；通过当前房间校验后再写入，避免迟到的旧房PlayerList污染上下文。
+        let strPlayerListRoomID = "";
         if (data.hasOwnProperty("room_id"))
         {
-            this.strMsgRoomID = data["room_id"].toString();
+            strPlayerListRoomID = data["room_id"].toString();
         }
         let nTimeCountDown = 0;
         if(data.hasOwnProperty("ready_countdown"))
@@ -304,7 +333,7 @@ export default class DrhLogicMgr extends cc.Component {
         }
 
         let strRoomID = GameDataManager.getAccount().roomID;
-        if (strRoomID != this.strMsgRoomID)
+        if (strRoomID != strPlayerListRoomID)
         {
             if(strRoomID == "0" && this.strGameState == "end")
             {
@@ -327,6 +356,7 @@ export default class DrhLogicMgr extends cc.Component {
             Debug.Log("跳出list1");
             return;
         }
+        this.strMsgRoomID = strPlayerListRoomID;
 
         if (this.bShowOverAnimate) //动画过程中不处理内容
         {
@@ -454,6 +484,8 @@ export default class DrhLogicMgr extends cc.Component {
 
         
         //绑定玩家数据到组件
+        //PlayerList是座位关系的全量快照，重建前清理旧房或旧座位映射。
+        this.mapID2PlayerCtl.clear();
         let nTemp = this.nSelfIndex;
         for (let i = 0; i < this.arrayPlayer.length; i++)
         {
@@ -716,6 +748,8 @@ export default class DrhLogicMgr extends cc.Component {
     //状态机消息处理
     public OnServerPlayEvent(strMsg:string)
     {
+        if(this.bLeavingRoom)
+            return;
         let data = JSON.parse(strMsg);        
         //定位这消息给谁的
         let nSitNum = Number(data["player_number"].toString());
@@ -874,6 +908,8 @@ export default class DrhLogicMgr extends cc.Component {
             this.audio.volume = nEff / 100;
 
             cc.loader.loadRes(strAuPath,cc.AudioClip,(err,obj:cc.AudioClip)=>{
+                if(!cc.isValid(this.node))
+                    return;
                 if(err)
                 {
                     Debug.Error(err.message+err);
@@ -905,6 +941,8 @@ export default class DrhLogicMgr extends cc.Component {
             this.audio2.volume = nEff / 100;
 
             cc.loader.loadRes(strAuPath,cc.AudioClip,(err,obj:cc.AudioClip)=>{
+                if(!cc.isValid(this.node))
+                    return;
                 if(err)
                 {
                     Debug.Error(err.message+err);
@@ -926,6 +964,8 @@ export default class DrhLogicMgr extends cc.Component {
         for (let one of arrayEnd)
         {
             cc.loader.loadRes("Prefabs/drh/coin",(err,obj)=>{
+                if(!cc.isValid(this.node))
+                    return;
                 if(err)
                 {
                     cc.error(err.message || err);
@@ -949,6 +989,8 @@ export default class DrhLogicMgr extends cc.Component {
 
     public ThrowCard2Player(item:DrhPlayerLogic,arrayGet:Array<number>,bQiao:boolean = false)
     {
+        if(this.bLeavingRoom || item == null || !cc.isValid(item.node))
+            return;
        
         let nPos = 0;
         let nAniCount = 0;
@@ -988,8 +1030,12 @@ export default class DrhLogicMgr extends cc.Component {
                 }
  
                 arrayAction.push(cc.callFunc(()=>{
-                    //Tool.GetChild(one.node,"handstop/handcardlist").opacity = 255;
-                    this.GetTransHand(one).opacity = 255;
+                    if(this.bLeavingRoom || one == null || !cc.isValid(one.node))
+                        return;
+                    const transHand = this.GetTransHand(one);
+                    if(!cc.isValid(transHand))
+                        return;
+                    transHand.opacity = 255;
                     one.AnimateMoveOneCard(nIndex);                    
                     
                 }));
@@ -1012,8 +1058,12 @@ export default class DrhLogicMgr extends cc.Component {
                 }
 
                 arrayAction.push(cc.callFunc(()=>{
-                    //Tool.GetChild(one.node,"handstop/handcardlist").opacity = 255;
-                    this.GetTransHand(one).opacity = 255;
+                    if(this.bLeavingRoom || one == null || !cc.isValid(one.node))
+                        return;
+                    const transHand = this.GetTransHand(one);
+                    if(!cc.isValid(transHand))
+                        return;
+                    transHand.opacity = 255;
                     one.AnimateMoveOneCard(nIndex);                    
                     
                 }));
@@ -1026,17 +1076,68 @@ export default class DrhLogicMgr extends cc.Component {
     }
     public OnClientDeath(strMsg:string)
     {
-        let data = JSON.parse(strMsg);
-        let nSitNum = data["number"];
-        if (nSitNum >= 0 && nSitNum < this.mapID2PlayerCtl.size)
-            this.mapID2PlayerCtl.get(nSitNum).ShowHideOffline(true);
+        this.ApplyClientConnectionState(strMsg, true);
     }
     public OnClientActive(strMsg:string)
     {
-        let data = JSON.parse(strMsg);
-        let nSitNum = data["number"];
-        if (nSitNum >= 0 && nSitNum < this.mapID2PlayerCtl.size)
-            this.mapID2PlayerCtl.get(nSitNum).ShowHideOffline(false);
+        this.ApplyClientConnectionState(strMsg, false);
+    }
+    private ApplyClientConnectionState(strMsg:string,bOffline:boolean)
+    {
+        if(this.bLeavingRoom)
+            return;
+
+        let data:any = null;
+        try
+        {
+            data = JSON.parse(strMsg);
+        }
+        catch(e)
+        {
+            Debug.Log("忽略无法解析的玩家在线状态消息");
+            return;
+        }
+
+        //新版增量消息必须带房间、玩家和座位上下文；旧格式直接忽略，等待PlayerList全量刷新。
+        if(data == null || data["room_id"] == null || data["id"] == null || data["number"] == null)
+            return;
+
+        const account = GameDataManager.getAccount();
+        if(account == null)
+            return;
+
+        const strEventRoomID = data["room_id"].toString();
+        const strCurrentRoomID = account.roomID == null ? "" : account.roomID.toString();
+        if(strEventRoomID == "" || strCurrentRoomID == "" || strEventRoomID != strCurrentRoomID)
+            return;
+
+        //牌桌必须已经收到过当前房间的PlayerList，避免切房期间用旧座位表处理新房消息。
+        if(this.strMsgRoomID == "" || strEventRoomID != this.strMsgRoomID)
+            return;
+
+        //roomType为兼容扩展字段；服务端携带时只接受当前普通房类型。
+        if(data["roomType"] != null && data["roomType"].toString() != "Custom")
+            return;
+
+        const nSitNum = Number(data["number"]);
+        if(!isFinite(nSitNum) || Math.floor(nSitNum) != nSitNum || !this.mapID2PlayerCtl.has(nSitNum))
+            return;
+
+        const player = this.mapID2PlayerCtl.get(nSitNum);
+        if(player == null || !cc.isValid(player.node) || player.info == null)
+            return;
+
+        const strPlayerID = data["id"].toString();
+        if(strPlayerID == "" || player.info.strUserID != strPlayerID)
+            return;
+
+        //当前连接仍能收到消息时，本人不应被旧连接的ClientDeath标为离线。
+        const strSelfID = account.guuid == null ? "" : account.guuid.toString();
+        if(bOffline && strSelfID != "" && strPlayerID == strSelfID)
+            return;
+
+        player.info.strDeadState = bOffline ? "True" : "False";
+        player.ShowHideOffline(bOffline);
     }
     public OnPlayerSay(strMsg:string)
     {
@@ -1075,6 +1176,8 @@ export default class DrhLogicMgr extends cc.Component {
             this.arrayTalkMsg.push(strWord);
 
             cc.loader.loadRes("Prefabs/聊天对象",(err,obj)=>{
+                if(!cc.isValid(this.node) || !cc.isValid(scroll.node))
+                    return;
                 if(err)
                 {
                     cc.error(err.message || err);
@@ -1256,6 +1359,8 @@ export default class DrhLogicMgr extends cc.Component {
     }
     public GetTransHand(player:DrhPlayerLogic):cc.Node
     {
+        if(this.bLeavingRoom || player == null || !cc.isValid(player.node))
+            return null;
         let transFind = null;
         //根据观战或打牌切换手牌
         if(player.playerPos == PlayerPos.self)
@@ -1264,15 +1369,21 @@ export default class DrhLogicMgr extends cc.Component {
             if(player.info.strUserID == this.strAccountUserID) //自己打牌
             {
                 transFind = Tool.GetChild(player.node,"handstop/handcardlist");
-                transFind.active = true;
-                Tool.GetChild(player.node,"handstop/handcardlist2").active = false;
+                const transWatchHand = Tool.GetChild(player.node,"handstop/handcardlist2");
+                if(cc.isValid(transFind))
+                    transFind.active = true;
+                if(cc.isValid(transWatchHand))
+                    transWatchHand.active = false;
             }
             else //自己观战
             {
 
                 transFind = Tool.GetChild(player.node,"handstop/handcardlist2");
-                transFind.active = true;
-                Tool.GetChild(player.node,"handstop/handcardlist").active = false;
+                const transPlayHand = Tool.GetChild(player.node,"handstop/handcardlist");
+                if(cc.isValid(transFind))
+                    transFind.active = true;
+                if(cc.isValid(transPlayHand))
+                    transPlayHand.active = false;
             }
         }
         else

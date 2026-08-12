@@ -271,4 +271,36 @@ export default class ImageManager extends cc.Component {
             this.mapID2ImageSave.delete(strID);
         }
     }
+
+    /**
+     * 场景切换后保留已经加载的头像SpriteFrame和用户头像序号，
+     * 只清理指向已销毁场景Sprite的等待及写回引用。
+     */
+    public ReleaseInvalidSceneReferences()
+    {
+        this.mapSprite2Avatar.forEach((avatarIndex:string, sprite:cc.Sprite)=>{
+            if(sprite == null || !cc.isValid(sprite) || sprite.node == null || !cc.isValid(sprite.node))
+                this.mapSprite2Avatar.delete(sprite);
+        });
+
+        this.mapAvatar2Wait.forEach((sprites:Array<cc.Sprite>, avatarIndex:string)=>{
+            let validSprites = sprites.filter((sprite:cc.Sprite)=>{
+                return sprite != null && cc.isValid(sprite) && sprite.node != null && cc.isValid(sprite.node);
+            });
+            if(validSprites.length == 0)
+                this.mapAvatar2Wait.delete(avatarIndex);
+            else
+                this.mapAvatar2Wait.set(avatarIndex, validSprites);
+        });
+
+        this.mapID2ImageSave.forEach((sprites:Array<cc.Sprite>, userID:string)=>{
+            let validSprites = sprites.filter((sprite:cc.Sprite)=>{
+                return sprite != null && cc.isValid(sprite) && sprite.node != null && cc.isValid(sprite.node);
+            });
+            if(validSprites.length == 0)
+                this.mapID2ImageSave.delete(userID);
+            else
+                this.mapID2ImageSave.set(userID, validSprites);
+        });
+    }
 }
