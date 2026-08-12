@@ -335,10 +335,14 @@ export default class QueueMatchManager extends cc.Component {
         if(this.reservation.roomID == Number(roomID) && this.reservation.site == site)
         {
             // PlayerList 和预坐成功回包没有固定先后顺序。PlayerList 先到时只能
-            // 记录座位已经展示，必须等 onRoomCommand(0x200) 消费完预约快照后再清理。
+            // 记录座位已经展示。本人已出现在目标座位就是预坐成功的
+            // 权威事实，排队流程应立即结束，不能等迟到的命令回包才刷新 UI。
+            let commandAlreadyAccepted = this.reservation.accepted;
             this.reservation.playerListConfirmed = true;
-            if(this.reservation.accepted)
+            this.finishQueueAtPreSit();
+            if(commandAlreadyAccepted)
                 this.reservation = null;
+            this.emitState();
         }
     }
 
@@ -486,7 +490,8 @@ export default class QueueMatchManager extends cc.Component {
             {
                 shouldRefreshList = true;
                 // matched 甚至预坐成功都可能早于 accepted，后到的申请回包不能复活已结束的队列。
-                if(this.queueId == "" && (this.reservation == null || !this.reservation.accepted))
+                if(this.queueId == "" && (this.reservation == null ||
+                    (!this.reservation.accepted && !this.reservation.playerListConfirmed)))
                 {
                     this.queueActive = true;
                     this.status = "queued";
@@ -839,8 +844,14 @@ export default class QueueMatchManager extends cc.Component {
 
     private onRoomCommand(nCode:number, param:string)
     {
-        if(this.switchPhase != "pre_sitting" || param == null ||
-            (param.indexOf("queue_pre_site") < 0 && param.indexOf(this.queueId) < 0))
+        if(param == null)
+            return;
+        let matchedQueuePreSit = param.indexOf("queue_pre_site") >= 0 ||
+            (this.queueId != "" && param.indexOf(this.queueId) >= 0);
+        // PlayerList 可能先于命令回包确认预坐。此时快速换房已经结束，
+        // 但仍要消费同一个预约的迟到回包，不能因 switchPhase 已归零而遗漏。
+        let playerListConfirmed = this.reservation != null && this.reservation.playerListConfirmed;
+        if(!matchedQueuePreSit || (this.switchPhase != "pre_sitting" && !playerListConfirmed))
             return;
 
         if(nCode == 0x200)
@@ -854,14 +865,7 @@ export default class QueueMatchManager extends cc.Component {
                 acceptedReservation.expiresAt = Date.now() + 20000;
             }
             // 服务端确认排队预坐成功即代表撮合结束，带入不再属于排队流程。
-            this.queueActive = false;
-            this.status = "none";
-            this.message = "匹配成功，请选择带入分数";
-            this.rank = 0;
-            this.queueCount = 0;
-            this.assignFailCount = 0;
-            this.lastPreSitQueueId = "";
-            this.switchPhase = this.currentSceneName() == "drh8" ? "idle" : "waiting_room_scene";
+            this.finishQueueAtPreSit();
             if(acceptedReservation != null)
             {
                 KBEngine.Event.fire("QueuePreSitAccepted", this.copyReservation(acceptedReservation));
@@ -890,6 +894,20 @@ export default class QueueMatchManager extends cc.Component {
             // 后续只消费服务端重新分配的下一条 QueueMatchInfo matched。
         }
         this.emitState();
+    }
+
+    /** PlayerList 或预坐回包任一确认占座后，统一结束本地排队展示。 */
+    private finishQueueAtPreSit()
+    {
+        this.queueActive = false;
+        this.status = "none";
+        this.message = "匹配成功，请选择带入分数";
+        this.rank = 0;
+        this.queueCount = 0;
+        this.assignFailCount = 0;
+        this.lastPreSitQueueId = "";
+        this.switchDeadline = 0;
+        this.switchPhase = this.currentSceneName() == "drh8" ? "idle" : "waiting_room_scene";
     }
 
     private armSwitchWatchdog(generation:number)

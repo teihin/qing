@@ -53,7 +53,9 @@ COALESCE(SUM(c.status='active' AND EXISTS (
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法读取未读会话数量")
 		return
 	}
-	_ = s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_agent WHERE channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?`, p.ChannelCode, cutoff).Scan(&onlineAgents)
+	_ = s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_agent
+WHERE channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?
+AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=chat_agent.id AND sess.expires_at>NOW())`, p.ChannelCode, cutoff).Scan(&onlineAgents)
 	writeData(w, http.StatusOK, map[string]any{"queued": queued, "active": active, "myActive": myActive, "myUnread": myUnread, "allUnread": allUnread, "onlineAgents": onlineAgents, "todayClosed": todayClosed})
 }
 
@@ -295,7 +297,9 @@ func (s *Server) handleAgentTransfer(w http.ResponseWriter, r *http.Request, p a
 	var targetName string
 	var targetCapacity int
 	if err := tx.QueryRowContext(r.Context(), `SELECT display_name,max_conversations FROM chat_agent
-WHERE id=? AND channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=? FOR UPDATE`, req.AgentID, channelCode, time.Now().Add(-s.cfg.AgentOfflineAfter)).Scan(&targetName, &targetCapacity); err != nil {
+WHERE id=? AND channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?
+AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=chat_agent.id AND sess.expires_at>NOW())
+FOR UPDATE`, req.AgentID, channelCode, time.Now().Add(-s.cfg.AgentOfflineAfter)).Scan(&targetName, &targetCapacity); err != nil {
 		writeError(w, 400, "INVALID_AGENT", "目标客服不在线或接待量已满")
 		return
 	}

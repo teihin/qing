@@ -377,7 +377,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`, actorType, actorID, action, targetType, ta
 }
 
 func (s *Server) cleanupExpired(ctx context.Context) {
-	_, _ = s.db.ExecContext(ctx, `DELETE FROM chat_agent_session WHERE expires_at <= NOW()`)
+	result, _ := s.db.ExecContext(ctx, `DELETE FROM chat_agent_session WHERE expires_at <= NOW()`)
+	if deleted, _ := result.RowsAffected(); deleted > 0 {
+		s.hub.publish("team", liveEvent{Type: "team.changed"})
+	}
 	_, _ = s.db.ExecContext(ctx, `DELETE FROM chat_player_session WHERE expires_at <= NOW()`)
 }
 

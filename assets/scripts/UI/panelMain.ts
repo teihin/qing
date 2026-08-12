@@ -37,13 +37,29 @@ export default class panelMain extends UIPanelViewBase {
 
     private txtInputRoomid:cc.Label = null; //房号
 
-    private dtLastGetAllRoom:number = new Date().getTime()-10000;
-
-
     private scrollRoom2:scrollview2 = null;
-    private arrayRoomData:any[] //房间滚动列表数据缓存
-
-    private bEnableScroll2Top = false; //刷新列表后滚动到第一行
+    private arrayRoomData:any[] = []; //房间滚动列表数据缓存
+    private readonly ROOM_PAGE_COUNT:number = 200;
+    private roomListLoading:boolean = false;
+    private roomListHasMore:boolean = true;
+    private roomListRequestPage:number = -1;
+    private roomListRequestFilterKey:string = "";
+    private roomListAppliedFilterKey:string = "";
+    private roomListDesiredFilterKey:string = "";
+    private roomListPendingRefresh:boolean = false;
+    private readonly roomListRequestTimeoutHandler = ()=>{
+        if(!this.roomListLoading)
+            return;
+        this.roomListLoading = false;
+        this.roomListRequestPage = -1;
+        this.roomListRequestFilterKey = "";
+        // 超时后不自动连发同一请求；用户切换了筛选时只补发最新筛选。
+        if(this.roomListPendingRefresh)
+        {
+            this.roomListPendingRefresh = false;
+            this.scheduleOnce(()=>this.getAllRooms(0,true));
+        }
+    };
 
     private listSet = ['战绩','代理','资金明细','赠送','设置'];
 
@@ -121,56 +137,14 @@ export default class panelMain extends UIPanelViewBase {
         }
         this.scrollRoom2 = this.scrollRoom.getComponent(scrollview2);
         this.scrollRoom2.main = this;
-        this.scrollRoom.node.on("scroll-to-top",()=>{
-            //this.scrollRoom.LastEvent = ScrollEvent.ToTop;
-               // this.getAllRooms(0);
-
-        },this);
-        this.scrollRoom.node.on("scroll-to-bottom",()=>{
-            //this.scrollRoom.LastEvent = ScrollEvent.ToBottom;
-            //this.getAllRooms(this.scrollRoom.nCurPage+1);
-
-            //console.log("到底了");
-
-        },this);
         this.scrollRoom.node.on(cc.Node.EventType.TOUCH_END,()=>{
-            //结束的时候如果发现列表是空的则需要获取一次
-            let bFind = false;
-            for(let one of this.scrollRoom.content.children)
-            {
-                if(one.active)
-                {
-                    bFind = true;
-                    break;
-                }
-            }
-            if(!bFind)
-            {            
+            if(this.arrayRoomData.length === 0 && !this.roomListLoading)
                 this.getAllRooms(0);
-
-            }
-            Debug.Log("结束");
-        },this);
-
-        this.scrollRoom.node.on("bounce-bottom",()=>{
-            Debug.Log("进入bounce-bottom");
-          //  this.getAllRooms(this.scrollRoom.nCurPage+1);
         },this);
         this.scrollRoom.node.on("bounce-top",()=>{
-            Debug.Log("进入bounce-top");
             this.getAllRooms(0);
         },this);
-
-        this.scrollRoom.node.on("scrolling",()=>{
-            //计算滚到百分比
-            let nTotle = this.scrollRoom.content.height-this.scrollRoom.node.height;
-            let nPer = this.scrollRoom.content.y/nTotle;
-            //Debug.Error("当前比例："+nPer);
-            if(nPer>0.7)
-            {
-                this.getAllRooms(this.scrollRoom.nCurPage+1);
-            }
-        },this);
+        this.scrollRoom.node.on("scrolling",this.TryLoadMoreRooms,this);
 
         this.switchTabSel("发现");
         this.getAllRooms();
@@ -711,6 +685,11 @@ export default class panelMain extends UIPanelViewBase {
             if(strID.length != 6)
             {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入正确的用户ID！");
+                return;
+            }
+            if(strNum !== "" && !/^0*[1-9][0-9]*$/.test(strNum))
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"赠送金额只能输入大于0的整数！");
                 return;
             }
             // if(strNum === "")
@@ -1418,8 +1397,6 @@ export default class panelMain extends UIPanelViewBase {
         if(toggle.node.name === "发现")
         {
             this.switchTabSel(toggle.node.name);
-            //this.scrollRoom.LastEvent = ScrollEvent.Normal;
-            this.bEnableScroll2Top = true;
             this.getAllRooms();
         }
         else if(toggle.node.name === "公告")
@@ -1538,16 +1515,13 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(toggle.node.name === "全" || toggle.node.name === "小" || toggle.node.name === "中" || toggle.node.name === "大" || toggle.node.name === "有空位")
         {
-            if(toggle.node.parent.name === "过滤")
+            if(toggle.node.parent.name === "过滤" && toggle.isChecked)
             {
-                //this.scrollRoom.LastEvent = ScrollEvent.Normal;
-                this.bEnableScroll2Top = true;
                 this.getAllRooms(0,true);
             }
         }
-        else if(toggle.node.parent.name === "过滤")
+        else if(toggle.node.parent.name === "过滤" && toggle.isChecked)
         {
-           // this.scrollRoom.LastEvent = ScrollEvent.Normal;
             this.getAllRooms(0,true);
         }
         else if(toggle.node.name === "聊天语音")
@@ -1728,134 +1702,219 @@ export default class panelMain extends UIPanelViewBase {
         });
     }
 
-    //获取房间列表
-    getAllRooms(nPage:number = 0,bFouce:boolean = false)
+    private GetRoomListFilter():{roomType:string,haveFreeSit:number,key:string}
     {
-        let span = new Date().getTime()-this.dtLastGetAllRoom;
-        if(span<1000 && !bFouce)
+        let roomType = "";
+        let haveFreeSit = 0;
+        const arrayType = Tool.GetChild(this.node,"Main/发现/过滤").getComponentsInChildren(cc.Toggle);
+        for(const toggle of arrayType)
         {
-            return;
+            if(!toggle.isChecked || !toggle.node.activeInHierarchy)
+                continue;
+            if(toggle.node.name === "有空位")
+                haveFreeSit = 1;
+            else if(roomType === "")
+                roomType = toggle.node.name;
         }
-        this.dtLastGetAllRoom = new Date().getTime();
-
-        let strRoomType:string = "";
-        let nHaveFreeSit:number = 0;
-
-
-        let arrayType = Tool.GetChild(this.node,"Main/发现/过滤").getComponentsInChildren(cc.Toggle);
-        // arrayType.forEach((item,idx,array)=>{
-        //     if(item.node.name === "有空位")
-        //     {
-        //         nHaveFreeSit = item.isChecked?1:0;
-        //     }
-        //     else
-        //     {
-        //         if(!item.isChecked)
-        //             return;
-        //         strRoomType += item.node.name;
-        //         strRoomType += ",";
-        //     }
-        // });
-        for(let one of arrayType)
-        {
-            if(one.isChecked)
-            {
-                strRoomType = one.node.name;
-                break;
-            }
-        }
-
-        this.strPreRoomParam = this.strCurRoomParam;
-        this.strCurRoomParam = strRoomType+nHaveFreeSit.toString();
-
-
-        //Debug.Log("查询列表");
-        //return;
-   
-        let strParam = "{\"header\":\"查询_所有_自创_房间\",\"is_zip_result\":\"1\",\"page\":\"" + nPage + "\",\"count\":\"" + 200 + "\",\"fillter_01\":\"" + strRoomType + "\",\"is_have_site\":\"" + nHaveFreeSit + "\",\"fillter_02\":\"\",\"is_no_running\":\"0\"}";
-        GameDataManager.getAccount().reqHallCommand(strParam, "P@查询_所有_自创_房间");
+        return {roomType:roomType,haveFreeSit:haveFreeSit,key:roomType+"|"+haveFreeSit.toString()};
     }
 
-    //解析房间列表信息
-    OnClubRoomInfo(strMsg:string)
+    private TryLoadMoreRooms()
     {
-        let msg = JSON.parse(strMsg);
-        if(msg == null)
+        if(this.roomListLoading || !this.roomListHasMore || this.scrollRoom == null)
+            return;
+
+        const maxOffsetY = this.scrollRoom.getMaxScrollOffset().y;
+        if(maxOffsetY <= 0)
+            return;
+
+        const offsetY = Math.max(0,this.scrollRoom.getScrollOffset().y);
+        if(offsetY/maxOffsetY >= 0.75)
+            this.getAllRooms(Number(this.scrollRoom.nCurPage)+1);
+    }
+
+    private FinishRoomListRequest()
+    {
+        this.unschedule(this.roomListRequestTimeoutHandler);
+        this.roomListLoading = false;
+        this.roomListRequestPage = -1;
+        this.roomListRequestFilterKey = "";
+    }
+
+    private RequestLatestRoomFilterIfNeeded()
+    {
+        if(!this.roomListPendingRefresh)
+            return;
+        this.roomListPendingRefresh = false;
+        this.scheduleOnce(()=>this.getAllRooms(0,true));
+    }
+
+    // 获取房间列表。请求串行化，避免滚动和快速切换分类产生重复页或串包。
+    getAllRooms(nPage:number = 0,_bFouce:boolean = false)
+    {
+        const filter = this.GetRoomListFilter();
+        this.roomListDesiredFilterKey = filter.key;
+
+        if(this.roomListLoading)
         {
-            Debug.Log("解析OnClubRoomInfo内容失败！");
+            if(filter.key !== this.roomListRequestFilterKey)
+                this.roomListPendingRefresh = true;
+            else
+                this.roomListPendingRefresh = false;
             return;
         }
-        let data = msg.result;
 
-
-        //校验消息是否属实压缩消息，不是则抛弃
-        if(data.length>0)
+        if(nPage > 0)
         {
-            if(strMsg.indexOf("room_id")>=0)
+            if(!this.roomListHasMore)
+                return;
+            if(filter.key !== this.roomListAppliedFilterKey)
             {
-                //非压缩消息，丢弃
-                Debug.Error("丢弃非压缩消息");
+                nPage = 0;
+            }
+            else if(nPage !== Number(this.scrollRoom.nCurPage)+1)
+            {
                 return;
             }
         }
 
+        this.strPreRoomParam = this.strCurRoomParam;
+        this.strCurRoomParam = filter.key;
+        this.roomListLoading = true;
+        this.roomListRequestPage = nPage;
+        this.roomListRequestFilterKey = filter.key;
+        if(nPage === 0)
+            this.roomListHasMore = true;
 
-        let nCount = 0;
-        let nCurPage = 0;
-        if(msg.hasOwnProperty("count"))
+        this.unschedule(this.roomListRequestTimeoutHandler);
+        this.scheduleOnce(this.roomListRequestTimeoutHandler,8);
+
+        const requestData = {
+            header:"查询_所有_自创_房间",
+            is_zip_result:"1",
+            page:nPage.toString(),
+            count:this.ROOM_PAGE_COUNT.toString(),
+            fillter_01:filter.roomType,
+            is_have_site:filter.haveFreeSit.toString(),
+            fillter_02:"",
+            is_no_running:"0"
+        };
+        GameDataManager.getAccount().reqHallCommand(JSON.stringify(requestData), "P@查询_所有_自创_房间");
+    }
+
+    // 解析房间列表信息
+    OnClubRoomInfo(strMsg:string)
+    {
+        let msg:any = null;
+        try
         {
-            nCount = msg.count;
-            nCurPage = msg.number;
-            if(msg.result.length>0)
-            {
-                this.scrollRoom.nCurPage = nCurPage;
-            }
+            msg = JSON.parse(strMsg);
+        }
+        catch(error)
+        {
+            Debug.Error("解析OnClubRoomInfo内容失败："+error);
+            this.FinishRoomListRequest();
+            this.RequestLatestRoomFilterIfNeeded();
+            return;
         }
 
+        if(msg == null || !Array.isArray(msg.result))
+        {
+            Debug.Log("解析OnClubRoomInfo内容失败！");
+            this.FinishRoomListRequest();
+            this.RequestLatestRoomFilterIfNeeded();
+            return;
+        }
+
+        const data:any[] = msg.result;
+        const nCount = msg.hasOwnProperty("count") ? Math.max(0,Number(msg.count)||0) : 0;
+        const isTrackedRequest = this.roomListLoading;
+        let requestPage = this.roomListRequestPage;
+        let requestFilterKey = this.roomListRequestFilterKey;
+
+        // 保留服务端主动推送第一页房间列表的兼容能力；非请求状态下不接受追加页。
+        if(!isTrackedRequest)
+        {
+            const pushedPage = msg.hasOwnProperty("number") ? Math.max(0,Number(msg.number)||0) : 0;
+            if(pushedPage !== 0 || this.roomListPendingRefresh)
+                return;
+            requestPage = 0;
+            requestFilterKey = this.roomListAppliedFilterKey || this.roomListDesiredFilterKey || this.GetRoomListFilter().key;
+        }
+
+        const nCurPage = msg.hasOwnProperty("number") ? Math.max(0,Number(msg.number)||0) : requestPage;
+
+        if(nCurPage !== requestPage)
+        {
+            Debug.Error("丢弃页码不匹配的房间列表回包，请求页："+requestPage+"，返回页："+nCurPage);
+            return;
+        }
+
+        if(isTrackedRequest)
+            this.FinishRoomListRequest();
+
+        // 切换筛选期间返回的旧分类数据不再落到当前列表，随后只请求最新分类。
+        if(requestFilterKey !== this.roomListDesiredFilterKey)
+        {
+            this.RequestLatestRoomFilterIfNeeded();
+            return;
+        }
+
+        // 校验是否为压缩数组消息，不是则抛弃。
+        if(data.length > 0 && strMsg.indexOf("room_id") >= 0)
+        {
+            Debug.Error("丢弃非压缩房间列表消息");
+            this.RequestLatestRoomFilterIfNeeded();
+            return;
+        }
+
+        const temp:any[] = [];
+        for(const room of data)
+        {
+            if(Array.isArray(room) && room.length >= 9)
+                temp.push(room);
+            else
+                Debug.Error("忽略格式错误的房间列表项");
+        }
         this.scrollRoom2 = this.scrollRoom.getComponent(scrollview2);
-        let temp = [];
-        for(let i=0;i<data.length;i++)
-        {
-            let objRoom:cc.Node = null;
-            let jRoom = data[i];
-            temp.push(jRoom);
-        }
-        if(nCurPage == 0)
-        {
-            //房间数小于8，需要补位到8
-            if(temp.length<8&&temp.length>0)
-            {
-                let tt = []
-                for(let i=0;i<8-temp.length;i++)
-                {
-                    let one = [];
-                    one.push(...temp[0])
-                    one[0] = '-999';
-                    tt.push(one)
-                }
-                temp.push(...tt);
-            }
+        this.scrollRoom.nCurPage = nCurPage;
+        this.scrollRoom.nCount = nCount;
+        this.scrollRoom.nTotlePage = nCount > 0 ? Math.ceil(nCount/this.ROOM_PAGE_COUNT) : 0;
 
-
-            this.arrayRoomData = [];
-            this.arrayRoomData.push(...temp);
+        if(nCurPage === 0)
+        {
+            this.arrayRoomData = temp;
+            this.roomListAppliedFilterKey = requestFilterKey;
             this.scrollRoom2.Init(this.arrayRoomData,true);
-            //if(this.bEnableScroll2Top)
-            {
-                this.scrollRoom.scrollToTop();
-                this.bEnableScroll2Top = false;
-            }
-            
         }
-        else
+        else if(temp.length > 0)
         {
-            if(temp.length>0)
+            // 服务端偶发重复页时按房间号覆盖旧数据，不重复追加节点。
+            const roomIndex:{[roomID:string]:number} = {};
+            for(let index=0;index<this.arrayRoomData.length;index++)
+                roomIndex[String(this.arrayRoomData[index][0])] = index;
+            for(const room of temp)
             {
-                this.arrayRoomData.push(...temp);
-                this.scrollRoom2.Init(this.arrayRoomData,false);
+                const roomID = String(room[0]);
+                if(roomIndex.hasOwnProperty(roomID))
+                    this.arrayRoomData[roomIndex[roomID]] = room;
+                else
+                {
+                    roomIndex[roomID] = this.arrayRoomData.length;
+                    this.arrayRoomData.push(room);
+                }
             }
-
+            this.scrollRoom2.Init(this.arrayRoomData,false);
         }
+
+        if(temp.length === 0)
+            this.roomListHasMore = false;
+        else if(msg.hasOwnProperty("count"))
+            this.roomListHasMore = this.arrayRoomData.length < nCount;
+        else
+            this.roomListHasMore = temp.length >= this.ROOM_PAGE_COUNT;
+
+        this.RequestLatestRoomFilterIfNeeded();
 
      //   let cashItem = new Array<cc.Node>();
  

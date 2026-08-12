@@ -72,6 +72,11 @@ export default class panelGivePad extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入金额!");
                 return;
             }
+            if(!/^0*[1-9][0-9]*$/.test(strNum))
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"赠送金额只能输入大于0的整数！");
+                return;
+            }
 
             let strPass = Tool.GetChild(this.node,"bk/密码").getComponent(cc.EditBox).string;
             if(strPass == "")

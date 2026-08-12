@@ -2768,6 +2768,13 @@ export default class panelGameView extends UIPanelViewBase {
             return;
         let shouldShow = this.IsQueueSupportedRoom() && !isSelfSeated;
         this.queueEntryNode.active = shouldShow;
+        // 房间切换期间排队结束事件可能早于新牌桌 UI 绑定。入口重新显示时
+        // 必须以常驻管理器快照重绘文字，不能复用场景中残留的“排队中”。
+        if(shouldShow && this.queueEntryLabel != null && cc.isValid(this.queueEntryLabel))
+        {
+            let snapshot = QueueMatchManager.getInstance().getSnapshot();
+            this.queueEntryLabel.string = snapshot.queueActive ? "排队中" : "排队";
+        }
         if(!shouldShow)
             this.CloseQueuePanel();
     }
@@ -3078,7 +3085,12 @@ export default class panelGameView extends UIPanelViewBase {
 
     public OnQueuePreSitAccepted(reservation:any)
     {
-        this.RefreshQueueEntryVisibility(true);
+        // PlayerList 先到时玩家可能已经取消带入并起立，迟到的预坐成功回包
+        // 只能确认排队结束，不能再次强制隐藏已恢复的排队入口。
+        let strUserID = GameDataManager.getAccount().guuid;
+        let isSelfSeated = this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID;
+        let playerListAlreadyConfirmed = reservation != null && reservation.playerListConfirmed === true;
+        this.RefreshQueueEntryVisibility(playerListAlreadyConfirmed ? isSelfSeated : true);
         this.CloseQueuePanel();
         this.OnQueuePreSitReservation(reservation);
     }

@@ -6,9 +6,19 @@ const { ccclass, property } = cc._decorator;
 
 @ccclass
 export default class ScrollItem extends ScrollItemBase {
+    private static statusSpriteCache:{[path:string]:cc.SpriteFrame} = {};
+    private refreshVersion:number = 0;
+
     public Refresh(jRoom:any){
+        if(!Array.isArray(jRoom))
+        {
+            this.node.active = false;
+            return;
+        }
+
+        const currentRefreshVersion = ++this.refreshVersion;
         this.node.active = true;
-        let room_id = jRoom[0];
+        let room_id = jRoom[0] == null ? "" : jRoom[0].toString();
         let room_status = jRoom[1];
         let remark = jRoom[2];
         let plays = jRoom[3];
@@ -18,7 +28,7 @@ export default class ScrollItem extends ScrollItemBase {
         let room_name = jRoom[7];
         let game_9 = jRoom[8] == 0 ? false:true; //地九王
 
-        this.node.name = room_id.toString();
+        this.node.name = room_id;
 
         if(room_id == '-999')
         {
@@ -31,21 +41,32 @@ export default class ScrollItem extends ScrollItemBase {
 
 
         this.node.getChildByName("地九王").active = game_9;        
-        this.node.getChildByName("底皮").getComponent(cc.Label).string = game_pi.replace("底皮","");
+        this.node.getChildByName("底皮").getComponent(cc.Label).string = String(game_pi || "").replace("底皮","");
         this.node.getChildByName("人数").getComponent(cc.Label).string = plays+'/'+max_plays;
         this.node.getChildByName("时间").getComponent(cc.Label).string = game_time;
         this.node.getChildByName("倒计时").getComponent(cc.Label).string = "剩余"+remark;
         this.node.getChildByName("name").getComponent(cc.Label).string = room_name;
 
-        cc.loader.loadRes("other/状态_"+room_status,cc.SpriteFrame,(err,obj)=>{
+        const statusPath = "other/状态_"+room_status;
+        const cachedStatus = ScrollItem.statusSpriteCache[statusPath];
+        if(cachedStatus != null)
+        {
+            this.node.getChildByName("状态").getComponent(cc.Sprite).spriteFrame = cachedStatus;
+        }
+        else
+        {
+            this.node.getChildByName("状态").getComponent(cc.Sprite).spriteFrame = null;
+            cc.loader.loadRes(statusPath,cc.SpriteFrame,(err,obj:cc.SpriteFrame)=>{
             if(err)
             {
                 cc.error(err.message || err);
                 return null;
             }
-            if(cc.isValid(this.node))
+            ScrollItem.statusSpriteCache[statusPath] = obj;
+            if(cc.isValid(this.node) && this.refreshVersion === currentRefreshVersion && this.node.name === room_id)
                 this.node.getChildByName("状态").getComponent(cc.Sprite).spriteFrame = obj;
-        });     
+            });
+        }
         
         //更新背景
         // cc.loader.loadRes("other/背景_"+room_status,cc.SpriteFrame,(err,obj)=>{
@@ -59,7 +80,7 @@ export default class ScrollItem extends ScrollItemBase {
         // }); 
 
         let btn = this.node.getComponent(cc.Button);
-        
+        btn.interactable = room_id != '-999';
         btn.node.targetOff(this);
         btn.node.on("click",()=>{
             this.main.onButtonClick(btn);

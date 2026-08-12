@@ -387,6 +387,11 @@ export default class panelManager extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入金额");
                 return;
             }
+            if(!/^0*[1-9][0-9]*$/.test(strCount))
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"赠送金额只能输入大于0的整数！");
+                return;
+            }
             if(bKC)
             {
                 strCount = "-"+strCount;

@@ -173,7 +173,7 @@ WHERE player_id=? AND channel_code=? AND status IN ('queued','active') ORDER BY 
 (id,player_id,channel_code,status,priority,category,queue_started_at,last_message_at,created_at,updated_at)
 VALUES (?, ?, ?, 'queued', 'normal', ?, NOW(), NOW(), NOW(), NOW())`, conversationID, playerID, channel.Code, channel.DisplayName)
 		if err == nil {
-			err = insertSystemMessage(r.Context(), tx, conversationID, "您好，消息已送达。正在为您接入在线客服。")
+			err = insertSystemMessage(r.Context(), tx, conversationID, "您好，正在为您接入在线客服。")
 		}
 	}
 	if err != nil {
@@ -301,7 +301,9 @@ FROM chat_conversation c LEFT JOIN chat_agent a ON a.id = c.assigned_agent_id WH
 	}
 	var online int
 	cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
-	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM chat_agent WHERE channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?`, channelCode, cutoff).Scan(&online)
+	_ = s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM chat_agent
+WHERE channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?
+AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=chat_agent.id AND sess.expires_at>NOW())`, channelCode, cutoff).Scan(&online)
 	var metadataValue any = map[string]any{}
 	_ = json.Unmarshal([]byte(metadata), &metadataValue)
 	return map[string]any{
@@ -314,9 +316,32 @@ FROM chat_conversation c LEFT JOIN chat_agent a ON a.id = c.assigned_agent_id WH
 }
 
 func (s *Server) handlePlayerEvents(w http.ResponseWriter, r *http.Request, p playerPrincipal) {
-	ch, cancel := s.hub.subscribe("player-conversation:" + p.ConversationID)
-	defer cancel()
-	streamEvents(w, r, ch, s.hub.done)
+	conversation, cancelConversation := s.hub.subscribe("player-conversation:" + p.ConversationID)
+	defer cancelConversation()
+	team, cancelTeam := s.hub.subscribe("team")
+	defer cancelTeam()
+	merged := make(chan liveEvent, 32)
+	go func() {
+		for {
+			select {
+			case event := <-conversation:
+				select {
+				case merged <- event:
+				case <-r.Context().Done():
+					return
+				}
+			case event := <-team:
+				select {
+				case merged <- event:
+				case <-r.Context().Done():
+					return
+				}
+			case <-r.Context().Done():
+				return
+			}
+		}
+	}()
+	streamEvents(w, r, merged, s.hub.done)
 }
 
 func (s *Server) handlePlayerTyping(w http.ResponseWriter, r *http.Request, p playerPrincipal) {
@@ -410,6 +435,7 @@ func (s *Server) assignQueued(ctx context.Context) (int, error) {
 WHERE c.status='queued' AND EXISTS (
   SELECT 1 FROM chat_agent available
   WHERE available.channel_code=c.channel_code AND available.enabled=1 AND available.presence='online' AND available.last_seen_at>=?
+  AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=available.id AND sess.expires_at>NOW())
   AND (SELECT COUNT(*) FROM chat_conversation active WHERE active.assigned_agent_id=available.id AND active.status='active') < available.max_conversations
 )
 ORDER BY FIELD(c.priority,'urgent','high','normal','low'),c.queue_started_at ASC LIMIT 1 FOR UPDATE`, cutoff).Scan(&conversationID, &channelCode)
@@ -427,7 +453,9 @@ ORDER BY FIELD(c.priority,'urgent','high','normal','low'),c.queue_started_at ASC
 FROM chat_agent a
 LEFT JOIN (SELECT assigned_agent_id, COUNT(*) active_count FROM chat_conversation WHERE status='active' GROUP BY assigned_agent_id) c
 ON c.assigned_agent_id = a.id
-WHERE a.channel_code=? AND a.enabled=1 AND a.presence='online' AND a.last_seen_at >= ? AND COALESCE(c.active_count,0) < a.max_conversations
+WHERE a.channel_code=? AND a.enabled=1 AND a.presence='online' AND a.last_seen_at >= ?
+AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=a.id AND sess.expires_at>NOW())
+AND COALESCE(c.active_count,0) < a.max_conversations
 ORDER BY COALESCE(c.active_count,0) ASC, COALESCE(a.last_assigned_at,'1970-01-01') ASC, a.id ASC
 LIMIT 1 FOR UPDATE`, channelCode, cutoff).Scan(&agentID, &agentName)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -563,6 +591,9 @@ func (s *Server) runMaintenance(ctx context.Context) {
 				for _, id := range ids {
 					_, _ = s.db.ExecContext(ctx, `UPDATE chat_agent SET presence='offline' WHERE id=?`, id)
 					_ = s.requeueAgentConversations(ctx, id, "客服心跳超时")
+				}
+				if len(ids) > 0 {
+					s.hub.publish("team", liveEvent{Type: "team.changed"})
 				}
 			}
 			_, _ = s.db.ExecContext(ctx, `UPDATE chat_conversation SET status='closed', closed_at=NOW(), close_reason='会话长时间无消息自动关闭', updated_at=NOW()

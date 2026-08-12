@@ -99,6 +99,8 @@ textarea { resize: none; }
 .typing-bubble i:nth-child(3), .agent-typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes typing { 0%,60%,100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
 .player-composer { position: sticky; bottom: 0; z-index: 5; padding: 9px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid #dbe7e4; background: rgba(255,255,255,.97); backdrop-filter: blur(18px); }
+.player-composer-disabled { background: rgba(246,248,247,.98); }
+.player-composer-disabled .composer-row textarea { color: #889592; background: #edf1f0; }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
 .composer-row textarea { min-height: 42px; max-height: 100px; flex: 1; padding: 10px 12px; outline: 0; border: 1px solid #d8e4e1; border-radius: 12px; color: var(--ink); background: #f5f8f7; font-size: 14px; line-height: 20px; }
 .composer-row textarea:focus { border-color: #71bea9; background: #fff; box-shadow: 0 0 0 3px rgba(21,158,120,.08); }
@@ -106,6 +108,7 @@ textarea { resize: none; }
 .add-button-open { transform: rotate(45deg); color: #fff; background: var(--green); border-color: var(--green); }
 .send-button { height: 40px; padding: 0 15px; color: #fff; border: 0; border-radius: 11px; background: linear-gradient(135deg, #14a87e, #08775c); font-size: 13px; font-weight: 700; }
 .safe-tip { display: block; margin-top: 5px; padding-left: 48px; color: #9aa7a5; font-size: 10px; }
+.safe-tip.offline-tip { color: #9b7b3e; }
 .player-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 4px 4px 14px; }
 .player-actions label { display: flex; flex-direction: column; align-items: center; gap: 6px; color: #5d716f; font-size: 11px; cursor: pointer; }
 .player-actions input, .composer-tools input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

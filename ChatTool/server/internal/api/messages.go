@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -122,6 +123,10 @@ func (s *Server) handlePlayerSendMessage(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	item, err := s.insertMessage(r, p.ConversationID, "player", p.PlayerID, p.Nickname, "text", text, "", req.ClientMessageID)
+	if errors.Is(err, errNoOnlineAgent) {
+		writeError(w, http.StatusConflict, "NO_AGENT_ONLINE", "当前没有客服在线，暂时无法发送消息")
+		return
+	}
 	if errors.Is(err, errConversationClosed) {
 		writeError(w, http.StatusConflict, "CONVERSATION_CLOSED", "本次咨询已经结束，请返回游戏重新进入客服")
 		return
@@ -169,7 +174,10 @@ func (s *Server) handleAgentSendMessage(w http.ResponseWriter, r *http.Request, 
 	writeData(w, http.StatusCreated, item)
 }
 
-var errConversationClosed = errors.New("conversation closed")
+var (
+	errConversationClosed = errors.New("conversation closed")
+	errNoOnlineAgent      = errors.New("no agent online")
+)
 
 func (s *Server) insertMessage(r *http.Request, conversationID, senderType, senderID, senderName, messageType, text, mediaID, clientMessageID string) (messageItem, error) {
 	deduplicateByClientID := clientMessageID != "" && len(clientMessageID) <= 64
@@ -188,12 +196,17 @@ func (s *Server) insertMessage(r *http.Request, conversationID, senderType, send
 		return messageItem{}, err
 	}
 	defer tx.Rollback()
-	var status string
-	if err = tx.QueryRowContext(r.Context(), `SELECT status FROM chat_conversation WHERE id=? FOR UPDATE`, conversationID).Scan(&status); err != nil {
+	var status, channelCode string
+	if err = tx.QueryRowContext(r.Context(), `SELECT status,channel_code FROM chat_conversation WHERE id=? FOR UPDATE`, conversationID).Scan(&status, &channelCode); err != nil {
 		return messageItem{}, err
 	}
 	if status == "closed" {
 		return messageItem{}, errConversationClosed
+	}
+	if senderType == "player" {
+		if err = s.lockOnlineAgent(r.Context(), tx, channelCode); err != nil {
+			return messageItem{}, err
+		}
 	}
 	var media any
 	if mediaID != "" {
@@ -287,12 +300,24 @@ func (s *Server) writeUploadError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) saveUpload(w http.ResponseWriter, r *http.Request, conversationID, uploaderType, uploaderID, uploaderName string) (messageItem, error) {
-	var status string
-	if err := s.db.QueryRowContext(r.Context(), `SELECT status FROM chat_conversation WHERE id=?`, conversationID).Scan(&status); err != nil {
+	var status, channelCode string
+	if err := s.db.QueryRowContext(r.Context(), `SELECT status,channel_code FROM chat_conversation WHERE id=?`, conversationID).Scan(&status, &channelCode); err != nil {
 		return messageItem{}, err
 	}
 	if status == "closed" {
 		return messageItem{}, uploadError{http.StatusConflict, "CONVERSATION_CLOSED", "会话已经结束"}
+	}
+	if uploaderType == "player" {
+		var online int
+		cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
+		if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_agent
+WHERE channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?
+AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=chat_agent.id AND sess.expires_at>NOW())`, channelCode, cutoff).Scan(&online); err != nil {
+			return messageItem{}, err
+		}
+		if online == 0 {
+			return messageItem{}, uploadError{http.StatusConflict, "NO_AGENT_ONLINE", "当前没有客服在线，暂时无法发送文件"}
+		}
 	}
 	maxRequest := s.cfg.MaxVideoBytes
 	if s.cfg.MaxImageBytes > maxRequest {
@@ -384,6 +409,19 @@ func (s *Server) saveUpload(w http.ResponseWriter, r *http.Request, conversation
 		return messageItem{}, err
 	}
 	defer tx.Rollback()
+	if err = tx.QueryRowContext(r.Context(), `SELECT status,channel_code FROM chat_conversation WHERE id=? FOR UPDATE`, conversationID).Scan(&status, &channelCode); err != nil {
+		return messageItem{}, err
+	}
+	if status == "closed" {
+		return messageItem{}, uploadError{http.StatusConflict, "CONVERSATION_CLOSED", "会话已经结束"}
+	}
+	if uploaderType == "player" {
+		if err = s.lockOnlineAgent(r.Context(), tx, channelCode); errors.Is(err, errNoOnlineAgent) {
+			return messageItem{}, uploadError{http.StatusConflict, "NO_AGENT_ONLINE", "当前没有客服在线，暂时无法发送文件"}
+		} else if err != nil {
+			return messageItem{}, err
+		}
+	}
 	_, err = tx.ExecContext(r.Context(), `INSERT INTO chat_media
 (id, conversation_id, uploader_type, uploader_id, original_name, storage_key, mime_type, size_bytes, sha256, media_kind, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, mediaID, conversationID, uploaderType, uploaderID, originalName, storageKey,
@@ -413,6 +451,19 @@ VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, NOW())`, messageID, conversationID, uploader
 	return messageItem{ID: messageID, ConversationID: conversationID, SenderType: uploaderType, SenderID: uploaderID,
 		SenderName: uploaderName, MessageType: kind, MediaID: &mediaID, MediaName: &originalName, MediaMIME: &mimeType,
 		MediaSize: &written, CreatedAt: time.Now()}, nil
+}
+
+func (s *Server) lockOnlineAgent(ctx context.Context, tx *sql.Tx, channelCode string) error {
+	var agentID int64
+	cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
+	err := tx.QueryRowContext(ctx, `SELECT a.id FROM chat_agent a
+JOIN chat_agent_session sess ON sess.agent_id=a.id AND sess.expires_at>NOW()
+WHERE a.channel_code=? AND a.enabled=1 AND a.presence='online' AND a.last_seen_at>=?
+ORDER BY a.id LIMIT 1 FOR UPDATE`, channelCode, cutoff).Scan(&agentID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return errNoOnlineAgent
+	}
+	return err
 }
 
 func classifyUpload(mimeType string) (kind string, maxBytes int64, extension string, ok bool) {

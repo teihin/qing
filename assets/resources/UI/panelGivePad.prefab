@@ -2140,8 +2140,8 @@
       }
     ],
     "_useOriginalSize": true,
-    "_string": "请输入金额",
-    "_N$string": "请输入金额",
+    "_string": "请输入整数",
+    "_N$string": "请输入整数",
     "_fontSize": 20,
     "_lineHeight": 25,
     "_enableWrapText": false,
@@ -2221,7 +2221,7 @@
       "__id__": 49
     },
     "_N$inputFlag": 5,
-    "_N$inputMode": 2,
+    "_N$inputMode": 3,
     "_N$stayOnTop": false,
     "_id": ""
   },

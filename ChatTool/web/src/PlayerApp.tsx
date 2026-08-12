@@ -22,6 +22,7 @@ export default function PlayerApp() {
   const typingActive = useRef(false)
   const agentTypingExpiry = useRef<number | undefined>(undefined)
   const conversationID = state?.conversation.id
+	const canSend = Boolean(state && state.conversation.status !== 'closed' && state.onlineAgents > 0)
 
   const loadMessages = useCallback(async () => {
     const result = await api<{ items: Message[] }>('/api/player/messages')
@@ -104,27 +105,31 @@ export default function PlayerApp() {
     source.addEventListener('conversation.assigned', refresh)
     source.addEventListener('conversation.requeued', refresh)
     source.addEventListener('conversation.transferred', refresh)
-	source.addEventListener('conversation.closed', refresh)
-	source.addEventListener('conversation.cleared', refresh)
-    source.addEventListener('typing', (event) => {
+	  source.addEventListener('conversation.closed', refresh)
+	  source.addEventListener('conversation.cleared', refresh)
+	  source.addEventListener('team.changed', () => void loadState())
+	  source.addEventListener('typing', (event) => {
       try {
         const data = JSON.parse((event as MessageEvent).data) as { payload?: { actor?: string; typing?: boolean } }
         if (data.payload?.actor === 'agent') updateAgentTyping(Boolean(data.payload.typing))
       } catch { /* ignore malformed realtime event */ }
-    })
+	  })
+	const statePoll = window.setInterval(() => void loadState().catch(() => undefined), 20000)
     return () => {
       source.close()
+	  window.clearInterval(statePoll)
       window.clearTimeout(agentTypingExpiry.current)
       agentTypingExpiry.current = undefined
     }
   }, [conversationID, loadMessages, loadState, updateAgentTyping])
 
   useEffect(() => {
-    if (state?.conversation.status !== 'active') {
+	if (!canSend || state?.conversation.status !== 'active') {
       stopPlayerTyping()
       updateAgentTyping(false)
     }
-  }, [state?.conversation.status, stopPlayerTyping, updateAgentTyping])
+	if (!canSend) setShowActions(false)
+	}, [canSend, state?.conversation.status, stopPlayerTyping, updateAgentTyping])
 
   useEffect(() => () => {
     stopPlayerTyping()
@@ -142,7 +147,7 @@ export default function PlayerApp() {
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     const content = text.trim()
-    if (!content || sending || state?.conversation.status === 'closed') return
+	if (!content || sending || !canSend) return
     stopPlayerTyping()
     setSending(true)
     setError('')
@@ -157,14 +162,14 @@ export default function PlayerApp() {
 
   const onTextChange = (value: string) => {
     setText(value)
-    if (state?.conversation.status === 'active' && value.trim()) startPlayerTyping()
+	if (canSend && state?.conversation.status === 'active' && value.trim()) startPlayerTyping()
     else stopPlayerTyping()
   }
 
   const upload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file || uploading || state?.conversation.status === 'closed') return
+	if (!file || uploading || !canSend) return
     stopPlayerTyping()
     setUploading(true)
     setShowActions(false)
@@ -196,7 +201,7 @@ export default function PlayerApp() {
   )
 
   const { conversation } = state
-  const unavailable = conversation.status === 'queued' && state.onlineAgents === 0
+	const unavailable = conversation.status !== 'closed' && state.onlineAgents === 0
   return (
     <main className="player-shell">
       <header className="player-header">
@@ -206,8 +211,8 @@ export default function PlayerApp() {
       <section className={`service-banner banner-${conversation.status} ${unavailable ? 'banner-unavailable' : ''}`}>
         <span className="service-avatar"><Avatar name={conversation.agentName || '客'} size="large" /><i /></span>
         <div>
-          <strong>{conversation.status === 'active' ? `${conversation.agentName} 正在为您服务` : conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '暂时没有客服在线' : '正在为您分配客服'}</strong>
-          <p>{conversation.status === 'active' ? '您可以发送文字、图片、视频或文件' : conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '您可以先留言，客服上线后会尽快回复' : '请稍候，您的消息已经进入排队队列'}</p>
+		  <strong>{conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : conversation.status === 'active' ? `${conversation.agentName} 正在为您服务` : '正在为您分配客服'}</strong>
+		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '暂时无法发送消息，请等待客服上线后再咨询' : conversation.status === 'active' ? '您可以发送文字、图片、视频或文件' : '请稍候，正在为您接入在线客服'}</p>
         </div>
       </section>
       <section className="player-messages" aria-live="polite">
@@ -219,19 +224,19 @@ export default function PlayerApp() {
       {error && <div className="toast-error" role="alert">{error}<button onClick={() => setError('')} aria-label="关闭提示">×</button></div>}
       {conversation.status === 'closed' && <button className="rating-entry" type="button" onClick={() => setShowRating(true)}>评价本次服务</button>}
       {uploading && <div className="uploading-bar"><span className="loading-spinner" />正在上传文件…</div>}
-      <form className="player-composer" onSubmit={submit}>
-        {showActions && <div className="player-actions">
-          <label><span className="action-icon action-photo">图</span><b>图片</b><input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={upload} /></label>
-          <label><span className="action-icon action-camera">拍</span><b>拍摄</b><input type="file" accept="image/*,video/*" capture="environment" onChange={upload} /></label>
-          <label><span className="action-icon action-video">视</span><b>视频</b><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={upload} /></label>
-          <label><span className="action-icon action-file">文</span><b>文件</b><input type="file" accept=".pdf,.txt,.zip" onChange={upload} /></label>
-        </div>}
-        <div className="composer-row">
-          <button className={`add-button ${showActions ? 'add-button-open' : ''}`} type="button" aria-label="添加图片或视频" onClick={() => setShowActions((value) => !value)} disabled={conversation.status === 'closed'}>＋</button>
-          <textarea value={text} onChange={(event) => onTextChange(event.target.value)} onBlur={stopPlayerTyping} rows={1} maxLength={2000} placeholder={conversation.status === 'closed' ? '本次咨询已结束' : '请输入您要咨询的问题…'} disabled={conversation.status === 'closed'} />
-          <button className="send-button" type="submit" disabled={!text.trim() || sending || conversation.status === 'closed'}>{sending ? '发送中' : '发送'}</button>
-        </div>
-        <small className="safe-tip">请勿发送密码、验证码、银行卡等敏感信息</small>
+	  <form className={`player-composer ${!canSend ? 'player-composer-disabled' : ''}`} onSubmit={submit}>
+		{showActions && <div className="player-actions">
+		  <label><span className="action-icon action-photo">图</span><b>图片</b><input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={upload} disabled={!canSend} /></label>
+		  <label><span className="action-icon action-camera">拍</span><b>拍摄</b><input type="file" accept="image/*,video/*" capture="environment" onChange={upload} disabled={!canSend} /></label>
+		  <label><span className="action-icon action-video">视</span><b>视频</b><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={upload} disabled={!canSend} /></label>
+		  <label><span className="action-icon action-file">文</span><b>文件</b><input type="file" accept=".pdf,.txt,.zip" onChange={upload} disabled={!canSend} /></label>
+		</div>}
+		<div className="composer-row">
+		  <button className={`add-button ${showActions ? 'add-button-open' : ''}`} type="button" aria-label="添加图片或视频" onClick={() => setShowActions((value) => !value)} disabled={!canSend}>＋</button>
+		  <textarea value={text} onChange={(event) => onTextChange(event.target.value)} onBlur={stopPlayerTyping} rows={1} maxLength={2000} placeholder={conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : '请输入您要咨询的问题…'} disabled={!canSend} />
+		  <button className="send-button" type="submit" disabled={!text.trim() || sending || !canSend}>{sending ? '发送中' : '发送'}</button>
+		</div>
+		<small className={`safe-tip ${unavailable ? 'offline-tip' : ''}`}>{unavailable ? '客服上线后将自动恢复发送功能' : '请勿发送密码、验证码、银行卡等敏感信息'}</small>
       </form>
       {previewImage && <div className="image-preview" role="dialog" aria-modal="true" onClick={() => setPreviewImage('')}><button type="button" aria-label="关闭图片">×</button><img src={previewImage} alt="图片预览" /></div>}
       {showRating && <RatingModal onClose={() => setShowRating(false)} onSubmit={async (score, tags, comment) => { await api('/api/player/satisfaction', { method: 'POST', body: jsonBody({ score, tags, comment }) }); setShowRating(false) }} />}

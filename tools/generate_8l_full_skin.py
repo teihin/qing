@@ -836,7 +836,12 @@ def special_result(path: Path, source: Image.Image, master: Image.Image) -> Imag
     if value == PROFILE_FRAME:
         return profile_frame(source)
     if value == "assets/ImagesLuck/游戏内/yuan.png":
-        return Image.new("RGB", source.size, (48, 120, 135))
+        # 该图是头像倒计时与决策进度的径向填充遮罩，节点颜色会在运行时
+        # 切换为黑/绿/橙/红。必须保留原圆形 alpha，不能重建成实心矩形。
+        result = Image.new("RGBA", source.size, (255, 255, 255, 0))
+        if "A" in source.getbands():
+            result.putalpha(source.convert("RGBA").getchannel("A"))
+        return result
     if value in WHOLE_CHIP_TARGETS:
         return chip_asset(source)
     if value in SEAL_PATCHES:

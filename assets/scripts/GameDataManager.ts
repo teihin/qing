@@ -246,14 +246,15 @@ export default class GameDataManager extends cc.Component {
      }
 
      onKicked(failedcode:number){
-        KBEngine.INFO_MSG("被踢出服务器，停止自动重连！failedcode=" + failedcode);
+        KBEngine.INFO_MSG("服务器终止当前连接，停止自动重连！failedcode=" + failedcode);
         if(this._automaticReconnectStoppedByKick)
             return;
 
-        // onKicked是服务端明确强制下线，与普通断网分开处理。旧设备若继续
-        // 自动重连，会反过来把新设备踢下线，造成两个客户端循环互踢。
+        // onKicked表示本次连接已经被服务端终止，与普通断网分开处理。
+        // 多设备互踢时若旧客户端继续自动重连，会造成两个客户端循环互踢；
+        // 服务器重启也可能发出同类事件，因此界面只显示中性的失效提示。
         this._automaticReconnectStoppedByKick = true;
-        this._pendingForcedLogoutMessage = "当前账号已在其他设备登录，本机已退出登录";
+        this._pendingForcedLogoutMessage = "当前登录连接已失效，请重新登录";
         this._loginAttempt++;
         this.bLoginSuccess = false;
         this.unschedule(this.callbackSendHeart);

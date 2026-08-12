@@ -11,8 +11,8 @@
 - `POST /api/player/session`：提交含 `channel` 的客户端 AES 加密资料并建立HttpOnly会话；缺省通道兼容为 `general`。响应含非敏感 `sessionRef`，允许同一浏览器标签页并行保持不同通道会话。
 - `GET /api/player/me`：玩家、会话、在线客服数和 CSRF。
 - `GET /api/player/events`：SSE 实时事件。
-- `GET/POST /api/player/messages`：聊天记录与文字发送。
-- `POST /api/player/uploads`：图片、视频或文件。
+- `GET/POST /api/player/messages`：聊天记录与文字发送；本通道没有在线客服时发送返回409 `NO_AGENT_ONLINE`。
+- `POST /api/player/uploads`：图片、视频或文件；本通道没有在线客服时上传返回409 `NO_AGENT_ONLINE`。
 - `POST /api/player/typing`、`POST /api/player/read`：输入和已读。
 - `POST /api/player/end`：玩家结束咨询。
 - `POST /api/player/satisfaction`：结束后 1～5 分评价。
