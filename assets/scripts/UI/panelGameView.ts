@@ -600,6 +600,11 @@ export default class panelGameView extends UIPanelViewBase {
         {
             cc.sys.localStorage.setItem("AudioEff",toggle.isChecked?100:0);
         }
+        else if(toggle.node.name === "聚光灯开关")
+        {
+            cc.sys.localStorage.setItem("下注聚光灯",toggle.isChecked?1:0);
+            this.gameLogic.SetBettingSpotlightEnabled(toggle.isChecked);
+        }
         else if(toggle.node.name == "奖池" || toggle.node.name == "奖池总览" || toggle.node.name == "奖池记录")
         {
             this.switchJC(toggle.node.name);
@@ -847,6 +852,7 @@ export default class panelGameView extends UIPanelViewBase {
             //Tool.GetChild(this.node,"系统设置/设置/音乐/音乐开关").getComponent(cc.Toggle).isChecked = nBKAudio==1?true:false;
             Tool.GetChild(this.node,"系统设置/设置/声音/音效/音效开关").getComponent(cc.Toggle).isChecked = nGameAudio>=1?true:false;
             Tool.GetChild(this.node,"系统设置/设置/声音/语音/语音开关").getComponent(cc.Toggle).isChecked = nLiaoAudio==1?true:false;
+            Tool.GetChild(this.node,"系统设置/设置/聚光灯/聚光灯开关").getComponent(cc.Toggle).isChecked = Tool.GetConfigNumber("下注聚光灯",1)==1;
 
             let strBack = Tool.GetConfigString("牌背","1");
             let arrayToggle2 = Tool.GetChild(this.node,"系统设置/设置/牌背").getComponentsInChildren(cc.Toggle);

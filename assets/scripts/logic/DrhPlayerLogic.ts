@@ -131,10 +131,11 @@ export default class DrhPlayerLogic extends cc.Component {
        //事件分类处理
        if (strEvent == "开始_发牌_事件")
        {
-
+           this.gameLogic.BeginBettingSpotlightDealAnimation();
        }
        else if(strEvent == "玩家_开局_事件")
        {
+           this.gameLogic.BeginBettingSpotlightDealAnimation();
            //投钱入芒池
            this.ThrowGold2Mang();
        }
@@ -234,6 +235,8 @@ export default class DrhPlayerLogic extends cc.Component {
            //发出4张手牌
            if (strMsg == "持有_手牌_消息")
            {
+               if(this.info.handCardEx.length > 0 && strState.indexOf("决策") >= 0 && (strState.indexOf("下注") >= 0 || strState.indexOf("押牌") >= 0))
+                   this.gameLogic.ConfirmBettingSpotlightCardsDealtFromFullState();
                if(strState.indexOf("等待_结算_状态")>0)
                {
                    if(this.playerPos == PlayerPos.self)
@@ -388,7 +391,8 @@ export default class DrhPlayerLogic extends cc.Component {
             this.UpdateHandCard(false,false,0);
        }
 
-
+       if(this.gameLogic != null)
+           this.gameLogic.NotifyBettingSpotlightState(this);
    }
    public PlayCoverLast()
    {

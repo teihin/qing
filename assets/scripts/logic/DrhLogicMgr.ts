@@ -60,6 +60,16 @@ export default class DrhLogicMgr extends cc.Component {
     public _CloseRoomTimmerCallBack = null;
     private bIsGamePlaying = false;    //玩家是非已经在游戏中
     private bLeavingRoom = false;      //退出流程开始后停止房间动画和延迟回调
+    private bettingSpotlight:cc.Node = null; //下注阶段指向当前操作玩家的聚光灯
+    private bettingSpotlightPlayerID = "";
+    private bettingSpotlightActionPlayer:DrhPlayerLogic = null;
+    private bettingSpotlightRefreshPending = false;
+    private bettingSpotlightDealAnimationRunning = false;
+    private bettingSpotlightCardsDealt = false;
+    private bettingSpotlightDealSerial = 0;
+    private bettingSpotlightBaseHeight = 560;
+    private readonly bettingSpotlightFadeLength = 52;
+    private readonly bettingSpotlightConfigKey = "下注聚光灯";
     public nTimeLeft = 0;  //时间倒计时
 
     public bGuanzhanFirst = false;
@@ -83,6 +93,10 @@ export default class DrhLogicMgr extends cc.Component {
         this.strAccountUserID = GameDataManager.getAccount().guuid;
 
         this.initLogic();
+        this.bettingSpotlight = this.node.getChildByName("下注聚光灯");
+        if(this.bettingSpotlight != null)
+            this.bettingSpotlightBaseHeight = Math.max(1, this.bettingSpotlight.height);
+        this.HideBettingSpotlight(true);
         this.UpdateAllUserShowInfo();
 
         let strSet = GameDataManager.getAccount().roomSetting;
@@ -151,6 +165,11 @@ export default class DrhLogicMgr extends cc.Component {
         if(this.bLeavingRoom)
             return;
         this.bLeavingRoom = true;
+        this.bettingSpotlightRefreshPending = false;
+        this.bettingSpotlightActionPlayer = null;
+        this.bettingSpotlightDealAnimationRunning = false;
+        this.bettingSpotlightCardsDealt = false;
+        this.HideBettingSpotlight(true);
         this.unscheduleAllCallbacks();
         if(cc.isValid(this.node))
             this.node.stopAllActions();
@@ -193,6 +212,189 @@ export default class DrhLogicMgr extends cc.Component {
         KBEngine.Event.register("EntitiesEnabled", this, "OnClientActive");
         KBEngine.Event.register("OnPlayNextAudio", this, "OnPlayNextAudio");
         KBEngine.Event.register("DismissInfo", this, "OnDismissInfo");
+    }
+
+    public SetBettingSpotlightEnabled(enabled:boolean)
+    {
+        if(!enabled)
+        {
+            this.HideBettingSpotlight();
+            return;
+        }
+        this.RequestBettingSpotlightRefresh();
+    }
+
+    public RequestBettingSpotlightRefresh()
+    {
+        if(this.bLeavingRoom || this.bettingSpotlightRefreshPending)
+            return;
+
+        // 同一轮服务端通常会连续下发旧玩家取消和新玩家激活，稍作合并可避免中间闪灭。
+        this.bettingSpotlightRefreshPending = true;
+        this.scheduleOnce(()=>{
+            this.bettingSpotlightRefreshPending = false;
+            this.RefreshBettingSpotlight();
+        }, 0.03);
+    }
+
+    public NotifyBettingSpotlightState(player:DrhPlayerLogic)
+    {
+        if(player == null)
+            return;
+        if(this.IsBettingSpotlightPlayer(player))
+            this.bettingSpotlightActionPlayer = player;
+        else if(this.bettingSpotlightActionPlayer == player)
+            this.bettingSpotlightActionPlayer = null;
+        this.RequestBettingSpotlightRefresh();
+    }
+
+    public BeginBettingSpotlightDealAnimation():number
+    {
+        this.bettingSpotlightDealAnimationRunning = true;
+        this.bettingSpotlightCardsDealt = false;
+        let serial = ++this.bettingSpotlightDealSerial;
+        this.HideBettingSpotlight(true);
+        return serial;
+    }
+
+    private CompleteBettingSpotlightDealAnimation(serial:number)
+    {
+        if(serial != this.bettingSpotlightDealSerial || this.bLeavingRoom)
+            return;
+        this.bettingSpotlightDealAnimationRunning = false;
+        this.bettingSpotlightCardsDealt = true;
+        this.RequestBettingSpotlightRefresh();
+    }
+
+    public ConfirmBettingSpotlightCardsDealtFromFullState()
+    {
+        if(this.bLeavingRoom || this.bettingSpotlightDealAnimationRunning)
+            return;
+        this.bettingSpotlightCardsDealt = true;
+        this.RequestBettingSpotlightRefresh();
+    }
+
+    private IsBettingSpotlightPlayer(player:DrhPlayerLogic):boolean
+    {
+        if(player == null || player.info == null || player.info.strUserID == "init" || player.info.is_action != "True")
+            return false;
+        let state = player.info.strServerState == null ? "" : player.info.strServerState;
+        if(state.indexOf("决策") < 0 || (state.indexOf("下注") < 0 && state.indexOf("押牌") < 0))
+            return false;
+
+        // 同批消息中旧玩家的is_action可能短暂滞后；现有绿色操作圈已经按最新
+        // 状态完成显隐，只有操作圈仍在显示的玩家才是聚光灯的最终目标。
+        let playerInfo = player.node == null ? null : player.node.getChildByName("PlayerInfo");
+        let actionIndicator = playerInfo == null ? null : playerInfo.getChildByName("lightBK");
+        return actionIndicator != null && actionIndicator.activeInHierarchy;
+    }
+
+    private RefreshBettingSpotlight()
+    {
+        if(this.bLeavingRoom || !this.bettingSpotlightCardsDealt || this.bettingSpotlightDealAnimationRunning || Tool.GetConfigNumber(this.bettingSpotlightConfigKey, 1) != 1 || this.strGameState != "running")
+        {
+            this.HideBettingSpotlight(!this.bettingSpotlightCardsDealt || this.bettingSpotlightDealAnimationRunning);
+            return;
+        }
+
+        let actionPlayer:DrhPlayerLogic = this.IsBettingSpotlightPlayer(this.bettingSpotlightActionPlayer) ? this.bettingSpotlightActionPlayer : null;
+        if(actionPlayer == null)
+        {
+            this.HideBettingSpotlight();
+            return;
+        }
+        this.ShowBettingSpotlight(actionPlayer);
+    }
+
+    private ShowBettingSpotlight(player:DrhPlayerLogic)
+    {
+        if(this.bettingSpotlight == null || !cc.isValid(this.bettingSpotlight) || player == null || !cc.isValid(player.node))
+            return;
+
+        let playerInfo = player.node.getChildByName("PlayerInfo");
+        let head = playerInfo == null ? null : playerInfo.getChildByName("Head");
+        if(head == null || !cc.isValid(head))
+        {
+            this.HideBettingSpotlight();
+            return;
+        }
+
+        let targetWorld = head.convertToWorldSpaceAR(cc.v2(0, 0));
+        let targetLocal = this.bettingSpotlight.parent.convertToNodeSpaceAR(targetWorld);
+        let delta = targetLocal.sub(this.bettingSpotlight.position);
+        let distance = delta.mag();
+        if(distance <= 1)
+        {
+            this.HideBettingSpotlight();
+            return;
+        }
+
+        // 节点锚点位于素材底边，光轴沿局部+Y从牌桌中心伸向玩家；PNG顶部是朝向玩家的宽端。
+        // 用头像中心的真实距离缩放，使宽端中心精确落在当前操作玩家头像中心。
+        let targetAngle = this.NormalizeSpotlightAngle(Math.atan2(-delta.x, delta.y) * 180 / Math.PI);
+        // 素材朝玩家的一端有渐隐区。让渐隐开始处（而不是完全透明的图片顶边）
+        // 落到头像中心，这样不同座位会按各自真实距离拉伸，实体光线能到达头像，
+        // 剩余柔光再穿过头像自然消失。
+        let visibleBaseHeight = Math.max(1, this.bettingSpotlightBaseHeight - this.bettingSpotlightFadeLength);
+        let targetScaleY = distance / visibleBaseHeight;
+        let wasVisible = this.bettingSpotlight.active && this.bettingSpotlight.opacity > 0;
+        let samePlayer = this.bettingSpotlightPlayerID == player.info.strUserID;
+
+        this.bettingSpotlight.stopAllActions();
+        this.bettingSpotlight.active = true;
+        this.bettingSpotlightPlayerID = player.info.strUserID;
+
+        if(!wasVisible)
+        {
+            this.bettingSpotlight.angle = targetAngle;
+            this.bettingSpotlight.scaleX = 1;
+            this.bettingSpotlight.scaleY = targetScaleY;
+            this.bettingSpotlight.opacity = 0;
+            this.bettingSpotlight.runAction(cc.fadeTo(0.16, 176));
+            return;
+        }
+
+        let currentAngle = this.NormalizeSpotlightAngle(this.bettingSpotlight.angle);
+        this.bettingSpotlight.angle = currentAngle;
+        let counterClockwiseDelta = (targetAngle - currentAngle + 360) % 360;
+        if(samePlayer || counterClockwiseDelta < 0.5)
+            counterClockwiseDelta = 0;
+
+        let duration = counterClockwiseDelta > 0 ? 0.28 : 0.12;
+        // Creator 2.4.13 的 cc.rotateBy 构造函数会把传入角度取反；这里传负值，
+        // 才能让 Node.angle 按上面算出的正向增量持续逆时针旋转。
+        let rotate = cc.rotateBy(duration, -counterClockwiseDelta).easing(cc.easeSineInOut());
+        let resize = cc.scaleTo(duration, 1, targetScaleY).easing(cc.easeSineInOut());
+        let keepVisible = cc.fadeTo(duration, 176);
+        this.bettingSpotlight.runAction(cc.spawn(rotate, resize, keepVisible));
+    }
+
+    private HideBettingSpotlight(immediately:boolean = false)
+    {
+        this.bettingSpotlightPlayerID = "";
+        if(this.bettingSpotlight == null || !cc.isValid(this.bettingSpotlight))
+            return;
+
+        this.bettingSpotlight.stopAllActions();
+        if(immediately || !this.bettingSpotlight.active)
+        {
+            this.bettingSpotlight.opacity = 0;
+            this.bettingSpotlight.active = false;
+            return;
+        }
+
+        this.bettingSpotlight.runAction(cc.sequence(
+            cc.fadeTo(0.14, 0),
+            cc.callFunc(()=>{
+                if(this.bettingSpotlightPlayerID == "" && this.bettingSpotlight != null && cc.isValid(this.bettingSpotlight))
+                    this.bettingSpotlight.active = false;
+            })
+        ));
+    }
+
+    private NormalizeSpotlightAngle(angle:number):number
+    {
+        return (angle % 360 + 360) % 360;
     }
 
     public OnDismissInfo(strMsg:string)
@@ -664,6 +866,7 @@ export default class DrhLogicMgr extends cc.Component {
             
             UIManager.getInstance().showPanel("panelRecordInfo",ShowPanelMode.Cover,strRoomID);
         }
+        this.RequestBettingSpotlightRefresh();
     }
 
     //更新所有玩家基本信息
@@ -742,6 +945,9 @@ export default class DrhLogicMgr extends cc.Component {
    {
        //进入游戏标记打开
        this.bIsGamePlaying = true;
+       this.bettingSpotlightCardsDealt = false;
+       this.bettingSpotlightActionPlayer = null;
+       this.HideBettingSpotlight(true);
        this.ClearCoin();
        
    }
@@ -991,6 +1197,7 @@ export default class DrhLogicMgr extends cc.Component {
     {
         if(this.bLeavingRoom || item == null || !cc.isValid(item.node))
             return;
+        let spotlightDealSerial = this.BeginBettingSpotlightDealAnimation();
        
         let nPos = 0;
         let nAniCount = 0;
@@ -1071,6 +1278,16 @@ export default class DrhLogicMgr extends cc.Component {
             }
         }
         
+        if(arrayAction.length <= 0)
+        {
+            this.CompleteBettingSpotlightDealAnimation(spotlightDealSerial);
+            return;
+        }
+        // 每张牌位移动画为0.2秒，序列最后已有0.08秒间隔；补足尾帧后才允许聚光灯出现。
+        arrayAction.push(cc.delayTime(0.13));
+        arrayAction.push(cc.callFunc(()=>{
+            this.CompleteBettingSpotlightDealAnimation(spotlightDealSerial);
+        }));
         this.node.runAction(cc.sequence(arrayAction));
 
     }
