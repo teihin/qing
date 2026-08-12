@@ -23,6 +23,8 @@ export default class GameDataManager extends cc.Component {
     public bLoginSuccess:boolean = false; //是否已经成功连接到服务器，成功则发送心跳
     private _loginAttempt:number = 0;
     private _antiTheftLoginStopped:boolean = false;
+    private _automaticReconnectStoppedByKick:boolean = false;
+    private _pendingForcedLogoutMessage:string = "";
 
     public dtLastSend = new Date().getTime() + 1000*10; //最后一次发送心跳时间
     public dtLastSuccess = new Date().getTime() + 1000*10; //最后一次成功时间;
@@ -154,10 +156,10 @@ export default class GameDataManager extends cc.Component {
     }
 
     loginDelay(){
-        if(this._antiTheftLoginStopped)
+        if(this._antiTheftLoginStopped || this._automaticReconnectStoppedByKick)
             return;
         this.scheduleOnce(()=>{
-            if(this._antiTheftLoginStopped)
+            if(this._antiTheftLoginStopped || this._automaticReconnectStoppedByKick)
                 return;
             this.loginGame(this.strLastUserName,this.strLastPass,"重连");
         },3);
@@ -241,10 +243,21 @@ export default class GameDataManager extends cc.Component {
         this.loginDelay();
      }
 
-     onKicked(){
-        KBEngine.INFO_MSG("被踢出服务器！");
-        //this.bLoginSuccess = false;
-        this.loginDelay();
+     onKicked(failedcode:number){
+        KBEngine.INFO_MSG("被踢出服务器，停止自动重连！failedcode=" + failedcode);
+        if(this._automaticReconnectStoppedByKick)
+            return;
+
+        // onKicked是服务端明确强制下线，与普通断网分开处理。旧设备若继续
+        // 自动重连，会反过来把新设备踢下线，造成两个客户端循环互踢。
+        this._automaticReconnectStoppedByKick = true;
+        this._pendingForcedLogoutMessage = "当前账号已在其他设备登录，本机已退出登录";
+        this._loginAttempt++;
+        this.bLoginSuccess = false;
+        this.unschedule(this.callbackSendHeart);
+        this.unschedule(this.callbackCheckConnectState);
+        UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
+        cc.director.loadScene("login");
      }
 
      onLoginSuccessfully(){
@@ -254,6 +267,7 @@ export default class GameDataManager extends cc.Component {
         this.dtLastSuccess = new Date().getTime();
         this.bLoginSuccess = true;
         this._antiTheftLoginStopped = false;
+        this._automaticReconnectStoppedByKick = false;
         UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
 
         //恢复重连校验        
@@ -325,15 +339,25 @@ export default class GameDataManager extends cc.Component {
         this.strLastUserName = strUserName;
         this.strLastPass = strPass;
         if(other !== "重连")
+        {
             this._antiTheftLoginStopped = false;
-        if(this._antiTheftLoginStopped)
+            this._automaticReconnectStoppedByKick = false;
+        }
+        if(this._antiTheftLoginStopped || this._automaticReconnectStoppedByKick)
             return;
         let attempt = ++this._loginAttempt;
         UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
         let loginData = await DeviceIdentityManager.getInstance().createLoginData(other === "重连" ? "reconnect" : "login");
-        if(attempt !== this._loginAttempt || this._antiTheftLoginStopped)
+        if(attempt !== this._loginAttempt || this._antiTheftLoginStopped || this._automaticReconnectStoppedByKick)
             return;
         KBEngine.Event.fire("login", strUserName, strPass, loginData);
+    }
+
+    public consumeForcedLogoutMessage():string
+    {
+        let message = this._pendingForcedLogoutMessage;
+        this._pendingForcedLogoutMessage = "";
+        return message;
     }
 
     private hasServerErrorDefinition(failedcode:number):boolean

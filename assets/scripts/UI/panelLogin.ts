@@ -95,6 +95,15 @@ export default class panelLogin extends UIPanelViewBase {
 
         this.initRegisterUI();
 
+        let forcedLogoutMessage = GameDataManager.getInstance().consumeForcedLogoutMessage();
+        if(forcedLogoutMessage != "")
+        {
+            // 等登录面板完成挂载后再显示，避免被更新页到登录页的切换覆盖。
+            this.scheduleOnce(()=>{
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,forcedLogoutMessage);
+            },0);
+        }
+
 
         //Debug.Error("https://mcybde.com/chat/text/chat_04RAVp.html?extradata="+Tool.encrypt("{\"vipid\":\"999999\",\"name\":\"黄澄澄\"}"))
 

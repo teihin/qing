@@ -4741,7 +4741,10 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 
 	this.Client_onKicked = function(failedcode)
 	{
-		KBEngine.ERROR_MSG("KBEngineApp::Client_onKicked: failedcode(" + KBEngine.app.serverErrs[failedcode].name + ")!");
+		// 服务端错误描述可能尚未导入，仍必须派发onKicked让业务层停止自动重连。
+		var serverError = KBEngine.app.serverErrs[failedcode];
+		var errorName = serverError == undefined ? "UNKNOWN_SERVER_ERROR_" + failedcode : serverError.name;
+		KBEngine.ERROR_MSG("KBEngineApp::Client_onKicked: failedcode(" + errorName + ")!");
 		KBEngine.Event.fire("onKicked", failedcode);
 	}
 
