@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { PlayerBalanceAdjustmentResult, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, TransactionItem, TransactionResponse } from "../types";
 
 interface PlayerResponse {
@@ -65,6 +66,7 @@ export default function PlayersPage({ can, isSuper, notify }: { can: (permission
   const [selected, setSelected] = useState<PlayerItem | null>(null);
   const [adjusting, setAdjusting] = useState<PlayerItem | null>(null);
   const [resettingPassword, setResettingPassword] = useState<PlayerItem | null>(null);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -76,6 +78,7 @@ export default function PlayersPage({ can, isSuper, notify }: { can: (permission
   }, [applied, page, pageSize]);
 
   const load = useCallback(async () => {
+    void queryRevision;
     setLoading(true);
     try {
       setData(await api<PlayerResponse>(`/api/game/players?${queryString}`));
@@ -84,17 +87,19 @@ export default function PlayersPage({ can, isSuper, notify }: { can: (permission
     } finally {
       setLoading(false);
     }
-  }, [queryString, notify]);
+  }, [queryString, queryRevision, notify]);
   useEffect(() => { void load(); }, [load]);
 
   const applyFilters = () => {
     setApplied(Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, value.trim()])) as unknown as PlayerFilters);
     setPage(1);
+    refreshQuery();
   };
   const resetFilters = () => {
     setDraft(emptyFilters);
     setApplied(emptyFilters);
     setPage(1);
+    refreshQuery();
   };
   const update = (key: keyof PlayerFilters, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const activeFilterCount = Object.values(applied).filter(Boolean).length;

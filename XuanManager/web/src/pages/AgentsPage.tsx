@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { AgentBonusResponse, AgentChildItem, AgentChildrenResponse, AgentItem, AgentRelationship, AgentSummary } from "../types";
 
 interface AgentResponse {
@@ -57,6 +58,7 @@ export default function AgentsPage({ notify }: { notify: (message: string, kind?
   const [loading, setLoading] = useState(true);
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<AgentItem | null>(null);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -68,6 +70,7 @@ export default function AgentsPage({ notify }: { notify: (message: string, kind?
   }, [applied, page, pageSize]);
 
   const load = useCallback(async () => {
+    void queryRevision;
     setLoading(true);
     try {
       setData(await api<AgentResponse>(`/api/game/agents?${queryString}`));
@@ -76,14 +79,15 @@ export default function AgentsPage({ notify }: { notify: (message: string, kind?
     } finally {
       setLoading(false);
     }
-  }, [queryString, notify]);
+  }, [queryString, queryRevision, notify]);
   useEffect(() => { void load(); }, [load]);
 
   const applyFilters = () => {
     setApplied(Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, value.trim()])) as unknown as AgentFilters);
     setPage(1);
+    refreshQuery();
   };
-  const resetFilters = () => { setDraft(emptyFilters); setApplied(emptyFilters); setPage(1); };
+  const resetFilters = () => { setDraft(emptyFilters); setApplied(emptyFilters); setPage(1); refreshQuery(); };
   const update = (key: keyof AgentFilters, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const activeFilterCount = Object.entries(applied).filter(([key, value]) => Boolean(value) && !(key === "type" && value === "all")).length;
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
@@ -210,6 +214,7 @@ function AgentRelationshipModal({ agent, notify, onClose }: { agent: AgentItem; 
   const [childrenLoading, setChildrenLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [childrenQueryRevision, refreshChildrenQuery] = useQueryRefresh();
 
   useEffect(() => {
     let active = true;
@@ -227,6 +232,7 @@ function AgentRelationshipModal({ agent, notify, onClose }: { agent: AgentItem; 
     return params.toString();
   }, [scope, childType, page, pageSize, appliedKeyword]);
   useEffect(() => {
+    void childrenQueryRevision;
     let active = true;
     setChildrenLoading(true);
     api<AgentChildrenResponse>(`/api/game/agents/${encodeURIComponent(agent.agentId)}/children?${childrenQuery}`)
@@ -234,7 +240,7 @@ function AgentRelationshipModal({ agent, notify, onClose }: { agent: AgentItem; 
       .catch((reason) => notify(reason instanceof ApiError ? reason.message : "下级数据加载失败", "error"))
       .finally(() => { if (active) setChildrenLoading(false); });
     return () => { active = false; };
-  }, [agent.agentId, childrenQuery, notify]);
+  }, [agent.agentId, childrenQuery, childrenQueryRevision, notify]);
 
   const childPages = Math.max(1, Math.ceil((children?.total ?? 0) / pageSize));
   const current = relationship?.agent ?? agent;
@@ -299,7 +305,7 @@ function AgentRelationshipModal({ agent, notify, onClose }: { agent: AgentItem; 
             <button type="button" className={scope === "all" ? "is-active" : ""} onClick={() => { setScope("all"); setPage(1); }}>全部后代</button>
           </div>
           <label><span>显示</span><select value={childType} onChange={(event) => { setChildType(event.target.value); setPage(1); }}><option value="all">代理和玩家</option><option value="agents">仅代理</option><option value="leaders">仅盟主</option><option value="players">仅玩家</option></select></label>
-          <form onSubmit={(event) => { event.preventDefault(); setAppliedKeyword(childKeyword.trim()); setPage(1); }}><input value={childKeyword} onChange={(event) => setChildKeyword(event.target.value)} placeholder="搜索下级ID、账号或名字" /><button type="submit">搜索</button></form>
+          <form onSubmit={(event) => { event.preventDefault(); setAppliedKeyword(childKeyword.trim()); setPage(1); refreshChildrenQuery(); }}><input value={childKeyword} onChange={(event) => setChildKeyword(event.target.value)} placeholder="搜索下级ID、账号或名字" /><button type="submit">搜索</button></form>
         </div>
         {children?.truncated && <div className="chain-message chain-message--broken">下级超过 20,000 条，本次已停止继续展开，请缩小查询范围。</div>}
         <div className="child-summary"><span>代理 <strong>{children?.agentCount ?? 0}</strong></span><span>玩家 <strong>{children?.playerCount ?? 0}</strong></span><span>最深 <strong>{children?.maxDepth ?? 0}</strong> 层</span></div>
@@ -332,6 +338,7 @@ function AgentBonusPanel({ agentId, notify }: { agentId: string; notify: (messag
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const query = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -343,6 +350,7 @@ function AgentBonusPanel({ agentId, notify }: { agentId: string; notify: (messag
   }, [applied, page, pageSize]);
 
   useEffect(() => {
+    void queryRevision;
     let active = true;
     setLoading(true);
     api<AgentBonusResponse>(`/api/game/agents/${encodeURIComponent(agentId)}/bonuses?${query}`)
@@ -350,13 +358,14 @@ function AgentBonusPanel({ agentId, notify }: { agentId: string; notify: (messag
       .catch((reason) => notify(reason instanceof ApiError ? reason.message : "代理红利加载失败", "error"))
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [agentId, query, notify]);
+  }, [agentId, query, queryRevision, notify]);
 
   const applyFilters = () => {
     setApplied({ ...draft, sourcePlayerId: draft.sourcePlayerId.trim(), roomId: draft.roomId.trim() });
     setPage(1);
+    refreshQuery();
   };
-  const resetFilters = () => { setDraft(emptyBonusFilters); setApplied(emptyBonusFilters); setPage(1); };
+  const resetFilters = () => { setDraft(emptyBonusFilters); setApplied(emptyBonusFilters); setPage(1); refreshQuery(); };
   const pages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const summary = data?.summary;
 

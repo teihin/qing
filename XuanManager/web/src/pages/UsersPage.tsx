@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, FormActions, formatDate, LoadingBlock, Modal, PageHeader, StatusPill, submitGuard } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { RoleItem, UserItem } from "../types";
 
 interface UserResponse { items: UserItem[]; total: number; page: number; pageSize: number }
@@ -12,8 +13,10 @@ export default function UsersPage({ can, notify }: { can: (permission: string) =
   const [keyword, setKeyword] = useState("");
   const [query, setQuery] = useState("");
   const [modal, setModal] = useState<ModalState>(null);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
+    void queryRevision;
     try {
       const [users, roleData] = await Promise.all([
         api<UserResponse>(`/api/users?keyword=${encodeURIComponent(query)}&page=1&pageSize=50`),
@@ -24,7 +27,7 @@ export default function UsersPage({ can, notify }: { can: (permission: string) =
     } catch (reason) {
       notify(reason instanceof ApiError ? reason.message : "用户列表加载失败", "error");
     }
-  }, [query, notify]);
+  }, [query, queryRevision, notify]);
   useEffect(() => { void load(); }, [load]);
 
   const setStatus = async (user: UserItem) => {
@@ -42,7 +45,7 @@ export default function UsersPage({ can, notify }: { can: (permission: string) =
       <PageHeader eyebrow="ADMIN ACCOUNTS" title="后台用户管理" description="这些账号只用于 XuanManager，不是游戏玩家账号。" actions={can("user.create") ? <Button onClick={() => setModal({ type: "create" })}><span>＋</span>创建用户</Button> : undefined} />
       <section className="panel">
         <div className="toolbar">
-          <form className="search-box" onSubmit={(event) => { event.preventDefault(); setQuery(keyword.trim()); }}><span>⌕</span><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索后台账号或显示名称" /><button>搜索</button></form>
+          <form className="search-box" onSubmit={(event) => { event.preventDefault(); setQuery(keyword.trim()); refreshQuery(); }}><span>⌕</span><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索后台账号或显示名称" /><button>搜索</button></form>
           <span className="toolbar__count">共 {data?.total ?? 0} 个后台用户</span>
         </div>
         {!data ? <LoadingBlock /> : data.items.length === 0 ? <EmptyState title="没有找到后台用户" description="调整搜索条件，或创建一个新的后台账号。" /> : (

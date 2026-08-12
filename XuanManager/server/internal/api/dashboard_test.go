@@ -1,9 +1,20 @@
 package api
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestDashboardNewPlayersUseDatabaseRegistrationDate(t *testing.T) {
+	if !strings.Contains(dashboardGameMetricsQuery, "sm_reg_time >= CURDATE()") ||
+		!strings.Contains(dashboardGameMetricsQuery, "sm_reg_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)") {
+		t.Fatal("new player metric must use the database registration calendar day")
+	}
+	if strings.Contains(dashboardGameMetricsQuery, "sm_reg_time >= ?") {
+		t.Fatal("new player metric must not reuse the UTC+8 login timestamp boundary")
+	}
+}
 
 func TestDashboardBusinessPeriodUsesChinaOperatingDay(t *testing.T) {
 	now := time.Date(2026, 8, 10, 16, 19, 38, 0, time.UTC)

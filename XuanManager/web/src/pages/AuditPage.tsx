@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../api";
 import { EmptyState, formatDate, LoadingBlock, PageHeader } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { AuditItem } from "../types";
 
 interface AuditResponse { items: AuditItem[]; total: number; page: number; pageSize: number }
@@ -9,12 +10,14 @@ export default function AuditPage({ notify }: { notify: (message: string, kind?:
   const [data, setData] = useState<AuditResponse | null>(null);
   const [keyword, setKeyword] = useState("");
   const [query, setQuery] = useState("");
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(() => {
+    void queryRevision;
     api<AuditResponse>(`/api/audit?keyword=${encodeURIComponent(query)}&page=1&pageSize=50`)
       .then(setData)
       .catch((reason) => notify(reason instanceof ApiError ? reason.message : "审计记录加载失败", "error"));
-  }, [query, notify]);
+  }, [query, queryRevision, notify]);
   useEffect(load, [load]);
 
   return (
@@ -22,7 +25,7 @@ export default function AuditPage({ notify }: { notify: (message: string, kind?:
       <PageHeader eyebrow="AUDIT TRAIL" title="操作审计" description="查看后台用户的重要操作、结果和来源地址。" />
       <section className="panel">
         <div className="toolbar">
-          <form className="search-box" onSubmit={(event) => { event.preventDefault(); setQuery(keyword.trim()); }}><span>⌕</span><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索操作者、动作或目标 ID" /><button>搜索</button></form>
+          <form className="search-box" onSubmit={(event) => { event.preventDefault(); setQuery(keyword.trim()); refreshQuery(); }}><span>⌕</span><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索操作者、动作或目标 ID" /><button>搜索</button></form>
           <span className="toolbar__count">共 {data?.total ?? 0} 条记录</span>
         </div>
         {!data ? <LoadingBlock /> : data.items.length === 0 ? <EmptyState title="没有匹配记录" description="可以调整关键词后重新搜索。" /> : (

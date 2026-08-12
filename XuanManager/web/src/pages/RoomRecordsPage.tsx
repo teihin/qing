@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { EmptyState, LoadingBlock, Modal, PageHeader } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { RoomRecordAction, RoomRecordCard, RoomRecordListItem, RoomRecordListResponse, RoomRecordResponse, RoomRecordRound, RoomRecordRoundPlayer, RoomRecordRoundResponse } from "../types";
 
 const scoreFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 });
@@ -25,8 +26,10 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
   const [roundDetail, setRoundDetail] = useState<RoomRecordRoundResponse | null>(null);
   const [roundDetailLoading, setRoundDetailLoading] = useState(false);
   const [selectedRound, setSelectedRound] = useState<number | null>(null);
+  const [listQueryRevision, refreshListQuery] = useQueryRefresh();
 
   const loadList = useCallback(async () => {
+    void listQueryRevision;
     setListLoading(true);
     const params = new URLSearchParams({ page: String(page), pageSize: "20" });
     if (filters.keyword) params.set("keyword", filters.keyword);
@@ -37,7 +40,7 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
     } catch (reason) {
       notify(reason instanceof ApiError ? reason.message : "房间列表加载失败", "error");
     } finally { setListLoading(false); }
-  }, [filters, notify, page]);
+  }, [filters, listQueryRevision, notify, page]);
 
   useEffect(() => { void loadList(); }, [loadList]);
 
@@ -91,10 +94,12 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
         dateFrom: draftFilters.dateFrom,
         dateTo: draftFilters.dateTo,
       });
+      refreshListQuery();
     };
     const resetFilters = () => {
       const empty = { keyword: "", dateFrom: "", dateTo: "" };
       setDraftFilters(empty); setFilters(empty); setPage(1);
+      refreshListQuery();
     };
     return (
       <div className="page-stack">

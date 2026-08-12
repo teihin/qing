@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { TransactionItem, TransactionResponse } from "../types";
 
 interface TransactionFilters {
@@ -31,7 +32,6 @@ export default function TransactionsPage({ notify }: { notify: (message: string,
   const initialPlayerId = useMemo(() => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("playerId")?.trim() ?? "", []);
   const [playerIdDraft, setPlayerIdDraft] = useState(initialPlayerId);
   const [playerId, setPlayerId] = useState(initialPlayerId);
-  const [requestVersion, setRequestVersion] = useState(0);
   const [data, setData] = useState<TransactionResponse | null>(null);
   const [draft, setDraft] = useState<TransactionFilters>(emptyFilters);
   const [applied, setApplied] = useState<TransactionFilters>(emptyFilters);
@@ -39,6 +39,7 @@ export default function TransactionsPage({ notify }: { notify: (message: string,
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<TransactionItem | null>(null);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const queryString = useMemo(() => {
     if (!playerId) return "";
@@ -47,11 +48,11 @@ export default function TransactionsPage({ notify }: { notify: (message: string,
       const clean = value.trim();
       if (clean && clean !== "all") params.set(key, clean);
     }
-    params.set("requestVersion", String(requestVersion));
     return params.toString();
-  }, [playerId, applied, page, pageSize, requestVersion]);
+  }, [playerId, applied, page, pageSize]);
 
   const load = useCallback(async () => {
+    void queryRevision;
     if (!queryString) return;
     setLoading(true);
     try {
@@ -61,7 +62,7 @@ export default function TransactionsPage({ notify }: { notify: (message: string,
     } finally {
       setLoading(false);
     }
-  }, [queryString, notify]);
+  }, [queryString, queryRevision, notify]);
   useEffect(() => { void load(); }, [load]);
 
   const searchPlayer = () => {
@@ -72,13 +73,14 @@ export default function TransactionsPage({ notify }: { notify: (message: string,
     setApplied(emptyFilters);
     setPage(1);
     setData(null);
-    setRequestVersion((value) => value + 1);
+    refreshQuery();
   };
   const applyFilters = () => {
     setApplied(Object.fromEntries(Object.entries(draft).map(([key, value]) => [key, value.trim()])) as unknown as TransactionFilters);
     setPage(1);
+    refreshQuery();
   };
-  const resetFilters = () => { setDraft(emptyFilters); setApplied(emptyFilters); setPage(1); };
+  const resetFilters = () => { setDraft(emptyFilters); setApplied(emptyFilters); setPage(1); refreshQuery(); };
   const update = (key: keyof TransactionFilters, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const activeFilterCount = Object.values(applied).filter((value) => Boolean(value) && value !== "all").length;
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));

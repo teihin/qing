@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, formatDate, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { BannedPlayerItem, BannedPlayersResponse, PlayerBanHistoryResponse } from "../types";
 
 const defaultReason = "你的账号已被暂停使用！";
@@ -21,8 +22,10 @@ export default function BansPage({ can, notify }: {
   const [submitting, setSubmitting] = useState(false);
   const [unbanTarget, setUnbanTarget] = useState<BannedPlayerItem | null>(null);
   const [historyRefreshVersion, setHistoryRefreshVersion] = useState(0);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
+    void queryRevision;
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -35,7 +38,7 @@ export default function BansPage({ can, notify }: {
     } finally {
       setLoading(false);
     }
-  }, [appliedKeyword, notify, page, pageSize]);
+  }, [appliedKeyword, notify, page, pageSize, queryRevision]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -79,12 +82,14 @@ export default function BansPage({ can, notify }: {
   const search = () => {
     setAppliedKeyword(keyword.trim());
     setPage(1);
+    refreshQuery();
   };
 
   const resetSearch = () => {
     setKeyword("");
     setAppliedKeyword("");
     setPage(1);
+    refreshQuery();
   };
 
   return (
@@ -155,8 +160,10 @@ function BanHistoryPanel({ refreshVersion, notify }: {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
+    void queryRevision;
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -172,13 +179,14 @@ function BanHistoryPanel({ refreshVersion, notify }: {
     } finally {
       setLoading(false);
     }
-  }, [applied, notify, page, pageSize]);
+  }, [applied, notify, page, pageSize, queryRevision]);
 
   useEffect(() => { void refreshVersion; void load(); }, [load, refreshVersion]);
 
   const search = () => {
     setApplied({ keyword: keyword.trim(), operation, result });
     setPage(1);
+    refreshQuery();
   };
   const reset = () => {
     setKeyword("");
@@ -186,6 +194,7 @@ function BanHistoryPanel({ refreshVersion, notify }: {
     setResult("all");
     setApplied({ keyword: "", operation: "all", result: "all" });
     setPage(1);
+    refreshQuery();
   };
   const filtersActive = Boolean(applied.keyword || applied.operation !== "all" || applied.result !== "all");
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));

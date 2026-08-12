@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { PlayerOptimizationHistoryItem, PlayerOptimizationHistoryResponse, PlayerOptimizationItem, PlayerOptimizationsResponse } from "../types";
 
 type OptimizationStatus = "active" | "inactive" | "all";
@@ -23,8 +24,10 @@ export default function PlayerOptimizationPage({ can, notify }: {
   const [editing, setEditing] = useState<PlayerOptimizationItem | null>(null);
   const [deleting, setDeleting] = useState<PlayerOptimizationItem | null>(null);
   const [historyRefreshVersion, setHistoryRefreshVersion] = useState(0);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
+    void queryRevision;
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize), status });
@@ -40,7 +43,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
     } finally {
       setLoading(false);
     }
-  }, [appliedKeyword, appliedRange, notify, page, pageSize, status]);
+  }, [appliedKeyword, appliedRange, notify, page, pageSize, queryRevision, status]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -58,6 +61,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
     setAppliedKeyword(keyword.trim());
     setAppliedRange({ min: minimum, max: maximum });
     setPage(1);
+    refreshQuery();
   };
 
   const reset = () => {
@@ -68,6 +72,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
     setMaxChance("");
     setAppliedRange({ min: "", max: "" });
     setPage(1);
+    refreshQuery();
   };
 
   const canCreate = can("game.player_optimization.create");
@@ -158,8 +163,10 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
+    void queryRevision;
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -175,13 +182,14 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
     } finally {
       setLoading(false);
     }
-  }, [applied, notify, page, pageSize]);
+  }, [applied, notify, page, pageSize, queryRevision]);
 
   useEffect(() => { void refreshVersion; void load(); }, [load, refreshVersion]);
 
   const search = () => {
     setApplied({ keyword: keyword.trim(), operation, result });
     setPage(1);
+    refreshQuery();
   };
   const reset = () => {
     setKeyword("");
@@ -189,6 +197,7 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
     setResult("all");
     setApplied({ keyword: "", operation: "all", result: "all" });
     setPage(1);
+    refreshQuery();
   };
   const filtersActive = Boolean(applied.keyword || applied.operation !== "all" || applied.result !== "all");
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));

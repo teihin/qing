@@ -38,6 +38,13 @@ type liveDashboardGameMetrics struct {
 	CollectedAt          time.Time
 }
 
+const dashboardGameMetricsQuery = `SELECT
+  (SELECT COUNT(*) FROM tbl_Account),
+  (SELECT COUNT(*) FROM tbl_Account
+   WHERE sm_reg_time >= CURDATE() AND sm_reg_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)),
+  (SELECT COUNT(*) FROM kbe_accountinfos
+   WHERE lasttime >= ? AND lasttime < ?)`
+
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, p principal) {
 	canSeeSuper := canSeeSuperFlag(p)
 	var userCount, enabledUserCount, roleCount, moduleCount, todayAuditCount int64
@@ -88,13 +95,7 @@ func queryLiveDashboardGameMetrics(ctx context.Context, gameDB *sql.DB, now time
 	metrics := liveDashboardGameMetrics{
 		CollectedAt: localNow,
 	}
-	err := gameDB.QueryRowContext(ctx, `SELECT
-  (SELECT COUNT(*) FROM tbl_Account),
-  (SELECT COUNT(*) FROM tbl_Account
-   WHERE sm_reg_time >= ? AND sm_reg_time < ?),
-  (SELECT COUNT(*) FROM kbe_accountinfos
-   WHERE lasttime >= ? AND lasttime < ?)`,
-		dayStart.Format("2006-01-02 15:04:05"), dayEnd.Format("2006-01-02 15:04:05"),
+	err := gameDB.QueryRowContext(ctx, dashboardGameMetricsQuery,
 		dayStart.Unix(), dayEnd.Unix(),
 	).Scan(&metrics.TotalPlayers, &metrics.TodayNewPlayers, &metrics.TodayLoggedInPlayers)
 	return metrics, err

@@ -76,7 +76,7 @@ export default function DashboardPage({ notify }: { notify: (message: string, ki
         <>
           {metrics?.available ? (
             <section className="game-metric-grid" aria-label="游戏运营指标">
-              <Metric icon="新" label="今日新增玩家" value={metrics.todayNewPlayers} note="中国运营日 00:00 起注册" tone="cyan" />
+              <Metric icon="新" label="今日新增玩家" value={metrics.todayNewPlayers} note="每日新注册玩家" tone="cyan" />
               <Metric icon="活" label="今日登录玩家" value={metrics.todayLoggedInPlayers} note="按玩家去重，不重复累计登录次数" tone="blue" />
               <Metric icon="总" label="累计游戏玩家" value={metrics.totalPlayers} note={`更新于 ${formatDate(metrics.collectedAt)}`} tone="slate" />
             </section>

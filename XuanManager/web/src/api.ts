@@ -33,7 +33,12 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const requestPath = path.startsWith("/api/") ? `${base}${path}` : path;
-  const response = await fetch(requestPath, { ...init, headers, credentials: "same-origin" });
+  const response = await fetch(requestPath, {
+    ...init,
+    headers,
+    credentials: "same-origin",
+    cache: init.cache ?? (method === "GET" ? "no-store" : undefined),
+  });
   let payload: ApiSuccess<T> | ApiFailure;
   try {
     payload = (await response.json()) as ApiSuccess<T> | ApiFailure;

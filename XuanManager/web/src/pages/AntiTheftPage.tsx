@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, formatDate, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
+import { useQueryRefresh } from "../queryRefresh";
 import type { AntiTheftAccountItem, AntiTheftAccountsResponse } from "../types";
 
 const reasonOptions = [
@@ -25,8 +26,10 @@ export default function AntiTheftPage({ can, notify }: {
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(false);
   const [unbindTarget, setUnbindTarget] = useState<AntiTheftAccountItem | null>(null);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
+    void queryRevision;
     setLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -41,12 +44,12 @@ export default function AntiTheftPage({ can, notify }: {
     } finally {
       setLoading(false);
     }
-  }, [appliedKeyword, notify, page, pageSize, platform, status]);
+  }, [appliedKeyword, notify, page, pageSize, platform, queryRevision, status]);
 
   useEffect(() => { void load(); }, [load]);
 
-  const search = () => { setAppliedKeyword(keyword.trim()); setPage(1); };
-  const reset = () => { setKeyword(""); setAppliedKeyword(""); setStatus(""); setPlatform(""); setPage(1); };
+  const search = () => { setAppliedKeyword(keyword.trim()); setPage(1); refreshQuery(); };
+  const reset = () => { setKeyword(""); setAppliedKeyword(""); setStatus(""); setPlatform(""); setPage(1); refreshQuery(); };
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
