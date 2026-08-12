@@ -362,6 +362,47 @@ td strong { color: #294149; }
 .optimization-disable-link { margin-top: 12px; padding: 0; border: 0; color: #b74a57; background: transparent; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .optimization-confirm { margin-top: 18px; padding: 13px; border: 1px solid #dce8e9; border-radius: 10px; background: #fbfdfd; }
 .optimization-confirm.is-checked { border-color: #acd8d2; background: #eef9f7; }
+.optimization-history-header { min-height: 94px; display: flex; align-items: center; justify-content: space-between; gap: 22px; padding: 19px 22px; border-bottom: 1px solid #eaf0f0; background: linear-gradient(100deg, #fff, #f5fbfa); }
+.optimization-history-header > div > span { color: #3e9e96; font-size: 12px; font-weight: 900; letter-spacing: .14em; }
+.optimization-history-header h2 { margin-top: 4px; color: #29474e; font-size: 18px; }
+.optimization-history-header p { margin-top: 5px; color: #738b90; font-size: 13px; }
+.optimization-history-header > strong { min-width: 84px; padding: 11px 15px; border: 1px solid #c9e3df; border-radius: 12px; color: #157d75; background: #ebf8f5; text-align: center; font-family: Georgia, serif; font-size: 25px; line-height: 1; }
+.optimization-history-header > strong small { display: block; margin-top: 6px; color: #69868a; font-family: Inter, "PingFang SC", sans-serif; font-size: 11px; font-weight: 700; }
+.optimization-history-filters { display: flex; align-items: end; gap: 10px; padding: 16px 20px; border-bottom: 1px solid #edf2f2; background: #fbfdfd; }
+.optimization-history-filters > label:not(.optimization-history-search) { min-width: 145px; }
+.optimization-history-filters > label > span { display: block; margin-bottom: 6px; color: #647d83; font-size: 12px; font-weight: 750; }
+.optimization-history-filters select { width: 100%; height: 42px; padding: 0 34px 0 11px; border: 1px solid #d5e3e4; border-radius: 9px; outline: 0; color: #345159; background: #fff; font-size: 13px; }
+.optimization-history-search { min-width: 280px; max-width: 480px; height: 42px; display: flex; flex: 1; align-items: center; gap: 8px; padding: 0 12px; border: 1px solid #d5e3e4; border-radius: 9px; background: #fff; }
+.optimization-history-search > span { margin: 0 !important; color: #769096 !important; font-size: 16px !important; }
+.optimization-history-search input { min-width: 0; flex: 1; border: 0; outline: 0; color: #345159; background: transparent; font-size: 13px; }
+.optimization-history-table { min-width: 1180px; }
+.optimization-history-table th:nth-child(1) { min-width: 160px; }
+.optimization-history-table th:nth-child(2) { min-width: 210px; }
+.optimization-history-table th:nth-child(3) { min-width: 120px; }
+.optimization-history-table th:nth-child(4) { min-width: 260px; }
+.optimization-history-table th:nth-child(5) { min-width: 145px; }
+.optimization-history-table th:nth-child(6) { min-width: 220px; }
+.optimization-history-player { display: flex; align-items: center; gap: 11px; }
+.optimization-history-player > span { display: grid; width: 37px; height: 37px; flex: 0 0 37px; place-items: center; border-radius: 10px; color: #177c75; background: #e2f3f0; font-size: 13px; font-weight: 800; }
+.optimization-history-player strong, .optimization-history-player small { display: block; }
+.optimization-history-player small { margin-top: 2px; color: #7b8f94; font-size: 11px; }
+.optimization-history-operation, .optimization-history-result { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 800; }
+.optimization-history-operation i, .optimization-history-result i { width: 7px; height: 7px; border-radius: 50%; }
+.optimization-history-operation.is-create { color: #167e70; }
+.optimization-history-operation.is-create i { background: #35a887; box-shadow: 0 0 0 4px rgba(53,168,135,.1); }
+.optimization-history-operation.is-update { color: #3b7294; }
+.optimization-history-operation.is-update i { background: #4b93ba; box-shadow: 0 0 0 4px rgba(75,147,186,.1); }
+.optimization-history-operation.is-delete { color: #b84a58; }
+.optimization-history-operation.is-delete i { background: #d85867; box-shadow: 0 0 0 4px rgba(216,88,103,.1); }
+.optimization-history-result.is-success { color: #277d69; }
+.optimization-history-result.is-success i { background: #3aaf84; }
+.optimization-history-result.is-failed { color: #b44856; }
+.optimization-history-result.is-failed i { background: #d85262; }
+.optimization-history-change { display: grid; grid-template-columns: auto 18px auto; align-items: center; justify-content: start; gap: 5px; color: #60777c; }
+.optimization-history-change > span { color: #71878c; font-size: 12px; }
+.optimization-history-change > i { color: #65a7a1; font-style: normal; text-align: center; }
+.optimization-history-change > strong { color: #1e625f; font-size: 13px; }
+.optimization-history-change > small { grid-column: 1 / -1; margin-top: 3px; color: #84969a; font-size: 11px; }
 
 .configuration-summary-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .configuration-summary-strip > div { min-height: 91px; padding: 16px 18px; }
@@ -1246,6 +1287,9 @@ td strong { color: #294149; }
   .ban-history-filters { flex-wrap: wrap; }
   .ban-history-search { min-width: 100%; flex-basis: 100%; }
   .ban-history-filters > label:not(.ban-history-search) { flex: 1; }
+  .optimization-history-filters { flex-wrap: wrap; }
+  .optimization-history-search { min-width: 100%; flex-basis: 100%; }
+  .optimization-history-filters > label:not(.optimization-history-search) { flex: 1; }
   .login-page { grid-template-columns: 1fr; }
   .login-story { display: none; }
   .login-panel { min-height: 100vh; }
@@ -1367,6 +1411,12 @@ td strong { color: #294149; }
   .ban-history-search { min-width: 0; flex-basis: auto; flex: none; }
   .ban-history-filters > label:not(.ban-history-search), .ban-history-filters .button { width: 100%; }
   .ban-history-filters .button { justify-content: center; }
+  .optimization-history-header { align-items: flex-start; }
+  .optimization-history-header > strong { min-width: 70px; }
+  .optimization-history-filters { align-items: stretch; flex-direction: column; padding: 15px 14px; }
+  .optimization-history-search { min-width: 0; flex-basis: auto; flex: none; }
+  .optimization-history-filters > label:not(.optimization-history-search), .optimization-history-filters .button { width: 100%; }
+  .optimization-history-filters .button { justify-content: center; }
   .player-filter-primary .button { flex: 1; justify-content: center; }
   .filter-reset { width: 100%; }
   .player-filter-advanced { grid-template-columns: 1fr; }

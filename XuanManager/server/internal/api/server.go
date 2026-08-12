@@ -76,6 +76,7 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/game/players/{playerId}/balance-adjustments", s.authorized("game.player.balance_adjust", true, s.handleAdjustPlayerBalance))
 	s.mux.Handle("GET /api/game/players/{playerId}/rooms", s.authorized("game.room_record.view", false, s.handlePlayerRoomHistory))
 	s.mux.Handle("GET /api/game/player-optimization", s.authorized("game.player_optimization.view", false, s.handleListPlayerOptimizations))
+	s.mux.Handle("GET /api/game/player-optimization/history", s.authorized("game.player_optimization.view", false, s.handleListPlayerOptimizationHistory))
 	s.mux.Handle("GET /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.view", false, s.handleGetPlayerOptimization))
 	s.mux.Handle("POST /api/game/player-optimization", s.authorized("game.player_optimization.create", true, s.handleCreatePlayerOptimization))
 	s.mux.Handle("PUT /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.update", true, s.handleUpdatePlayerOptimization))

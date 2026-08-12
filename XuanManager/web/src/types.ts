@@ -246,6 +246,33 @@ export interface PlayerOptimizationsResponse {
   summary: PlayerOptimizationSummary;
 }
 
+export interface PlayerOptimizationHistoryItem {
+  id: number;
+  playerId: string;
+  loginName: string;
+  name: string;
+  operation: "create" | "update" | "delete";
+  hasBefore: boolean;
+  beforeRemainingCount: number;
+  beforeChance: number;
+  hasAfter: boolean;
+  afterRemainingCount: number;
+  afterChance: number;
+  reason: string;
+  operatorName: string;
+  success: boolean;
+  resultCode: number;
+  resultMessage: string;
+  createdAt: string;
+}
+
+export interface PlayerOptimizationHistoryResponse {
+  items: PlayerOptimizationHistoryItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface PaymentChannelConfig {
   name: string;
   enabled: boolean;

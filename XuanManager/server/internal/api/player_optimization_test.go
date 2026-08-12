@@ -138,6 +138,58 @@ func TestApplyPlayerOptimizationVisibilityHidesSuperAttribution(t *testing.T) {
 	}
 }
 
+func TestParsePlayerOptimizationHistoryFilter(t *testing.T) {
+	request := httptest.NewRequest("GET", "/api/game/player-optimization/history?keyword=292989&operation=create&result=success", nil)
+	filter, err := parsePlayerOptimizationHistoryFilter(request)
+	if err != nil {
+		t.Fatalf("valid history filter rejected: %v", err)
+	}
+	if filter.Keyword != "292989" || filter.Operation != "create" || filter.Result != "success" {
+		t.Fatalf("filter = %#v", filter)
+	}
+
+	request = httptest.NewRequest("GET", "/api/game/player-optimization/history?operation=unknown", nil)
+	if _, err := parsePlayerOptimizationHistoryFilter(request); err == nil {
+		t.Fatal("invalid history operation accepted")
+	}
+}
+
+func TestBuildPlayerOptimizationHistoryWhereHidesSuperActions(t *testing.T) {
+	filter := playerOptimizationHistoryFilter{Keyword: "292989", Operation: "update", Result: "failed"}
+	where, args := buildPlayerOptimizationHistoryWhere(filter, principal{})
+	if !containsAll(where,
+		"audit_row.action IN (?, ?, ?)",
+		"hidden_super.id = audit_row.operator_id",
+		"audit_row.action = ?",
+		"audit_row.result_code <> 0",
+		"audit_row.operator_name LIKE ?",
+	) {
+		t.Fatalf("where = %s", where)
+	}
+	if len(args) != 14 || args[4] != 0 {
+		t.Fatalf("ordinary history args = %#v", args)
+	}
+
+	_, superArgs := buildPlayerOptimizationHistoryWhere(playerOptimizationHistoryFilter{}, principal{IsSuper: true})
+	if len(superArgs) != 5 || superArgs[4] != 1 {
+		t.Fatalf("super history args = %#v", superArgs)
+	}
+}
+
+func TestEnrichPlayerOptimizationHistoryItem(t *testing.T) {
+	item := playerOptimizationHistoryItem{Operation: "update"}
+	requestJSON := `{"playerId":"292989","reason":"客服复核"}`
+	beforeJSON := `{"playerId":"292989","loginName":"player1","name":"测试玩家","remainingCount":10,"chance":50}`
+	afterJSON := `{"playerId":"292989","loginName":"player1","name":"测试玩家","remainingCount":20,"chance":80}`
+	enrichPlayerOptimizationHistoryItem(&item, requestJSON, beforeJSON, afterJSON)
+	if !item.HasBefore || !item.HasAfter || item.PlayerID != "292989" || item.LoginName != "player1" || item.Name != "测试玩家" {
+		t.Fatalf("history identity/state = %#v", item)
+	}
+	if item.BeforeRemainingCount != 10 || item.BeforeChance != 50 || item.AfterRemainingCount != 20 || item.AfterChance != 80 || item.Reason != "客服复核" {
+		t.Fatalf("history values = %#v", item)
+	}
+}
+
 func TestPlayerOptimizationConfiguredSource(t *testing.T) {
 	if got := playerOptimizationConfiguredSource("admin999", "648425"); got != "admin" {
 		t.Fatalf("admin source = %q", got)

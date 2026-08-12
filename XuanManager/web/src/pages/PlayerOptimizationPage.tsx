@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
-import type { PlayerOptimizationItem, PlayerOptimizationsResponse } from "../types";
+import type { PlayerOptimizationHistoryItem, PlayerOptimizationHistoryResponse, PlayerOptimizationItem, PlayerOptimizationsResponse } from "../types";
 
 type OptimizationStatus = "active" | "inactive" | "all";
 
@@ -22,6 +22,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
   const [adding, setAdding] = useState<PlayerOptimizationItem | true | null>(null);
   const [editing, setEditing] = useState<PlayerOptimizationItem | null>(null);
   const [deleting, setDeleting] = useState<PlayerOptimizationItem | null>(null);
+  const [historyRefreshVersion, setHistoryRefreshVersion] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,7 +77,13 @@ export default function PlayerOptimizationPage({ can, notify }: {
   const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
   const filtersActive = Boolean(appliedKeyword || appliedRange.min || appliedRange.max || status !== "active");
-  const done = async () => { setAdding(null); setEditing(null); setDeleting(null); await load(); };
+  const done = async () => {
+    setAdding(null);
+    setEditing(null);
+    setDeleting(null);
+    setHistoryRefreshVersion((value) => value + 1);
+    await load();
+  };
 
   return <div className="page-stack optimization-page">
     <PageHeader eyebrow="DEAL OPTIMIZATION CONTROL" title="玩家优化" description="新增、调整或删除玩家发牌优化；本游戏不使用优化2或胡牌优化。" actions={<><span className="configuration-status is-live"><i />游戏账号实时参数</span>{canCreate && <Button type="button" onClick={() => setAdding(true)}>＋ 新增发牌优化</Button>}</>} />
@@ -131,10 +138,102 @@ export default function PlayerOptimizationPage({ can, notify }: {
       </>}
     </section>
 
+    <OptimizationHistoryPanel refreshVersion={historyRefreshVersion} notify={notify} />
+
     {adding && <AddOptimizationModal initialItem={adding === true ? undefined : adding} notify={notify} onClose={() => setAdding(null)} onDone={done} />}
     {editing && <OptimizationModal item={editing} notify={notify} onClose={() => setEditing(null)} onDone={done} />}
     {deleting && <DeleteOptimizationModal item={deleting} notify={notify} onClose={() => setDeleting(null)} onDone={done} />}
   </div>;
+}
+
+function OptimizationHistoryPanel({ refreshVersion, notify }: {
+  refreshVersion: number;
+  notify: (message: string, kind?: "success" | "error") => void;
+}) {
+  const [data, setData] = useState<PlayerOptimizationHistoryResponse | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [operation, setOperation] = useState("all");
+  const [result, setResult] = useState("all");
+  const [applied, setApplied] = useState({ keyword: "", operation: "all", result: "all" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+      if (applied.keyword) params.set("keyword", applied.keyword);
+      if (applied.operation !== "all") params.set("operation", applied.operation);
+      if (applied.result !== "all") params.set("result", applied.result);
+      const response = await api<PlayerOptimizationHistoryResponse>(`/api/game/player-optimization/history?${params.toString()}`);
+      setData(response);
+      const pages = Math.max(1, Math.ceil(response.total / pageSize));
+      if (page > pages) setPage(pages);
+    } catch (cause) {
+      notify(errorMessage(cause, "发牌优化历史加载失败"), "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [applied, notify, page, pageSize]);
+
+  useEffect(() => { void refreshVersion; void load(); }, [load, refreshVersion]);
+
+  const search = () => {
+    setApplied({ keyword: keyword.trim(), operation, result });
+    setPage(1);
+  };
+  const reset = () => {
+    setKeyword("");
+    setOperation("all");
+    setResult("all");
+    setApplied({ keyword: "", operation: "all", result: "all" });
+    setPage(1);
+  };
+  const filtersActive = Boolean(applied.keyword || applied.operation !== "all" || applied.result !== "all");
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
+  const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
+  const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
+
+  return <section className="panel optimization-history-panel">
+    <header className="optimization-history-header">
+      <div><span>DEAL OPTIMIZATION HISTORY</span><h2>发牌优化历史记录</h2><p>保留新增、调整和删除记录；列表已按当前账号的安全可见范围过滤。</p></div>
+      <strong>{data?.total ?? "—"}<small>条记录</small></strong>
+    </header>
+    <form className="optimization-history-filters" onSubmit={submitGuard(async () => search())}>
+      <label className="optimization-history-search"><span>⌕</span><input value={keyword} maxLength={100} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家ID、昵称、登录账号或操作人" /></label>
+      <label><span>操作类型</span><select value={operation} onChange={(event) => setOperation(event.target.value)}><option value="all">全部操作</option><option value="create">新增</option><option value="update">调整</option><option value="delete">删除</option></select></label>
+      <label><span>操作结果</span><select value={result} onChange={(event) => setResult(event.target.value)}><option value="all">全部结果</option><option value="success">成功</option><option value="failed">失败</option></select></label>
+      <Button type="submit">查询记录</Button>
+      {filtersActive && <Button type="button" variant="secondary" onClick={reset}>重置</Button>}
+    </form>
+
+    {loading && !data ? <LoadingBlock label="正在读取发牌优化历史记录" /> : !data || data.items.length === 0 ? <EmptyState title={filtersActive ? "没有匹配的发牌优化记录" : "暂无发牌优化历史记录"} description={filtersActive ? "可以修改或重置查询条件。" : "通过本后台新增、调整或删除发牌优化后，记录会显示在这里。"} /> : <>
+      <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
+        <table className="optimization-history-table"><thead><tr><th>操作时间</th><th>玩家</th><th>操作</th><th>参数变化</th><th>操作人</th><th>结果</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
+          <td><strong>{formatOptimizationHistoryDate(item.createdAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
+          <td><div className="optimization-history-player"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small><small>账号：{item.loginName || "—"}</small></div></div></td>
+          <td><span className={`optimization-history-operation is-${item.operation}`}><i />{optimizationOperationLabel(item.operation)}</span></td>
+          <td><OptimizationHistoryChange item={item} /></td>
+          <td><strong>{item.operatorName || "系统 / 未知"}</strong><small className="cell-subtitle">后台管理账号</small></td>
+          <td><span className={`optimization-history-result ${item.success ? "is-success" : "is-failed"}`}><i />{item.success ? "操作成功" : "操作失败"}</span><small className="cell-subtitle">{item.resultMessage || (item.success ? "参数已写入并回读" : `错误码 ${item.resultCode}`)}</small></td>
+        </tr>)}</tbody></table>
+      </div>
+      <footer className="table-pagination"><span>显示 {firstRow}–{lastRow}，共 {data.total} 条历史记录</span><div><label>每页<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>下一页</button></div></footer>
+    </>}
+  </section>;
+}
+
+function OptimizationHistoryChange({ item }: { item: PlayerOptimizationHistoryItem }) {
+  const before = item.hasBefore && item.beforeRemainingCount > 0 ? `${item.beforeRemainingCount.toLocaleString("zh-CN")} 次 · ${item.beforeChance}%` : "未启用";
+  const after = item.hasAfter && item.afterRemainingCount > 0 ? `${item.afterRemainingCount.toLocaleString("zh-CN")} 次 · ${item.afterChance}%` : item.success ? "已停用" : "操作未完成";
+  return <div className="optimization-history-change"><span>{before}</span><i>→</i><strong>{after}</strong>{item.reason && <small>备注：{item.reason}</small>}</div>;
+}
+
+function optimizationOperationLabel(operation: PlayerOptimizationHistoryItem["operation"]) {
+  if (operation === "create") return "新增优化";
+  if (operation === "delete") return "删除优化";
+  return "调整参数";
 }
 
 function AddOptimizationModal({ initialItem, notify, onClose, onDone }: {
@@ -295,6 +394,12 @@ function DeleteOptimizationModal({ item, notify, onClose, onDone }: {
 function formatOptimizationDate(value: string) {
   if (!value || value.startsWith("0 ")) return "—";
   return value;
+}
+
+function formatOptimizationHistoryDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value || "—";
+  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
 }
 
 function errorMessage(cause: unknown, fallback: string) {

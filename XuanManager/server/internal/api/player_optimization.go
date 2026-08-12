@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -32,6 +33,32 @@ type playerOptimizationSummary struct {
 	ActivePlayers  int64   `json:"activePlayers"`
 	TotalRemaining int64   `json:"totalRemaining"`
 	AverageChance  float64 `json:"averageChance"`
+}
+
+type playerOptimizationHistoryFilter struct {
+	Keyword   string
+	Operation string
+	Result    string
+}
+
+type playerOptimizationHistoryItem struct {
+	ID                   int64     `json:"id"`
+	PlayerID             string    `json:"playerId"`
+	LoginName            string    `json:"loginName"`
+	Name                 string    `json:"name"`
+	Operation            string    `json:"operation"`
+	HasBefore            bool      `json:"hasBefore"`
+	BeforeRemainingCount int64     `json:"beforeRemainingCount"`
+	BeforeChance         int64     `json:"beforeChance"`
+	HasAfter             bool      `json:"hasAfter"`
+	AfterRemainingCount  int64     `json:"afterRemainingCount"`
+	AfterChance          int64     `json:"afterChance"`
+	Reason               string    `json:"reason"`
+	OperatorName         string    `json:"operatorName"`
+	Success              bool      `json:"success"`
+	ResultCode           int       `json:"resultCode"`
+	ResultMessage        string    `json:"resultMessage"`
+	CreatedAt            time.Time `json:"createdAt"`
 }
 
 type playerOptimizationState struct {
@@ -181,6 +208,161 @@ FROM kbedm.tbl_Account`).Scan(&summary.ActivePlayers, &summary.TotalRemaining, &
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "page": page, "pageSize": size, "total": total, "summary": summary,
 	})
+}
+
+func (s *Server) handleListPlayerOptimizationHistory(w http.ResponseWriter, r *http.Request, p principal) {
+	page, size := pageParams(r)
+	filter, err := parsePlayerOptimizationHistoryFilter(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
+		return
+	}
+	where, args := buildPlayerOptimizationHistoryWhere(filter, p)
+
+	var total int64
+	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*)
+FROM mgr_audit_log audit_row
+LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
+LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
+WHERE `+where, args...).Scan(&total); err != nil {
+		s.logger.Error("count player optimization history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史数量失败")
+		return
+	}
+
+	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
+	rows, err := s.db.QueryContext(r.Context(), `SELECT
+audit_row.id, audit_row.target_id,
+COALESCE(game_login.accountName, game_player.sm_wxID, ''), COALESCE(game_player.sm_name, ''),
+audit_row.action, audit_row.operator_name, audit_row.request_json, audit_row.before_json, audit_row.after_json,
+audit_row.result_code, audit_row.result_message, audit_row.created_at
+FROM mgr_audit_log audit_row
+LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
+LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
+WHERE `+where+`
+ORDER BY audit_row.id DESC
+LIMIT ? OFFSET ?`, queryArgs...)
+	if err != nil {
+		s.logger.Error("list player optimization history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史失败")
+		return
+	}
+	defer rows.Close()
+
+	items := make([]playerOptimizationHistoryItem, 0, size)
+	for rows.Next() {
+		var item playerOptimizationHistoryItem
+		var action string
+		var requestJSON, beforeJSON, afterJSON sql.NullString
+		if err := rows.Scan(
+			&item.ID, &item.PlayerID, &item.LoginName, &item.Name,
+			&action, &item.OperatorName, &requestJSON, &beforeJSON, &afterJSON,
+			&item.ResultCode, &item.ResultMessage, &item.CreatedAt,
+		); err != nil {
+			s.logger.Error("scan player optimization history", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史数据失败")
+			return
+		}
+		item.Operation = playerOptimizationHistoryOperation(action)
+		item.Success = item.ResultCode == 0
+		enrichPlayerOptimizationHistoryItem(&item, requestJSON.String, beforeJSON.String, afterJSON.String)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		s.logger.Error("iterate player optimization history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史数据失败")
+		return
+	}
+
+	writeData(w, http.StatusOK, map[string]any{
+		"items": items, "page": page, "pageSize": size, "total": total,
+	})
+}
+
+func parsePlayerOptimizationHistoryFilter(r *http.Request) (playerOptimizationHistoryFilter, error) {
+	filter := playerOptimizationHistoryFilter{
+		Keyword:   strings.TrimSpace(r.URL.Query().Get("keyword")),
+		Operation: strings.TrimSpace(strings.ToLower(r.URL.Query().Get("operation"))),
+		Result:    strings.TrimSpace(strings.ToLower(r.URL.Query().Get("result"))),
+	}
+	if utf8.RuneCountInString(filter.Keyword) > 100 {
+		return playerOptimizationHistoryFilter{}, errors.New("查询内容不能超过 100 个字符")
+	}
+	if filter.Operation != "" && filter.Operation != "create" && filter.Operation != "update" && filter.Operation != "delete" {
+		return playerOptimizationHistoryFilter{}, errors.New("操作类型不正确")
+	}
+	if filter.Result != "" && filter.Result != "success" && filter.Result != "failed" {
+		return playerOptimizationHistoryFilter{}, errors.New("操作结果不正确")
+	}
+	return filter, nil
+}
+
+func buildPlayerOptimizationHistoryWhere(filter playerOptimizationHistoryFilter, p principal) (string, []any) {
+	clauses := []string{
+		"audit_row.target_type = ?",
+		"audit_row.action IN (?, ?, ?)",
+		"(? = 1 OR " + nonSuperAuditVisibilitySQL + ")",
+	}
+	args := []any{
+		"game_player",
+		"game.player_optimization.create",
+		"game.player_optimization.update",
+		"game.player_optimization.delete",
+		canSeeSuperFlag(p),
+	}
+	if filter.Operation != "" {
+		clauses = append(clauses, "audit_row.action = ?")
+		args = append(args, "game.player_optimization."+filter.Operation)
+	}
+	if filter.Result == "success" {
+		clauses = append(clauses, "audit_row.result_code = 0")
+	} else if filter.Result == "failed" {
+		clauses = append(clauses, "audit_row.result_code <> 0")
+	}
+	if filter.Keyword != "" {
+		like := "%" + filter.Keyword + "%"
+		clauses = append(clauses, `(audit_row.target_id LIKE ? OR COALESCE(game_player.sm_wxID, '') LIKE ? OR COALESCE(game_login.accountName, '') LIKE ?
+OR COALESCE(game_player.sm_name, '') LIKE ? OR audit_row.operator_name LIKE ? OR COALESCE(audit_row.request_json, '') LIKE ?
+OR COALESCE(audit_row.before_json, '') LIKE ? OR COALESCE(audit_row.after_json, '') LIKE ?)`)
+		for i := 0; i < 8; i++ {
+			args = append(args, like)
+		}
+	}
+	return strings.Join(clauses, " AND "), args
+}
+
+func playerOptimizationHistoryOperation(action string) string {
+	switch action {
+	case "game.player_optimization.create":
+		return "create"
+	case "game.player_optimization.delete":
+		return "delete"
+	default:
+		return "update"
+	}
+}
+
+func enrichPlayerOptimizationHistoryItem(item *playerOptimizationHistoryItem, requestJSON, beforeJSON, afterJSON string) {
+	var request struct {
+		PlayerID string `json:"playerId"`
+		Reason   string `json:"reason"`
+	}
+	var before, after playerOptimizationState
+	_ = json.Unmarshal([]byte(requestJSON), &request)
+	if json.Unmarshal([]byte(beforeJSON), &before) == nil && strings.TrimSpace(beforeJSON) != "" && beforeJSON != "null" {
+		item.HasBefore = true
+		item.BeforeRemainingCount = before.RemainingCount
+		item.BeforeChance = before.Chance
+	}
+	if json.Unmarshal([]byte(afterJSON), &after) == nil && strings.TrimSpace(afterJSON) != "" && afterJSON != "null" {
+		item.HasAfter = true
+		item.AfterRemainingCount = after.RemainingCount
+		item.AfterChance = after.Chance
+	}
+	item.PlayerID = firstNonEmpty(item.PlayerID, after.PlayerID, before.PlayerID, request.PlayerID)
+	item.LoginName = firstNonEmpty(item.LoginName, after.LoginName, before.LoginName)
+	item.Name = firstNonEmpty(item.Name, after.Name, before.Name)
+	item.Reason = strings.TrimSpace(request.Reason)
 }
 
 func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
