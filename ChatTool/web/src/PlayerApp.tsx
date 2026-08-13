@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { api, ApiError, appURL, jsonBody, playerSessionURL, setCSRF, setPlayerSessionRef } from './api'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { api, ApiError, appURL, jsonBody, playerSessionURL, setCSRF, setPlayerEmbeddedToken, setPlayerSessionRef } from './api'
 import { createClientMessageID } from './client'
 import { Avatar, LoadingScreen, MessageBubble } from './components'
 import type { Message, PlayerState } from './types'
 
 export default function PlayerApp() {
+  const embedded = useRef(new URLSearchParams(location.search).get('embed') === 'game').current
   const [state, setState] = useState<PlayerState | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [text, setText] = useState('')
@@ -23,6 +24,12 @@ export default function PlayerApp() {
   const agentTypingExpiry = useRef<number | undefined>(undefined)
   const conversationID = state?.conversation.id
 	const canSend = Boolean(state && state.conversation.status !== 'closed' && state.onlineAgents > 0)
+
+  useLayoutEffect(() => {
+    if (!embedded) return
+    document.documentElement.classList.add('chattool-embedded-document')
+    return () => document.documentElement.classList.remove('chattool-embedded-document')
+  }, [embedded])
 
   const loadMessages = useCallback(async () => {
     const result = await api<{ items: Message[] }>('/api/player/messages')
@@ -78,12 +85,23 @@ export default function PlayerApp() {
 		const encryptedData = params.get('d') || params.get('data') || params.get('extradata') || params.get('info')
 		const existingSessionRef = params.get('sessionRef') || ''
 		setPlayerSessionRef(existingSessionRef)
+		if (embedded) setPlayerEmbeddedToken(sessionStorage.getItem('chattool.playerEmbeddedToken') || '')
 		let result: PlayerState
 		if (encryptedData) {
 			setPlayerSessionRef('')
-			result = await api<PlayerState>('/api/player/session', { method: 'POST', body: jsonBody({ encryptedData }) })
+			setPlayerEmbeddedToken('')
+			if (embedded) sessionStorage.removeItem('chattool.playerEmbeddedToken')
+			result = await api<PlayerState>('/api/player/session', { method: 'POST', body: jsonBody({ encryptedData, embedded }) })
 			setPlayerSessionRef(result.sessionRef || '')
-			const cleanURL = result.sessionRef ? `${appURL('/player')}?sessionRef=${encodeURIComponent(result.sessionRef)}` : appURL('/player')
+			if (embedded && result.embeddedToken) {
+				setPlayerEmbeddedToken(result.embeddedToken)
+				sessionStorage.setItem('chattool.playerEmbeddedToken', result.embeddedToken)
+			}
+			const cleanParams = new URLSearchParams()
+			if (result.sessionRef) cleanParams.set('sessionRef', result.sessionRef)
+			if (embedded) cleanParams.set('embed', 'game')
+			const cleanQuery = cleanParams.toString()
+			const cleanURL = `${appURL('/player')}${cleanQuery ? `?${cleanQuery}` : ''}`
 			history.replaceState(null, '', cleanURL)
         } else {
           result = await api<PlayerState>('/api/player/me')
@@ -95,10 +113,15 @@ export default function PlayerApp() {
         setError(reason instanceof ApiError ? reason.message : '暂时无法连接客服中心，请返回游戏后重试')
       }
     })()
-  }, [loadMessages])
+  }, [embedded, loadMessages])
 
   useEffect(() => {
     if (!conversationID) return
+	if (embedded) {
+	  const refresh = () => { void Promise.all([loadState(), loadMessages()]).catch(() => undefined) }
+	  const embeddedPoll = window.setInterval(refresh, 2000)
+	  return () => window.clearInterval(embeddedPoll)
+	}
 	const source = new EventSource(playerSessionURL('/api/player/events'))
     const refresh = () => { void Promise.all([loadState(), loadMessages()]) }
     source.addEventListener('message.created', refresh)
@@ -121,7 +144,7 @@ export default function PlayerApp() {
       window.clearTimeout(agentTypingExpiry.current)
       agentTypingExpiry.current = undefined
     }
-  }, [conversationID, loadMessages, loadState, updateAgentTyping])
+  }, [conversationID, embedded, loadMessages, loadState, updateAgentTyping])
 
   useEffect(() => {
 	if (!canSend || state?.conversation.status !== 'active') {
@@ -193,9 +216,9 @@ export default function PlayerApp() {
     } catch (reason) { setError(reason instanceof ApiError ? reason.message : '无法结束咨询') }
   }
 
-  if (!state && !error) return <LoadingScreen />
+  if (!state && !error) return <LoadingScreen embedded={embedded} />
   if (!state) return (
-    <main className="player-shell player-error-page">
+    <main className={`player-shell player-error-page ${embedded ? 'player-shell-embedded player-error-page-embedded' : ''}`}>
       <div className="brand-mark">8L</div><h1>无法进入在线客服</h1><p>{error}</p><button type="button" onClick={() => location.reload()}>重新连接</button><small>为保障账号安全，请从游戏内的“客服”入口进入。</small>
     </main>
   )
@@ -203,7 +226,7 @@ export default function PlayerApp() {
   const { conversation } = state
 	const unavailable = conversation.status !== 'closed' && state.onlineAgents === 0
   return (
-    <main className="player-shell">
+    <main className={`player-shell ${embedded ? 'player-shell-embedded' : ''}`}>
       <header className="player-header">
 		<div className="player-brand"><span className="brand-mark brand-mark-small">8L</span><div><strong>在线客服</strong><small>{conversation.category} · 专属服务</small></div></div>
         <button className="header-action" type="button" onClick={endConversation} disabled={conversation.status === 'closed'}>结束咨询</button>
@@ -212,7 +235,7 @@ export default function PlayerApp() {
         <span className="service-avatar"><Avatar name={conversation.agentName || '客'} size="large" /><i /></span>
         <div>
 		  <strong>{conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : conversation.status === 'active' ? `${conversation.agentName} 正在为您服务` : '正在为您分配客服'}</strong>
-		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '暂时无法发送消息，请等待客服上线后再咨询' : conversation.status === 'active' ? '您可以发送文字、图片、视频或文件' : '请稍候，正在为您接入在线客服'}</p>
+		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '暂时无法发送消息，请等待客服上线后再咨询' : conversation.status === 'active' ? (embedded ? '您可以发送文字、图片或视频' : '您可以发送文字、图片、视频或文件') : '请稍候，正在为您接入在线客服'}</p>
         </div>
       </section>
       <section className="player-messages" aria-live="polite">
@@ -225,11 +248,11 @@ export default function PlayerApp() {
       {conversation.status === 'closed' && <button className="rating-entry" type="button" onClick={() => setShowRating(true)}>评价本次服务</button>}
       {uploading && <div className="uploading-bar"><span className="loading-spinner" />正在上传文件…</div>}
 	  <form className={`player-composer ${!canSend ? 'player-composer-disabled' : ''}`} onSubmit={submit}>
-		{showActions && <div className="player-actions">
+		{showActions && <div className={`player-actions ${embedded ? 'player-actions-embedded' : ''}`}>
 		  <label><span className="action-icon action-photo">图</span><b>图片</b><input type="file" accept="image/jpeg,image/png,image/gif,image/webp" onChange={upload} disabled={!canSend} /></label>
-		  <label><span className="action-icon action-camera">拍</span><b>拍摄</b><input type="file" accept="image/*,video/*" capture="environment" onChange={upload} disabled={!canSend} /></label>
+		  {!embedded && <label><span className="action-icon action-camera">拍</span><b>拍摄</b><input type="file" accept="image/*,video/*" capture="environment" onChange={upload} disabled={!canSend} /></label>}
 		  <label><span className="action-icon action-video">视</span><b>视频</b><input type="file" accept="video/mp4,video/webm,video/quicktime" onChange={upload} disabled={!canSend} /></label>
-		  <label><span className="action-icon action-file">文</span><b>文件</b><input type="file" accept=".pdf,.txt,.zip" onChange={upload} disabled={!canSend} /></label>
+		  {!embedded && <label><span className="action-icon action-file">文</span><b>文件</b><input type="file" accept=".pdf,.txt,.zip" onChange={upload} disabled={!canSend} /></label>}
 		</div>}
 		<div className="composer-row">
 		  <button className={`add-button ${showActions ? 'add-button-open' : ''}`} type="button" aria-label="添加图片或视频" onClick={() => setShowActions((value) => !value)} disabled={!canSend}>＋</button>

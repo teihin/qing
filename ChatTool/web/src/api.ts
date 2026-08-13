@@ -2,6 +2,7 @@ type Envelope<T> = { ok: true; data: T } | { ok: false; error: { code: string; m
 
 let csrfToken = ''
 let playerSessionRef = ''
+let playerEmbeddedToken = ''
 const basePath = import.meta.env.BASE_URL === '/' ? '' : import.meta.env.BASE_URL.replace(/\/$/, '')
 
 export const agentSessionExpiredEvent = 'chattool:agent-session-expired'
@@ -21,6 +22,14 @@ export function setCSRF(value: string) {
 
 export function setPlayerSessionRef(value: string) {
 	playerSessionRef = /^[a-f0-9]{32}$/.test(value) ? value : ''
+}
+
+export function setPlayerEmbeddedToken(value: string) {
+	playerEmbeddedToken = /^[a-f0-9]{64}$/.test(value) ? value : ''
+}
+
+export function hasPlayerEmbeddedToken(): boolean {
+	return playerEmbeddedToken !== ''
 }
 
 export function playerSessionURL(path: string): string {
@@ -45,6 +54,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 	if (csrfToken && init.method && init.method !== 'GET') headers.set('X-CSRF-Token', csrfToken)
   if (playerSessionRef && path.startsWith('/api/player/')) headers.set('X-Player-Session-Ref', playerSessionRef)
+  if (playerEmbeddedToken && path.startsWith('/api/player/')) headers.set('X-Player-Embedded-Token', playerEmbeddedToken)
   const response = await fetch(appURL(path), { ...init, headers, credentials: 'same-origin' })
 	if (response.status === 401 && path.startsWith('/api/agent/') && path !== '/api/agent/auth/login') {
 		notifyAgentSessionExpired()
@@ -69,4 +79,10 @@ export function jsonBody(value: unknown): string {
 
 export function mediaURL(id: string): string {
 	return playerSessionURL(`/api/media/${encodeURIComponent(id)}`)
+}
+
+export async function resolveMediaURL(id: string): Promise<string> {
+	if (!hasPlayerEmbeddedToken()) return mediaURL(id)
+	const result = await api<{ path: string }>(`/api/player/media/${encodeURIComponent(id)}/ticket`)
+	return appURL(result.path)
 }

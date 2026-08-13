@@ -26,6 +26,16 @@
 - `assets/Scenes/login - 001.fire` 属于测试/备用场景。
 - Android/iOS 原生工程目前封装在根目录 `runtime-src.zip`，不是普通活动源码目录。不要未经确认就解压覆盖或假定 Creator 构建会自动使用它。
 
+### 2026-08-13 当前交接速览
+
+- 活跃仓库是 `/Volumes/CCCC/qing`，主分支为 `main`，远端为 `git@github.com:teihin/qing.git`；本轮功能基线已推送至 `c117dd8`。提交、构建或发布前仍需重新检查分支、工作区和远端，不能把该提交号当作永久最新版本。
+- 当前客户端重点能力：大厅房间按“全/小/中/大”筛选并使用可下拉刷新的虚拟列表；排队撮合支持同房预坐和经 `roomTransition` 的异房快速切换；普通断网继续重连，服务端明确 `onKicked` 则停止重连并返回登录；赠送金币只允许大于0的整数。
+- 牌桌下注聚光灯首次默认开启，可在牌局设置中关闭并保存本地选择；它只在发牌动画完成且当前下注玩家操作倒计时圈有效时显示，按头像世界坐标动态计算方向/长度并持续逆时针旋转。最新方向、末端和发牌门禁代码已完成构建验证，但真实连续下注、跳过、弃牌和收灯仍需在线牌局回归。
+- 当前五套桌布为全屏绒布风格，牌背1/2为蓝银与墨绿金8L款，搓牌图及切牌图集已同步；运行资源、原图归档和生成母版均已入库。五桌面切换、两牌背选择、搓牌和DragonBones切牌动画仍需登录态逐项验证。
+- 本地热更新清单最终为 `2.0.14`、共3706项资源；这里只表示代码仓库中的 manifest 已更新，不代表热更新包已经上传或远端 `/up` 已切换。正式发布仍须按“生成产物→上传暂存→服务器切换→远端版本/MD5抽检”逐层验收。
+- 当前最重要的验证边界：排队换房弱网/迟到回包、房间列表真实分页、聚光灯连续轮转、赠送整数软键盘、桌布/牌背动画、两台设备互踢与普通断网重连均未形成完整自动化或全量真机矩阵；静态检查和Creator构建通过不能替代这些联调。
+- `tools/validate_qin_drh8_skin.py`会主动重建并改写141张运行资源，不是只读检查；脏工作区禁止直接运行。优先使用JSON/Meta/尺寸/哈希检查和Creator构建，确需运行时先保存文件清单与哈希，并只撤销该脚本额外生成的内容。
+
 ## XuanManager 新后台管理系统
 
 - 新后台的全部代码统一放在根目录 `XuanManager/`；服务端提供的数据接入规范为 `XuanManager/新后台管理系统接口文档.md`。当前技术栈为 Go 标准库后端加 React/Vite 前端：Go 便于在无 Node/Go 环境的 CentOS 7 游戏服务器上交付静态 Linux amd64 二进制，React 构建产物由同一个后端同源提供。
@@ -140,6 +150,9 @@
 - 2026-08-11 用户要求把全部客服密码统一初始化为指定的6位临时密码；正式执行使用bcrypt cost 12摘要，明文未写入源码、迁移、审计或运行配置。事务共重置2个客服账号、注销2个旧登录会话、把全部客服设为离线并写入1条不含密码的批量重置审计；当时没有活动会话需要重新排队。最终只读核对为2个账号、1种相同有效摘要、0个会话、0个离线客服占用的活动会话和1条重置审计，本机及公网健康和新版页面“至少6位”文案均通过。所有客服必须使用新临时密码重新登录，之后可在工作台自行修改。
 - 2026-08-12 ChatTool 客服账号已改为严格单点登录：登录事务先用 `SELECT ... FOR UPDATE` 锁定同一客服账号，使并发登录串行执行，再删除该账号全部旧会话并插入当前会话；数据库迁移 `005_agent_single_session.sql` 会保留每个客服最新历史会话并增加 `agent_id` 唯一索引，数据库层保证每个客服最多一条会话。后登录成功后向旧工作台推送 `session.replaced`，旧页面立即返回登录页并显示被顶下线提示；实时事件不可用时，前端也会统一监听客服受保护接口的401并退出。新登录不会把该客服置为离线或重新排队其会话。Go `test -race`/vet、Linux amd64静态构建、前端lint/生产构建和候选8894均通过；正式库已记录5个迁移，唯一索引1个、重复客服会话0个，发布时现存客服会话0个。正式本机及公网健康/客服页/新版JS均为200，未登录客服身份接口401，候选进程已停止；尚未使用真实客服账号执行双设备登录，以避免无授权登录和触发自动派单，待客服实际双设备操作验收。
 - 2026-08-12 ChatTool 已按最终业务规则改为“必须有本通道客服在线才能发送”：玩家页无客服时显示“当前没有客服在线”，禁用文字框、发送按钮和图片/拍摄/视频/文件入口，客服上线后经SSE团队事件恢复，另有20秒状态轮询防止移动网络重连时漏事件。服务端文字事务和媒体上传落库事务会按通道二次确认至少一个客服满足启用、在线、心跳有效且登录会话未过期；无客服时统一返回409 `NO_AGENT_ONLINE`，不写消息、媒体或磁盘文件。自动派单、在线统计和转接目标也复用有效登录会话条件；客服会话自然过期时维护任务广播团队状态变化。Go `test -race`/vet、Linux amd64静态构建、前端lint/生产构建、两轮8894候选和正式切换均通过；正式本机及公网玩家页/健康/最终JS为200，未登录玩家身份接口401，最终上线时有效在线客服0、客服会话0、消息87、媒体3，发布前后消息与媒体数量不变，候选已停止。最终版本未创建迁移，正式库仍为5个迁移；当前新进程日志只有启动信息，日志中的三条优雅停止超时均为2026-08-11历史记录。
+- 2026-08-13 玩家客服新增游戏内全屏半透明 WebView 模式，同时保留原独立网页协议和公网地址作为兼容能力，但游戏界面不再显示“浏览器打开”按钮。`panelKefu.ts` 在原 `cc.WebView` 上加载 `embed=game`，客户端与网页背景均设为透明，使牌桌可继续透出；内嵌页只提供文字、图片和视频，原独立网页仍保留完整入口。Android 项目自有 `QingChatWebViewBridge` 实现 `WebChromeClient.onShowFileChooser`，支持系统图片/视频选择器、取消与结果回传；iOS 桥负责把 `WKWebView` 设为透明，选择器继续使用系统 WebKit 能力并由同步脚本写入相册/相机用途说明。`tools/sync_android_chat_webview.py`、`tools/sync_ios_chat_webview.py` 用于 Creator 重建原生工程后的重复同步；iOS 设备/语音同步脚本也已改为自动发现当前唯一 `.xcodeproj`、修正历史 `8L*Bridge` 文件名并允许三类桥任意顺序重复执行。
+- 游戏内 WebView 不依赖 SameSite Cookie：`POST /api/player/session` 在 `embedded=true` 时返回仅存 `sessionStorage` 的随机内嵌会话令牌，后续玩家接口通过 `X-Player-Embedded-Token` 发送；媒体显示先换取30分钟、限定媒体与会话的随机票据，图片和视频URL不携带完整玩家会话。内嵌页用2秒轮询替代无法附加请求头的原生 `EventSource`，普通独立网页仍使用Cookie与SSE。服务端只允许 `/player` 页面被嵌入，`/agent` 和API继续 `X-Frame-Options: DENY`/`frame-ancestors 'none'`；公网仍是用户明确要求的纯HTTP，不能提供链路机密性。
+- 该版本已通过Go全量测试/vet、Linux amd64静态构建、React lint/TypeScript/Vite生产构建、Cocos Creator 2.4.13 Web Mobile构建、Android `compileDebugJavaWithJavac`、iOS无签名iphoneos整包编译和三类桥目标文件核对；内置浏览器确认半透明嵌入样式生效且不存在浏览器打开按钮。尚未在真实Android/iPhone上完成相册选择、视频选择、上传进度、播放与牌桌透出回归，客户端发布前必须由用户用各一台真机验证。ChatTool 服务端和网页已正式发布，当前二进制SHA-256为 `b3fa178abfbdad072abfaddff394e34fe29e917291a9461fada6566bfcdd5e60`，网页JS/CSS为 `index-CRPbYXyr.js`、`index-B7oJSgk3.css`；公网健康、玩家页允许嵌入、客服页禁止嵌入、未登录401和新资源200均回读通过，回滚副本为 `bin/chattool.previous-ingame-chat-20260813` 与 `web.previous-ingame-chat-20260813`。本轮未生成或发布Cocos客户端包。
 
 ## 8L 换皮方向（丁二黄扑克风格，已确认并落地）
 
@@ -336,7 +349,7 @@ login.fire
 - 2026-07-23 进一步结合新玩家坐下的浏览器日志确认客户端还有缓存短路：`PlayerList`不带photo时，`GetImageByName(id,"",img)`若命中`mapID2Avatar`（尤其以前缓存的头像1）会返回true，导致新座位不再发送`查询_用户_头像`。现已修改`DrhLogicMgr`：新绑定座位且PlayerList缺photo时无论缓存是否命中都刷新一次服务端头像；`ImageManager.AddWaitFreshImage2Catch`在已有缓存时保留当前显示，只在完全无缓存时先放头像1，且等待映射继续保证同一查询未返回前只发一次。`validate_local_avatar_flow.py`与`git diff --check`通过，待Creator/真机观察新玩家坐下日志应出现查询请求。
 - 2026-07-23 房间头像偶发只显示默认1、重进恢复的根因是异步资源回调竞态。真机日志确认服务端已返回例如`photo:"10"`且无本地资源加载失败；同一座位Sprite会先等待头像1、随后等待真实头像，两个`loadRes`完成顺序不固定，旧头像1回调可能最后覆盖真实头像。`ImageManager`现为每个Sprite记录最新期望头像序号，缓存命中、成功回调和失败回退都仅在序号仍匹配时写入，过期回调直接忽略。头像流程验证与`git diff --check`通过，待Creator/真机做首次进入和连续换座验证。
 - 2026-07-23 热更新“下载完成但重启后不生效”已定位并加入生成流程：`panelUpdate.ts`在`UPDATE_FINISHED`中已经把Manifest搜索路径置顶、保存到`HotUpdateSearchPaths`并调用`jsb.fileUtils.setSearchPaths()`，缺的是重启后在加载settings/引擎/bundle前恢复该值。`tools/generate_hot_update.py`现会在打热更包前幂等修补`build/jsb-link/main.js`顶部：Native环境读取全局`localStorage`、解析路径并调用`jsb.fileUtils.setSearchPaths()`；使用成对唯一标记防止重复插入，标记残缺、找不到`window.boot`或位置过晚时拒绝继续。该`main.js`不会进入只含src/assets的热更ZIP，只会由Android/iOS后续基础包携带，因此必须先发布一次包含补丁的新基础包，旧包不能靠热更新自举。临时文件首次/重复插入测试、真实当前main副本的`node --check`、Python语法和`git diff --check`均通过。
-- Android `Cocos2dxWebView` 曾为客服网页增加图片文件选择、禁缓存、文件访问、混合内容和返回键处理。当前 `panelKefu` 在 `cc.sys.openURL()` 后直接返回，内嵌 WebView 不可达；`panelSJBWeb` 又缺少 Prefab。默认不迁移；若恢复内嵌客服，只重写最小文件选择能力，不照搬全局混合内容和文件访问放开。
+- 2026-08-13 已恢复客服内嵌 WebView，但没有照搬旧工程对全局文件访问、混合内容、禁缓存和返回键的宽泛修改。当前仅通过项目自有 Android `QingChatWebViewBridge` 为活动客服 WebView 安装最小文件选择能力，并由Cocos页面控制透明背景；Creator重新生成原生工程后必须运行 `tools/sync_android_chat_webview.py`，再做Java编译和Android真机图片/视频选择回归。
 - iOS `CCDevice-ios.mm` 曾在读取电量前启用电量监控；项目牌桌确实显示电量，但 2.4.13 已内置相同处理，无需迁移。
 - 2.2.1 `config.hpp` 强制启用 V8 Inspector 属于历史调试修改；2.4.13 已等效启用，不迁移旧 `#if 1`，发布前应另行评估是否关闭远程调试。
 - 2026-07-23 按用户测试需求，当前生成工程的 `Classes/AppDelegate.cpp` 已取消 `COCOS2D_DEBUG` 条件，使 Debug 与 Release 都调用 `jsb_enable_debugger("0.0.0.0", 9527, false)`；iOS `Info.plist` 已增加本地网络用途说明。启用后的完整 Release 未签名归档编译成功，交付为 `build/ios-unsigned/qing-unsigned-debuggable.xcarchive/.ipa`。该端口暴露 V8 Inspector 和脚本执行能力，只限内部测试包；正式对外发布前必须恢复条件保护或关闭该调用。
@@ -431,7 +444,7 @@ login.fire
 - 钱包换皮可由`tools/generate_qin_wallet_skin.py`从`art_sources/wallet/qin_wallet_emblem_source.png`确定性重建，六状态静态预览为`art_sources/wallet/qin_wallet_runtime_preview.png`。52张输出图片的尺寸和透明裁剪范围均与`.meta`一致，既有`.meta`/UUID未改，新增资源使用独立UUID，强蓝/青像素检查为0；共用`公用/btn_4.png`会按共享覆盖原则同步影响8个文件中的18处关闭按钮。外部`panelKefu`、`panelMsgView`和`panelLoading`未纳入，Creator中的服务端动态渠道、三种提现方式、EditBox、列表和点击交互仍待用户在现有实例中验证。
 - `assets/Scenes/drh8.fire`牌桌已按当前用户手调布局完成整套黑金秦风美术替换；运行资源现由核心生成器130项与牌背/图集生成器12项共同构建，去重后共141张PNG。范围包含主操作、玩家框、动态状态、语音、设置、带入、实时战绩、牌型提示、奖池、举报、转盘、牌背/搓背、切牌图集、爆奖图集和新增动作状态`resources/other/drh/滚.png`。动态文字严格保留“大、跟、敲、休、丢、分、滚、搓牌中、地九王”等原业务含义。
 - 2026-08-13 五张可选桌面已从带实体椭圆桌子的同构背景改为类似用户视频的全屏绒布牌桌，均保持750×1334及原文件名、`.meta`和UUID；用户反馈首版深翡翠桌布略显脏后，最终顺序调整为`zuotype/1～5.jpg`依次为孔雀青、皇家蓝、曜石蓝灰、香槟棕和重新生成的干净深翡翠绿。新第5款只保留均匀细腻的绒布纹理、中央柔光和边缘暗角，首版斑驳深翡翠不再用于运行资源；只有美术颜色/纹理和选项顺序变化，座位、按钮、文字和交互布局未改。牌背选项1/2同步换成蓝银冰青与墨绿金色两款Art Deco设计，中央保留8L徽标；`牌背1/2.png`、`搓背1/2.png`以及DragonBones `ImagesLuck/动画/切/hand_tex.png`内第1/2套上牌、下牌、放牌切片已同步，选项3和旧配置0保持原资源。原图及调整前五桌面完整归档于`HisImg/20260813-fullscreen-tables-cardbacks/`，视频参考、生成母版和最终总览位于`art_sources/8l/table-cardback-20260813/`。尺寸/透明通道、图集1376×892切片坐标及场景Sprite解析均通过；`tools/render_drh8_scene_preview.py`从真实`drh8.fire`渲染750×1334牌桌时70个活动Sprite全部解析，确认新默认孔雀青桌布全屏且布局不变。浏览器只验证了登录预览可启动，未使用真实账号进入牌桌，因此五桌面切换、两牌背选择、搓牌和DragonBones切牌动画仍待登录态实际点击验收。
-- drh8换皮由`tools/generate_qin_drh8_skin.py`、`tools/generate_qin_drh8_atlases.py`确定性重建；`tools/generate_qin_drh8_panel_fix.py`已作为核心生成器最后一道必跑修复，专门重绘74张易变形的弹层/按钮/选择框/滑条/动作资源，后续不得绕过该步骤单独保留宽泛生成器的旧结果。`tools/validate_qin_drh8_skin.py`已验证141张PNG尺寸、模式和透明裁剪与`.meta`一致，两次构建哈希一致，场景/Prefab前后哈希一致，预览成功解析69个活动Sprite和33个Label且未解析为0。
+- drh8换皮由`tools/generate_qin_drh8_skin.py`、`tools/generate_qin_drh8_atlases.py`确定性重建；`tools/generate_qin_drh8_panel_fix.py`已作为核心生成器最后一道必跑修复，专门重绘74张易变形的弹层/按钮/选择框/滑条/动作资源，后续不得绕过该步骤单独保留宽泛生成器的旧结果。`tools/validate_qin_drh8_skin.py`已验证141张PNG尺寸、模式和透明裁剪与`.meta`一致，两次构建哈希一致，场景/Prefab前后哈希一致；新增下注聚光灯后的预览成功解析70个活动Sprite和34个Label且未解析为0。
 - 2026-08-13 注意：`tools/validate_qin_drh8_skin.py`不是只读校验，它会先执行两轮完整换皮生成器并改写141张运行资源及预览图；工作区存在用户手调桌布、牌背或其他未提交美术时禁止直接运行。提交前应优先使用JSON/Meta/尺寸检查和Creator构建；确需运行时必须先保存脏文件清单与哈希，并在结束后只恢复校验器额外生成的文件，避免覆盖用户美术。
 - 2026-07-23 Creator截图确认的变形根因是部分`cc.Sprite`使用RAW/TRIMMED尺寸模式：Creator预加载会按原图/裁剪尺寸重置节点大小，不能只依据场景序列化的`contentSize`判断运行效果。修复时在原尺寸透明画布内限定实际可见安全区，并保留极低透明度裁剪锚点；`tools/render_drh8_scene_preview.py`的`--simulate-creator-size-mode`模式用于复现这条运行路径。
 - `tools/render_drh8_panel_previews.py`覆盖20个弹层状态，`tools/render_drh8_action_previews.py`覆盖12个动态动作状态；两套都必须同时跑普通尺寸和`--simulate-creator-size-mode`尺寸。当前模拟Creator预览中实时战绩、带入/余额不足、牌局回顾、文字牌谱、设置、举报、奖池及主操作/分牌/预操作/坐下/观战/语音均无解析或隔离错误。为避免房号、局内信息和分牌倒计时互相遮挡，场景与`panelGameView.prefab`仅同步调整了这些显示节点的位置/字号，并修正“解散房间”Sprite绑定及少量蓝青/纯红动态文字色；按钮逻辑、脚本、协议和用户手调的其他布局未改。Creator中的DragonBones播放、真实动态列表数据、点击热区和多桌布显示仍待用户在现有实例中验证。
@@ -470,13 +483,14 @@ login.fire
 - XuanManager 正式服务器 SSH 部署连接固定使用 `client_update@154.37.155.17:2233`，本机身份文件为 `~/.ssh/id_ed25519_newserver`，建议命令：`ssh -i ~/.ssh/id_ed25519_newserver -p 2233 -o IdentitiesOnly=yes client_update@154.37.155.17`。2026-08-11 已实测登录成功，远端身份为 `uid=1000(client_update)`、主目录/落点为 `/www`，并具备 `/www/html/.xuanmanager` 写权限。`webcm_user` 是服务器本机 MySQL 的数据库账号，不能用于 SSH；不得在本文件记录对应密码。
 
 - 2026-07-22 已在本机创建 GitHub Ed25519 密钥，文件名为 `~/.ssh/id_ed25519_github_qing`，并配置为本机访问 `github.com` 所有仓库的默认密钥；私钥不得提交、复制到项目或对外发送。
-- GitHub SSH 已验证成功，身份为 `teihin`；远程仓库地址为 `git@github.com:teihin/qing.git`，页面可访问且 `git ls-remote` 成功。当前远程没有引用，属于尚无提交的空仓库。
-- 当前 `/Volumes/CB/qing` 已初始化为 Git 仓库，默认分支为 `main`，远程 `origin` 为 `git@github.com:teihin/qing.git`。
+- GitHub SSH 已验证成功，身份为 `teihin`；远程仓库地址为 `git@github.com:teihin/qing.git`，默认分支为 `main`。远端已有持续提交记录，不再是空仓库。
+- 当前活跃 Git 仓库位于 `/Volumes/CCCC/qing`，不是历史挂载 `/Volumes/CB/qing`；开始任务时必须先用 `pwd`、`git status -sb` 和 `git remote -v` 重新确认活动检出。
 - 公开仓库提交前已将 `Tool.ts` 的短信平台账号字段和 `MobileManager.ts` 的微信、语音及统计平台配置字段置空；恢复这些功能时必须改用服务端或不入库的安全配置，不得再次硬编码真实凭据。
 - `.gitignore` 已排除根目录签名文件、`runtime-src.zip`、macOS 元数据以及既有 Creator 缓存目录，避免敏感文件和生成内容进入仓库。
 - 2026-07-22 已完成首次提交并成功推送到 `origin/main`；后续改动应继续先检查敏感信息和大文件，再提交并推送该分支。
 - 后续所有 Git 提交说明必须使用中文，并详细写明修改内容；提交正文应按实际情况说明修改原因、涉及模块、关键行为变化、验证结果及未验证风险，不使用“更新”“修复问题”等无法追溯的笼统描述。
 - 若本机代理导致 GitHub SSH 22 端口在握手阶段断开，可改走 GitHub 官方 `ssh.github.com:443`；2026-07-22 已按 GitHub 官方公布值核对 Ed25519 主机指纹、写入 `known_hosts` 并验证账号认证和推送成功。不得使用跳过主机校验的方式绕过错误。
+- 2026-08-13 再次遇到 Clash Fake-IP 下 `github.com:22` 连接被关闭；使用项目专用密钥访问 `ssh.github.com:443` 验证成功。为让 VS Code 的 `origin/main` 跟踪引用同步更新，应继续以命名远端 `origin` 推送，并仅在单次命令中用 Git URL rewrite 把 `git@github.com:` 映射到 `ssh://git@ssh.github.com:443/`；不要永久改坏仓库远端，也不要跳过主机校验。
 
 ## 审查范围说明
 

@@ -3,49 +3,38 @@ import UIManager from "../common/UIManager";
 import Tool from "../common/Tool";
 import GameDataManager from "../GameDataManager";
 import ConfigManager from "../logic/ConfigManager";
-import { ClosePanelMode } from "../common/GameDef";
+import { ClosePanelMode, ShowPanelMode } from "../common/GameDef";
 
-const {ccclass, property} = cc._decorator;
+const {ccclass} = cc._decorator;
 
 @ccclass
 export default class panelKefu extends UIPanelViewBase {
 
-    // private strKF:string = "http://203.107.63.249:88/chatlink.html?agentid=bdbd429542191477212d36bcee06778d&metadata={info}";//"https://chat.meiqia.cn/widget/standalone.html?eid=ec514deaf8b068d645b96b74fd7c992e&metadata={info}";
-    // private strVIP:string = "http://203.107.63.249:88/vip/chatlink.html?agentid=bb4bde36abd481153a5334b0fb220b78&metadata={info}";//"https://chat.meiqia.cn/widget/standalone.html?eid=f54a10e193bf3842ecaf589d80a90fc8&metadata={info}";
-    // private strVIP2:string = "http://203.107.63.249:88/vip2/chatlink.html?&agentid=dc99d1d7371ab13a7284bf3051864e54&metadata={info}";//"https://chat.meiqia.cn/widget/standalone.html?eid=f54a10e193bf3842ecaf589d80a90fc8&metadata={info}";
-    
-    private strKF:string =  ""//"https://4mff4v.com:443/chat/text/chat_0t1Bp9.html?extradata={info}"//"https://mcybde.com/chat/text/chat_04RAVp.html?extradata={info}"
     private strVIP:string = "http://154.37.155.17/chattool/player?d={info}";
     private strVIP2:string = "http://154.37.155.17/chattool/player?d={info}";
-    
 
     private loading:cc.ProgressBar = null;
-
-    
-
     private web:cc.WebView = null;
+    private externalUrl:string = "";
+
     onLoad () {
         super.onLoad();
     }
-    
 
     start () {
-        //http://mcybde.com:443/chat/text/chat_04RAVp.html?&agentid=2c90ffef80b2348101816bff8fed0963&metadata={info}
-        //ConfigManager.getInstance().SetOneHashKey("客服2","https://mcybde.com:443/chat/text/chat_04RAVp.html?skill=2c90ffef80b2348101816bc7a34a01d9&agent=2c90ffef80b2348101816bff8fed0963&l=zh&extradata={info}")
         if(this.strUserData == "")
         {
             this.strUserData = "客服";
         }
 
-        //Tool.GetChild(this.node,"title/label").getComponent(cc.Label).string = this.strUserData;
         this.web = this.node.getChildByName("web").getComponent(cc.WebView);
 
         let strUrl = "";
-        let passkey = ""
-        let channel = "general"
+        let passkey = "";
+        let channel = "general";
         if(this.strUserData == "客服")
         {
-            strUrl = ConfigManager.getInstance().kefuUrl//this.strKF;
+            strUrl = ConfigManager.getInstance().kefuUrl;
         }
         else if(this.strUserData == "VIP充值")
         {
@@ -57,8 +46,7 @@ export default class panelKefu extends UIPanelViewBase {
             strUrl = this.strVIP2;
             channel = "vip_recharge";
         }
-        
-        
+
         let account = GameDataManager.getAccount();
         let playerInfo:any = {
             playerId: account.guuid,
@@ -73,59 +61,133 @@ export default class panelKefu extends UIPanelViewBase {
             },
             ts: Math.floor(Date.now() / 1000)
         };
-        let strEx = Tool.encrypt(JSON.stringify(playerInfo),passkey);
+        let strEx = Tool.encrypt(JSON.stringify(playerInfo), passkey);
         if(strUrl.indexOf("{info}") >= 0)
         {
-            strUrl = strUrl.replace(RegExp("{info}",'g'),encodeURIComponent(strEx));
+            strUrl = strUrl.replace(RegExp("{info}",'g'), encodeURIComponent(strEx));
         }
         else
         {
             strUrl += (strUrl.indexOf("?") >= 0 ? "&" : "?") + "d=" + encodeURIComponent(strEx);
         }
-        
 
         if(cc.sys.os === cc.sys.OS_IOS)
         {
-            strUrl+="&device=ios";
+            strUrl = this.AppendQuery(strUrl, "device", "ios");
         }
 
-        cc.sys.openURL(strUrl)
-        UIManager.getInstance().closePanelByName(this.node.name,ClosePanelMode.Normal)
-        return
+        // 默认在游戏内打开；原有外部网页版协议保留，但游戏界面不显示跳出按钮。
+        this.externalUrl = strUrl;
+        let embeddedUrl = this.AppendQuery(strUrl, "embed", "game");
+        this.ConfigureTitle();
+        this.ConfigureTransparentWebView();
+        this.web.url = embeddedUrl;
 
-        this.web.url = strUrl;
-
-        //显示进度
         this.loading = Tool.GetChild(this.node,"进度/img").getComponent(cc.ProgressBar);
         this.loading.progress = 0;
-        this.schedule(this.UpdateProgress,0.01,1000,0.1);
+        this.schedule(this.UpdateProgress, 0.02);
 
-        if(cc.sys.os != cc.sys.OS_IOS)
-        {
-            Tool.GetChild(this.node,"title/弹出").active = false;
-            this.web.node.on("loaded",()=>{
-                this.loading.progress = 1;
-                this.unschedule(this.UpdateProgress);
-            },this);
-        }
-        else
-        {
-            Tool.GetChild(this.node,"title/弹出").active = false;
-            this.scheduleOnce(()=>{
-                this.loading.progress = 1;
-                this.unschedule(this.UpdateProgress);
-            },6);
-        }
-
-
-
+        this.web.node.on("loaded", this.OnWebLoaded, this);
+        this.web.node.on("error", this.OnWebError, this);
     }
+
+    onDestroy () {
+        this.unschedule(this.UpdateProgress);
+        if(this.web != null && cc.isValid(this.web.node))
+        {
+            this.web.node.off("loaded", this.OnWebLoaded, this);
+            this.web.node.off("error", this.OnWebError, this);
+        }
+    }
+
+    private ConfigureTitle()
+    {
+        let popup = Tool.GetChild(this.node, "title/弹出");
+        if(popup != null)
+        {
+            // 外部网页版继续兼容，但游戏内入口不向玩家展示跳出按钮。
+            popup.active = false;
+        }
+    }
+
+    private ConfigureTransparentWebView()
+    {
+        if(this.web == null)
+            return;
+        try {
+            let impl:any = (this.web as any)._impl;
+            if(impl != null && impl._iframe != null)
+            {
+                if(typeof impl._iframe.setBackgroundTransparent === "function")
+                {
+                    impl._iframe.setBackgroundTransparent(true);
+                }
+                if(impl._iframe.style != null)
+                {
+                    impl._iframe.style.background = "transparent";
+                    impl._iframe.setAttribute("allowtransparency", "true");
+                }
+            }
+            if(impl != null && impl._div != null && impl._div.style != null)
+            {
+                impl._div.style.background = "transparent";
+            }
+        } catch(error) {
+            cc.warn("客服WebView透明背景设置失败", error);
+        }
+
+        if(cc.sys.isBrowser)
+            return;
+        try {
+            if(cc.sys.os === cc.sys.OS_ANDROID)
+            {
+                jsb.reflection.callStaticMethod(
+                    "org/cocos2dx/javascript/QingChatWebViewBridge",
+                    "Enable",
+                    "()V"
+                );
+            }
+            else if(cc.sys.os === cc.sys.OS_IOS)
+            {
+                (jsb.reflection as any).callStaticMethod("QingChatWebViewBridge", "Enable");
+            }
+        } catch(error) {
+            // 老基础包没有桥接时仍可发送文字；图片、视频选择需更新原生包。
+            cc.warn("客服媒体选择桥接暂不可用", error);
+        }
+    }
+
+    private AppendQuery(url:string, key:string, value:string):string
+    {
+        return url + (url.indexOf("?") >= 0 ? "&" : "?")
+            + encodeURIComponent(key) + "=" + encodeURIComponent(value);
+    }
+
+    private OnWebLoaded()
+    {
+        this.ConfigureTransparentWebView();
+        if(this.loading != null)
+            this.loading.progress = 1;
+        this.unschedule(this.UpdateProgress);
+    }
+
+    private OnWebError()
+    {
+        this.unschedule(this.UpdateProgress);
+        UIManager.getInstance().showPanel(
+            "panelMsgView",
+            ShowPanelMode.Cover,
+            "游戏内客服加载失败，请关闭后重新进入。"
+        );
+    }
+
     public UpdateProgress()
     {
-        this.loading.progress = this.loading.progress+0.001;
+        if(this.loading != null && this.loading.progress < 0.92)
+        {
+            this.loading.progress = Math.min(0.92, this.loading.progress + 0.006);
+        }
     }
-
-    // update (dt) {}
 
     public onButtonClick(button:cc.Button)
     {
@@ -143,7 +205,8 @@ export default class panelKefu extends UIPanelViewBase {
         }
         else if(button.node.name === "弹出")
         {
-            cc.sys.openURL(this.web.url);
+            if(this.externalUrl != "")
+                cc.sys.openURL(this.externalUrl);
         }
     }
 }

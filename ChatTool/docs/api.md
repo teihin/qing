@@ -8,11 +8,12 @@
 
 ## 玩家接口
 
-- `POST /api/player/session`：提交含 `channel` 的客户端 AES 加密资料并建立HttpOnly会话；缺省通道兼容为 `general`。响应含非敏感 `sessionRef`，允许同一浏览器标签页并行保持不同通道会话。
+- `POST /api/player/session`：提交含 `channel` 的客户端 AES 加密资料并建立HttpOnly会话；缺省通道兼容为 `general`。响应含非敏感 `sessionRef`，允许同一浏览器标签页并行保持不同通道会话。游戏内请求可提交 `embedded:true`，响应额外返回只供当前 WebView `sessionStorage` 保存的 `embeddedToken`，后续玩家接口通过 `X-Player-Embedded-Token` 发送，以兼容跨站 iframe 禁用第三方 Cookie。
 - `GET /api/player/me`：玩家、会话、在线客服数和 CSRF。
 - `GET /api/player/events`：SSE 实时事件。
 - `GET/POST /api/player/messages`：聊天记录与文字发送；本通道没有在线客服时发送返回409 `NO_AGENT_ONLINE`。
 - `POST /api/player/uploads`：图片、视频或文件；本通道没有在线客服时上传返回409 `NO_AGENT_ONLINE`。
+- `GET /api/player/media/{id}/ticket`：游戏内嵌会话领取30分钟媒体票据；票据只对应当前会话中的单个媒体。
 - `POST /api/player/typing`、`POST /api/player/read`：输入和已读。
 - `POST /api/player/end`：玩家结束咨询。
 - `POST /api/player/satisfaction`：结束后 1～5 分评价。
@@ -32,6 +33,6 @@
 
 ## 媒体
 
-- `GET /api/media/{id}`：玩家只可访问当前标签页会话媒体；普通客服只可访问自己且同通道的会话；主管只可访问主管所属通道现存会话媒体。视频支持 HTTP Range。
+- `GET /api/media/{id}`：玩家只可访问当前标签页会话媒体，或持有当前媒体的短期游戏内票据；普通客服只可访问自己且同通道的会话；主管只可访问主管所属通道现存会话媒体。视频支持 HTTP Range。
 
 SSE 事件包括 `message.created`、`conversation.assigned`、`conversation.requeued`、`conversation.transferred`、`conversation.closed`、`conversation.cleared`、`conversation.changed`、`player.memo.changed`、`team.changed`、`typing` 和客服单点登录事件 `session.replaced`。玩家事件按会话、客服事件按通道分发；事件只用于刷新提示，数据库记录始终是权威数据。

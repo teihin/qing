@@ -530,6 +530,9 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 			authorized = true
 		}
 	}
+	if !authorized && s.validMediaTicket(strings.TrimSpace(r.URL.Query().Get("ticket")), mediaID, conversationID) {
+		authorized = true
+	}
 	if !authorized {
 		writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "无权访问此文件")
 		return
@@ -561,6 +564,55 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=3600")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, originalName, stat.ModTime(), file)
+}
+
+func (s *Server) handlePlayerMediaTicket(w http.ResponseWriter, r *http.Request, p playerPrincipal) {
+	mediaID := strings.TrimSpace(r.PathValue("id"))
+	if len(mediaID) != 32 {
+		writeError(w, http.StatusNotFound, "MEDIA_NOT_FOUND", "文件不存在")
+		return
+	}
+	var conversationID string
+	if err := s.db.QueryRowContext(r.Context(), `SELECT conversation_id FROM chat_media WHERE id=?`, mediaID).Scan(&conversationID); err != nil || conversationID != p.ConversationID {
+		writeError(w, http.StatusNotFound, "MEDIA_NOT_FOUND", "文件不存在")
+		return
+	}
+	ticket, err := security.RandomID()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "TOKEN_ERROR", "暂时无法读取文件")
+		return
+	}
+	expiresAt := time.Now().Add(30 * time.Minute)
+	s.mediaTicketMu.Lock()
+	if s.mediaTickets == nil {
+		s.mediaTickets = make(map[string]mediaAccessTicket)
+	}
+	for key, item := range s.mediaTickets {
+		if time.Now().After(item.ExpiresAt) {
+			delete(s.mediaTickets, key)
+		}
+	}
+	s.mediaTickets[ticket] = mediaAccessTicket{MediaID: mediaID, ConversationID: conversationID, ExpiresAt: expiresAt}
+	s.mediaTicketMu.Unlock()
+	writeData(w, http.StatusOK, map[string]any{
+		"path":      "/api/media/" + mediaID + "?ticket=" + url.QueryEscape(ticket),
+		"expiresAt": expiresAt,
+	})
+}
+
+func (s *Server) validMediaTicket(ticket, mediaID, conversationID string) bool {
+	if len(ticket) != 32 {
+		return false
+	}
+	now := time.Now()
+	s.mediaTicketMu.Lock()
+	defer s.mediaTicketMu.Unlock()
+	item, ok := s.mediaTickets[ticket]
+	if !ok || now.After(item.ExpiresAt) {
+		delete(s.mediaTickets, ticket)
+		return false
+	}
+	return item.MediaID == mediaID && item.ConversationID == conversationID
 }
 
 func urlEncodeFilename(value string) string {

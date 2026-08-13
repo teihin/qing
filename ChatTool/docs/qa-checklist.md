@@ -35,6 +35,10 @@
 - 浏览器网络面板确认 `/chattool/api/*`、`/chattool/api/media/*` 和 SSE 均使用 `/chattool/` 前缀；记录纯 HTTP 明文传输风险已由业务接受。
 - 验收记录明确说明客户端口令可被逆向，轻量加密不作为可靠玩家身份认证。
 - 上传目录不可由 Caddy 静态映射，只能经鉴权媒体接口读取。
+- 游戏内 `/player?...&embed=game` 可在 Android、iOS 和 Web/PWA 的 Cocos WebView 内显示，背景半透明且没有“浏览器打开”按钮。
+- 游戏内附件区只有图片和视频；Android 系统选择器、iOS 相册选择器、上传进度、发送后回显、客服发送媒体的玩家端回显均逐项验证。
+- 跨站 Web/PWA iframe 禁用第三方 Cookie 时仍能发送文字和媒体；完整嵌入会话令牌不出现在地址栏或媒体 URL，媒体票据不能跨媒体或跨会话复用。
+- `/player` 允许被游戏 iframe 嵌入；`/agent` 和全部 API 响应仍带禁止 framing 的策略。
 
 ## 运维
 

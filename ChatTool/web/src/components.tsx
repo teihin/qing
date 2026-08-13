@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react'
 import type { Message } from './types'
-import { mediaURL } from './api'
+import { hasPlayerEmbeddedToken, mediaURL, resolveMediaURL } from './api'
 
 export function Avatar({ name, url, size = 'normal' }: { name: string; url?: string; size?: 'small' | 'normal' | 'large' }) {
   const safeName = typeof name === 'string' ? name : ''
@@ -13,10 +14,20 @@ export function StatusDot({ status }: { status: string }) {
 
 export function MessageBubble({ message, own, onImage }: { message: Message; own: boolean; onImage?: (src: string) => void }) {
   const time = formatTime(message.createdAt)
+  const [mediaSrc, setMediaSrc] = useState(
+    message.mediaId && !hasPlayerEmbeddedToken() ? mediaURL(message.mediaId) : '',
+  )
+  useEffect(() => {
+    let active = true
+    if (!message.mediaId) return () => { active = false }
+    void resolveMediaURL(message.mediaId).then((value) => {
+      if (active) setMediaSrc(value)
+    }).catch(() => undefined)
+    return () => { active = false }
+  }, [message.mediaId])
   if (message.senderType === 'system') {
     return <div className="system-message"><span>{message.text}</span></div>
   }
-  const mediaSrc = message.mediaId ? mediaURL(message.mediaId) : ''
   return (
     <div className={`message-row ${own ? 'message-own' : ''} ${message.senderType === 'note' ? 'message-note-row' : ''}`}>
       {!own && <Avatar name={message.senderName} size="small" />}
@@ -28,9 +39,15 @@ export function MessageBubble({ message, own, onImage }: { message: Message; own
         </div>
         <div className={`message-bubble message-${message.messageType}`}>
           {(message.messageType === 'text' || message.messageType === 'note') && <p>{message.text}</p>}
-          {message.messageType === 'image' && <button className="media-button" type="button" onClick={() => onImage?.(mediaSrc)}><img src={mediaSrc} alt={message.mediaName || '聊天图片'} loading="lazy" /></button>}
-          {message.messageType === 'video' && <video src={mediaSrc} controls playsInline preload="metadata" aria-label={message.mediaName || '聊天视频'} />}
-          {message.messageType === 'file' && <a className="file-card" href={mediaSrc} download><span className="file-icon">文</span><span><strong>{message.mediaName || '文件'}</strong><small>{formatBytes(message.mediaSize || 0)}</small></span><b>下载</b></a>}
+          {message.messageType === 'image' && (mediaSrc
+            ? <button className="media-button" type="button" onClick={() => onImage?.(mediaSrc)}><img src={mediaSrc} alt={message.mediaName || '聊天图片'} loading="lazy" /></button>
+            : <span className="media-loading">图片加载中…</span>)}
+          {message.messageType === 'video' && (mediaSrc
+            ? <video src={mediaSrc} controls playsInline preload="metadata" aria-label={message.mediaName || '聊天视频'} />
+            : <span className="media-loading">视频加载中…</span>)}
+          {message.messageType === 'file' && (mediaSrc
+            ? <a className="file-card" href={mediaSrc} download><span className="file-icon">文</span><span><strong>{message.mediaName || '文件'}</strong><small>{formatBytes(message.mediaSize || 0)}</small></span><b>下载</b></a>
+            : <span className="media-loading">文件加载中…</span>)}
         </div>
       </div>
     </div>
@@ -41,8 +58,8 @@ export function EmptyState({ icon, title, text }: { icon: string; title: string;
   return <div className="empty-state"><span className="empty-icon">{icon}</span><h3>{title}</h3><p>{text}</p></div>
 }
 
-export function LoadingScreen({ label = '正在连接客服中心' }: { label?: string }) {
-  return <div className="loading-screen"><div className="brand-mark">8L</div><span className="loading-spinner" /><p>{label}</p></div>
+export function LoadingScreen({ label = '正在连接客服中心', embedded = false }: { label?: string; embedded?: boolean }) {
+  return <div className={`loading-screen ${embedded ? 'loading-screen-embedded' : ''}`}><div className="brand-mark">8L</div><span className="loading-spinner" /><p>{label}</p></div>
 }
 
 export function formatBytes(bytes: number) {

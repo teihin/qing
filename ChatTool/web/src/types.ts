@@ -49,6 +49,7 @@ export type PlayerState = {
   onlineAgents: number
 	csrfToken: string
 	sessionRef?: string
+	embeddedToken?: string
 }
 
 export type Conversation = {

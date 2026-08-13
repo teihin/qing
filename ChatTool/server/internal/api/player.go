@@ -21,6 +21,7 @@ import (
 
 type directPlayerSessionRequest struct {
 	EncryptedData string `json:"encryptedData"`
+	Embedded      bool   `json:"embedded,omitempty"`
 }
 
 type directPlayerPayload struct {
@@ -204,6 +205,11 @@ VALUES (?, ?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), playerI
 	}
 	state["csrfToken"] = csrfToken
 	state["sessionRef"] = sessionRef
+	if req.Embedded {
+		// 嵌入跨站 iframe 时浏览器可能拦截 SameSite Cookie。令牌只返回给
+		// 明确声明的游戏内页面，并由页面保存在当前 WebView 的 sessionStorage。
+		state["embeddedToken"] = sessionToken
+	}
 	s.audit(r.Context(), "player", playerID, "player.direct_session", "player", playerID, map[string]any{"source": "encrypted_client_payload", "channel": channel.Code}, clientIP(r))
 	s.publishConversationEvent(r.Context(), conversationID, liveEvent{Type: "conversation.changed", ConversationID: conversationID})
 	writeData(w, http.StatusOK, state)

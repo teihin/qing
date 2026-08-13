@@ -11,6 +11,7 @@ ChatTool 是独立于游戏服和 XuanManager 的客服产品，全部代码位�
 - 客服上线后自动从队列分配并实时显示客服名称。
 - “客服”入口进入普通聊天通道，“VIP充值 / VIP充值2”进入VIP充值通道；同一玩家在不同入口建立相互独立的会话。
 - 支持文字、相册图片、现场拍摄、视频、PDF、文本和 ZIP 文件。
+- 游戏入口改为 Cocos 内全屏透明 WebView，牌桌仍可见；内嵌模式只保留文字、图片和视频，兼容 Android、iOS 和 Web/PWA，独立网页版继续保留。
 - 支持输入中提示、已读时间更新、媒体预览、会话结束和五星服务评价。
 - 为触屏、安全区、软键盘和窄屏进行了专门布局；不会要求玩家登录第二套账号。
 
@@ -34,7 +35,7 @@ ChatTool 是独立于游戏服和 XuanManager 的客服产品，全部代码位�
 - 图片和视频按文件头识别，拒绝 SVG、HTML 和其他可执行内联内容；媒体使用不可预测 ID、鉴权下载和范围请求。
 - 消息、派单、评价和关键操作均持久化；媒体文件不写入 MySQL BLOB。
 - 所有文字、系统消息、内部备注和媒体在创建满48小时后自动永久清除；清理同时删除数据库消息/媒体记录与磁盘文件。
-- CSP、禁止 iframe、禁嗅探、私有缓存以及上传目录 `0700`。
+- CSP、客服后台和 API 禁止 iframe、仅玩家入口允许游戏嵌入、禁嗅探、私有缓存以及上传目录 `0700`。
 
 ## 目录
 
@@ -66,7 +67,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o bin
 
 ## 游戏接入
 
-游戏不需要新增KB命令。`assets/scripts/UI/panelKefu.ts` 已直接读取当前玩家ID、昵称、等级、平台、角色和房间，使用现有 `Tool.encrypt()` 加密后打开 ChatTool。具体字段、配置和兼容范围见[游戏接入说明](docs/game-integration.md)。
+游戏不需要新增KB命令。`assets/scripts/UI/panelKefu.ts` 已直接读取当前玩家ID、昵称、等级、平台、角色和房间，使用现有 `Tool.encrypt()` 加密后在游戏内透明 WebView 打开 ChatTool。Android/iOS 原生媒体桥和 Web/PWA 跨站会话兼容范围见[游戏接入说明](docs/game-integration.md)。
 
 当前部署口径按用户确认改为纯 HTTP + 公网 IP：玩家入口为 `http://154.37.155.17/chattool/player`，客服入口为 `http://154.37.155.17/chattool/agent`。`CHAT_COOKIE_SECURE=false`，但 HttpOnly、SameSite、CSRF 和同源校验继续启用；新版玩家资料带有效期，旧版资料仅提供加密混淆兼容。
 

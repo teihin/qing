@@ -12,14 +12,25 @@ SOURCE_DIR = ROOT / "native/ios/voice"
 IOS_ROOT = ROOT / "build/jsb-link/frameworks/runtime-src/proj.ios_mac/ios"
 APP_CONTROLLER = IOS_ROOT / "AppController.mm"
 INFO_PLIST = IOS_ROOT / "Info.plist"
-PBXPROJ = (
-    ROOT
-    / "build/jsb-link/frameworks/runtime-src/proj.ios_mac/Qing.xcodeproj/project.pbxproj"
-)
+IOS_PROJECT_ROOT = ROOT / "build/jsb-link/frameworks/runtime-src/proj.ios_mac"
+
+
+def find_project_file() -> Path:
+    candidates = sorted(IOS_PROJECT_ROOT.glob("*.xcodeproj/project.pbxproj"))
+    if len(candidates) != 1:
+        raise RuntimeError(
+            "expected exactly one generated iOS Xcode project, found "
+            + str(len(candidates))
+        )
+    return candidates[0]
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
     if new in text:
+        return text
+    old_lines = set(old.splitlines())
+    added_lines = [line for line in new.splitlines() if line not in old_lines]
+    if added_lines and all(line in text.splitlines() for line in added_lines):
         return text
     count = text.count(old)
     if count != 1:
@@ -27,10 +38,23 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def deduplicate_bridge_lines(text: str) -> str:
+    seen: set[str] = set()
+    output: list[str] = []
+    for line in text.splitlines(keepends=True):
+        if "QingVoiceBridge" in line:
+            if line in seen:
+                continue
+            seen.add(line)
+        output.append(line)
+    return "".join(output)
+
+
 def main() -> int:
     header = SOURCE_DIR / "QingVoiceBridge.h"
     implementation = SOURCE_DIR / "QingVoiceBridge.mm"
-    required = [header, implementation, APP_CONTROLLER, INFO_PLIST, PBXPROJ]
+    pbxproj = find_project_file()
+    required = [header, implementation, APP_CONTROLLER, INFO_PLIST, pbxproj]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise RuntimeError("missing required files: " + ", ".join(missing))
@@ -82,7 +106,8 @@ def main() -> int:
     with INFO_PLIST.open("wb") as stream:
         plistlib.dump(info, stream, fmt=plistlib.FMT_XML, sort_keys=False)
 
-    project = PBXPROJ.read_text(encoding="utf-8")
+    project = pbxproj.read_text(encoding="utf-8")
+    project = project.replace("8LVoiceBridge", "QingVoiceBridge")
     project = replace_once(
         project,
         "\t\t509D4ABC17EBB2AB00697056 /* AppController.mm in Sources */ = "
@@ -144,7 +169,7 @@ def main() -> int:
                 f"iOS target settings: expected exactly two anchors, found {count}"
             )
         project = project.replace(ios_target_anchor, ios_target_settings)
-    PBXPROJ.write_text(project, encoding="utf-8")
+    pbxproj.write_text(deduplicate_bridge_lines(project), encoding="utf-8")
 
     print("iOS voice bridge synchronized")
     print(IOS_ROOT / implementation.name)

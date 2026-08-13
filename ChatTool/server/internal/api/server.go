@@ -54,7 +54,14 @@ type playerPrincipal struct {
 	Nickname       string `json:"nickname"`
 	ConversationID string `json:"conversationId"`
 	SessionRef     string `json:"-"`
+	TokenHash      string `json:"-"`
 	CSRFHash       string `json:"-"`
+}
+
+type mediaAccessTicket struct {
+	MediaID        string
+	ConversationID string
+	ExpiresAt      time.Time
 }
 
 type Server struct {
@@ -65,6 +72,8 @@ type Server struct {
 	hub            *eventHub
 	loginLimiter   *rateLimiter
 	messageLimiter *rateLimiter
+	mediaTicketMu  sync.Mutex
+	mediaTickets   map[string]mediaAccessTicket
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, agentPrincipal)
@@ -79,6 +88,7 @@ func New(db *sql.DB, cfg config.Config, logger *slog.Logger) *Server {
 		hub:            newEventHub(),
 		loginLimiter:   newRateLimiter(8, 10*time.Minute),
 		messageLimiter: newRateLimiter(30, time.Minute),
+		mediaTickets:   make(map[string]mediaAccessTicket),
 	}
 	s.routes()
 	return s
@@ -104,6 +114,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/player/messages", s.playerAuthorized(false, s.handlePlayerMessages))
 	s.mux.Handle("POST /api/player/messages", s.playerAuthorized(true, s.handlePlayerSendMessage))
 	s.mux.Handle("POST /api/player/uploads", s.playerAuthorized(true, s.handlePlayerUpload))
+	s.mux.Handle("GET /api/player/media/{id}/ticket", s.playerAuthorized(false, s.handlePlayerMediaTicket))
 	s.mux.Handle("POST /api/player/typing", s.playerAuthorized(true, s.handlePlayerTyping))
 	s.mux.Handle("POST /api/player/read", s.playerAuthorized(true, s.handlePlayerRead))
 	s.mux.Handle("POST /api/player/end", s.playerAuthorized(true, s.handlePlayerEnd))
@@ -196,21 +207,27 @@ WHERE sess.token_hash = ? AND sess.expires_at > NOW() AND a.enabled = 1`, securi
 
 func (s *Server) authenticatePlayer(r *http.Request) (playerPrincipal, error) {
 	ref := playerSessionRefFromRequest(r)
-	cookie, err := r.Cookie(playerSessionCookieName(ref))
-	if err != nil || len(cookie.Value) != 64 {
-		return playerPrincipal{}, errors.New("missing player session")
+	sessionToken := strings.TrimSpace(r.Header.Get("X-Player-Embedded-Token"))
+	if len(sessionToken) != 64 {
+		cookie, err := r.Cookie(playerSessionCookieName(ref))
+		if err != nil || len(cookie.Value) != 64 {
+			return playerPrincipal{}, errors.New("missing player session")
+		}
+		sessionToken = cookie.Value
 	}
+	tokenHash := security.HashToken(sessionToken)
 	var p playerPrincipal
-	err = s.db.QueryRowContext(r.Context(), `SELECT ps.player_id, p.nickname, ps.conversation_id, ps.csrf_hash
+	err := s.db.QueryRowContext(r.Context(), `SELECT ps.player_id, p.nickname, ps.conversation_id, ps.csrf_hash
 FROM chat_player_session ps JOIN chat_player p ON p.player_id = ps.player_id
-WHERE ps.token_hash = ? AND ps.expires_at > NOW()`, security.HashToken(cookie.Value)).Scan(
+WHERE ps.token_hash = ? AND ps.expires_at > NOW()`, tokenHash).Scan(
 		&p.PlayerID, &p.Nickname, &p.ConversationID, &p.CSRFHash,
 	)
 	if err != nil {
 		return playerPrincipal{}, err
 	}
 	p.SessionRef = ref
-	_, _ = s.db.ExecContext(r.Context(), `UPDATE chat_player_session SET last_seen_at = NOW() WHERE token_hash = ?`, security.HashToken(cookie.Value))
+	p.TokenHash = tokenHash
+	_, _ = s.db.ExecContext(r.Context(), `UPDATE chat_player_session SET last_seen_at = NOW() WHERE token_hash = ?`, tokenHash)
 	return p, nil
 }
 
@@ -255,10 +272,17 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 func (s *Server) securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'")
+		contentSecurityPolicy := "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+		if r.Method == http.MethodGet && (r.URL.Path == "/player" || r.URL.Path == "/player/") {
+			// 游戏 Web/PWA 端通过 Cocos WebView 的 iframe 打开玩家聊天页。
+			// 只允许玩家入口被嵌入；客服后台与全部 API 仍禁止装入第三方页面。
+			contentSecurityPolicy = "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors *; base-uri 'self'; form-action 'self'"
+		} else {
+			w.Header().Set("X-Frame-Options", "DENY")
+		}
+		w.Header().Set("Content-Security-Policy", contentSecurityPolicy)
 		next.ServeHTTP(w, r)
 	})
 }
