@@ -6,6 +6,8 @@ import type { Message, PlayerState } from './types'
 
 export default function PlayerApp() {
   const embedded = useRef(new URLSearchParams(location.search).get('embed') === 'game').current
+	const embeddedTokenKey = 'chattool.playerEmbeddedToken'
+	const embeddedCSRFKey = 'chattool.playerEmbeddedCSRF'
   const [state, setState] = useState<PlayerState | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [text, setText] = useState('')
@@ -38,7 +40,7 @@ export default function PlayerApp() {
 
   const loadState = useCallback(async () => {
     const result = await api<PlayerState>('/api/player/me')
-    setCSRF(result.csrfToken)
+	if (result.csrfToken) setCSRF(result.csrfToken)
     setState(result)
   }, [])
 
@@ -85,17 +87,23 @@ export default function PlayerApp() {
 		const encryptedData = params.get('d') || params.get('data') || params.get('extradata') || params.get('info')
 		const existingSessionRef = params.get('sessionRef') || ''
 		setPlayerSessionRef(existingSessionRef)
-		if (embedded) setPlayerEmbeddedToken(sessionStorage.getItem('chattool.playerEmbeddedToken') || '')
+		if (embedded) {
+			setPlayerEmbeddedToken(sessionStorage.getItem(embeddedTokenKey) || '')
+			setCSRF(sessionStorage.getItem(embeddedCSRFKey) || '')
+		}
 		let result: PlayerState
 		if (encryptedData) {
 			setPlayerSessionRef('')
 			setPlayerEmbeddedToken('')
-			if (embedded) sessionStorage.removeItem('chattool.playerEmbeddedToken')
+			if (embedded) {
+				sessionStorage.removeItem(embeddedTokenKey)
+				sessionStorage.removeItem(embeddedCSRFKey)
+			}
 			result = await api<PlayerState>('/api/player/session', { method: 'POST', body: jsonBody({ encryptedData, embedded }) })
 			setPlayerSessionRef(result.sessionRef || '')
 			if (embedded && result.embeddedToken) {
 				setPlayerEmbeddedToken(result.embeddedToken)
-				sessionStorage.setItem('chattool.playerEmbeddedToken', result.embeddedToken)
+				sessionStorage.setItem(embeddedTokenKey, result.embeddedToken)
 			}
 			const cleanParams = new URLSearchParams()
 			if (result.sessionRef) cleanParams.set('sessionRef', result.sessionRef)
@@ -106,14 +114,17 @@ export default function PlayerApp() {
         } else {
           result = await api<PlayerState>('/api/player/me')
         }
-        setCSRF(result.csrfToken)
+		if (result.csrfToken) {
+			setCSRF(result.csrfToken)
+			if (embedded) sessionStorage.setItem(embeddedCSRFKey, result.csrfToken)
+		}
         setState(result)
         await loadMessages()
       } catch (reason) {
         setError(reason instanceof ApiError ? reason.message : '暂时无法连接客服中心，请返回游戏后重试')
       }
     })()
-  }, [embedded, loadMessages])
+  }, [embedded, embeddedCSRFKey, embeddedTokenKey, loadMessages])
 
   useEffect(() => {
     if (!conversationID) return

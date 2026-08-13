@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"chattool/internal/security"
 )
 
 func TestSecurityHeadersAllowOnlyPlayerPageEmbedding(t *testing.T) {
@@ -78,5 +80,28 @@ func TestMediaTicketIsScopedAndExpires(t *testing.T) {
 	}
 	if _, exists := server.mediaTickets[expiredKey]; exists {
 		t.Fatal("expired media ticket was not removed")
+	}
+}
+
+func TestPlayerMutationAuthorizationModes(t *testing.T) {
+	headerRequest := httptest.NewRequest(http.MethodPost, "http://example.invalid/api/player/messages", nil)
+	headerRequest.Header.Set("Origin", "null")
+	if !playerMutationAllowed(headerRequest, playerPrincipal{HeaderAuth: true}) {
+		t.Fatal("embedded bearer request should not depend on cookie CSRF or WebView Origin")
+	}
+
+	csrfToken := strings.Repeat("c", 64)
+	cookieRequest := httptest.NewRequest(http.MethodPost, "http://chat.example/api/player/messages", nil)
+	cookieRequest.Host = "chat.example"
+	cookieRequest.Header.Set("Origin", "http://chat.example")
+	cookieRequest.Header.Set("X-CSRF-Token", csrfToken)
+	principal := playerPrincipal{CSRFHash: security.HashToken(csrfToken)}
+	if !playerMutationAllowed(cookieRequest, principal) {
+		t.Fatal("same-origin cookie request with valid CSRF was rejected")
+	}
+
+	cookieRequest.Header.Set("X-CSRF-Token", "wrong")
+	if playerMutationAllowed(cookieRequest, principal) {
+		t.Fatal("cookie request with invalid CSRF was accepted")
 	}
 }

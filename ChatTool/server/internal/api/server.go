@@ -55,6 +55,7 @@ type playerPrincipal struct {
 	ConversationID string `json:"conversationId"`
 	SessionRef     string `json:"-"`
 	TokenHash      string `json:"-"`
+	HeaderAuth     bool   `json:"-"`
 	CSRFHash       string `json:"-"`
 }
 
@@ -178,7 +179,7 @@ func (s *Server) playerAuthorized(mutate bool, next playerHandlerFunc) http.Hand
 			writeError(w, http.StatusUnauthorized, "PLAYER_SESSION_EXPIRED", "会话已失效，请返回游戏重新进入客服")
 			return
 		}
-		if mutate && (!sameOrigin(r) || !security.EqualSecret(security.HashToken(r.Header.Get("X-CSRF-Token")), p.CSRFHash)) {
+		if mutate && !playerMutationAllowed(r, p) {
 			writeError(w, http.StatusForbidden, "BAD_CSRF", "安全校验已失效，请重新进入客服")
 			return
 		}
@@ -208,7 +209,8 @@ WHERE sess.token_hash = ? AND sess.expires_at > NOW() AND a.enabled = 1`, securi
 func (s *Server) authenticatePlayer(r *http.Request) (playerPrincipal, error) {
 	ref := playerSessionRefFromRequest(r)
 	sessionToken := strings.TrimSpace(r.Header.Get("X-Player-Embedded-Token"))
-	if len(sessionToken) != 64 {
+	headerAuth := len(sessionToken) == 64
+	if !headerAuth {
 		cookie, err := r.Cookie(playerSessionCookieName(ref))
 		if err != nil || len(cookie.Value) != 64 {
 			return playerPrincipal{}, errors.New("missing player session")
@@ -227,8 +229,22 @@ WHERE ps.token_hash = ? AND ps.expires_at > NOW()`, tokenHash).Scan(
 	}
 	p.SessionRef = ref
 	p.TokenHash = tokenHash
+	p.HeaderAuth = headerAuth
 	_, _ = s.db.ExecContext(r.Context(), `UPDATE chat_player_session SET last_seen_at = NOW() WHERE token_hash = ?`, tokenHash)
 	return p, nil
+}
+
+func playerMutationAllowed(r *http.Request, p playerPrincipal) bool {
+	if p.HeaderAuth {
+		// 内嵌令牌通过自定义请求头显式发送，不会像Cookie一样被浏览器自动
+		// 附带到跨站请求，因此本身不受CSRF攻击；认证成功后无需依赖可能被
+		// WebView的SameSite策略拦截的CSRF Cookie。
+		return true
+	}
+	return sameOrigin(r) && security.EqualSecret(
+		security.HashToken(r.Header.Get("X-CSRF-Token")),
+		p.CSRFHash,
+	)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
