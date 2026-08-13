@@ -160,6 +160,10 @@ func (s *Server) agentAuthorized(mutate, supervisor bool, next handlerFunc) http
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "登录已失效，请重新登录")
 			return
 		}
+		if !agentIdentityMatchesRequest(r, p.ID) {
+			writeError(w, http.StatusUnauthorized, "AGENT_ACCOUNT_SWITCHED", "当前浏览器已切换为其他客服账号；多客服请使用独立浏览器配置文件、不同浏览器或不同设备")
+			return
+		}
 		if supervisor && !p.IsSupervisor() {
 			writeError(w, http.StatusForbidden, "FORBIDDEN", "只有客服主管可以执行此操作")
 			return
@@ -170,6 +174,19 @@ func (s *Server) agentAuthorized(mutate, supervisor bool, next handlerFunc) http
 		}
 		next(w, r.WithContext(context.WithValue(r.Context(), agentPrincipalKey, p)), p)
 	})
+}
+
+func agentIdentityMatchesRequest(r *http.Request, agentID int64) bool {
+	expected := strings.TrimSpace(r.Header.Get("X-Agent-Expected-ID"))
+	if expected == "" {
+		expected = strings.TrimSpace(r.URL.Query().Get("expectedAgentId"))
+	}
+	if expected == "" {
+		// 兼容尚未刷新到新版静态资源的既有工作台，以及首次加载 /auth/me。
+		return true
+	}
+	value, err := strconv.ParseInt(expected, 10, 64)
+	return err == nil && value > 0 && value == agentID
 }
 
 func (s *Server) playerAuthorized(mutate bool, next playerHandlerFunc) http.Handler {

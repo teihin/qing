@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { agentSessionExpiredEvent, api, ApiError, appURL, jsonBody, notifyAgentSessionExpired, setCSRF } from './api'
+import { agentSessionExpiredEvent, agentSessionURL, api, ApiError, jsonBody, notifyAgentSessionExpired, setAgentExpectedID, setCSRF } from './api'
 import { createClientMessageID, gameAdminPlayerURL, playIncomingMessageSound, readAgentSoundPreference, writeAgentSoundPreference } from './client'
 import { Avatar, EmptyState, LoadingScreen, MessageBubble, StatusDot, formatAgo, formatDateTime } from './components'
 import type { Agent, Conversation, ConversationDetail, Message, ServiceChannel, TeamMember } from './types'
@@ -7,6 +7,15 @@ import type { Agent, Conversation, ConversationDetail, Message, ServiceChannel, 
 type Dashboard = { queued: number; active: number; myActive: number; myUnread: number; allUnread: number; onlineAgents: number; todayClosed: number }
 type QuickReply = { id: number; title: string; content: string; category: string }
 type PlayerMemo = { id: number; playerId: string; content: string; createdBy: number; createdByName: string; createdAt: string }
+const agentIdentityStorageKey = 'chattool.agentIdentityChanged'
+
+function announceAgentIdentity(agentID: number) {
+	try {
+		localStorage.setItem(agentIdentityStorageKey, JSON.stringify({ agentID, changedAt: Date.now(), nonce: Math.random() }))
+	} catch {
+		// 隐私模式禁用localStorage时仍由接口身份头和定时请求兜底识别账号切换。
+	}
+}
 
 export default function AgentApp() {
   const [agent, setAgent] = useState<Agent | null>(null)
@@ -20,6 +29,7 @@ export default function AgentApp() {
 			agentRef.current = null
 			const message = (event as CustomEvent<{ message?: string }>).detail?.message
 			setCSRF('')
+			setAgentExpectedID()
 			setAgent(null)
 			setSessionNotice(message || '登录已失效，请重新登录')
 		}
@@ -27,15 +37,29 @@ export default function AgentApp() {
 		return () => window.removeEventListener(agentSessionExpiredEvent, handleSessionExpired)
 	}, [])
 
+	useEffect(() => {
+		const handleIdentityChange = (event: StorageEvent) => {
+			if (event.key !== agentIdentityStorageKey || !event.newValue || !agentRef.current) return
+			try {
+				const value = JSON.parse(event.newValue) as { agentID?: number }
+				if (value.agentID && value.agentID !== agentRef.current.id) {
+					notifyAgentSessionExpired('当前浏览器已登录其他客服账号；多客服请使用独立浏览器配置文件、不同浏览器或不同设备')
+				}
+			} catch { /* ignore invalid cross-tab notification */ }
+		}
+		window.addEventListener('storage', handleIdentityChange)
+		return () => window.removeEventListener('storage', handleIdentityChange)
+	}, [])
+
   useEffect(() => {
     void api<{ agent: Agent; csrfToken: string }>('/api/agent/auth/me').then((result) => {
-	  agentRef.current = result.agent; setCSRF(result.csrfToken); setAgent(result.agent)
+	  agentRef.current = result.agent; setAgentExpectedID(result.agent.id); setCSRF(result.csrfToken); setAgent(result.agent)
     }).catch(() => undefined).finally(() => setChecking(false))
   }, [])
 
   if (checking) return <LoadingScreen label="正在进入客服工作台" />
-	if (!agent) return <AgentLogin notice={sessionNotice} onLogin={(value, token) => { agentRef.current = value; setSessionNotice(''); setCSRF(token); setAgent(value) }} />
-	return <AgentWorkspace agent={agent} onLogout={() => { agentRef.current = null; setCSRF(''); setAgent(null) }} />
+	if (!agent) return <AgentLogin notice={sessionNotice} onLogin={(value, token) => { agentRef.current = value; setSessionNotice(''); setAgentExpectedID(value.id); setCSRF(token); setAgent(value); announceAgentIdentity(value.id) }} />
+	return <AgentWorkspace agent={agent} onLogout={() => { agentRef.current = null; setAgentExpectedID(); setCSRF(''); setAgent(null) }} />
 }
 
 function AgentLogin({ notice, onLogin }: { notice: string; onLogin: (agent: Agent, token: string) => void }) {
@@ -185,7 +209,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
 
   useEffect(() => {
     const refresh = () => { void Promise.all([loadDashboard(), loadConversations(), loadTeam(), selectedID ? loadSelected(selectedID) : Promise.resolve()]).catch(() => undefined) }
-    const source = new EventSource(appURL('/api/agent/events'))
+    const source = new EventSource(agentSessionURL('/api/agent/events'))
     source.addEventListener('conversation.changed', refresh)
     source.addEventListener('conversation.assigned', refresh)
     source.addEventListener('conversation.cleared', refresh)
