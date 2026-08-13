@@ -74,6 +74,13 @@ export default class panelMain extends UIPanelViewBase {
     private pendingPaidAvatarIndex:string = "";
     private pendingPaidProfileName:string = "";
     private readonly AVATAR_CHANGE_COST:number = 1000; // 服务端消费命令使用“分”，1000分=10元
+    private avatarChargeBusy:boolean = false;
+    private readonly avatarChargeTimeoutHandler = ()=>{
+        if(!this.avatarChargeBusy)
+            return;
+        this.FinishAvatarChargeRequest();
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付处理超时，请稍后确认余额后再试！");
+    };
     private antiTheftToggle:cc.Toggle = null;
     private antiTheftStatus:cc.Label = null;
     private antiTheftBusy:boolean = false;
@@ -440,14 +447,9 @@ export default class panelMain extends UIPanelViewBase {
         this.RefreshEditAvatarBatch(editNode);
     }
 
-    private ApplyProfileChange(strName:string,avatarIndex:string,chargeAvatar:boolean)
+    private ApplyProfileChange(strName:string,avatarIndex:string)
     {
         let normalizedAvatar = ImageManager.getInstance().NormalizeAvatarIndex(avatarIndex);
-        if(chargeAvatar)
-        {
-            let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"换头像\",\"money\":" + this.AVATAR_CHANGE_COST + "}";
-            GameDataManager.getAccount().reqHallCommand(strParam,"玩家_消费_命令");
-        }
         GameDataManager.getAccount().reqSetProperty("photo",normalizedAvatar);
         GameDataManager.getAccount().reqSetProperty("name",strName);
         Tool.GetChild(this.node,"修改个人信息").active = false;
@@ -459,11 +461,47 @@ export default class panelMain extends UIPanelViewBase {
     {
         this.pendingPaidProfileName = strName;
         this.pendingPaidAvatarIndex = ImageManager.getInstance().NormalizeAvatarIndex(avatarIndex);
+        let prompt = Tool.GetChild(this.node,"确定修改个人信息/bk/msg");
+        if(prompt != null)
+            prompt.getComponent(cc.Label).string = "更换头像将收取10元，是否确认？";
         Tool.GetChild(this.node,"确定修改个人信息").active = true;
+    }
+
+    private SetAvatarChargeConfirmInteractable(interactable:boolean)
+    {
+        let confirmNode = Tool.GetChild(this.node,"确定修改个人信息/bk/确认修改个人信息");
+        let button = confirmNode == null ? null : confirmNode.getComponent(cc.Button);
+        if(button != null)
+            button.interactable = interactable;
+    }
+
+    private FinishAvatarChargeRequest()
+    {
+        this.unschedule(this.avatarChargeTimeoutHandler);
+        this.avatarChargeBusy = false;
+        this.SetAvatarChargeConfirmInteractable(true);
+    }
+
+    private GetHallCommandError(param:string,fallback:string):string
+    {
+        try
+        {
+            let msg = JSON.parse(param);
+            let result = msg == null ? null : msg["result"];
+            if(result != null && result["error"] != null && result["error"].toString().trim() != "")
+                return result["error"].toString();
+        }
+        catch(error)
+        {
+            Debug.Error("解析大厅命令错误信息失败："+error);
+        }
+        return fallback;
     }
 
     private ConfirmPaidAvatarChange()
     {
+        if(this.avatarChargeBusy)
+            return;
         if(!ImageManager.getInstance().IsAvatarIndex(this.pendingPaidAvatarIndex))
         {
             Tool.GetChild(this.node,"确定修改个人信息").active = false;
@@ -479,9 +517,12 @@ export default class panelMain extends UIPanelViewBase {
             return;
         }
 
-        this.ApplyProfileChange(this.pendingPaidProfileName,this.pendingPaidAvatarIndex,true);
-        this.pendingPaidProfileName = "";
-        this.pendingPaidAvatarIndex = "";
+        this.avatarChargeBusy = true;
+        this.SetAvatarChargeConfirmInteractable(false);
+        this.unschedule(this.avatarChargeTimeoutHandler);
+        this.scheduleOnce(this.avatarChargeTimeoutHandler,8);
+        let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"换头像\",\"money\":" + this.AVATAR_CHANGE_COST + "}";
+        GameDataManager.getAccount().reqHallCommand(strParam,"P@玩家_消费_命令_换头像");
     }
 
     set_gold(num:number)
@@ -1513,12 +1554,17 @@ export default class panelMain extends UIPanelViewBase {
 
             this.switchTabSel(toggle.node.name);
         }
-        else if(toggle.node.name === "全" || toggle.node.name === "小" || toggle.node.name === "中" || toggle.node.name === "大" || toggle.node.name === "有空位")
+        else if(toggle.node.name === "全" || toggle.node.name === "小" || toggle.node.name === "中" || toggle.node.name === "大")
         {
             if(toggle.node.parent.name === "过滤" && toggle.isChecked)
             {
                 this.getAllRooms(0,true);
             }
+        }
+        else if(toggle.node.name === "有空位")
+        {
+            // 空位是独立复选条件，勾选和取消都要重新请求第一页。
+            this.getAllRooms(0,true);
         }
         else if(toggle.node.parent.name === "过滤" && toggle.isChecked)
         {
@@ -2336,7 +2382,31 @@ export default class panelMain extends UIPanelViewBase {
     
     public onHallCommand(nCode:number, param:string)
     {
-        if(param.indexOf("修改_玩家_登录密码")>=0 || param.indexOf("修改_玩家_交易密码")>=0)
+        const isAvatarChargeReply = param.indexOf("玩家_消费_命令_换头像") >= 0 ||
+            (this.avatarChargeBusy && param.indexOf("玩家_消费_命令") >= 0 && param.indexOf("换头像") >= 0);
+        if(isAvatarChargeReply)
+        {
+            let profileName = this.pendingPaidProfileName;
+            let avatarIndex = this.pendingPaidAvatarIndex;
+            this.FinishAvatarChargeRequest();
+            if(nCode == 0x200)
+            {
+                if(ImageManager.getInstance().IsAvatarIndex(avatarIndex))
+                {
+                    this.pendingPaidProfileName = "";
+                    this.pendingPaidAvatarIndex = "";
+                    this.ApplyProfileChange(profileName,avatarIndex);
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"头像修改成功，已收取10元！");
+                }
+            }
+            else
+            {
+                Tool.GetChild(this.node,"确定修改个人信息").active = false;
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    this.GetHallCommandError(param,"头像修改失败，未完成扣费，请稍后重试！"));
+            }
+        }
+        else if(param.indexOf("修改_玩家_登录密码")>=0 || param.indexOf("修改_玩家_交易密码")>=0)
         {
             if (nCode == 0x200)
             {
@@ -2651,7 +2721,7 @@ export default class panelMain extends UIPanelViewBase {
                     }
         
         
-                    this.ApplyProfileChange(strName,imgName,false);
+                    this.ApplyProfileChange(strName,imgName);
                 }
                 else if(Tool.GetChild(this.node,"修改个人信息2").active)
                 {
@@ -2664,7 +2734,7 @@ export default class panelMain extends UIPanelViewBase {
                         this.QueuePaidAvatarChange(strName,selectedAvatar);
                         return;
                     }
-                    this.ApplyProfileChange(strName,selectedAvatar,false);
+                    this.ApplyProfileChange(strName,selectedAvatar);
                 }
             }
             else

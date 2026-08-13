@@ -681,6 +681,10 @@ export default class panelGameView extends UIPanelViewBase {
             else
                 manager.requestApply(GameDataManager.getAccount().roomID);
         }
+        else if(button.node.name === "联系客服")
+        {
+            UIManager.getInstance().showPanel("panelKefu",ShowPanelMode.Cover);
+        }
         else if(button.node.name === "退出房间")
         {
             let strUserID = GameDataManager.getAccount().guuid;

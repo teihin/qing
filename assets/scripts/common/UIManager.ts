@@ -14,6 +14,7 @@ export default class UIManager extends cc.Component {
     top: cc.Node = null;       //成绩置顶UI根节点
 
     strCashPanelName: string = ""; //正在等待加载的窗口名称
+    cashPanelScene: cc.Scene = null; //异步窗口请求所属场景
 
     static instance: UIManager
     static getInstance() {
@@ -93,9 +94,23 @@ export default class UIManager extends cc.Component {
         this.top = cc.find("Canvas/Top");
     }
 
+    private ClearPanelLoadRequest(strName:string,requestScene:cc.Scene)
+    {
+        //只清理当前这一次请求，不能让旧场景迟到回调覆盖新场景的同名加载状态。
+        if(this.strCashPanelName == strName && this.cashPanelScene === requestScene)
+        {
+            this.strCashPanelName = "";
+            this.cashPanelScene = null;
+        }
+    }
+
     //打开某个UI
     showPanel(strName:string,showMode:ShowPanelMode,strUserData:string = "",arrayEx:any[] = null):cc.Node
-    {        
+    {
+        let requestScene = cc.director.getScene();
+        if(!cc.isValid(requestScene))
+            return;
+
         let optRoot:cc.Node = showMode === ShowPanelMode.Top?this.top:this.root;
 
         if(!cc.isValid(optRoot))
@@ -110,8 +125,8 @@ export default class UIManager extends cc.Component {
         }
 
 
-        //如果当前窗口已经在异步加载，则跳过
-        if(this.strCashPanelName == strName)
+        //同一场景的同名窗口已经在异步加载时才跳过；旧场景请求不能阻塞新场景。
+        if(this.strCashPanelName == strName && this.cashPanelScene === requestScene)
         {
             Debug.Log("正在异步加载中，掉过:"+strName);
             return;
@@ -149,14 +164,25 @@ export default class UIManager extends cc.Component {
         if(objItem === null)
         {
             this.strCashPanelName = strName;
+            this.cashPanelScene = requestScene;
             cc.loader.loadRes("UI/"+strName,(err,prefab)=>{
                 if(err)
                 {
+                    this.ClearPanelLoadRequest(strName,requestScene);
                     cc.error(err.message || err);
                     return null;
                 }
+
+                //资源加载期间可能已经切换场景；旧场景弹窗必须丢弃，不能挂到新场景。
+                if(!cc.isValid(requestScene) || cc.director.getScene() !== requestScene || !cc.isValid(optRoot))
+                {
+                    this.ClearPanelLoadRequest(strName,requestScene);
+                    return null;
+                }
+
                 let node = cc.instantiate(prefab);
                 node.parent = optRoot;
+                this.ClearPanelLoadRequest(strName,requestScene);
                 return this.setPanelInfo(node,strUserData,arrayEx);
             });
         }
@@ -190,8 +216,7 @@ export default class UIManager extends cc.Component {
         else
         {
             console.log("找不到挂载的UI组件！");
-        }        
-        this.strCashPanelName = "";
+        }
         return item;
     }
     //关闭UI

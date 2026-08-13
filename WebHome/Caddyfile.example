@@ -1,0 +1,21 @@
+# 示例部署路径：https://154-37-155-17.sslip.io/webhome/
+# 把 WebHome 上传到 /www/html/WebHome 后，将下面片段合并到现有站点配置。
+
+handle_path /webhome/* {
+    root * /www/html/WebHome
+
+    @mobileconfig path /downloads/*.mobileconfig
+    header @mobileconfig Content-Type "application/x-apple-aspen-config"
+    header @mobileconfig Content-Disposition "attachment; filename=8L.mobileconfig"
+
+    @apk path /downloads/*.apk
+    header @apk Content-Type "application/vnd.android.package-archive"
+    header @apk Content-Disposition "attachment; filename=8L.apk"
+
+    header {
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "no-referrer"
+        Cache-Control "no-cache"
+    }
+    file_server
+}

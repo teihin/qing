@@ -18,6 +18,7 @@ from typing import Callable
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 import generate_qin_drh8_panel_fix as panel_fix
+import jackpot_card_colors
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -640,7 +641,8 @@ def build() -> list[Path]:
         ("牌型展示.png", "牌型展示", 21), ("牌局设置.png", "牌局设置", 21),
         ("留座离桌.png", "留座离桌", 21), ("确认分牌.png", "确认分牌", 20),
         ("站起围观.png", "站起围观", 21), ("补充钵钵.png", "补充钵钵", 21),
-        ("退出房间.png", "退出房间", 21), ("回座.png", "回座", 22),
+        ("联系客服.png", "联系客服", 21), ("退出房间.png", "退出房间", 21),
+        ("回座.png", "回座", 22),
     ):
         out.append(save_asset(f"assets/ImagesLuck/游戏内/{name}",
                               lambda sz, t=text, f=fs: pill(sz, t, selected=True, font_size=f)))
@@ -736,7 +738,11 @@ def build() -> list[Path]:
                               lambda sz, t=text, ln=lines: label_text(sz, t, lines=ln)))
     for name in ("比列.png", "奖池桌面数字.png"):
         path = ROOT / "assets" / "ImagesLuck" / "奖池" / name
-        out.append(save_asset(str(path.relative_to(ROOT)), recolor_neon_to_gold(Image.open(path))))
+        source = Image.open(path)
+        rendered = recolor_neon_to_gold(source)
+        if name == "比列.png":
+            rendered = jackpot_card_colors.preserve_card_faces(rendered, source)
+        out.append(save_asset(str(path.relative_to(ROOT)), rendered))
 
     # Report and review subpanels.
     for name, text in (("举 报.png", "举报"), ("举报.png", "举报"),

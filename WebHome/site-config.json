@@ -1,0 +1,12 @@
+{
+  "siteName": "8L 官方下载",
+  "gameName": "8L",
+  "versionText": "官方最新版",
+  "promotionSiteUrl": "https://154-37-155-17.sslip.io/webhome/",
+  "androidApkUrl": "./downloads/8L.apk",
+  "iosProfileUrl": "./downloads/8L.mobileconfig",
+  "iosGameUrl": "https://154-37-155-17.sslip.io/web-mobile/",
+  "profileIdentifier": "io.sslip.154-37-155-17.eightl.webclip",
+  "profileOrganization": "8L",
+  "profileDescription": "在主屏幕添加8L游戏入口"
+}

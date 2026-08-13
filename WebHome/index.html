@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#03101d">
+  <meta name="color-scheme" content="dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="description" content="8L官方游戏下载中心，支持Android下载安装与iPhone桌面版安装。">
+  <title>8L 官方下载</title>
+  <link rel="icon" type="image/png" href="assets/8l-app-icon.png">
+  <link rel="apple-touch-icon" href="assets/8l-app-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="scene" aria-hidden="true">
+    <div class="scene__image"></div>
+    <div class="scene__shade"></div>
+    <div class="scene__beam scene__beam--left"></div>
+    <div class="scene__beam scene__beam--right"></div>
+    <div class="scene__halo"></div>
+    <div class="particles" id="particles"></div>
+  </div>
+
+  <header class="site-header">
+    <a class="brand" href="./" aria-label="8L官方首页">
+      <img src="assets/8l-app-icon.png" alt="" width="42" height="42">
+      <span>
+        <strong>8L</strong>
+        <small>官方游戏下载</small>
+      </span>
+    </a>
+    <div class="header-status">
+      <i aria-hidden="true"></i>
+      <span>官方安全版本</span>
+    </div>
+  </header>
+
+  <main class="download-shell">
+    <section class="hero" aria-labelledby="page-title">
+      <div class="hero-copy">
+        <div class="eyebrow"><span></span> 8L PRIVATE CLUB</div>
+        <div class="logo-stage">
+          <div class="logo-stage__orbit"></div>
+          <div class="logo-stage__glow"></div>
+          <img class="hero-logo" src="assets/8l-logo.png" alt="8L" width="540" height="540">
+        </div>
+        <h1 id="page-title">随时入席，<em>即刻开局</em></h1>
+        <p class="hero-lead">专为牌友打造的沉浸式对局体验。<br>选择你的设备，安装官方版本。</p>
+        <div class="feature-row" aria-label="游戏特点">
+          <span><i class="feature-icon feature-icon--shield"></i>官方版本</span>
+          <span><i class="feature-icon feature-icon--bolt"></i>快速安装</span>
+          <span><i class="feature-icon feature-icon--refresh"></i>持续更新</span>
+        </div>
+      </div>
+
+      <section class="download-card" aria-labelledby="download-title">
+        <div class="download-card__edge"></div>
+        <div class="device-summary">
+          <div class="device-icon" id="deviceIcon" aria-hidden="true">
+            <span></span>
+          </div>
+          <div>
+            <div class="device-label">已识别当前设备</div>
+            <h2 id="download-title">正在检测...</h2>
+          </div>
+          <span class="browser-badge" id="browserBadge">检测中</span>
+        </div>
+
+        <div class="primary-action-wrap">
+          <button class="primary-action" id="primaryAction" type="button" disabled>
+            <span class="primary-action__shine"></span>
+            <span class="platform-mark" id="primaryMark" aria-hidden="true"></span>
+            <span class="primary-action__text">
+              <strong id="primaryLabel">准备下载</strong>
+              <small id="primarySubLabel">正在读取下载配置</small>
+            </span>
+            <span class="action-arrow" aria-hidden="true">›</span>
+          </button>
+          <p class="action-note" id="actionNote">系统将自动为你选择对应版本</p>
+        </div>
+
+        <div class="platform-divider"><span>其他平台</span></div>
+
+        <div class="platform-options">
+          <button class="platform-option" id="androidAction" type="button">
+            <span class="platform-option__icon platform-option__icon--android" aria-hidden="true"></span>
+            <span><strong>Android</strong><small>APK安装包</small></span>
+          </button>
+          <button class="platform-option" id="iosAction" type="button">
+            <span class="platform-option__icon platform-option__icon--apple" aria-hidden="true"></span>
+            <span><strong>iPhone / iPad</strong><small>桌面版安装</small></span>
+          </button>
+        </div>
+
+        <div class="install-tip" id="installTip">
+          <i aria-hidden="true">i</i>
+          <p><strong>安装提示</strong><span>请使用系统浏览器打开本页面。</span></p>
+        </div>
+
+        <div class="download-meta">
+          <span><i></i><b id="versionText">官方最新版</b></span>
+          <span>适配主流手机系统</span>
+        </div>
+      </section>
+    </section>
+
+    <section class="install-flow" aria-labelledby="flow-title">
+      <div class="section-heading">
+        <span>INSTALL GUIDE</span>
+        <h2 id="flow-title">三步进入游戏</h2>
+      </div>
+      <ol>
+        <li><span>01</span><div><strong>识别设备</strong><p>自动匹配Android或iPhone版本</p></div></li>
+        <li><span>02</span><div><strong>完成安装</strong><p>根据页面提示确认下载与安装</p></div></li>
+        <li><span>03</span><div><strong>桌面启动</strong><p>从8L图标进入，开启精彩对局</p></div></li>
+      </ol>
+    </section>
+
+    <p class="legal-note">请认准8L官方页面，勿安装来源不明的文件。</p>
+  </main>
+
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+
+  <section class="bottom-sheet" id="iosSheet" role="dialog" aria-modal="true" aria-labelledby="iosSheetTitle" hidden>
+    <button class="sheet-close" type="button" data-close-sheet aria-label="关闭">×</button>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <img class="sheet-app-icon" src="assets/8l-app-icon.png" alt="" width="78" height="78">
+    <span class="sheet-kicker">iPhone / iPad</span>
+    <h2 id="iosSheetTitle">安装8L桌面版</h2>
+    <p class="sheet-intro">下载描述文件后，需要在系统设置中完成安装。</p>
+    <ol class="ios-steps">
+      <li><b>1</b><span>Safari弹出提示时，点击<strong>允许</strong>下载描述文件</span></li>
+      <li><b>2</b><span>打开手机<strong>设置</strong>，点击顶部“已下载描述文件”</span></li>
+      <li><b>3</b><span>点击右上角<strong>安装</strong>，按系统提示确认</span></li>
+      <li><b>4</b><span>返回桌面，点击<strong>8L图标</strong>进入游戏</span></li>
+    </ol>
+    <div class="sheet-warning">描述文件下载后请在8分钟内完成安装</div>
+    <button class="sheet-primary" id="downloadProfileAction" type="button">下载描述文件</button>
+  </section>
+
+  <section class="bottom-sheet browser-sheet" id="browserSheet" role="dialog" aria-modal="true" aria-labelledby="browserSheetTitle" hidden>
+    <button class="sheet-close" type="button" data-close-sheet aria-label="关闭">×</button>
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="browser-compass" aria-hidden="true"><span>↗</span></div>
+    <span class="sheet-kicker">浏览器提示</span>
+    <h2 id="browserSheetTitle">请在系统浏览器中打开</h2>
+    <p class="sheet-intro" id="browserSheetText">当前浏览器可能无法完成安装，请使用右上角菜单在系统浏览器中打开。</p>
+    <div class="browser-route" id="browserRoute">•••　→　在Safari中打开</div>
+    <button class="sheet-primary" id="copyAddressAction" type="button">复制本页地址</button>
+  </section>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <noscript><div class="noscript">需要启用JavaScript才能自动识别设备。你仍可在 <a href="downloads/8L.apk">Android</a> 或 <a href="downloads/8L.mobileconfig">iPhone</a> 中选择下载。</div></noscript>
+  <script src="app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,40 @@
+{
+  "@id": "qing_web_mobile_assets_immutable",
+  "match": [
+    {
+      "host": [
+        "154-37-155-17.sslip.io"
+      ],
+      "path": [
+        "/web-mobile/assets/*",
+        "/web-mobile/src/*"
+      ]
+    },
+    {
+      "host": [
+        "154-37-155-17.sslip.io"
+      ],
+      "path_regexp": {
+        "name": "qing_web_mobile_top_level_hashed_asset",
+        "pattern": "^/web-mobile/[^/]+\\.[0-9a-f]{5,}\\.[^/]+$"
+      }
+    }
+  ],
+  "handle": [
+    {
+      "handler": "headers",
+      "response": {
+        "require": {
+          "status_code": [
+            2
+          ]
+        },
+        "set": {
+          "Cache-Control": [
+            "public, max-age=31536000, immutable"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -62,6 +62,9 @@ export default class DrhLogicMgr extends cc.Component {
     private bLeavingRoom = false;      //退出流程开始后停止房间动画和延迟回调
     private bettingSpotlight:cc.Node = null; //下注阶段指向当前操作玩家的聚光灯
     private bettingSpotlightPlayerID = "";
+    private bettingSpotlightTargetAngle = 0;
+    private bettingSpotlightTargetScaleY = 1;
+    private bettingSpotlightMotionSerial = 0;
     private bettingSpotlightActionPlayer:DrhPlayerLogic = null;
     private bettingSpotlightRefreshPending = false;
     private bettingSpotlightDealAnimationRunning = false;
@@ -337,12 +340,24 @@ export default class DrhLogicMgr extends cc.Component {
         // 剩余柔光再穿过头像自然消失。
         let visibleBaseHeight = Math.max(1, this.bettingSpotlightBaseHeight - this.bettingSpotlightFadeLength);
         let targetScaleY = distance / visibleBaseHeight;
+        let targetPlayerID = player.info.strUserID;
         let wasVisible = this.bettingSpotlight.active && this.bettingSpotlight.opacity > 0;
-        let samePlayer = this.bettingSpotlightPlayerID == player.info.strUserID;
+        let samePlayer = this.bettingSpotlightPlayerID == targetPlayerID;
+        let sameTarget = samePlayer
+            && this.GetSpotlightAngleDistance(targetAngle, this.bettingSpotlightTargetAngle) < 0.5
+            && Math.abs(targetScaleY - this.bettingSpotlightTargetScaleY) < 0.002;
+
+        // 同一操作玩家经常会在一次0.28秒旋转期间收到多条状态或倒计时消息。
+        // 这些重复刷新不能 stopAllActions，否则光柱会永久停在旋转的中间角度。
+        if(wasVisible && sameTarget)
+            return;
 
         this.bettingSpotlight.stopAllActions();
         this.bettingSpotlight.active = true;
-        this.bettingSpotlightPlayerID = player.info.strUserID;
+        this.bettingSpotlightPlayerID = targetPlayerID;
+        this.bettingSpotlightTargetAngle = targetAngle;
+        this.bettingSpotlightTargetScaleY = targetScaleY;
+        let motionSerial = ++this.bettingSpotlightMotionSerial;
 
         if(!wasVisible)
         {
@@ -354,10 +369,21 @@ export default class DrhLogicMgr extends cc.Component {
             return;
         }
 
+        // 同一玩家仍在操作但布局刚发生变化时直接校准，避免为很小的反向位移
+        // 绕牌桌旋转一整圈；普通重复消息已经在上面的 sameTarget 分支返回。
+        if(samePlayer)
+        {
+            this.bettingSpotlight.angle = targetAngle;
+            this.bettingSpotlight.scaleX = 1;
+            this.bettingSpotlight.scaleY = targetScaleY;
+            this.bettingSpotlight.opacity = 176;
+            return;
+        }
+
         let currentAngle = this.NormalizeSpotlightAngle(this.bettingSpotlight.angle);
         this.bettingSpotlight.angle = currentAngle;
         let counterClockwiseDelta = (targetAngle - currentAngle + 360) % 360;
-        if(samePlayer || counterClockwiseDelta < 0.5)
+        if(counterClockwiseDelta < 0.5)
             counterClockwiseDelta = 0;
 
         let duration = counterClockwiseDelta > 0 ? 0.28 : 0.12;
@@ -366,12 +392,21 @@ export default class DrhLogicMgr extends cc.Component {
         let rotate = cc.rotateBy(duration, -counterClockwiseDelta).easing(cc.easeSineInOut());
         let resize = cc.scaleTo(duration, 1, targetScaleY).easing(cc.easeSineInOut());
         let keepVisible = cc.fadeTo(duration, 176);
-        this.bettingSpotlight.runAction(cc.spawn(rotate, resize, keepVisible));
+        let settle = cc.callFunc(()=>{
+            if(motionSerial != this.bettingSpotlightMotionSerial || this.bettingSpotlightPlayerID != targetPlayerID || this.bettingSpotlight == null || !cc.isValid(this.bettingSpotlight))
+                return;
+            this.bettingSpotlight.angle = targetAngle;
+            this.bettingSpotlight.scaleX = 1;
+            this.bettingSpotlight.scaleY = targetScaleY;
+            this.bettingSpotlight.opacity = 176;
+        });
+        this.bettingSpotlight.runAction(cc.sequence(cc.spawn(rotate, resize, keepVisible), settle));
     }
 
     private HideBettingSpotlight(immediately:boolean = false)
     {
         this.bettingSpotlightPlayerID = "";
+        this.bettingSpotlightMotionSerial++;
         if(this.bettingSpotlight == null || !cc.isValid(this.bettingSpotlight))
             return;
 
@@ -395,6 +430,12 @@ export default class DrhLogicMgr extends cc.Component {
     private NormalizeSpotlightAngle(angle:number):number
     {
         return (angle % 360 + 360) % 360;
+    }
+
+    private GetSpotlightAngleDistance(first:number, second:number):number
+    {
+        let difference = Math.abs(this.NormalizeSpotlightAngle(first) - this.NormalizeSpotlightAngle(second));
+        return Math.min(difference, 360 - difference);
     }
 
     public OnDismissInfo(strMsg:string)

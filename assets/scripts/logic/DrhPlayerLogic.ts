@@ -35,6 +35,8 @@ export default class DrhPlayerLogic extends cc.Component {
     private transLightBKBar:cc.ProgressBar;
     private transLigtBKBlackBKBar:cc.ProgressBar;
     private txtActionTime:cc.Label;
+    private bActionUiRecoveryAttempted = false;
+    private bActionUiFullStateRequested = false;
 
     //扯牌倒计时相关
     private transCheTimeBar:cc.ProgressBar;
@@ -971,13 +973,21 @@ export default class DrhPlayerLogic extends cc.Component {
 
             if (data.hasOwnProperty("is_action"))
             {
+                let bWasAction = this.info.is_action == "True";
                 this.info.is_action = data["is_action"].toString();
                 if (this.info.is_action == "True")
                 {
+                    if(!bWasAction)
+                    {
+                        this.bActionUiRecoveryAttempted = false;
+                        this.bActionUiFullStateRequested = false;
+                    }
                     this.ShowHideLightBK(true);
                 }
                 else
                 {
+                    this.bActionUiRecoveryAttempted = false;
+                    this.bActionUiFullStateRequested = false;
                     this.ShowHideLightBK(false);
                 }
             }
@@ -1225,10 +1235,12 @@ export default class DrhPlayerLogic extends cc.Component {
 
                 this.ShowCmdPad(false, 0);
                 let strUserID = GameDataManager.getAccount().guuid;
-                //只有自己能回坐
-                if (this.playerPos == PlayerPos.self && this.info.strUserID == strUserID)
+                //每次刷新都重新计算，避免0号显示槽重绑到其他留座玩家后残留本人的回坐按钮。
+                if(this.playerPos == PlayerPos.self)
                 {
-                    Tool.GetChild(this.node,"PlayerInfo/回坐").active = true;
+                    let transReturnSeat = Tool.GetChild(this.node,"PlayerInfo/回坐");
+                    if(transReturnSeat != null)
+                        transReturnSeat.active = this.info.strUserID == strUserID;
                 }
                 this.node.getChildByName("展示牌").active = false;
                 if(this.arrayShow === null)
@@ -1271,7 +1283,11 @@ export default class DrhPlayerLogic extends cc.Component {
 
                 Tool.GetChild(this.node,"PlayerInfo/Head/留坐").active = false;
                 if(this.playerPos === PlayerPos.self)
-                    Tool.GetChild(this.node,"PlayerInfo/回坐").active = false;
+                {
+                    let transReturnSeat = Tool.GetChild(this.node,"PlayerInfo/回坐");
+                    if(transReturnSeat != null)
+                        transReturnSeat.active = false;
+                }
             }
 
             if(this.info.strServerState.indexOf("看牌")<0&&this.info.strServerState.indexOf("结算")<0)
@@ -2196,6 +2212,8 @@ export default class DrhPlayerLogic extends cc.Component {
                 return;
             }
 
+            this.TryRecoverMissingSelfActionUI(nTotle, nCur);
+
             this.transLightBKBar.progress = nCur/nTotle;
             this.transLigtBKBlackBKBar.progress = nCur/nTotle;
 
@@ -2226,6 +2244,75 @@ export default class DrhPlayerLogic extends cc.Component {
             this.txtActionTime.node.active = false;
             this.unschedule(this.UpdateActionTimmer);
         }
+    }
+
+    private TryRecoverMissingSelfActionUI(nTotle:number, nCur:number)
+    {
+        // 正常切牌加发牌可能持续数秒，先观察5秒再把“双缺失”判定为异常。
+        if(this.bActionUiRecoveryAttempted || this.bActionUiFullStateRequested || nTotle <= 0 || nCur <= 0 || nTotle - nCur < 50)
+            return;
+        if(this.playerPos != PlayerPos.self || this.info.strUserID != GameDataManager.getAccount().guuid || this.info.is_action != "True")
+            return;
+        if(this.gameLogic == null || !cc.isValid(this.gameLogic.node) || this.gameLogic.IsLeavingRoom() || this.gameLogic.strGameState != "running")
+            return;
+        if(this.info.emState != PlayerState.running || this.info.site_countdown != "0")
+            return;
+
+        let strState = this.info.strServerState == null ? "" : this.info.strServerState;
+        if(strState.indexOf("决策") < 0 || (strState.indexOf("下注") < 0 && strState.indexOf("押牌") < 0) || strState.indexOf("看牌") >= 0)
+            return;
+
+        let nCmdType = 0;
+        let transCmd:cc.Node = null;
+        if(this.info.role == "敲牌")
+        {
+            nCmdType = 5;
+            transCmd = this.gameLogic.node.getChildByName("cmd5");
+        }
+        else if(this.info.role != null && this.info.role.length == 6)
+        {
+            nCmdType = 1;
+            transCmd = this.gameLogic.node.getChildByName("cmd1");
+        }
+        else
+        {
+            return;
+        }
+
+        let transHand = this.GetTransHand();
+        let arrayHand = this.GetArrayHandList();
+        let bHandVisible = cc.isValid(transHand) && transHand.activeInHierarchy && transHand.opacity > 0 && arrayHand.some((one)=>{
+            if(one == null || !cc.isValid(one.node) || !one.node.activeInHierarchy || one.node.opacity <= 0)
+                return false;
+            let transFace = one.node.getChildByName("BK0");
+            let transBack = one.node.getChildByName("BK1");
+            if(transBack == null)
+                transBack = one.node.getChildByName("ZBK1");
+            return (cc.isValid(transFace) && transFace.activeInHierarchy && transFace.opacity > 0)
+                || (cc.isValid(transBack) && transBack.activeInHierarchy && transBack.opacity > 0);
+        });
+        let bCmdVisible = cc.isValid(transCmd) && transCmd.activeInHierarchy;
+
+        // 正常流程只要手牌或操作区任一已经出现便不介入；仅修复录屏中的“双缺失”。
+        if(bHandVisible || bCmdVisible)
+            return;
+
+        let bHandReady = this.info.handCardEx != null && this.info.handCardEx.length > 0 && arrayHand.length >= this.info.handCardEx.length;
+        let bCmdReady = nCmdType != 1 || (this.info.bei_shu_unit != null && this.info.bei_shu_unit.split(',').length >= 3);
+        if(!bHandReady || !bCmdReady)
+        {
+            // 沿用断线恢复已经使用的全量状态接口，每个操作回合最多请求一次。
+            this.bActionUiFullStateRequested = true;
+            GameDataManager.getAccount().reqGetFullMessage();
+            Debug.Log("检测到本人倒计时中手牌和操作区均缺失，已请求一次全量状态");
+            return;
+        }
+
+        this.bActionUiRecoveryAttempted = true;
+        this.UpdateHandCard(false, false, 0);
+        if(this.info.is_action == "True")
+            this.ShowCmdPad(true, nCmdType, false);
+        Debug.Log("检测到本人倒计时中手牌和操作区均缺失，已按现有状态无动画恢复");
     }
 
     UpdateCmd2Timmer()

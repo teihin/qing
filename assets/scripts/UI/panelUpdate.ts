@@ -1,6 +1,6 @@
 import UIPanelViewBase from "../common/UIPanelViewBase";
 import UIManager from "../common/UIManager";
-import GameDef, { ShowPanelMode, WEB_IP, WEB_PORT, SERVER_IP, LOCAL_HOT_UPDATE } from "../common/GameDef";
+import GameDef, { ShowPanelMode, SERVER_IP, LOCAL_HOT_UPDATE } from "../common/GameDef";
 import UIViewBase from "../common/UIViewBase";
 import GameDataManager from "../GameDataManager";
 import Debug from "../common/Debug";
@@ -41,6 +41,7 @@ export default class panelUpdate extends UIPanelViewBase {
     private _updating = false;
 
     private nWebLoadCount = 1;
+    private isWebLoginLoading = false;
 
     public startAnimate:dragonBones.ArmatureDisplay = null; //启动动画
     
@@ -110,10 +111,7 @@ export default class panelUpdate extends UIPanelViewBase {
         if(!cc.sys.isNative)
         {
             console.log("不是NATIVE项目，跳过热更检查");
-            let random = new Date().getTime();
-            let strUrl = "http://" + WEB_IP + ":" + WEB_PORT + "/"+ "server/game.config?v=" + random; 
-            console.log(strUrl);
-            UIManager.getInstance().showPanel("panelLogin",ShowPanelMode.CloseOther,"",null);
+            this.LoadWebLogin();
             return;
         }
         this.UpdateWebConfig();
@@ -195,6 +193,12 @@ export default class panelUpdate extends UIPanelViewBase {
         }
         else if(button.node.name === "重试")
         {
+            if(!cc.sys.isNative)
+            {
+                this.node.getChildByName("网络异常").active = false;
+                this.LoadWebLogin();
+                return;
+            }
             this.checkUpdate();
             this.node.getChildByName("网络异常").active = false;
         }
@@ -245,6 +249,63 @@ export default class panelUpdate extends UIPanelViewBase {
                 cc.game.restart();
             },0.3);
         }
+    }
+
+    /**
+     * Web构建的首个Cocos进度只覆盖启动场景。登录面板及其图片、字体等依赖
+     * 会在场景启动后继续异步下载；先预加载并显示第二段进度，避免启动页被
+     * 提前关闭后留下长时间黑屏。原生热更新不进入这里。
+     */
+    private LoadWebLogin()
+    {
+        if(this.isWebLoginLoading || !cc.isValid(this.node))
+            return;
+
+        this.isWebLoginLoading = true;
+        this.fileProgressNode.active = false;
+        this.byteProgressNode.active = true;
+        this.byteProgressBar.progress = 0;
+        // Prefab中的fileLabel实际位于当前可见的“大小进度”节点上方；
+        // byteLabel属于已隐藏的“文件进度”节点，网页版百分比必须写到这里。
+        if(this.fileLabel != null)
+            this.fileLabel.string = "0%";
+        if(this.info != null)
+            this.info.string = "正在加载登录资源";
+
+        cc.loader.loadRes("UI/panelLogin",
+            (completedCount:number,totalCount:number,item:any)=>{
+                if(!cc.isValid(this.node))
+                    return;
+
+                let progress = totalCount > 0 ? completedCount / totalCount : 0;
+                progress = Math.max(0,Math.min(1,progress));
+                this.byteProgressBar.progress = progress;
+                if(this.fileLabel != null)
+                    this.fileLabel.string = Math.floor(progress * 100) + "%";
+            },
+            (err,prefab)=>{
+                this.isWebLoginLoading = false;
+                if(!cc.isValid(this.node))
+                    return;
+
+                if(err)
+                {
+                    if(this.info != null)
+                        this.info.string = "登录资源加载失败，请重试";
+                    this.node.getChildByName("网络异常").active = true;
+                    cc.error(err.message || err);
+                    return;
+                }
+
+                this.byteProgressBar.progress = 1;
+                if(this.fileLabel != null)
+                    this.fileLabel.string = "100%";
+                if(this.info != null)
+                    this.info.string = "登录资源加载完成";
+
+                // 资源已进入缓存，再打开面板时不会产生长时间的黑屏下载阶段。
+                UIManager.getInstance().showPanel("panelLogin",ShowPanelMode.CloseOther,"",null);
+            });
     }
     public MotifyConfigFile(file:string,src:string,des:string):boolean
     {   

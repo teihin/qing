@@ -306,4 +306,3 @@ export default class Tool extends cc.Component{
         return nSpan;
     }
 }
-

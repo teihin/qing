@@ -87,10 +87,18 @@ def validate_code() -> None:
     require('new cc.Node("本地头像列表")' in panel_main, "20-slot avatar selector container missing")
     require('let batch = imageManager.RandomAvatarBatch(20,previousBatch)' in panel_main,
             "in-game selector does not refresh a random batch of 20")
+    require('button.node.name === "换一批头像"' in panel_main and 'this.RandHeadList();' in panel_main,
+            "in-game selector refresh button handler missing")
     require('item.on("click"' in panel_main and 'this.SetEditAvatar(editNode, slotMap[slotName])' in panel_main,
             "avatar selector click-to-preview flow missing")
     require('currentIndex >= ImageManager.getInstance().AVATAR_COUNT' not in panel_main,
             "legacy click-to-cycle avatar flow still remains")
+    require('AVATAR_CHANGE_COST:number = 1000' in panel_main and
+            'consume_type\\\":\\\"换头像' in panel_main and
+            'P@玩家_消费_命令_换头像' in panel_main,
+            "10-yuan avatar charge command missing")
+    require('if(nCode == 0x200)' in panel_main and 'this.ApplyProfileChange(profileName,avatarIndex);' in panel_main,
+            "avatar is not applied after a successful charge response")
     require('ImageManager.IsAvatarIndex' not in panel_main and 'ImageManager.NormalizeAvatarIndex' not in panel_main,
             "Creator-incompatible avatar static method call remains")
     require('this.strPhoto = "";' in game_def, "PlayerInfoBase.ResetAll does not clear avatar index")
@@ -105,6 +113,36 @@ def validate_code() -> None:
     for expression in writes:
         require("http" not in expression and ".jpg" not in expression and "IMG_URL" not in expression,
                 f"non-index avatar write remains: {expression.strip()}")
+
+
+def validate_profile_prefab() -> None:
+    prefab = json.loads(read("assets/resources/UI/panelMain.prefab"))
+
+    def node_parent(node: dict) -> dict | None:
+        reference = node.get("_parent") or {}
+        node_id = reference.get("__id__")
+        return prefab[node_id] if isinstance(node_id, int) else None
+
+    edit_panels = [
+        node for node in prefab
+        if isinstance(node, dict) and node.get("__type__") == "cc.Node"
+        and node.get("_name") == "修改个人信息2"
+        and node_parent(node) is not None and node_parent(node).get("_name") == "panelMain"
+    ]
+    require(len(edit_panels) == 1, "player profile panel missing")
+    edit_panel = edit_panels[0]
+    children = [prefab[reference["__id__"]] for reference in edit_panel.get("_children", [])]
+    require(sum(child.get("_name") == "换一批头像" for child in children) == 1,
+            "prefab refresh-avatar button missing")
+    fee_nodes = [child for child in children if child.get("_name") == "头像收费提示"]
+    require(len(fee_nodes) == 1, "prefab avatar fee hint missing")
+    labels = [
+        prefab[reference["__id__"]]
+        for reference in fee_nodes[0].get("_components", [])
+        if prefab[reference["__id__"]].get("__type__") == "cc.Label"
+    ]
+    require(len(labels) == 1 and labels[0].get("_string") == "更换头像每次收取10元",
+            "prefab avatar fee hint is incorrect")
 
 
 def validate_normalization_contract() -> None:
@@ -133,6 +171,7 @@ def validate_normalization_contract() -> None:
 def main() -> None:
     validate_assets()
     validate_code()
+    validate_profile_prefab()
     validate_normalization_contract()
     print("PASS: 100 local avatars and random-20 numbered-avatar flow validated")
 

@@ -344,20 +344,28 @@ def draw_round_action(
 
 
 def draw_observer_badge(ctx: Context) -> Image.Image:
-    """Keep the observer mark below the face instead of covering the portrait."""
+    """Draw a conspicuous non-blue observer plaque below the portrait centre."""
     width, height = ctx.size
-    safe_w, safe_h = 46, 22
+    safe_w, safe_h = 62, 32
     left = (width - safe_w) / 2
-    top = height - safe_h - 4
+    top = height - safe_h - 2
     bounds = (left, top, left + safe_w - 1, top + safe_h - 1)
     image = hi_canvas(ctx.size)
-    mask = rounded_mask(ctx.size, bounds, 8)
-    paste_gradient(image, mask, (27, 20, 11, 252), (7, 7, 6, 252))
+    mask = rounded_mask(ctx.size, bounds, 7)
+    paste_gradient(image, mask, (42, 29, 13, 255), (8, 7, 5, 255))
     draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle(hbox(bounds), radius=hs(8), outline=GOLD_HI, width=hs(1.5))
+    draw.rounded_rectangle(
+        hbox(bounds), radius=hs(7), outline=GOLD_HI, width=hs(2)
+    )
     inner = (left + 3, top + 3, left + safe_w - 4, top + safe_h - 4)
-    draw.rounded_rectangle(hbox(inner), radius=hs(5), outline=GOLD_MID, width=hs(1))
-    draw_centered_text(draw, bounds, "观战", 11, GOLD_HI, 0)
+    draw.rounded_rectangle(
+        hbox(inner), radius=hs(4), outline=GOLD_MID, width=hs(1)
+    )
+    # 两侧短线让小尺寸铭牌更像牌桌状态牌，同时不给文字增加视觉噪声。
+    cy = top + safe_h / 2
+    draw.line(hbox((left + 5, cy, left + 9, cy)), fill=GOLD, width=hs(1))
+    draw.line(hbox((left + safe_w - 10, cy, left + safe_w - 6, cy)), fill=GOLD, width=hs(1))
+    draw_centered_text(draw, (left + 8, top, left + safe_w - 9, top + safe_h - 1), "观战中", 16, GOLD_HI, 1)
     return finish(image, ctx.size)
 
 
@@ -854,7 +862,7 @@ def structural_checks(paths: list[Path]) -> None:
         ("assets/ImagesLuck/公用/取消.png", (152, 54)),
         ("assets/imagesKK/公用/确定.png", (152, 54)),
         ("assets/ImagesLuck/游戏内/解散房间.png", (216, 57)),
-        ("assets/resources/other/观战.png", (46, 22)),
+        ("assets/resources/other/观战.png", (62, 32)),
         ("assets/ImagesLuck/设置/关.png", (92, 39)),
         ("assets/ImagesLuck/设置/开.png", (92, 39)),
     ):
@@ -967,6 +975,7 @@ def build() -> list[Path]:
         ("assets/ImagesLuck/游戏内/站起围观.png", lambda ctx: draw_clean_button(ctx, "站起围观", None, True, 20)),
         ("assets/ImagesLuck/游戏内/补充钵钵.png", lambda ctx: draw_clean_button(ctx, "补充钵钵", None, True, 20)),
         ("assets/ImagesLuck/游戏内/解散房间.png", lambda ctx: draw_clean_button(ctx, "解散房间", (216, 57), False, 20)),
+        ("assets/ImagesLuck/游戏内/联系客服.png", lambda ctx: draw_clean_button(ctx, "联系客服", (216, 57), False, 20)),
         ("assets/ImagesLuck/游戏内/退出房间.png", lambda ctx: draw_clean_button(ctx, "退出房间", None, False, 20)),
         ("assets/ImagesLuck/游戏内/闹钟.png", lambda ctx: tint_existing_alpha(ctx, GOLD_HI)),
         ("assets/ImagesLuck/游戏内/zuoxia.png", lambda ctx: draw_round_action(ctx, "空位", True, (88, 88), 21)),

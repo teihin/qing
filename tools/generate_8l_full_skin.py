@@ -23,6 +23,8 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
+import jackpot_card_colors
+
 
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / "assets"
@@ -112,6 +114,8 @@ BOTTOM_NAV_ICONS = {
 ATLAS_LOGO = "assets/ImagesLuck/动画/大厅LOGO动画/logo_tex.png"
 ATLAS_NAV = "assets/ImagesLuck/动画/导航按钮动画/MainButton_backup_tex.png"
 ATLAS_HAND = "assets/ImagesLuck/动画/切/hand_tex.png"
+NATURAL_HAND_ATLAS = ROOT / "HisImg" / "qing" / ATLAS_HAND
+NATURAL_HAND_FRAMES = {"放牌手", "底部手", "顶部手"}
 ATLAS_BIGWIN = {
     "assets/ImagesLuck/动画/报奖-old/ui_bigwin_tex.png",
     "assets/ImagesLuck/动画/奖池动画/ui_bigwin_tex.png",
@@ -794,6 +798,16 @@ def patch_atlas(path: Path, image: Image.Image, master: Image.Image) -> Image.Im
     if not document:
         return image
     atlas = image.convert("RGBA")
+    natural_hand_atlas: Image.Image | None = None
+    if relative(path) == ATLAS_HAND:
+        if not NATURAL_HAND_ATLAS.is_file():
+            raise SkinError(f"缺少正常肤色人手图集：{NATURAL_HAND_ATLAS}")
+        with Image.open(NATURAL_HAND_ATLAS) as opened:
+            natural_hand_atlas = opened.convert("RGBA")
+        if natural_hand_atlas.size != atlas.size:
+            raise SkinError(
+                f"正常肤色人手图集尺寸错误：{natural_hand_atlas.size} != {atlas.size}"
+            )
     for item in document.get("SubTexture") or []:
         name = str(item.get("name", ""))
         if relative(path) == ATLAS_LOGO:
@@ -810,6 +824,14 @@ def patch_atlas(path: Path, image: Image.Image, master: Image.Image) -> Image.Im
             x, y, w, h = clear_frame(atlas, item)
             angle = 7.0 if name.startswith("下牌") else (-7.0 if name.startswith("上牌") else 0.0)
             atlas.alpha_composite(card_for_atlas_slice((w, h), angle, master), (x, y))
+        elif relative(path) == ATLAS_HAND and name in NATURAL_HAND_FRAMES:
+            x = int(item["x"])
+            y = int(item["y"])
+            w = int(item["width"])
+            h = int(item["height"])
+            # 人手是动画骨骼切片，只恢复原版正常肤色像素；牌背切片仍由上面
+            # 的8L逻辑生成，图集坐标、尺寸、透明度和DragonBones数据均不改。
+            atlas.paste(natural_hand_atlas.crop((x, y, x + w, y + h)), (x, y))
         elif relative(path) in ATLAS_BIGWIN:
             if name.startswith("WING") or name == "zi_00000":
                 x, y, w, h = clear_frame(atlas, item)
@@ -823,6 +845,13 @@ def patch_atlas(path: Path, image: Image.Image, master: Image.Image) -> Image.Im
 
 def special_result(path: Path, source: Image.Image, master: Image.Image) -> Image.Image | None:
     value = relative(path)
+    if value == "assets/resources/other/观战.png":
+        # 观战状态使用独立的黑金高对比铭牌，不能再被全局蓝色换色覆盖。
+        return source.copy()
+    if value == "assets/ImagesLuck/奖池/比列.png":
+        # The chart is UI art around twelve real playing-card faces.  Recolour
+        # the labels/rings, but keep standard red/black card semantics intact.
+        return jackpot_card_colors.preserve_card_faces(recolor_8l(source), source)
     if value in BACKGROUND_TARGETS:
         return common_background(BACKGROUND_TARGETS[value], source.size)
     if value == HALL_HERO:

@@ -42,6 +42,7 @@ def main() -> None:
     font = ImageFont.truetype(str(FONT), 25)
     draw.text((375, 1334 / 2 - 285), "玩家昵称", font=font, fill=(231, 212, 174, 255), anchor="mm")
     paste_center(canvas, image("ImagesLuck/头像/点击上传.png"), 0, 185, (215, 47))
+    paste_center(canvas, image("ImagesLuck/钱包/刷新.png"), 250, 185, (165, 40))
 
     for index in range(1, 21):
         col = (index - 1) % 5
@@ -58,6 +59,8 @@ def main() -> None:
             draw.ellipse((cx + 25, cy - 51, cx + 51, cy - 25), fill=(238, 187, 82, 255))
             draw.line((cx + 31, cy - 38, cx + 36, cy - 33, cx + 44, cy - 43), fill=(42, 24, 7, 255), width=3, joint="curve")
 
+    fee_font = ImageFont.truetype(str(FONT), 22)
+    draw.text((375, 1334 / 2 + 345), "更换头像每次收取10元", font=fee_font, fill=(225, 191, 108, 255), anchor="mm")
     paste_center(canvas, image("imagesKK/公用/确定.png"), -2.187, -410, (198, 66))
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     canvas.convert("RGB").save(OUTPUT, quality=95)

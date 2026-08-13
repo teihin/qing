@@ -1,0 +1,33 @@
+{
+  "@id": "qing_web_mobile_index_no_store",
+  "match": [
+    {
+      "host": [
+        "154-37-155-17.sslip.io"
+      ],
+      "path": [
+        "/web-mobile",
+        "/web-mobile/",
+        "/web-mobile/index.html"
+      ]
+    }
+  ],
+  "handle": [
+    {
+      "handler": "headers",
+      "response": {
+        "set": {
+          "Cache-Control": [
+            "no-store, max-age=0"
+          ],
+          "Expires": [
+            "0"
+          ],
+          "Pragma": [
+            "no-cache"
+          ]
+        }
+      }
+    }
+  ]
+}
