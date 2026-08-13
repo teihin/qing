@@ -83,8 +83,25 @@ func TestPaymentHashWritesMatchClientConfiguration(t *testing.T) {
 	if err := json.Unmarshal([]byte(decoded), &client); err != nil {
 		t.Fatalf("decode client JSON: %v", err)
 	}
-	if client.InfoList != "姓名#手机#" || client.Money != "100,200" || client.InputRange != "50,500" || !client.NeedInfo || !client.OpenInput {
+	if client.InfoList != "姓名#手机#" || client.Money != "100,200" || client.Bank != "中国银行#" || client.InputRange != "50,500" || !client.NeedInfo || !client.OpenInput {
 		t.Fatalf("unexpected client config: %#v", client)
+	}
+}
+
+func TestPaymentBankListNormalizesAndRejectsDuplicates(t *testing.T) {
+	input := updatePaymentConfigurationRequest{Channels: []paymentChannelConfig{{
+		Name: "支付1", Banks: " 中国建设银行 #招商银行#",
+	}}}
+	if err := normalizeAndValidatePaymentRequest(&input); err != nil {
+		t.Fatalf("normalize payment banks: %v", err)
+	}
+	if got := input.Channels[0].Banks; got != "中国建设银行#招商银行#" {
+		t.Fatalf("normalized banks = %q", got)
+	}
+
+	input.Channels[0].Banks = "中国银行#中国银行#"
+	if err := normalizeAndValidatePaymentRequest(&input); err == nil || !strings.Contains(err.Error(), "重复项") {
+		t.Fatalf("duplicate banks should be rejected, got %v", err)
 	}
 }
 

@@ -268,7 +268,6 @@ func normalizeAndValidatePaymentRequest(input *updatePaymentConfigurationRequest
 		seen[channel.Name] = true
 		channel.PresetAmounts = strings.TrimSpace(channel.PresetAmounts)
 		channel.DisplayText = strings.TrimSpace(channel.DisplayText)
-		channel.Banks = strings.TrimSpace(channel.Banks)
 		channel.CustomMin = strings.TrimSpace(channel.CustomMin)
 		channel.CustomMax = strings.TrimSpace(channel.CustomMax)
 		if err := validateConfigurationText(channel.PresetAmounts, 0, 1000, false, channel.Name+"预设金额"); err != nil {
@@ -277,9 +276,11 @@ func normalizeAndValidatePaymentRequest(input *updatePaymentConfigurationRequest
 		if err := validateConfigurationText(channel.DisplayText, 0, 1000, true, channel.Name+"支付说明"); err != nil {
 			return err
 		}
-		if err := validateConfigurationText(channel.Banks, 0, 4000, true, channel.Name+"银行列表"); err != nil {
+		bankNames, err := normalizePaymentBankList(channel.Banks, channel.Name)
+		if err != nil {
 			return err
 		}
+		channel.Banks = joinHashList(bankNames)
 		if len(channel.InfoFields) > 20 {
 			return fmt.Errorf("%s 的资料字段不能超过 20 个", channel.Name)
 		}
@@ -298,6 +299,29 @@ func normalizeAndValidatePaymentRequest(input *updatePaymentConfigurationRequest
 		}
 	}
 	return nil
+}
+
+func normalizePaymentBankList(value, channelName string) ([]string, error) {
+	result := []string{}
+	seen := map[string]bool{}
+	for _, item := range strings.Split(value, "#") {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if err := validateSimplePaymentValue(item, 40, channelName+"银行名称"); err != nil {
+			return nil, err
+		}
+		if seen[item] {
+			return nil, fmt.Errorf("%s 的银行列表中存在重复项：%s", channelName, item)
+		}
+		seen[item] = true
+		result = append(result, item)
+		if len(result) > 50 {
+			return nil, fmt.Errorf("%s 的银行列表不能超过 50 项", channelName)
+		}
+	}
+	return result, nil
 }
 
 func validatePaymentChannelName(value string) error {
@@ -453,12 +477,14 @@ func paymentStateMatchesRequest(state paymentConfigurationState, input updatePay
 
 func paymentAuditSummary(input updatePaymentConfigurationRequest) map[string]any {
 	enabled := []string{}
+	bankCounts := map[string]int{}
 	for _, channel := range input.Channels {
 		if channel.Enabled {
 			enabled = append(enabled, channel.Name)
 		}
+		bankCounts[channel.Name] = len(splitHashListOrdered(channel.Banks))
 	}
-	return map[string]any{"enabledChannels": enabled, "channelCount": len(input.Channels), "paymentDomain": input.PaymentDomain, "requireBankBranch": input.RequireBankBranch}
+	return map[string]any{"enabledChannels": enabled, "channelCount": len(input.Channels), "bankCounts": bankCounts, "paymentDomain": input.PaymentDomain, "requireBankBranch": input.RequireBankBranch}
 }
 
 func splitHashList(value string) map[string]bool {

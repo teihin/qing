@@ -449,6 +449,28 @@ td strong { color: #294149; }
 .check-chip-list input { position: absolute; opacity: 0; }
 .check-chip-list span { display: inline-flex; min-height: 36px; align-items: center; padding: 0 13px; border: 1px solid #dce7e8; border-radius: 9px; color: #5b747a; background: white; font-size: 13px; }
 .check-chip-list input:checked + span { border-color: #77c9c0; color: #087970; background: #eaf7f5; font-weight: 700; }
+.payment-bank-section { display: grid; gap: 14px; }
+.payment-bank-heading { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.payment-bank-heading p { margin-top: 5px; color: #748a90; font-size: 13px; line-height: 1.65; }
+.payment-bank-heading .button { flex: 0 0 auto; }
+.payment-bank-add { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
+.payment-bank-add input, .payment-bank-edit-input { min-width: 0; min-height: 40px; padding: 9px 12px; border: 1px solid #d8e4e5; border-radius: 9px; color: #29464e; background: #fff; font: inherit; font-size: 14px; outline: none; }
+.payment-bank-add input:focus, .payment-bank-edit-input:focus { border-color: #70c6bc; box-shadow: 0 0 0 3px rgba(21,155,145,.11); }
+.payment-bank-empty { padding: 24px; border: 1px dashed #cddddd; border-radius: 12px; background: #f9fbfb; text-align: center; }
+.payment-bank-empty strong { color: #49656b; font-size: 14px; }
+.payment-bank-empty p { margin-top: 5px; color: #829499; font-size: 12px; }
+.payment-bank-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin: 0; padding: 0; list-style: none; }
+.payment-bank-list li { min-width: 0; min-height: 51px; display: grid; grid-template-columns: 28px minmax(90px, 1fr) auto; align-items: center; gap: 9px; padding: 8px 9px; border: 1px solid #e0e9ea; border-radius: 10px; background: #fbfdfd; }
+.payment-bank-order { display: grid; width: 27px; height: 27px; place-items: center; border-radius: 8px; color: #16847b; background: #e6f5f2; font-size: 11px; font-weight: 800; }
+.payment-bank-list li > strong { overflow: hidden; color: #3f5c63; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.payment-bank-edit-input { width: 100%; min-height: 34px; padding: 6px 8px; }
+.payment-bank-actions { display: flex; align-items: center; gap: 4px; }
+.payment-bank-actions button { min-width: 28px; height: 30px; padding: 0 7px; border: 0; border-radius: 7px; color: #557077; background: #edf3f3; font-size: 12px; cursor: pointer; }
+.payment-bank-actions button:hover:not(:disabled) { color: #087970; background: #def1ee; }
+.payment-bank-actions button.is-danger:hover:not(:disabled) { color: #b34351; background: #fbecee; }
+.payment-bank-actions button:disabled { opacity: .38; cursor: not-allowed; }
+.payment-bank-footnote { color: #7b9095; font-size: 12px; line-height: 1.65; }
+.payment-bank-footnote code { padding: 2px 5px; border-radius: 5px; color: #116f68; background: #eaf6f4; }
 .withdrawal-copy-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; margin-top: 15px; }
 .configuration-savebar { position: sticky; z-index: 5; bottom: 14px; display: flex; align-items: center; gap: 12px; padding: 15px 17px; border: 1px solid #d9e5e6; border-radius: 13px; background: rgba(255,255,255,.95); box-shadow: 0 16px 44px rgba(21, 55, 62, .16); backdrop-filter: blur(13px); }
 .configuration-savebar.is-dirty { border-color: #9bd3cd; }
@@ -515,6 +537,7 @@ td strong { color: #294149; }
   .payment-channel-nav, .activity-list-nav { position: static; }
   .payment-channel-nav > div { max-height: 300px; }
   .configuration-card-heading { align-items: flex-start; flex-direction: column; }
+  .payment-bank-list { grid-template-columns: 1fr; }
   .activity-power-grid { grid-template-columns: 1fr 1fr; }
 }
 
@@ -527,6 +550,11 @@ td strong { color: #294149; }
   .current-room-stats > div:nth-child(-n+2) { border-bottom: 1px solid #e5eded; }
   .current-room-meta { grid-template-columns: 1fr; }
   .two-column-fields, .activity-time-grid, .activity-power-grid { grid-template-columns: 1fr; }
+  .payment-bank-heading { align-items: stretch; flex-direction: column; }
+  .payment-bank-heading .button { width: 100%; }
+  .payment-bank-add { grid-template-columns: 1fr; }
+  .payment-bank-list li { grid-template-columns: 28px minmax(0, 1fr); }
+  .payment-bank-actions { grid-column: 1 / -1; justify-content: flex-end; }
   .optimization-metrics, .optimization-form-grid { grid-template-columns: 1fr; }
   .optimization-form-grid .field:last-child { grid-column: auto; }
   .optimization-player-summary { grid-template-columns: 42px 1fr; }
