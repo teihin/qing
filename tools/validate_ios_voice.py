@@ -15,11 +15,18 @@ GENERATED_SOURCE = GENERATED_ROOT / SOURCE.name
 GENERATED_HEADER = GENERATED_ROOT / HEADER.name
 INFO_PLIST = GENERATED_ROOT / "Info.plist"
 APP_CONTROLLER = GENERATED_ROOT / "AppController.mm"
-PROJECT = (
-    ROOT
-    / "build/jsb-link/frameworks/runtime-src/proj.ios_mac/Qing.xcodeproj/project.pbxproj"
-)
+IOS_PROJECT_ROOT = ROOT / "build/jsb-link/frameworks/runtime-src/proj.ios_mac"
 MOBILE_MANAGER = ROOT / "assets/scripts/mobile/MobileManager.ts"
+
+
+def find_project_file() -> Path:
+    candidates = sorted(IOS_PROJECT_ROOT.glob("*.xcodeproj/project.pbxproj"))
+    if len(candidates) != 1:
+        raise AssertionError(
+            "expected exactly one generated iOS Xcode project, found "
+            + str(len(candidates))
+        )
+    return candidates[0]
 
 
 def require(condition: bool, message: str) -> None:
@@ -89,7 +96,7 @@ def main() -> None:
     )
     count_once(controller, "[QingVoiceBridge shutdownBridge];", "shutdown hook")
 
-    project = PROJECT.read_text(encoding="utf-8")
+    project = find_project_file().read_text(encoding="utf-8")
     count_once(
         project,
         "QingVoiceBridge.mm in Sources */ =",
