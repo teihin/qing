@@ -28,9 +28,12 @@ export default function PlayerApp() {
 	const canSend = Boolean(state && state.conversation.status !== 'closed' && state.onlineAgents > 0)
 
   useLayoutEffect(() => {
-    if (!embedded) return
-    document.documentElement.classList.add('chattool-embedded-document')
-    return () => document.documentElement.classList.remove('chattool-embedded-document')
+    document.documentElement.classList.add('chattool-player-document')
+    if (embedded) document.documentElement.classList.add('chattool-embedded-document')
+    return () => {
+      document.documentElement.classList.remove('chattool-player-document')
+      document.documentElement.classList.remove('chattool-embedded-document')
+    }
   }, [embedded])
 
   const loadMessages = useCallback(async () => {
