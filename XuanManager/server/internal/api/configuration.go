@@ -21,6 +21,7 @@ type gameAnnouncementState struct {
 	Content       string     `json:"content"`
 	Configured    bool       `json:"configured"`
 	ContentLength int        `json:"contentLength"`
+	Format        string     `json:"format"`
 	LastUpdatedBy string     `json:"lastUpdatedBy"`
 	LastUpdatedAt *time.Time `json:"lastUpdatedAt"`
 	StorageKey    string     `json:"storageKey"`
@@ -66,7 +67,7 @@ func (s *Server) handleUpdateGameAnnouncement(w http.ResponseWriter, r *http.Req
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	content := strings.TrimSpace(input.Content)
+	content := normalizeAnnouncementContent(input.Content)
 	if err := validateConfigurationText(content, 0, 4000, true, "公告内容"); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_ANNOUNCEMENT", err.Error())
 		return
@@ -139,6 +140,7 @@ func (s *Server) handleUpdateGameAnnouncement(w http.ResponseWriter, r *http.Req
 		map[string]any{"content": content, "configured": content != ""}, 0, "游戏公告已保存并校验", clientIP(r))
 	writeData(w, http.StatusOK, gameAnnouncementState{
 		Content: content, Configured: content != "", ContentLength: utf8.RuneCountInString(content),
+		Format:        "plain-text-preserved-v1",
 		LastUpdatedBy: p.Username, LastUpdatedAt: &now, StorageKey: systemAnnouncementKey,
 		Encoding: "client-base64", DuplicateRows: max(0, len(storedRows)-1),
 	})
@@ -206,10 +208,12 @@ FROM kbedm.usr_hash_info WHERE hash_key = ? ORDER BY id`, systemAnnouncementKey)
 	if err != nil {
 		return state, err
 	}
+	content = normalizeAnnouncementContent(content)
 	state.Content = content
 	state.Configured = content != ""
 	state.ContentLength = utf8.RuneCountInString(content)
 	state.DuplicateRows = max(0, count-1)
+	state.Format = "plain-text-preserved-v1"
 
 	updatedBy, updatedAt, err := s.latestAuditAttribution(ctx, "game.announcement.update", p)
 	if err != nil {
@@ -218,6 +222,18 @@ FROM kbedm.usr_hash_info WHERE hash_key = ? ORDER BY id`, systemAnnouncementKey)
 	state.LastUpdatedBy = updatedBy
 	state.LastUpdatedAt = updatedAt
 	return state, nil
+}
+
+// normalizeAnnouncementContent only unifies platform line endings. It deliberately
+// preserves visible whitespace, empty lines and indentation so the Cocos Label can
+// render the same plain-text layout that an operator authored in XuanManager.
+func normalizeAnnouncementContent(value string) string {
+	value = strings.ReplaceAll(value, "\r\n", "\n")
+	value = strings.ReplaceAll(value, "\r", "\n")
+	if strings.TrimSpace(value) == "" {
+		return ""
+	}
+	return value
 }
 
 func (s *Server) handleSendGameNotification(w http.ResponseWriter, r *http.Request, p principal) {
@@ -237,7 +253,7 @@ func (s *Server) handleSendGameNotification(w http.ResponseWriter, r *http.Reque
 	operationContext := gameOperationContext("notice")
 	requestAudit := map[string]any{"content": content, "audience": "all_online", "context": operationContext}
 	result, err := s.callGameCommand(r.Context(), "通知_所有玩家_信息", map[string]any{
-		"system_content": ",,,,####" + content,
+		"system_content": notificationSystemContent(content),
 		"context":        operationContext,
 	})
 	if err != nil {

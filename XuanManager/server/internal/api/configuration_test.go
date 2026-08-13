@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -54,6 +55,23 @@ func TestValidateConfigurationText(t *testing.T) {
 	}
 }
 
+func TestNormalizeAnnouncementContentPreservesFormatting(t *testing.T) {
+	input := "\r\n  居中前导空格  \r\n\r\n正文保留尾部空格  \r\n"
+	want := "\n  居中前导空格  \n\n正文保留尾部空格  \n"
+	got := normalizeAnnouncementContent(input)
+	if got != want {
+		t.Fatalf("normalized announcement = %q, want %q", got, want)
+	}
+	encoded := encodeClientBase64(got)
+	decoded, err := decodeClientBase64(encoded)
+	if err != nil || decoded != want {
+		t.Fatalf("announcement formatting round trip = %q, %v", decoded, err)
+	}
+	if got := normalizeAnnouncementContent(" \r\n\t "); got != "" {
+		t.Fatalf("whitespace-only announcement = %q", got)
+	}
+}
+
 func TestCallGameCommand(t *testing.T) {
 	client := fakeGameHTTPClient(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path != "/hall/command" || r.URL.Query().Get("header") != "通知_所有玩家_信息" {
@@ -63,7 +81,7 @@ func TestCallGameCommand(t *testing.T) {
 		if err := json.Unmarshal([]byte(r.URL.Query().Get("param")), &params); err != nil {
 			t.Fatalf("decode param: %v", err)
 		}
-		if params["system_content"] != ",,,,####测试通知" || params["context"] != "test-context" {
+		if params["system_content"] != ",,,,测试通知" || params["context"] != "test-context" {
 			t.Fatalf("unexpected params: %#v", params)
 		}
 		return &http.Response{
@@ -78,7 +96,7 @@ func TestCallGameCommand(t *testing.T) {
 		gameHTTPClient: client,
 	}
 	response, err := s.callGameCommand(context.Background(), "通知_所有玩家_信息", map[string]any{
-		"system_content": ",,,,####测试通知",
+		"system_content": ",,,,测试通知",
 		"context":        "test-context",
 	})
 	if err != nil {
@@ -86,6 +104,32 @@ func TestCallGameCommand(t *testing.T) {
 	}
 	if response.RetCode != 512 {
 		t.Fatalf("ret code = %d", response.RetCode)
+	}
+}
+
+func TestNotificationCarouselContentAndOrder(t *testing.T) {
+	input := updateNotificationCarouselRequest{}
+	input.Items = append(input.Items, struct {
+		Content string `json:"content"`
+	}{Content: "  第一条, 公告  "}, struct {
+		Content string `json:"content"`
+	}{Content: "第二条公告"})
+	items, err := normalizeNotificationCarouselItems(input.Items)
+	if err != nil {
+		t.Fatalf("normalize carousel items: %v", err)
+	}
+	if got := items[0].Content; got != "第一条， 公告" {
+		t.Fatalf("normalized first item = %q", got)
+	}
+	if got := notificationSystemContent(items[0].Content); got != ",,,,第一条， 公告" {
+		t.Fatalf("system content = %q", got)
+	}
+	if strings.Contains(notificationSystemContent(items[0].Content), "系统广播") || strings.Contains(notificationSystemContent(items[0].Content), "####") {
+		t.Fatal("carousel content must not add a system prefix or special-colour marker")
+	}
+	next := nextNotificationCarouselItem(items, sql.NullInt64{Int64: items[0].ID, Valid: true})
+	if next.Content != items[1].Content {
+		t.Fatalf("next item = %q", next.Content)
 	}
 }
 

@@ -455,13 +455,38 @@ def validate_prefab(document: PrefabDocument) -> None:
     if background_uuid == LEGACY_BACKGROUND_SPRITEFRAME_UUID:
         raise RuntimeError(f"仍绑定旧弹窗公告底：{relative(document.path)}")
 
-    msg_id, msg = document.require_node("panelNotifyView/bk/msg")
-    document.component(msg_id, "cc.Label")
-    if msg.get("_active") is not True or node_size(msg) != (574.0, 660.0):
-        raise RuntimeError(
-            f"公告正文节点尺寸/显隐错误：{relative(document.path)} -> "
-            f"active={msg.get('_active')} size={node_size(msg)}"
-        )
+    if document.path == PREFABS[0].resolve():
+        message_root_id, message_root = document.require_node("panelNotifyView/bk/msg")
+        scroll_view = document.component(message_root_id, "cc.ScrollView")
+        if message_root.get("_active") is not True or node_size(message_root) != (574.0, 577.0):
+            raise RuntimeError(
+                f"公告滚动区尺寸/显隐错误：{relative(document.path)} -> "
+                f"active={message_root.get('_active')} size={node_size(message_root)}"
+            )
+        if scroll_view.get("horizontal") is not False or scroll_view.get("vertical") is not True:
+            raise RuntimeError(f"公告滚动方向错误：{relative(document.path)}")
+        if scroll_view.get("_N$horizontalScrollBar") is not None or scroll_view.get("_N$verticalScrollBar") is not None:
+            raise RuntimeError(f"公告滚动区不应显示滚动条：{relative(document.path)}")
+        view_id, view = document.require_node("panelNotifyView/bk/msg/view")
+        document.component(view_id, "cc.Mask")
+        if node_size(view) != (574.0, 577.0):
+            raise RuntimeError(f"公告滚动遮罩尺寸错误：{relative(document.path)} -> {node_size(view)}")
+        msg_id, msg = document.require_node("panelNotifyView/bk/msg/view/content/msg")
+        label = document.component(msg_id, "cc.Label")
+        if node_size(msg)[0] != 534.0 or label.get("_fontSize") != 26 or label.get("_lineHeight") != 36:
+            raise RuntimeError(
+                f"公告正文排版契约错误：{relative(document.path)} -> "
+                f"size={node_size(msg)} font={label.get('_fontSize')}/{label.get('_lineHeight')}"
+            )
+    else:
+        msg_id, msg = document.require_node("panelNotifyView/bk/msg")
+        document.component(msg_id, "cc.Label")
+        expected_height = 578.0 if document.path == PREFABS[1].resolve() else 583.0
+        if msg.get("_active") is not True or node_size(msg) != (574.0, expected_height):
+            raise RuntimeError(
+                f"公告正文节点尺寸/显隐错误：{relative(document.path)} -> "
+                f"active={msg.get('_active')} size={node_size(msg)}"
+            )
     colour = node_colour(msg)
     if colour != EXPECTED_MESSAGE_COLOUR:
         raise RuntimeError(
@@ -570,8 +595,18 @@ def validate_panel_script_contract() -> None:
     )
     require_source_pattern(
         source,
-        r'getChildByName\(\s*["\']bk["\']\s*\)\s*\.\s*getChildByName\(\s*["\']msg["\']\s*\)\s*\.\s*getComponent\(\s*cc\.Label\s*\)\s*\.\s*string\s*=\s*this\.strUserData',
-        "bk/msg 动态正文写入路径",
+        r'this\.SetMessage\(\s*this\.strUserData\s*\)',
+        "统一公告正文写入入口",
+    )
+    require_source_pattern(
+        source,
+        r'Tool\.NormalizeMultilineText\(\s*message\s*\)',
+        "公告换行符标准化",
+    )
+    require_source_pattern(
+        source,
+        r'view/content/msg',
+        "可滚动公告正文路径",
     )
     require_source_pattern(
         source,

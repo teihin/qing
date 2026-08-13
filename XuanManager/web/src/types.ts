@@ -44,6 +44,7 @@ export interface GameAnnouncement {
   content: string;
   configured: boolean;
   contentLength: number;
+  format: "plain-text-preserved-v1";
   lastUpdatedBy: string;
   lastUpdatedAt: string | null;
   storageKey: string;
@@ -58,6 +59,27 @@ export interface GameNotificationHistoryItem {
   status: "sent" | "accepted" | "failed";
   resultMessage: string;
   createdAt: string;
+}
+
+export interface GameNotificationCarouselItem {
+  id: number;
+  content: string;
+  sortOrder: number;
+}
+
+export interface GameNotificationCarousel {
+  enabled: boolean;
+  intervalSeconds: number;
+  startAt: string | null;
+  loopCount: number;
+  completedLoops: number;
+  items: GameNotificationCarouselItem[];
+  lastSentItemId: number | null;
+  lastSentAt: string | null;
+  lastStatus: "sent" | "accepted" | "failed" | "completed" | "";
+  lastMessage: string;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string | null;
 }
 
 export interface RewardPoolItem {

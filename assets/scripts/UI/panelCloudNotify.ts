@@ -39,13 +39,10 @@ export default class panelCloudNotify extends UIPanelViewBase {
 
         if(strMsg.indexOf("####")>=0)
         {
-            strMsg = strMsg.replace("####","系统广播:");
-            this.node.getChildByName("msk").color = cc.color(255,143,0,145);            
+            strMsg = strMsg.replace("####","");
         }
-        else
-        {
-            this.node.getChildByName("msk").color = cc.color(0,0,0,145);            
-        }
+        // 系统公告与普通通知统一使用相同背景，不再用橙色区分。
+        this.node.getChildByName("msk").color = cc.color(0,0,0,145);
 
         //开始动画        
         let txtItem = this.node.getChildByName("txt").getComponent(cc.Label);

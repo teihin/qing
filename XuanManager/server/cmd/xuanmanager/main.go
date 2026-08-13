@@ -61,6 +61,11 @@ func main() {
 		logger.Error("bootstrap administrator failed", "error", err)
 		os.Exit(1)
 	}
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	if cfg.NotificationCarouselWorker {
+		go api.RunNotificationCarouselWorker(workerCtx, db, cfg, logger)
+	}
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.NewWithGameDB(db, gameDB, cfg, logger),
@@ -81,6 +86,7 @@ func main() {
 	}()
 
 	<-stop
+	stopWorker()
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	_ = server.Shutdown(shutdownCtx)

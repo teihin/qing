@@ -3,6 +3,13 @@ import { api, ApiError, jsonBody } from "../api";
 import { Button, formatDate, LoadingBlock, PageHeader } from "../components/ui";
 import type { GameAnnouncement } from "../types";
 
+type AnnouncementPreviewMode = "popup" | "lobby";
+
+const previewProfiles: Record<AnnouncementPreviewMode, { name: string; detail: string }> = {
+  popup: { name: "进入大厅公告弹窗", detail: "文字区 534 × 577，字号 26，行高 36（预览按 50% 缩放）" },
+  lobby: { name: "大厅公告详情页", detail: "文字区宽 600，字号 28，行高 35（预览按 39% 缩放）" },
+};
+
 export default function GameAnnouncementPage({ can, notify }: {
   can: (permission: string) => boolean;
   notify: (message: string, kind?: "success" | "error") => void;
@@ -10,6 +17,7 @@ export default function GameAnnouncementPage({ can, notify }: {
   const [data, setData] = useState<GameAnnouncement | null>(null);
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
+  const [previewMode, setPreviewMode] = useState<AnnouncementPreviewMode>("popup");
 
   const load = useCallback(async () => {
     try {
@@ -23,10 +31,18 @@ export default function GameAnnouncementPage({ can, notify }: {
 
   useEffect(() => { void load(); }, [load]);
 
-  const normalized = content.trim();
+  const normalized = normalizeAnnouncementContent(content);
   const length = Array.from(normalized).length;
-  const dirty = data !== null && normalized !== data.content;
-  const previewLines = useMemo(() => normalized.split(/\r?\n/).filter(Boolean), [normalized]);
+  const dirty = data !== null && normalized !== normalizeAnnouncementContent(data.content);
+  const formatStats = useMemo(() => {
+    if (!normalized) return { lines: 0, blankLines: 0, spaces: 0 };
+    const lines = normalized.split("\n");
+    return {
+      lines: lines.length,
+      blankLines: lines.filter((line) => line.length === 0).length,
+      spaces: Array.from(normalized).filter((char) => char === " " || char === "　").length,
+    };
+  }, [normalized]);
 
   const save = async () => {
     if (length > 4000) {
@@ -59,11 +75,23 @@ export default function GameAnnouncementPage({ can, notify }: {
         <div className="configuration-editor-grid">
           <section className="panel configuration-editor">
             <header className="configuration-panel-title">
-              <div><span>CONTENT EDITOR</span><h2>公告正文</h2><p>支持多行文本，保存后按照游戏客户端原有编码写入“系统公告”。</p></div>
+              <div><span>CONTENT EDITOR</span><h2>公告正文</h2><p>纯文本保真模式：换行、空行、段首缩进和连续空格会逐字保存。</p></div>
               <strong className={length > 4000 ? "is-over" : ""}>{length} / 4000</strong>
             </header>
             <div className="configuration-editor__body">
-              <textarea rows={15} maxLength={4200} value={content} onChange={(event) => setContent(event.target.value)} disabled={!can("configuration.announcement.update")} placeholder="输入玩家进入大厅后需要看到的公告内容……" />
+              <div className="announcement-editor-mode">
+                <div><strong>编辑排版</strong><span>与右侧预览同步切换，输入时的自动换行位置保持一致。</span></div>
+                <div className="announcement-preview-tabs is-editor" role="tablist" aria-label="编辑区客户端公告显示位置">
+                  {(Object.keys(previewProfiles) as AnnouncementPreviewMode[]).map((mode) => <button key={mode} type="button" role="tab" aria-selected={previewMode === mode} className={previewMode === mode ? "is-active" : ""} onClick={() => setPreviewMode(mode)}>{previewProfiles[mode].name}</button>)}
+                </div>
+              </div>
+              <div className={`announcement-editor-viewport is-${previewMode}`}>
+                <div className="announcement-editor-canvas">
+                  <div className="announcement-editor-canvas__meta"><span>客户端 1:1 排版编辑</span><strong>{previewProfiles[previewMode].name}</strong></div>
+                  <textarea className="announcement-plain-text-editor" rows={15} maxLength={4200} value={content} onChange={(event) => setContent(event.target.value.replace(/\r\n?/g, "\n"))} disabled={!can("configuration.announcement.update")} spellCheck={false} wrap="soft" placeholder="输入玩家进入大厅后需要看到的公告内容……" />
+                </div>
+              </div>
+              <div className="announcement-format-summary"><span>{formatStats.lines} 行</span><span>{formatStats.blankLines} 个空行</span><span>{formatStats.spaces} 个空格</span><p>建议用回车控制段落；网页富文本的颜色、粗体、表格和图片不属于当前客户端纯文本公告格式。</p></div>
               {data.duplicateRows > 0 && <div className="configuration-warning"><span>!</span><p>检测到 {data.duplicateRows + 1} 条同名配置，保存时会统一内容，避免客户端读取到不同公告。</p></div>}
               <div className="configuration-editor__actions">
                 <p>{can("configuration.announcement.update") ? "保存操作会记录修改前后内容和操作者。" : "当前角色只有查看公告权限。"}</p>
@@ -76,14 +104,17 @@ export default function GameAnnouncementPage({ can, notify }: {
           </section>
 
           <aside className="panel announcement-preview-panel">
-            <header><span>PLAYER PREVIEW</span><h2>玩家端预览</h2><p>模拟大厅公告阅读区域，实际字号和换行由客户端适配。</p></header>
-            <div className="announcement-device">
-              <div className="announcement-device__top"><i />XuanManager 游戏公告<span>大厅</span></div>
+            <header><span>CLIENT LAYOUT PREVIEW</span><h2>客户端等比例预览</h2><p>使用客户端实际文字宽度、字号和行高比例；切换查看两个显示位置。</p></header>
+            <div className="announcement-preview-tabs" role="tablist" aria-label="客户端公告显示位置">
+              {(Object.keys(previewProfiles) as AnnouncementPreviewMode[]).map((mode) => <button key={mode} type="button" role="tab" aria-selected={previewMode === mode} className={previewMode === mode ? "is-active" : ""} onClick={() => setPreviewMode(mode)}>{previewProfiles[mode].name}</button>)}
+            </div>
+            <div className={`announcement-device is-${previewMode}`}>
+              <div className="announcement-device__top"><i />{previewProfiles[previewMode].name}<span>纯文本</span></div>
               <div className="announcement-device__paper">
-                <span>系统公告</span>
-                {previewLines.length > 0 ? previewLines.map((line, index) => <p key={`${line}-${index}`}>{line}</p>) : <p className="is-placeholder">暂未设置公告内容</p>}
+                <p className={normalized ? "" : "is-placeholder"}>{normalized || "暂未设置公告内容"}</p>
               </div>
             </div>
+            <p className="announcement-preview-spec">{previewProfiles[previewMode].detail}</p>
             <dl className="configuration-meta">
               <div><dt>配置键</dt><dd>{data.storageKey}</dd></div>
               <div><dt>最后修改</dt><dd>{data.lastUpdatedAt ? formatDate(data.lastUpdatedAt) : "尚无后台修改记录"}</dd></div>
@@ -99,4 +130,9 @@ export default function GameAnnouncementPage({ can, notify }: {
 
 function errorMessage(reason: unknown, fallback: string) {
   return reason instanceof ApiError ? reason.message : fallback;
+}
+
+function normalizeAnnouncementContent(value: string) {
+  const lineNormalized = value.replace(/\r\n?/g, "\n");
+  return lineNormalized.trim() ? lineNormalized : "";
 }

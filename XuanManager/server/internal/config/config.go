@@ -12,25 +12,26 @@ import (
 )
 
 type Config struct {
-	HTTPAddr           string
-	StaticDir          string
-	CookieSecure       bool
-	SessionTTL         time.Duration
-	DBHost             string
-	DBPort             string
-	DBName             string
-	DBUser             string
-	DBPassword         string
-	GameDBHost         string
-	GameDBPort         string
-	GameDBName         string
-	GameDBUser         string
-	GameDBPassword     string
-	GameAdminURL       string
-	GameExchangeSign   string
-	BootstrapAdminUser string
-	BootstrapAdminPass string
-	BootstrapAdminName string
+	HTTPAddr                   string
+	StaticDir                  string
+	CookieSecure               bool
+	SessionTTL                 time.Duration
+	DBHost                     string
+	DBPort                     string
+	DBName                     string
+	DBUser                     string
+	DBPassword                 string
+	GameDBHost                 string
+	GameDBPort                 string
+	GameDBName                 string
+	GameDBUser                 string
+	GameDBPassword             string
+	GameAdminURL               string
+	GameExchangeSign           string
+	NotificationCarouselWorker bool
+	BootstrapAdminUser         string
+	BootstrapAdminPass         string
+	BootstrapAdminName         string
 }
 
 func Load() (Config, error) {
@@ -44,26 +45,32 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("XUAN_COOKIE_SECURE 必须是 true 或 false")
 	}
 
+	carouselWorker, err := strconv.ParseBool(env("XUAN_NOTIFICATION_CAROUSEL_WORKER", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("XUAN_NOTIFICATION_CAROUSEL_WORKER 必须是 true 或 false")
+	}
+
 	cfg := Config{
-		HTTPAddr:           env("XUAN_HTTP_ADDR", "127.0.0.1:8891"),
-		StaticDir:          env("XUAN_STATIC_DIR", "../web/dist"),
-		CookieSecure:       secure,
-		SessionTTL:         ttl,
-		DBHost:             env("XUAN_DB_HOST", "127.0.0.1"),
-		DBPort:             env("XUAN_DB_PORT", "3306"),
-		DBName:             env("XUAN_DB_NAME", "webcm"),
-		DBUser:             strings.TrimSpace(os.Getenv("XUAN_DB_USER")),
-		DBPassword:         os.Getenv("XUAN_DB_PASSWORD"),
-		GameDBHost:         env("XUAN_GAME_DB_HOST", "127.0.0.1"),
-		GameDBPort:         env("XUAN_GAME_DB_PORT", "3306"),
-		GameDBName:         env("XUAN_GAME_DB_NAME", "kbedm"),
-		GameDBUser:         strings.TrimSpace(os.Getenv("XUAN_GAME_DB_USER")),
-		GameDBPassword:     os.Getenv("XUAN_GAME_DB_PASSWORD"),
-		GameAdminURL:       env("XUAN_GAME_ADMIN_URL", "http://127.0.0.1:8890"),
-		GameExchangeSign:   strings.TrimSpace(os.Getenv("XUAN_GAME_EXCHANGE_SIGN")),
-		BootstrapAdminUser: strings.TrimSpace(os.Getenv("XUAN_BOOTSTRAP_ADMIN_USERNAME")),
-		BootstrapAdminPass: os.Getenv("XUAN_BOOTSTRAP_ADMIN_PASSWORD"),
-		BootstrapAdminName: env("XUAN_BOOTSTRAP_ADMIN_NAME", "超级管理员"),
+		HTTPAddr:                   env("XUAN_HTTP_ADDR", "127.0.0.1:8891"),
+		StaticDir:                  env("XUAN_STATIC_DIR", "../web/dist"),
+		CookieSecure:               secure,
+		SessionTTL:                 ttl,
+		DBHost:                     env("XUAN_DB_HOST", "127.0.0.1"),
+		DBPort:                     env("XUAN_DB_PORT", "3306"),
+		DBName:                     env("XUAN_DB_NAME", "webcm"),
+		DBUser:                     strings.TrimSpace(os.Getenv("XUAN_DB_USER")),
+		DBPassword:                 os.Getenv("XUAN_DB_PASSWORD"),
+		GameDBHost:                 env("XUAN_GAME_DB_HOST", "127.0.0.1"),
+		GameDBPort:                 env("XUAN_GAME_DB_PORT", "3306"),
+		GameDBName:                 env("XUAN_GAME_DB_NAME", "kbedm"),
+		GameDBUser:                 strings.TrimSpace(os.Getenv("XUAN_GAME_DB_USER")),
+		GameDBPassword:             os.Getenv("XUAN_GAME_DB_PASSWORD"),
+		GameAdminURL:               env("XUAN_GAME_ADMIN_URL", "http://127.0.0.1:8890"),
+		GameExchangeSign:           strings.TrimSpace(os.Getenv("XUAN_GAME_EXCHANGE_SIGN")),
+		NotificationCarouselWorker: carouselWorker,
+		BootstrapAdminUser:         strings.TrimSpace(os.Getenv("XUAN_BOOTSTRAP_ADMIN_USERNAME")),
+		BootstrapAdminPass:         os.Getenv("XUAN_BOOTSTRAP_ADMIN_PASSWORD"),
+		BootstrapAdminName:         env("XUAN_BOOTSTRAP_ADMIN_NAME", "超级管理员"),
 	}
 
 	if cfg.DBUser == "" || cfg.DBPassword == "" {

@@ -173,6 +173,13 @@ export default class Tool extends cc.Component{
     {
         return decodeURIComponent(atob(str));
     }
+    /** 公告等多行纯文本统一使用 LF，保留空行、缩进和连续空格。 */
+    public static NormalizeMultilineText(str:string):string
+    {
+        if(str == null)
+            return "";
+        return str.replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+    }
     //复位并重启游戏
     public static RestartGame()
     {

@@ -53,6 +53,19 @@ def child_id(data: list[dict], parent_id: int, name: str) -> int:
     return matches[0]
 
 
+def message_label_id(data: list[dict], bk_id: int) -> int:
+    """Resolve both the legacy direct Label and the scrollable announcement Label."""
+    message_root_id = child_id(data, bk_id, "msg")
+    if any(value.get("__type__") == "cc.Label" for _, value in components(data, data[message_root_id])):
+        return message_root_id
+    view_id = child_id(data, message_root_id, "view")
+    content_id = child_id(data, view_id, "content")
+    label_id = child_id(data, content_id, "msg")
+    if not any(value.get("__type__") == "cc.Label" for _, value in components(data, data[label_id])):
+        raise RuntimeError(f"Missing cc.Label below scrollable message root {message_root_id}")
+    return label_id
+
+
 def sprite_component(data: list[dict], node_id: int) -> tuple[int, dict]:
     matches = [(identifier, value) for identifier, value in components(data, data[node_id]) if value.get("__type__") == "cc.Sprite"]
     if len(matches) != 1:
@@ -140,7 +153,7 @@ def patch_prefab(path: Path) -> tuple[bool, bool, bool]:
         raise RuntimeError(f"Unexpected root in {path}")
     root_id = root_nodes[0]
     bk_id = child_id(data, root_id, "bk")
-    msg_id = child_id(data, bk_id, "msg")
+    msg_id = message_label_id(data, bk_id)
     title_id = child_id(data, bk_id, "最新公告")
 
     _, background_sprite = sprite_component(data, bk_id)

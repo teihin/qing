@@ -2508,7 +2508,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(context === "公告6")
         {
-            Tool.GetChild(this.node,"公告6/list/view/content/msg").getComponent(cc.Label).string = strContent==""?"":Tool.Base64Decode(strContent);;
+            this.SetScrollableAnnouncement("公告6",strContent==""?"":Tool.Base64Decode(strContent));
         }
         else if(context === "公告7")
         {
@@ -2516,7 +2516,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(context === "公告8")
         {
-            Tool.GetChild(this.node,"公告8/list/view/content/msg").getComponent(cc.Label).string = strContent==""?"":Tool.Base64Decode(strContent);;
+            this.SetScrollableAnnouncement("公告8",strContent==""?"":Tool.Base64Decode(strContent));
         }
         else if(context === "世界杯2")
         {
@@ -2529,6 +2529,37 @@ export default class panelMain extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,strContent);
             }
         }
+    }
+
+    /** 根据公告文字的实际换行高度刷新内容区，确保长公告可以完整滚动。 */
+    private SetScrollableAnnouncement(panelName:string,message:string)
+    {
+        let list = Tool.GetChild(this.node,panelName+"/list");
+        let content = list == null ? null : Tool.GetChild(list,"view/content");
+        let messageNode = content == null ? null : content.getChildByName("msg");
+        let label = messageNode == null ? null : messageNode.getComponent(cc.Label);
+        let scrollView = list == null ? null : list.getComponent(cc.ScrollView);
+        if(label == null || content == null || scrollView == null)
+            return;
+
+        message = Tool.NormalizeMultilineText(message);
+        label.string = message;
+        this.scheduleOnce(() =>
+        {
+            if(!cc.isValid(this.node) || !cc.isValid(label.node) || !cc.isValid(content))
+                return;
+            let forceUpdate = (label as any)._forceUpdateRenderData;
+            if(typeof forceUpdate === "function")
+                forceUpdate.call(label, true);
+            let explicitLineHeight = Math.max(label.lineHeight, message.split("\n").length * label.lineHeight);
+            label.node.height = Math.max(label.node.height, explicitLineHeight);
+            let layout = content.getComponent(cc.Layout);
+            if(layout != null)
+                layout.updateLayout();
+            content.height = Math.max(scrollView.node.height,content.height);
+            scrollView.stopAutoScroll();
+            scrollView.scrollToTop(0);
+        },0);
     }
     public UserHash2Info(strMsg:string)
     {

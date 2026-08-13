@@ -107,6 +107,8 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/configuration/announcement", s.authorized("configuration.announcement.update", true, s.handleUpdateGameAnnouncement))
 	s.mux.Handle("GET /api/configuration/notifications", s.authorized("configuration.notification.view", false, s.handleListGameNotifications))
 	s.mux.Handle("POST /api/configuration/notifications", s.authorized("configuration.notification.send", true, s.handleSendGameNotification))
+	s.mux.Handle("GET /api/configuration/notification-carousel", s.authorized("configuration.notification.view", false, s.handleGetNotificationCarousel))
+	s.mux.Handle("PUT /api/configuration/notification-carousel", s.authorized("configuration.notification.carousel.update", true, s.handleUpdateNotificationCarousel))
 	s.mux.Handle("GET /api/configuration/reward-pools", s.authorized("configuration.reward_pool.view", false, s.handleGetRewardPools))
 	s.mux.Handle("PUT /api/configuration/reward-pools", s.authorized("configuration.reward_pool.update", true, s.handleUpdateRewardPools))
 	s.mux.Handle("GET /api/configuration/payments", s.authorized("configuration.payment.view", false, s.handleGetPaymentConfiguration))
