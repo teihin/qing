@@ -95,6 +95,7 @@ VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), p.ID, secu
 	}
 	s.hub.publish("team", liveEvent{Type: "team.changed"})
 	s.tryAssignQueued(r.Context(), "agent_login")
+	s.tryRebalanceLiveConversations(r.Context(), "agent_login")
 	writeData(w, http.StatusOK, map[string]any{"agent": p, "csrfToken": csrfToken})
 }
 
@@ -191,6 +192,7 @@ func (s *Server) handleAgentPresence(w http.ResponseWriter, r *http.Request, p a
 		_ = s.requeueAgentConversations(r.Context(), p.ID, "客服切换为离线")
 	} else if req.Presence == "online" {
 		s.tryAssignQueued(r.Context(), "agent_presence_online")
+		s.tryRebalanceLiveConversations(r.Context(), "agent_presence_online")
 	}
 	s.hub.publish("team", liveEvent{Type: "team.changed"})
 	writeData(w, http.StatusOK, map[string]any{"presence": req.Presence})
@@ -204,6 +206,7 @@ func (s *Server) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request, p 
 	}
 	if p.Presence == "online" {
 		s.tryAssignQueued(r.Context(), "agent_heartbeat")
+		s.tryRebalanceLiveConversations(r.Context(), "agent_heartbeat")
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

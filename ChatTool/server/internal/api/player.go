@@ -198,6 +198,7 @@ VALUES (?, ?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), playerI
 	setCookie(w, playerSessionCookieName(sessionRef), sessionToken, s.cfg.CookiePath, true, s.cfg.CookieSecure, s.cfg.PlayerSessionTTL)
 	setCookie(w, playerCSRFCookieName(sessionRef), csrfToken, s.cfg.CookiePath, false, s.cfg.CookieSecure, s.cfg.PlayerSessionTTL)
 	s.tryAssignQueued(r.Context(), "player_session_created")
+	s.tryRebalanceLiveConversations(r.Context(), "player_session_created")
 	state, err := s.loadPlayerState(r.Context(), playerID, conversationID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法读取咨询状态")
@@ -429,6 +430,12 @@ VALUES(?,?,?,?,?,NOW(),NOW()) ON DUPLICATE KEY UPDATE score=VALUES(score),tags=V
 }
 
 func (s *Server) assignQueued(ctx context.Context) (int, error) {
+	s.assignmentMu.Lock()
+	defer s.assignmentMu.Unlock()
+	return s.assignQueuedLocked(ctx)
+}
+
+func (s *Server) assignQueuedLocked(ctx context.Context) (int, error) {
 	assignedCount := 0
 	for assignedCount < 50 {
 		tx, err := s.db.BeginTx(ctx, nil)
@@ -438,13 +445,19 @@ func (s *Server) assignQueued(ctx context.Context) (int, error) {
 		var conversationID, channelCode string
 		cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
 		err = tx.QueryRowContext(ctx, `SELECT c.id,c.channel_code FROM chat_conversation c
-WHERE c.status='queued' AND EXISTS (
+WHERE c.status='queued'
+AND EXISTS (
+  SELECT 1 FROM chat_player_session player_sess
+  WHERE player_sess.conversation_id=c.id AND player_sess.expires_at>NOW() AND player_sess.last_seen_at>=?
+)
+AND EXISTS (
   SELECT 1 FROM chat_agent available
   WHERE available.channel_code=c.channel_code AND available.enabled=1 AND available.presence='online' AND available.last_seen_at>=?
   AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=available.id AND sess.expires_at>NOW())
-  AND (SELECT COUNT(*) FROM chat_conversation active WHERE active.assigned_agent_id=available.id AND active.status='active') < available.max_conversations
+  AND (SELECT COUNT(*) FROM chat_conversation active
+       WHERE active.assigned_agent_id=available.id AND active.status='active') < available.max_conversations
 )
-ORDER BY FIELD(c.priority,'urgent','high','normal','low'),c.queue_started_at ASC LIMIT 1 FOR UPDATE`, cutoff).Scan(&conversationID, &channelCode)
+ORDER BY FIELD(c.priority,'urgent','high','normal','low'),c.queue_started_at ASC LIMIT 1 FOR UPDATE`, cutoff, cutoff).Scan(&conversationID, &channelCode)
 		if errors.Is(err, sql.ErrNoRows) {
 			tx.Rollback()
 			break
@@ -457,13 +470,19 @@ ORDER BY FIELD(c.priority,'urgent','high','normal','low'),c.queue_started_at ASC
 		var agentName string
 		err = tx.QueryRowContext(ctx, `SELECT a.id, a.display_name
 FROM chat_agent a
-LEFT JOIN (SELECT assigned_agent_id, COUNT(*) active_count FROM chat_conversation WHERE status='active' GROUP BY assigned_agent_id) c
+LEFT JOIN (SELECT active.assigned_agent_id, COUNT(*) active_count
+           FROM chat_conversation active
+           WHERE active.status='active'
+           AND EXISTS (SELECT 1 FROM chat_player_session active_sess
+                       WHERE active_sess.conversation_id=active.id AND active_sess.expires_at>NOW() AND active_sess.last_seen_at>=?)
+           GROUP BY active.assigned_agent_id) c
 ON c.assigned_agent_id = a.id
 WHERE a.channel_code=? AND a.enabled=1 AND a.presence='online' AND a.last_seen_at >= ?
 AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=a.id AND sess.expires_at>NOW())
 AND COALESCE(c.active_count,0) < a.max_conversations
+AND (SELECT COUNT(*) FROM chat_conversation total_active WHERE total_active.assigned_agent_id=a.id AND total_active.status='active') < a.max_conversations
 ORDER BY COALESCE(c.active_count,0) ASC, COALESCE(a.last_assigned_at,'1970-01-01') ASC, a.id ASC
-LIMIT 1 FOR UPDATE`, channelCode, cutoff).Scan(&agentID, &agentName)
+LIMIT 1 FOR UPDATE`, cutoff, channelCode, cutoff).Scan(&agentID, &agentName)
 		if errors.Is(err, sql.ErrNoRows) {
 			tx.Rollback()
 			break
@@ -498,6 +517,201 @@ LIMIT 1 FOR UPDATE`, channelCode, cutoff).Scan(&agentID, &agentName)
 	return assignedCount, nil
 }
 
+type agentLiveLoad struct {
+	ID                 int64
+	DisplayName        string
+	ChannelCode        string
+	LiveConversations  int
+	TotalConversations int
+	MaxConversations   int
+	LastAssignedAt     sql.NullTime
+}
+
+func chooseLiveRebalancePair(loads []agentLiveLoad) (agentLiveLoad, agentLiveLoad, bool) {
+	if len(loads) < 2 {
+		return agentLiveLoad{}, agentLiveLoad{}, false
+	}
+	source := loads[0]
+	var target agentLiveLoad
+	targetFound := false
+	for _, load := range loads {
+		if load.TotalConversations < load.MaxConversations && (!targetFound || load.LiveConversations < target.LiveConversations ||
+			(load.LiveConversations == target.LiveConversations && lastAssignedBefore(load, target))) {
+			target, targetFound = load, true
+		}
+		if load.LiveConversations > source.LiveConversations ||
+			(load.LiveConversations == source.LiveConversations && lastAssignedAfter(load, source)) {
+			source = load
+		}
+	}
+	if !targetFound || source.ID == target.ID || source.LiveConversations-target.LiveConversations <= 1 {
+		return agentLiveLoad{}, agentLiveLoad{}, false
+	}
+	return source, target, true
+}
+
+func lastAssignedBefore(left, right agentLiveLoad) bool {
+	if left.LastAssignedAt.Valid != right.LastAssignedAt.Valid {
+		return !left.LastAssignedAt.Valid
+	}
+	if left.LastAssignedAt.Valid && !left.LastAssignedAt.Time.Equal(right.LastAssignedAt.Time) {
+		return left.LastAssignedAt.Time.Before(right.LastAssignedAt.Time)
+	}
+	return left.ID < right.ID
+}
+
+func lastAssignedAfter(left, right agentLiveLoad) bool {
+	if left.LastAssignedAt.Valid != right.LastAssignedAt.Valid {
+		return left.LastAssignedAt.Valid
+	}
+	if left.LastAssignedAt.Valid && !left.LastAssignedAt.Time.Equal(right.LastAssignedAt.Time) {
+		return left.LastAssignedAt.Time.After(right.LastAssignedAt.Time)
+	}
+	return left.ID > right.ID
+}
+
+func (s *Server) rebalanceLiveConversations(ctx context.Context) (int, error) {
+	s.assignmentMu.Lock()
+	defer s.assignmentMu.Unlock()
+
+	movedCount := 0
+	for movedCount < 50 {
+		cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
+		rows, err := s.db.QueryContext(ctx, `SELECT a.id,a.display_name,a.channel_code,a.max_conversations,a.last_assigned_at,
+(SELECT COUNT(*) FROM chat_conversation active
+ WHERE active.assigned_agent_id=a.id AND active.status='active'
+ AND EXISTS (SELECT 1 FROM chat_player_session player_sess
+             WHERE player_sess.conversation_id=active.id AND player_sess.expires_at>NOW() AND player_sess.last_seen_at>=?)) live_count,
+(SELECT COUNT(*) FROM chat_conversation total_active
+ WHERE total_active.assigned_agent_id=a.id AND total_active.status='active') total_count
+FROM chat_agent a
+WHERE a.enabled=1 AND a.presence='online' AND a.last_seen_at>=?
+AND EXISTS (SELECT 1 FROM chat_agent_session agent_sess WHERE agent_sess.agent_id=a.id AND agent_sess.expires_at>NOW())
+ORDER BY a.channel_code,a.id`, cutoff, cutoff)
+		if err != nil {
+			return movedCount, err
+		}
+		byChannel := make(map[string][]agentLiveLoad)
+		for rows.Next() {
+			var load agentLiveLoad
+			if err := rows.Scan(&load.ID, &load.DisplayName, &load.ChannelCode, &load.MaxConversations, &load.LastAssignedAt, &load.LiveConversations, &load.TotalConversations); err != nil {
+				rows.Close()
+				return movedCount, err
+			}
+			byChannel[load.ChannelCode] = append(byChannel[load.ChannelCode], load)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return movedCount, err
+		}
+		rows.Close()
+
+		var source, target agentLiveLoad
+		found := false
+		for _, loads := range byChannel {
+			candidateSource, candidateTarget, ok := chooseLiveRebalancePair(loads)
+			if !ok {
+				continue
+			}
+			if !found || candidateSource.LiveConversations-candidateTarget.LiveConversations > source.LiveConversations-target.LiveConversations {
+				source, target, found = candidateSource, candidateTarget, true
+			}
+		}
+		if !found {
+			break
+		}
+
+		conversationID, targetName, moved, err := s.moveLiveUnansweredConversation(ctx, source, target, cutoff)
+		if err != nil {
+			return movedCount, err
+		}
+		if !moved {
+			break
+		}
+		movedCount++
+		s.hub.publish("agent:"+strconv.FormatInt(source.ID, 10), liveEvent{Type: "conversation.changed", ConversationID: conversationID})
+		s.hub.publish("agent:"+strconv.FormatInt(target.ID, 10), liveEvent{Type: "conversation.assigned", ConversationID: conversationID})
+		s.hub.publish("player-conversation:"+conversationID, liveEvent{Type: "conversation.transferred", ConversationID: conversationID, Payload: map[string]any{"agentName": targetName}})
+		s.publishConversationEvent(ctx, conversationID, liveEvent{Type: "conversation.changed", ConversationID: conversationID})
+	}
+	return movedCount, nil
+}
+
+func (s *Server) moveLiveUnansweredConversation(ctx context.Context, source, target agentLiveLoad, cutoff time.Time) (string, string, bool, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return "", "", false, err
+	}
+	defer tx.Rollback()
+
+	var conversationID string
+	err = tx.QueryRowContext(ctx, `SELECT c.id FROM chat_conversation c
+WHERE c.assigned_agent_id=? AND c.channel_code=? AND c.status='active' AND c.assigned_at IS NOT NULL
+AND EXISTS (SELECT 1 FROM chat_player_session player_sess
+            WHERE player_sess.conversation_id=c.id AND player_sess.expires_at>NOW() AND player_sess.last_seen_at>=?)
+AND NOT EXISTS (SELECT 1 FROM chat_message reply
+                WHERE reply.conversation_id=c.id AND reply.sender_type='agent' AND reply.created_at>=c.assigned_at)
+AND COALESCE((SELECT CONCAT(latest.operator_type,':',latest.action) FROM chat_assignment_log latest
+              WHERE latest.conversation_id=c.id ORDER BY latest.id DESC LIMIT 1),'') IN ('system:auto_assign','system:transfer')
+ORDER BY c.last_message_at DESC,c.assigned_at DESC,c.id
+LIMIT 1 FOR UPDATE`, source.ID, source.ChannelCode, cutoff).Scan(&conversationID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+
+	var targetName string
+	var targetCapacity int
+	err = tx.QueryRowContext(ctx, `SELECT display_name,max_conversations FROM chat_agent
+WHERE id=? AND channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?
+AND EXISTS (SELECT 1 FROM chat_agent_session agent_sess WHERE agent_sess.agent_id=chat_agent.id AND agent_sess.expires_at>NOW())
+FOR UPDATE`, target.ID, source.ChannelCode, cutoff).Scan(&targetName, &targetCapacity)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+
+	var targetTotal int
+	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM chat_conversation active
+WHERE active.assigned_agent_id=? AND active.status='active'`, target.ID).Scan(&targetTotal)
+	if err != nil {
+		return "", "", false, err
+	}
+	if targetTotal >= targetCapacity {
+		return "", "", false, nil
+	}
+
+	result, err := tx.ExecContext(ctx, `UPDATE chat_conversation
+SET assigned_agent_id=?,assigned_at=NOW(),agent_last_read_at=NULL,updated_at=NOW()
+WHERE id=? AND assigned_agent_id=? AND status='active'`, target.ID, conversationID, source.ID)
+	if err != nil {
+		return "", "", false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return "", "", false, err
+	}
+	if affected != 1 {
+		return "", "", false, nil
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE chat_agent SET last_assigned_at=NOW() WHERE id=?`, target.ID); err == nil {
+		_, err = tx.ExecContext(ctx, `INSERT INTO chat_assignment_log
+(conversation_id,from_agent_id,to_agent_id,action,operator_type,reason,created_at)
+VALUES (?,?,?,'transfer','system','在线客服负载自动均衡',NOW())`, conversationID, source.ID, target.ID)
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	if err = tx.Commit(); err != nil {
+		return "", "", false, err
+	}
+	return conversationID, targetName, true, nil
+}
+
 type sqlExecer interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
@@ -519,6 +733,16 @@ func (s *Server) tryAssignQueued(ctx context.Context, trigger string) int {
 		s.logger.Error("automatic conversation assignment failed", "trigger", trigger, "assigned", assigned, "error", err)
 	}
 	return assigned
+}
+
+func (s *Server) tryRebalanceLiveConversations(ctx context.Context, trigger string) int {
+	moved, err := s.rebalanceLiveConversations(ctx)
+	if err != nil {
+		s.logger.Error("live conversation rebalance failed", "trigger", trigger, "moved", moved, "error", err)
+	} else if moved > 0 {
+		s.logger.Info("live conversations rebalanced", "trigger", trigger, "moved", moved)
+	}
+	return moved
 }
 
 func (s *Server) requeueAgentConversations(ctx context.Context, agentID int64, reason string) error {
@@ -605,6 +829,7 @@ func (s *Server) runMaintenance(ctx context.Context) {
 			_, _ = s.db.ExecContext(ctx, `UPDATE chat_conversation SET status='closed', closed_at=NOW(), close_reason='会话长时间无消息自动关闭', updated_at=NOW()
 WHERE status IN ('queued','active') AND last_message_at < ?`, time.Now().Add(-s.cfg.ConversationIdle))
 			s.tryAssignQueued(ctx, "maintenance")
+			s.tryRebalanceLiveConversations(ctx, "maintenance")
 		}
 	}
 }

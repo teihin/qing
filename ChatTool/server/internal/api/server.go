@@ -73,6 +73,7 @@ type Server struct {
 	hub            *eventHub
 	loginLimiter   *rateLimiter
 	messageLimiter *rateLimiter
+	assignmentMu   sync.Mutex
 	mediaTicketMu  sync.Mutex
 	mediaTickets   map[string]mediaAccessTicket
 }
