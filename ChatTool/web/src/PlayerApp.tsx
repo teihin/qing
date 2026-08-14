@@ -19,6 +19,7 @@ export default function PlayerApp() {
   const [showActions, setShowActions] = useState(false)
   const [showRating, setShowRating] = useState(false)
   const booted = useRef(false)
+  const parentReadySent = useRef(false)
   const listEnd = useRef<HTMLDivElement>(null)
   const typingIdleTimer = useRef<number | undefined>(undefined)
   const typingHeartbeatTimer = useRef<number | undefined>(undefined)
@@ -128,6 +129,12 @@ export default function PlayerApp() {
       }
     })()
   }, [embedded, embeddedCSRFKey, embeddedTokenKey, loadMessages])
+
+  useEffect(() => {
+    if (!embedded || parentReadySent.current || (!state && !error) || window.parent === window) return
+    parentReadySent.current = true
+    window.parent.postMessage({ type: 'chattool:player-ready', ok: Boolean(state) }, '*')
+  }, [embedded, error, state])
 
   useEffect(() => {
     if (!conversationID) return

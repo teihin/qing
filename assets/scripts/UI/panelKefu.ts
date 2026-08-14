@@ -16,6 +16,11 @@ export default class panelKefu extends UIPanelViewBase {
     private loading:cc.ProgressBar = null;
     private web:cc.WebView = null;
     private externalUrl:string = "";
+    private embeddedUrl:string = "";
+    private expectedWebOrigin:string = "";
+    private webReady:boolean = false;
+    private webLoadAttempt:number = 0;
+    private webMessageHandler:(event:MessageEvent) => void = null;
 
     onLoad () {
         super.onLoad();
@@ -78,25 +83,42 @@ export default class panelKefu extends UIPanelViewBase {
 
         // 默认在游戏内打开；原有外部网页版协议保留，但游戏界面不显示跳出按钮。
         this.externalUrl = strUrl;
-        let embeddedUrl = this.AppendQuery(strUrl, "embed", "game");
-        this.ConfigureTitle();
-        this.ConfigureTransparentWebView();
-        this.web.url = embeddedUrl;
+        this.embeddedUrl = this.AppendQuery(strUrl, "embed", "game");
+        this.expectedWebOrigin = this.GetWebOrigin(this.embeddedUrl);
 
         this.loading = Tool.GetChild(this.node,"进度/img").getComponent(cc.ProgressBar);
         this.loading.progress = 0;
         this.schedule(this.UpdateProgress, 0.02);
 
+        // 必须先监听再赋URL。浏览器首次创建iframe时，缓存页可能在同一帧完成加载，
+        // 原先的“先赋URL、后监听”会漏掉第一次loaded事件，关闭重开后才恢复。
         this.web.node.on("loaded", this.OnWebLoaded, this);
         this.web.node.on("error", this.OnWebError, this);
+        if(cc.sys.isBrowser && typeof window !== "undefined")
+        {
+            this.webMessageHandler = this.OnWebMessage.bind(this);
+            window.addEventListener("message", this.webMessageHandler, false);
+        }
+
+        this.ConfigureTitle();
+        this.ConfigureTransparentWebView();
+        // 下一帧再导航，确保WebView对应的DOM/原生控件已经完成首次布局。
+        this.scheduleOnce(this.BeginWebLoad, 0);
     }
 
     onDestroy () {
         this.unschedule(this.UpdateProgress);
+        this.unschedule(this.BeginWebLoad);
+        this.unschedule(this.CheckWebReady);
         if(this.web != null && cc.isValid(this.web.node))
         {
             this.web.node.off("loaded", this.OnWebLoaded, this);
             this.web.node.off("error", this.OnWebError, this);
+        }
+        if(cc.sys.isBrowser && typeof window !== "undefined" && this.webMessageHandler != null)
+        {
+            window.removeEventListener("message", this.webMessageHandler, false);
+            this.webMessageHandler = null;
         }
     }
 
@@ -163,21 +185,112 @@ export default class panelKefu extends UIPanelViewBase {
             + encodeURIComponent(key) + "=" + encodeURIComponent(value);
     }
 
-    private OnWebLoaded()
+    private GetWebOrigin(url:string):string
     {
+        if(!cc.sys.isBrowser || typeof document === "undefined")
+            return "";
+        try {
+            let anchor = document.createElement("a");
+            anchor.href = url;
+            return anchor.protocol + "//" + anchor.host;
+        } catch(error) {
+            return "";
+        }
+    }
+
+    private BeginWebLoad()
+    {
+        if(this.web == null || this.embeddedUrl == "" || this.webReady)
+            return;
+
+        this.webLoadAttempt += 1;
+        this.unschedule(this.CheckWebReady);
+        let targetUrl = this.embeddedUrl;
+        if(this.webLoadAttempt > 1)
+        {
+            targetUrl = this.AppendQuery(targetUrl, "chat_retry", Date.now().toString());
+        }
+        this.web.url = targetUrl;
+        this.scheduleOnce(this.CheckWebReady, this.webLoadAttempt === 1 ? 8 : 12);
+    }
+
+    private CheckWebReady()
+    {
+        if(this.webReady)
+            return;
+        if(this.webLoadAttempt < 2)
+        {
+            this.BeginWebLoad();
+            return;
+        }
+        this.ShowWebLoadError();
+    }
+
+    private OnWebMessage(event:MessageEvent)
+    {
+        if(this.webReady || event == null || event.data == null || event.data.type !== "chattool:player-ready")
+            return;
+        if(this.expectedWebOrigin != "" && event.origin !== this.expectedWebOrigin)
+            return;
+
+        try {
+            let impl:any = this.web == null ? null : (this.web as any)._impl;
+            if(impl != null && impl._iframe != null && impl._iframe.contentWindow != null
+                && event.source !== impl._iframe.contentWindow)
+                return;
+        } catch(error) {
+            return;
+        }
+
+        // 页面已经渲染但接口首次初始化失败时，也自动重试一次；第二次则保留网页自己的错误提示。
+        if(event.data.ok === false && this.webLoadAttempt < 2)
+        {
+            this.scheduleOnce(this.BeginWebLoad, 0.3);
+            return;
+        }
+        this.MarkWebReady();
+    }
+
+    private MarkWebReady()
+    {
+        if(this.webReady)
+            return;
+        this.webReady = true;
+        this.unschedule(this.CheckWebReady);
+        this.unschedule(this.UpdateProgress);
         this.ConfigureTransparentWebView();
         if(this.loading != null)
             this.loading.progress = 1;
-        this.unschedule(this.UpdateProgress);
+    }
+
+    private OnWebLoaded()
+    {
+        this.ConfigureTransparentWebView();
+        // Native WebView没有window.postMessage握手，仍以loaded作为完成标志。
+        if(!cc.sys.isBrowser)
+            this.MarkWebReady();
     }
 
     private OnWebError()
     {
+        if(this.webReady)
+            return;
+        if(this.webLoadAttempt < 2)
+        {
+            this.scheduleOnce(this.BeginWebLoad, 0.3);
+            return;
+        }
+        this.ShowWebLoadError();
+    }
+
+    private ShowWebLoadError()
+    {
+        this.unschedule(this.CheckWebReady);
         this.unschedule(this.UpdateProgress);
         UIManager.getInstance().showPanel(
             "panelMsgView",
             ShowPanelMode.Cover,
-            "游戏内客服加载失败，请关闭后重新进入。"
+            "游戏内客服加载失败，请检查网络后点击关闭并重新进入。"
         );
     }
 

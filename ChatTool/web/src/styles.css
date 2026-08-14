@@ -411,48 +411,50 @@ textarea { resize: none; }
   .player-info dl div { grid-template-columns: 58px 1fr; }
 }
 
-@media (max-width: 960px) {
-  /* 游戏内 WebView 可能按 750～960 CSS 像素报告宽度，玩家端必须在这一档就进入大字手机布局。 */
-  .player-header { height: auto; min-height: 94px; padding-right: 16px; padding-bottom: 15px; padding-left: 16px; }
-  .player-brand { gap: 14px; }
-  .player-brand strong { font-size: 24px; }
-  .player-brand small { margin-top: 4px; font-size: 15px; line-height: 1.4; }
-  .player-shell .brand-mark-small { width: 54px; height: 54px; font-size: 22px; }
-  .header-action { min-height: 48px; padding: 10px 15px; font-size: 16px; }
-  .service-banner { gap: 17px; margin: 14px 14px 0; padding: 18px; }
-  .service-banner .avatar-large { width: 72px; height: 72px; font-size: 27px; }
-  .service-banner .service-avatar i { width: 15px; height: 15px; }
-  .service-banner strong { font-size: 20px; line-height: 1.4; }
-  .service-banner p { margin-top: 7px; font-size: 16px; line-height: 1.55; }
-  .player-messages { padding: 20px 14px 30px; }
-  .conversation-date { margin-bottom: 20px; padding: 6px 12px; font-size: 14px; }
-  .player-shell .message-row { gap: 11px; margin-bottom: 24px; }
-  .player-shell .message-row > .avatar-small { width: 40px; height: 40px; font-size: 16px; }
-  .player-shell .message-stack { max-width: 86%; }
-  .player-shell .message-meta { min-height: 22px; margin-bottom: 6px; font-size: 14px; }
-  .player-shell .message-bubble p { padding: 14px 16px; font-size: 20px; line-height: 1.58; }
-  .player-shell .media-loading { min-width: 124px; min-height: 68px; font-size: 16px; }
-  .player-shell .file-card { min-width: min(270px, 74vw); padding: 14px; }
-  .player-shell .file-card strong { max-width: 160px; font-size: 17px; }
-  .player-shell .file-card small { font-size: 14px; }
-  .player-shell .file-card b { font-size: 15px; }
-  .player-shell .system-message span { padding: 8px 12px; font-size: 15px; line-height: 1.6; }
-  .typing-bubble { margin-left: 50px; padding: 12px 15px; }
-  .player-composer { padding: 11px 14px max(10px, env(safe-area-inset-bottom)); }
-  .composer-row { gap: 10px; }
-  .composer-row textarea { min-height: 52px; padding: 13px 14px; font-size: 18px; line-height: 24px; }
-  .add-button { width: 50px; height: 50px; font-size: 31px; line-height: 46px; }
-  .send-button { min-width: 68px; height: 50px; padding: 0 18px; font-size: 17px; }
-  .safe-tip { margin-top: 8px; padding-left: 60px; font-size: 14px; line-height: 1.45; }
-  .player-actions { gap: 12px; padding: 10px 4px 18px; }
-  .player-actions label { gap: 8px; font-size: 15px; }
-  .action-icon { width: 58px; height: 58px; border-radius: 18px; font-size: 19px; }
-  .toast-error, .uploading-bar { bottom: 112px; padding: 13px 16px; font-size: 16px; line-height: 1.5; }
-  .rating-entry { bottom: 116px; padding: 11px 22px; font-size: 16px; }
-  .rating-modal > p { font-size: 16px; line-height: 1.6; }
-  .rating-tags button, .rating-modal > footer button { min-height: 42px; font-size: 14px; }
-  .rating-modal > textarea { font-size: 16px; line-height: 1.55; }
+@media (max-width: 1280px) {
+  /* 游戏内 WebView 可能按 750～1280 CSS 像素报告宽度，玩家端统一使用更醒目的大字触控布局。 */
+  .player-header { height: auto; min-height: 110px; padding: 18px 18px 17px; }
+  .player-brand { gap: 16px; }
+  .player-brand strong { font-size: 29px; line-height: 1.25; }
+  .player-brand small { margin-top: 5px; font-size: 18px; line-height: 1.45; }
+  .player-shell .brand-mark-small { width: 64px; height: 64px; font-size: 26px; }
+  .header-action { min-height: 54px; padding: 11px 18px; font-size: 19px; }
+  .service-banner { gap: 20px; margin: 16px 16px 0; padding: 22px; }
+  .service-banner .avatar-large { width: 84px; height: 84px; font-size: 32px; }
+  .service-banner .service-avatar i { width: 17px; height: 17px; }
+  .service-banner strong { font-size: 25px; line-height: 1.4; }
+  .service-banner p { margin-top: 8px; font-size: 20px; line-height: 1.55; }
+  .player-messages { padding: 24px 16px 34px; }
+  .conversation-date { margin-bottom: 24px; padding: 7px 14px; font-size: 17px; }
+  .player-shell .message-row { gap: 13px; margin-bottom: 28px; }
+  .player-shell .message-row > .avatar-small { width: 46px; height: 46px; font-size: 19px; }
+  .player-shell .message-stack { max-width: 88%; }
+  .player-shell .message-meta { min-height: 25px; margin-bottom: 7px; font-size: 17px; }
+  .player-shell .message-bubble p { padding: 17px 19px; font-size: 25px; line-height: 1.58; }
+  .player-shell .media-loading { min-width: 146px; min-height: 78px; font-size: 19px; }
+  .player-shell .file-card { min-width: min(310px, 78vw); padding: 17px; }
+  .player-shell .file-card strong { max-width: 190px; font-size: 21px; }
+  .player-shell .file-card small { font-size: 17px; }
+  .player-shell .file-card b { font-size: 18px; }
+  .player-shell .system-message span { padding: 10px 14px; font-size: 18px; line-height: 1.6; }
+  .typing-bubble { margin-left: 59px; padding: 14px 17px; }
+  .player-composer { padding: 13px 16px max(12px, env(safe-area-inset-bottom)); }
+  .composer-row { gap: 11px; }
+  .composer-row textarea { min-height: 60px; padding: 15px 16px; font-size: 22px; line-height: 29px; }
+  .add-button { width: 58px; height: 58px; font-size: 36px; line-height: 54px; }
+  .send-button { min-width: 78px; height: 58px; padding: 0 20px; font-size: 20px; }
+  .safe-tip { margin-top: 9px; padding-left: 69px; font-size: 16px; line-height: 1.5; }
+  .player-actions { gap: 14px; padding: 12px 5px 20px; }
+  .player-actions label { gap: 9px; font-size: 18px; }
+  .action-icon { width: 66px; height: 66px; border-radius: 20px; font-size: 22px; }
+  .toast-error, .uploading-bar { bottom: 132px; padding: 15px 18px; font-size: 19px; line-height: 1.5; }
+  .rating-entry { bottom: 136px; padding: 13px 25px; font-size: 19px; }
+  .rating-modal > p { font-size: 19px; line-height: 1.6; }
+  .rating-tags button, .rating-modal > footer button { min-height: 48px; font-size: 17px; }
+  .rating-modal > textarea { font-size: 19px; line-height: 1.55; }
+}
 
+@media (max-width: 960px) {
   .agent-workspace { grid-template-columns: 300px 1fr; }
   .player-info-panel { display: none; }
   .topbar-metrics { display: none; }
@@ -491,10 +493,10 @@ textarea { resize: none; }
 
 @media (max-width: 480px) {
   .player-shell { box-shadow: none; }
-  .player-header { height: auto; min-height: 94px; }
-  .player-shell .brand-mark-small { width: 54px; height: 54px; }
-  .service-banner { margin: 10px 10px 0; padding-right: 16px; padding-left: 16px; }
-  .player-messages { padding-right: 10px; padding-left: 10px; }
+  .player-header { height: auto; min-height: 110px; }
+  .player-shell .brand-mark-small { width: 64px; height: 64px; }
+  .service-banner { margin: 12px 10px 0; padding-right: 18px; padding-left: 18px; }
+  .player-messages { padding-right: 12px; padding-left: 12px; }
   .player-shell .message-stack { max-width: 88%; }
   .player-shell .message-bubble img { max-width: 72vw; }
   .agent-login-page { background: linear-gradient(180deg, #e7f2ef, #f8faf9); }
