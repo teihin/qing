@@ -8782,7 +8782,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "开局倒计时",
+    "_name": "房间已就绪美术字",
     "_objFlags": 0,
     "_parent": {
       "__id__": 218
@@ -8800,15 +8800,15 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 225,
-      "g": 225,
-      "b": 225,
+      "r": 255,
+      "g": 255,
+      "b": 255,
       "a": 255
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 302.4,
-      "height": 79.1
+      "width": 440,
+      "height": 102
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -8845,7 +8845,7 @@
     "_id": ""
   },
   {
-    "__type__": "cc.Label",
+    "__type__": "cc.Sprite",
     "_name": "",
     "_objFlags": 0,
     "node": {
@@ -8857,23 +8857,23 @@
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
       }
     ],
-    "_useOriginalSize": false,
-    "_string": "房间2小时不开始将自动解散\n倒计时:",
-    "_N$string": "房间2小时不开始将自动解散\n倒计时:",
-    "_fontSize": 24,
-    "_lineHeight": 35,
-    "_enableWrapText": true,
-    "_N$file": {
-      "__uuid__": "fd7307b2-666e-4c26-963d-59f787cad6fb"
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_spriteFrame": {
+      "__uuid__": "a3d8b745-0b7c-4a39-8d86-5dd61b7dd129"
     },
-    "_isSystemFontUsed": false,
-    "_spacingX": 0,
-    "_batchAsBitmap": false,
-    "_N$horizontalAlign": 1,
-    "_N$verticalAlign": 1,
-    "_N$fontFamily": "Arial",
-    "_N$overflow": 0,
-    "_N$cacheMode": 0,
+    "_type": 0,
+    "_sizeMode": 0,
+    "_fillType": 0,
+    "_fillCenter": {
+      "__type__": "cc.Vec2",
+      "x": 0,
+      "y": 0
+    },
+    "_fillStart": 0,
+    "_fillRange": 0,
+    "_isTrimmedMode": true,
+    "_atlas": null,
     "_id": ""
   },
   {

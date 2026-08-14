@@ -1,0 +1,161 @@
+{
+	admin 127.0.0.1:2019
+}
+
+(qing_access_log) {
+	log {
+		output file /var/log/caddy/update-access.log {
+			roll_size 50MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+	}
+}
+
+(qing_common) {
+	import qing_access_log
+	root * /www/html
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	@chattool_no_slash path /chattool
+	redir @chattool_no_slash /chattool/ 308
+
+	@xuanmanager_no_slash path /xuanmanager
+	redir @xuanmanager_no_slash /xuanmanager/ 308
+
+	handle_path /xuanmanager/* {
+		reverse_proxy 127.0.0.1:8891
+	}
+
+	handle_path /chattool/* {
+		request_body {
+			max_size 110MB
+		}
+		reverse_proxy 127.0.0.1:8893 {
+			flush_interval -1
+		}
+	}
+
+	handle_path /audio/* {
+		reverse_proxy 127.0.0.1:18080
+	}
+
+	# 热更新清单会随版本变化，绝不能使用immutable。
+	@hot_update_manifest path /up/project.manifest /up/version.manifest
+	header @hot_update_manifest {
+		Cache-Control "no-store, max-age=0"
+		Pragma "no-cache"
+		Expires "0"
+	}
+
+	# 热更新资源路径不带内容哈希，要求每次重新验证。
+	@hot_update_payload {
+		path /up/*
+		not path /up/project.manifest /up/version.manifest
+	}
+	header @hot_update_payload Cache-Control "no-cache"
+
+	@web_mobile_entry path /web-mobile /web-mobile/ /web-mobile/index.html
+	header @web_mobile_entry {
+		Cache-Control "no-store, max-age=0"
+		Pragma "no-cache"
+		Expires "0"
+	}
+
+	@webhome_entry path_regexp webhome_entry `(?i)^/webhome(?:/?|/.*\.(?:html?|js|css|json))$`
+	header @webhome_entry {
+		Cache-Control "no-store, max-age=0"
+		Pragma "no-cache"
+		Expires "0"
+	}
+}
+
+(qing_file_server) {
+	file_server {
+		hide .git .env .audio-server .xuanmanager .chattool .web-mobile-caddy-cache .webhome-caddy-headers .web-mobile.previous .webhome.previous _incoming _processed _failed .extracting /etc/caddy/Caddyfile
+	}
+}
+
+# 原生客户端、热更新和旧后台仍使用HTTP公网IP。
+http://{$QING_PUBLIC_IP:154.37.155.17} {
+	import qing_common
+	import qing_file_server
+}
+
+# 显式把域名HTTP跳转到HTTPS。
+http://{$QING_PUBLIC_HOST:154-37-155-17.sslip.io} {
+	redir https://{$QING_PUBLIC_HOST:154-37-155-17.sslip.io}{uri} 308
+}
+
+# 网页版、WSS、HTTPS语音和HTTPS客服入口。
+{$QING_PUBLIC_HOST:154-37-155-17.sslip.io} {
+	import qing_common
+
+	handle_path /ws/20013/* {
+		reverse_proxy 127.0.0.1:20013 {
+			transport http {
+				dial_timeout 10s
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	handle_path /ws/20015/* {
+		reverse_proxy 127.0.0.1:20015 {
+			transport http {
+				dial_timeout 10s
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	handle_path /ws/20016/* {
+		reverse_proxy 127.0.0.1:20016 {
+			transport http {
+				dial_timeout 10s
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	# 20017～20019是预留BaseApp端口；未启动对应进程时返回502属于预期。
+	handle_path /ws/20017/* {
+		reverse_proxy 127.0.0.1:20017 {
+			transport http {
+				dial_timeout 10s
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	handle_path /ws/20018/* {
+		reverse_proxy 127.0.0.1:20018 {
+			transport http {
+				dial_timeout 10s
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	handle_path /ws/20019/* {
+		reverse_proxy 127.0.0.1:20019 {
+			transport http {
+				dial_timeout 10s
+				read_timeout 10m
+				write_timeout 10m
+			}
+		}
+	}
+
+	import qing_file_server
+}

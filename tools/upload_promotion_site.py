@@ -50,12 +50,46 @@ REQUIRED_SITE_FILES = {
 }
 PUBLIC_EXCLUDED_NAMES = {"Caddyfile.example"}
 PUBLIC_EXCLUDED_SUFFIXES = {".md"}
+CACHE_BUST_LENGTH = 12
 
 
 @dataclasses.dataclass(frozen=True)
 class ArchiveEntry:
     source: Path
     archive_name: str
+
+
+def update_static_cache_versions(source_dir: Path) -> None:
+    """Keep stable asset names while forcing browsers to fetch changed CSS/JS."""
+    index_path = source_dir / "index.html"
+    try:
+        index_text = index_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise RuntimeError(f"推广网站入口读取失败 {index_path}: {exc}") from exc
+
+    replacements = {
+        "styles.css": upload_common.sha256_file(source_dir / "styles.css")[:CACHE_BUST_LENGTH],
+        "app.js": upload_common.sha256_file(source_dir / "app.js")[:CACHE_BUST_LENGTH],
+    }
+    updated_text = index_text
+    for asset_name, version in replacements.items():
+        pattern = rf"{re.escape(asset_name)}(?:\?v=[0-9a-f]{{{CACHE_BUST_LENGTH}}})?"
+        updated_text, replacement_count = re.subn(
+            pattern,
+            f"{asset_name}?v={version}",
+            updated_text,
+        )
+        if replacement_count != 1:
+            raise RuntimeError(
+                f"index.html 中 {asset_name} 引用数量异常: {replacement_count}，应为1"
+            )
+
+    if updated_text != index_text:
+        try:
+            index_path.write_text(updated_text, encoding="utf-8")
+        except OSError as exc:
+            raise RuntimeError(f"推广网站入口版本号写入失败 {index_path}: {exc}") from exc
+        print("[预检] 已按CSS/JS内容更新入口缓存版本号。", flush=True)
 
 
 def run_profile_generator(source_dir: Path) -> None:
@@ -402,6 +436,7 @@ def main() -> int:
 
     source_dir = args.source_dir.resolve()
     run_profile_generator(source_dir)
+    update_static_cache_versions(source_dir)
     entries, site_config, apk_relative = collect_source_files(source_dir)
     apk_path = find_release_apk(args.apk_dir.resolve())
     apk_sha256 = upload_common.sha256_file(apk_path)

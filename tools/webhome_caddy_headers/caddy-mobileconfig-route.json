@@ -24,6 +24,15 @@
           "Content-Disposition": [
             "attachment"
           ],
+          "Cache-Control": [
+            "no-store, max-age=0"
+          ],
+          "Expires": [
+            "0"
+          ],
+          "Pragma": [
+            "no-cache"
+          ],
           "Content-Type": [
             "application/x-apple-aspen-config"
           ]

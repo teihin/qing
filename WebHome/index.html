@@ -8,11 +8,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="format-detection" content="telephone=no">
-  <meta name="description" content="8L官方游戏下载中心，支持Android下载安装与iPhone桌面版安装。">
+  <meta name="description" content="8L官方游戏下载中心，支持Android安装包与苹果签名版。">
   <title>8L 官方下载</title>
   <link rel="icon" type="image/png" href="assets/8l-app-icon.png">
   <link rel="apple-touch-icon" href="assets/8l-app-icon.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=1be49963613b">
 </head>
 <body>
   <div class="scene" aria-hidden="true">
@@ -82,16 +82,16 @@
           <p class="action-note" id="actionNote">系统将自动为你选择对应版本</p>
         </div>
 
-        <div class="platform-divider"><span>其他平台</span></div>
+        <div class="platform-divider" hidden><span>其他平台</span></div>
 
-        <div class="platform-options">
+        <div class="platform-options" hidden>
           <button class="platform-option" id="androidAction" type="button">
             <span class="platform-option__icon platform-option__icon--android" aria-hidden="true"></span>
             <span><strong>Android</strong><small>APK安装包</small></span>
           </button>
           <button class="platform-option" id="iosAction" type="button">
             <span class="platform-option__icon platform-option__icon--apple" aria-hidden="true"></span>
-            <span><strong>iPhone / iPad</strong><small>桌面版安装</small></span>
+            <span><strong>苹果签名版</strong></span>
           </button>
         </div>
 
@@ -113,9 +113,9 @@
         <h2 id="flow-title">三步进入游戏</h2>
       </div>
       <ol>
-        <li><span>01</span><div><strong>识别设备</strong><p>自动匹配Android或iPhone版本</p></div></li>
+        <li><span>01</span><div><strong>识别设备</strong><p id="flowDeviceText">自动匹配对应版本</p></div></li>
         <li><span>02</span><div><strong>完成安装</strong><p>根据页面提示确认下载与安装</p></div></li>
-        <li><span>03</span><div><strong>桌面启动</strong><p>从8L图标进入，开启精彩对局</p></div></li>
+        <li><span>03</span><div><strong>进入游戏</strong><p>安装完成后打开8L，开启精彩对局</p></div></li>
       </ol>
     </section>
 
@@ -128,17 +128,17 @@
     <button class="sheet-close" type="button" data-close-sheet aria-label="关闭">×</button>
     <div class="sheet-handle" aria-hidden="true"></div>
     <img class="sheet-app-icon" src="assets/8l-app-icon.png" alt="" width="78" height="78">
-    <span class="sheet-kicker">iPhone / iPad</span>
-    <h2 id="iosSheetTitle">安装8L桌面版</h2>
-    <p class="sheet-intro">下载描述文件后，需要在系统设置中完成安装。</p>
+    <span class="sheet-kicker">苹果签名版</span>
+    <h2 id="iosSheetTitle">安装8L苹果签名版</h2>
+    <p class="sheet-intro">下载苹果签名版后，需要在系统设置中完成安装。</p>
     <ol class="ios-steps">
       <li><b>1</b><span>Safari弹出提示时，点击<strong>允许</strong>下载描述文件</span></li>
       <li><b>2</b><span>打开手机<strong>设置</strong>，点击顶部“已下载描述文件”</span></li>
       <li><b>3</b><span>点击右上角<strong>安装</strong>，按系统提示确认</span></li>
-      <li><b>4</b><span>返回桌面，点击<strong>8L图标</strong>进入游戏</span></li>
+      <li><b>4</b><span>安装完成后，点击<strong>8L图标</strong>进入游戏</span></li>
     </ol>
-    <div class="sheet-warning">描述文件下载后请在8分钟内完成安装</div>
-    <button class="sheet-primary" id="downloadProfileAction" type="button">下载描述文件</button>
+    <div class="sheet-warning">苹果签名版下载后请在8分钟内完成安装</div>
+    <button class="sheet-primary" id="downloadProfileAction" type="button">下载苹果签名版</button>
   </section>
 
   <section class="bottom-sheet browser-sheet" id="browserSheet" role="dialog" aria-modal="true" aria-labelledby="browserSheetTitle" hidden>
@@ -154,7 +154,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-  <noscript><div class="noscript">需要启用JavaScript才能自动识别设备。你仍可在 <a href="downloads/8L.apk">Android</a> 或 <a href="downloads/8L.mobileconfig">iPhone</a> 中选择下载。</div></noscript>
-  <script src="app.js" defer></script>
+  <noscript><div class="noscript">需要启用JavaScript才能自动识别设备。你仍可在 <a href="downloads/8L.apk">Android</a> 或 <a href="downloads/8L.mobileconfig">苹果签名版</a> 中选择下载。</div></noscript>
+  <script src="app.js?v=3cb59f2338f9" defer></script>
 </body>
 </html>

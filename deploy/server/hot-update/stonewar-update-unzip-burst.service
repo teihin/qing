@@ -1,0 +1,11 @@
+[Unit]
+Description=Qing burst unzip scanner after incoming directory changes
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/stonewar-update-burst-watch.sh
+TimeoutStartSec=0
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

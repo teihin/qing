@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Qing update unzip scanner every minute
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=1min
+AccuracySec=10s
+Unit=stonewar-update-unzip.service
+
+[Install]
+WantedBy=timers.target

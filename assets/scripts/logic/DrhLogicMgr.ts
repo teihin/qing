@@ -44,7 +44,6 @@ export default class DrhLogicMgr extends cc.Component {
 
     public strStartTime = ""; //开始时间
     public strEndTime = ""; //结束时间
-    private nCloseRoomTime:number; //关闭房间倒计时
     public bShowOverAnimate = false;  //结算动画进行中
     public strLastDelayMsg = "";  //动画过程中延迟的消息
     private  nLastPlayerCount = 0; //上一次playlist人数
@@ -57,7 +56,6 @@ export default class DrhLogicMgr extends cc.Component {
 
     public mapID2PlayerCtl = new Map<number, DrhPlayerLogic>();    //座位号到用户组件的映射关系
 
-    public _CloseRoomTimmerCallBack = null;
     private bIsGamePlaying = false;    //玩家是非已经在游戏中
     private bLeavingRoom = false;      //退出流程开始后停止房间动画和延迟回调
     private bettingSpotlight:cc.Node = null; //下注阶段指向当前操作玩家的聚光灯
@@ -143,7 +141,6 @@ export default class DrhLogicMgr extends cc.Component {
 
 
     }
-
     start () {
 
     }
@@ -570,11 +567,6 @@ export default class DrhLogicMgr extends cc.Component {
             this.UpdateCurJiangChi(strJiang);
         }
 
-        if(data.hasOwnProperty("closeroom_countdown"))
-        {
-            this.nCloseRoomTime = Number(data["closeroom_countdown"].toString());
-        }
-
         let strRoomID = GameDataManager.getAccount().roomID;
         if (strRoomID != strPlayerListRoomID)
         {
@@ -822,17 +814,10 @@ export default class DrhLogicMgr extends cc.Component {
         if(arrayJsonPlayer.length <4 && this.round_count == "0")
         {
             this.node.getChildByName("等待开局提示").active = true;
-
-            let txt = Tool.GetChild(this.node,"等待开局提示/开局倒计时").getComponent(cc.Label);            
-            this.unschedule(this._CloseRoomTimmerCallBack);            
-            this._CloseRoomTimmerCallBack = this.CloseRoomTimmer.bind(this,txt);
-            this.schedule(this._CloseRoomTimmerCallBack,1,cc.macro.REPEAT_FOREVER,0.1);
         }
         else
         {
             this.node.getChildByName("等待开局提示").active = false;
-            if(this._CloseRoomTimmerCallBack != null)
-                this.unschedule(this._CloseRoomTimmerCallBack);
         }
 
 
@@ -945,19 +930,6 @@ export default class DrhLogicMgr extends cc.Component {
                break;
        }
        return psReturn;
-   }
-   //关闭房间倒计时schedle方法
-   public CloseRoomTimmer(txt:cc.Label)
-   {
-        if(this.nCloseRoomTime>=0)
-        {
-            let time = new Date(0,0,0,0,0,this.nCloseRoomTime--,0);
-            txt.string = "房间2小时不开始将自动解散\r\n倒计时:"+time.getHours().toString().padStart(2,"0")+":"+time.getMinutes().toString().padStart(2,"0")+":"+time.getSeconds().toString().padStart(2,"0");
-        }
-        else
-        {
-            this.unschedule(this._CloseRoomTimmerCallBack);
-        }
    }
    public UpdateSitInfo()
    {

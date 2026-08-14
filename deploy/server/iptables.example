@@ -1,0 +1,17 @@
+*filter
+:INPUT DROP [0:0]
+:FORWARD DROP [0:0]
+:OUTPUT ACCEPT [0:0]
+:f2b-sshd - [0:0]
+-A INPUT -p tcp -m multiport --dports 2233 -j f2b-sshd
+-A INPUT -i lo -j ACCEPT
+-A INPUT -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A INPUT -p icmp -j ACCEPT
+-A INPUT -p tcp --dport 2233 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -p tcp --dport 80 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -p tcp --dport 443 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -p tcp --dport 20000:20099 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -p udp --dport 20000:20099 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -j DROP
+-A f2b-sshd -j RETURN
+COMMIT

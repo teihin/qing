@@ -1,23 +1,32 @@
 # 示例部署路径：https://154-37-155-17.sslip.io/webhome/
-# 把 WebHome 上传到 /www/html/WebHome 后，将下面片段合并到现有站点配置。
+# 把 WebHome 上传到 /www/html/webhome 后，将下面片段合并到现有站点配置。
 
 handle_path /webhome/* {
-    root * /www/html/WebHome
+    root * /www/html/webhome
 
     # 匹配WebHome下任意子目录、任意文件名的.mobileconfig，改名后仍可安装。
     @mobileconfig path_regexp mobileconfig `(?i)^/.*\.mobileconfig$`
     header @mobileconfig Content-Type "application/x-apple-aspen-config"
     # 不写死filename，Safari使用URL中的实际文件名。
     header @mobileconfig Content-Disposition "attachment"
+    header @mobileconfig Cache-Control "no-store, max-age=0"
+    header @mobileconfig Pragma "no-cache"
+    header @mobileconfig Expires "0"
 
     @apk path /downloads/*.apk
     header @apk Content-Type "application/vnd.android.package-archive"
     header @apk Content-Disposition "attachment; filename=8L.apk"
 
+    @entry path / /index.html *.html *.htm *.js *.css *.json
+    header @entry {
+        Cache-Control "no-store, max-age=0"
+        Pragma "no-cache"
+        Expires "0"
+    }
+
     header {
         X-Content-Type-Options "nosniff"
         Referrer-Policy "no-referrer"
-        Cache-Control "no-cache"
     }
     file_server
 }

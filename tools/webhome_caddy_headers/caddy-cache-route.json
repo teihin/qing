@@ -1,0 +1,37 @@
+{
+  "@id": "qing_webhome_entry_cache_headers",
+  "match": [
+    {
+      "host": [
+        "154-37-155-17.sslip.io"
+      ],
+      "path_regexp": {
+        "name": "qing_webhome_entry_cache_path",
+        "pattern": "(?i)^/webhome(?:/?|/.*\\.(?:html?|js|css|json))$"
+      }
+    }
+  ],
+  "handle": [
+    {
+      "handler": "headers",
+      "response": {
+        "require": {
+          "status_code": [
+            2
+          ]
+        },
+        "set": {
+          "Cache-Control": [
+            "no-store, max-age=0"
+          ],
+          "Expires": [
+            "0"
+          ],
+          "Pragma": [
+            "no-cache"
+          ]
+        }
+      }
+    }
+  ]
+}

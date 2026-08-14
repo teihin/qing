@@ -674,6 +674,11 @@ p {
   gap: 10px;
 }
 
+.platform-divider[hidden],
+.platform-options[hidden] {
+  display: none;
+}
+
 .platform-option {
   display: flex;
   align-items: center;

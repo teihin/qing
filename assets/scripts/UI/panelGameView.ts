@@ -66,6 +66,7 @@ export default class panelGameView extends UIPanelViewBase {
 
     private queueEntryLabel:cc.Label = null;
     private queueEntryNode:cc.Node = null;
+    private queueEntrySkeleton:sp.Skeleton = null;
     private queuePanel:cc.Node = null;
     private queueStatusLabel:cc.Label = null;
     private queueActionLabel:cc.Label = null;
@@ -82,6 +83,7 @@ export default class panelGameView extends UIPanelViewBase {
     private roomInviteEntryButton:cc.Button = null;
     private roomInviteGlowNode:cc.Node = null;
     private roomInviteRingNode:cc.Node = null;
+    private roomInviteSkeleton:sp.Skeleton = null;
     private roomInviteAnimationRunning:boolean = false;
 
     onEnable(){
@@ -2792,6 +2794,18 @@ export default class panelGameView extends UIPanelViewBase {
         this.roomInviteEntryButton = this.roomInviteEntryNode.getComponent(cc.Button);
         this.roomInviteGlowNode = Tool.GetChild(this.roomInviteEntryNode, "呼吸光");
         this.roomInviteRingNode = Tool.GetChild(this.roomInviteEntryNode, "旋转光环");
+        let inviteAnimationNode = Tool.GetChild(this.roomInviteEntryNode, "邀请动画");
+        this.roomInviteSkeleton = inviteAnimationNode == null ? null : inviteAnimationNode.getComponent(sp.Skeleton);
+        if(this.roomInviteSkeleton == null)
+        {
+            cc.error("drh8 场景缺少一键邀请 Spine 动画");
+            let legacySprite = this.roomInviteEntryNode.getComponent(cc.Sprite);
+            if(legacySprite != null)
+                legacySprite.enabled = true;
+            this.roomInviteEntryLabel.node.active = true;
+            this.roomInviteGlowNode.active = true;
+            this.roomInviteRingNode.active = true;
+        }
         // 节点在场景里默认隐藏，部分Creator版本不会让基类遍历到隐藏按钮，
         // 因此这里显式绑定一次，并先移除可能由基类添加的同目标监听，避免重复发送。
         this.roomInviteEntryButton.node.targetOff(this);
@@ -2809,6 +2823,22 @@ export default class panelGameView extends UIPanelViewBase {
             return;
         this.roomInviteAnimationRunning = active;
 
+        // 新视觉直接使用场景内预制的 Spine 动画。父节点仍承担按钮点击、显隐和冷却逻辑，
+        // 不在代码中重新绘制光环，确保 Creator 内可以直接预览最终效果。
+        if(this.roomInviteSkeleton != null && cc.isValid(this.roomInviteSkeleton))
+        {
+            this.roomInviteSkeleton.node.active = active;
+            this.roomInviteSkeleton.paused = !active;
+            if(active)
+            {
+                let current = this.roomInviteSkeleton.getCurrent(0);
+                if(current == null || current.animation == null || current.animation.name != "animation")
+                    this.roomInviteSkeleton.setAnimation(0, "animation", true);
+            }
+            return;
+        }
+
+        // Spine 资源缺失时才回退旧节点，避免线上因资源异常出现一个完全不可见的按钮。
         if(this.roomInviteGlowNode != null && cc.isValid(this.roomInviteGlowNode))
         {
             this.roomInviteGlowNode.stopAllActions();
@@ -2961,6 +2991,17 @@ export default class panelGameView extends UIPanelViewBase {
         entry.active = false;
         this.queueEntryNode = entry;
         this.queueEntryLabel = Tool.GetChild(entry, "文字").getComponent(cc.Label);
+        let queueAnimationNode = Tool.GetChild(entry, "排队动画");
+        this.queueEntrySkeleton = queueAnimationNode == null ? null : queueAnimationNode.getComponent(sp.Skeleton);
+        if(this.queueEntrySkeleton != null)
+            this.queueEntrySkeleton.paused = false;
+        else
+        {
+            cc.error("drh8 场景缺少排队 Spine 动画");
+            let legacySprite = entry.getComponent(cc.Sprite);
+            if(legacySprite != null)
+                legacySprite.enabled = true;
+        }
         this.queueStatusLabel = Tool.GetChild(this.queuePanel, "排队面板/排队状态").getComponent(cc.Label);
         this.queueMemberTitle = Tool.GetChild(this.queuePanel, "排队面板/人员标题");
         this.queueMemberRoot = Tool.GetChild(this.queuePanel, "排队面板/排队人员列表");
@@ -2981,6 +3022,13 @@ export default class panelGameView extends UIPanelViewBase {
             return;
         let shouldShow = this.IsQueueSupportedRoom() && !isSelfSeated;
         this.queueEntryNode.active = shouldShow;
+        if(shouldShow && this.queueEntrySkeleton != null && cc.isValid(this.queueEntrySkeleton))
+        {
+            this.queueEntrySkeleton.paused = false;
+            let current = this.queueEntrySkeleton.getCurrent(0);
+            if(current == null || current.animation == null || current.animation.name != "animation")
+                this.queueEntrySkeleton.setAnimation(0, "animation", true);
+        }
         // 房间切换期间排队结束事件可能早于新牌桌 UI 绑定。入口重新显示时
         // 必须以常驻管理器快照重绘文字，不能复用场景中残留的“排队中”。
         if(shouldShow && this.queueEntryLabel != null && cc.isValid(this.queueEntryLabel))

@@ -1,0 +1,15 @@
+[Unit]
+Description=Restore restrictive Qing firewall rules
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+ExecStart=/sbin/iptables-restore /etc/sysconfig/iptables
+ExecStart=/sbin/ip6tables-restore /etc/sysconfig/ip6tables
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

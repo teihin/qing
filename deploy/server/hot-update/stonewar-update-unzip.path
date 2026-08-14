@@ -1,0 +1,10 @@
+[Unit]
+Description=Watch Qing incoming update directory changes
+
+[Path]
+PathChanged=/www/html/_incoming
+PathModified=/www/html/_incoming
+Unit=stonewar-update-unzip-burst.service
+
+[Install]
+WantedBy=multi-user.target

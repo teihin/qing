@@ -25,9 +25,12 @@
     actionNote: document.getElementById("actionNote"),
     androidAction: document.getElementById("androidAction"),
     iosAction: document.getElementById("iosAction"),
+    platformDivider: document.querySelector(".platform-divider"),
+    platformOptions: document.querySelector(".platform-options"),
     deviceIcon: document.getElementById("deviceIcon"),
     downloadTitle: document.getElementById("download-title"),
     browserBadge: document.getElementById("browserBadge"),
+    flowDeviceText: document.getElementById("flowDeviceText"),
     installTip: document.getElementById("installTip"),
     versionText: document.getElementById("versionText"),
     particles: document.getElementById("particles"),
@@ -151,26 +154,31 @@
     elements.iosAction.classList.toggle("is-current", device.isIOS);
     elements.androidAction.setAttribute("aria-current", device.isAndroid ? "true" : "false");
     elements.iosAction.setAttribute("aria-current", device.isIOS ? "true" : "false");
+    elements.platformDivider.hidden = !device.isDesktop;
+    elements.platformOptions.hidden = !device.isDesktop;
 
     if (device.isIOS) {
       elements.deviceIcon.classList.add("is-ios");
-      elements.downloadTitle.textContent = "iPhone / iPad";
-      elements.primaryLabel.textContent = device.isSafari && !device.isEmbedded ? "安装 iPhone 版" : "使用 Safari 打开";
-      elements.primarySubLabel.textContent = device.isSafari && !device.isEmbedded ? "下载8L桌面描述文件" : "苹果安装需通过Safari完成";
-      elements.actionNote.textContent = device.isStandalone ? "当前已从桌面模式打开" : "安装后可从手机桌面全屏进入游戏";
-      setInstallTip("苹果安装提示", device.isSafari && !device.isEmbedded ? "下载后前往“设置 → 已下载描述文件”完成安装。" : "请复制本页地址并切换到Safari浏览器打开。 ");
+      elements.downloadTitle.textContent = "苹果签名版";
+      elements.primaryLabel.textContent = device.isSafari && !device.isEmbedded ? "安装苹果签名版" : "使用 Safari 打开";
+      elements.primarySubLabel.textContent = device.isSafari && !device.isEmbedded ? "按系统提示完成安装" : "苹果签名版需通过Safari安装";
+      elements.actionNote.textContent = device.isStandalone ? "苹果签名版已安装" : "安装完成后即可进入游戏";
+      elements.flowDeviceText.textContent = "已为你匹配苹果签名版";
+      setInstallTip("苹果签名版", device.isSafari && !device.isEmbedded ? "下载后前往“设置 → 已下载描述文件”完成安装。" : "请复制本页地址并切换到Safari浏览器打开。 ");
     } else if (device.isAndroid) {
       elements.deviceIcon.classList.add("is-android");
       elements.downloadTitle.textContent = "Android 手机";
       elements.primaryLabel.textContent = device.isEmbedded ? "使用浏览器打开" : "下载 Android 版";
       elements.primarySubLabel.textContent = device.isEmbedded ? `当前位于${device.embeddedName}内置浏览器` : "下载官方APK安装包";
       elements.actionNote.textContent = device.isEmbedded ? "请从右上角菜单选择“在浏览器打开”" : "下载完成后按系统提示允许安装";
+      elements.flowDeviceText.textContent = "已为你匹配Android版本";
       setInstallTip("安卓安装提示", device.isEmbedded ? "内置浏览器可能拦截APK，请切换系统浏览器。" : "如系统提示未知来源，请仅对当前浏览器授权。 ");
     } else {
       elements.downloadTitle.textContent = "电脑浏览器";
       elements.primaryLabel.textContent = "选择手机版本";
-      elements.primarySubLabel.textContent = "支持 Android 与 iPhone / iPad";
+      elements.primarySubLabel.textContent = "支持 Android 与苹果签名版";
       elements.actionNote.textContent = "建议直接使用手机打开本页面下载";
+      elements.flowDeviceText.textContent = "请选择Android或苹果签名版";
       setInstallTip("电脑访问提示", "请选择下方平台，或将本页地址发送到手机打开。 ");
     }
 
@@ -207,7 +215,7 @@
   function openBrowserGuide(targetPlatform) {
     const isIOSGuide = targetPlatform === "ios" || state.device.isIOS;
     elements.browserSheetText.textContent = isIOSGuide
-      ? "苹果描述文件需要使用Safari下载。请复制本页地址，再切换到Safari粘贴打开。"
+      ? "苹果签名版需要使用Safari下载。请复制本页地址，再切换到Safari粘贴打开。"
       : "当前应用的内置浏览器可能拦截APK下载。请点击右上角菜单，选择在系统浏览器中打开。";
     elements.browserRoute.textContent = isIOSGuide ? "复制地址　→　打开 Safari　→　粘贴访问" : "右上角菜单　→　在浏览器中打开";
     openSheet(elements.browserSheet);
@@ -275,7 +283,7 @@
     } else if (state.device.isAndroid) {
       startAndroidDownload();
     } else {
-      showToast("请在下方选择 Android 或 iPhone 版本");
+      showToast("请在下方选择 Android 或苹果签名版");
       elements.androidAction.focus();
     }
   }
@@ -287,7 +295,7 @@
     elements.sheetBackdrop.addEventListener("click", () => closeSheets());
     document.querySelectorAll("[data-close-sheet]").forEach((button) => button.addEventListener("click", () => closeSheets()));
     elements.downloadProfileAction.addEventListener("click", () => {
-      showToast("正在下载8L描述文件…");
+      showToast("正在下载8L苹果签名版…");
       window.setTimeout(() => window.location.assign(absoluteUrl(state.config.iosProfileUrl)), 160);
     });
     elements.copyAddressAction.addEventListener("click", copyPageAddress);

@@ -1,0 +1,11 @@
+[Unit]
+Description=Qing auto unzip uploaded update archives
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/stonewar-auto-unzip-updates.sh
+TimeoutStartSec=0
+Nice=5
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

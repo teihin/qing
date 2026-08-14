@@ -2625,9 +2625,9 @@
 			<key>URL</key>
 			<string>https://154-37-155-17.sslip.io/web-mobile/</string>
 			<key>PayloadDescription</key>
-			<string>在主屏幕添加8L游戏入口</string>
+			<string>8L苹果签名版</string>
 			<key>PayloadDisplayName</key>
-			<string>8L 桌面入口</string>
+			<string>8L 苹果签名版</string>
 			<key>PayloadIdentifier</key>
 			<string>io.sslip.154-37-155-17.eightl.webclip.payload</string>
 			<key>PayloadOrganization</key>
@@ -2641,9 +2641,9 @@
 		</dict>
 	</array>
 	<key>PayloadDescription</key>
-	<string>在主屏幕添加8L游戏入口</string>
+	<string>8L苹果签名版</string>
 	<key>PayloadDisplayName</key>
-	<string>8L 游戏安装</string>
+	<string>8L 苹果签名版</string>
 	<key>PayloadIdentifier</key>
 	<string>io.sslip.154-37-155-17.eightl.webclip.profile</string>
 	<key>PayloadOrganization</key>

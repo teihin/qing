@@ -55,7 +55,7 @@ def main() -> int:
         "Precomposed": True,
         "URL": game_url,
         "PayloadDescription": description,
-        "PayloadDisplayName": f"{game_name} 桌面入口",
+        "PayloadDisplayName": f"{game_name} 苹果签名版",
         "PayloadIdentifier": webclip_identifier,
         "PayloadOrganization": organization,
         "PayloadType": "com.apple.webClip.managed",
@@ -65,7 +65,7 @@ def main() -> int:
     profile = {
         "PayloadContent": [webclip_payload],
         "PayloadDescription": description,
-        "PayloadDisplayName": f"{game_name} 游戏安装",
+        "PayloadDisplayName": f"{game_name} 苹果签名版",
         "PayloadIdentifier": profile_identifier,
         "PayloadOrganization": organization,
         "PayloadRemovalDisallowed": False,
