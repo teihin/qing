@@ -246,6 +246,7 @@ export default function PlayerApp() {
 
   const { conversation } = state
 	const unavailable = conversation.status !== 'closed' && state.onlineAgents === 0
+	const hasPlayerMessage = messages.some((message) => message.senderType === 'player')
   return (
     <main className={`player-shell ${embedded ? 'player-shell-embedded' : ''}`}>
       <header className="player-header">
@@ -255,8 +256,8 @@ export default function PlayerApp() {
       <section className={`service-banner banner-${conversation.status} ${unavailable ? 'banner-unavailable' : ''}`}>
         <span className="service-avatar"><Avatar name={conversation.agentName || '客'} size="large" /><i /></span>
         <div>
-		  <strong>{conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : conversation.status === 'active' ? `${conversation.agentName} 正在为您服务` : '正在为您分配客服'}</strong>
-		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '暂时无法发送消息，请等待客服上线后再咨询' : conversation.status === 'active' ? (embedded ? '您可以发送文字、图片或视频' : '您可以发送文字、图片、视频或文件') : '请稍候，正在为您接入在线客服'}</p>
+		  <strong>{conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : conversation.status === 'active' ? `${conversation.agentName} 正在为您服务` : hasPlayerMessage ? '正在为您分配客服' : '请先发送您的问题'}</strong>
+		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '暂时无法发送消息，请等待客服上线后再咨询' : conversation.status === 'active' ? (embedded ? '您可以发送文字、图片或视频' : '您可以发送文字、图片、视频或文件') : hasPlayerMessage ? '请稍候，正在为您接入在线客服' : '发送第一条文字、图片或视频后，将自动接入在线客服'}</p>
         </div>
       </section>
       <section className="player-messages" aria-live="polite">

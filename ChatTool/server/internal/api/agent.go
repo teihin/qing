@@ -35,8 +35,11 @@ func (s *Server) handleAgentDashboard(w http.ResponseWriter, r *http.Request, p 
 	var queued, active, myActive, myUnread, allUnread, onlineAgents, todayClosed int
 	cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
 	if err := s.db.QueryRowContext(r.Context(), `SELECT
-COALESCE(SUM(status='queued'),0), COALESCE(SUM(status='active'),0), COALESCE(SUM(status='active' AND assigned_agent_id=?),0),
-	COALESCE(SUM(status='closed' AND closed_at >= CURDATE()),0) FROM chat_conversation WHERE channel_code=?`, p.ID, p.ChannelCode).Scan(&queued, &active, &myActive, &todayClosed); err != nil {
+COALESCE(SUM(c.status='queued' AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')),0),
+COALESCE(SUM(c.status='active' AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')),0),
+COALESCE(SUM(c.status='active' AND c.assigned_agent_id=? AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')),0),
+COALESCE(SUM(c.status='closed' AND c.closed_at >= CURDATE() AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')),0)
+FROM chat_conversation c WHERE c.channel_code=?`, p.ID, p.ChannelCode).Scan(&queued, &active, &myActive, &todayClosed); err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法读取工作台数据")
 		return
 	}
@@ -65,7 +68,9 @@ func (s *Server) handleAgentConversations(w http.ResponseWriter, r *http.Request
 		scope = "mine"
 	}
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
-	where := "c.channel_code=?"
+	where := `c.channel_code=? AND EXISTS (
+SELECT 1 FROM chat_message player_message
+WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')`
 	args := []any{p.ChannelCode}
 	switch scope {
 	case "mine":
@@ -193,10 +198,13 @@ LEFT JOIN chat_satisfaction satisfaction ON satisfaction.conversation_id=c.id WH
 func (s *Server) ensureAgentCanAccessOrQueued(r *http.Request, p agentPrincipal, conversationID string) error {
 	var assigned sql.NullInt64
 	var status, channelCode string
-	if err := s.db.QueryRowContext(r.Context(), `SELECT assigned_agent_id,status,channel_code FROM chat_conversation WHERE id=?`, conversationID).Scan(&assigned, &status, &channelCode); err != nil {
+	var hasPlayerMessage int
+	if err := s.db.QueryRowContext(r.Context(), `SELECT c.assigned_agent_id,c.status,c.channel_code,
+EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')
+FROM chat_conversation c WHERE c.id=?`, conversationID).Scan(&assigned, &status, &channelCode, &hasPlayerMessage); err != nil {
 		return err
 	}
-	if channelCode == p.ChannelCode && (p.IsSupervisor() || (status == "queued" && !assigned.Valid) || (assigned.Valid && assigned.Int64 == p.ID)) {
+	if hasPlayerMessage == 1 && channelCode == p.ChannelCode && (p.IsSupervisor() || (status == "queued" && !assigned.Valid) || (assigned.Valid && assigned.Int64 == p.ID)) {
 		return nil
 	}
 	return sql.ErrNoRows
@@ -212,7 +220,10 @@ func (s *Server) handleAgentClaim(w http.ResponseWriter, r *http.Request, p agen
 	defer tx.Rollback()
 	var status, channelCode string
 	var assigned sql.NullInt64
-	if err = tx.QueryRowContext(r.Context(), `SELECT status,assigned_agent_id,channel_code FROM chat_conversation WHERE id=? FOR UPDATE`, conversationID).Scan(&status, &assigned, &channelCode); err != nil {
+	var hasPlayerMessage int
+	if err = tx.QueryRowContext(r.Context(), `SELECT c.status,c.assigned_agent_id,c.channel_code,
+EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')
+FROM chat_conversation c WHERE c.id=? FOR UPDATE`, conversationID).Scan(&status, &assigned, &channelCode, &hasPlayerMessage); err != nil {
 		writeError(w, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "会话不存在")
 		return
 	}
@@ -224,8 +235,14 @@ func (s *Server) handleAgentClaim(w http.ResponseWriter, r *http.Request, p agen
 		writeError(w, http.StatusConflict, "ALREADY_ASSIGNED", "会话已经被其他客服接入")
 		return
 	}
+	if hasPlayerMessage == 0 {
+		writeError(w, http.StatusConflict, "PLAYER_MESSAGE_REQUIRED", "玩家发送第一条消息后才能接入")
+		return
+	}
 	var active, max int
-	if err = tx.QueryRowContext(r.Context(), `SELECT (SELECT COUNT(*) FROM chat_conversation WHERE assigned_agent_id=? AND status='active'), max_conversations
+	if err = tx.QueryRowContext(r.Context(), `SELECT (SELECT COUNT(*) FROM chat_conversation active
+WHERE active.assigned_agent_id=? AND active.status='active'
+AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=active.id AND player_message.sender_type='player')), max_conversations
 FROM chat_agent WHERE id=? AND enabled=1 AND presence='online'`, p.ID, p.ID).Scan(&active, &max); err != nil || active >= max {
 		writeError(w, http.StatusConflict, "AGENT_CAPACITY", "当前接待量已达上限或客服不在线")
 		return
@@ -304,7 +321,9 @@ FOR UPDATE`, req.AgentID, channelCode, time.Now().Add(-s.cfg.AgentOfflineAfter))
 		return
 	}
 	var targetActive int
-	if err := tx.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_conversation WHERE assigned_agent_id=? AND status='active'`, req.AgentID).Scan(&targetActive); err != nil {
+	if err := tx.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_conversation active
+WHERE active.assigned_agent_id=? AND active.status='active'
+AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=active.id AND player_message.sender_type='player')`, req.AgentID).Scan(&targetActive); err != nil {
 		writeError(w, 500, "DB_ERROR", "转接失败")
 		return
 	}
@@ -384,7 +403,8 @@ func (s *Server) handleQuickReplies(w http.ResponseWriter, r *http.Request, p ag
 
 func (s *Server) handleTeamOptions(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT a.id,a.display_name,a.role,a.channel_code,channel.display_name,a.presence,a.max_conversations,a.last_seen_at,
-(SELECT COUNT(*) FROM chat_conversation c WHERE c.assigned_agent_id=a.id AND c.status='active') active_count
+(SELECT COUNT(*) FROM chat_conversation c WHERE c.assigned_agent_id=a.id AND c.status='active'
+ AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')) active_count
 FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code
 WHERE a.enabled=1 AND a.channel_code=? ORDER BY FIELD(a.presence,'online','away','offline'),a.display_name`, p.ChannelCode)
 	if err != nil {
@@ -408,7 +428,8 @@ WHERE a.enabled=1 AND a.channel_code=? ORDER BY FIELD(a.presence,'online','away'
 
 func (s *Server) handleTeamList(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT a.id,a.username,a.display_name,a.role,a.channel_code,channel.display_name,a.enabled,a.presence,a.max_conversations,a.last_seen_at,
-(SELECT COUNT(*) FROM chat_conversation c WHERE c.assigned_agent_id=a.id AND c.status='active') active_count
+(SELECT COUNT(*) FROM chat_conversation c WHERE c.assigned_agent_id=a.id AND c.status='active'
+ AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')) active_count
 FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code ORDER BY a.enabled DESC,channel.sort_order,a.role,a.display_name`)
 	if err != nil {
 		writeError(w, 500, "DB_ERROR", "无法读取客服团队")
@@ -523,7 +544,8 @@ func (s *Server) handleTeamUpdate(w http.ResponseWriter, r *http.Request, p agen
 	var existingEnabled bool
 	var activeConversations int
 	if err := s.db.QueryRowContext(r.Context(), `SELECT role,channel_code,enabled,
-(SELECT COUNT(*) FROM chat_conversation WHERE assigned_agent_id=chat_agent.id AND status='active')
+(SELECT COUNT(*) FROM chat_conversation active WHERE active.assigned_agent_id=chat_agent.id AND active.status='active'
+ AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=active.id AND player_message.sender_type='player'))
 FROM chat_agent WHERE id=?`, id).Scan(&existingRole, &existingChannel, &existingEnabled, &activeConversations); err != nil {
 		writeError(w, 404, "AGENT_NOT_FOUND", "客服账号不存在")
 		return

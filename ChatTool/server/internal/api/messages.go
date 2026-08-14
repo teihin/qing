@@ -135,6 +135,7 @@ func (s *Server) handlePlayerSendMessage(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "消息发送失败")
 		return
 	}
+	s.tryAssignQueued(r.Context(), "player_first_message")
 	s.notifyConversation(r, p.ConversationID, item)
 	writeData(w, http.StatusCreated, item)
 }
@@ -225,11 +226,7 @@ FROM chat_message WHERE conversation_id=? AND sender_type=? AND client_message_i
 		}
 		return messageItem{}, err
 	}
-	if senderType == "agent" {
-		_, err = tx.ExecContext(r.Context(), `UPDATE chat_conversation SET last_message_at=NOW(), first_response_at=COALESCE(first_response_at,NOW()), updated_at=NOW() WHERE id=?`, conversationID)
-	} else {
-		_, err = tx.ExecContext(r.Context(), `UPDATE chat_conversation SET last_message_at=NOW(), updated_at=NOW() WHERE id=?`, conversationID)
-	}
+	err = updateConversationAfterMessage(r.Context(), tx, conversationID, senderType)
 	if err != nil {
 		return messageItem{}, err
 	}
@@ -238,6 +235,31 @@ FROM chat_message WHERE conversation_id=? AND sender_type=? AND client_message_i
 	}
 	return messageItem{ID: messageID, ConversationID: conversationID, SenderType: senderType, SenderID: senderID,
 		SenderName: senderName, MessageType: messageType, Text: text, CreatedAt: time.Now()}, nil
+}
+
+func updateConversationAfterMessage(ctx context.Context, exec sqlExecer, conversationID, senderType string) error {
+	var query string
+	switch senderType {
+	case "agent":
+		query = `UPDATE chat_conversation
+SET last_message_at=NOW(),first_response_at=COALESCE(first_response_at,NOW()),updated_at=NOW()
+WHERE id=?`
+	case "player":
+		// 页面打开只创建内部会话。首条玩家内容成功落库时才开始计算排队时间，
+		// 这样未发言的页面不会抢占真正咨询玩家的队列顺序。
+		query = `UPDATE chat_conversation
+SET last_message_at=NOW(),
+queue_started_at=IF((SELECT COUNT(*) FROM chat_message player_message
+                     WHERE player_message.conversation_id=? AND player_message.sender_type='player')=1,NOW(),queue_started_at),
+updated_at=NOW()
+WHERE id=?`
+		_, err := exec.ExecContext(ctx, query, conversationID, conversationID)
+		return err
+	default:
+		query = `UPDATE chat_conversation SET last_message_at=NOW(),updated_at=NOW() WHERE id=?`
+	}
+	_, err := exec.ExecContext(ctx, query, conversationID)
+	return err
 }
 
 func (s *Server) notifyConversation(r *http.Request, conversationID string, item messageItem) {
@@ -262,6 +284,7 @@ func (s *Server) handlePlayerUpload(w http.ResponseWriter, r *http.Request, p pl
 		s.writeUploadError(w, err)
 		return
 	}
+	s.tryAssignQueued(r.Context(), "player_first_upload")
 	s.notifyConversation(r, p.ConversationID, item)
 	writeData(w, http.StatusCreated, item)
 }
@@ -432,11 +455,7 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, mediaID, conversationID, uploader
 VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, NOW())`, messageID, conversationID, uploaderType, uploaderID, uploaderName, kind, mediaID, messageID)
 	}
 	if err == nil {
-		if uploaderType == "agent" {
-			_, err = tx.ExecContext(r.Context(), `UPDATE chat_conversation SET last_message_at=NOW(), first_response_at=COALESCE(first_response_at,NOW()), updated_at=NOW() WHERE id=?`, conversationID)
-		} else {
-			_, err = tx.ExecContext(r.Context(), `UPDATE chat_conversation SET last_message_at=NOW(), updated_at=NOW() WHERE id=?`, conversationID)
-		}
+		err = updateConversationAfterMessage(r.Context(), tx, conversationID, uploaderType)
 	}
 	if err != nil {
 		return messageItem{}, err

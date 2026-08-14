@@ -268,7 +268,9 @@ func setCookie(w http.ResponseWriter, name, value, path string, httpOnly, secure
 func (s *Server) ensureAgentCanAccess(r *http.Request, p agentPrincipal, conversationID string) error {
 	if p.IsSupervisor() {
 		var exists int
-		if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_conversation WHERE id=? AND channel_code=?`, conversationID, p.ChannelCode).Scan(&exists); err != nil {
+		if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_conversation c
+WHERE c.id=? AND c.channel_code=?
+AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')`, conversationID, p.ChannelCode).Scan(&exists); err != nil {
 			return err
 		}
 		if exists == 0 {
@@ -278,10 +280,13 @@ func (s *Server) ensureAgentCanAccess(r *http.Request, p agentPrincipal, convers
 	}
 	var assigned sql.NullInt64
 	var status, channelCode string
-	if err := s.db.QueryRowContext(r.Context(), `SELECT assigned_agent_id,status,channel_code FROM chat_conversation WHERE id=?`, conversationID).Scan(&assigned, &status, &channelCode); err != nil {
+	var hasPlayerMessage int
+	if err := s.db.QueryRowContext(r.Context(), `SELECT c.assigned_agent_id,c.status,c.channel_code,
+EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')
+FROM chat_conversation c WHERE c.id=?`, conversationID).Scan(&assigned, &status, &channelCode, &hasPlayerMessage); err != nil {
 		return err
 	}
-	if channelCode != p.ChannelCode || status == "queued" || !assigned.Valid || assigned.Int64 != p.ID {
+	if hasPlayerMessage == 0 || channelCode != p.ChannelCode || status == "queued" || !assigned.Valid || assigned.Int64 != p.ID {
 		return sql.ErrNoRows
 	}
 	return nil

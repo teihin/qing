@@ -173,9 +173,6 @@ WHERE player_id=? AND channel_code=? AND status IN ('queued','active') ORDER BY 
 		_, err = tx.ExecContext(r.Context(), `INSERT INTO chat_conversation
 (id,player_id,channel_code,status,priority,category,queue_started_at,last_message_at,created_at,updated_at)
 VALUES (?, ?, ?, 'queued', 'normal', ?, NOW(), NOW(), NOW(), NOW())`, conversationID, playerID, channel.Code, channel.DisplayName)
-		if err == nil {
-			err = insertSystemMessage(r.Context(), tx, conversationID, "您好，正在为您接入在线客服。")
-		}
 	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法创建咨询会话")
@@ -197,8 +194,6 @@ VALUES (?, ?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), playerI
 	setCookie(w, playerCSRFCookie, csrfToken, s.cfg.CookiePath, false, s.cfg.CookieSecure, s.cfg.PlayerSessionTTL)
 	setCookie(w, playerSessionCookieName(sessionRef), sessionToken, s.cfg.CookiePath, true, s.cfg.CookieSecure, s.cfg.PlayerSessionTTL)
 	setCookie(w, playerCSRFCookieName(sessionRef), csrfToken, s.cfg.CookiePath, false, s.cfg.CookieSecure, s.cfg.PlayerSessionTTL)
-	s.tryAssignQueued(r.Context(), "player_session_created")
-	s.tryRebalanceLiveConversations(r.Context(), "player_session_created")
 	state, err := s.loadPlayerState(r.Context(), playerID, conversationID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法读取咨询状态")
@@ -446,6 +441,8 @@ func (s *Server) assignQueuedLocked(ctx context.Context) (int, error) {
 		cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
 		err = tx.QueryRowContext(ctx, `SELECT c.id,c.channel_code FROM chat_conversation c
 WHERE c.status='queued'
+AND EXISTS (SELECT 1 FROM chat_message player_message
+            WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')
 AND EXISTS (
   SELECT 1 FROM chat_player_session player_sess
   WHERE player_sess.conversation_id=c.id AND player_sess.expires_at>NOW() AND player_sess.last_seen_at>=?
@@ -455,7 +452,9 @@ AND EXISTS (
   WHERE available.channel_code=c.channel_code AND available.enabled=1 AND available.presence='online' AND available.last_seen_at>=?
   AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=available.id AND sess.expires_at>NOW())
   AND (SELECT COUNT(*) FROM chat_conversation active
-       WHERE active.assigned_agent_id=available.id AND active.status='active') < available.max_conversations
+       WHERE active.assigned_agent_id=available.id AND active.status='active'
+       AND EXISTS (SELECT 1 FROM chat_message active_player_message
+                   WHERE active_player_message.conversation_id=active.id AND active_player_message.sender_type='player')) < available.max_conversations
 )
 ORDER BY FIELD(c.priority,'urgent','high','normal','low'),c.queue_started_at ASC LIMIT 1 FOR UPDATE`, cutoff, cutoff).Scan(&conversationID, &channelCode)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -473,6 +472,8 @@ FROM chat_agent a
 LEFT JOIN (SELECT active.assigned_agent_id, COUNT(*) active_count
            FROM chat_conversation active
            WHERE active.status='active'
+           AND EXISTS (SELECT 1 FROM chat_message active_player_message
+                       WHERE active_player_message.conversation_id=active.id AND active_player_message.sender_type='player')
            AND EXISTS (SELECT 1 FROM chat_player_session active_sess
                        WHERE active_sess.conversation_id=active.id AND active_sess.expires_at>NOW() AND active_sess.last_seen_at>=?)
            GROUP BY active.assigned_agent_id) c
@@ -480,7 +481,10 @@ ON c.assigned_agent_id = a.id
 WHERE a.channel_code=? AND a.enabled=1 AND a.presence='online' AND a.last_seen_at >= ?
 AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=a.id AND sess.expires_at>NOW())
 AND COALESCE(c.active_count,0) < a.max_conversations
-AND (SELECT COUNT(*) FROM chat_conversation total_active WHERE total_active.assigned_agent_id=a.id AND total_active.status='active') < a.max_conversations
+AND (SELECT COUNT(*) FROM chat_conversation total_active
+     WHERE total_active.assigned_agent_id=a.id AND total_active.status='active'
+     AND EXISTS (SELECT 1 FROM chat_message total_player_message
+                 WHERE total_player_message.conversation_id=total_active.id AND total_player_message.sender_type='player')) < a.max_conversations
 ORDER BY COALESCE(c.active_count,0) ASC, COALESCE(a.last_assigned_at,'1970-01-01') ASC, a.id ASC
 LIMIT 1 FOR UPDATE`, cutoff, channelCode, cutoff).Scan(&agentID, &agentName)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -580,10 +584,14 @@ func (s *Server) rebalanceLiveConversations(ctx context.Context) (int, error) {
 		rows, err := s.db.QueryContext(ctx, `SELECT a.id,a.display_name,a.channel_code,a.max_conversations,a.last_assigned_at,
 (SELECT COUNT(*) FROM chat_conversation active
  WHERE active.assigned_agent_id=a.id AND active.status='active'
+ AND EXISTS (SELECT 1 FROM chat_message active_player_message
+             WHERE active_player_message.conversation_id=active.id AND active_player_message.sender_type='player')
  AND EXISTS (SELECT 1 FROM chat_player_session player_sess
              WHERE player_sess.conversation_id=active.id AND player_sess.expires_at>NOW() AND player_sess.last_seen_at>=?)) live_count,
 (SELECT COUNT(*) FROM chat_conversation total_active
- WHERE total_active.assigned_agent_id=a.id AND total_active.status='active') total_count
+ WHERE total_active.assigned_agent_id=a.id AND total_active.status='active'
+ AND EXISTS (SELECT 1 FROM chat_message total_player_message
+             WHERE total_player_message.conversation_id=total_active.id AND total_player_message.sender_type='player')) total_count
 FROM chat_agent a
 WHERE a.enabled=1 AND a.presence='online' AND a.last_seen_at>=?
 AND EXISTS (SELECT 1 FROM chat_agent_session agent_sess WHERE agent_sess.agent_id=a.id AND agent_sess.expires_at>NOW())
@@ -647,6 +655,8 @@ func (s *Server) moveLiveUnansweredConversation(ctx context.Context, source, tar
 	var conversationID string
 	err = tx.QueryRowContext(ctx, `SELECT c.id FROM chat_conversation c
 WHERE c.assigned_agent_id=? AND c.channel_code=? AND c.status='active' AND c.assigned_at IS NOT NULL
+AND EXISTS (SELECT 1 FROM chat_message player_message
+            WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')
 AND EXISTS (SELECT 1 FROM chat_player_session player_sess
             WHERE player_sess.conversation_id=c.id AND player_sess.expires_at>NOW() AND player_sess.last_seen_at>=?)
 AND NOT EXISTS (SELECT 1 FROM chat_message reply
@@ -677,7 +687,9 @@ FOR UPDATE`, target.ID, source.ChannelCode, cutoff).Scan(&targetName, &targetCap
 
 	var targetTotal int
 	err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM chat_conversation active
-WHERE active.assigned_agent_id=? AND active.status='active'`, target.ID).Scan(&targetTotal)
+WHERE active.assigned_agent_id=? AND active.status='active'
+AND EXISTS (SELECT 1 FROM chat_message player_message
+            WHERE player_message.conversation_id=active.id AND player_message.sender_type='player')`, target.ID).Scan(&targetTotal)
 	if err != nil {
 		return "", "", false, err
 	}

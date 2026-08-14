@@ -37,6 +37,29 @@ func TestInsertSystemMessageUsesUniqueClientMessageID(t *testing.T) {
 	}
 }
 
+func TestUpdateConversationAfterFirstPlayerMessageStartsQueue(t *testing.T) {
+	exec := &captureExecer{}
+	if err := updateConversationAfterMessage(context.Background(), exec, "conversation-id", "player"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(exec.query, "sender_type='player'") || !strings.Contains(exec.query, "queue_started_at=IF") {
+		t.Fatalf("player message must start queue from its first persisted content: %s", exec.query)
+	}
+	if len(exec.args) != 2 || exec.args[0] != "conversation-id" || exec.args[1] != "conversation-id" {
+		t.Fatalf("unexpected player queue update arguments: %#v", exec.args)
+	}
+}
+
+func TestUpdateConversationAfterAgentMessageKeepsResponseTimestamp(t *testing.T) {
+	exec := &captureExecer{}
+	if err := updateConversationAfterMessage(context.Background(), exec, "conversation-id", "agent"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(exec.query, "first_response_at=COALESCE") || strings.Contains(exec.query, "queue_started_at") {
+		t.Fatalf("agent response update changed queue semantics: %s", exec.query)
+	}
+}
+
 func TestPlayerLinkTimestampCompatibility(t *testing.T) {
 	now := time.Unix(1786442400, 0)
 	if !playerLinkTimestampValid(0, now, 15*time.Minute) {
