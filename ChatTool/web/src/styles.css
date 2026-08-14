@@ -91,7 +91,7 @@ textarea { resize: none; }
 .player-actions-embedded { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .player-error-page-embedded { color: #eefaf7; background: rgba(3,17,22,.76); }
 .player-error-page-embedded p, .player-error-page-embedded small { color: #c5d7d3; }
-.player-header { height: 76px; flex: 0 0 auto; padding: max(12px, env(safe-area-inset-top)) 18px 12px; display: flex; align-items: center; justify-content: space-between; color: #fff; background: linear-gradient(112deg, #06191d, #0b2b2e 62%, #0b433a); }
+.player-header { height: 76px; flex: 0 0 auto; padding: 12px 18px; padding: max(12px, env(safe-area-inset-top)) 18px 12px; display: flex; align-items: center; justify-content: space-between; color: #fff; background: linear-gradient(112deg, #06191d, #0b2b2e 62%, #0b433a); }
 .player-brand { display: flex; align-items: center; gap: 11px; }
 .player-brand strong { display: block; font-size: 18px; letter-spacing: .5px; }
 .player-brand small { display: block; margin-top: 2px; color: #9fb8b8; font-size: 11px; }
@@ -135,7 +135,7 @@ textarea { resize: none; }
 .typing-bubble i:nth-child(2), .agent-typing i:nth-child(2) { animation-delay: .15s; }
 .typing-bubble i:nth-child(3), .agent-typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes typing { 0%,60%,100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-4px); opacity: 1; } }
-.player-composer { position: relative; z-index: 5; flex: 0 0 auto; padding: 9px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid #dbe7e4; background: rgba(255,255,255,.97); backdrop-filter: blur(18px); }
+.player-composer { position: relative; z-index: 5; flex: 0 0 auto; padding: 9px 12px 8px; padding: 9px 12px max(8px, env(safe-area-inset-bottom)); border-top: 1px solid #dbe7e4; background: rgba(255,255,255,.97); backdrop-filter: blur(18px); }
 .player-composer-disabled { background: rgba(246,248,247,.98); }
 .player-composer-disabled .composer-row textarea { color: #889592; background: #edf1f0; }
 .composer-row { display: flex; align-items: flex-end; gap: 8px; }
@@ -520,14 +520,95 @@ textarea { resize: none; }
   .team-channel { order: 5; width: calc(100% - 54px); margin-left: 46px; }
 }
 
-@media (max-width: 480px) {
+/* 折叠屏、小平板及少数放大显示的 WebView：在桌面设计宽与窄屏之间平滑过渡。 */
+@media (max-width: 640px) {
+  .player-header { min-height: 92px; padding: 14px; }
+  .player-brand { min-width: 0; gap: 13px; }
+  .player-brand > div { min-width: 0; }
+  .player-brand strong { font-size: 24px; }
+  .player-brand small { margin-top: 3px; font-size: 15px; line-height: 1.4; }
+  .player-shell .brand-mark-small { width: 56px; height: 56px; font-size: 23px; }
+  .header-action { min-height: 48px; padding: 9px 14px; font-size: 16px; line-height: 1.3; }
+  .service-banner { gap: 15px; margin: 13px 12px 0; padding: 17px; }
+  .service-banner > div { min-width: 0; }
+  .service-banner .avatar-large { width: 68px; height: 68px; font-size: 27px; }
+  .service-banner .service-avatar i { width: 15px; height: 15px; }
+  .service-banner strong { font-size: 21px; line-height: 1.4; }
+  .service-banner p { margin-top: 6px; font-size: 17px; line-height: 1.5; }
+  .player-messages { padding: 21px 14px 30px; }
+  .conversation-date { margin-bottom: 21px; padding: 6px 12px; font-size: 14px; }
+  .player-shell .message-row { gap: 11px; margin-bottom: 24px; }
+  .player-shell .message-row > .avatar-small { width: 41px; height: 41px; font-size: 17px; }
+  .player-shell .message-meta { min-height: 21px; margin-bottom: 6px; font-size: 14px; }
+  .player-shell .message-bubble p { padding: 14px 16px; font-size: 21px; line-height: 1.58; }
+  .player-shell .media-loading { min-width: 124px; min-height: 66px; font-size: 16px; }
+  .player-shell .file-card { min-width: min(276px, 76vw); padding: 14px; }
+  .player-shell .file-card strong { max-width: 165px; font-size: 18px; }
+  .player-shell .file-card small { font-size: 14px; }
+  .player-shell .file-card b { font-size: 15px; }
+  .player-shell .system-message span { padding: 8px 12px; font-size: 15px; }
+  .typing-bubble { margin-left: 52px; padding: 12px 15px; }
+  .player-composer { padding: 11px 12px 10px; padding: 11px 12px max(10px, env(safe-area-inset-bottom)); }
+  .composer-row { gap: 9px; }
+  .composer-row textarea { min-width: 0; min-height: 52px; padding: 12px 14px; font-size: 19px; line-height: 26px; }
+  .add-button { width: 50px; height: 50px; font-size: 32px; line-height: 46px; }
+  .send-button { min-width: 70px; height: 50px; padding: 0 17px; font-size: 17px; }
+  .safe-tip { margin-top: 7px; padding-left: 59px; font-size: 13px; line-height: 1.45; }
+  .player-actions { gap: 10px; padding: 8px 4px 16px; }
+  .player-actions label { gap: 7px; font-size: 15px; }
+  .action-icon { width: 58px; height: 58px; border-radius: 18px; font-size: 19px; }
+  .toast-error, .uploading-bar { bottom: 114px; width: calc(100% - 24px); max-width: 620px; width: min(calc(100% - 24px), 620px); padding: 12px 15px; font-size: 16px; line-height: 1.45; }
+  .rating-entry { bottom: 118px; padding: 11px 21px; font-size: 16px; }
+  .rating-modal > p { font-size: 16px; }
+  .rating-tags button, .rating-modal > footer button { min-height: 44px; font-size: 15px; }
+  .rating-modal > textarea { font-size: 16px; }
+}
+
+/* 常见 320～480 CSS 像素手机及横屏手机：保持可读，但避免 Android WebView 整页被大字撑乱。 */
+@media (max-width: 480px), (max-height: 520px) and (orientation: landscape) {
   .player-shell { box-shadow: none; }
-  .player-header { height: auto; min-height: 110px; }
-  .player-shell .brand-mark-small { width: 64px; height: 64px; }
-  .service-banner { margin: 12px 10px 0; padding-right: 18px; padding-left: 18px; }
-  .player-messages { padding-right: 12px; padding-left: 12px; }
+  .player-header { height: auto; min-height: 80px; padding: 10px 12px; padding: max(10px, env(safe-area-inset-top)) 12px 10px; }
+  .player-brand { min-width: 0; gap: 10px; }
+  .player-brand > div { min-width: 0; }
+  .player-brand strong { font-size: 20px; line-height: 1.25; }
+  .player-brand small { margin-top: 2px; font-size: 12.5px; line-height: 1.35; }
+  .player-shell .brand-mark-small { width: 48px; height: 48px; font-size: 20px; }
+  .header-action { min-height: 42px; padding: 8px 11px; font-size: 14px; line-height: 1.25; }
+  .service-banner { gap: 12px; margin: 10px 10px 0; padding: 14px; border-radius: 15px; }
+  .service-banner > div { min-width: 0; }
+  .service-banner .avatar-large { width: 58px; height: 58px; font-size: 23px; }
+  .service-banner .service-avatar i { width: 13px; height: 13px; }
+  .service-banner strong { font-size: 18px; line-height: 1.35; }
+  .service-banner p { margin-top: 4px; font-size: 14px; line-height: 1.5; }
+  .player-messages { padding: 18px 12px 24px; }
+  .conversation-date { margin-bottom: 18px; padding: 4px 10px; font-size: 12px; }
+  .player-shell .message-row { gap: 9px; margin-bottom: 20px; }
+  .player-shell .message-row > .avatar-small { width: 36px; height: 36px; font-size: 15px; }
   .player-shell .message-stack { max-width: 88%; }
+  .player-shell .message-meta { min-height: 18px; margin-bottom: 4px; font-size: 12px; }
+  .player-shell .message-bubble p { padding: 12px 14px; font-size: 17px; line-height: 1.6; }
   .player-shell .message-bubble img { max-width: 72vw; }
+  .player-shell .media-loading { min-width: 108px; min-height: 58px; font-size: 13px; }
+  .player-shell .file-card { min-width: min(238px, 74vw); padding: 12px; }
+  .player-shell .file-card strong { max-width: 142px; font-size: 15px; }
+  .player-shell .file-card small { font-size: 12px; }
+  .player-shell .file-card b { font-size: 13px; }
+  .player-shell .system-message span { padding: 7px 10px; font-size: 13px; line-height: 1.5; }
+  .typing-bubble { margin-left: 45px; padding: 10px 13px; }
+  .player-composer { padding: 9px 10px 8px; padding: 9px 10px max(8px, env(safe-area-inset-bottom)); }
+  .composer-row { gap: 7px; }
+  .composer-row textarea { min-width: 0; min-height: 46px; max-height: 96px; padding: 11px 12px; font-size: 16px; line-height: 22px; }
+  .add-button { width: 44px; height: 44px; font-size: 29px; line-height: 40px; }
+  .send-button { min-width: 64px; height: 44px; padding: 0 14px; font-size: 15px; }
+  .safe-tip { margin-top: 6px; padding-left: 51px; font-size: 11.5px; line-height: 1.45; }
+  .player-actions { gap: 8px; padding: 6px 4px 14px; }
+  .player-actions label { gap: 6px; font-size: 13px; }
+  .action-icon { width: 50px; height: 50px; border-radius: 16px; font-size: 16px; }
+  .toast-error, .uploading-bar { bottom: 104px; width: calc(100% - 20px); max-width: 620px; width: min(calc(100% - 20px), 620px); padding: 11px 14px; font-size: 14px; line-height: 1.45; }
+  .rating-entry { bottom: 108px; padding: 10px 18px; font-size: 14px; }
+  .rating-modal > p { font-size: 14px; }
+  .rating-tags button, .rating-modal > footer button { min-height: 42px; font-size: 14px; }
+  .rating-modal > textarea { font-size: 16px; }
   .agent-login-page { background: linear-gradient(180deg, #e7f2ef, #f8faf9); }
   .login-card h2 { font-size: 29px; }
   .login-card header p { margin-bottom: 30px; }
