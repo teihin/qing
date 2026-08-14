@@ -63,8 +63,11 @@ EXCLUDED_EXACT = {
     "assets/ImagesLuck/互动/枪.png",
     "assets/ImagesLuck/互动/炸弹.png",
     "assets/ImagesLuck/互动/鸡.png",
+    "assets/ImagesLuck/钱包/3-1.png",
+    "assets/ImagesLuck/钱包/其他支付.png",
     "assets/ImagesLuck/钱包/支付宝.png",
     "assets/ImagesLuck/钱包/微信.png",
+    "assets/ImagesLuck/钱包/选择.png",
     "assets/ImagesXYPK/推广/二维码6.png",
 }
 

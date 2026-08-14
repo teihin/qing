@@ -62,7 +62,7 @@ func TestBalanceAdjustmentStillChecksBalanceConflicts(t *testing.T) {
 
 func TestPaymentHashWritesMatchClientConfiguration(t *testing.T) {
 	input := updatePaymentConfigurationRequest{
-		Channels:      []paymentChannelConfig{{Name: "支付1", Enabled: true, NeedsInfo: true, InfoFields: []string{"姓名", "手机"}, PresetAmounts: "100,200", DisplayText: "测试", Banks: "中国银行#", AllowCustom: true, CustomMin: "50", CustomMax: "500"}},
+		Channels:      []paymentChannelConfig{{Name: "支付1", Enabled: true, IconType: paymentIconWeChat, NeedsInfo: true, InfoFields: []string{"姓名", "手机"}, PresetAmounts: "100,200", DisplayText: "测试", Banks: "中国银行#", AllowCustom: true, CustomMin: "50", CustomMax: "500"}},
 		PaymentDomain: "http://pay.example.com", RequireBankBranch: true,
 	}
 	if err := normalizeAndValidatePaymentRequest(&input); err != nil {
@@ -83,8 +83,52 @@ func TestPaymentHashWritesMatchClientConfiguration(t *testing.T) {
 	if err := json.Unmarshal([]byte(decoded), &client); err != nil {
 		t.Fatalf("decode client JSON: %v", err)
 	}
-	if client.InfoList != "姓名#手机#" || client.Money != "100,200" || client.Bank != "中国银行#" || client.InputRange != "50,500" || !client.NeedInfo || !client.OpenInput {
+	if client.Icon != paymentIconWeChat || client.InfoList != "姓名#手机#" || client.Money != "100,200" || client.Bank != "中国银行#" || client.InputRange != "50,500" || !client.NeedInfo || !client.OpenInput {
 		t.Fatalf("unexpected client config: %#v", client)
+	}
+}
+
+func TestPaymentIconTypeDefaultsAndRejectsUnknownValues(t *testing.T) {
+	input := updatePaymentConfigurationRequest{Channels: []paymentChannelConfig{{Name: "支付1"}}}
+	if err := normalizeAndValidatePaymentRequest(&input); err != nil {
+		t.Fatalf("normalize default payment icon: %v", err)
+	}
+	if got := input.Channels[0].IconType; got != paymentIconDefault {
+		t.Fatalf("default icon type = %q", got)
+	}
+
+	input.Channels[0].IconType = "unknown"
+	if err := normalizeAndValidatePaymentRequest(&input); err == nil || !strings.Contains(err.Error(), "支付图标") {
+		t.Fatalf("unknown payment icon should be rejected, got %v", err)
+	}
+}
+
+func TestPaymentConfigurationNormalizesEmptyInfoFieldsForReadback(t *testing.T) {
+	input := updatePaymentConfigurationRequest{Channels: []paymentChannelConfig{{Name: "支付1", InfoFields: nil}}}
+	if err := normalizeAndValidatePaymentRequest(&input); err != nil {
+		t.Fatalf("normalize payment configuration: %v", err)
+	}
+	if input.Channels[0].InfoFields == nil || len(input.Channels[0].InfoFields) != 0 {
+		t.Fatalf("empty info fields must be a non-nil empty slice: %#v", input.Channels[0].InfoFields)
+	}
+	after := paymentConfigurationState{Channels: []paymentChannelConfig{{
+		Name: "支付1", IconType: paymentIconDefault, InfoFields: []string{}, Configured: true,
+	}}}
+	if mismatches := paymentStateMismatchFields(after, input); len(mismatches) != 0 {
+		t.Fatalf("equivalent empty info fields must pass readback: %#v", mismatches)
+	}
+}
+
+func TestPaymentConfigurationMismatchNamesFieldsWithoutValues(t *testing.T) {
+	input := updatePaymentConfigurationRequest{Channels: []paymentChannelConfig{{
+		Name: "支付1", IconType: paymentIconDefault, InfoFields: []string{},
+	}}}
+	after := paymentConfigurationState{Channels: []paymentChannelConfig{{
+		Name: "支付1", IconType: paymentIconWeChat, InfoFields: []string{}, Configured: true,
+	}}}
+	mismatches := paymentStateMismatchFields(after, input)
+	if len(mismatches) != 1 || mismatches[0] != "channels[0].iconType" {
+		t.Fatalf("unexpected mismatch fields: %#v", mismatches)
 	}
 }
 

@@ -11,6 +11,7 @@ import DrhLogicMgr from "../logic/DrhLogicMgr";
 import Debug from "../common/Debug";
 import MobileManager from "../mobile/MobileManager";
 import { resolve } from "path";
+import WebLoadingManager from "../common/WebLoadingManager";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -168,7 +169,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
             if(i>=this.scrollRecordList.content.childrenCount)
             {
                 let task = new Promise((resolve,reject)=>{
-                    cc.loader.loadRes("Prefabs/战绩玩家对象",(err,obj)=>{
+                    WebLoadingManager.loadBlockingRes("Prefabs/战绩玩家对象","正在加载战绩详情",(err,obj)=>{
                         if(err)
                         {
                             cc.error(err.message || err);
@@ -481,7 +482,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
                 let jItem = jPlayers[i];
                 if(i>=this.scrollRecordPlays.content.childrenCount)
                 {
-                    cc.loader.loadRes("Prefabs/回顾对象2",(err,obj)=>{
+                    WebLoadingManager.loadBlockingRes("Prefabs/回顾对象2","正在加载牌局回顾",(err,obj)=>{
                         if(err)
                         {
                             cc.error(err.message || err);
@@ -811,7 +812,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
             let curComplet = completShow[nLun];
             if(jCurCount[nLun]>=curComplet.childrenCount)
             {
-                cc.loader.loadRes("Prefabs/文字牌谱对象2",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/文字牌谱对象2","正在加载文字牌谱",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);

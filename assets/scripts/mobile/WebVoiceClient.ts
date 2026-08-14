@@ -1,7 +1,8 @@
 import {
     AUDIO_SERVER_HTTP_BASE,
     AUDIO_SERVER_WS_URL,
-    AUDIO_SERVER_PROXY_PATH
+    WEB_AUDIO_SERVER_HTTP_BASE,
+    WEB_AUDIO_SERVER_WS_URL
 } from "../common/GameDef";
 import WebVoiceRecorder from "./WebVoiceRecorder";
 
@@ -48,6 +49,8 @@ interface VoiceUploadSession {
     abortController:any;
 }
 
+type PlaybackPermissionHandler = (retry:()=>void, cancel:()=>void)=>void;
+
 export default class WebVoiceClient {
     private recorder:WebVoiceRecorder = new WebVoiceRecorder();
     private endpoints:VoiceEndpoints;
@@ -65,9 +68,27 @@ export default class WebVoiceClient {
     private activeAudio:HTMLAudioElement = null;
     private playbackTimer:any = null;
     private onPlaybackDone:()=>void;
+    private onPlaybackPermissionRequired:PlaybackPermissionHandler = null;
+    private appleWebPlayback:boolean = false;
+    private applePlaybackAudio:HTMLAudioElement = null;
+    private applePlaybackUnlocked:boolean = false;
+    private readonly appleUnlockAudioSource:string =
+        "data:audio/wav;base64,UklGRmQBAABXQVZFZm10IBAAAAABAAEAgD4AAAB9AAACABAA" +
+        "ZGF0YUABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+        "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
 
-    constructor(onPlaybackDone:()=>void) {
+    constructor(onPlaybackDone:()=>void,
+        onPlaybackPermissionRequired:PlaybackPermissionHandler = null) {
         this.onPlaybackDone = onPlaybackDone;
+        this.onPlaybackPermissionRequired = onPlaybackPermissionRequired;
+        this.appleWebPlayback = this.isAppleMobileWeb();
         this.endpoints = this.resolveEndpoints();
     }
 
@@ -81,6 +102,10 @@ export default class WebVoiceClient {
             return Promise.reject(new Error("当前浏览器不支持麦克风录音"));
         if(!WebVoiceRecorder.IsSecureEnough())
             return Promise.reject(new Error("网页版录音必须通过HTTPS或localhost打开"));
+        // iOS会在MediaStreamTrack存活期间持续显示麦克风占用提示。
+        // 进房只检查能力和地址，真正按住说话时再申请麦克风。
+        if(this.appleWebPlayback)
+            return Promise.resolve();
         return this.recorder.prepare();
     }
 
@@ -123,14 +148,20 @@ export default class WebVoiceClient {
             {
                 let message = error == null ? "" :
                     (error.message == null ? error.toString() : error.message.toString());
-                if(message.indexOf("录音已取消") >= 0)
+                // 首次请求麦克风权限时，iOS系统弹窗会终止原来的按住手势，
+                // TOUCH_END/TOUCH_CANCEL先停止本次录音；用户允许权限后，迟到的
+                // getUserMedia才返回“麦克风预热已取消”。这是正常取消，不应再弹错。
+                // 权限拒绝等真实错误不包含这两个文案，仍会继续抛出并提示用户。
+                if(message.indexOf("录音已取消") >= 0 ||
+                    (this.appleWebPlayback &&
+                    message.indexOf("麦克风预热已取消") >= 0))
                     return;
                 throw error;
             }
             session.cancelled = true;
             if(this.activeSession === session)
                 this.activeSession = null;
-            this.recorder.stop();
+            this.stopRecorderCapture();
             this.cancelSocket(session);
             this.removeSession(session);
             throw error;
@@ -151,7 +182,7 @@ export default class WebVoiceClient {
             if(this.activeSession === session)
                 this.activeSession = null;
             session.stopped = true;
-            this.recorder.stop();
+            this.stopRecorderCapture();
             this.clearInputHealthTimer(session);
             if(session.cancelled)
                 throw new Error("语音发送已取消");
@@ -189,7 +220,7 @@ export default class WebVoiceClient {
     public cancel() {
         let session = this.activeSession;
         this.activeSession = null;
-        this.recorder.stop();
+        this.stopRecorderCapture();
         if(session != null)
             this.cancelSession(session);
     }
@@ -197,41 +228,129 @@ export default class WebVoiceClient {
     public play(voiceID:string):Promise<void> {
         this.stopPlayback(false);
         return this.getVoiceURL(voiceID).then((blobURL:string)=>{
-            return new Promise<void>((resolve, reject)=>{
-                let completed = false;
-                let audio = new Audio(blobURL);
-                this.activeAudio = audio;
-                audio.preload = "auto";
-
-                let finish = (error:any)=>{
-                    if(completed)
-                        return;
-                    completed = true;
-                    this.stopPlayback(false);
-                    if(error != null)
-                        reject(error);
-                    else
-                        resolve();
-                };
-                audio.onended = ()=>finish(null);
-                audio.onerror = ()=>finish(new Error("语音播放失败"));
-                this.playbackTimer = setTimeout(()=>{
-                    finish(new Error("语音播放超时"));
-                }, 12000);
-
-                let playResult:any = audio.play();
-                if(playResult != null && typeof playResult.catch === "function")
-                {
-                    playResult.catch((error:any)=>{
-                        finish(new Error("浏览器阻止了语音自动播放"));
-                    });
-                }
-            });
+            return this.appleWebPlayback ?
+                this.playAppleWebAudio(blobURL) : this.playDefaultWebAudio(blobURL);
         }).then(()=>{
             this.onPlaybackDone();
         }).catch((error:any)=>{
             this.onPlaybackDone();
             throw error;
+        });
+    }
+
+    // 非苹果网页严格保留原来的Audio创建、超时和失败行为。
+    private playDefaultWebAudio(blobURL:string):Promise<void> {
+        return new Promise<void>((resolve, reject)=>{
+            let completed = false;
+            let audio = new Audio(blobURL);
+            this.activeAudio = audio;
+            audio.preload = "auto";
+
+            let finish = (error:any)=>{
+                if(completed)
+                    return;
+                completed = true;
+                this.stopPlayback(false);
+                if(error != null)
+                    reject(error);
+                else
+                    resolve();
+            };
+            audio.onended = ()=>finish(null);
+            audio.onerror = ()=>finish(new Error("语音播放失败"));
+            this.playbackTimer = setTimeout(()=>{
+                finish(new Error("语音播放超时"));
+            }, 12000);
+
+            let playResult:any = audio.play();
+            if(playResult != null && typeof playResult.catch === "function")
+            {
+                playResult.catch((error:any)=>{
+                    finish(new Error("浏览器阻止了语音自动播放"));
+                });
+            }
+        });
+    }
+
+    private playAppleWebAudio(blobURL:string):Promise<void> {
+        return new Promise<void>((resolve, reject)=>{
+            let completed = false;
+            let permissionRequested = false;
+            let audio = this.getApplePlaybackAudio();
+            this.activeAudio = audio;
+            audio.preload = "auto";
+            try {
+                audio.pause();
+                audio.src = blobURL;
+                audio.currentTime = 0;
+                audio.load();
+            } catch(e) {}
+
+            let finish = (error:any)=>{
+                if(completed)
+                    return;
+                completed = true;
+                this.stopPlayback(false);
+                if(error != null)
+                    reject(error);
+                else
+                    resolve();
+            };
+            let armPlaybackTimeout = (timeoutMS:number)=>{
+                if(this.playbackTimer != null)
+                    clearTimeout(this.playbackTimer);
+                this.playbackTimer = setTimeout(()=>{
+                    finish(new Error("语音播放超时"));
+                }, timeoutMS);
+            };
+            let attemptPlayback = (manualRetry:boolean)=>{
+                if(completed)
+                    return;
+                let playResult:any = null;
+                try {
+                    playResult = audio.play();
+                } catch(error) {
+                    finish(new Error("语音播放失败"));
+                    return;
+                }
+                if(playResult == null || typeof playResult.then !== "function")
+                {
+                    this.applePlaybackUnlocked = true;
+                    return;
+                }
+                playResult.then(()=>{
+                    this.applePlaybackUnlocked = true;
+                }).catch((error:any)=>{
+                    if(!manualRetry && !permissionRequested &&
+                        this.isPlaybackNotAllowed(error) &&
+                        this.onPlaybackPermissionRequired != null)
+                    {
+                        permissionRequested = true;
+                        this.applePlaybackUnlocked = false;
+                        // 等待用户点击时不能按普通12秒播放超时立即丢弃当前语音。
+                        armPlaybackTimeout(30000);
+                        try {
+                            this.onPlaybackPermissionRequired(()=>{
+                                if(completed)
+                                    return;
+                                armPlaybackTimeout(12000);
+                                attemptPlayback(true);
+                            }, ()=>{
+                                finish(new Error("未开启苹果网页版语音播放"));
+                            });
+                        } catch(callbackError) {
+                            finish(new Error("无法显示语音播放授权提示"));
+                        }
+                        return;
+                    }
+                    finish(new Error(this.isPlaybackNotAllowed(error) ?
+                        "浏览器阻止了语音自动播放" : "语音播放失败"));
+                });
+            };
+            audio.onended = ()=>finish(null);
+            audio.onerror = ()=>finish(new Error("语音播放失败"));
+            armPlaybackTimeout(12000);
+            attemptPlayback(false);
         });
     }
 
@@ -244,6 +363,31 @@ export default class WebVoiceClient {
     public unlockPlayback() {
         if(typeof document === "undefined")
             return;
+        if(this.appleWebPlayback)
+        {
+            let audio = this.getApplePlaybackAudio();
+            if(audio == null || this.applePlaybackUnlocked || this.activeAudio === audio)
+                return;
+            try {
+                audio.onended = null;
+                audio.onerror = null;
+                audio.src = this.appleUnlockAudioSource;
+                audio.currentTime = 0;
+                let result:any = audio.play();
+                let complete = ()=>{
+                    this.applePlaybackUnlocked = true;
+                    try {
+                        audio.pause();
+                        audio.currentTime = 0;
+                    } catch(e) {}
+                };
+                if(result != null && typeof result.then === "function")
+                    result.then(complete).catch((error:any)=>{});
+                else
+                    setTimeout(complete,0);
+            } catch(e) {}
+            return;
+        }
         try {
             let audio = new Audio(
                 "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEA" +
@@ -259,6 +403,7 @@ export default class WebVoiceClient {
     public shutdown() {
         this.clearRecorderReleaseTimer();
         this.resetRoomState();
+        this.releaseApplePlaybackAudio();
         this.recorder.shutdown();
     }
 
@@ -267,6 +412,12 @@ export default class WebVoiceClient {
     public leaveRoom() {
         this.clearRecorderReleaseTimer();
         this.resetRoomState();
+        if(this.appleWebPlayback)
+        {
+            // 苹果网页离开房间时必须立即释放麦克风，不能保留5秒复用窗口。
+            this.recorder.shutdown();
+            return;
+        }
         this.recorder.resetPreRoll();
         this.recorderReleaseTimer = setTimeout(()=>{
             this.recorderReleaseTimer = null;
@@ -720,6 +871,16 @@ export default class WebVoiceClient {
         }
     }
 
+    private stopRecorderCapture() {
+        this.recorder.stop();
+        if(this.appleWebPlayback)
+        {
+            // 只有stop轨道才能可靠关闭iOS右上角的麦克风占用提示；
+            // 已录PCM保存在VoiceUploadSession中，释放采集链不会影响后续上传。
+            this.recorder.shutdown();
+        }
+    }
+
     private stopPlayback(notify:boolean) {
         if(this.playbackTimer != null)
         {
@@ -738,6 +899,70 @@ export default class WebVoiceClient {
         }
         if(notify)
             this.onPlaybackDone();
+    }
+
+    private isAppleMobileWeb():boolean {
+        if(!cc.sys.isBrowser || typeof navigator === "undefined")
+            return false;
+        let userAgent = navigator.userAgent == null ? "" : navigator.userAgent;
+        if(/iPhone|iPad|iPod/i.test(userAgent))
+            return true;
+        // iPadOS可使用桌面级UA伪装成Mac，触点数用于排除真正的Mac。
+        let platform = (navigator as any).platform == null ? "" :
+            (navigator as any).platform.toString();
+        let maxTouchPoints = Number((navigator as any).maxTouchPoints || 0);
+        return platform === "MacIntel" && maxTouchPoints > 1;
+    }
+
+    private getApplePlaybackAudio():HTMLAudioElement {
+        if(this.applePlaybackAudio != null)
+            return this.applePlaybackAudio;
+        if(typeof document === "undefined")
+            return null;
+        let audio = new Audio();
+        audio.preload = "auto";
+        audio.setAttribute("playsinline", "true");
+        audio.setAttribute("webkit-playsinline", "true");
+        audio.style.position = "fixed";
+        audio.style.left = "-9999px";
+        audio.style.top = "-9999px";
+        audio.style.width = "1px";
+        audio.style.height = "1px";
+        audio.style.opacity = "0";
+        audio.style.pointerEvents = "none";
+        if(document.body != null)
+            document.body.appendChild(audio);
+        this.applePlaybackAudio = audio;
+        return audio;
+    }
+
+    private releaseApplePlaybackAudio() {
+        if(this.applePlaybackAudio == null)
+            return;
+        try {
+            this.applePlaybackAudio.pause();
+            this.applePlaybackAudio.onended = null;
+            this.applePlaybackAudio.onerror = null;
+            this.applePlaybackAudio.removeAttribute("src");
+            this.applePlaybackAudio.load();
+            if(this.applePlaybackAudio.parentNode != null)
+                this.applePlaybackAudio.parentNode.removeChild(this.applePlaybackAudio);
+        } catch(e) {}
+        this.applePlaybackAudio = null;
+        this.applePlaybackUnlocked = false;
+    }
+
+    private isPlaybackNotAllowed(error:any):boolean {
+        if(error == null)
+            return false;
+        let name = error.name == null ? "" : error.name.toString();
+        let message = error.message == null ? error.toString() : error.message.toString();
+        let normalized = (name + " " + message).toLowerCase();
+        return name === "NotAllowedError" ||
+            normalized.indexOf("notallowed") >= 0 ||
+            normalized.indexOf("not allowed") >= 0 ||
+            normalized.indexOf("user gesture") >= 0 ||
+            normalized.indexOf("user interaction") >= 0;
     }
 
     private addCache(voiceID:string, blobURL:string) {
@@ -788,21 +1013,21 @@ export default class WebVoiceClient {
     }
 
     private resolveEndpoints():VoiceEndpoints {
+        let useWebSecureEndpoints = cc.sys.isBrowser;
         let override = "";
         try {
             override = cc.sys.localStorage.getItem("AudioServerBaseURL") || "";
         } catch(e) {}
 
-        let httpBase = AUDIO_SERVER_HTTP_BASE;
-        if(override !== "")
+        // 网页固定使用正式HTTPS/WSS域名，不能被旧浏览器里残留的明文IP覆盖。
+        let httpBase = useWebSecureEndpoints ? WEB_AUDIO_SERVER_HTTP_BASE : AUDIO_SERVER_HTTP_BASE;
+        if(!useWebSecureEndpoints && override !== "")
             httpBase = override.replace(/\/+$/, "");
-        else if(typeof window !== "undefined" && window.location.protocol === "https:")
-            httpBase = window.location.origin + AUDIO_SERVER_PROXY_PATH;
 
-        let wsURL = AUDIO_SERVER_WS_URL;
-        if(httpBase.indexOf("https://") === 0)
+        let wsURL = useWebSecureEndpoints ? WEB_AUDIO_SERVER_WS_URL : AUDIO_SERVER_WS_URL;
+        if(!useWebSecureEndpoints && httpBase.indexOf("https://") === 0)
             wsURL = "wss://" + httpBase.substr("https://".length) + "/v1/stream";
-        else if(httpBase.indexOf("http://") === 0)
+        else if(!useWebSecureEndpoints && httpBase.indexOf("http://") === 0)
             wsURL = "ws://" + httpBase.substr("http://".length) + "/v1/stream";
         return {
             httpBase: httpBase,

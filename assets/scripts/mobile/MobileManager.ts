@@ -163,6 +163,18 @@ export default class MobileManager extends cc.Component {
         {
             this.webVoiceClient = new WebVoiceClient(()=>{
                 KBEngine.Event.fire("OnPlayNextAudio", "");
+            }, (retry:()=>void,cancel:()=>void)=>{
+                UIManager.getInstance().showPanel(
+                    "panelMsgView",
+                    ShowPanelMode.Cover,
+                    "苹果网页版需要先开启语音播放，点击确定后继续播放当前语音。",
+                    [(confirmed:boolean)=>{
+                        if(confirmed)
+                            retry();
+                        else
+                            cancel();
+                    }]
+                );
             });
             if(typeof document !== "undefined")
             {

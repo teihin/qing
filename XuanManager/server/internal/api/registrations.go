@@ -48,6 +48,22 @@ type normalizedGameRegistration struct {
 	DeviceVersion    int
 }
 
+type registrationUpperChain struct {
+	Direct string
+	Second string
+	Third  string
+	All    []string
+}
+
+func (chain registrationUpperChain) IDs() []string {
+	if len(chain.All) > 0 {
+		return compactUniqueRegistrationIDs(chain.All...)
+	}
+	return compactUniqueRegistrationIDs(chain.Direct, chain.Second, chain.Third)
+}
+
+const maxRegistrationAncestorDepth = 64
+
 var registrationDeviceIDPattern = regexp.MustCompile(`^[A-Za-z0-9._:-]{8,255}$`)
 
 type registrationRateEntry struct {
@@ -128,7 +144,7 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	validInvitation, err := s.validRegistrationInvitation(r, registration.InvitationCode)
+	upperChain, validInvitation, err := s.registrationInvitationUpperChain(r.Context(), registration.InvitationCode)
 	if err != nil {
 		s.logger.Error("validate game registration invitation", "error", err)
 		writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "暂时无法验证邀请码，请稍后再试")
@@ -196,10 +212,11 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		bindingRevision = 1
 	}
 	result, err := registrationConn.ExecContext(r.Context(), `INSERT INTO kbedm.third_marketing_info
-(date, time, upper_guuid, player_wxid, player_wxname, player_wxpwd, status, level,
+(date, time, upper_guuid, upper2_guuid, upper3_guuid, player_wxid, player_wxname, player_wxpwd, status, level,
  anti_theft_on, device_id, device_platform, device_version, device_bound_at, binding_revision)
-VALUES (CURDATE(), CURTIME(), ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1, NOW(), NULL), ?)`,
-		registration.InvitationCode, registration.LoginName, registration.Nickname, registration.Password,
+VALUES (CURDATE(), CURTIME(), ?, ?, ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1, NOW(), NULL), ?)`,
+		upperChain.Direct, upperChain.Second, upperChain.Third,
+		registration.LoginName, registration.Nickname, registration.Password,
 		antiTheftValue, deviceID, devicePlatform, registration.DeviceVersion, antiTheftValue, bindingRevision)
 	if err != nil {
 		if isDuplicateKey(err) {
@@ -217,6 +234,14 @@ VALUES (CURDATE(), CURTIME(), ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1, NOW(
 		return
 	}
 
+	upperIDs := upperChain.IDs()
+	lowerCountsRefreshed := true
+	if err := refreshRegistrationLowerCounts(r.Context(), registrationConn, upperIDs); err != nil {
+		lowerCountsRefreshed = false
+		s.logger.Error("refresh registration lower counts", "error", err, "registrationId", id, "upperChain", upperIDs)
+		go s.retryRegistrationLowerCounts(upperIDs)
+	}
+
 	s.audit(r.Context(), nil, "game.registration.create", "third_marketing_info", numericID(id),
 		map[string]any{
 			"invitationCode":   registration.InvitationCode,
@@ -226,7 +251,11 @@ VALUES (CURDATE(), CURTIME(), ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1, NOW(
 			"antiTheftEnabled": registration.AntiTheftEnabled,
 			"devicePlatform":   registration.DevicePlatform,
 			"deviceVersion":    registration.DeviceVersion,
-		}, nil, map[string]any{"registrationId": id}, 0, "游戏账号注册成功", clientIP(r))
+		}, nil, map[string]any{
+			"registrationId":       id,
+			"upperChain":           upperIDs,
+			"lowerCountsRefreshed": lowerCountsRefreshed,
+		}, 0, "游戏账号注册成功", clientIP(r))
 	go s.applyRegistrationAvatar(id, registration.AvatarIndex)
 	writeData(w, http.StatusCreated, map[string]any{
 		"registrationId":   id,
@@ -444,15 +473,246 @@ func validateRegistrationText(value string, minLength, maxLength int, label stri
 	return nil
 }
 
-func (s *Server) validRegistrationInvitation(r *http.Request, invitationCode string) (bool, error) {
-	var exists bool
-	err := s.db.QueryRowContext(r.Context(), `SELECT EXISTS(
-SELECT 1
+func (s *Server) registrationInvitationUpperChain(ctx context.Context, invitationCode string) (registrationUpperChain, bool, error) {
+	current := strings.TrimSpace(invitationCode)
+	if current == "" {
+		return registrationUpperChain{}, false, nil
+	}
+	chainIDs := make([]string, 0, 4)
+	seen := make(map[string]struct{}, 4)
+
+	for depth := 0; depth < maxRegistrationAncestorDepth; depth++ {
+		if _, exists := seen[current]; exists {
+			return registrationUpperChain{}, false, errors.New("invitation agent relationship contains a cycle")
+		}
+		seen[current] = struct{}{}
+
+		parentID, isBoss, exists, err := s.registrationAgentParent(ctx, current)
+		if err != nil {
+			return registrationUpperChain{}, false, err
+		}
+		if !exists {
+			if depth == 0 {
+				return registrationUpperChain{}, false, nil
+			}
+			return registrationUpperChain{}, false, errors.New("invitation agent upstream account is invalid")
+		}
+		chainIDs = append(chainIDs, current)
+		if isBoss {
+			return registrationUpperChainFromIDs(chainIDs), true, nil
+		}
+		if parentID == "" {
+			return registrationUpperChain{}, false, errors.New("invitation agent is not linked to an upstream agent")
+		}
+		current = parentID
+	}
+	return registrationUpperChain{}, false, errors.New("invitation agent relationship exceeds maximum depth")
+}
+
+func (s *Server) registrationAgentParent(ctx context.Context, agentID string) (string, bool, bool, error) {
+	var parentID string
+	var isBoss bool
+	err := s.db.QueryRowContext(ctx, `SELECT
+COALESCE(NULLIF(TRIM(m.upper_guuid), ''), NULLIF(TRIM(a.sm_agentID), ''), ''),
+(a.sm_role LIKE '%老板%')
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.third_marketing_info m ON m.player_guuid = a.sm_guuid
 WHERE a.sm_guuid = ? AND `+agentCandidateSQL+`
-)`, invitationCode).Scan(&exists)
-	return exists, err
+ORDER BY m.id DESC
+LIMIT 1`, agentID).Scan(&parentID, &isBoss)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, false, nil
+	}
+	if err != nil {
+		return "", false, false, err
+	}
+	return strings.TrimSpace(parentID), isBoss, true, nil
+}
+
+func registrationUpperChainFromIDs(values []string) registrationUpperChain {
+	ids := compactUniqueRegistrationIDs(values...)
+	chain := registrationUpperChain{All: ids}
+	if len(ids) > 0 {
+		chain.Direct = ids[0]
+	}
+	if len(ids) > 1 {
+		chain.Second = ids[1]
+	}
+	if len(ids) > 2 {
+		chain.Third = ids[2]
+	}
+	return chain
+}
+
+type registrationCountStore interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+type registrationRelationship struct {
+	RegistrationID  int64
+	PlayerID        string
+	ParentID        string
+	RegisteredToday bool
+}
+
+type registrationLowerCount struct {
+	All   int64
+	Today int64
+}
+
+const registrationRelationshipSelectSQL = `SELECT
+m.id, COALESCE(TRIM(m.player_guuid), ''),
+COALESCE(NULLIF(TRIM(m.upper_guuid), ''), NULLIF(TRIM(a.sm_agentID), ''), ''),
+(LEFT(TRIM(m.date), 10) = DATE_FORMAT(CURDATE(), '%Y-%m-%d'))
+FROM kbedm.third_marketing_info m
+LEFT JOIN kbedm.tbl_Account a ON a.sm_guuid = m.player_guuid
+WHERE COALESCE(NULLIF(TRIM(m.upper_guuid), ''), NULLIF(TRIM(a.sm_agentID), ''), '') <> ''`
+
+func refreshRegistrationLowerCounts(ctx context.Context, store registrationCountStore, upperIDs []string) error {
+	upperIDs = compactUniqueRegistrationIDs(upperIDs...)
+	if len(upperIDs) == 0 {
+		return nil
+	}
+	counts, err := queryRegistrationLowerCounts(ctx, store, upperIDs)
+	if err != nil {
+		return err
+	}
+	query, args := registrationLowerCountUpdateStatement(upperIDs, counts)
+	_, err = store.ExecContext(ctx, query, args...)
+	return err
+}
+
+func registrationLowerCountUpdateStatement(upperIDs []string, counts map[string]registrationLowerCount) (string, []any) {
+	upperIDs = compactUniqueRegistrationIDs(upperIDs...)
+	selects := make([]string, 0, len(upperIDs))
+	args := make([]any, 0, len(upperIDs)*3)
+	for _, upperID := range upperIDs {
+		count := counts[upperID]
+		selects = append(selects, "SELECT ? AS ancestor_id, ? AS all_lower_count, ? AS today_lower_count")
+		args = append(args, upperID, count.All, count.Today)
+	}
+	return `UPDATE kbedm.third_marketing_info AS parent
+JOIN (` + strings.Join(selects, " UNION ALL ") + `) AS calculated
+  ON calculated.ancestor_id = parent.player_guuid
+SET parent.all_lower_count = calculated.all_lower_count,
+    parent.today_lower_count = calculated.today_lower_count,
+    parent.today_lower_date = DATE_FORMAT(CURDATE(), '%Y-%m-%d')
+`, args
+}
+
+func queryRegistrationLowerCounts(ctx context.Context, store interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, ancestorIDs []string) (map[string]registrationLowerCount, error) {
+	ancestorIDs = compactUniqueRegistrationIDs(ancestorIDs...)
+	if len(ancestorIDs) == 0 {
+		return map[string]registrationLowerCount{}, nil
+	}
+	rows, err := store.QueryContext(ctx, registrationRelationshipSelectSQL)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	relationships := make([]registrationRelationship, 0)
+	for rows.Next() {
+		var relationship registrationRelationship
+		if err := rows.Scan(
+			&relationship.RegistrationID,
+			&relationship.PlayerID,
+			&relationship.ParentID,
+			&relationship.RegisteredToday,
+		); err != nil {
+			return nil, err
+		}
+		relationships = append(relationships, relationship)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return calculateRegistrationLowerCounts(relationships, ancestorIDs), nil
+}
+
+func calculateRegistrationLowerCounts(relationships []registrationRelationship, ancestorIDs []string) map[string]registrationLowerCount {
+	children := make(map[string][]registrationRelationship)
+	for _, relationship := range relationships {
+		parentID := strings.TrimSpace(relationship.ParentID)
+		if parentID == "" {
+			continue
+		}
+		children[parentID] = append(children[parentID], relationship)
+	}
+
+	result := make(map[string]registrationLowerCount)
+	for _, ancestorID := range compactUniqueRegistrationIDs(ancestorIDs...) {
+		count := registrationLowerCount{}
+		visitedRegistrations := make(map[int64]struct{})
+		expandedPlayers := map[string]struct{}{ancestorID: {}}
+		queue := []string{ancestorID}
+		for len(queue) > 0 {
+			parentID := queue[0]
+			queue = queue[1:]
+			for _, relationship := range children[parentID] {
+				if _, visited := visitedRegistrations[relationship.RegistrationID]; !visited {
+					visitedRegistrations[relationship.RegistrationID] = struct{}{}
+					count.All++
+					if relationship.RegisteredToday {
+						count.Today++
+					}
+				}
+				playerID := strings.TrimSpace(relationship.PlayerID)
+				if playerID == "" {
+					continue
+				}
+				if _, expanded := expandedPlayers[playerID]; expanded {
+					continue
+				}
+				expandedPlayers[playerID] = struct{}{}
+				queue = append(queue, playerID)
+			}
+		}
+		result[ancestorID] = count
+	}
+	return result
+}
+
+func compactUniqueRegistrationIDs(values ...string) []string {
+	result := make([]string, 0, len(values))
+	seen := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
+}
+
+func (s *Server) retryRegistrationLowerCounts(upperIDs []string) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	for attempt := 1; attempt <= 5; attempt++ {
+		if err := refreshRegistrationLowerCounts(ctx, s.db, upperIDs); err == nil {
+			s.logger.Info("registration lower counts repaired", "upperChain", upperIDs, "attempt", attempt)
+			return
+		} else if attempt == 5 {
+			s.logger.Error("registration lower counts repair failed", "error", err, "upperChain", upperIDs, "attempt", attempt)
+			return
+		}
+
+		timer := time.NewTimer(time.Duration(attempt) * time.Second)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return
+		case <-timer.C:
+		}
+	}
 }
 
 func gameNicknameExists(ctx context.Context, conn *sql.Conn, nickname string) (bool, error) {

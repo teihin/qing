@@ -5308,7 +5308,7 @@
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
     "_spriteFrame": {
-      "__uuid__": "9f645c91-df87-4dfd-a645-80e17988dc92"
+      "__uuid__": "77dd757b-fa39-4c51-9855-9df592d11dd1"
     },
     "_type": 0,
     "_sizeMode": 1,
@@ -5793,7 +5793,7 @@
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
     "_spriteFrame": {
-      "__uuid__": "ab113f14-79c1-48a5-a423-6f767af50ee3"
+      "__uuid__": "77dd757b-fa39-4c51-9855-9df592d11dd1"
     },
     "_type": 0,
     "_sizeMode": 1,
@@ -46579,6 +46579,18 @@
       "__id__": 1
     },
     "_enabled": true,
+    "paymentAlipayIcon": {
+      "__uuid__": "9f645c91-df87-4dfd-a645-80e17988dc92"
+    },
+    "paymentUnionPayIcon": {
+      "__uuid__": "ab113f14-79c1-48a5-a423-6f767af50ee3"
+    },
+    "paymentWeChatIcon": {
+      "__uuid__": "77dd757b-fa39-4c51-9855-9df592d11dd1"
+    },
+    "paymentOtherIcon": {
+      "__uuid__": "643a434b-cd3a-48d0-b7d2-09da7352a150"
+    },
     "_id": ""
   },
   {

@@ -5,6 +5,7 @@ import UIManager from "../common/UIManager";
 import ScrollViewEx from "../common/ScrollViewEx";
 import Debug from "../common/Debug";
 import { ShowPanelMode } from "../common/GameDef";
+import WebLoadingManager from "../common/WebLoadingManager";
 
 var KBEngine = require("kbengine");
 
@@ -111,7 +112,7 @@ export default class panelRecordList extends UIPanelViewBase {
 
             if(i>=this.scrollRecordList.content.childrenCount)
             {
-                cc.loader.loadRes("Prefabs/战绩对象",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/战绩对象","正在加载战绩列表",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);
@@ -146,11 +147,20 @@ export default class panelRecordList extends UIPanelViewBase {
     public setRecordItemInfo(node:cc.Node,jItem:any)
     {
         node.active = true;
-        let remark = jItem["all_remark"];
+        let rawRemark = jItem["all_remark"];
+        let remark:any[] = Array.isArray(rawRemark) ? rawRemark : (rawRemark == null ? [] : rawRemark.toString().split(','));
+        let buyIn:string = "--";
+        if(remark.length > 1 && remark[1] != null)
+        {
+            let rawBuyIn = remark[1].toString().trim();
+            if(rawBuyIn !== "" && isFinite(Number(rawBuyIn)) && Number(rawBuyIn) >= 0)
+                buyIn = rawBuyIn;
+        }
 
         node.getChildByName("房间号").getComponent(cc.Label).string = jItem["room_id"];
-        node.getChildByName("底皮").getComponent(cc.Label).string = remark[5];
-        node.getChildByName("时间").getComponent(cc.Label).string = remark[7];
+        node.getChildByName("带入").getComponent(cc.Label).string = buyIn;
+        node.getChildByName("底皮").getComponent(cc.Label).string = remark.length > 5 && remark[5] != null ? remark[5].toString() : "--";
+        node.getChildByName("时间").getComponent(cc.Label).string = remark.length > 7 && remark[7] != null ? remark[7].toString() : "--";
         node.getChildByName("输赢").getComponent(cc.Label).string = jItem["score"];
 
         //node.getChildByName("s房间").color = jItem["creater_guuid"] == "694632"?cc.Color.WHITE:cc.Color.RED;

@@ -5,7 +5,7 @@
 - 自动识别 iPhone、iPad、Android 和桌面浏览器。
 - 识别微信、QQ、微博、抖音、支付宝等内置浏览器并给出切换提示。
 - Android 下载正式 APK。
-- iPhone/iPad 通过 `.mobileconfig` 安装全屏 Web Clip。
+- iPhone/iPad 通过 `.mobileconfig` 安装全屏 Web Clip；即使进入同域的客服、语音等其他路径，也继续保持无 Safari 地址栏的全屏模式。
 - iPhone 非 Safari 浏览器引导复制地址并切换 Safari。
 - 桌面和手机响应式布局、刘海屏安全区、减少动画偏好和键盘关闭弹层。
 

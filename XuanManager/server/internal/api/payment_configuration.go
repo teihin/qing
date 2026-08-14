@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,11 @@ const (
 	paymentAlipayTextKey   = "提现文本_支付宝"
 	paymentUnionPayTextKey = "提现文本_银联"
 	paymentUSDTTextKey     = "提现文本_USDT"
+	paymentIconDefault     = "default"
+	paymentIconAlipay      = "alipay"
+	paymentIconUnionPay    = "unionpay"
+	paymentIconWeChat      = "wechat"
+	paymentIconOther       = "other"
 )
 
 var paymentConfigurationMutationMu sync.Mutex
@@ -37,6 +43,7 @@ var defaultPaymentChannelNames = []string{
 type paymentChannelConfig struct {
 	Name          string   `json:"name"`
 	Enabled       bool     `json:"enabled"`
+	IconType      string   `json:"iconType"`
 	NeedsInfo     bool     `json:"needsInfo"`
 	InfoFields    []string `json:"infoFields"`
 	PresetAmounts string   `json:"presetAmounts"`
@@ -73,6 +80,7 @@ type updatePaymentConfigurationRequest struct {
 }
 
 type paymentClientConfig struct {
+	Icon       string `json:"icon"`
 	NeedInfo   bool   `json:"needinfo"`
 	InfoList   string `json:"infolist"`
 	Money      string `json:"money"`
@@ -150,7 +158,8 @@ func (s *Server) handleUpdatePaymentConfiguration(w http.ResponseWriter, r *http
 	after, verifyErr := s.queryPaymentConfiguration(ctx, p)
 	if verifyErr != nil || !paymentStateMatchesRequest(after, input) {
 		restoreErr := s.restoreStoredHashRows(ctx, beforeRows, insertedIDs, keys)
-		s.logger.Error("verify payment configuration", "error", verifyErr, "restoreError", restoreErr)
+		s.logger.Error("verify payment configuration", "error", verifyErr,
+			"mismatchedFields", paymentStateMismatchFields(after, input), "restoreError", restoreErr)
 		writeError(w, http.StatusInternalServerError, "PAYMENT_CONFIGURATION_VERIFY_FAILED", "支付配置回读校验失败，已尝试恢复原配置")
 		return
 	}
@@ -201,7 +210,7 @@ ORDER BY id`, paymentListKey, paymentDomainKey, paymentBranchKey, paymentAlipayT
 		USDTWithdrawalText: values[paymentUSDTTextKey],
 	}
 	for _, name := range channelNames {
-		channel := paymentChannelConfig{Name: name, Enabled: enabled[name]}
+		channel := paymentChannelConfig{Name: name, Enabled: enabled[name], IconType: paymentIconDefault, InfoFields: []string{}}
 		encoded, configured := values["支付配置_"+name]
 		channel.Configured = configured && encoded != ""
 		if channel.Configured {
@@ -210,6 +219,12 @@ ORDER BY id`, paymentListKey, paymentDomainKey, paymentBranchKey, paymentAlipayT
 			if decodeErr != nil || json.Unmarshal([]byte(decoded), &client) != nil {
 				channel.EncodingError = true
 			} else {
+				iconType, iconErr := normalizePaymentIconType(client.Icon)
+				if iconErr != nil {
+					channel.EncodingError = true
+				} else {
+					channel.IconType = iconType
+				}
 				channel.NeedsInfo = client.NeedInfo
 				channel.InfoFields = splitHashListOrdered(client.InfoList)
 				channel.PresetAmounts = client.Money
@@ -266,6 +281,11 @@ func normalizeAndValidatePaymentRequest(input *updatePaymentConfigurationRequest
 			return fmt.Errorf("支付通道 %s 重复", channel.Name)
 		}
 		seen[channel.Name] = true
+		iconType, err := normalizePaymentIconType(channel.IconType)
+		if err != nil {
+			return fmt.Errorf("%s 的%s", channel.Name, err.Error())
+		}
+		channel.IconType = iconType
 		channel.PresetAmounts = strings.TrimSpace(channel.PresetAmounts)
 		channel.DisplayText = strings.TrimSpace(channel.DisplayText)
 		channel.CustomMin = strings.TrimSpace(channel.CustomMin)
@@ -284,12 +304,15 @@ func normalizeAndValidatePaymentRequest(input *updatePaymentConfigurationRequest
 		if len(channel.InfoFields) > 20 {
 			return fmt.Errorf("%s 的资料字段不能超过 20 个", channel.Name)
 		}
-		for infoIndex := range channel.InfoFields {
-			channel.InfoFields[infoIndex] = strings.TrimSpace(channel.InfoFields[infoIndex])
-			if err := validateSimplePaymentValue(channel.InfoFields[infoIndex], 32, "资料字段"); err != nil {
+		normalizedInfoFields := make([]string, 0, len(channel.InfoFields))
+		for _, infoField := range channel.InfoFields {
+			infoField = strings.TrimSpace(infoField)
+			if err := validateSimplePaymentValue(infoField, 32, "资料字段"); err != nil {
 				return err
 			}
+			normalizedInfoFields = append(normalizedInfoFields, infoField)
 		}
+		channel.InfoFields = normalizedInfoFields
 		if channel.AllowCustom {
 			minValue, minErr := strconv.ParseFloat(channel.CustomMin, 64)
 			maxValue, maxErr := strconv.ParseFloat(channel.CustomMax, 64)
@@ -299,6 +322,19 @@ func normalizeAndValidatePaymentRequest(input *updatePaymentConfigurationRequest
 		}
 	}
 	return nil
+}
+
+func normalizePaymentIconType(value string) (string, error) {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return paymentIconDefault, nil
+	}
+	switch value {
+	case paymentIconDefault, paymentIconAlipay, paymentIconUnionPay, paymentIconWeChat, paymentIconOther:
+		return value, nil
+	default:
+		return "", errors.New("支付图标只能选择默认、支付宝、银联、微信或其他")
+	}
 }
 
 func normalizePaymentBankList(value, channelName string) ([]string, error) {
@@ -363,6 +399,7 @@ func paymentHashWrites(input updatePaymentConfigurationRequest) (map[string]stri
 			inputRange = channel.CustomMin + "," + channel.CustomMax
 		}
 		client := paymentClientConfig{
+			Icon:     channel.IconType,
 			NeedInfo: channel.NeedsInfo, InfoList: joinHashList(channel.InfoFields), Money: channel.PresetAmounts,
 			Notify: channel.DisplayText, Bank: channel.Banks, OpenInput: channel.AllowCustom, InputRange: inputRange,
 		}
@@ -464,6 +501,10 @@ func paymentStateRevision(state paymentConfigurationState) string {
 }
 
 func paymentStateMatchesRequest(state paymentConfigurationState, input updatePaymentConfigurationRequest) bool {
+	return len(paymentStateMismatchFields(state, input)) == 0
+}
+
+func paymentStateMismatchFields(state paymentConfigurationState, input updatePaymentConfigurationRequest) []string {
 	expected := paymentConfigurationState{
 		Channels: input.Channels, PaymentDomain: input.PaymentDomain, RequireBankBranch: input.RequireBankBranch,
 		AlipayWithdrawalText: input.AlipayWithdrawalText, UnionWithdrawalText: input.UnionWithdrawalText, USDTWithdrawalText: input.USDTWithdrawalText,
@@ -472,19 +513,85 @@ func paymentStateMatchesRequest(state paymentConfigurationState, input updatePay
 		expected.Channels[index].Configured = true
 		expected.Channels[index].EncodingError = false
 	}
-	return paymentStateRevision(state) == paymentStateRevision(expected)
+	mismatches := []string{}
+	if state.PaymentDomain != expected.PaymentDomain {
+		mismatches = append(mismatches, "paymentDomain")
+	}
+	if state.RequireBankBranch != expected.RequireBankBranch {
+		mismatches = append(mismatches, "requireBankBranch")
+	}
+	if state.AlipayWithdrawalText != expected.AlipayWithdrawalText {
+		mismatches = append(mismatches, "alipayWithdrawalText")
+	}
+	if state.UnionWithdrawalText != expected.UnionWithdrawalText {
+		mismatches = append(mismatches, "unionWithdrawalText")
+	}
+	if state.USDTWithdrawalText != expected.USDTWithdrawalText {
+		mismatches = append(mismatches, "usdtWithdrawalText")
+	}
+	if len(state.Channels) != len(expected.Channels) {
+		mismatches = append(mismatches, "channels.length")
+	}
+	channelCount := min(len(state.Channels), len(expected.Channels))
+	for index := 0; index < channelCount; index++ {
+		actualChannel := state.Channels[index]
+		expectedChannel := expected.Channels[index]
+		prefix := "channels[" + strconv.Itoa(index) + "]"
+		if actualChannel.Name != expectedChannel.Name {
+			mismatches = append(mismatches, prefix+".name")
+		}
+		if actualChannel.Enabled != expectedChannel.Enabled {
+			mismatches = append(mismatches, prefix+".enabled")
+		}
+		if actualChannel.IconType != expectedChannel.IconType {
+			mismatches = append(mismatches, prefix+".iconType")
+		}
+		if actualChannel.NeedsInfo != expectedChannel.NeedsInfo {
+			mismatches = append(mismatches, prefix+".needsInfo")
+		}
+		if !slices.Equal(actualChannel.InfoFields, expectedChannel.InfoFields) {
+			mismatches = append(mismatches, prefix+".infoFields")
+		}
+		if actualChannel.PresetAmounts != expectedChannel.PresetAmounts {
+			mismatches = append(mismatches, prefix+".presetAmounts")
+		}
+		if actualChannel.DisplayText != expectedChannel.DisplayText {
+			mismatches = append(mismatches, prefix+".displayText")
+		}
+		if actualChannel.Banks != expectedChannel.Banks {
+			mismatches = append(mismatches, prefix+".banks")
+		}
+		if actualChannel.AllowCustom != expectedChannel.AllowCustom {
+			mismatches = append(mismatches, prefix+".allowCustom")
+		}
+		if actualChannel.CustomMin != expectedChannel.CustomMin {
+			mismatches = append(mismatches, prefix+".customMin")
+		}
+		if actualChannel.CustomMax != expectedChannel.CustomMax {
+			mismatches = append(mismatches, prefix+".customMax")
+		}
+		if actualChannel.Configured != expectedChannel.Configured {
+			mismatches = append(mismatches, prefix+".configured")
+		}
+		if actualChannel.EncodingError != expectedChannel.EncodingError {
+			mismatches = append(mismatches, prefix+".encodingError")
+		}
+	}
+	return mismatches
 }
 
 func paymentAuditSummary(input updatePaymentConfigurationRequest) map[string]any {
 	enabled := []string{}
 	bankCounts := map[string]int{}
+	iconTypes := map[string]string{}
 	for _, channel := range input.Channels {
 		if channel.Enabled {
 			enabled = append(enabled, channel.Name)
 		}
 		bankCounts[channel.Name] = len(splitHashListOrdered(channel.Banks))
+		iconTypes[channel.Name] = channel.IconType
 	}
-	return map[string]any{"enabledChannels": enabled, "channelCount": len(input.Channels), "bankCounts": bankCounts, "paymentDomain": input.PaymentDomain, "requireBankBranch": input.RequireBankBranch}
+	return map[string]any{"enabledChannels": enabled, "channelCount": len(input.Channels), "bankCounts": bankCounts, "iconTypes": iconTypes, "paymentDomain": input.PaymentDomain, "requireBankBranch": input.RequireBankBranch}
 }
 
 func splitHashList(value string) map[string]bool {

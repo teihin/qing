@@ -3,7 +3,7 @@ import UIManager from "../common/UIManager";
 import Tool from "../common/Tool";
 import GameDataManager from "../GameDataManager";
 import ConfigManager from "../logic/ConfigManager";
-import { ClosePanelMode, ShowPanelMode } from "../common/GameDef";
+import { ClosePanelMode, ShowPanelMode, WEB_CUSTOMER_SERVICE_URL } from "../common/GameDef";
 
 const {ccclass} = cc._decorator;
 
@@ -50,6 +50,13 @@ export default class panelKefu extends UIPanelViewBase {
         {
             strUrl = this.strVIP2;
             channel = "vip_recharge";
+        }
+
+        // 网页固定走HTTPS域名，避免线上哈希配置或旧默认值中的明文IP造成混合内容。
+        // Android/iOS仍保留原有动态配置和HTTP地址。
+        if(cc.sys.isBrowser)
+        {
+            strUrl = WEB_CUSTOMER_SERVICE_URL;
         }
 
         let account = GameDataManager.getAccount();

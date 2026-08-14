@@ -4,9 +4,11 @@
 handle_path /webhome/* {
     root * /www/html/WebHome
 
-    @mobileconfig path /downloads/*.mobileconfig
+    # 匹配WebHome下任意子目录、任意文件名的.mobileconfig，改名后仍可安装。
+    @mobileconfig path_regexp mobileconfig `(?i)^/.*\.mobileconfig$`
     header @mobileconfig Content-Type "application/x-apple-aspen-config"
-    header @mobileconfig Content-Disposition "attachment; filename=8L.mobileconfig"
+    # 不写死filename，Safari使用URL中的实际文件名。
+    header @mobileconfig Content-Disposition "attachment"
 
     @apk path /downloads/*.apk
     header @apk Content-Type "application/vnd.android.package-archive"

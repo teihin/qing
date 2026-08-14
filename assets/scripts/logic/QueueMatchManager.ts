@@ -1,5 +1,6 @@
 import UIManager from "../common/UIManager";
 import { ShowPanelMode } from "../common/GameDef";
+import WebSceneLoader from "../common/WebSceneLoader";
 
 var KBEngine = require("kbengine");
 
@@ -744,7 +745,7 @@ export default class QueueMatchManager extends cc.Component {
         this.status = "switching";
         this.message = "正在快速切换房间…";
         this.emitState();
-        let started = cc.director.loadScene("roomTransition", (error:any)=>{
+        let started = WebSceneLoader.loadScene("roomTransition", (error:any)=>{
             if(generation != this.switchGeneration)
                 return;
             if(error)
@@ -759,7 +760,7 @@ export default class QueueMatchManager extends cc.Component {
                 imageManagerClass.instance.ReleaseInvalidSceneReferences();
             this.switchPhase = "entering";
             this.requestEnterTarget(generation);
-        });
+        },()=>generation == this.switchGeneration && this.switchPhase == "transition");
         if(!started)
             this.failTargetRoom("快速换房场景正在加载，请重试");
     }
@@ -800,7 +801,7 @@ export default class QueueMatchManager extends cc.Component {
 
     private loadTargetRoomScene(generation:number)
     {
-        let started = cc.director.loadScene("drh8", (error:any)=>{
+        let started = WebSceneLoader.loadScene("drh8", (error:any)=>{
             if(generation != this.switchGeneration)
                 return;
             if(error)
@@ -811,7 +812,7 @@ export default class QueueMatchManager extends cc.Component {
             UIManager.getInstance().ResetBase();
             this.switchPhase = this.reservation == null ? "idle" : "waiting_room_scene";
             this.onRoomViewReady();
-        });
+        },()=>generation == this.switchGeneration && this.switchPhase != "idle");
         if(!started)
             this.failTargetRoom("牌桌场景正在加载，请重试");
     }
@@ -1010,12 +1011,12 @@ export default class QueueMatchManager extends cc.Component {
         {
             let sceneName = currentRoomID > 0 ? "drh8" : "login";
             this.switchPhase = "waiting_room_scene";
-            let started = cc.director.loadScene(sceneName, (error:any)=>{
+            let started = WebSceneLoader.loadScene(sceneName, (error:any)=>{
                 this.switchPhase = "idle";
                 if(error)
                 {
                     if(sceneName != "login")
-                        cc.director.loadScene("login");
+                        WebSceneLoader.loadScene("login");
                     return;
                 }
                 UIManager.getInstance().ResetBase();
@@ -1053,7 +1054,7 @@ export default class QueueMatchManager extends cc.Component {
         this.emitState();
         if(this.currentSceneName() == "roomTransition")
         {
-            cc.director.loadScene("login", ()=>{
+            WebSceneLoader.loadScene("login", ()=>{
                 UIManager.getInstance().ResetBase();
                 UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, message);
                 this.scheduleOnce(()=>this.requestQuery(true), 0.5);

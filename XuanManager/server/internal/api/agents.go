@@ -38,7 +38,8 @@ a.sm_big_percent, a.sm_super_percent,
 (a.sm_supperAgentID = a.sm_guuid OR a.sm_role LIKE '%合伙人%'),
 (a.sm_chiefAgentID = a.sm_guuid OR a.sm_role LIKE '%总裁%'),
 COALESCE(child_counts.direct_agent_count, 0), COALESCE(child_counts.direct_player_count, 0),
-COALESCE(m.all_lower_count, 0), COALESCE(m.today_lower_count, 0),
+COALESCE(m.all_lower_count, 0),
+CASE WHEN m.today_lower_date = DATE_FORMAT(CURDATE(), '%Y-%m-%d') THEN m.today_lower_count ELSE 0 END,
 TRIM(CONCAT_WS(' ', NULLIF(m.reg_proxy_date, ''), NULLIF(m.reg_proxy_time, ''))), a.sm_reg_time,
 COALESCE(NULLIF(m.upper2_guuid, ''), NULLIF(a.sm_agentID2, ''), ''),
 COALESCE(NULLIF(m.upper3_guuid, ''), NULLIF(a.sm_agentID3, ''), ''),
@@ -212,6 +213,21 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理数据失败")
 		return
 	}
+	agentIDs := make([]string, len(items))
+	for index := range items {
+		agentIDs[index] = items[index].AgentID
+	}
+	lowerCounts, err := queryRegistrationLowerCounts(r.Context(), s.db, agentIDs)
+	if err != nil {
+		s.logger.Error("calculate game agent lower counts", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理下级人数失败")
+		return
+	}
+	for index := range items {
+		count := lowerCounts[items[index].AgentID]
+		items[index].StoredLowerCount = count.All
+		items[index].TodayLowerCount = count.Today
+	}
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "page": page, "pageSize": size, "total": total, "summary": summary,
 	})
@@ -335,6 +351,15 @@ func (s *Server) queryAgentItem(ctx context.Context, agentID string) (agentItem,
 	var item agentItem
 	err := scanAgentItem(s.db.QueryRowContext(ctx, agentSelectSQL+agentCoreJoins+agentChildCountsJoin+`
 WHERE a.sm_guuid = ? ORDER BY m.id DESC LIMIT 1`, agentID), &item)
+	if err != nil {
+		return item, err
+	}
+	counts, err := queryRegistrationLowerCounts(ctx, s.db, []string{agentID})
+	if err != nil {
+		return item, err
+	}
+	item.StoredLowerCount = counts[agentID].All
+	item.TodayLowerCount = counts[agentID].Today
 	return item, err
 }
 

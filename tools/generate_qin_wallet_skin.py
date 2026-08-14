@@ -2,8 +2,8 @@
 """Generate the black-gold Qin skin used by resources/Prefabs/钱包.
 
 The script keeps every existing image dimension, meta trim rectangle and UUID.
-Recharge-channel brand tabs (UnionPay/Alipay/WeChat/VIP and their generic tile)
-are intentionally left untouched per the art direction confirmed by the user.
+Recharge-channel brand tabs keep their normal UnionPay/Alipay/WeChat colours,
+and the transparent selected-state highlight is intentionally left untouched.
 """
 
 from __future__ import annotations

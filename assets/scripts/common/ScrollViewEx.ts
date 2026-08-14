@@ -1,6 +1,7 @@
 import { ScrollEvent } from "./GameDef";
 import Debug from "./Debug";
 import PageEx from "./PageEx";
+import WebLoadingManager from "./WebLoadingManager";
 
 
 const {ccclass, property} = cc._decorator;
@@ -115,7 +116,7 @@ export default class ScrollViewEx extends cc.ScrollView {
 
             if(i>=this.content.childrenCount)
             {
-                cc.loader.loadRes("Prefabs/"+strPreName,(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/"+strPreName,"正在加载列表内容",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);

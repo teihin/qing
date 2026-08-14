@@ -6,6 +6,7 @@ import Tool from "../common/Tool";
 import ImageManager from "../logic/ImageManager";
 import GameDataManager from "../GameDataManager";
 import Debug from "../common/Debug";
+import WebLoadingManager from "../common/WebLoadingManager";
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
 
@@ -145,7 +146,7 @@ export default class panelUserInfo extends UIPanelViewBase {
         }
         else if(button.node.name === "充值")
         {
-            cc.loader.loadRes("Prefabs/钱包",(err,obj)=>{
+            WebLoadingManager.loadBlockingRes("Prefabs/钱包","正在加载钱包",(err,obj)=>{
                 if(err)
                 {
                     cc.error(err.message || err);

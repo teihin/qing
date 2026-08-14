@@ -1,4 +1,4 @@
-import { SERVER_IP, SERVER_PORT, IS_USE_WSS, LOGIN_BY_IP, SERVER_URL, ClosePanelMode, ShowPanelMode, WEB_IP, SERVER_IP_TEST, BASE_SERVER_IP } from "./common/GameDef";
+import { SERVER_IP, SERVER_PORT, IS_USE_WSS, LOGIN_BY_IP, SERVER_URL, ClosePanelMode, ShowPanelMode, WEB_IP, SERVER_IP_TEST, BASE_SERVER_IP, WEB_KB_WSS_PROXY_BASE_URL, WEB_KB_WSS_ALLOWED_PORTS } from "./common/GameDef";
 import Debug from "./common/Debug";
 import UIManager from "./common/UIManager";
 import DrhNameManager from "./logic/DrhNameManager";
@@ -6,6 +6,8 @@ import MobileManager from "./mobile/MobileManager";
 import Tool from "./common/Tool";
 import DeviceIdentityManager from "./logic/DeviceIdentityManager";
 import QueueMatchManager from "./logic/QueueMatchManager";
+import WebSceneLoader from "./common/WebSceneLoader";
+import WebWakeLockManager from "./common/WebWakeLockManager";
 
 var KBEngine = require("kbengine");
 
@@ -49,6 +51,7 @@ export default class GameDataManager extends cc.Component {
     }
 
     onDestroy(){
+        WebWakeLockManager.shutdown();
         KBEngine.Event.deregisterAll(this);
         // GameDataManager 是常驻节点，热更新完成调用 cc.game.restart() 时也会被销毁。
         // 此时 KBEngine 的消息表可能已经开始清理，继续触发 logout 会让
@@ -84,6 +87,7 @@ export default class GameDataManager extends cc.Component {
         DrhNameManager.getInstance().initManager();
         MobileManager.getInstance().InitGvoice();
         MobileManager.getInstance().InitTalkingData();
+        WebWakeLockManager.init();
         // 提前准备设备标识，减少用户点击登录后的等待时间。
         DeviceIdentityManager.getInstance().prepare();
         QueueMatchManager.getInstance();
@@ -145,10 +149,13 @@ export default class GameDataManager extends cc.Component {
         Debug.Error("初始化了一次KB");
 
         var args = new KBEngine.KBEngineArgs();
+        const useWebWss = cc.sys.isBrowser;
     
         args.ip = GameDataManager.GetSerVerIP();
         args.port = SERVER_PORT;
-        args.isWss = IS_USE_WSS;              //是否用wss协议， true:wss  false:ws
+        args.isWss = useWebWss ? true : IS_USE_WSS; // Web统一WSS；Android/iOS保持原有WS
+        args.wssProxyBaseURL = useWebWss ? WEB_KB_WSS_PROXY_BASE_URL : "";
+        args.wssProxyAllowedPorts = useWebWss ? WEB_KB_WSS_ALLOWED_PORTS : [];
         args.isByIP = LOGIN_BY_IP;             //用ip还是用域名登录服务器   有修改官方的kbengine.js
         args.serverURL = SERVER_URL;
 
@@ -260,7 +267,7 @@ export default class GameDataManager extends cc.Component {
         this.unschedule(this.callbackSendHeart);
         this.unschedule(this.callbackCheckConnectState);
         UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
-        cc.director.loadScene("login");
+        WebSceneLoader.loadScene("login");
      }
 
      onLoginSuccessfully(){
@@ -405,7 +412,7 @@ export default class GameDataManager extends cc.Component {
     //回到大厅
     onGoToMain()
     {
-        cc.director.loadScene("login");
+        WebSceneLoader.loadScene("login");
     }
     onEnterRoom(nCode:number,nRoomID:number)
     {

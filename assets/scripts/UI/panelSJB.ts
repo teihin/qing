@@ -5,6 +5,7 @@ import Tool from "../common/Tool";
 import { ShowPanelMode, WEB_TX_IP } from "../common/GameDef";
 import Debug from "../common/Debug";
 import ScrollViewEx from "../common/ScrollViewEx";
+import WebLoadingManager from "../common/WebLoadingManager";
 
 const {ccclass, property} = cc._decorator;
 
@@ -258,7 +259,7 @@ export default class panelSJB extends UIPanelViewBase {
 
             if(i>=this.scrollRecordList.content.childrenCount)
             {
-                cc.loader.loadRes("Prefabs/世界杯对象",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/世界杯对象","正在加载活动记录",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);

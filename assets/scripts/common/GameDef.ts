@@ -42,11 +42,21 @@ export const LOGIN_BY_IP:boolean = true;
 export const IS_USE_WSS:boolean = false;
 export const SERVER_URL:string = "";
 
-// 自研语音服务。HTTPS网页会自动改用当前网页同源的 /audio HTTPS/WSS
-// 入口，绝不静默降级到下面的明文地址。
+// Web Mobile/浏览器专用的KB WSS入口。原生客户端继续使用上面的IP、端口和WS配置。
+// BaseApp端口来自登录服下发，只允许连接服务器已明确开放的代理端口。
+export const WEB_PUBLIC_HOST:string = "154-37-155-17.sslip.io";
+export const WEB_PUBLIC_HTTPS_ORIGIN:string = "https://" + WEB_PUBLIC_HOST;
+export const WEB_PUBLIC_WSS_ORIGIN:string = "wss://" + WEB_PUBLIC_HOST;
+export const WEB_KB_WSS_PROXY_BASE_URL:string = WEB_PUBLIC_WSS_ORIGIN + "/ws/";
+export const WEB_KB_WSS_ALLOWED_PORTS:number[] = [20013, 20015, 20016, 20017, 20018, 20019];
+
+// 自研语音和客服：Native继续使用原IP配置，浏览器固定使用sslip HTTPS/WSS域名。
 export const AUDIO_SERVER_HTTP_BASE:string = "http://154.37.155.17/audio";
 export const AUDIO_SERVER_WS_URL:string = "ws://154.37.155.17/audio/v1/stream";
 export const AUDIO_SERVER_PROXY_PATH:string = "/audio";
+export const WEB_AUDIO_SERVER_HTTP_BASE:string = WEB_PUBLIC_HTTPS_ORIGIN + AUDIO_SERVER_PROXY_PATH;
+export const WEB_AUDIO_SERVER_WS_URL:string = WEB_PUBLIC_WSS_ORIGIN + AUDIO_SERVER_PROXY_PATH + "/v1/stream";
+export const WEB_CUSTOMER_SERVICE_URL:string = WEB_PUBLIC_HTTPS_ORIGIN + "/chattool/player?d={info}";
 
 
 export const SERVER_IP_TEST:string = "192.168.2.96";

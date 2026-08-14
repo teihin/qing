@@ -36,6 +36,9 @@
         "__id__": 18
       },
       {
+        "__id__": 33
+      },
+      {
         "__id__": 21
       },
       {
@@ -708,7 +711,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -280.005,
+        -295,
         0,
         0,
         0,
@@ -815,7 +818,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -113.786,
+        -10,
         0,
         0,
         0,
@@ -922,7 +925,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        99.595,
+        135,
         0,
         0,
         0,
@@ -1029,7 +1032,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        274.248,
+        285,
         0,
         0,
         0,
@@ -1203,6 +1206,113 @@
       "__id__": 0
     },
     "fileId": "d1GvAWdw1JrboLdMbT/IZy",
+    "sync": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "带入",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 1
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 34
+      }
+    ],
+    "_prefab": {
+      "__id__": 35
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 232,
+      "g": 193,
+      "b": 111,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 14.4,
+      "height": 30.24
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        -145,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Label",
+    "_name": "带入<Label>",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 33
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_useOriginalSize": false,
+    "_string": "0",
+    "_N$string": "0",
+    "_fontSize": 24,
+    "_lineHeight": 24,
+    "_enableWrapText": true,
+    "_N$file": {
+      "__uuid__": "fd7307b2-666e-4c26-963d-59f787cad6fb"
+    },
+    "_isSystemFontUsed": false,
+    "_spacingX": 0,
+    "_batchAsBitmap": false,
+    "_N$horizontalAlign": 1,
+    "_N$verticalAlign": 1,
+    "_N$fontFamily": "Arial",
+    "_N$overflow": 0,
+    "_N$cacheMode": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "recordBuyInValue20260814",
     "sync": false
   }
 ]

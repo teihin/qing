@@ -165,6 +165,7 @@ def validate_mobileconfig(profile_path: Path, expected_game_url: str) -> None:
         "PayloadType": "com.apple.webClip.managed",
         "URL": expected_game_url,
         "FullScreen": True,
+        "IgnoreManifestScope": True,
         "IsRemovable": True,
     }
     for key, expected in checks.items():

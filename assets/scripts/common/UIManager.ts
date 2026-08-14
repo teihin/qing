@@ -2,6 +2,7 @@ import{ShowPanelMode, ClosePanelMode} from "./GameDef"
 import UIPanelViewBase from "./UIPanelViewBase";
 import UIViewBase from "./UIViewBase";
 import Debug from "./Debug";
+import WebLoadingManager from "./WebLoadingManager";
 
 const {ccclass, property} = cc._decorator;
 
@@ -104,6 +105,29 @@ export default class UIManager extends cc.Component {
         }
     }
 
+    private CloseOtherPanels(optRoot:cc.Node,strName:string)
+    {
+        if(!cc.isValid(optRoot) || optRoot.childrenCount <= 0)
+            return;
+        optRoot.children.forEach((item,idx,array)=>{
+            //只删除绑定有UI组件的对象
+            let comp = item.getComponent(UIPanelViewBase);
+            if(comp != null && comp.node.name != strName) //不能删除自己
+                item.destroy();
+        });
+    }
+
+    private WebPanelLoadingTitle(strName:string):string
+    {
+        if(strName == "panelGameView")
+            return "正在打开牌桌";
+        if(strName == "panelMain")
+            return "正在打开游戏大厅";
+        if(strName == "panelLogin")
+            return "正在打开登录界面";
+        return "正在打开游戏界面";
+    }
+
     //打开某个UI
     showPanel(strName:string,showMode:ShowPanelMode,strUserData:string = "",arrayEx:any[] = null):cc.Node
     {
@@ -133,17 +157,10 @@ export default class UIManager extends cc.Component {
         }
 
 
-        if(showMode == ShowPanelMode.CloseOther && optRoot.childrenCount>0) //关闭其他所有UI
-        {
-            optRoot.children.forEach((item,idx,array)=>{
-                //只删除绑定有UI组件的对象
-                let comp =item.getComponent(UIPanelViewBase);
-                if(comp != null && comp.node.name != strName) //不能删除自己
-                {
-                    item.destroy();
-                }                
-            });
-        }
+        //Native维持原顺序；网页在新Prefab成功实例化前保留旧界面，由跨场景进度层遮罩。
+        let deferWebCloseOther = WebLoadingManager.isEnabled() && showMode == ShowPanelMode.CloseOther;
+        if(showMode == ShowPanelMode.CloseOther && !deferWebCloseOther)
+            this.CloseOtherPanels(optRoot,strName);
 
 
         //检测是否已经存在
@@ -165,11 +182,19 @@ export default class UIManager extends cc.Component {
         {
             this.strCashPanelName = strName;
             this.cashPanelScene = requestScene;
-            cc.loader.loadRes("UI/"+strName,(err,prefab)=>{
+            let webTaskID = WebLoadingManager.isEnabled() ?
+                WebLoadingManager.begin(this.WebPanelLoadingTitle(strName),"正在下载界面资源…",150) : "";
+            let completeCallback = (err:any,prefab:any)=>{
                 if(err)
                 {
                     this.ClearPanelLoadRequest(strName,requestScene);
                     cc.error(err.message || err);
+                    if(webTaskID != "")
+                    {
+                        WebLoadingManager.fail(webTaskID,"界面资源加载失败，请检查网络后重试",()=>{
+                            this.showPanel(strName,showMode,strUserData,arrayEx);
+                        });
+                    }
                     return null;
                 }
 
@@ -177,17 +202,70 @@ export default class UIManager extends cc.Component {
                 if(!cc.isValid(requestScene) || cc.director.getScene() !== requestScene || !cc.isValid(optRoot))
                 {
                     this.ClearPanelLoadRequest(strName,requestScene);
+                    if(webTaskID != "")
+                        WebLoadingManager.cancel(webTaskID);
                     return null;
                 }
 
-                let node = cc.instantiate(prefab);
-                node.parent = optRoot;
-                this.ClearPanelLoadRequest(strName,requestScene);
-                return this.setPanelInfo(node,strUserData,arrayEx);
-            });
+                if(webTaskID != "")
+                    WebLoadingManager.setPreparing(webTaskID,"资源下载完成，正在生成界面…");
+
+                //Native保持原来的实例化、挂载和异常行为，不进入网页保护逻辑。
+                if(webTaskID == "")
+                {
+                    let nativeNode = cc.instantiate(prefab);
+                    nativeNode.parent = optRoot;
+                    this.ClearPanelLoadRequest(strName,requestScene);
+                    return this.setPanelInfo(nativeNode,strUserData,arrayEx);
+                }
+
+                let node:cc.Node = null;
+                try
+                {
+                    node = cc.instantiate(prefab);
+                    if(deferWebCloseOther)
+                        this.CloseOtherPanels(optRoot,strName);
+                    node.parent = optRoot;
+                    this.ClearPanelLoadRequest(strName,requestScene);
+                    let result = this.setPanelInfo(node,strUserData,arrayEx);
+                    if(webTaskID != "")
+                        WebLoadingManager.finishAfterFrame(webTaskID);
+                    return result;
+                }
+                catch(error)
+                {
+                    this.ClearPanelLoadRequest(strName,requestScene);
+                    if(cc.isValid(node))
+                        node.destroy();
+                    cc.error(error);
+                    if(webTaskID != "")
+                    {
+                        WebLoadingManager.fail(webTaskID,"界面生成失败，请重新加载",()=>{
+                            this.showPanel(strName,showMode,strUserData,arrayEx);
+                        });
+                    }
+                    return null;
+                }
+            };
+
+            if(webTaskID != "")
+            {
+                cc.loader.loadRes("UI/"+strName,
+                    (completedCount:number,totalCount:number,item:any)=>{
+                        WebLoadingManager.update(webTaskID,completedCount,totalCount,"正在下载界面资源…");
+                    },
+                    completeCallback);
+            }
+            else
+            {
+                //Native保持原来的loadRes签名和加载时序。
+                cc.loader.loadRes("UI/"+strName,completeCallback);
+            }
         }
         else
         {
+            if(deferWebCloseOther)
+                this.CloseOtherPanels(optRoot,strName);
             objItem.parent = optRoot;
             return this.setPanelInfo(objItem,strUserData,arrayEx);
         }
@@ -197,14 +275,12 @@ export default class UIManager extends cc.Component {
     //设置UI数据
     setPanelInfo(item:cc.Node,strUserData:string,arrayEx:string[]):cc.Node
     {
-        if(cc.sys.os == cc.sys.OS_IOS)
+        // 原生 iOS 需要给刘海/状态栏预留顶部空间；Safari/Web Clip 的可视区域
+        // 已由浏览器处理，再额外下移会在页面顶部形成一条黑色空白。
+        if(cc.sys.isNative && cc.sys.os == cc.sys.OS_IOS)
         {
             item.getComponent(cc.Widget).top = 50
         }
-        //修改IOS流海
-        
-
-
         item.scale = 1;
 
         let one = item.getComponent(UIPanelViewBase);

@@ -15,6 +15,8 @@ import ConfigManager from "../logic/ConfigManager";
 import DrhPlayerLogic from "../logic/DrhPlayerLogic";
 import ScrollViewEx from "../common/ScrollViewEx";
 import QueueMatchManager, { QueueMatchSnapshot } from "../logic/QueueMatchManager";
+import WebSceneLoader from "../common/WebSceneLoader";
+import WebLoadingManager from "../common/WebLoadingManager";
 
 var KBEngine = require("kbengine");
 
@@ -1098,7 +1100,7 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name == "充值")
         {
-            cc.loader.loadRes("Prefabs/钱包",(err,obj)=>{
+            WebLoadingManager.loadBlockingRes("Prefabs/钱包","正在加载钱包",(err,obj)=>{
                 if(!cc.isValid(this.node))
                     return;
                 if(err)
@@ -1529,11 +1531,11 @@ export default class panelGameView extends UIPanelViewBase {
             this.gameLogic.PrepareLeaveRoom();
         if(nCode === 0x200)
         {
-            cc.director.loadScene("login");
+            WebSceneLoader.loadScene("login");
         }
         else
         {
-            cc.director.loadScene("login");
+            WebSceneLoader.loadScene("login");
         }
     }
     onEnterRoom(nCode:number,nRoomID:number)
@@ -2002,7 +2004,7 @@ export default class panelGameView extends UIPanelViewBase {
             nTotleIn += Number(strIn);
             if(Number(strScore)>0)
                 nTotleScore += Number(strScore);
-            cc.loader.loadRes("Prefabs/带入记录",(err,obj)=>{
+            WebLoadingManager.loadBlockingRes("Prefabs/带入记录","正在加载带入记录",(err,obj)=>{
                 if(!cc.isValid(this.node) || !cc.isValid(transParent))
                     return;
                 if(err)
@@ -2162,7 +2164,7 @@ export default class panelGameView extends UIPanelViewBase {
                 let jItem = jPlayers[i];
                 if(i>=this.scrollHuiGu.content.childrenCount)
                 {
-                    cc.loader.loadRes("Prefabs/回顾对象",(err,obj)=>{
+                    WebLoadingManager.loadBlockingRes("Prefabs/回顾对象","正在加载牌局回顾",(err,obj)=>{
                         if(!cc.isValid(this.node) || !cc.isValid(this.scrollHuiGu.node))
                             return;
                         if(err)
@@ -3297,7 +3299,7 @@ export default class panelGameView extends UIPanelViewBase {
         
                 for(let one of GetChoujiangRec["history_list"])
                 {
-                    cc.loader.loadRes("Prefabs/转盘记录对象",(err,obj)=>{
+                    WebLoadingManager.loadBlockingRes("Prefabs/转盘记录对象","正在加载转盘记录",(err,obj)=>{
                         if(!cc.isValid(this.node) || !cc.isValid(transRoot))
                             return;
                         if(err)
@@ -3334,7 +3336,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         for(let one of msg["history_list"])
         {
-            cc.loader.loadRes("Prefabs/奖池记录对象",(err,obj)=>{
+            WebLoadingManager.loadBlockingRes("Prefabs/奖池记录对象","正在加载奖池记录",(err,obj)=>{
                 if(!cc.isValid(this.node) || !cc.isValid(transRoot))
                     return;
                 if(err)
@@ -3383,7 +3385,7 @@ export default class panelGameView extends UIPanelViewBase {
             let curComplet = completShow[nLun];
             if(jCurCount[nLun]>=curComplet.childrenCount)
             {
-                cc.loader.loadRes("Prefabs/文字牌谱对象",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/文字牌谱对象","正在加载文字牌谱",(err,obj)=>{
                     if(!cc.isValid(this.node) || !cc.isValid(curComplet))
                         return;
                     if(err)

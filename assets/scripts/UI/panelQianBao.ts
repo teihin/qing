@@ -7,6 +7,7 @@ import { ClosePanelMode, ShowPanelMode, WEB_IP, WEB_TX_IP } from "../common/Game
 import GameDataManager from "../GameDataManager";
 import ScrollViewEx from "../common/ScrollViewEx";
 import MobileManager from "../mobile/MobileManager";
+import WebLoadingManager from "../common/WebLoadingManager";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -14,7 +15,21 @@ const {ccclass, property} = cc._decorator;
 @ccclass
 export default class panelQianBao extends UIPanelViewBase {
 
+    @property(cc.SpriteFrame)
+    paymentAlipayIcon:cc.SpriteFrame = null;
+
+    @property(cc.SpriteFrame)
+    paymentUnionPayIcon:cc.SpriteFrame = null;
+
+    @property(cc.SpriteFrame)
+    paymentWeChatIcon:cc.SpriteFrame = null;
+
+    @property(cc.SpriteFrame)
+    paymentOtherIcon:cc.SpriteFrame = null;
+
     private PAGE_PER_COUNT:number = 15;
+    private paymentDefaultIconFrames:{[key:string]:cc.SpriteFrame} = {};
+    private readonly paymentIconContextPrefix:string = "更新支付通道图标:";
     private strCurZhifuConfig:string = ""; //当前支付配置
     private strZhifubTxt:string = "";
     private strYinlianTxt:string = "";
@@ -33,6 +48,8 @@ export default class panelQianBao extends UIPanelViewBase {
     private nZhifu5HandCount = 0 ;//支付5最低手数要求
     onLoad () {
         super.onLoad();
+
+        this.CapturePaymentChannelDefaultIcons();
 
         KBEngine.Event.register("set_gold", this, "set_gold");
         KBEngine.Event.register("set_gold2", this, "set_gold");
@@ -1009,7 +1026,12 @@ export default class panelQianBao extends UIPanelViewBase {
         let strKey:string = info["key"];
         let strContent:string = info["content"];
         let context:string = info["context"];
-        if(context === "更新提现预留")
+        if(context.indexOf(this.paymentIconContextPrefix) === 0)
+        {
+            let channelName = context.substring(this.paymentIconContextPrefix.length);
+            this.ApplyPaymentChannelIcon(channelName, "default");
+        }
+        else if(context === "更新提现预留")
         {
             //没有查询到实名信息
             Tool.GetChild(this.node,"实名").active = true;
@@ -1061,6 +1083,7 @@ export default class panelQianBao extends UIPanelViewBase {
             let bHaveOne = false;
             for(let item of arrayToggle)
             {
+                this.ApplyPaymentChannelIcon(item.node.name, "default");
                 let bFind = false;
                 for(let one of arrayMsg)
                 {
@@ -1075,6 +1098,7 @@ export default class panelQianBao extends UIPanelViewBase {
                 if(bFind)
                 {
                     item.node.active = true;
+                    ConfigManager.getInstance().GetOneHashKey("支付配置_"+item.node.name,this.paymentIconContextPrefix+item.node.name);
                     if(!bHaveOne)
                     {
                         //第一个默认选中
@@ -1122,6 +1146,20 @@ export default class panelQianBao extends UIPanelViewBase {
             }
 
         }
+        else if(context.indexOf(this.paymentIconContextPrefix) === 0)
+        {
+            let channelName = context.substring(this.paymentIconContextPrefix.length);
+            try
+            {
+                let iconConfig = JSON.parse(Tool.Base64Decode(strContent));
+                this.ApplyPaymentChannelIcon(channelName, iconConfig == null ? "default" : iconConfig["icon"]);
+            }
+            catch(error)
+            {
+                Debug.Log("支付通道图标配置解析失败:"+channelName);
+                this.ApplyPaymentChannelIcon(channelName, "default");
+            }
+        }
         else if(context === "更新支付配置")
         {
             let test = Tool.Base64Decode(strContent);
@@ -1129,6 +1167,9 @@ export default class panelQianBao extends UIPanelViewBase {
             Debug.Log(Tool.Base64Decode(strContent));
             if(data == null)
                 return;
+            let channelName = strKey.indexOf("支付配置_") === 0 ? strKey.substring("支付配置_".length) : "";
+            if(channelName != "")
+                this.ApplyPaymentChannelIcon(channelName, data["icon"]);
             this.strCurZhifuConfig = Tool.Base64Decode(strContent);
 
             if(data["money"] != "")
@@ -1293,6 +1334,48 @@ export default class panelQianBao extends UIPanelViewBase {
             this.nZhifu5HandCount = Number(strContent)
         }
     }
+
+    private CapturePaymentChannelDefaultIcons()
+    {
+        let channelRoot = Tool.GetChild(this.node,"容器/充值/根/充值渠道");
+        if(channelRoot == null)
+            return;
+        for(let channelNode of channelRoot.children)
+        {
+            let background = channelNode.getChildByName("Background");
+            let sprite = background == null ? null : background.getComponent(cc.Sprite);
+            if(sprite != null && sprite.spriteFrame != null)
+                this.paymentDefaultIconFrames[channelNode.name] = sprite.spriteFrame;
+        }
+    }
+
+    private ApplyPaymentChannelIcon(channelName:string, iconType:any)
+    {
+        let channelRoot = Tool.GetChild(this.node,"容器/充值/根/充值渠道");
+        let channelNode = channelRoot == null ? null : channelRoot.getChildByName(channelName);
+        let background = channelNode == null ? null : channelNode.getChildByName("Background");
+        let sprite = background == null ? null : background.getComponent(cc.Sprite);
+        if(sprite == null)
+            return;
+
+        let normalized = typeof iconType === "string" ? iconType.toLowerCase() : "default";
+        let target:cc.SpriteFrame = null;
+        if(normalized === "alipay")
+            target = this.paymentAlipayIcon;
+        else if(normalized === "unionpay")
+            target = this.paymentUnionPayIcon;
+        else if(normalized === "wechat")
+            target = this.paymentWeChatIcon;
+        else if(normalized === "other")
+            target = this.paymentOtherIcon;
+        else
+            target = this.paymentDefaultIconFrames[channelName];
+
+        if(target == null)
+            target = this.paymentDefaultIconFrames[channelName];
+        if(target != null)
+            sprite.spriteFrame = target;
+    }
     public UpdateBankList()
     {
         let content = Tool.GetChild(this.node,"选择银行/bk/列表").getComponent(ScrollViewEx).content;
@@ -1319,7 +1402,7 @@ export default class panelQianBao extends UIPanelViewBase {
 
             if(i>=content.childrenCount)
             {
-                cc.loader.loadRes("Prefabs/银行对象",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/银行对象","正在加载银行记录",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);

@@ -48,7 +48,8 @@ def main() -> int:
     webclip_payload = {
         "FullScreen": True,
         "Icon": ICON_PATH.read_bytes(),
-        "IgnoreManifestScope": False,
+        # 游戏会访问同域下的客服、语音等路径；保持Web Clip全屏，不因超出起始URL范围而显示Safari界面。
+        "IgnoreManifestScope": True,
         "IsRemovable": True,
         "Label": game_name,
         "Precomposed": True,

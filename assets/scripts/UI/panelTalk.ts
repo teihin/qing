@@ -5,6 +5,7 @@ import UIManager from "../common/UIManager";
 import DrhLogicMgr from "../logic/DrhLogicMgr";
 import ScrollViewEx from "../common/ScrollViewEx";
 import { ShowPanelMode } from "../common/GameDef";
+import WebLoadingManager from "../common/WebLoadingManager";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -114,7 +115,7 @@ export default class panelTalk extends UIPanelViewBase {
 
         for (let one of this.gameLogic.arrayTalkMsg)
         {
-            cc.loader.loadRes("Prefabs/聊天对象",(err,obj)=>{
+            WebLoadingManager.loadBlockingRes("Prefabs/聊天对象","正在加载聊天记录",(err,obj)=>{
                 if(err)
                 {
                     cc.error(err.message || err);
@@ -157,7 +158,7 @@ export default class panelTalk extends UIPanelViewBase {
 
         strWord = strWord.replace("@SS","");
 
-        cc.loader.loadRes("Prefabs/聊天对象",(err,obj)=>{
+        WebLoadingManager.loadBlockingRes("Prefabs/聊天对象","正在加载聊天记录",(err,obj)=>{
             if(err)
             {
                 cc.error(err.message || err);

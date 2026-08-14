@@ -15,6 +15,8 @@ import ObjPoolManager from "../logic/ObjPoolManager";
 import scrollview2 from "../common/scrollview2";
 import DeviceIdentityManager from "../logic/DeviceIdentityManager";
 import QueueMatchManager from "../logic/QueueMatchManager";
+import WebSceneLoader from "../common/WebSceneLoader";
+import WebLoadingManager from "../common/WebLoadingManager";
 
 var KBEngine = require("kbengine");
 
@@ -974,7 +976,7 @@ export default class panelMain extends UIPanelViewBase {
             if(!Tool.GetChild(this.node,"排行榜"))
             {
                 Debug.Log("没有！！！！！！！！");
-                cc.loader.loadRes("Prefabs/排行榜",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/排行榜","正在加载排行榜",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);
@@ -1460,7 +1462,7 @@ export default class panelMain extends UIPanelViewBase {
             if(!Tool.GetChild(this.node,"排行榜"))
             {
                 Debug.Log("没有！！！！！！！！");
-                cc.loader.loadRes("Prefabs/排行榜",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/排行榜","正在加载排行榜",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);
@@ -1488,7 +1490,7 @@ export default class panelMain extends UIPanelViewBase {
             if(!Tool.GetChild(this.node,"Main/钱包"))
             {
                 Debug.Log("没有！！！！！！！！");
-                cc.loader.loadRes("Prefabs/钱包",(err,obj)=>{
+                WebLoadingManager.loadBlockingRes("Prefabs/钱包","正在加载钱包",(err,obj)=>{
                     if(err)
                     {
                         cc.error(err.message || err);
@@ -2216,7 +2218,7 @@ export default class panelMain extends UIPanelViewBase {
         //准备进入游戏
         if(nCode === 0x200) //进入房间成功！
         {
-            cc.director.loadScene("drh8");    
+            WebSceneLoader.loadScene("drh8");
         }
         else
         {

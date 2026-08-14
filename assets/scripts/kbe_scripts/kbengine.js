@@ -2867,6 +2867,11 @@ KBEngine.KBEngineArgs = function()
 	// 是否用wss, 默认使用ws
 	this.isWss = false;
 
+	// 浏览器可通过同一个WSS代理前缀按服务端端口连接LoginApp/BaseApp。
+	// 留空时完全保留原有的 ws(s)://ip:port 地址规则。
+	this.wssProxyBaseURL = "";
+	this.wssProxyAllowedPorts = [];
+
 	this.defBaseAppIP = "" //自定义外部BaseappID
 }
 
@@ -3065,6 +3070,8 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 	this.port = this.args.port;
 	this.isWss = this.args.isWss;
 	this.protocol = this.isWss ? "wss://" : "ws://";
+	this.wssProxyBaseURL = this.args.wssProxyBaseURL || "";
+	this.wssProxyAllowedPorts = this.args.wssProxyAllowedPorts || [];
 	
 	// 服务端分配的baseapp地址
 	this.baseappIP = "";
@@ -3216,6 +3223,13 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 	this.connect = function(addr)
 	{
 		console.assert(KBEngine.app.socket == null, "Assertion of socket not is null");
+
+		if(!addr)
+		{
+			KBEngine.ERROR_MSG('WebSocket init error: server address is empty!');
+			KBEngine.Event.fire(KBEngine.EventTypes.onConnectionState, false);
+			return false;
+		}
 		
 		try
 		{  
@@ -3225,7 +3239,7 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 		{  
 			KBEngine.ERROR_MSG('WebSocket init error(' + e.toString() + ')!'); 
 			KBEngine.Event.fire(KBEngine.EventTypes.onConnectionState, false);
-			return;  
+			return false;
 		}
 		
 		KBEngine.app.socket.binaryType = "arraybuffer";
@@ -3233,6 +3247,7 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 		KBEngine.app.socket.onerror = KBEngine.app.onerror_before_onopen;  
 		KBEngine.app.socket.onmessage = KBEngine.app.onmessage;  
 		KBEngine.app.socket.onclose = KBEngine.app.onclose;
+		return true;
 	}
 
 	this.disconnect = function()
@@ -4038,6 +4053,30 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 	
 	this.getServerAddr = function(ip, port)
 	{
+		if(KBEngine.app.isWss && KBEngine.app.wssProxyBaseURL)
+		{
+			var portText = String(port);
+			var portNumber = parseInt(portText, 10);
+			if(!/^\d+$/.test(portText) || portNumber < 1 || portNumber > 65535)
+			{
+				KBEngine.ERROR_MSG("KBEngineApp::getServerAddr: invalid WSS proxy port(" + portText + ")!");
+				return "";
+			}
+
+			if(KBEngine.app.wssProxyAllowedPorts.length > 0 &&
+				KBEngine.app.wssProxyAllowedPorts.indexOf(portNumber) < 0)
+			{
+				KBEngine.ERROR_MSG("KBEngineApp::getServerAddr: WSS proxy port(" + portText + ") is not allowed!");
+				return "";
+			}
+
+			var proxyBaseURL = KBEngine.app.wssProxyBaseURL;
+			if(proxyBaseURL.charAt(proxyBaseURL.length - 1) != "/")
+				proxyBaseURL += "/";
+
+			return proxyBaseURL + portText + "/";
+		}
+
 		var serverAddr = KBEngine.app.protocol + ip;
 		if(port != "")
 		{
@@ -4054,8 +4093,8 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 			var serverAddr = this.getServerAddr(KBEngine.app.ip, KBEngine.app.port);
 			KBEngine.INFO_MSG("KBEngineApp::createAccount_loginapp: start connect to " + serverAddr + "!");
 			KBEngine.app.currconnect = "loginapp";
-			KBEngine.app.connect(serverAddr);
-			KBEngine.app.socket.onopen = KBEngine.app.onOpenLoginapp_createAccount;  
+			if(KBEngine.app.connect(serverAddr))
+				KBEngine.app.socket.onopen = KBEngine.app.onOpenLoginapp_createAccount;
 		}
 		else
 		{
@@ -4122,8 +4161,8 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 			var serverAddr = this.getServerAddr(KBEngine.app.ip, KBEngine.app.port);
 			KBEngine.INFO_MSG("KBEngineApp::login_loginapp: start connect to " + serverAddr + "!");
 			KBEngine.app.currconnect = "loginapp";
-			KBEngine.app.connect(serverAddr);
-			KBEngine.app.socket.onopen = KBEngine.app.onOpenLoginapp_login;  
+			if(KBEngine.app.connect(serverAddr))
+				KBEngine.app.socket.onopen = KBEngine.app.onOpenLoginapp_login;
 		}
 		else
 		{
@@ -4171,8 +4210,8 @@ KBEngine.KBEngineApp = function(kbengineArgs)
 			var serverAddr = this.getServerAddr(KBEngine.app.ip, KBEngine.app.port);
 			KBEngine.INFO_MSG("KBEngineApp::resetpassword_loginapp: start connect to " + serverAddr + "!");
 			KBEngine.app.currconnect = "loginapp";
-			KBEngine.app.connect(serverAddr);
-			KBEngine.app.socket.onopen = KBEngine.app.onOpenLoginapp_resetpassword;  
+			if(KBEngine.app.connect(serverAddr))
+				KBEngine.app.socket.onopen = KBEngine.app.onOpenLoginapp_resetpassword;
 		}
 		else
 		{

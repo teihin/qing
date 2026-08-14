@@ -1,0 +1,34 @@
+{
+  "@id": "qing_webhome_mobileconfig_headers",
+  "match": [
+    {
+      "host": [
+        "154-37-155-17.sslip.io"
+      ],
+      "path_regexp": {
+        "name": "qing_webhome_mobileconfig_path",
+        "pattern": "(?i)^/webhome/.*\\.mobileconfig$"
+      }
+    }
+  ],
+  "handle": [
+    {
+      "handler": "headers",
+      "response": {
+        "require": {
+          "status_code": [
+            2
+          ]
+        },
+        "set": {
+          "Content-Disposition": [
+            "attachment"
+          ],
+          "Content-Type": [
+            "application/x-apple-aspen-config"
+          ]
+        }
+      }
+    }
+  ]
+}

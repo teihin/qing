@@ -298,6 +298,7 @@ export interface PlayerOptimizationHistoryResponse {
 export interface PaymentChannelConfig {
   name: string;
   enabled: boolean;
+  iconType: "default" | "alipay" | "unionpay" | "wechat" | "other";
   needsInfo: boolean;
   infoFields: string[];
   presetAmounts: string;

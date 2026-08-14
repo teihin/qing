@@ -122,6 +122,82 @@ func TestRegistrationNicknameLockNameIgnoresEnglishCaseAndOuterSpaces(t *testing
 	}
 }
 
+func TestRegistrationUpperChainPersistsFirstThreeAndKeepsEveryAncestor(t *testing.T) {
+	chain := registrationUpperChainFromIDs([]string{"300003", "300002", "300001", "648425"})
+	if chain.Direct != "300003" || chain.Second != "300002" || chain.Third != "300001" {
+		t.Fatalf("unexpected persisted chain: %#v", chain)
+	}
+	want := []string{"300003", "300002", "300001", "648425"}
+	got := chain.IDs()
+	if len(got) != len(want) {
+		t.Fatalf("all ancestors = %#v, want %#v", got, want)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("all ancestors = %#v, want %#v", got, want)
+		}
+	}
+}
+
+func TestCalculateRegistrationLowerCountsSupportsArbitraryDepth(t *testing.T) {
+	relationships := []registrationRelationship{
+		{RegistrationID: 1, PlayerID: "300001", ParentID: "648425"},
+		{RegistrationID: 2, PlayerID: "300002", ParentID: "300001", RegisteredToday: true},
+		{RegistrationID: 3, PlayerID: "300003", ParentID: "300002"},
+		{RegistrationID: 4, PlayerID: "900001", ParentID: "300003", RegisteredToday: true},
+		{RegistrationID: 5, PlayerID: "900002", ParentID: "648425", RegisteredToday: true},
+	}
+	counts := calculateRegistrationLowerCounts(relationships, []string{"648425", "300001", "300002", "300003"})
+	wants := map[string]registrationLowerCount{
+		"648425": {All: 5, Today: 3},
+		"300001": {All: 3, Today: 2},
+		"300002": {All: 2, Today: 1},
+		"300003": {All: 1, Today: 1},
+	}
+	for agentID, want := range wants {
+		if got := counts[agentID]; got != want {
+			t.Fatalf("count for %s = %#v, want %#v", agentID, got, want)
+		}
+	}
+}
+
+func TestRegistrationLowerCountUpdateUsesOneIdempotentStatement(t *testing.T) {
+	query, args := registrationLowerCountUpdateStatement(
+		[]string{"300003", "300002", "300001", "648425", "300003", " "},
+		map[string]registrationLowerCount{
+			"300003": {All: 1, Today: 1},
+			"300002": {All: 2, Today: 1},
+			"300001": {All: 3, Today: 2},
+			"648425": {All: 5, Today: 3},
+		},
+	)
+	if len(args) != 12 {
+		t.Fatalf("update args = %#v", args)
+	}
+	for _, fragment := range []string{
+		"SELECT ? AS ancestor_id, ? AS all_lower_count, ? AS today_lower_count UNION ALL",
+		"parent.all_lower_count = calculated.all_lower_count",
+		"parent.today_lower_count = calculated.today_lower_count",
+		"DATE_FORMAT(CURDATE(), '%Y-%m-%d')",
+	} {
+		if !strings.Contains(query, fragment) {
+			t.Fatalf("count refresh query missing %q", fragment)
+		}
+	}
+	if strings.Contains(query, "today_lower_count + 1") || strings.Contains(query, "all_lower_count + 1") {
+		t.Fatal("count refresh must recompute exact values instead of incrementing cached values")
+	}
+}
+
+func TestAgentTodayLowerCountUsesCurrentDatabaseDate(t *testing.T) {
+	if !strings.Contains(agentSelectSQL, "m.today_lower_date = DATE_FORMAT(CURDATE(), '%Y-%m-%d')") {
+		t.Fatal("agent count fallback must hide stale today_lower_count values")
+	}
+	if !strings.Contains(registrationRelationshipSelectSQL, "LEFT(TRIM(m.date), 10) = DATE_FORMAT(CURDATE(), '%Y-%m-%d')") {
+		t.Fatal("relationship graph query must mark registrations from the current database day")
+	}
+}
+
 func TestSetRegistrationAvatarUsesGamePropertyCommand(t *testing.T) {
 	client := fakeGameHTTPClient(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Path != "/hall/command" || r.URL.Query().Get("header") != "异步_设置_玩家_属性" {
