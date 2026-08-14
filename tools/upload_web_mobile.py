@@ -9,6 +9,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,7 @@ from pathlib import Path, PurePosixPath
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SOURCE_DIR = PROJECT_ROOT / "build" / "web-mobile"
 DEFAULT_CONFIG = PROJECT_ROOT / ".hot-update-upload-config.json"
+WEB_IMAGE_PROTECTION_SCRIPT = PROJECT_ROOT / "tools" / "protect_web_images.js"
 DEFAULTS = {
     "host": "154.37.155.17",
     "port": 2233,
@@ -32,6 +34,49 @@ REMOTE_PREVIOUS = REMOTE_PARENT / ".web-mobile.previous"
 SAFE_UPLOAD_NAME_RE = re.compile(r"^\.web-mobile-upload-[0-9]+-[0-9]+\.zip$")
 UPLOAD_MAX_ATTEMPTS = 4
 UPLOAD_RETRY_DELAY_SECONDS = 3
+
+
+def find_node_executable() -> Path:
+    candidates: list[Path] = []
+    path_node = shutil.which("node")
+    if path_node:
+        candidates.append(Path(path_node))
+    candidates.extend(
+        [
+            Path("/opt/homebrew/bin/node"),
+            Path("/usr/local/bin/node"),
+        ]
+    )
+    nvm_root = Path.home() / ".nvm" / "versions" / "node"
+    if nvm_root.is_dir():
+        candidates.extend(
+            version_dir / "bin" / "node"
+            for version_dir in sorted(nvm_root.iterdir(), reverse=True)
+            if version_dir.is_dir()
+        )
+
+    for candidate in candidates:
+        try:
+            resolved = candidate.resolve()
+        except OSError:
+            continue
+        if resolved.is_file() and os.access(resolved, os.X_OK):
+            return resolved
+    raise RuntimeError("找不到Node.js，无法执行网页版图片保护")
+
+
+def protect_web_images(source_dir: Path) -> None:
+    if not WEB_IMAGE_PROTECTION_SCRIPT.is_file():
+        raise RuntimeError(f"网页版图片保护脚本不存在: {WEB_IMAGE_PROTECTION_SCRIPT}")
+    node = find_node_executable()
+    print("\n[上传前] 加密并校验网页版图片资源...", flush=True)
+    result = subprocess.run(
+        [str(node), str(WEB_IMAGE_PROTECTION_SCRIPT), "--source-dir", str(source_dir)],
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"网页版图片保护失败，退出码: {result.returncode}")
 
 
 def load_config(path: Path) -> dict:
@@ -272,6 +317,7 @@ def main() -> int:
     args = parser.parse_args()
 
     source_dir = args.source_dir.resolve()
+    protect_web_images(source_dir)
     files = collect_source_files(source_dir)
     host, port, user, identity_file = resolve_connection(args)
     total_bytes = sum(path.stat().st_size for path in files)
