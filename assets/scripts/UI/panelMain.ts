@@ -17,6 +17,7 @@ import DeviceIdentityManager from "../logic/DeviceIdentityManager";
 import QueueMatchManager from "../logic/QueueMatchManager";
 import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
+import RoomInviteManager from "../logic/RoomInviteManager";
 
 var KBEngine = require("kbengine");
 
@@ -208,6 +209,7 @@ export default class panelMain extends UIPanelViewBase {
 
         this.scrollCFNotify = Tool.GetChild(this.node,"惩罚列表/list").getComponent(ScrollViewEx);
         this.scrollCFNotify.callBackFresh = this.GetCFNotifyInfo.bind(this);
+        RoomInviteManager.getInstance().onLobbyReady();
     }
 
     onEnable(){
@@ -774,6 +776,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "切换账号")
         {
+            RoomInviteManager.getInstance().clearCurrentAccountSession();
             cc.sys.localStorage.setItem("unionid","");
             cc.sys.localStorage.setItem("pass","");
             GameDataManager.getInstance().bLoginSuccess = false;

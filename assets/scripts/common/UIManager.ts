@@ -25,9 +25,6 @@ export default class UIManager extends cc.Component {
             this.instance = node.addComponent(UIManager);            
         }
 
-        Debug.Log("上一个场景名:"+UIManager.instance.strPreScense);
-        Debug.Log("场景名称:"+cc.director.getScene().name);
-
         if(UIManager.instance.strPreScense != cc.director.getScene().name)
         {
             console.log("场景已经切换，需要复位根节点");

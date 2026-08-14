@@ -3,6 +3,7 @@ import UIManager from "../common/UIManager";
 import { ClosePanelMode } from "../common/GameDef";
 import Debug from "../common/Debug";
 import Tool from "../common/Tool";
+import RoomInviteManager from "../logic/RoomInviteManager";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -103,6 +104,8 @@ export default class panelCloudNotify extends UIPanelViewBase {
 
     public SystemInfo(strMsg:string)
     {
+        if(RoomInviteManager.isRoomInviteSystemMessage(strMsg))
+            return;
         let data = JSON.parse(strMsg);
         if (data == null)
         {

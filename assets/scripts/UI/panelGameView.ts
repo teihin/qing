@@ -17,6 +17,7 @@ import ScrollViewEx from "../common/ScrollViewEx";
 import QueueMatchManager, { QueueMatchSnapshot } from "../logic/QueueMatchManager";
 import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
+import RoomInviteManager from "../logic/RoomInviteManager";
 
 var KBEngine = require("kbengine");
 
@@ -59,6 +60,7 @@ export default class panelGameView extends UIPanelViewBase {
     private preSitState:string = "idle"; // idle / waiting / selecting / submitting
     private preSitSite:number = -1;
     private preSitQueueId:string = "";
+    private roomInviteSeatGuardUntil:number = 0;
     private lastModalPrompt:string = "";
     private lastModalPromptTime:number = 0;
 
@@ -75,6 +77,12 @@ export default class panelGameView extends UIPanelViewBase {
     private queueEmptyLabel:cc.Label = null;
     private queueMemberRows:cc.Node[] = [];
     private readonly queueListRefreshSeconds:number = 5;
+    private roomInviteEntryNode:cc.Node = null;
+    private roomInviteEntryLabel:cc.Label = null;
+    private roomInviteEntryButton:cc.Button = null;
+    private roomInviteGlowNode:cc.Node = null;
+    private roomInviteRingNode:cc.Node = null;
+    private roomInviteAnimationRunning:boolean = false;
 
     onEnable(){
        // Debug.Error("进入enable")
@@ -84,6 +92,7 @@ export default class panelGameView extends UIPanelViewBase {
         super.onLoad();
 
         this.BindQueueMatchUI();
+        this.BindRoomInviteUI();
 
 
 
@@ -123,6 +132,7 @@ export default class panelGameView extends UIPanelViewBase {
         KBEngine.Event.register("QueuePreSitReservation", this, "OnQueuePreSitReservation");
         KBEngine.Event.register("QueuePreSitAccepted", this, "OnQueuePreSitAccepted");
         KBEngine.Event.register("QueuePreSitFailed", this, "OnQueuePreSitFailed");
+        KBEngine.Event.register("RoomInviteStateChanged", this, "RefreshRoomInviteEntry");
 
         this.scrollGuanZhan = Tool.GetChild(this.node,"实时战绩/围观列表").getComponent(ScrollViewEx);
         this.scrollGuanZhan.callBackFresh = this.GetWatchList.bind(this);
@@ -134,6 +144,7 @@ export default class panelGameView extends UIPanelViewBase {
         MobileManager.getInstance().PrepareVoice();
         QueueMatchManager.getInstance().onRoomViewReady();
         this.OnQueueMatchStateChanged(QueueMatchManager.getInstance().getSnapshot());
+        this.schedule(this.RefreshRoomInviteEntry, 1, cc.macro.REPEAT_FOREVER, 0.2);
 
         this.node.on(cc.Node.EventType.TOUCH_END,(event:cc.Event.EventTouch)=>{
             this.OnPointDown(event);        
@@ -669,6 +680,10 @@ export default class panelGameView extends UIPanelViewBase {
         else if(button.node.name === "排队")
         {
             this.OpenQueuePanel();
+        }
+        else if(button.node.name === "一键邀请")
+        {
+            this.SendRoomInvite();
         }
         else if(button.node.name === "关闭排队")
         {
@@ -1525,6 +1540,12 @@ export default class panelGameView extends UIPanelViewBase {
 
     onLeaveRoom(nCode:number)
     {
+        if(RoomInviteManager.getInstance().isHandlingRoomNavigation())
+        {
+            if(this.gameLogic != null)
+                this.gameLogic.PrepareLeaveRoom();
+            return;
+        }
         if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
             return;
         if(this.gameLogic != null)
@@ -1540,6 +1561,8 @@ export default class panelGameView extends UIPanelViewBase {
     }
     onEnterRoom(nCode:number,nRoomID:number)
     {
+        if(RoomInviteManager.getInstance().isHandlingRoomNavigation())
+            return;
         if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
             return;
         //准备进入游戏
@@ -1879,6 +1902,7 @@ export default class panelGameView extends UIPanelViewBase {
                 if(param == "坐下_事件1")
                 {
                     this.ClearPreSitState(false);
+                    this.RefreshRoomInviteEntry();
                     this.ShowMsg("带入成功!");
                 }
                 else
@@ -1889,6 +1913,7 @@ export default class panelGameView extends UIPanelViewBase {
             }
             else
             {
+                this.roomInviteSeatGuardUntil = 0;
                 if(param == "坐下_事件1" && this.preSitState == "submitting")
                 {
                     this.CancelPreSitReservation(true);
@@ -1899,6 +1924,7 @@ export default class panelGameView extends UIPanelViewBase {
         else if(param.indexOf("起立_事件") >= 0 && nCode == 0x200)
         {
             this.RefreshQueueEntryVisibility(false);
+            this.RefreshRoomInviteEntry();
         }
     }
     public PlayButtonAudio()
@@ -2547,6 +2573,8 @@ export default class panelGameView extends UIPanelViewBase {
     }
     public SystemInfo(strMsg:string)
     {
+        if(RoomInviteManager.isRoomInviteSystemMessage(strMsg))
+            return;
         let data = JSON.parse(strMsg);
         if (data == null)
         {
@@ -2670,6 +2698,9 @@ export default class panelGameView extends UIPanelViewBase {
                     {
                         nSitPos = nSitPos - this.gameLogic.MAX_PLAYER;
                     }
+                    // 旧玩家直接坐下没有预坐状态，用短保护覆盖坐下请求到PlayerList回推的窗口。
+                    this.roomInviteSeatGuardUntil = Date.now() + 10000;
+                    RoomInviteManager.getInstance().onRoomAudienceStateChanged();
                     GameDataManager.getAccount().reqRoomCommand("{\"header\":\"坐下_事件\",\"site\":" + nSitPos.toString() + "}", "坐下_事件");
                     return;
                 }
@@ -2684,6 +2715,7 @@ export default class panelGameView extends UIPanelViewBase {
 
             this.preSitState = "waiting";
             this.preSitSite = nSitPos;
+            RoomInviteManager.getInstance().onRoomAudienceStateChanged();
             GameDataManager.getAccount().reqRoomCommand("{\"header\":\"预坐_事件\",\"site\":" + nSitPos.toString() + "}", "预坐_事件");
     }
 
@@ -2693,6 +2725,8 @@ export default class panelGameView extends UIPanelViewBase {
         let strUserID = GameDataManager.getAccount().guuid;
         let isSelfSeated = this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID;
         this.RefreshQueueEntryVisibility(isSelfSeated);
+        this.RefreshRoomInviteEntry();
+        RoomInviteManager.getInstance().onRoomAudienceStateChanged();
         if(this.preSitState == "idle")
             return;
 
@@ -2741,6 +2775,173 @@ export default class panelGameView extends UIPanelViewBase {
         this.preSitQueueId = "";
         if(closeBuyIn)
             Tool.GetChild(this.node,"带入窗口").active = false;
+    }
+
+    /**
+     * 邀请入口直接预制在 drh8.fire 的本人头像区域，脚本只负责显隐、动画、冷却和发送。
+     */
+    private BindRoomInviteUI()
+    {
+        this.roomInviteEntryNode = Tool.GetChild(this.node, "UserInfo/player0/一键邀请");
+        if(this.roomInviteEntryNode == null)
+        {
+            cc.error("drh8 场景缺少一键邀请节点");
+            return;
+        }
+        this.roomInviteEntryLabel = Tool.GetChild(this.roomInviteEntryNode, "文字").getComponent(cc.Label);
+        this.roomInviteEntryButton = this.roomInviteEntryNode.getComponent(cc.Button);
+        this.roomInviteGlowNode = Tool.GetChild(this.roomInviteEntryNode, "呼吸光");
+        this.roomInviteRingNode = Tool.GetChild(this.roomInviteEntryNode, "旋转光环");
+        // 节点在场景里默认隐藏，部分Creator版本不会让基类遍历到隐藏按钮，
+        // 因此这里显式绑定一次，并先移除可能由基类添加的同目标监听，避免重复发送。
+        this.roomInviteEntryButton.node.targetOff(this);
+        this.roomInviteEntryButton.node.on("click", ()=>{
+            this.onButtonClick(this.roomInviteEntryButton);
+            this.PlayAudio("按键");
+        }, this);
+        // 等待首个PlayerList确认本人已经正式坐下，避免观战进入时入口闪现。
+        this.roomInviteEntryNode.active = false;
+    }
+
+    private SetRoomInviteAnimation(active:boolean)
+    {
+        if(active && this.roomInviteAnimationRunning)
+            return;
+        this.roomInviteAnimationRunning = active;
+
+        if(this.roomInviteGlowNode != null && cc.isValid(this.roomInviteGlowNode))
+        {
+            this.roomInviteGlowNode.stopAllActions();
+            this.roomInviteGlowNode.scale = 1;
+            this.roomInviteGlowNode.opacity = active ? 38 : 0;
+            if(active)
+            {
+                this.roomInviteGlowNode.runAction(cc.repeatForever(cc.sequence(
+                    cc.spawn(cc.fadeTo(0.95, 88), cc.scaleTo(0.95, 1.04)),
+                    cc.spawn(cc.fadeTo(0.95, 24), cc.scaleTo(0.95, 0.98))
+                )));
+            }
+        }
+
+        if(this.roomInviteRingNode != null && cc.isValid(this.roomInviteRingNode))
+        {
+            this.roomInviteRingNode.stopAllActions();
+            this.roomInviteRingNode.angle = 0;
+            this.roomInviteRingNode.opacity = active ? 45 : 0;
+            if(active)
+                this.roomInviteRingNode.runAction(cc.repeatForever(cc.rotateBy(4.6, -360)));
+        }
+    }
+
+    private CountSeatedPlayers():number
+    {
+        if(this.gameLogic == null || this.gameLogic.arrayPlayer == null)
+            return 0;
+        let count = 0;
+        this.gameLogic.arrayPlayer.forEach((player:DrhPlayerLogic)=>{
+            if(player != null && player.info != null && player.info.strUserID != "" && player.info.strUserID != "init")
+                count++;
+        });
+        return count;
+    }
+
+    private GetRoomInviteMinBuyIn():number
+    {
+        let account = GameDataManager.getAccount();
+        let roomSetting = account == null || account.roomSetting == null ? "" : account.roomSetting.toString();
+        let match = roomSetting.match(/最小带入\s*([0-9]+(?:\.[0-9]+)?)/);
+        if(match == null)
+            return 0;
+        let minBuyIn = Number(match[1]);
+        return isFinite(minBuyIn) && minBuyIn > 0 ? minBuyIn : 0;
+    }
+
+    /** 房间邀请在牌桌内只允许没有正式座位的观战玩家接收。 */
+    public GetRoomInviteAudienceState():string
+    {
+        if(this.gameLogic == null)
+            return "unknown";
+        // 从玩家点空位开始就按已占座处理，覆盖预坐请求发出到PlayerList回推之间的窗口。
+        if(this.preSitState != "idle")
+            return "seated";
+        if(Date.now() < this.roomInviteSeatGuardUntil)
+            return "seated";
+        let account = GameDataManager.getAccount();
+        if(account == null || account.guuid == null || account.guuid.toString() == "")
+            return "unknown";
+        let self = this.gameLogic.GetPlayerCtlByID(0);
+        if(self == null || self.info == null || self.info.strUserID == null)
+            return "unknown";
+        return self.info.strUserID == account.guuid.toString() ? "seated" : "spectator";
+    }
+
+    private CanShowRoomInviteEntry():boolean
+    {
+        if(this.gameLogic == null || this.preSitState != "idle")
+            return false;
+        let account = GameDataManager.getAccount();
+        if(account == null || account.roomID == null || Number(account.roomID) <= 0)
+            return false;
+        let self = this.gameLogic.GetPlayerCtlByID(0);
+        if(self == null || self.info == null || self.info.strUserID != account.guuid || self.info.emState == PlayerState.init)
+            return false;
+        if(this.gameLogic.round_count != "0" || this.gameLogic.strGameState != "init")
+            return false;
+        return this.CountSeatedPlayers() < Number(this.gameLogic.MAX_PLAYER);
+    }
+
+    public RefreshRoomInviteEntry()
+    {
+        if(this.roomInviteEntryNode == null || !cc.isValid(this.roomInviteEntryNode))
+            return;
+        let visible = this.CanShowRoomInviteEntry();
+        if(visible)
+        {
+            let remaining = RoomInviteManager.getInstance().getRemainingSeconds(RoomType.Custom, GameDataManager.getAccount().roomID);
+            // 竞品行为：邀请发送后入口立即消失，冷却结束且仍满足首局等待条件时再出现。
+            visible = remaining <= 0;
+        }
+        this.roomInviteEntryNode.active = visible;
+        if(!visible)
+        {
+            this.SetRoomInviteAnimation(false);
+            return;
+        }
+        if(this.roomInviteEntryLabel == null || this.roomInviteEntryButton == null)
+            return;
+
+        this.roomInviteEntryButton.interactable = true;
+        this.roomInviteEntryLabel.string = "一键\n邀请";
+        this.roomInviteEntryLabel.node.color = cc.color(226,241,248,255);
+        this.SetRoomInviteAnimation(true);
+    }
+
+    private SendRoomInvite()
+    {
+        if(!this.CanShowRoomInviteEntry())
+        {
+            this.RefreshRoomInviteEntry();
+            return;
+        }
+        let manager = RoomInviteManager.getInstance();
+        let roomID = GameDataManager.getAccount().roomID;
+        let remaining = manager.getRemainingSeconds(RoomType.Custom, roomID);
+        if(remaining > 0)
+        {
+            this.RefreshRoomInviteEntry();
+            return;
+        }
+
+        let playerCount = this.CountSeatedPlayers();
+        let minBuyIn = this.GetRoomInviteMinBuyIn();
+        let sent = manager.sendInvite(RoomType.Custom, roomID, this.gameLogic.strRoomDipi, minBuyIn, playerCount, this.gameLogic.MAX_PLAYER);
+        this.RefreshRoomInviteEntry();
+        if(sent)
+            this.ShowMsg("邀请已发送，3分钟后可再次邀请");
+        else if(manager.getRemainingSeconds(RoomType.Custom, roomID) > 0)
+            this.ShowMsg("邀请请求已提交，3分钟后可再次邀请");
+        else
+            this.ShowMsg("当前无法发送邀请，请稍后再试");
     }
 
     /**
@@ -3093,6 +3294,7 @@ export default class panelGameView extends UIPanelViewBase {
         this.preSitState = "waiting";
         this.preSitSite = site;
         this.preSitQueueId = queueId;
+        RoomInviteManager.getInstance().onRoomAudienceStateChanged();
     }
 
     public OnQueuePreSitAccepted(reservation:any)

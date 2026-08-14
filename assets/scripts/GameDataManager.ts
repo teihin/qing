@@ -8,6 +8,7 @@ import DeviceIdentityManager from "./logic/DeviceIdentityManager";
 import QueueMatchManager from "./logic/QueueMatchManager";
 import WebSceneLoader from "./common/WebSceneLoader";
 import WebWakeLockManager from "./common/WebWakeLockManager";
+import RoomInviteManager from "./logic/RoomInviteManager";
 
 var KBEngine = require("kbengine");
 
@@ -91,6 +92,7 @@ export default class GameDataManager extends cc.Component {
         // 提前准备设备标识，减少用户点击登录后的等待时间。
         DeviceIdentityManager.getInstance().prepare();
         QueueMatchManager.getInstance();
+        RoomInviteManager.getInstance();
 
         
         
@@ -457,6 +459,8 @@ export default class GameDataManager extends cc.Component {
 
     public SystemInfo(strMsg:string)
     {
+        if(RoomInviteManager.isRoomInviteSystemMessage(strMsg))
+            return;
         let data = JSON.parse(strMsg);
         if (data == null)
         {

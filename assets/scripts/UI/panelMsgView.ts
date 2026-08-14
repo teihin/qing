@@ -2,6 +2,7 @@ import UIPanelViewBase from "../common/UIPanelViewBase";
 import UIManager from "../common/UIManager";
 import GameDataManager from "../GameDataManager";
 import Tool from "../common/Tool";
+import RoomInviteManager from "../logic/RoomInviteManager";
 
 const {ccclass, property} = cc._decorator;
 
@@ -83,6 +84,7 @@ export default class panelMsgView extends UIPanelViewBase {
         }
         else if(button.node.name === "切换账号")
         {
+            RoomInviteManager.getInstance().clearCurrentAccountSession();
             cc.sys.localStorage.setItem("unionid","");
             cc.sys.localStorage.setItem("pass","");
             GameDataManager.getInstance().bLoginSuccess = false;
