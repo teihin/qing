@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "247bc527-9100-4302-9b88-30812dd04e95",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 136,
+  "height": 31,
+  "platformSettings": {},
+  "subMetas": {
+    "本局总手数": {
+      "ver": "1.0.6",
+      "uuid": "9d8b194b-1561-49bd-8880-5a125e267502",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "247bc527-9100-4302-9b88-30812dd04e95",
+      "trimType": "auto",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 136,
+      "height": 31,
+      "rawWidth": 136,
+      "rawHeight": 31,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

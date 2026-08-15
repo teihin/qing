@@ -88,6 +88,10 @@ export default class QueueMatchManager extends cc.Component {
     private recoveringSwitch:boolean = false;
     private disconnectedDuringSwitch:boolean = false;
     private recoveryToken:number = 0;
+    // Account.roomID 可能在结算或场景切换期间被旧逻辑提前清空。常驻管理器
+    // 在每次成功进房时保存同账号最后进入的房间，供结算页退房、排队继续使用。
+    private lastEnteredRoomID:number = 0;
+    private lastEnteredRoomOwnerID:string = "";
 
     public static getInstance():QueueMatchManager
     {
@@ -198,6 +202,34 @@ export default class QueueMatchManager extends cc.Component {
         return true;
     }
 
+    /**
+     * 保存服务端确认成功进入的房间。该值不随普通退房立即清除，因为结算页
+     * 后续申请排队仍需要把原房间作为参考房间；账号变化时会自动隔离旧值。
+     */
+    public rememberEnteredRoom(roomID:any):number
+    {
+        let value = Number(roomID);
+        if(!isFinite(value) || value <= 0)
+            return this.getLastEnteredRoomID(true);
+        this.ensureEnteredRoomOwner();
+        this.lastEnteredRoomID = value;
+        return this.lastEnteredRoomID;
+    }
+
+    /** 优先吸收Account当前值，再返回同账号最后一次成功进入的房间。 */
+    public getLastEnteredRoomID(includeAccountRoom:boolean = true):number
+    {
+        this.ensureEnteredRoomOwner();
+        if(includeAccountRoom)
+        {
+            let account = this.getAccount();
+            let currentRoomID = account == null ? 0 : Number(account.roomID);
+            if(isFinite(currentRoomID) && currentRoomID > 0)
+                this.lastEnteredRoomID = currentRoomID;
+        }
+        return this.lastEnteredRoomID;
+    }
+
     public requestCancel():boolean
     {
         if(this.pendingCommand != "" || !this.queueActive || this.isSwitching())
@@ -301,6 +333,8 @@ export default class QueueMatchManager extends cc.Component {
     {
         let account = this.getAccount();
         let roomID = account == null ? 0 : Number(account.roomID);
+        if(isFinite(roomID) && roomID > 0)
+            this.rememberEnteredRoom(roomID);
         if(this.switchPhase == "waiting_room_scene" && roomID == this.targetRoomID)
             this.switchPhase = "idle";
         let reservation = this.getReservationForRoom(roomID);
@@ -360,6 +394,7 @@ export default class QueueMatchManager extends cc.Component {
 
     private onLoginSuccessfully()
     {
+        this.ensureEnteredRoomOwner();
         if(this.isSwitching())
             this.scheduleOnce(()=>this.beginSwitchReconciliation("正在恢复换房状态…"), 0.5);
         else
@@ -721,6 +756,15 @@ export default class QueueMatchManager extends cc.Component {
             this.message = "正在离开当前房间…";
             return;
         }
+        // 结算页排队会先正常退出服务端房间，但为了让玩家继续查看战绩，
+        // 客户端仍停留在旧drh8场景。此时绝不能直接进入目标房间：否则
+        // onEnterRoom会因场景名称仍为drh8而跳过重载，新房消息会灌进旧牌桌。
+        // 必须先切到轻量过渡场景，完整销毁旧牌桌，再请求进入目标房间。
+        if(this.currentSceneName() == "drh8")
+        {
+            this.beginTargetRoomTransition(generation);
+            return;
+        }
         this.switchPhase = "entering";
         this.status = "switching";
         this.requestEnterTarget(generation);
@@ -741,6 +785,14 @@ export default class QueueMatchManager extends cc.Component {
             return;
         }
 
+        this.beginTargetRoomTransition(generation);
+    }
+
+    /** 统一经轻量场景释放旧牌桌，再开始目标房间的进房协议。 */
+    private beginTargetRoomTransition(generation:number)
+    {
+        if(generation != this.switchGeneration)
+            return;
         this.switchPhase = "transition";
         this.status = "switching";
         this.message = "正在快速切换房间…";
@@ -780,6 +832,10 @@ export default class QueueMatchManager extends cc.Component {
 
     private onEnterRoom(nCode:number, nRoomID:number)
     {
+        // 不论是否由排队快速换房触发，只要服务端确认进房成功就先保存。
+        // 这段必须位于switchPhase判断之前，才能覆盖大厅正常进房和断线恢复。
+        if(nCode == 0x200)
+            this.rememberEnteredRoom(nRoomID);
         if(this.switchPhase != "entering")
             return;
         if(Number(nRoomID) != this.targetRoomID)
@@ -1130,8 +1186,22 @@ export default class QueueMatchManager extends cc.Component {
         this.recoveringSwitch = false;
         this.disconnectedDuringSwitch = false;
         this.recoveryToken++;
+        this.lastEnteredRoomID = 0;
+        this.lastEnteredRoomOwnerID = "";
         this.clearQueueState();
         this.emitState();
+    }
+
+    /** 防止常驻节点把上一个登录账号的房间号带给新账号。 */
+    private ensureEnteredRoomOwner()
+    {
+        let account = this.getAccount();
+        let ownerID = account == null || account.guuid == null ? "" : account.guuid.toString();
+        if(ownerID == "")
+            return;
+        if(this.lastEnteredRoomOwnerID != "" && this.lastEnteredRoomOwnerID != ownerID)
+            this.lastEnteredRoomID = 0;
+        this.lastEnteredRoomOwnerID = ownerID;
     }
 
     private isSwitching():boolean

@@ -9,6 +9,7 @@ import ImageManager from "./ImageManager";
 import GpsManager from "./GpsManager";
 import MobileManager from "../mobile/MobileManager";
 import ScrollViewEx from "../common/ScrollViewEx";
+import QueueMatchManager from "./QueueMatchManager";
 
 var KBEngine = require("kbengine");
 
@@ -592,6 +593,7 @@ export default class DrhLogicMgr extends cc.Component {
             return;
         }
         this.strMsgRoomID = strPlayerListRoomID;
+        QueueMatchManager.getInstance().rememberEnteredRoom(strPlayerListRoomID);
 
         if (this.bShowOverAnimate) //动画过程中不处理内容
         {

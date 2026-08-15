@@ -418,6 +418,10 @@ export default class GameDataManager extends cc.Component {
     }
     onEnterRoom(nCode:number,nRoomID:number)
     {
+        // 进房成功回包是房间上下文的最早权威节点。先交给常驻排队管理器
+        // 保存，避免结算或旧退出逻辑提前清空Account.roomID后丢失原房间号。
+        if(nCode == 0x200)
+            QueueMatchManager.getInstance().rememberEnteredRoom(nRoomID);
         if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
             return;
         if(nCode != 0x200 && cc.director.getScene().name != "login")

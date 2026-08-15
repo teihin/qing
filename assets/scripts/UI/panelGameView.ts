@@ -78,6 +78,12 @@ export default class panelGameView extends UIPanelViewBase {
     private queueEmptyLabel:cc.Label = null;
     private queueMemberRows:cc.Node[] = [];
     private readonly queueListRefreshSeconds:number = 5;
+    private pendingQueueApplyAfterLeave:boolean = false;
+    private queueReferenceRoomID:number = 0;
+    private queueReturnLobbyAfterLeave:boolean = false;
+    private queueRoomLeaveConfirmed:boolean = false;
+    private queueOpenedFromRecordInfo:boolean = false;
+    private pendingSettlementExitToLobby:boolean = false;
     private roomInviteEntryNode:cc.Node = null;
     private roomInviteEntryLabel:cc.Label = null;
     private roomInviteEntryButton:cc.Button = null;
@@ -144,6 +150,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         this.setRoomInfo();
         MobileManager.getInstance().PrepareVoice();
+        QueueMatchManager.getInstance().rememberEnteredRoom(GameDataManager.getAccount().roomID);
         QueueMatchManager.getInstance().onRoomViewReady();
         this.OnQueueMatchStateChanged(QueueMatchManager.getInstance().getSnapshot());
         this.schedule(this.RefreshRoomInviteEntry, 1, cc.macro.REPEAT_FOREVER, 0.2);
@@ -693,12 +700,7 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "申请或取消排队")
         {
-            let manager = QueueMatchManager.getInstance();
-            let snapshot = manager.getSnapshot();
-            if(snapshot.queueActive)
-                manager.requestCancel();
-            else
-                manager.requestApply(GameDataManager.getAccount().roomID);
+            this.RequestQueueMatchFromPopup();
         }
         else if(button.node.name === "联系客服")
         {
@@ -1542,6 +1544,44 @@ export default class panelGameView extends UIPanelViewBase {
 
     onLeaveRoom(nCode:number)
     {
+        if(this.pendingQueueApplyAfterLeave)
+        {
+            let referenceRoomID = this.queueReferenceRoomID;
+            let shouldReturnLobby = this.queueReturnLobbyAfterLeave;
+            this.queueReturnLobbyAfterLeave = false;
+            if(nCode != 0x200)
+            {
+                this.FinishQueueLeavePreparation("退出当前房间失败，暂时无法申请排队");
+                if(shouldReturnLobby)
+                    KBEngine.Event.fire("onGoToMain");
+                return;
+            }
+
+            this.FinishQueueLeavePreparation("");
+            if(MobileManager.instance != null)
+                MobileManager.instance.LeaveVoiceRoom();
+            GameDataManager.getAccount().roomID = "";
+            this.queueRoomLeaveConfirmed = true;
+            if(!QueueMatchManager.getInstance().requestApply(referenceRoomID))
+                KBEngine.Event.fire("QueueMatchLeaveState", false, "房间已退出，但排队申请失败，请重新申请");
+            if(shouldReturnLobby)
+                KBEngine.Event.fire("onGoToMain");
+            return;
+        }
+        if(this.pendingSettlementExitToLobby)
+        {
+            this.pendingSettlementExitToLobby = false;
+            this.unschedule(this.OnSettlementExitTimeout);
+            if(MobileManager.instance != null)
+                MobileManager.instance.LeaveVoiceRoom();
+            // 匹配通知可能与主动返回同时到达。QueueMatchManager先处理同一个
+            // 退房回包并进入切房阶段时，不能再并发跳大厅。
+            if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+                return;
+            GameDataManager.getAccount().roomID = "";
+            KBEngine.Event.fire("onGoToMain");
+            return;
+        }
         if(RoomInviteManager.getInstance().isHandlingRoomNavigation())
         {
             if(this.gameLogic != null)
@@ -1563,6 +1603,12 @@ export default class panelGameView extends UIPanelViewBase {
     }
     onEnterRoom(nCode:number,nRoomID:number)
     {
+        if(nCode === 0x200)
+        {
+            QueueMatchManager.getInstance().rememberEnteredRoom(nRoomID);
+            this.queueReferenceRoomID = Number(nRoomID);
+            this.queueRoomLeaveConfirmed = false;
+        }
         if(RoomInviteManager.getInstance().isHandlingRoomNavigation())
             return;
         if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
@@ -3036,7 +3082,7 @@ export default class panelGameView extends UIPanelViewBase {
             let snapshot = QueueMatchManager.getInstance().getSnapshot();
             this.queueEntryLabel.string = snapshot.queueActive ? "排队中" : "排队";
         }
-        if(!shouldShow)
+        if(!shouldShow && (this.gameLogic == null || this.gameLogic.strGameState != "end"))
             this.CloseQueuePanel();
     }
 
@@ -3076,17 +3122,218 @@ export default class panelGameView extends UIPanelViewBase {
         }
     }
 
-    private OpenQueuePanel()
+    private OpenQueuePanel(requireRoomLeaveBeforeApply:boolean = false)
     {
-        if(this.queuePanel == null)
-            return;
-        this.ResizeQueueOverlay();
-        this.queuePanel.active = true;
+        this.queueOpenedFromRecordInfo = requireRoomLeaveBeforeApply;
+        UIManager.getInstance().showPanel("panelQueueMatch", ShowPanelMode.Top);
+    }
+
+    /**
+     * 战局详情只负责提供入口，顶层Prefab负责显示，排队状态和跨房协议仍由
+     * 常驻QueueMatchManager统一管理，避免出现两套排队状态。
+     */
+    public CanOpenQueuePanelFromRecordInfo():boolean
+    {
+        if(this.gameLogic == null || !cc.isValid(this.gameLogic.node) ||
+            !this.IsQueueSupportedRoom())
+            return false;
+
+        let account = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        if(this.ResolveQueueReferenceRoomID() <= 0)
+            return false;
+        if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+            return false;
+
+        // 观战玩家沿用原排队入口条件；已经坐下的玩家只允许在本局结束后
+        // 从战局详情进入排队，防止牌局进行中借此绕过座位保护。
+        let selfPlayer = this.gameLogic.GetPlayerCtlByID(0);
+        let isSelfSeated = selfPlayer != null && selfPlayer.info != null &&
+            selfPlayer.info.strUserID == account.guuid;
+        return !isSelfSeated || this.gameLogic.strGameState == "end";
+    }
+
+    public OpenQueuePanelFromRecordInfo():boolean
+    {
+        if(!this.CanOpenQueuePanelFromRecordInfo())
+            return false;
+        let currentRoomID = Number(GameDataManager.getAccount().roomID);
+        if(isFinite(currentRoomID) && currentRoomID > 0)
+            this.queueRoomLeaveConfirmed = false;
+        this.OpenQueuePanel(true);
+        return true;
+    }
+
+    /**
+     * 从结算页申请时，无论本人结算后显示为坐下还是观战，都必须先完整退出
+     * 原房间；只有正常退房回包确认后才申请排队。普通未开局观战入口不变。
+     */
+    public RequestQueueMatchFromPopup():boolean
+    {
         let manager = QueueMatchManager.getInstance();
-        this.OnQueueMatchStateChanged(manager.getSnapshot());
-        manager.requestQuery(false);
-        manager.requestList(GameDataManager.getAccount().roomID);
-        this.StartQueueListAutoRefresh();
+        let snapshot = manager.getSnapshot();
+        if(snapshot.queueActive)
+            return manager.requestCancel();
+        if(snapshot.busy || this.pendingQueueApplyAfterLeave || manager.isHandlingRoomNavigation())
+            return false;
+
+        let account = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        let referenceRoomID = this.ResolveQueueReferenceRoomID();
+        if(referenceRoomID <= 0)
+        {
+            // 正常流程在进房成功回包和牌桌创建时已经双重保存，走到这里说明
+            // 进房上下文本身异常，保留明确日志以便发现协议问题。
+            KBEngine.Event.fire("QueueMatchLeaveState", false, "房间信息同步异常，请稍后重试");
+            cc.error("[QueueMatch] 进房成功后仍未保存有效roomID");
+            return false;
+        }
+        this.queueReferenceRoomID = referenceRoomID;
+        // 只有本次正常退房成功回包已经确认，才可以直接用原房间号重新申请；
+        // account.roomID被结算流程提前清空不能视为已经退房。
+        if(this.queueRoomLeaveConfirmed)
+            return manager.requestApply(referenceRoomID);
+        // 结算状态下不再依赖PlayerList中的座位显示。服务端可能已经把结算玩家
+        // 从可见座位状态移除，但Account仍属于原房间；此时必须先完整退房。
+        if(this.queueOpenedFromRecordInfo || (this.gameLogic != null && this.gameLogic.strGameState == "end"))
+            return this.BeginQueueApplyAfterRoomLeave(account);
+        let selfPlayer = this.gameLogic == null ? null : this.gameLogic.GetPlayerCtlByID(0);
+        let isSelfSeated = selfPlayer != null && selfPlayer.info != null &&
+            selfPlayer.info.strUserID == account.guuid;
+        if(!isSelfSeated)
+            return manager.requestApply(referenceRoomID);
+        if(this.gameLogic.strGameState != "end")
+        {
+            KBEngine.Event.fire("QueueMatchLeaveState", false, "牌局进行中，暂时不能申请排队");
+            return false;
+        }
+
+        return this.BeginQueueApplyAfterRoomLeave(account);
+    }
+
+    private BeginQueueApplyAfterRoomLeave(account:any):boolean
+    {
+        this.pendingQueueApplyAfterLeave = true;
+        KBEngine.Event.fire("QueueMatchLeaveState", true, "正在退出当前房间，稍后自动申请排队…");
+        if(this.gameLogic != null)
+            this.gameLogic.PrepareLeaveRoom();
+        try { account.reqStopGame(); } catch(error) {}
+        account.reqLeaveRoom();
+        this.scheduleOnce(this.OnQueueLeavePreparationTimeout, 10);
+        return true;
+    }
+
+    public IsPreparingQueueMatchAfterLeave():boolean
+    {
+        return this.pendingQueueApplyAfterLeave;
+    }
+
+    public GetQueueReferenceRoomID():number
+    {
+        return this.ResolveQueueReferenceRoomID();
+    }
+
+    /**
+     * 当前Account值优先；结算阶段被旧逻辑清空时，恢复常驻管理器在成功
+     * 进房时按账号保存的值。这样排队列表、退房和申请始终引用同一原房间。
+     */
+    private ResolveQueueReferenceRoomID():number
+    {
+        let account = GameDataManager.getAccount();
+        let currentRoomID = account == null ? 0 : Number(account.roomID);
+        let manager = QueueMatchManager.getInstance();
+        if(isFinite(currentRoomID) && currentRoomID > 0)
+        {
+            this.queueReferenceRoomID = manager.rememberEnteredRoom(currentRoomID);
+            return this.queueReferenceRoomID;
+        }
+        let rememberedRoomID = manager.getLastEnteredRoomID();
+        if(isFinite(rememberedRoomID) && rememberedRoomID > 0)
+        {
+            this.queueReferenceRoomID = rememberedRoomID;
+            return this.queueReferenceRoomID;
+        }
+        // PlayerList在牌桌逻辑中保存的是服务端全量消息携带的权威房间号，
+        // 用作旧Account属性和进房回包都异常时的最后恢复来源。
+        let playerListRoomID = this.gameLogic == null ? 0 : Number(this.gameLogic.strMsgRoomID);
+        if(isFinite(playerListRoomID) && playerListRoomID > 0)
+            this.queueReferenceRoomID = manager.rememberEnteredRoom(playerListRoomID);
+        return this.queueReferenceRoomID;
+    }
+
+    /** 结算主页面及牌局回顾子页返回时统一处理退房和场景导航。 */
+    public HandleRecordInfoClose():boolean
+    {
+        let account = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        // 匹配已经进入离房/进房阶段时，以常驻排队管理器的导航为准；不能再
+        // 同时启动回大厅场景，否则两个异步场景加载会互相抢占。
+        if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+            return true;
+        if(this.pendingQueueApplyAfterLeave)
+        {
+            this.queueReturnLobbyAfterLeave = true;
+            UIManager.getInstance().closePanelByName("panelQueueMatch", ClosePanelMode.Top);
+            UIManager.getInstance().showPanel("panelLoading", ShowPanelMode.Top);
+            return true;
+        }
+
+        let referenceRoomID = this.ResolveQueueReferenceRoomID();
+        if(this.queueRoomLeaveConfirmed)
+        {
+            UIManager.getInstance().closePanelByName("panelQueueMatch", ClosePanelMode.Top);
+            KBEngine.Event.fire("onGoToMain");
+            return true;
+        }
+        if(referenceRoomID <= 0)
+            cc.error("[RecordInfo] 进房成功后仍未保存有效roomID，继续发送正常退房请求");
+
+        // 仍属于原房间时必须先走与牌桌“退出房间”相同的正常协议；战绩面板
+        // 保留到场景真正切走，避免出现面板关闭后仍停在drh8空桌的状态。
+        this.pendingSettlementExitToLobby = true;
+        UIManager.getInstance().closePanelByName("panelQueueMatch", ClosePanelMode.Top);
+        UIManager.getInstance().showPanel("panelLoading", ShowPanelMode.Top);
+        if(this.gameLogic != null)
+            this.gameLogic.PrepareLeaveRoom();
+        try { account.reqStopGame(); } catch(error) {}
+        account.reqLeaveRoom();
+        this.scheduleOnce(this.OnSettlementExitTimeout, 10);
+        return true;
+    }
+
+    private OnSettlementExitTimeout()
+    {
+        if(!this.pendingSettlementExitToLobby)
+            return;
+        this.pendingSettlementExitToLobby = false;
+        // 保持项目原有退出策略：服务端回包异常时也不能把玩家留在结算牌桌。
+        if(!QueueMatchManager.getInstance().isHandlingRoomNavigation())
+        {
+            GameDataManager.getAccount().roomID = "";
+            KBEngine.Event.fire("onGoToMain");
+        }
+    }
+
+    private OnQueueLeavePreparationTimeout()
+    {
+        if(this.pendingQueueApplyAfterLeave)
+        {
+            let shouldReturnLobby = this.queueReturnLobbyAfterLeave;
+            this.queueReturnLobbyAfterLeave = false;
+            this.FinishQueueLeavePreparation("退出当前房间超时，请重新申请排队");
+            if(shouldReturnLobby)
+                KBEngine.Event.fire("onGoToMain");
+        }
+    }
+
+    private FinishQueueLeavePreparation(message:string)
+    {
+        this.pendingQueueApplyAfterLeave = false;
+        this.unschedule(this.OnQueueLeavePreparationTimeout);
+        KBEngine.Event.fire("QueueMatchLeaveState", false, message);
     }
 
     private CloseQueuePanel()
@@ -3094,6 +3341,7 @@ export default class panelGameView extends UIPanelViewBase {
         this.StopQueueListAutoRefresh();
         if(this.queuePanel != null && cc.isValid(this.queuePanel))
             this.queuePanel.active = false;
+        UIManager.getInstance().closePanelByName("panelQueueMatch", ClosePanelMode.Top);
     }
 
     /** 弹窗打开期间每5秒向服务器对账一次名单，每秒只在本地推进时长显示。 */

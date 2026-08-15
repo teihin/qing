@@ -48,6 +48,9 @@ UI_ROOTS = (
 
 EXCLUDED_PREFIXES = (
     "assets/ImagesLuck/表情/",
+    # 战绩详情由 style_record_info_8l.py 按多层银青材质和荣誉专色生成；
+    # 通用调色会抹掉四种荣誉之间的层级和金属文字高光。
+    "assets/ImagesLuck/战绩详情/",
     "assets/Images/表情/",
     "assets/Images/表情kk/",
     "assets/Images/表情图标/",
@@ -68,6 +71,7 @@ EXCLUDED_EXACT = {
     "assets/ImagesLuck/钱包/支付宝.png",
     "assets/ImagesLuck/钱包/微信.png",
     "assets/ImagesLuck/钱包/选择.png",
+    "assets/ImagesLuck/公用/皇冠框.png",
     "assets/ImagesXYPK/推广/二维码6.png",
 }
 

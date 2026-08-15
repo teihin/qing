@@ -12,6 +12,8 @@ import Debug from "../common/Debug";
 import MobileManager from "../mobile/MobileManager";
 import { resolve } from "path";
 import WebLoadingManager from "../common/WebLoadingManager";
+import PanelGameView from "./panelGameView";
+import QueueMatchManager from "../logic/QueueMatchManager";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -50,19 +52,27 @@ export default class panelRecordInfo extends UIPanelViewBase {
     private strPingtai:string = "0"; //平台得到的奖励
 
     private nCurPage = 1;
+    private queueButton:cc.Node = null;
 
     onLoad () {
         super.onLoad();
 
         this.scrollRecordList = Tool.GetChild(this.node,"战绩列表").getComponent(ScrollViewEx);
         this.scrollRecordPlays = Tool.GetChild(this.node,"牌局回顾/回顾列表").getComponent(ScrollViewEx);
+        this.queueButton = Tool.GetChild(this.node,"排行/排队");
+        this.RefreshQueueButtonVisibility();
         KBEngine.Event.register("ClubRoomPlayedScore", this, "OnClubRoomPlayedScore");
         KBEngine.Event.register("RoundScore", this, "OnRoundScore");
         KBEngine.Event.register("Paipu", this, "Paipu"); //文字牌谱
+        KBEngine.Event.register("QueueMatchStateChanged", this, "OnQueueMatchStateChanged");
     }
 
     start () {
         this.strRoomID = this.strUserData;
+        // 牌桌结算弹窗自身也携带房间号。作为第四层上下文来源立即写入
+        // 常驻缓存，避免旧结算代码提前清空Account.roomID影响退房和排队。
+        if(cc.director.getScene().name == "drh8")
+            QueueMatchManager.getInstance().rememberEnteredRoom(this.strRoomID);
 
         this.GetCreateRecord();
     }
@@ -71,10 +81,15 @@ export default class panelRecordInfo extends UIPanelViewBase {
 
     public onButtonClick(button:cc.Button)
     {
-        if(button.node.name === "关闭")
+        if(button.node.name === "关闭" || button.node.name === "关闭上上层")
         {
             if(cc.director.getScene().name == "drh8")
             {
+                let gameView = this.GetActiveGameView();
+                if(gameView != null && gameView.HandleRecordInfoClose())
+                {
+                    return;
+                }
                 const roomLogic = cc.director.getScene().getComponentInChildren(DrhLogicMgr);
                 if(roomLogic != null)
                     roomLogic.PrepareLeaveRoom();
@@ -83,8 +98,13 @@ export default class panelRecordInfo extends UIPanelViewBase {
     
                 UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
                 MobileManager.getInstance().OnTalkingEvent("退出房间","退出房间");
+                return;
             }
-            UIManager.getInstance().closePanelByName(this.node.name);
+            // 大厅历史战绩仍保留原层级行为：子页返回战绩详情，主页面关闭。
+            if(button.node.name === "关闭上上层")
+                button.node.parent.parent.active = false;
+            else
+                UIManager.getInstance().closePanelByName(this.node.name);
         }
         else if(button.node.name === "牌局回顾")
         {
@@ -92,6 +112,18 @@ export default class panelRecordInfo extends UIPanelViewBase {
             Tool.GetChild(this.node,"牌局回顾/title/地九王").active = this.strPlayMode === "地方"?true:false;
             Tool.GetChild(this.node,"牌局回顾/操作/牌局回顾").getComponent(cc.Toggle).isChecked = true;
             this.ShowHistoryInfo(1);
+        }
+        else if(button.node.name === "排队")
+        {
+            let gameView = this.GetActiveGameView();
+            if(gameView == null || !gameView.CanOpenQueuePanelFromRecordInfo())
+            {
+                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "当前状态不能申请排队");
+                this.RefreshQueueButtonVisibility();
+                return;
+            }
+
+            gameView.OpenQueuePanelFromRecordInfo();
         }
         else if(button.node.name === "首页")
         {
@@ -115,6 +147,32 @@ export default class panelRecordInfo extends UIPanelViewBase {
                 return;
             this.ShowHistoryInfo(Number(this.strRound));
         }
+    }
+
+    private GetActiveGameView():PanelGameView
+    {
+        let scene = cc.director.getScene();
+        if(scene == null || scene.name != "drh8")
+            return null;
+        return scene.getComponentInChildren(PanelGameView);
+    }
+
+    private RefreshQueueButtonVisibility()
+    {
+        if(this.queueButton == null || !cc.isValid(this.queueButton))
+            return;
+        let gameView = this.GetActiveGameView();
+        this.queueButton.active = gameView != null && gameView.CanOpenQueuePanelFromRecordInfo();
+    }
+
+    public OnQueueMatchStateChanged(snapshot:any)
+    {
+        if(snapshot == null)
+            return;
+        // 排队等待期间保留战局详情供玩家继续查看；只有真正匹配到座位、即将
+        // 进入房间流程时才关闭，避免挡住后续预坐和带入窗口。
+        if(snapshot.status == "assigning" || snapshot.status == "switching" || snapshot.status == "pre_sitting")
+            UIManager.getInstance().closePanelByName(this.node.name);
     }
 
     public onToggleClick(toggle:cc.Toggle)
@@ -237,14 +295,14 @@ export default class panelRecordInfo extends UIPanelViewBase {
 
        if(Number(this.strGameJiangChi)>0)
        {
-            Tool.GetChild(this.node,"扩展/奖池").color = cc.Color.RED;
+            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(74, 211, 218, 255);
        }
        else if(Number(this.strGameJiangChi) == 0)
        {
-            Tool.GetChild(this.node,"扩展/奖池").color = cc.Color.WHITE;
+            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(205, 226, 235, 255);
        }
        else{
-            Tool.GetChild(this.node,"扩展/奖池").color = cc.Color.GREEN;
+            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(112, 172, 191, 255);
        }
        
        //更新排行
@@ -357,16 +415,17 @@ export default class panelRecordInfo extends UIPanelViewBase {
         if (Number(strScore) > 0)
         {
             node.getChildByName("输赢").getComponent(cc.Label).string = "+" + this.CheckSmallPlay(strScore);
-            node.getChildByName("输赢").color = cc.Color.RED;            
+            node.getChildByName("输赢").color = cc.color(74, 211, 218, 255);
         }
         else if (Number(strScore) < 0)
         {
             node.getChildByName("输赢").getComponent(cc.Label).string = this.CheckSmallPlay(strScore);;
-            node.getChildByName("输赢").color = cc.color(21, 255, 139, 255);
+            node.getChildByName("输赢").color = cc.color(88, 178, 167, 255);
         }
         else
         {
-            node.getChildByName("输赢").getComponent(cc.Label).string = this.CheckSmallPlay(strScore);;            
+            node.getChildByName("输赢").getComponent(cc.Label).string = this.CheckSmallPlay(strScore);;
+            node.getChildByName("输赢").color = cc.color(205, 226, 235, 255);
         }
 
         //惩罚问题
