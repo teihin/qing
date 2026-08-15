@@ -91,6 +91,7 @@ export default class panelGameView extends UIPanelViewBase {
     private roomInviteRingNode:cc.Node = null;
     private roomInviteSkeleton:sp.Skeleton = null;
     private roomInviteAnimationRunning:boolean = false;
+    private roomReadyArtNode:cc.Node = null;
 
     onEnable(){
        // Debug.Error("进入enable")
@@ -101,6 +102,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         this.BindQueueMatchUI();
         this.BindRoomInviteUI();
+        this.BindRoomReadyBreathing();
 
 
 
@@ -688,6 +690,13 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "排队")
         {
+            // 入口显隐可能刚好遇到起立回包与PlayerList交错；点击时仍以
+            // 当前座位映射复核一次，避免本局仍在座位上的玩家打开排队。
+            if(this.IsSelfActuallySeated())
+            {
+                this.RefreshQueueEntryVisibility(true);
+                return;
+            }
             this.OpenQueuePanel();
         }
         else if(button.node.name === "一键邀请")
@@ -1971,7 +1980,9 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(param.indexOf("起立_事件") >= 0 && nCode == 0x200)
         {
-            this.RefreshQueueEntryVisibility(false);
+            // 起立成功只代表服务器接受请求；牌局进行中本人仍可能保留在本局
+            // 座位，不能在PlayerList确认前直接按“已经不在座位”显示排队入口。
+            this.RefreshQueueEntryVisibility(this.IsSelfActuallySeated());
             this.RefreshRoomInviteEntry();
         }
     }
@@ -3062,10 +3073,35 @@ export default class panelGameView extends UIPanelViewBase {
         this.ResizeQueueOverlay();
     }
 
+    /** “8L 游戏已就绪”只做克制的缩放与明暗呼吸，不改变位置和显隐逻辑。 */
+    private BindRoomReadyBreathing()
+    {
+        this.roomReadyArtNode = Tool.GetChild(this.node, "等待开局提示/房间已就绪美术字");
+        if(this.roomReadyArtNode == null || !cc.isValid(this.roomReadyArtNode))
+            return;
+
+        this.roomReadyArtNode.stopAllActions();
+        this.roomReadyArtNode.setScale(1);
+        this.roomReadyArtNode.opacity = 238;
+        let breatheIn = cc.spawn(
+            cc.scaleTo(1.2, 1.025).easing(cc.easeSineInOut()),
+            cc.fadeTo(1.2, 255).easing(cc.easeSineInOut())
+        );
+        let breatheOut = cc.spawn(
+            cc.scaleTo(1.2, 1).easing(cc.easeSineInOut()),
+            cc.fadeTo(1.2, 238).easing(cc.easeSineInOut())
+        );
+        this.roomReadyArtNode.runAction(cc.repeatForever(cc.sequence(breatheIn, breatheOut)));
+    }
+
     private RefreshQueueEntryVisibility(isSelfSeated:boolean)
     {
         if(this.queueEntryNode == null || !cc.isValid(this.queueEntryNode))
             return;
+        // false只能作为“可能未坐下”，真正显示前还要以当前PlayerList映射
+        // 复核；true仍可供坐下/预坐回包提前隐藏入口，保持原有安全行为。
+        if(!isSelfSeated && this.IsSelfActuallySeated())
+            isSelfSeated = true;
         let shouldShow = this.IsQueueSupportedRoom() && !isSelfSeated;
         this.queueEntryNode.active = shouldShow;
         if(shouldShow && this.queueEntrySkeleton != null && cc.isValid(this.queueEntrySkeleton))
@@ -3084,6 +3120,19 @@ export default class panelGameView extends UIPanelViewBase {
         }
         if(!shouldShow && (this.gameLogic == null || this.gameLogic.strGameState != "end"))
             this.CloseQueuePanel();
+    }
+
+    private IsSelfActuallySeated():boolean
+    {
+        if(this.gameLogic == null || !cc.isValid(this.gameLogic.node))
+            return true;
+        let account = GameDataManager.getAccount();
+        if(account == null || account.guuid == null)
+            return true;
+        let selfPlayer = this.gameLogic.GetPlayerCtlByID(0);
+        if(selfPlayer == null || selfPlayer.info == null)
+            return true;
+        return selfPlayer.info.strUserID == account.guuid.toString();
     }
 
     private IsQueueSupportedRoom():boolean
@@ -3143,14 +3192,18 @@ export default class panelGameView extends UIPanelViewBase {
             return false;
         if(this.ResolveQueueReferenceRoomID() <= 0)
             return false;
-        if(QueueMatchManager.getInstance().isHandlingRoomNavigation())
+        let queueManager = QueueMatchManager.getInstance();
+        if(queueManager.isHandlingRoomNavigation())
             return false;
+
+        // 已经处于排队等待/取消中的玩家再次点击战绩页入口，是查看状态，
+        // 不再套用“是否允许发起一次新排队”的座位和结算条件。
+        if(queueManager.getSnapshot().queueActive)
+            return true;
 
         // 观战玩家沿用原排队入口条件；已经坐下的玩家只允许在本局结束后
         // 从战局详情进入排队，防止牌局进行中借此绕过座位保护。
-        let selfPlayer = this.gameLogic.GetPlayerCtlByID(0);
-        let isSelfSeated = selfPlayer != null && selfPlayer.info != null &&
-            selfPlayer.info.strUserID == account.guuid;
+        let isSelfSeated = this.IsSelfActuallySeated();
         return !isSelfSeated || this.gameLogic.strGameState == "end";
     }
 
@@ -3158,9 +3211,14 @@ export default class panelGameView extends UIPanelViewBase {
     {
         if(!this.CanOpenQueuePanelFromRecordInfo())
             return false;
-        let currentRoomID = Number(GameDataManager.getAccount().roomID);
-        if(isFinite(currentRoomID) && currentRoomID > 0)
-            this.queueRoomLeaveConfirmed = false;
+        // 查看既有排队时保留已经完成的退房确认；只有准备发起新申请才根据
+        // Account当前房间重新初始化，避免取消后无法再次按原房间排队。
+        if(!QueueMatchManager.getInstance().getSnapshot().queueActive)
+        {
+            let currentRoomID = Number(GameDataManager.getAccount().roomID);
+            if(isFinite(currentRoomID) && currentRoomID > 0)
+                this.queueRoomLeaveConfirmed = false;
+        }
         this.OpenQueuePanel(true);
         return true;
     }
@@ -3199,9 +3257,12 @@ export default class panelGameView extends UIPanelViewBase {
         // 从可见座位状态移除，但Account仍属于原房间；此时必须先完整退房。
         if(this.queueOpenedFromRecordInfo || (this.gameLogic != null && this.gameLogic.strGameState == "end"))
             return this.BeginQueueApplyAfterRoomLeave(account);
-        let selfPlayer = this.gameLogic == null ? null : this.gameLogic.GetPlayerCtlByID(0);
-        let isSelfSeated = selfPlayer != null && selfPlayer.info != null &&
-            selfPlayer.info.strUserID == account.guuid;
+        if(this.gameLogic == null || !cc.isValid(this.gameLogic.node))
+        {
+            KBEngine.Event.fire("QueueMatchLeaveState", false, "房间状态同步中，请稍后重试");
+            return false;
+        }
+        let isSelfSeated = this.IsSelfActuallySeated();
         if(!isSelfSeated)
             return manager.requestApply(referenceRoomID);
         if(this.gameLogic.strGameState != "end")

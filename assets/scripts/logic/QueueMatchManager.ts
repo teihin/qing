@@ -534,6 +534,11 @@ export default class QueueMatchManager extends cc.Component {
                     this.message = payload.message == null ? "已进入排队" : payload.message.toString();
                 }
             }
+            else if(this.isAlreadyQueuedPayload(payload))
+            {
+                shouldRefreshList = true;
+                this.restoreExistingQueue(payload);
+            }
             else
             {
                 this.queueActive = false;
@@ -612,6 +617,15 @@ export default class QueueMatchManager extends cc.Component {
 
     private handleCommandFailure(command:QueueCommand, payload:any, nCode:number)
     {
+        // 服务端已存在排队记录但客户端因重连/迟到回包尚未恢复时，重复申请
+        // 可能以错误码返回“已经排队”。这是服务端权威状态，恢复为queued后
+        // 玩家才能进入详情查看并取消，不能继续表现成申请失败。
+        if(command == "apply" && this.isAlreadyQueuedPayload(payload))
+        {
+            this.restoreExistingQueue(payload);
+            this.emitState();
+            return;
+        }
         if(command == "apply")
         {
             this.queueActive = false;
@@ -623,6 +637,27 @@ export default class QueueMatchManager extends cc.Component {
         }
         this.message = this.payloadMessage(payload, this.serverError(nCode, "排队操作失败"));
         this.emitState();
+    }
+
+    private isAlreadyQueuedPayload(payload:any):boolean
+    {
+        if(payload == null)
+            return false;
+        let status = payload.status == null ? "" : payload.status.toString().toLowerCase();
+        if(status == "queued")
+            return true;
+        let message = this.payloadMessage(payload, "").replace(/\s+/g, "").toLowerCase();
+        return message.indexOf("已经排队") >= 0 || message.indexOf("已在排队") >= 0 ||
+            message.indexOf("正在排队") >= 0 || message.indexOf("alreadyqueued") >= 0;
+    }
+
+    private restoreExistingQueue(payload:any)
+    {
+        this.queueActive = true;
+        this.status = "queued";
+        this.message = this.payloadMessage(payload, "已在排队，可查看状态或取消排队");
+        // 当前申请命令已经结束，再查询一次权威顺位和人数，不重复提交申请。
+        this.scheduleOnce(()=>this.requestQuery(true), 0.1);
     }
 
     private applyQueryPayload(payload:any)

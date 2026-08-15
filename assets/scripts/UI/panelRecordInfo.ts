@@ -116,14 +116,16 @@ export default class panelRecordInfo extends UIPanelViewBase {
         else if(button.node.name === "排队")
         {
             let gameView = this.GetActiveGameView();
-            if(gameView == null || !gameView.CanOpenQueuePanelFromRecordInfo())
+            let snapshot = QueueMatchManager.getInstance().getSnapshot();
+            // 已经排队时这里是“查看排队状态”入口，不应再按新申请资格拦截。
+            let canOpen = gameView != null && (snapshot.queueActive || gameView.CanOpenQueuePanelFromRecordInfo());
+            if(!canOpen || !gameView.OpenQueuePanelFromRecordInfo())
             {
-                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "当前状态不能申请排队");
+                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover,
+                    snapshot.queueActive ? "排队状态正在切换，请稍后查看" : "当前状态不能申请排队");
                 this.RefreshQueueButtonVisibility();
                 return;
             }
-
-            gameView.OpenQueuePanelFromRecordInfo();
         }
         else if(button.node.name === "首页")
         {
@@ -169,6 +171,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
     {
         if(snapshot == null)
             return;
+        this.RefreshQueueButtonVisibility();
         // 排队等待期间保留战局详情供玩家继续查看；只有真正匹配到座位、即将
         // 进入房间流程时才关闭，避免挡住后续预坐和带入窗口。
         if(snapshot.status == "assigning" || snapshot.status == "switching" || snapshot.status == "pre_sitting")
