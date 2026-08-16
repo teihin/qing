@@ -8,6 +8,7 @@ export interface SessionUser {
   roleCode: string;
   roleName: string;
   isSuper: boolean;
+  isProtectedRoot: boolean;
 }
 
 export interface ModuleItem {
@@ -94,6 +95,29 @@ export interface GameRewardPoolState {
   lastUpdatedBy: string;
   lastUpdatedAt: string | null;
   unexpectedKeys: string[];
+}
+
+export interface RewardPoolControlItem {
+  key: string;
+  label: string;
+  baseRewardRate: number | null;
+  tierNoRewardRate: number;
+  estimatedActualRewardRate: number | null;
+  platformRetentionYuan: number | null;
+}
+
+export interface RewardPoolControlValues {
+  rewardRates: Record<string, number>;
+  globalNoRewardRate: number;
+  tierNoRewardRates: Record<string, number>;
+  platformRetentionYuan: Record<string, number>;
+}
+
+export interface GameRewardPoolControlState {
+  items: RewardPoolControlItem[];
+  globalNoRewardRate: number;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string | null;
 }
 
 export interface BannedPlayerItem {

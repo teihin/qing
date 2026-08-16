@@ -46,15 +46,15 @@ const dashboardGameMetricsQuery = `SELECT
    WHERE lasttime >= ? AND lasttime < ?)`
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, p principal) {
-	canSeeSuper := canSeeSuperFlag(p)
+	canSeeSuper := canSeeProtectedRootFlag(p)
 	var userCount, enabledUserCount, roleCount, moduleCount, todayAuditCount int64
 	err := s.db.QueryRowContext(r.Context(), `SELECT
-(SELECT COUNT(*) FROM mgr_user WHERE (? = 1 OR is_super = 0)),
-(SELECT COUNT(*) FROM mgr_user WHERE status = 'enabled' AND (? = 1 OR is_super = 0)),
+(SELECT COUNT(*) FROM mgr_user WHERE (? = 1 OR username <> 'admin999')),
+(SELECT COUNT(*) FROM mgr_user WHERE status = 'enabled' AND (? = 1 OR username <> 'admin999')),
 (SELECT COUNT(*) FROM mgr_role WHERE status = 'enabled'),
 (SELECT COUNT(*) FROM mgr_module WHERE status = 'enabled'),
 (SELECT COUNT(*) FROM mgr_audit_log audit_row
- WHERE audit_row.created_at >= CURDATE() AND (? = 1 OR `+nonSuperAuditVisibilitySQL+`))`,
+ WHERE audit_row.created_at >= CURDATE() AND (? = 1 OR `+nonRootAuditVisibilitySQL+`))`,
 		canSeeSuper, canSeeSuper, canSeeSuper).Scan(
 		&userCount, &enabledUserCount, &roleCount, &moduleCount, &todayAuditCount,
 	)
@@ -113,9 +113,9 @@ func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request, p princ
 	like := "%" + keyword + "%"
 	var total int64
 	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM mgr_audit_log audit_row
-WHERE (? = 1 OR `+nonSuperAuditVisibilitySQL+`)
+WHERE (? = 1 OR `+nonRootAuditVisibilitySQL+`)
   AND (? = '' OR audit_row.operator_name LIKE ? OR audit_row.action LIKE ? OR audit_row.target_id LIKE ?)`,
-		canSeeSuperFlag(p), keyword, like, like, like).Scan(&total); err != nil {
+		canSeeProtectedRootFlag(p), keyword, like, like, like).Scan(&total); err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取审计数量失败")
 		return
 	}
@@ -132,9 +132,9 @@ func (s *Server) queryAudits(r *http.Request, p principal, keyword string, page,
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 id, operator_name, action, target_type, target_id, result_code, result_message, ip, created_at
 FROM mgr_audit_log audit_row
-WHERE (? = 1 OR `+nonSuperAuditVisibilitySQL+`)
+WHERE (? = 1 OR `+nonRootAuditVisibilitySQL+`)
   AND (? = '' OR audit_row.operator_name LIKE ? OR audit_row.action LIKE ? OR audit_row.target_id LIKE ?)
-ORDER BY audit_row.id DESC LIMIT ? OFFSET ?`, canSeeSuperFlag(p), keyword, like, like, like, size, (page-1)*size)
+ORDER BY audit_row.id DESC LIMIT ? OFFSET ?`, canSeeProtectedRootFlag(p), keyword, like, like, like, size, (page-1)*size)
 	if err != nil {
 		return nil, err
 	}

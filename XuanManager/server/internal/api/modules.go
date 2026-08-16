@@ -26,7 +26,7 @@ type permissionRequest struct {
 	Status      string `json:"status"`
 }
 
-func (s *Server) handleListModules(w http.ResponseWriter, r *http.Request, _ principal) {
+func (s *Server) handleListModules(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, parent_id, code, name, route, icon, sort_order, visible, status
 FROM mgr_module ORDER BY COALESCE(parent_id, id), parent_id IS NOT NULL, sort_order, id`)
 	if err != nil {
@@ -40,6 +40,9 @@ FROM mgr_module ORDER BY COALESCE(parent_id, id), parent_id IS NOT NULL, sort_or
 		if err := rows.Scan(&item.ID, &item.ParentID, &item.Code, &item.Name, &item.Route, &item.Icon, &item.SortOrder, &item.Visible, &item.Status); err != nil {
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取模块数据失败")
 			return
+		}
+		if isSuperOnlyModuleID(item.ID) && !p.IsSuper {
+			continue
 		}
 		items = append(items, item)
 	}
@@ -75,6 +78,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, input.ParentID, input.Code, input.Name, input.
 func (s *Server) handleUpdateModule(w http.ResponseWriter, r *http.Request, p principal) {
 	id, ok := parseID(w, r)
 	if !ok {
+		return
+	}
+	if isSuperOnlyModuleID(id) && !p.IsSuper {
+		writeError(w, http.StatusNotFound, "MODULE_NOT_FOUND", "模块不存在")
 		return
 	}
 	var input moduleRequest
@@ -121,6 +128,9 @@ ORDER BY m.sort_order, p.id`)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取权限数据失败")
 			return
 		}
+		if isSuperOnlyModuleID(item.ModuleID) {
+			continue
+		}
 		items = append(items, item)
 	}
 	writeData(w, http.StatusOK, map[string]any{"items": items})
@@ -132,6 +142,10 @@ func (s *Server) handleCreatePermission(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	normalizePermission(&input)
+	if isSuperOnlyModuleID(input.ModuleID) && !p.IsSuper {
+		writeError(w, http.StatusNotFound, "MODULE_NOT_FOUND", "模块不存在")
+		return
+	}
 	if message := s.validatePermission(r, input, true); message != "" {
 		writeError(w, http.StatusBadRequest, "INVALID_PERMISSION", message)
 		return
@@ -157,11 +171,26 @@ func (s *Server) handleUpdatePermission(w http.ResponseWriter, r *http.Request, 
 	if !ok {
 		return
 	}
+	if !p.IsSuper {
+		var superOnly int
+		if err := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_permission WHERE id = ? AND module_id IN (?, ?)", id, roomMaintenanceModuleID, platformRevenueModuleID).Scan(&superOnly); err != nil {
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取操作权限失败")
+			return
+		}
+		if superOnly > 0 {
+			writeError(w, http.StatusNotFound, "PERMISSION_NOT_FOUND", "权限不存在")
+			return
+		}
+	}
 	var input permissionRequest
 	if !decodeJSON(w, r, &input) {
 		return
 	}
 	normalizePermission(&input)
+	if isSuperOnlyModuleID(input.ModuleID) && !p.IsSuper {
+		writeError(w, http.StatusNotFound, "MODULE_NOT_FOUND", "模块不存在")
+		return
+	}
 	if message := s.validatePermission(r, input, false); message != "" {
 		writeError(w, http.StatusBadRequest, "INVALID_PERMISSION", message)
 		return

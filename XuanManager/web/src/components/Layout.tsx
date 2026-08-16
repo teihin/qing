@@ -12,6 +12,7 @@ const iconText: Record<string, string> = {
   players: "玩",
   agents: "代",
   transactions: "账",
+  "platform-revenue": "收",
   "transaction-blacklist": "禁",
   "room-records": "绩",
   bans: "封",

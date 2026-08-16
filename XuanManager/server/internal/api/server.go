@@ -38,6 +38,7 @@ type Server struct {
 	logger              *slog.Logger
 	registrationLimiter *registrationRateLimiter
 	gameHTTPClient      httpDoer
+	platformRevenueSem  chan struct{}
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, principal)
@@ -55,6 +56,7 @@ func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) h
 		logger:              logger,
 		registrationLimiter: newRegistrationRateLimiter(10, 10*time.Minute),
 		gameHTTPClient:      &http.Client{Timeout: 6 * time.Second},
+		platformRevenueSem:  make(chan struct{}, 1),
 	}
 	s.routes()
 	return s.securityHeaders(s.mux)
@@ -86,6 +88,10 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/agents/{agentId}/children", s.authorized("game.agent.view", false, s.handleAgentChildren))
 	s.mux.Handle("GET /api/game/agents/{agentId}/bonuses", s.authorized("game.agent.view", false, s.handleAgentBonuses))
 	s.mux.Handle("GET /api/game/transactions", s.authorized("game.transaction.view", false, s.handleListTransactions))
+	s.mux.Handle("GET /api/game/platform-revenue/summary", s.authorized("game.platform_revenue.view", false, s.handlePlatformRevenueSummary))
+	s.mux.Handle("GET /api/game/platform-revenue/details", s.authorized("game.platform_revenue.view", false, s.handlePlatformRevenueDetails))
+	s.mux.Handle("GET /api/configuration/platform-revenue/summary", s.authorized("game.platform_revenue.view", false, s.handlePlatformRevenueSummary))
+	s.mux.Handle("GET /api/configuration/platform-revenue/details", s.authorized("game.platform_revenue.view", false, s.handlePlatformRevenueDetails))
 	s.mux.Handle("GET /api/game/transaction-blacklist", s.authorized("game.transaction_blacklist.view", false, s.handleGetTransactionBlacklist))
 	s.mux.Handle("POST /api/game/transaction-blacklist", s.authorized("game.transaction_blacklist.create", true, s.handleCreateTransactionBlacklist))
 	s.mux.Handle("PUT /api/game/transaction-blacklist/status", s.authorized("game.transaction_blacklist.update", true, s.handleUpdateTransactionBlacklistStatus))
@@ -99,10 +105,12 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/game/bans/{playerId}/unban", s.authorized("game.ban.remove", true, s.handleRemovePlayerBan))
 	s.mux.Handle("GET /api/game/anti-theft", s.authorized("game.anti_theft.view", false, s.handleListAntiTheftAccounts))
 	s.mux.Handle("POST /api/game/anti-theft/{playerId}/unbind", s.authorized("game.anti_theft.unbind", true, s.handleUnbindAntiTheftAccount))
-	s.mux.Handle("GET /api/admin/hall/rooms", s.authorized("game.room_maintenance.view", false, s.handleListCurrentRooms))
-	s.mux.Handle("GET /api/game/room-maintenance", s.authorized("game.room_maintenance.view", false, s.handleListCurrentRooms))
-	s.mux.Handle("POST /api/game/room-maintenance/dissolve-all", s.authorized("game.room_maintenance.dissolve_all", true, s.handleDissolveAllRooms))
-	s.mux.Handle("POST /api/game/room-maintenance/{roomId}/dissolve", s.authorized("game.room_maintenance.dissolve", true, s.handleDissolveRoom))
+	s.mux.Handle("GET /api/admin/hall/rooms", s.superAuthorized("game.room_maintenance.view", false, s.handleListCurrentRooms))
+	s.mux.Handle("GET /api/game/room-maintenance", s.superAuthorized("game.room_maintenance.view", false, s.handleListCurrentRooms))
+	s.mux.Handle("GET /api/game/room-maintenance/creation-control", s.superAuthorized("game.room_maintenance.view", false, s.handleGetRoomCreationControl))
+	s.mux.Handle("PUT /api/game/room-maintenance/creation-control", s.superAuthorized("game.room_maintenance.creation_control", true, s.handleUpdateRoomCreationControl))
+	s.mux.Handle("POST /api/game/room-maintenance/dissolve-all", s.superAuthorized("game.room_maintenance.dissolve_all", true, s.handleDissolveAllRooms))
+	s.mux.Handle("POST /api/game/room-maintenance/{roomId}/dissolve", s.superAuthorized("game.room_maintenance.dissolve", true, s.handleDissolveRoom))
 	s.mux.Handle("GET /api/configuration/announcement", s.authorized("configuration.announcement.view", false, s.handleGetGameAnnouncement))
 	s.mux.Handle("PUT /api/configuration/announcement", s.authorized("configuration.announcement.update", true, s.handleUpdateGameAnnouncement))
 	s.mux.Handle("GET /api/configuration/notifications", s.authorized("configuration.notification.view", false, s.handleListGameNotifications))
@@ -111,6 +119,8 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/configuration/notification-carousel", s.authorized("configuration.notification.carousel.update", true, s.handleUpdateNotificationCarousel))
 	s.mux.Handle("GET /api/configuration/reward-pools", s.authorized("configuration.reward_pool.view", false, s.handleGetRewardPools))
 	s.mux.Handle("PUT /api/configuration/reward-pools", s.authorized("configuration.reward_pool.update", true, s.handleUpdateRewardPools))
+	s.mux.Handle("GET /api/configuration/reward-pools/controls", s.authorized("configuration.reward_pool.view", false, s.handleGetRewardPoolControls))
+	s.mux.Handle("PUT /api/configuration/reward-pools/controls", s.authorized("configuration.reward_pool.update", true, s.handleUpdateRewardPoolControls))
 	s.mux.Handle("GET /api/configuration/payments", s.authorized("configuration.payment.view", false, s.handleGetPaymentConfiguration))
 	s.mux.Handle("PUT /api/configuration/payments", s.authorized("configuration.payment.update", true, s.handleUpdatePaymentConfiguration))
 	s.mux.Handle("GET /api/configuration/activities", s.authorized("configuration.activity.view", false, s.handleGetActivityConfiguration))
@@ -164,6 +174,16 @@ func (s *Server) authorized(permission string, mutate bool, next handlerFunc) ht
 	})
 }
 
+func (s *Server) superAuthorized(permission string, mutate bool, next handlerFunc) http.Handler {
+	return s.authorized(permission, mutate, func(w http.ResponseWriter, r *http.Request, p principal) {
+		if !p.IsSuper {
+			writeError(w, http.StatusForbidden, "SUPER_ADMIN_ONLY", "房间维护仅超级管理员可以使用")
+			return
+		}
+		next(w, r, p)
+	})
+}
+
 func (s *Server) authenticate(r *http.Request) (principal, error) {
 	cookie, err := r.Cookie(sessionCookie)
 	if err != nil || len(cookie.Value) != 64 {
@@ -184,7 +204,8 @@ WHERE sess.token_hash = ? AND sess.expires_at > NOW()
 	if err != nil {
 		return principal{}, err
 	}
-	p.IsSuper = isSuper
+	p.IsProtectedRoot = isProtectedRootIdentity(p.Username)
+	p.IsSuper = isEffectiveSuper(isSuper, p.RoleCode)
 	p.Permissions = map[string]bool{}
 	query := `SELECT p.code FROM mgr_permission p WHERE p.status = 'enabled'`
 	args := []any{}

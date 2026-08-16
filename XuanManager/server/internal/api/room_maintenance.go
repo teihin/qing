@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +69,21 @@ type dissolveRoomRequest struct {
 	Mode         string `json:"mode"`
 	Confirm      bool   `json:"confirm"`
 	ConfirmScope string `json:"confirmScope"`
+}
+
+type dissolveRoomResponse struct {
+	Status         string `json:"status"`
+	Mode           string `json:"mode"`
+	RoomID         int64  `json:"roomId,omitempty"`
+	CommandSent    bool   `json:"commandSent"`
+	Verified       bool   `json:"verified"`
+	RoomExists     bool   `json:"roomExists"`
+	RoomStatus     string `json:"roomStatus,omitempty"`
+	TargetCount    int    `json:"targetCount,omitempty"`
+	AcceptedCount  int    `json:"acceptedCount,omitempty"`
+	RemainingCount int    `json:"remainingCount,omitempty"`
+	FailedCount    int    `json:"failedCount,omitempty"`
+	Message        string `json:"message"`
 }
 
 func (s *Server) handleListCurrentRooms(w http.ResponseWriter, r *http.Request, _ principal) {
@@ -303,41 +320,268 @@ func validateDissolveRequest(input dissolveRoomRequest, all bool) error {
 }
 
 func (s *Server) executeRoomDissolve(w http.ResponseWriter, r *http.Request, p principal, roomID int64, mode string, before any, all bool) {
-	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
-	command := map[string]any{}
 	if all {
-		command["header"] = "强制_解散_全部房间_事件"
-	} else {
-		command["header"] = "强制_解散_事件"
-		command["room_id"] = strconv.FormatInt(roomID, 10)
+		s.executeAllRoomDissolve(ctx, w, r, p, mode, before)
+		return
 	}
-	if mode == "friendly" {
-		command["is_qiangzhi"] = 0
+	s.executeSingleRoomDissolve(ctx, w, r, p, roomID, mode, before)
+}
+
+func (s *Server) executeSingleRoomDissolve(ctx context.Context, w http.ResponseWriter, r *http.Request, p principal, roomID int64, mode string, fallbackBefore any) {
+	room, found, err := s.findActiveHallRoom(ctx, roomID)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "ROOM_STATE_UNAVAILABLE", "执行前无法核对 KB 实时房间状态，请稍后重试")
+		return
 	}
-	commandBody, _ := json.Marshal(command)
-	operationContext := gameOperationContext("room-dissolve")
-	result, err := s.callGameCommand(ctx, "异步_执行_房间_命令", map[string]any{
-		"room_id": roomID, "cmd": string(commandBody), "context": operationContext,
-	})
-	target := strconv.FormatInt(roomID, 10)
-	if all {
-		target = "all"
+	if !found {
+		writeError(w, http.StatusNotFound, "ROOM_NOT_ACTIVE", "该房间已不在 KB 大厅实时房间列表中")
+		return
 	}
-	requestAudit := map[string]any{"roomId": roomID, "scope": target, "mode": mode, "context": operationContext}
-	if err != nil || (result.RetCode != 512 && result.RetCode != 1280) {
+	before := any(room)
+	if room.RoomID == 0 {
+		before = fallbackBefore
+	}
+	operationContext := gameOperationContext(roomDissolveContextAction(mode))
+	result, err := s.sendRoomDissolveCommand(ctx, roomID, mode, operationContext)
+	requestAudit := map[string]any{"roomId": roomID, "scope": strconv.FormatInt(roomID, 10), "mode": mode, "cmd": roomDissolveCommand(mode), "context": operationContext}
+	if err != nil {
 		code := result.RetCode
-		if err != nil {
-			code = 502
+		if code == 0 {
+			code = http.StatusBadGateway
 		}
-		s.audit(ctx, &p, "game.room.dissolve", "game_room", target, requestAudit, before, nil, code, "游戏服务拒绝房间解散命令", clientIP(r))
+		s.audit(ctx, &p, "game.room.dissolve", "game_room", strconv.FormatInt(roomID, 10), requestAudit, before, nil, code, "游戏服务拒绝房间解散命令", clientIP(r))
 		writeError(w, http.StatusBadGateway, "ROOM_DISSOLVE_FAILED", "游戏服务未接受房间解散命令")
 		return
 	}
-	message := "指定房间的解散命令已提交；游戏服务未提供结果回读，请在客户端确认房间已消失"
-	if all {
-		message = "全部房间的解散命令已提交；游戏服务未提供结果回读，请在客户端确认"
+
+	remaining, verifyErr := s.verifyRoomsDissolved(ctx, []int64{roomID})
+	response := dissolveRoomResponse{Status: "pending", Mode: mode, RoomID: roomID, CommandSent: true, Verified: false, RoomExists: true}
+	statusCode := http.StatusAccepted
+	if verifyErr != nil {
+		response.Status = "verification_unavailable"
+		response.Message = "解散命令已发送，但 KB 实时房间列表复查失败，当前不能确认解散成功"
+	} else if len(remaining) == 0 {
+		response.Status = "dissolved"
+		response.Verified = true
+		response.RoomExists = false
+		response.Message = "已通过 KB 实时房间列表确认房间解散"
+		statusCode = http.StatusOK
+	} else {
+		response.RoomStatus = displayHallRoomStatus(remaining[0])
+		response.Message = "解散命令已发送，但复查时房间仍存在，当前不能确认解散成功"
 	}
-	s.audit(ctx, &p, "game.room.dissolve", "game_room", target, requestAudit, before, map[string]any{"status": "accepted", "retCode": result.RetCode}, 0, message, clientIP(r))
-	writeData(w, http.StatusAccepted, map[string]any{"status": "accepted", "mode": mode, "roomId": roomID, "message": message})
+	after := map[string]any{"status": response.Status, "retCode": result.RetCode, "commandSent": true, "verified": response.Verified, "roomExists": response.RoomExists, "roomStatus": response.RoomStatus}
+	s.audit(ctx, &p, "game.room.dissolve", "game_room", strconv.FormatInt(roomID, 10), requestAudit, before, after, 0, response.Message, clientIP(r))
+	writeData(w, statusCode, response)
+}
+
+func (s *Server) executeAllRoomDissolve(ctx context.Context, w http.ResponseWriter, r *http.Request, p principal, mode string, fallbackBefore any) {
+	rooms, err := s.fetchAllActiveHallRooms(ctx)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "ROOM_STATE_UNAVAILABLE", "执行前无法读取 KB 实时房间列表，未发送任何解散命令")
+		return
+	}
+	if len(rooms) == 0 {
+		writeData(w, http.StatusOK, dissolveRoomResponse{Status: "no_active_rooms", Mode: mode, Verified: true, RoomExists: false, Message: "当前没有需要解散的活跃房间"})
+		return
+	}
+
+	roomIDs := make([]int64, 0, len(rooms))
+	acceptedIDs := make([]int64, 0, len(rooms))
+	failedIDs := make([]int64, 0)
+	retCodes := make(map[string]int, len(rooms))
+	for _, room := range rooms {
+		roomIDs = append(roomIDs, room.RoomID)
+		operationContext := gameOperationContext(roomDissolveContextAction(mode))
+		result, sendErr := s.sendRoomDissolveCommand(ctx, room.RoomID, mode, operationContext)
+		retCodes[strconv.FormatInt(room.RoomID, 10)] = result.RetCode
+		if sendErr != nil {
+			failedIDs = append(failedIDs, room.RoomID)
+			continue
+		}
+		acceptedIDs = append(acceptedIDs, room.RoomID)
+	}
+
+	requestAudit := map[string]any{"scope": "all", "mode": mode, "cmd": roomDissolveCommand(mode), "roomIds": roomIDs}
+	before := any(rooms)
+	if len(rooms) == 0 {
+		before = fallbackBefore
+	}
+	if len(acceptedIDs) == 0 {
+		message := "游戏服务未接受任何房间解散命令"
+		after := map[string]any{"status": "failed", "retCodes": retCodes, "failedRoomIds": failedIDs}
+		s.audit(ctx, &p, "game.room.dissolve", "game_room", "all", requestAudit, before, after, http.StatusBadGateway, message, clientIP(r))
+		writeError(w, http.StatusBadGateway, "ROOM_DISSOLVE_FAILED", message)
+		return
+	}
+
+	remaining, verifyErr := s.verifyRoomsDissolved(ctx, acceptedIDs)
+	response := dissolveRoomResponse{
+		Status: "pending", Mode: mode, CommandSent: true, Verified: false, RoomExists: true,
+		TargetCount: len(roomIDs), AcceptedCount: len(acceptedIDs), RemainingCount: len(remaining), FailedCount: len(failedIDs),
+	}
+	statusCode := http.StatusAccepted
+	if verifyErr != nil {
+		response.Status = "verification_unavailable"
+		response.Message = fmt.Sprintf("已向 %d 个房间发送命令，但实时列表复查失败，当前不能确认全部解散成功", len(acceptedIDs))
+	} else if len(remaining) == 0 && len(failedIDs) == 0 {
+		response.Status = "dissolved"
+		response.Verified = true
+		response.RoomExists = false
+		response.Message = fmt.Sprintf("已通过 KB 实时房间列表确认 %d 个房间全部解散", len(acceptedIDs))
+		statusCode = http.StatusOK
+	} else {
+		response.RoomExists = len(remaining) > 0 || len(failedIDs) > 0
+		response.Message = fmt.Sprintf("命令已发送：目标 %d 个，已接受 %d 个，复查仍存在 %d 个，发送失败 %d 个；当前不能确认全部解散成功", len(roomIDs), len(acceptedIDs), len(remaining), len(failedIDs))
+	}
+	after := map[string]any{"status": response.Status, "retCodes": retCodes, "acceptedRoomIds": acceptedIDs, "remainingRoomIds": hallRoomIDs(remaining), "failedRoomIds": failedIDs, "verified": response.Verified}
+	s.audit(ctx, &p, "game.room.dissolve", "game_room", "all", requestAudit, before, after, 0, response.Message, clientIP(r))
+	writeData(w, statusCode, response)
+}
+
+func roomDissolveCommand(mode string) string {
+	if mode == "friendly" {
+		return "申请_解散_事件"
+	}
+	return "强制_解散_事件"
+}
+
+func roomDissolveContextAction(mode string) string {
+	if mode == "friendly" {
+		return "room-friendly-dissolve"
+	}
+	return "room-force-dissolve"
+}
+
+func (s *Server) sendRoomDissolveCommand(ctx context.Context, roomID int64, mode, operationContext string) (gameCommandResponse, error) {
+	result, err := s.callGameCommand(ctx, "异步_执行_房间_命令", map[string]any{
+		"room_id": roomID,
+		"cmd":     roomDissolveCommand(mode),
+		"context": operationContext,
+	})
+	if err != nil {
+		return result, err
+	}
+	if result.RetCode != 512 && result.RetCode != 1280 {
+		return result, fmt.Errorf("room dissolve ret_code %d", result.RetCode)
+	}
+	return result, nil
+}
+
+func (s *Server) findActiveHallRoom(ctx context.Context, roomID int64) (hallRoomItem, bool, error) {
+	rooms, err := s.fetchAllActiveHallRooms(ctx)
+	if err != nil {
+		return hallRoomItem{}, false, err
+	}
+	for _, room := range rooms {
+		if room.RoomID == roomID && !hallRoomClosed(room) {
+			return room, true, nil
+		}
+	}
+	return hallRoomItem{}, false, nil
+}
+
+func (s *Server) fetchAllActiveHallRooms(ctx context.Context) ([]hallRoomItem, error) {
+	const maxPages = 50
+	roomsByID := make(map[int64]hallRoomItem)
+	total := 0
+	for page := 0; page < maxPages; page++ {
+		result, err := s.callGameCommand(ctx, "查询_大厅_所有房间", map[string]any{
+			"page": page, "count": hallRoomMaxPageSize, "context": gameOperationContext("room-dissolve-verify"),
+		})
+		if err != nil {
+			return nil, err
+		}
+		if result.RetCode != 512 {
+			return nil, fmt.Errorf("hall room list ret_code %d", result.RetCode)
+		}
+		payload, err := decodeHallRoomListResult(result.RetResult, page)
+		if err != nil {
+			return nil, err
+		}
+		if err := validateHallRoomList(payload); err != nil {
+			return nil, err
+		}
+		if page == 0 {
+			total = payload.Count
+		}
+		for _, room := range payload.Result {
+			roomsByID[room.RoomID] = room
+		}
+		if len(payload.Result) == 0 || len(roomsByID) >= total {
+			break
+		}
+	}
+	if total > len(roomsByID) {
+		return nil, errors.New("大厅实时房间分页读取不完整")
+	}
+	rooms := make([]hallRoomItem, 0, len(roomsByID))
+	for _, room := range roomsByID {
+		if !hallRoomClosed(room) {
+			rooms = append(rooms, room)
+		}
+	}
+	sort.Slice(rooms, func(i, j int) bool { return rooms[i].RoomID < rooms[j].RoomID })
+	return rooms, nil
+}
+
+func (s *Server) verifyRoomsDissolved(ctx context.Context, targetIDs []int64) ([]hallRoomItem, error) {
+	targets := make(map[int64]struct{}, len(targetIDs))
+	for _, roomID := range targetIDs {
+		targets[roomID] = struct{}{}
+	}
+	delays := []time.Duration{0, 400 * time.Millisecond, 800 * time.Millisecond, 1200 * time.Millisecond, 1600 * time.Millisecond}
+	var remaining []hallRoomItem
+	for _, delay := range delays {
+		if delay > 0 {
+			timer := time.NewTimer(delay)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return remaining, ctx.Err()
+			case <-timer.C:
+			}
+		}
+		rooms, err := s.fetchAllActiveHallRooms(ctx)
+		if err != nil {
+			return remaining, err
+		}
+		remaining = remaining[:0]
+		for _, room := range rooms {
+			if _, ok := targets[room.RoomID]; ok && !hallRoomClosed(room) {
+				remaining = append(remaining, room)
+			}
+		}
+		if len(remaining) == 0 {
+			return nil, nil
+		}
+	}
+	return remaining, nil
+}
+
+func hallRoomClosed(room hallRoomItem) bool {
+	status := strings.ToLower(strings.TrimSpace(room.RoomStatus + " " + room.GameStatus))
+	for _, marker := range []string{"已关闭", "关闭完成", "已解散", "解散完成", "closed", "dismissed", "dissolved"} {
+		if strings.Contains(status, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func displayHallRoomStatus(room hallRoomItem) string {
+	if status := strings.TrimSpace(room.RoomStatus); status != "" {
+		return status
+	}
+	return strings.TrimSpace(room.GameStatus)
+}
+
+func hallRoomIDs(rooms []hallRoomItem) []int64 {
+	result := make([]int64, 0, len(rooms))
+	for _, room := range rooms {
+		result = append(result, room.RoomID)
+	}
+	return result
 }

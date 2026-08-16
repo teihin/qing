@@ -128,13 +128,19 @@ func TestApplyPlayerOptimizationVisibilityHidesSuperAttribution(t *testing.T) {
 	configuredBy, configuredSource, configuredAt := "admin999", "", "2026-08-10 12:00:00"
 	applyPlayerOptimizationVisibility(principal{}, &configuredBy, &configuredSource, &configuredAt, true, "648425")
 	if configuredBy != "" || configuredSource != "hidden" || configuredAt != "" {
-		t.Fatalf("non-super attribution leaked: %q %q %q", configuredBy, configuredSource, configuredAt)
+		t.Fatalf("protected-root attribution leaked: %q %q %q", configuredBy, configuredSource, configuredAt)
 	}
 
 	configuredBy, configuredSource, configuredAt = "admin999", "", "2026-08-10 12:00:00"
 	applyPlayerOptimizationVisibility(principal{IsSuper: true}, &configuredBy, &configuredSource, &configuredAt, true, "648425")
+	if configuredBy != "" || configuredSource != "hidden" || configuredAt != "" {
+		t.Fatalf("super role saw protected-root attribution: %q %q %q", configuredBy, configuredSource, configuredAt)
+	}
+
+	configuredBy, configuredSource, configuredAt = "admin999", "", "2026-08-10 12:00:00"
+	applyPlayerOptimizationVisibility(principal{IsSuper: true, IsProtectedRoot: true}, &configuredBy, &configuredSource, &configuredAt, true, "648425")
 	if configuredBy != "admin999" || configuredSource != "admin" || configuredAt == "" {
-		t.Fatalf("super attribution was hidden from super: %q %q %q", configuredBy, configuredSource, configuredAt)
+		t.Fatalf("protected-root attribution was hidden from itself: %q %q %q", configuredBy, configuredSource, configuredAt)
 	}
 }
 
@@ -170,9 +176,13 @@ func TestBuildPlayerOptimizationHistoryWhereHidesSuperActions(t *testing.T) {
 		t.Fatalf("ordinary history args = %#v", args)
 	}
 
-	_, superArgs := buildPlayerOptimizationHistoryWhere(playerOptimizationHistoryFilter{}, principal{IsSuper: true})
-	if len(superArgs) != 5 || superArgs[4] != 1 {
-		t.Fatalf("super history args = %#v", superArgs)
+	_, superRoleArgs := buildPlayerOptimizationHistoryWhere(playerOptimizationHistoryFilter{}, principal{IsSuper: true})
+	if len(superRoleArgs) != 5 || superRoleArgs[4] != 0 {
+		t.Fatalf("super-role history args = %#v", superRoleArgs)
+	}
+	_, rootArgs := buildPlayerOptimizationHistoryWhere(playerOptimizationHistoryFilter{}, principal{IsSuper: true, IsProtectedRoot: true})
+	if len(rootArgs) != 5 || rootArgs[4] != 1 {
+		t.Fatalf("protected-root history args = %#v", rootArgs)
 	}
 }
 

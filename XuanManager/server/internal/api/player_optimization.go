@@ -152,7 +152,7 @@ COALESCE((SELECT log.operator_name FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
     AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
   ORDER BY log.id DESC LIMIT 1), ''),
-COALESCE((SELECT operator_user.is_super
+COALESCE((SELECT operator_user.username = 'admin999'
   FROM mgr_audit_log audit_row
   LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
   WHERE audit_row.target_type = 'game_player' AND audit_row.target_id = a.sm_guuid AND audit_row.result_code = 0
@@ -301,14 +301,14 @@ func buildPlayerOptimizationHistoryWhere(filter playerOptimizationHistoryFilter,
 	clauses := []string{
 		"audit_row.target_type = ?",
 		"audit_row.action IN (?, ?, ?)",
-		"(? = 1 OR " + nonSuperAuditVisibilitySQL + ")",
+		"(? = 1 OR " + nonRootAuditVisibilitySQL + ")",
 	}
 	args := []any{
 		"game_player",
 		"game.player_optimization.create",
 		"game.player_optimization.update",
 		"game.player_optimization.delete",
-		canSeeSuperFlag(p),
+		canSeeProtectedRootFlag(p),
 	}
 	if filter.Operation != "" {
 		clauses = append(clauses, "audit_row.action = ?")
@@ -470,9 +470,9 @@ OR EXISTS (SELECT 1 FROM mgr_audit_log operator_log
   WHERE operator_log.target_type = 'game_player' AND operator_log.target_id = a.sm_guuid AND operator_log.result_code = 0
     AND operator_log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
     AND (? = 1 OR NOT EXISTS (SELECT 1 FROM mgr_user hidden_super
-      WHERE hidden_super.is_super = 1 AND hidden_super.id = operator_log.operator_id))
+      WHERE hidden_super.username = 'admin999' AND hidden_super.id = operator_log.operator_id))
     AND operator_log.operator_name LIKE ?))`)
-		args = append(args, keyword, keyword, keyword, like, keyword, like, canSeeSuperFlag(p), like)
+		args = append(args, keyword, keyword, keyword, like, keyword, like, canSeeProtectedRootFlag(p), like)
 	}
 	if minChance != nil {
 		clauses = append(clauses, "a.sm_optimize01_chance >= ?")
@@ -676,7 +676,7 @@ COALESCE((SELECT log.operator_name FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
     AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
   ORDER BY log.id DESC LIMIT 1), ''),
-COALESCE((SELECT operator_user.is_super
+COALESCE((SELECT operator_user.username = 'admin999'
   FROM mgr_audit_log audit_row
   LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
   WHERE audit_row.target_type = 'game_player' AND audit_row.target_id = a.sm_guuid AND audit_row.result_code = 0
@@ -805,7 +805,7 @@ FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, target.PlayerID).Scan(
 		return lockedBefore, playerOptimizationState{}, err
 	}
 
-	after, err := s.readPlayerOptimizationState(ctx, target.PlayerID, principal{IsSuper: true})
+	after, err := s.readPlayerOptimizationState(ctx, target.PlayerID, principal{IsSuper: true, IsProtectedRoot: true})
 	if err != nil {
 		after = verified
 		after.LastConfiguredAt = time.Now().Format("2006-01-02 15:04:05")

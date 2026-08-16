@@ -58,7 +58,8 @@ WHERE id = ?`, p.ID)
 		writeError(w, http.StatusUnauthorized, "LOGIN_FAILED", "账号或密码错误，连续失败会暂时锁定账号")
 		return
 	}
-	p.IsSuper = isSuper
+	p.IsProtectedRoot = isProtectedRootIdentity(p.Username)
+	p.IsSuper = isEffectiveSuper(isSuper, p.RoleCode)
 
 	sessionToken, err := security.NewToken()
 	if err != nil {
@@ -136,7 +137,8 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, p principal) {
 	writeData(w, http.StatusOK, map[string]any{
 		"user": map[string]any{
 			"id": p.ID, "username": p.Username, "displayName": p.DisplayName,
-			"roleId": p.RoleID, "roleCode": p.RoleCode, "roleName": p.RoleName, "isSuper": p.IsSuper,
+			"roleId": p.RoleID, "roleCode": p.RoleCode, "roleName": p.RoleName,
+			"isSuper": p.IsSuper, "isProtectedRoot": p.IsProtectedRoot,
 		},
 		"permissions": permissionCodes,
 		"modules":     modules,
@@ -254,6 +256,9 @@ WHERE rp.role_id = ? AND p.status = 'enabled' AND p.action = 'view'`, p.RoleID)
 	}
 	result := make([]moduleItem, 0, len(all))
 	for _, item := range all {
+		if isSuperOnlyModuleID(item.ID) {
+			continue
+		}
 		if allowed[item.ID] {
 			result = append(result, item)
 		}

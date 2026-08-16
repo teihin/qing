@@ -3,15 +3,16 @@ package api
 import "time"
 
 type principal struct {
-	ID          int64
-	Username    string
-	DisplayName string
-	RoleID      int64
-	RoleCode    string
-	RoleName    string
-	IsSuper     bool
-	CSRFHash    string
-	Permissions map[string]bool
+	ID              int64
+	Username        string
+	DisplayName     string
+	RoleID          int64
+	RoleCode        string
+	RoleName        string
+	IsSuper         bool
+	IsProtectedRoot bool
+	CSRFHash        string
+	Permissions     map[string]bool
 }
 
 func (p principal) Can(code string) bool {

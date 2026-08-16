@@ -7,14 +7,14 @@ import (
 	"time"
 )
 
-// nonSuperAuditVisibilitySQL expects the audit table to be aliased as
-// audit_row. It hides both actions performed by a super administrator and
-// account actions whose target is a super administrator. The latter also
+// nonRootAuditVisibilitySQL expects the audit table to be aliased as
+// audit_row. It hides both actions performed by the protected root account and
+// account actions whose target is the protected root account. The latter also
 // covers failed-login audit rows, whose target_id is the submitted username.
-const nonSuperAuditVisibilitySQL = `NOT EXISTS (
+const nonRootAuditVisibilitySQL = `NOT EXISTS (
   SELECT 1
   FROM mgr_user hidden_super
-  WHERE hidden_super.is_super = 1
+  WHERE hidden_super.username = 'admin999'
     AND (
       hidden_super.id = audit_row.operator_id
       OR (
@@ -27,27 +27,31 @@ const nonSuperAuditVisibilitySQL = `NOT EXISTS (
     )
 )`
 
-func canSeeSuperFlag(p principal) int {
-	if p.IsSuper {
+func canSeeProtectedRootFlag(p principal) int {
+	return booleanFlag(p.IsProtectedRoot)
+}
+
+func booleanFlag(value bool) int {
+	if value {
 		return 1
 	}
 	return 0
 }
 
-func hideSuperUserFrom(p principal, isSuper bool) bool {
-	return isSuper && !p.IsSuper
+func hideSuperUserFrom(p principal, isProtectedRoot bool) bool {
+	return isProtectedRoot && !p.IsProtectedRoot
 }
 
 // latestAuditAttribution intentionally checks the latest successful action
-// before applying visibility. A non-super user gets no attribution when that
-// latest action belongs to a super administrator; it must not fall back to an
-// older ordinary administrator and misrepresent who made the current change.
+// before applying visibility. Any account other than admin999 gets no
+// attribution when that latest action belongs to admin999; it must not fall
+// back to an older administrator and misrepresent who made the current change.
 func (s *Server) latestAuditAttribution(ctx context.Context, action string, p principal) (string, *time.Time, error) {
 	var operatorName string
 	var createdAt time.Time
 	var operatorIsSuper bool
 	err := s.db.QueryRowContext(ctx, `SELECT
-audit_row.operator_name, audit_row.created_at, COALESCE(operator_user.is_super, 0)
+audit_row.operator_name, audit_row.created_at, COALESCE(operator_user.username = 'admin999', 0)
 FROM mgr_audit_log audit_row
 LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
 WHERE audit_row.action = ? AND audit_row.result_code = 0

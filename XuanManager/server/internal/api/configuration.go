@@ -295,8 +295,8 @@ func (s *Server) handleListGameNotifications(w http.ResponseWriter, r *http.Requ
 result_code, result_message, created_at
 FROM mgr_audit_log audit_row
 WHERE audit_row.action = 'game.notification.send'
-  AND (? = 1 OR `+nonSuperAuditVisibilitySQL+`)
-ORDER BY audit_row.id DESC LIMIT ?`, canSeeSuperFlag(p), limit)
+  AND (? = 1 OR `+nonRootAuditVisibilitySQL+`)
+ORDER BY audit_row.id DESC LIMIT ?`, canSeeProtectedRootFlag(p), limit)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "NOTIFICATION_HISTORY_FAILED", "读取通知记录失败")
 		return

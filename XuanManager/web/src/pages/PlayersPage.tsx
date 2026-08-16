@@ -55,7 +55,7 @@ function playerFiltersFromHash(): PlayerFilters {
 
 const balanceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PlayersPage({ can, isSuper, notify }: { can: (permission: string) => boolean; isSuper: boolean; notify: (message: string, kind?: "success" | "error") => void }) {
+export default function PlayersPage({ can, canViewSensitive, notify }: { can: (permission: string) => boolean; canViewSensitive: boolean; notify: (message: string, kind?: "success" | "error") => void }) {
   const [data, setData] = useState<PlayerResponse | null>(null);
   const [draft, setDraft] = useState<PlayerFilters>(playerFiltersFromHash);
   const [applied, setApplied] = useState<PlayerFilters>(playerFiltersFromHash);
@@ -191,7 +191,7 @@ export default function PlayersPage({ can, isSuper, notify }: { can: (permission
         )}
       </section>
 
-      {selected && <PlayerDetail player={selected} can={can} isSuper={isSuper} notify={notify} onClose={() => setSelected(null)} />}
+      {selected && <PlayerDetail player={selected} can={can} canViewSensitive={canViewSensitive} notify={notify} onClose={() => setSelected(null)} />}
       {adjusting && <BalanceAdjustmentModal player={adjusting} onClose={() => setAdjusting(null)} onDone={(result) => { setAdjusting(null); notify(result.message); void load(); }} />}
       {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
     </div>
@@ -255,7 +255,7 @@ function BalanceAdjustmentModal({ player, onClose, onDone }: { player: PlayerIte
 
 type PlayerDetailTab = "profile" | "finance" | "rooms";
 
-function PlayerDetail({ player, can, isSuper, notify, onClose }: { player: PlayerItem; can: (permission: string) => boolean; isSuper: boolean; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void }) {
+function PlayerDetail({ player, can, canViewSensitive, notify, onClose }: { player: PlayerItem; can: (permission: string) => boolean; canViewSensitive: boolean; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void }) {
   const [tab, setTab] = useState<PlayerDetailTab>("profile");
   const [finance, setFinance] = useState<TransactionResponse | null>(null);
   const [financePage, setFinancePage] = useState(1);
@@ -264,13 +264,13 @@ function PlayerDetail({ player, can, isSuper, notify, onClose }: { player: Playe
   const [roomPage, setRoomPage] = useState(1);
   const [roomLoading, setRoomLoading] = useState(false);
   const [sensitive, setSensitive] = useState<PlayerSensitiveInfo | null>(null);
-  const [sensitiveLoading, setSensitiveLoading] = useState(isSuper);
+  const [sensitiveLoading, setSensitiveLoading] = useState(canViewSensitive);
   const [sensitiveError, setSensitiveError] = useState("");
   const canViewFinance = can("game.transaction.view");
   const canViewRooms = can("game.room_record.view");
 
   const loadSensitive = useCallback(async () => {
-    if (!isSuper) return;
+    if (!canViewSensitive) return;
     setSensitiveLoading(true); setSensitiveError("");
     try {
       setSensitive(await api<PlayerSensitiveInfo>(`/api/game/players/${encodeURIComponent(player.playerId)}/sensitive`));
@@ -279,7 +279,7 @@ function PlayerDetail({ player, can, isSuper, notify, onClose }: { player: Playe
       setSensitiveError(message);
       notify(message, "error");
     } finally { setSensitiveLoading(false); }
-  }, [isSuper, notify, player.playerId]);
+  }, [canViewSensitive, notify, player.playerId]);
 
   const loadFinance = useCallback(async () => {
     if (!canViewFinance) return;
@@ -303,7 +303,7 @@ function PlayerDetail({ player, can, isSuper, notify, onClose }: { player: Playe
 
   useEffect(() => { if (tab === "finance") void loadFinance(); }, [loadFinance, tab]);
   useEffect(() => { if (tab === "rooms") void loadRooms(); }, [loadRooms, tab]);
-  useEffect(() => { if (tab === "profile" && isSuper && !sensitive && !sensitiveError) void loadSensitive(); }, [isSuper, loadSensitive, sensitive, sensitiveError, tab]);
+  useEffect(() => { if (tab === "profile" && canViewSensitive && !sensitive && !sensitiveError) void loadSensitive(); }, [canViewSensitive, loadSensitive, sensitive, sensitiveError, tab]);
 
   return (
     <Modal wide title={player.name || `玩家 ${player.playerId}`} eyebrow="PLAYER PROFILE" onClose={onClose}>
@@ -317,14 +317,14 @@ function PlayerDetail({ player, can, isSuper, notify, onClose }: { player: Playe
         <button type="button" className={tab === "finance" ? "is-active" : ""} disabled={!canViewFinance} onClick={() => setTab("finance")}><span>资金情况</span><small>{canViewFinance ? "完整金币流水" : "当前角色无权限"}</small></button>
         <button type="button" className={tab === "rooms" ? "is-active" : ""} disabled={!canViewRooms} onClick={() => setTab("rooms")}><span>房间战绩</span><small>{canViewRooms ? "参战房间与输赢" : "当前角色无权限"}</small></button>
       </nav>
-      {tab === "profile" && <PlayerProfileTab player={player} isSuper={isSuper} sensitive={sensitive} sensitiveLoading={sensitiveLoading} sensitiveError={sensitiveError} onRetrySensitive={() => void loadSensitive()} />}
+      {tab === "profile" && <PlayerProfileTab player={player} canViewSensitive={canViewSensitive} sensitive={sensitive} sensitiveLoading={sensitiveLoading} sensitiveError={sensitiveError} onRetrySensitive={() => void loadSensitive()} />}
       {tab === "finance" && canViewFinance && <PlayerFinanceTab player={player} data={finance} page={financePage} loading={financeLoading} onPage={setFinancePage} />}
       {tab === "rooms" && canViewRooms && <PlayerRoomsTab player={player} data={rooms} page={roomPage} loading={roomLoading} onPage={setRoomPage} />}
     </Modal>
   );
 }
 
-function PlayerProfileTab({ player, isSuper, sensitive, sensitiveLoading, sensitiveError, onRetrySensitive }: { player: PlayerItem; isSuper: boolean; sensitive: PlayerSensitiveInfo | null; sensitiveLoading: boolean; sensitiveError: string; onRetrySensitive: () => void }) {
+function PlayerProfileTab({ player, canViewSensitive, sensitive, sensitiveLoading, sensitiveError, onRetrySensitive }: { player: PlayerItem; canViewSensitive: boolean; sensitive: PlayerSensitiveInfo | null; sensitiveLoading: boolean; sensitiveError: string; onRetrySensitive: () => void }) {
   return <div className="player-profile-tab-content">
       <section className="player-detail-section">
         <h3>账号与游戏状态</h3>
@@ -363,7 +363,7 @@ function PlayerProfileTab({ player, isSuper, sensitive, sensitiveLoading, sensit
           <Detail label="备注" value={player.remark} wide />
         </div>
       </section>
-      {isSuper && <PlayerSensitiveSection player={player} data={sensitive} loading={sensitiveLoading} error={sensitiveError} onRetry={onRetrySensitive} />}
+      {canViewSensitive && <PlayerSensitiveSection player={player} data={sensitive} loading={sensitiveLoading} error={sensitiveError} onRetry={onRetrySensitive} />}
     </div>;
 }
 

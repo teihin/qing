@@ -53,7 +53,7 @@ func TestBuildBannedPlayerWhereIsParameterized(t *testing.T) {
 
 func TestBuildPlayerBanHistoryWhereUsesFiltersAndSuperVisibility(t *testing.T) {
 	where, args := buildPlayerBanHistoryWhere(playerBanHistoryFilter{Keyword: "565923", Operation: "unban", Result: "failed"}, principal{})
-	for _, expected := range []string{"audit_row.action IN (?, ?)", "audit_row.action = ?", "audit_row.result_code <> 0", nonSuperAuditVisibilitySQL} {
+	for _, expected := range []string{"audit_row.action IN (?, ?)", "audit_row.action = ?", "audit_row.result_code <> 0", nonRootAuditVisibilitySQL} {
 		if !strings.Contains(where, expected) {
 			t.Fatalf("history where missing %q: %s", expected, where)
 		}

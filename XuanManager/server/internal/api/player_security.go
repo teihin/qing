@@ -118,8 +118,8 @@ func (s *Server) handleGetPlayerSensitiveInfo(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
-	if !p.IsSuper {
-		writeError(w, http.StatusForbidden, "SUPER_ADMIN_REQUIRED", "只有超级管理员可以查看玩家 IP 和 GPS 定位")
+	if !p.IsProtectedRoot || !isProtectedRootIdentity(p.Username) {
+		writeError(w, http.StatusForbidden, "PROTECTED_ROOT_REQUIRED", "只有 admin999 可以查看玩家 IP 和 GPS 定位")
 		return
 	}
 
@@ -142,7 +142,7 @@ FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, playerID).Scan(&info.IP, &in
 	info.LocationMessage = locationMessage
 	w.Header().Set("Cache-Control", "no-store")
 	s.audit(r.Context(), &p, "game.player.sensitive.view", "game_player", playerID,
-		map[string]any{"fields": []string{"ip", "gps"}}, nil, nil, 0, "超级管理员查看玩家IP和GPS", clientIP(r))
+		map[string]any{"fields": []string{"ip", "gps"}}, nil, nil, 0, "admin999查看玩家IP和GPS", clientIP(r))
 	writeData(w, http.StatusOK, info)
 }
 

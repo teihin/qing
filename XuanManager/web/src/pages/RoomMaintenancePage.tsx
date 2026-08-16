@@ -5,6 +5,26 @@ import type { CurrentRoomItem, CurrentRoomsResponse } from "../types";
 
 type DissolveTarget = { roomId: number | null; all: boolean; mode: "force" | "friendly" };
 
+type DissolveResponse = {
+  status: "dissolved" | "pending" | "verification_unavailable" | "no_active_rooms";
+  message: string;
+  commandSent: boolean;
+  verified: boolean;
+  roomExists: boolean;
+  roomStatus?: string;
+  targetCount?: number;
+  acceptedCount?: number;
+  remainingCount?: number;
+  failedCount?: number;
+};
+
+type RoomCreationControlState = {
+  allowed: boolean;
+  status: string;
+  lastUpdatedBy: string;
+  lastUpdatedAt: string | null;
+};
+
 type CurrentRoomWireItem = Partial<CurrentRoomItem> & {
   room_id?: number;
   room_type?: string;
@@ -39,6 +59,10 @@ export default function RoomMaintenancePage({ can, notify }: { can: (permission:
   const [loadError, setLoadError] = useState("");
   const [loading, setLoading] = useState(true);
   const [target, setTarget] = useState<DissolveTarget | null>(null);
+  const [creationControl, setCreationControl] = useState<RoomCreationControlState | null>(null);
+  const [creationControlError, setCreationControlError] = useState("");
+  const [creationControlLoading, setCreationControlLoading] = useState(true);
+  const [creationControlTarget, setCreationControlTarget] = useState<boolean | null>(null);
 
   const load = useCallback(async (targetPage: number, targetPageSize: number, quiet = false) => {
     if (!quiet) setLoading(true);
@@ -57,9 +81,26 @@ export default function RoomMaintenancePage({ can, notify }: { can: (permission:
     }
   }, [notify]);
 
-  useEffect(() => { void load(1, 50); }, [load]);
+  const loadCreationControl = useCallback(async (quiet = false) => {
+    if (!quiet) setCreationControlLoading(true);
+    setCreationControlError("");
+    try {
+      setCreationControl(await api<RoomCreationControlState>("/api/game/room-maintenance/creation-control"));
+    } catch (reason) {
+      const message = reason instanceof ApiError ? reason.message : "服务器创建房间开关读取失败";
+      setCreationControl(null);
+      setCreationControlError(message);
+      if (!quiet) notify(message, "error");
+    } finally {
+      if (!quiet) setCreationControlLoading(false);
+    }
+  }, [notify]);
 
-  const refresh = useCallback(() => load(data?.page ?? 1, data?.pageSize ?? pageSize), [data, load, pageSize]);
+  useEffect(() => { void load(1, 50); void loadCreationControl(); }, [load, loadCreationControl]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([load(data?.page ?? 1, data?.pageSize ?? pageSize), loadCreationControl(true)]);
+  }, [data, load, loadCreationControl, pageSize]);
   const openSingleDissolve = (mode: "force" | "friendly", selectedRoomId?: number) => {
     const normalized = selectedRoomId ? String(selectedRoomId) : roomId.trim();
     if (!/^\d+$/.test(normalized) || Number(normalized) <= 0) {
@@ -72,6 +113,7 @@ export default function RoomMaintenancePage({ can, notify }: { can: (permission:
 
   const canDissolve = can("game.room_maintenance.dissolve");
   const canDissolveAll = can("game.room_maintenance.dissolve_all");
+  const canControlRoomCreation = can("game.room_maintenance.creation_control");
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.pageSize ?? pageSize)));
   const pagePeople = data ? data.playerCount + data.watcherCount : 0;
 
@@ -90,6 +132,19 @@ export default function RoomMaintenancePage({ can, notify }: { can: (permission:
       <article><span>当前活跃房间</span><strong>{data?.total ?? "—"}</strong><p>{data ? `第 ${data.page} / ${totalPages} 页` : "等待 KB 实时数据"}</p></article>
       <article><span>本页玩家与观战</span><strong>{data ? pagePeople : "—"}</strong><p>{data ? `玩家 ${data.playerCount} · 观战 ${data.watcherCount} · 等待带入 ${data.inholdCount}` : "不使用账号历史房间字段"}</p></article>
       <article className="room-maintenance-live"><span>数据来源</span><strong>{data ? "KB 实时内存" : "连接异常"}</strong><p>{data ? `刷新于 ${formatDate(data.refreshedAt)}` : "列表异常时不展示缓存房间"}</p></article>
+    </section>
+
+    <section className={`panel room-creation-control ${creationControl?.allowed === false ? "is-blocked" : ""}`}>
+      <div className="room-creation-control__copy">
+        <span className="eyebrow">GLOBAL ROOM CREATION</span>
+        <div><h2>服务器创建新房间</h2>{creationControl && <em className={creationControl.allowed ? "is-allowed" : "is-blocked"}>{creationControl.status}</em>}</div>
+        {creationControlLoading ? <p>正在读取大厅配置 <code>can_all_create_room</code>…</p> : creationControlError ? <p className="is-error">{creationControlError}。当前状态未知，不允许提交修改。</p> : creationControl ? <p>{creationControl.allowed ? "玩家手动创建、BOSS 创建和系统自动补房当前均被允许。" : "已全局禁止玩家手动创建、BOSS 创建和系统自动补房；现有房间不会因此自动解散。"}{creationControl.lastUpdatedBy ? ` 最近由 ${creationControl.lastUpdatedBy} 修改${creationControl.lastUpdatedAt ? `（${formatDate(creationControl.lastUpdatedAt)}）` : ""}。` : ""}</p> : null}
+      </div>
+      <div className="room-creation-control__actions">
+        {creationControlError && <Button variant="secondary" onClick={() => void loadCreationControl()} disabled={creationControlLoading}>重新读取</Button>}
+        {creationControl && canControlRoomCreation && <Button variant={creationControl.allowed ? "danger" : "primary"} onClick={() => setCreationControlTarget(!creationControl.allowed)}>{creationControl.allowed ? "禁止创建新房间" : "恢复允许创建"}</Button>}
+        {creationControl && !canControlRoomCreation && <span>当前角色仅可查看</span>}
+      </div>
     </section>
 
     <section className="panel room-maintenance-list-panel">
@@ -127,15 +182,23 @@ export default function RoomMaintenancePage({ can, notify }: { can: (permission:
       </div>}
     </section>}
 
-    {target && <DissolveModal target={target} onClose={() => setTarget(null)} onDone={(message) => { setTarget(null); notify(message); window.setTimeout(() => void refresh(), 1200); }} />}
+    {target && <DissolveModal target={target} onClose={() => setTarget(null)} onDone={(result) => { setTarget(null); notify(result.message, result.verified ? "success" : "error"); window.setTimeout(() => void refresh(), 300); }} />}
+    {creationControl && creationControlTarget !== null && <RoomCreationControlModal current={creationControl} targetAllowed={creationControlTarget} onClose={() => setCreationControlTarget(null)} onDone={(state, message) => { setCreationControl(state); setCreationControlTarget(null); notify(message); }} />}
   </div>;
 }
 
 function CurrentRoomCard({ room, canDissolve, onDissolve }: { room: CurrentRoomItem; canDissolve: boolean; onDissolve: (mode: "force" | "friendly", roomId: number) => void }) {
   const status = room.roomStatus || "未知状态";
-  const statusClass = status === "游戏中" ? "is-playing" : status === "要求解散" ? "is-dissolving" : status === "等待中" ? "is-waiting" : "is-ready";
+  const normalizedStatus = `${room.roomStatus} ${room.gameStatus}`.toLowerCase();
+  const statusClass = normalizedStatus.includes("解散") || normalizedStatus.includes("dissolv") || normalizedStatus.includes("closing")
+    ? "is-dissolving"
+    : normalizedStatus.includes("游戏") || normalizedStatus.includes("playing")
+      ? "is-playing"
+      : normalizedStatus.includes("等待") || normalizedStatus.includes("wait")
+        ? "is-waiting"
+        : "is-ready";
   const roundTarget = room.gameRound >= 99999 ? "不限" : room.gameRound;
-  return <article className="current-room-card">
+  return <article className={`current-room-card ${statusClass}`}>
     <header><div><span>房间号</span><strong>{room.roomId}</strong><small>{room.roomName || `房间 ${room.roomId}`}</small></div><em className={statusClass}>{status}</em></header>
     <div className="current-room-card__content">
       <div className="current-room-stats"><div><span>局数</span><strong>{room.roundCount} / {roundTarget}</strong></div><div><span>玩家</span><strong>{room.playerCount} / {room.maxNumber || "—"}</strong></div><div><span>观战</span><strong>{room.watcherCount}</strong></div><div><span>等待带入</span><strong>{room.inholdCount}</strong></div></div>
@@ -179,7 +242,7 @@ function textValue(value: unknown): string {
   return typeof value === "string" ? value : value == null ? "" : String(value);
 }
 
-function DissolveModal({ target, onClose, onDone }: { target: DissolveTarget; onClose: () => void; onDone: (message: string) => void }) {
+function DissolveModal({ target, onClose, onDone }: { target: DissolveTarget; onClose: () => void; onDone: (result: DissolveResponse) => void }) {
   const [checked, setChecked] = useState(false);
   const [scope, setScope] = useState("");
   const [busy, setBusy] = useState(false);
@@ -190,10 +253,32 @@ function DissolveModal({ target, onClose, onDone }: { target: DissolveTarget; on
     setBusy(true); setError("");
     try {
       const endpoint = target.all ? "/api/game/room-maintenance/dissolve-all" : `/api/game/room-maintenance/${target.roomId}/dissolve`;
-      const result = await api<{ message: string }>(endpoint, { method: "POST", ...jsonBody({ mode: target.mode, confirm: checked, confirmScope: target.all ? scope : "" }) });
-      onDone(result.message);
+      const result = await api<DissolveResponse>(endpoint, { method: "POST", ...jsonBody({ mode: target.mode, confirm: checked, confirmScope: target.all ? scope : "" }) });
+      onDone(result);
     } catch (reason) { setError(reason instanceof ApiError ? reason.message : "房间解散命令提交失败"); } finally { setBusy(false); }
   };
   const disabled = !checked || (target.all && scope !== "ALL_ROOMS");
-  return <Modal title={title} eyebrow="HIGH RISK OPERATION" onClose={onClose}><div className={`operation-warning ${friendly ? "" : "operation-warning--danger"}`}><strong>{friendly ? "给牌局正常收尾机会" : "立即中断房间牌局"}</strong><p>{friendly ? "友好解散由游戏服务按非强制模式处理。提交后后台会刷新 KB 实时房间列表，请继续核对房间是否消失。" : "强制解散可能打断正在进行的牌局。请先核对房间号与影响范围，提交后继续通过 KB 实时列表确认。"}</p></div>{error && <div className="form-error"><span>!</span>{error}</div>}{target.all && <Field label="范围确认" hint="请输入 ALL_ROOMS，防止误操作全部在线房间"><input value={scope} onChange={(event) => setScope(event.target.value)} placeholder="ALL_ROOMS" /></Field>}<label className="confirm-check"><input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} /><span>我已核对实时房间范围，并确认执行{friendly ? "友好" : "强制"}解散</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={friendly ? "primary" : "danger"} disabled={disabled || busy} onClick={() => void submit()}>{busy ? "正在提交…" : "确认解散"}</Button></div></Modal>;
+  return <Modal title={title} eyebrow="HIGH RISK OPERATION" onClose={onClose}><div className={`operation-warning ${friendly ? "" : "operation-warning--danger"}`}><strong>{friendly ? "给牌局正常收尾机会" : "立即中断房间牌局"}</strong><p>{friendly ? "后台会发送申请解散命令，并以 KB 实时房间列表复查结果作为成功依据。" : "强制解散可能打断正在进行的牌局；后台只有在实时列表确认房间消失或关闭后才会提示成功。"}</p></div>{error && <div className="form-error"><span>!</span>{error}</div>}{target.all && <Field label="范围确认" hint="请输入 ALL_ROOMS，防止误操作全部在线房间"><input value={scope} onChange={(event) => setScope(event.target.value)} placeholder="ALL_ROOMS" /></Field>}<label className="confirm-check"><input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} /><span>我已核对实时房间范围，并确认执行{friendly ? "友好" : "强制"}解散</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={friendly ? "primary" : "danger"} disabled={disabled || busy} onClick={() => void submit()}>{busy ? "正在执行并复查…" : "确认解散"}</Button></div></Modal>;
+}
+
+function RoomCreationControlModal({ current, targetAllowed, onClose, onDone }: { current: RoomCreationControlState; targetAllowed: boolean; onClose: () => void; onDone: (state: RoomCreationControlState, message: string) => void }) {
+  const [checked, setChecked] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const submit = async () => {
+    setBusy(true); setError("");
+    try {
+      const result = await api<{ state: RoomCreationControlState; message: string }>("/api/game/room-maintenance/creation-control", {
+        method: "PUT",
+        ...jsonBody({ allowed: targetAllowed, expectedAllowed: current.allowed, confirm: checked }),
+      });
+      onDone(result.state, result.message);
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : "服务器创建房间开关修改失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const title = targetAllowed ? "恢复允许创建新房间" : "全局禁止创建新房间";
+  return <Modal title={title} eyebrow="GLOBAL SERVER CONTROL" onClose={onClose}><div className={`operation-warning ${targetAllowed ? "" : "operation-warning--danger"}`}><strong>{targetAllowed ? "重新开放全部创建入口" : "关闭全部新房间创建入口"}</strong><p>{targetAllowed ? "保存后，玩家手动创建、BOSS 创建和系统自动补房将重新被允许。" : "保存后，玩家手动创建、BOSS 创建和系统自动补房都会被禁止；当前已经存在的房间不会被自动解散。"}</p></div>{error && <div className="form-error"><span>!</span>{error}</div>}<label className="confirm-check"><input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} /><span>我已了解该开关影响全部房间创建入口，并确认{targetAllowed ? "恢复允许" : "全局禁止"}创建新房间</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={targetAllowed ? "primary" : "danger"} disabled={!checked || busy} onClick={() => void submit()}>{busy ? "正在保存并回读…" : "确认修改"}</Button></div></Modal>;
 }

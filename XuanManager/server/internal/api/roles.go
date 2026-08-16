@@ -23,9 +23,9 @@ type rolePermissionRequest struct {
 func (s *Server) handleListRoles(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 r.id, r.code, r.name, r.description, r.status, r.is_system, COUNT(u.id)
-FROM mgr_role r LEFT JOIN mgr_user u ON u.role_id = r.id AND (? = 1 OR u.is_super = 0)
+FROM mgr_role r LEFT JOIN mgr_user u ON u.role_id = r.id AND (? = 1 OR u.username <> 'admin999')
 GROUP BY r.id, r.code, r.name, r.description, r.status, r.is_system
-ORDER BY r.is_system DESC, r.id`, canSeeSuperFlag(p))
+ORDER BY r.is_system DESC, r.id`, canSeeProtectedRootFlag(p))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取角色失败")
 		return
@@ -147,6 +147,12 @@ func (s *Server) handleRolePermissions(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	ids := uniquePositiveIDs(input.PermissionIDs)
+	for _, permissionID := range ids {
+		if isSuperOnlyPermissionID(permissionID) {
+			writeError(w, http.StatusBadRequest, "SUPER_ONLY_PERMISSION", "包含超级管理员专属权限，不能分配给其他角色")
+			return
+		}
+	}
 	if len(ids) > 0 {
 		placeholders := strings.TrimRight(strings.Repeat("?,", len(ids)), ",")
 		args := make([]any, len(ids))
@@ -156,6 +162,15 @@ func (s *Server) handleRolePermissions(w http.ResponseWriter, r *http.Request, p
 		var count int
 		if err := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_permission WHERE status = 'enabled' AND id IN ("+placeholders+")", args...).Scan(&count); err != nil || count != len(ids) {
 			writeError(w, http.StatusBadRequest, "INVALID_PERMISSION", "包含不存在或已停用的权限")
+			return
+		}
+		var superOnlyCount int
+		if err := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_permission WHERE module_id IN (?, ?) AND id IN ("+placeholders+")", append([]any{roomMaintenanceModuleID, platformRevenueModuleID}, args...)...).Scan(&superOnlyCount); err != nil {
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验超级管理员专属权限失败")
+			return
+		}
+		if superOnlyCount > 0 {
+			writeError(w, http.StatusBadRequest, "SUPER_ONLY_PERMISSION", "包含超级管理员专属权限，不能分配给其他角色")
 			return
 		}
 	}

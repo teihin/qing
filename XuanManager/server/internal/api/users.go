@@ -34,20 +34,21 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request, p princ
 	page, size := pageParams(r)
 	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
 	like := "%" + keyword + "%"
-	canSeeSuper := canSeeSuperFlag(p)
+	canSeeSuper := canSeeProtectedRootFlag(p)
 	var total int64
 	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM mgr_user u
-WHERE (? = 1 OR u.is_super = 0)
+WHERE (? = 1 OR u.username <> 'admin999')
   AND (? = '' OR u.username LIKE ? OR u.display_name LIKE ?)`, canSeeSuper, keyword, like, like).Scan(&total); err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取用户数量失败")
 		return
 	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
-u.id, u.username, u.display_name, u.role_id, r.code, r.name, u.is_super, u.status, u.last_login_at, u.created_at
+u.id, u.username, u.display_name, u.role_id, r.code, r.name,
+(u.is_super = 1 OR r.code = 'super_admin'), u.status, u.last_login_at, u.created_at
 FROM mgr_user u JOIN mgr_role r ON r.id = u.role_id
-WHERE (? = 1 OR u.is_super = 0)
+WHERE (? = 1 OR u.username <> 'admin999')
   AND (? = '' OR u.username LIKE ? OR u.display_name LIKE ?)
-ORDER BY u.is_super DESC, u.id DESC LIMIT ? OFFSET ?`, canSeeSuper, keyword, like, like, size, (page-1)*size)
+ORDER BY (u.is_super = 1 OR r.code = 'super_admin') DESC, u.id DESC LIMIT ? OFFSET ?`, canSeeSuper, keyword, like, like, size, (page-1)*size)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取用户列表失败")
 		return
@@ -68,8 +69,11 @@ ORDER BY u.is_super DESC, u.id DESC LIMIT ? OFFSET ?`, canSeeSuper, keyword, lik
 
 func (s *Server) handleRoleOptions(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, code, name, description, status, is_system,
-(SELECT COUNT(*) FROM mgr_user u WHERE u.role_id = mgr_role.id AND (? = 1 OR u.is_super = 0))
-FROM mgr_role WHERE status = 'enabled' ORDER BY is_system DESC, id`, canSeeSuperFlag(p))
+(SELECT COUNT(*) FROM mgr_user u WHERE u.role_id = mgr_role.id
+ AND (? = 1 OR u.username <> 'admin999'))
+FROM mgr_role
+WHERE status = 'enabled' AND (? = 1 OR code <> 'super_admin')
+ORDER BY is_system DESC, id`, canSeeProtectedRootFlag(p), booleanFlag(p.IsSuper))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取可用角色失败")
 		return
@@ -110,8 +114,13 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request, p prin
 		writeError(w, http.StatusBadRequest, "INVALID_STATUS", "用户状态不正确")
 		return
 	}
-	if !s.roleAvailable(r, input.RoleID) {
+	roleAvailable, roleIsSuper := s.roleState(r, input.RoleID)
+	if !roleAvailable {
 		writeError(w, http.StatusBadRequest, "INVALID_ROLE", "所选角色不存在或已停用")
+		return
+	}
+	if roleIsSuper && !p.IsSuper {
+		writeError(w, http.StatusForbidden, "SUPER_ROLE_PROTECTED", "只有超级管理员可以分配超级管理员角色")
 		return
 	}
 	hash, err := security.HashPassword(input.Password)
@@ -151,23 +160,30 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request, p prin
 		writeError(w, http.StatusBadRequest, "INVALID_NAME", "显示名称不能为空且不能超过 64 个字符")
 		return
 	}
-	if !s.roleAvailable(r, input.RoleID) {
+	roleAvailable, targetRoleIsSuper := s.roleState(r, input.RoleID)
+	if !roleAvailable {
 		writeError(w, http.StatusBadRequest, "INVALID_ROLE", "所选角色不存在或已停用")
+		return
+	}
+	if targetRoleIsSuper && !p.IsSuper {
+		writeError(w, http.StatusForbidden, "SUPER_ROLE_PROTECTED", "只有超级管理员可以分配超级管理员角色")
 		return
 	}
 	var username, beforeName string
 	var beforeRole int64
-	var isSuper bool
-	if err := s.db.QueryRowContext(r.Context(), "SELECT username, display_name, role_id, is_super FROM mgr_user WHERE id = ?", id).
-		Scan(&username, &beforeName, &beforeRole, &isSuper); err != nil {
+	var isSuper, isProtectedRoot bool
+	if err := s.db.QueryRowContext(r.Context(), `SELECT u.username, u.display_name, u.role_id,
+(u.is_super = 1 OR role_row.code = 'super_admin'), (u.username = 'admin999')
+FROM mgr_user u JOIN mgr_role role_row ON role_row.id = u.role_id WHERE u.id = ?`, id).
+		Scan(&username, &beforeName, &beforeRole, &isSuper, &isProtectedRoot); err != nil {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
-	if hideSuperUserFrom(p, isSuper) {
+	if hideSuperUserFrom(p, isProtectedRoot) {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
-	if isSuper && input.RoleID != 1 {
+	if isSuper && !targetRoleIsSuper {
 		writeError(w, http.StatusForbidden, "SUPER_PROTECTED", "超级管理员不能被降权")
 		return
 	}
@@ -201,12 +217,14 @@ func (s *Server) handleUserStatus(w http.ResponseWriter, r *http.Request, p prin
 		return
 	}
 	var beforeStatus string
-	var isSuper bool
-	if err := s.db.QueryRowContext(r.Context(), "SELECT status, is_super FROM mgr_user WHERE id = ?", id).Scan(&beforeStatus, &isSuper); err != nil {
+	var isSuper, isProtectedRoot bool
+	if err := s.db.QueryRowContext(r.Context(), `SELECT u.status,
+(u.is_super = 1 OR role_row.code = 'super_admin'), (u.username = 'admin999')
+FROM mgr_user u JOIN mgr_role role_row ON role_row.id = u.role_id WHERE u.id = ?`, id).Scan(&beforeStatus, &isSuper, &isProtectedRoot); err != nil {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
-	if hideSuperUserFrom(p, isSuper) {
+	if hideSuperUserFrom(p, isProtectedRoot) {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
@@ -241,12 +259,14 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request, p p
 		writeError(w, http.StatusBadRequest, "WEAK_PASSWORD", err.Error())
 		return
 	}
-	var isSuper bool
-	if err := s.db.QueryRowContext(r.Context(), "SELECT is_super FROM mgr_user WHERE id = ?", id).Scan(&isSuper); err != nil {
+	var isSuper, isProtectedRoot bool
+	if err := s.db.QueryRowContext(r.Context(), `SELECT
+(u.is_super = 1 OR role_row.code = 'super_admin'), (u.username = 'admin999')
+FROM mgr_user u JOIN mgr_role role_row ON role_row.id = u.role_id WHERE u.id = ?`, id).Scan(&isSuper, &isProtectedRoot); err != nil {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
-	if hideSuperUserFrom(p, isSuper) {
+	if hideSuperUserFrom(p, isProtectedRoot) {
 		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
 		return
 	}
@@ -265,10 +285,12 @@ func (s *Server) handleResetPassword(w http.ResponseWriter, r *http.Request, p p
 	writeData(w, http.StatusOK, map[string]any{"message": "密码已重置，用户需要重新登录"})
 }
 
-func (s *Server) roleAvailable(r *http.Request, roleID int64) bool {
-	var count int
-	err := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_role WHERE id = ? AND status = 'enabled'", roleID).Scan(&count)
-	return err == nil && count == 1
+func (s *Server) roleState(r *http.Request, roleID int64) (bool, bool) {
+	var code, status string
+	if err := s.db.QueryRowContext(r.Context(), "SELECT code, status FROM mgr_role WHERE id = ?", roleID).Scan(&code, &status); err != nil {
+		return false, false
+	}
+	return status == "enabled", code == superAdminRoleCode
 }
 
 func duplicateKey(err error) bool {

@@ -238,9 +238,9 @@ func buildPlayerBanHistoryWhere(filter playerBanHistoryFilter, p principal) (str
 	clauses := []string{
 		"audit_row.target_type = ?",
 		"audit_row.action IN (?, ?)",
-		"(? = 1 OR " + nonSuperAuditVisibilitySQL + ")",
+		"(? = 1 OR " + nonRootAuditVisibilitySQL + ")",
 	}
-	args := []any{"game_player", "game.player.ban", "game.player.unban", canSeeSuperFlag(p)}
+	args := []any{"game_player", "game.player.ban", "game.player.unban", canSeeProtectedRootFlag(p)}
 	if filter.Operation != "" {
 		clauses = append(clauses, "audit_row.action = ?")
 		args = append(args, "game.player."+filter.Operation)
@@ -326,7 +326,7 @@ func (s *Server) enrichBanAuditMetadata(ctx context.Context, p principal, items 
 		args = append(args, item.PlayerID)
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT audit_row.target_id, audit_row.operator_name, audit_row.created_at,
-COALESCE(operator_user.is_super, 0)
+COALESCE(operator_user.username = 'admin999', 0)
 FROM mgr_audit_log audit_row
 LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
 WHERE audit_row.action = ? AND audit_row.target_type = ? AND audit_row.result_code = 0

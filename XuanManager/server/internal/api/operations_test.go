@@ -191,6 +191,69 @@ func TestValidateDissolveAllRequiresExplicitScope(t *testing.T) {
 	}
 }
 
+func TestSendRoomDissolveCommandUsesPlainCommandString(t *testing.T) {
+	tests := []struct {
+		mode    string
+		command string
+		context string
+	}{
+		{mode: "force", command: "强制_解散_事件", context: "xuan-room-force-dissolve-test"},
+		{mode: "friendly", command: "申请_解散_事件", context: "xuan-room-friendly-dissolve-test"},
+	}
+	for _, test := range tests {
+		t.Run(test.mode, func(t *testing.T) {
+			client := fakeGameHTTPClient(func(request *http.Request) (*http.Response, error) {
+				if request.URL.Path != "/hall/command" || request.URL.Query().Get("header") != "异步_执行_房间_命令" {
+					t.Fatalf("unexpected request: %s", request.URL.String())
+				}
+				var params map[string]any
+				if err := json.Unmarshal([]byte(request.URL.Query().Get("param")), &params); err != nil {
+					t.Fatalf("decode params: %v", err)
+				}
+				if params["room_id"] != float64(241441) || params["cmd"] != test.command || params["context"] != test.context {
+					t.Fatalf("unexpected params: %#v", params)
+				}
+				if strings.HasPrefix(params["cmd"].(string), "{") {
+					t.Fatalf("cmd must not be nested JSON: %#v", params["cmd"])
+				}
+				if _, exists := params["is_qiangzhi"]; exists {
+					t.Fatalf("unused is_qiangzhi leaked into request: %#v", params)
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"ret_code":512,"ret_result":{}}`))}, nil
+			})
+			s := &Server{cfg: config.Config{GameAdminURL: "http://127.0.0.1:8890"}, gameHTTPClient: client}
+			if _, err := s.sendRoomDissolveCommand(context.Background(), 241441, test.mode, test.context); err != nil {
+				t.Fatalf("sendRoomDissolveCommand: %v", err)
+			}
+		})
+	}
+}
+
+func TestVerifyRoomsDissolvedUsesLiveHallRoomList(t *testing.T) {
+	client := fakeGameHTTPClient(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Query().Get("header") != "查询_大厅_所有房间" {
+			t.Fatalf("unexpected header: %s", request.URL.Query().Get("header"))
+		}
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"ret_code":512,"ret_result":{"number":0,"count":0,"result":[]}}`))}, nil
+	})
+	s := &Server{cfg: config.Config{GameAdminURL: "http://127.0.0.1:8890"}, gameHTTPClient: client}
+	remaining, err := s.verifyRoomsDissolved(context.Background(), []int64{241441})
+	if err != nil || len(remaining) != 0 {
+		t.Fatalf("verification = %#v, %v", remaining, err)
+	}
+}
+
+func TestHallRoomClosedRequiresFinalClosedState(t *testing.T) {
+	if hallRoomClosed(hallRoomItem{RoomStatus: "要求解散", GameStatus: "playing"}) {
+		t.Fatal("requested dissolve must not be treated as confirmed closed")
+	}
+	for _, room := range []hallRoomItem{{RoomStatus: "已关闭"}, {RoomStatus: "已解散"}, {GameStatus: "closed"}} {
+		if !hallRoomClosed(room) {
+			t.Fatalf("closed room not recognized: %#v", room)
+		}
+	}
+}
+
 func TestCurrentRoomListUsesKBHallRoomCommand(t *testing.T) {
 	client := fakeGameHTTPClient(func(request *http.Request) (*http.Response, error) {
 		if request.URL.Path != "/hall/command" || request.URL.Query().Get("header") != "查询_大厅_所有房间" {
@@ -277,5 +340,50 @@ func TestSafeHallRoomListErrorDoesNotExposeUnknownMessage(t *testing.T) {
 	}
 	if got := safeHallRoomListError(json.RawMessage(`{"error":"BOSS未初始化"}`)); got != "BOSS未初始化" {
 		t.Fatalf("safe error hidden: %q", got)
+	}
+}
+
+func TestRoomMaintenanceAndPlatformRevenueAreSuperOnly(t *testing.T) {
+	for _, moduleID := range []int64{roomMaintenanceModuleID, platformRevenueModuleID} {
+		if !isSuperOnlyModuleID(moduleID) {
+			t.Fatalf("module %d should be super-only", moduleID)
+		}
+	}
+	if isSuperOnlyModuleID(21) {
+		t.Fatal("player module must remain assignable")
+	}
+
+	for _, permissionID := range []int64{2601, 2602, 2603, 2604, platformRevenuePermissionID} {
+		if !isSuperOnlyPermissionID(permissionID) {
+			t.Fatalf("permission %d should be super-only", permissionID)
+		}
+	}
+	for _, permissionID := range []int64{2101, 2599, 2605, 3602} {
+		if isSuperOnlyPermissionID(permissionID) {
+			t.Fatalf("permission %d should remain assignable", permissionID)
+		}
+	}
+}
+
+func TestSuperAdminRoleIsEffectiveSuper(t *testing.T) {
+	if !isEffectiveSuper(false, superAdminRoleCode) {
+		t.Fatal("super_admin role must receive super administrator capabilities")
+	}
+	if !isEffectiveSuper(true, "operations") {
+		t.Fatal("legacy is_super marker must remain compatible")
+	}
+	if isEffectiveSuper(false, "operations") {
+		t.Fatal("ordinary role must not receive super administrator capabilities")
+	}
+}
+
+func TestProtectedRootIdentityIsOnlyAdmin999(t *testing.T) {
+	if !isProtectedRootIdentity("admin999") {
+		t.Fatal("admin999 must be the protected root identity")
+	}
+	for _, username := range []string{"admin", "ADMIN999", "admin9992", ""} {
+		if isProtectedRootIdentity(username) {
+			t.Fatalf("%q must not be treated as the protected root identity", username)
+		}
 	}
 }

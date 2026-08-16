@@ -38,13 +38,13 @@ func TestParsePlayerGPS(t *testing.T) {
 	}
 }
 
-func TestGetPlayerSensitiveInfoRequiresSuperAdmin(t *testing.T) {
+func TestGetPlayerSensitiveInfoRequiresProtectedRoot(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/api/game/players/565923/sensitive", nil)
 	request.SetPathValue("playerId", "565923")
 	response := httptest.NewRecorder()
 	server := &Server{}
-	server.handleGetPlayerSensitiveInfo(response, request, principal{})
-	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "SUPER_ADMIN_REQUIRED") {
+	server.handleGetPlayerSensitiveInfo(response, request, principal{IsSuper: true})
+	if response.Code != http.StatusForbidden || !strings.Contains(response.Body.String(), "PROTECTED_ROOT_REQUIRED") {
 		t.Fatalf("unexpected response: %d %s", response.Code, response.Body.String())
 	}
 }
