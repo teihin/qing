@@ -117,7 +117,7 @@ export default function GameAnnouncementPage({ can, notify }: {
             <p className="announcement-preview-spec">{previewProfiles[previewMode].detail}</p>
             <dl className="configuration-meta">
               <div><dt>配置键</dt><dd>{data.storageKey}</dd></div>
-              <div><dt>最后修改</dt><dd>{data.lastUpdatedAt ? formatDate(data.lastUpdatedAt) : "尚无后台修改记录"}</dd></div>
+              <div><dt>最后修改（北京时间）</dt><dd>{data.lastUpdatedAt ? formatDate(data.lastUpdatedAt) : "尚无后台修改记录"}</dd></div>
               <div><dt>操作者</dt><dd>{data.lastUpdatedBy || "—"}</dd></div>
             </dl>
             <div className="configuration-note"><span>i</span><p>长期公告不会立即推送跑马灯。如需马上提醒在线玩家，请使用“游戏通知发送”。</p></div>

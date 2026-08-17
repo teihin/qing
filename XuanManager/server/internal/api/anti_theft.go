@@ -73,9 +73,9 @@ m.id, COALESCE(m.player_guuid, ''), m.player_wxid,
 COALESCE(NULLIF(a.sm_name, ''), m.player_wxname, ''),
 COALESCE(m.anti_theft_on, 0), COALESCE(m.device_id, ''),
 COALESCE(m.device_platform, ''), COALESCE(m.device_version, 1),
-m.device_bound_at, COALESCE(m.binding_revision, 0),
-COALESCE(NULLIF(a.sm_reg_time, ''), CONCAT(m.date, ' ', m.time), ''),
-FROM_UNIXTIME(NULLIF(k.lasttime, 0))
+DATE_ADD(m.device_bound_at, INTERVAL 8 HOUR), COALESCE(m.binding_revision, 0),
+COALESCE(NULLIF(a.sm_reg_time, ''), DATE_FORMAT(DATE_ADD(CONCAT(m.date, ' ', m.time), INTERVAL 8 HOUR), '%Y-%m-%d %H:%i:%s'), ''),
+DATE_ADD(FROM_UNIXTIME(NULLIF(k.lasttime, 0)), INTERVAL 8 HOUR)
 FROM kbedm.third_marketing_info m
 LEFT JOIN kbedm.tbl_Account a ON a.sm_guuid = m.player_guuid
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
@@ -273,9 +273,9 @@ m.id, COALESCE(m.player_guuid, ''), m.player_wxid,
 COALESCE(NULLIF(a.sm_name, ''), m.player_wxname, ''),
 COALESCE(m.anti_theft_on, 0), COALESCE(m.device_id, ''),
 COALESCE(m.device_platform, ''), COALESCE(m.device_version, 1),
-m.device_bound_at, COALESCE(m.binding_revision, 0),
-COALESCE(NULLIF(a.sm_reg_time, ''), CONCAT(m.date, ' ', m.time), ''),
-FROM_UNIXTIME(NULLIF(k.lasttime, 0))
+DATE_ADD(m.device_bound_at, INTERVAL 8 HOUR), COALESCE(m.binding_revision, 0),
+COALESCE(NULLIF(a.sm_reg_time, ''), DATE_FORMAT(DATE_ADD(CONCAT(m.date, ' ', m.time), INTERVAL 8 HOUR), '%Y-%m-%d %H:%i:%s'), ''),
+DATE_ADD(FROM_UNIXTIME(NULLIF(k.lasttime, 0)), INTERVAL 8 HOUR)
 FROM kbedm.third_marketing_info m
 LEFT JOIN kbedm.tbl_Account a ON a.sm_guuid = m.player_guuid
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, formatDate } from "../components/ui";
+import { formatBeijingDateTime } from "../time";
 import type { CurrentRoomItem, CurrentRoomsResponse } from "../types";
 
 type DissolveTarget = { roomId: number | null; all: boolean; mode: "force" | "friendly" };
@@ -202,7 +203,7 @@ function CurrentRoomCard({ room, canDissolve, onDissolve }: { room: CurrentRoomI
     <header><div><span>房间号</span><strong>{room.roomId}</strong><small>{room.roomName || `房间 ${room.roomId}`}</small></div><em className={statusClass}>{status}</em></header>
     <div className="current-room-card__content">
       <div className="current-room-stats"><div><span>局数</span><strong>{room.roundCount} / {roundTarget}</strong></div><div><span>玩家</span><strong>{room.playerCount} / {room.maxNumber || "—"}</strong></div><div><span>观战</span><strong>{room.watcherCount}</strong></div><div><span>等待带入</span><strong>{room.inholdCount}</strong></div></div>
-      <dl className="current-room-meta"><div><dt>创建时间</dt><dd>{room.createDatetime || "—"}</dd></div><div><dt>备注</dt><dd>{room.remark || "—"}</dd></div></dl>
+      <dl className="current-room-meta"><div><dt>创建时间（北京时间）</dt><dd>{formatBeijingDateTime(room.createDatetime)}</dd></div><div><dt>备注</dt><dd>{room.remark || "—"}</dd></div></dl>
     </div>
     {canDissolve && <footer><Button variant="secondary" onClick={() => onDissolve("friendly", room.roomId)}>友好解散</Button><Button variant="danger" onClick={() => onDissolve("force", room.roomId)}>强制解散</Button></footer>}
   </article>;

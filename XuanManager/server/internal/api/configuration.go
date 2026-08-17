@@ -292,7 +292,7 @@ func (s *Server) handleListGameNotifications(w http.ResponseWriter, r *http.Requ
 		limit = 50
 	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, operator_name, COALESCE(request_json, ''), COALESCE(after_json, ''),
-result_code, result_message, created_at
+result_code, result_message, DATE_ADD(created_at, INTERVAL 8 HOUR)
 FROM mgr_audit_log audit_row
 WHERE audit_row.action = 'game.notification.send'
   AND (? = 1 OR `+nonRootAuditVisibilitySQL+`)

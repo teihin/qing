@@ -1,4 +1,5 @@
 import type { ButtonHTMLAttributes, FormEvent, ReactNode } from "react";
+import { formatBeijingDateTime } from "../time";
 
 export function Button({ className = "", variant = "primary", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger" }) {
   return <button className={`button button--${variant} ${className}`} {...props} />;
@@ -90,8 +91,5 @@ export function submitGuard(handler: () => Promise<void>) {
 }
 
 export function formatDate(value?: string | null): string {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false }).format(date);
+  return formatBeijingDateTime(value, { includeYear: false, includeSeconds: false });
 }

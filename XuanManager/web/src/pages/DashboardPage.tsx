@@ -78,7 +78,7 @@ export default function DashboardPage({ notify }: { notify: (message: string, ki
             <section className="game-metric-grid" aria-label="游戏运营指标">
               <Metric icon="新" label="今日新增玩家" value={metrics.todayNewPlayers} note="每日新注册玩家" tone="cyan" />
               <Metric icon="活" label="今日登录玩家" value={metrics.todayLoggedInPlayers} note="按玩家去重，不重复累计登录次数" tone="blue" />
-              <Metric icon="总" label="累计游戏玩家" value={metrics.totalPlayers} note={`更新于 ${formatDate(metrics.collectedAt)}`} tone="slate" />
+              <Metric icon="总" label="累计游戏玩家" value={metrics.totalPlayers} note={`更新于 ${formatDate(metrics.collectedAt)}（北京时间）`} tone="slate" />
             </section>
           ) : (
             <section className="panel dashboard-unavailable">
@@ -95,7 +95,7 @@ export default function DashboardPage({ notify }: { notify: (message: string, ki
           </section>
           <section className="dashboard-grid">
             <div className="panel panel--large">
-              <header className="panel__header"><div><span className="eyebrow">ACTIVITY</span><h2>最近操作</h2></div><span className="live-label"><i />实时记录</span></header>
+              <header className="panel__header"><div><span className="eyebrow">ACTIVITY</span><h2>最近操作（北京时间）</h2></div><span className="live-label"><i />实时记录</span></header>
               {data.recentAudits.length === 0 ? <EmptyState title="暂无操作记录" description="完成首个管理操作后，审计记录会显示在这里。" /> : (
                 <div className="activity-list">
                   {data.recentAudits.map((item) => (

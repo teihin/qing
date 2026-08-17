@@ -87,7 +87,7 @@ a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
 a.sm_vip, a.sm_vip_level, a.sm_agentID, COALESCE(agent.sm_name, ''),
 a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status,
 a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
-FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark
+DATE_ADD(FROM_UNIXTIME(NULLIF(k.lasttime, 0)), INTERVAL 8 HOUR), COALESCE(k.numlogin, 0), a.sm_remark
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID

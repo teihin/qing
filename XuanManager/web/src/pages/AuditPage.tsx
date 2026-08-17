@@ -29,7 +29,7 @@ export default function AuditPage({ notify }: { notify: (message: string, kind?:
           <span className="toolbar__count">共 {data?.total ?? 0} 条记录</span>
         </div>
         {!data ? <LoadingBlock /> : data.items.length === 0 ? <EmptyState title="没有匹配记录" description="可以调整关键词后重新搜索。" /> : (
-          <div className="table-wrap"><table><thead><tr><th>时间</th><th>操作者</th><th>操作</th><th>目标</th><th>结果</th><th>来源 IP</th></tr></thead><tbody>
+          <div className="table-wrap"><table><thead><tr><th>时间（北京时间）</th><th>操作者</th><th>操作</th><th>目标</th><th>结果</th><th>来源 IP</th></tr></thead><tbody>
             {data.items.map((item) => <tr key={item.id}><td>{formatDate(item.createdAt)}</td><td><strong>{item.operatorName || "系统"}</strong></td><td><code>{item.action}</code></td><td>{item.targetType}<small className="cell-subtitle">#{item.targetId || "—"}</small></td><td><span className={`result-text ${item.resultCode === 0 ? "is-success" : "is-error"}`}>{item.resultCode === 0 ? "成功" : "失败"}</span><small className="cell-subtitle">{item.resultMessage}</small></td><td>{item.ip || "—"}</td></tr>)}
           </tbody></table></div>
         )}

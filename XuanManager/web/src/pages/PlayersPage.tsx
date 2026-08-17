@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
+import { formatBeijingDateTime } from "../time";
 import type { PlayerBalanceAdjustmentResult, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, TransactionItem, TransactionResponse } from "../types";
 
 interface PlayerResponse {
@@ -163,7 +164,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <>
             <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
               <table className="player-table">
-                <thead><tr><th>玩家</th><th>登录账号</th><th>现金余额</th><th>等级 / 角色</th><th>直属代理</th><th>房间 / 客户端</th><th>注册 / 登录</th><th className="align-right">操作</th></tr></thead>
+                <thead><tr><th>玩家</th><th>登录账号</th><th>现金余额</th><th>等级 / 角色</th><th>直属代理</th><th>房间 / 客户端</th><th>注册 / 登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
                   <tr key={player.id}>
                     <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small></div></div></td>
@@ -358,8 +359,8 @@ function PlayerProfileTab({ player, canViewSensitive, sensitive, sensitiveLoadin
       <section className="player-detail-section">
         <h3>注册与其他参数</h3>
         <div className="player-detail-grid">
-          <Detail label="注册时间" value={formatDate(player.registrationTime)} />
-          <Detail label="最近登录" value={formatDate(player.lastLoginAt)} />
+          <Detail label="注册时间（北京时间）" value={formatDate(player.registrationTime)} />
+          <Detail label="最近登录（北京时间）" value={formatDate(player.lastLoginAt)} />
           <Detail label="备注" value={player.remark} wide />
         </div>
       </section>
@@ -397,13 +398,13 @@ function PlayerFinanceTab({ player, data, page, loading, onPage }: { player: Pla
   return <div className="player-profile-tab-content">
     <section className="player-fund-overview">
       <ProfileMetric label="当前金币" value={balanceFormatter.format(data.player.currentBalance)} note={`${data.player.totalRecords} 条历史流水`} />
-      <ProfileMetric label="历史总流入" value={`+${balanceFormatter.format(data.summary.totalIn)}`} note={`最早记录 ${data.summary.firstAt || "—"}`} tone="win" />
+      <ProfileMetric label="历史总流入" value={`+${balanceFormatter.format(data.summary.totalIn)}`} note={`最早记录 ${formatBeijingDateTime(data.summary.firstAt)}`} tone="win" />
       <ProfileMetric label="历史总流出" value={`−${balanceFormatter.format(data.summary.totalOut)}`} note={`道具支出 ${balanceFormatter.format(data.summary.itemSpend)}`} tone="loss" />
       <ProfileMetric label="金币净变化" value={formatPlayerScore(data.summary.netChange)} note={`游戏相关 ${formatPlayerScore(data.summary.gameNet)}`} tone={data.summary.netChange >= 0 ? "win" : "loss"} />
     </section>
     <section className="player-profile-data-section">
       <div className="player-profile-section-title"><div><h3>全部金币流水</h3><p>显示每笔金币变更前后余额、实际增减、关联内容和客服维护原因</p></div><button type="button" onClick={() => { window.location.hash = `/game/transactions?playerId=${encodeURIComponent(player.playerId)}`; }}>进入交易记录模块</button></div>
-      {data.items.length === 0 ? <EmptyState title="该玩家没有金币流水" description="服务器主金币流水中暂时没有这个玩家的记录。" /> : <div className="table-wrap"><table className="player-finance-table"><thead><tr><th>时间</th><th>业务类型</th><th>实际变化</th><th>变更前 → 变更后</th><th>关联内容</th></tr></thead><tbody>{data.items.map((item) => <PlayerFinanceRow key={item.id} item={item} />)}</tbody></table></div>}
+      {data.items.length === 0 ? <EmptyState title="该玩家没有金币流水" description="服务器主金币流水中暂时没有这个玩家的记录。" /> : <div className="table-wrap"><table className="player-finance-table"><thead><tr><th>时间（北京时间）</th><th>业务类型</th><th>实际变化</th><th>变更前 → 变更后</th><th>关联内容</th></tr></thead><tbody>{data.items.map((item) => <PlayerFinanceRow key={item.id} item={item} />)}</tbody></table></div>}
       <ProfilePagination page={page} totalPages={totalPages} total={data.total} loading={loading} onPage={onPage} unit="条流水" />
     </section>
   </div>;
@@ -412,7 +413,7 @@ function PlayerFinanceTab({ player, data, page, loading, onPage }: { player: Pla
 function PlayerFinanceRow({ item }: { item: TransactionItem }) {
   const roomContext = [item.remark1 ? `房间 ${item.remark1}` : "", item.remark3 && item.remark3 !== "0" ? `第 ${item.remark3} 局` : "", item.remark4].filter(Boolean).join(" · ");
   const context = item.maintenanceReason ? `维护原因：${item.maintenanceReason}${item.maintenanceOperator ? ` · 操作人：${item.maintenanceOperator}` : ""}` : roomContext;
-  return <tr><td><strong>{item.date}</strong><small className="cell-subtitle">{item.time}</small></td><td><strong>{item.optionType}</strong><small className="cell-subtitle">{financeCategoryLabel(item.category)}</small></td><td><strong className={`room-score room-score--${item.change > 0 ? "win" : item.change < 0 ? "loss" : "draw"}`}>{formatPlayerScore(item.change)}</strong></td><td><span className="balance-route">{balanceFormatter.format(item.oldBalance)}<i>→</i><strong>{balanceFormatter.format(item.newBalance)}</strong></span></td><td><span className={`player-history-context ${item.maintenanceReason ? "is-maintenance" : ""}`} title={context || undefined}>{context || "无关联说明"}</span></td></tr>;
+  return <tr><td><strong>{formatBeijingDateTime(item.occurredAt)}</strong></td><td><strong>{item.optionType}</strong><small className="cell-subtitle">{financeCategoryLabel(item.category)}</small></td><td><strong className={`room-score room-score--${item.change > 0 ? "win" : item.change < 0 ? "loss" : "draw"}`}>{formatPlayerScore(item.change)}</strong></td><td><span className="balance-route">{balanceFormatter.format(item.oldBalance)}<i>→</i><strong>{balanceFormatter.format(item.newBalance)}</strong></span></td><td><span className={`player-history-context ${item.maintenanceReason ? "is-maintenance" : ""}`} title={context || undefined}>{context || "无关联说明"}</span></td></tr>;
 }
 
 function PlayerRoomsTab({ player, data, page, loading, onPage }: { player: PlayerItem; data: PlayerRoomHistoryResponse | null; page: number; loading: boolean; onPage: (page: number) => void }) {
@@ -428,14 +429,14 @@ function PlayerRoomsTab({ player, data, page, loading, onPage }: { player: Playe
     </section>
     <section className="player-profile-data-section">
       <div className="player-profile-section-title"><div><h3>{player.name || player.playerId} 的房间对战</h3><p>点击房间可继续查看本房间全部玩家和逐局牌面</p></div><span>{data.total} 个房间</span></div>
-      {data.items.length === 0 ? <EmptyState title="该玩家没有房间战绩" description="总战绩表中暂时没有这个玩家形成的房间记录。" /> : <div className="table-wrap"><table className="player-room-history-table"><thead><tr><th>房间</th><th>房间时间</th><th>座位 / 局数</th><th>累计带入 / 返还</th><th>最终输赢</th><th>操作</th></tr></thead><tbody>{data.items.map((item) => <PlayerRoomRow key={item.id} item={item} />)}</tbody></table></div>}
+      {data.items.length === 0 ? <EmptyState title="该玩家没有房间战绩" description="总战绩表中暂时没有这个玩家形成的房间记录。" /> : <div className="table-wrap"><table className="player-room-history-table"><thead><tr><th>房间</th><th>房间时间（北京时间）</th><th>座位 / 局数</th><th>累计带入 / 返还</th><th>最终输赢</th><th>操作</th></tr></thead><tbody>{data.items.map((item) => <PlayerRoomRow key={item.id} item={item} />)}</tbody></table></div>}
       <ProfilePagination page={page} totalPages={totalPages} total={data.total} loading={loading} onPage={onPage} unit="个房间" />
     </section>
   </div>;
 }
 
 function PlayerRoomRow({ item }: { item: PlayerRoomHistoryItem }) {
-  return <tr><td><strong className="room-list-id">{item.roomId}</strong><small className="cell-subtitle">{item.roomName || item.playMode || "未记录房间名"}</small></td><td><span>{item.startedAt || item.recordedAt || "—"}</span><small className="cell-subtitle">至 {item.endedAt || item.recordedAt || "—"}</small></td><td><strong>{item.seat + 1} 号位 · {item.roundsPlayed} 局</strong><small className="cell-subtitle">房间共 {item.roomRoundCount} 局</small></td><td><strong>{balanceFormatter.format(item.totalBuyIn)} / {item.scoreSource === "settlement" ? balanceFormatter.format(item.settlementReturn) : "未记录"}</strong></td><td><strong className={`room-score room-score--${item.result}`}>{formatPlayerScore(item.score)}</strong>{item.scoreMismatch && <small className="room-score-warning">原战绩 {formatPlayerScore(item.recordedScore)}</small>}</td><td><button className="player-profile-link" type="button" onClick={() => { window.location.hash = `/game/room-records?roomId=${encodeURIComponent(item.roomId)}`; }}>查看房间战绩</button></td></tr>;
+  return <tr><td><strong className="room-list-id">{item.roomId}</strong><small className="cell-subtitle">{item.roomName || item.playMode || "未记录房间名"}</small></td><td><span>{formatBeijingDateTime(item.startedAt || item.recordedAt)}</span><small className="cell-subtitle">至 {formatBeijingDateTime(item.endedAt || item.recordedAt)}</small></td><td><strong>{item.seat + 1} 号位 · {item.roundsPlayed} 局</strong><small className="cell-subtitle">房间共 {item.roomRoundCount} 局</small></td><td><strong>{balanceFormatter.format(item.totalBuyIn)} / {item.scoreSource === "settlement" ? balanceFormatter.format(item.settlementReturn) : "未记录"}</strong></td><td><strong className={`room-score room-score--${item.result}`}>{formatPlayerScore(item.score)}</strong>{item.scoreMismatch && <small className="room-score-warning">原战绩 {formatPlayerScore(item.recordedScore)}</small>}</td><td><button className="player-profile-link" type="button" onClick={() => { window.location.hash = `/game/room-records?roomId=${encodeURIComponent(item.roomId)}`; }}>查看房间战绩</button></td></tr>;
 }
 
 function ProfileMetric({ label, value, note, tone = "default" }: { label: string; value: string; note: string; tone?: string }) {

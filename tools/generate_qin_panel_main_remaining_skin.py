@@ -166,7 +166,10 @@ def recolor_legacy(path: Path) -> Path:
 def build() -> list[Path]:
     out=[]
     ann=ROOT/"assets/ImagesLuck/公告"
-    for name in ("1.png","2.png","3.png","4.png","5.png"): out.append(recolor_legacy(ann/name))
+    # Static rule pages contain baked Chinese copy and standard-colour playing
+    # cards.  A global hue remap makes their headings illegible and turns red
+    # suits blue.  They are rebuilt by polish_qin_announcement_pages.py from
+    # checked-in source snapshots and must not be recoloured here.
     for name,text in {
         "公告.png":"公告","最新公告.png":"最新公告","充值提现公告.png":"充值提现公告","平台简介.png":"平台简介",
         "特色玩法介绍.png":"特色玩法介绍","红利说明.png":"红利说明","惩罚公告.png":"惩罚公告",

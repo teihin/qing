@@ -74,7 +74,7 @@ export default function AntiTheftPage({ can, notify }: {
 
       {loading && !data ? <LoadingBlock label="正在读取防盗号状态" /> : !data || data.items.length === 0 ? <EmptyState title={hasFilters ? "没有匹配账号" : "暂无注册账号"} description={hasFilters ? "请调整或清空查询条件。" : "KB 注册数据中暂时没有账号。"} /> : <>
         <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
-          <table className="anti-theft-table"><thead><tr><th>玩家</th><th>登录账号</th><th>防盗号</th><th>绑定设备</th><th>绑定记录</th><th className="align-right">操作</th></tr></thead><tbody>{data.items.map((item) => <AntiTheftRow key={item.registrationId} item={item} canUnbind={can("game.anti_theft.unbind")} onUnbind={setUnbindTarget} />)}</tbody></table>
+          <table className="anti-theft-table"><thead><tr><th>玩家</th><th>登录账号 / 注册（北京时间）</th><th>防盗号</th><th>绑定设备</th><th>绑定记录（北京时间）</th><th className="align-right">操作</th></tr></thead><tbody>{data.items.map((item) => <AntiTheftRow key={item.registrationId} item={item} canUnbind={can("game.anti_theft.unbind")} onUnbind={setUnbindTarget} />)}</tbody></table>
         </div>
         <footer className="table-pagination"><span>显示 {firstRow}–{lastRow}，共 {data.total} 个注册账号</span><div><label>每页<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>下一页</button></div></footer>
       </>}

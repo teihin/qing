@@ -86250,7 +86250,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -86428,7 +86428,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -86606,7 +86606,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -86966,7 +86966,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -87028,7 +87028,7 @@
       "ctor": "Float64Array",
       "array": [
         -0.347,
-        15.8,
+        18.541,
         0,
         0,
         0,
@@ -87305,7 +87305,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -87361,7 +87361,7 @@
       "ctor": "Float64Array",
       "array": [
         -1.3,
-        -19.698,
+        0.86,
         0,
         0,
         0,
@@ -87471,7 +87471,9 @@
       "__id__": 2443
     },
     "_enabled": true,
-    "_normalMaterial": null,
+    "_normalMaterial": {
+      "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+    },
     "_grayMaterial": null,
     "duration": 0.1,
     "zoomScale": 0.8,
@@ -87597,7 +87599,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -87653,7 +87655,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -19.698,
+        0.86,
         0,
         0,
         0,
@@ -87763,7 +87765,9 @@
       "__id__": 2450
     },
     "_enabled": true,
-    "_normalMaterial": null,
+    "_normalMaterial": {
+      "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+    },
     "_grayMaterial": null,
     "duration": 0.1,
     "zoomScale": 0.8,
@@ -87889,7 +87893,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -87945,7 +87949,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -19.698,
+        0.86,
         0,
         0,
         0,
@@ -88055,7 +88059,9 @@
       "__id__": 2457
     },
     "_enabled": true,
-    "_normalMaterial": null,
+    "_normalMaterial": {
+      "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+    },
     "_grayMaterial": null,
     "duration": 0.1,
     "zoomScale": 0.8,
@@ -92693,7 +92699,7 @@
         1,
         1.2,
         1.2,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -93715,7 +93721,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -94054,7 +94060,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -94498,7 +94504,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -94676,7 +94682,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -94967,7 +94973,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -95023,7 +95029,7 @@
       "ctor": "Float64Array",
       "array": [
         1.59,
-        -33.578,
+        29.466,
         0,
         0,
         0,
@@ -95259,7 +95265,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -95315,7 +95321,7 @@
       "ctor": "Float64Array",
       "array": [
         2.46,
-        -35.022,
+        28.022,
         0,
         0,
         0,

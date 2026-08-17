@@ -130,6 +130,7 @@ export default function Layout({ session, route, onNavigate, onChangePassword, o
         <header className="topbar">
           <div className="topbar__breadcrumb"><span>XuanManager</span><i>/</i><strong>{session.modules.find((item) => item.route === route)?.name ?? "工作台"}</strong></div>
           <div className="account-menu">
+            <span className="topbar-timezone" title="后台全部时间统一按中国标准时间显示">北京时间 UTC+8</span>
             <span className="account-menu__avatar">{session.user.displayName.slice(0, 1) || "管"}</span>
             <div><strong>{session.user.displayName}</strong><small>{session.user.roleName}</small></div>
             <button type="button" onClick={onChangePassword}>改密</button>

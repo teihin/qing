@@ -41,12 +41,13 @@ type liveDashboardGameMetrics struct {
 const dashboardGameMetricsQuery = `SELECT
   (SELECT COUNT(*) FROM tbl_Account),
   (SELECT COUNT(*) FROM tbl_Account
-   WHERE sm_reg_time >= CURDATE() AND sm_reg_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)),
+   WHERE sm_reg_time >= ? AND sm_reg_time < ?),
   (SELECT COUNT(*) FROM kbe_accountinfos
    WHERE lasttime >= ? AND lasttime < ?)`
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, p principal) {
 	canSeeSuper := canSeeProtectedRootFlag(p)
+	_, beijingDayStart, beijingDayEnd := dashboardBusinessPeriod(time.Now())
 	var userCount, enabledUserCount, roleCount, moduleCount, todayAuditCount int64
 	err := s.db.QueryRowContext(r.Context(), `SELECT
 (SELECT COUNT(*) FROM mgr_user WHERE (? = 1 OR username <> 'admin999')),
@@ -54,8 +55,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, p princ
 (SELECT COUNT(*) FROM mgr_role WHERE status = 'enabled'),
 (SELECT COUNT(*) FROM mgr_module WHERE status = 'enabled'),
 (SELECT COUNT(*) FROM mgr_audit_log audit_row
- WHERE audit_row.created_at >= CURDATE() AND (? = 1 OR `+nonRootAuditVisibilitySQL+`))`,
-		canSeeSuper, canSeeSuper, canSeeSuper).Scan(
+ WHERE audit_row.created_at >= ? AND audit_row.created_at < ? AND (? = 1 OR `+nonRootAuditVisibilitySQL+`))`,
+		canSeeSuper, canSeeSuper,
+		beijingDayStart.UTC().Format("2006-01-02 15:04:05"), beijingDayEnd.UTC().Format("2006-01-02 15:04:05"), canSeeSuper).Scan(
 		&userCount, &enabledUserCount, &roleCount, &moduleCount, &todayAuditCount,
 	)
 	if err != nil {
@@ -96,6 +98,7 @@ func queryLiveDashboardGameMetrics(ctx context.Context, gameDB *sql.DB, now time
 		CollectedAt: localNow,
 	}
 	err := gameDB.QueryRowContext(ctx, dashboardGameMetricsQuery,
+		localNow.Format("2006-01-02 00:00:00"), localNow.AddDate(0, 0, 1).Format("2006-01-02 00:00:00"),
 		dayStart.Unix(), dayEnd.Unix(),
 	).Scan(&metrics.TotalPlayers, &metrics.TodayNewPlayers, &metrics.TodayLoggedInPlayers)
 	return metrics, err
@@ -130,7 +133,7 @@ WHERE (? = 1 OR `+nonRootAuditVisibilitySQL+`)
 func (s *Server) queryAudits(r *http.Request, p principal, keyword string, page, size int) ([]auditItem, error) {
 	like := "%" + keyword + "%"
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
-id, operator_name, action, target_type, target_id, result_code, result_message, ip, created_at
+id, operator_name, action, target_type, target_id, result_code, result_message, ip, DATE_ADD(created_at, INTERVAL 8 HOUR)
 FROM mgr_audit_log audit_row
 WHERE (? = 1 OR `+nonRootAuditVisibilitySQL+`)
   AND (? = '' OR audit_row.operator_name LIKE ? OR audit_row.action LIKE ? OR audit_row.target_id LIKE ?)

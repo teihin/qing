@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, formatDate, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
+import { formatBeijingDateTime } from "../time";
 import type { BannedPlayerItem, BannedPlayersResponse, PlayerBanHistoryResponse } from "../types";
 
 const defaultReason = "你的账号已被暂停使用！";
@@ -129,7 +130,7 @@ export default function BansPage({ can, notify }: {
           <EmptyState title={appliedKeyword ? "没有匹配的已封账号" : "暂无已封账号"} description={appliedKeyword ? "可以清空查询条件后查看全部封号。" : "当前游戏账号中没有被封禁的玩家。"} />
         ) : <>
           <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
-            <table className="ban-table"><thead><tr><th>玩家</th><th>登录账号</th><th>封号提示</th><th>游戏状态</th><th>封号记录</th><th className="align-right">操作</th></tr></thead><tbody>
+            <table className="ban-table"><thead><tr><th>玩家</th><th>登录账号</th><th>封号提示</th><th>游戏状态</th><th>封号记录（北京时间）</th><th className="align-right">操作</th></tr></thead><tbody>
               {data.items.map((item) => <BanRow key={item.playerId} item={item} canRemove={canRemove} onUnban={setUnbanTarget} />)}
             </tbody></table>
           </div>
@@ -216,8 +217,8 @@ function BanHistoryPanel({ refreshVersion, notify }: {
 
     {loading && !data ? <LoadingBlock label="正在读取封号历史记录" /> : !data || data.items.length === 0 ? <EmptyState title={filtersActive ? "没有匹配的封号记录" : "暂无封号历史记录"} description={filtersActive ? "可以修改或重置查询条件。" : "通过本后台执行封号或解封后，记录会显示在这里。"} /> : <>
       <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
-        <table className="ban-history-table"><thead><tr><th>操作时间</th><th>玩家</th><th>操作</th><th>当时封号原因</th><th>操作人</th><th>结果</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
-          <td><strong>{formatBanHistoryDate(item.createdAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
+        <table className="ban-history-table"><thead><tr><th>操作时间（北京时间）</th><th>玩家</th><th>操作</th><th>当时封号原因</th><th>操作人</th><th>结果</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
+          <td><strong>{formatBeijingDateTime(item.createdAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
           <td><div className="ban-history-player"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small><small>账号：{item.loginName || item.accountName || "—"}</small></div></div></td>
           <td><span className={`ban-history-operation is-${item.operation}`}><i />{item.operation === "ban" ? "封号" : "解除封号"}</span></td>
           <td><strong className="ban-history-reason">{item.reason || "未记录原因"}</strong></td>
@@ -251,10 +252,4 @@ function UnbanModal({ item, notify, onClose, onDone }: { item: BannedPlayerItem;
 
 function errorMessage(cause: unknown, fallback: string) {
   return cause instanceof ApiError ? cause.message : fallback;
-}
-
-function formatBanHistoryDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value || "—";
-  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
 }

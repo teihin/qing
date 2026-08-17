@@ -49,7 +49,7 @@ export default function UsersPage({ can, notify }: { can: (permission: string) =
           <span className="toolbar__count">共 {data?.total ?? 0} 个后台用户</span>
         </div>
         {!data ? <LoadingBlock /> : data.items.length === 0 ? <EmptyState title="没有找到后台用户" description="调整搜索条件，或创建一个新的后台账号。" /> : (
-          <div className="table-wrap"><table><thead><tr><th>用户</th><th>账号</th><th>角色</th><th>状态</th><th>最近登录</th><th>创建时间</th><th className="align-right">操作</th></tr></thead><tbody>
+          <div className="table-wrap"><table><thead><tr><th>用户</th><th>账号</th><th>角色</th><th>状态</th><th>最近登录（北京时间）</th><th>创建时间（北京时间）</th><th className="align-right">操作</th></tr></thead><tbody>
             {data.items.map((user) => (
               <tr key={user.id}>
                 <td><div className="user-cell"><span>{user.displayName.slice(0, 1) || "管"}</span><div><strong>{user.displayName}</strong>{user.isSuper && <small>系统最高权限账号</small>}</div></div></td>

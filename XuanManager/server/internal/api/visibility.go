@@ -51,7 +51,7 @@ func (s *Server) latestAuditAttribution(ctx context.Context, action string, p pr
 	var createdAt time.Time
 	var operatorIsSuper bool
 	err := s.db.QueryRowContext(ctx, `SELECT
-audit_row.operator_name, audit_row.created_at, COALESCE(operator_user.username = 'admin999', 0)
+audit_row.operator_name, DATE_ADD(audit_row.created_at, INTERVAL 8 HOUR), COALESCE(operator_user.username = 'admin999', 0)
 FROM mgr_audit_log audit_row
 LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
 WHERE audit_row.action = ? AND audit_row.result_code = 0

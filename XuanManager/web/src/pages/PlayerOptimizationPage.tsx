@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
+import { formatBeijingDateTime } from "../time";
 import type { PlayerOptimizationHistoryItem, PlayerOptimizationHistoryResponse, PlayerOptimizationItem, PlayerOptimizationsResponse } from "../types";
 
 type OptimizationStatus = "active" | "inactive" | "all";
@@ -219,8 +220,8 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
 
     {loading && !data ? <LoadingBlock label="正在读取发牌优化历史记录" /> : !data || data.items.length === 0 ? <EmptyState title={filtersActive ? "没有匹配的发牌优化记录" : "暂无发牌优化历史记录"} description={filtersActive ? "可以修改或重置查询条件。" : "通过本后台新增、调整或删除发牌优化后，记录会显示在这里。"} /> : <>
       <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
-        <table className="optimization-history-table"><thead><tr><th>操作时间</th><th>玩家</th><th>操作</th><th>参数变化</th><th>操作人</th><th>结果</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
-          <td><strong>{formatOptimizationHistoryDate(item.createdAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
+        <table className="optimization-history-table"><thead><tr><th>操作时间（北京时间）</th><th>玩家</th><th>操作</th><th>参数变化</th><th>操作人</th><th>结果</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
+          <td><strong>{formatBeijingDateTime(item.createdAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
           <td><div className="optimization-history-player"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small><small>账号：{item.loginName || "—"}</small></div></div></td>
           <td><span className={`optimization-history-operation is-${item.operation}`}><i />{optimizationOperationLabel(item.operation)}</span></td>
           <td><OptimizationHistoryChange item={item} /></td>
@@ -402,13 +403,7 @@ function DeleteOptimizationModal({ item, notify, onClose, onDone }: {
 
 function formatOptimizationDate(value: string) {
   if (!value || value.startsWith("0 ")) return "—";
-  return value;
-}
-
-function formatOptimizationHistoryDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value || "—";
-  return new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(date);
+  return formatBeijingDateTime(value);
 }
 
 function errorMessage(cause: unknown, fallback: string) {

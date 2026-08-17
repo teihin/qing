@@ -44,7 +44,8 @@ WHERE (? = 1 OR u.username <> 'admin999')
 	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 u.id, u.username, u.display_name, u.role_id, r.code, r.name,
-(u.is_super = 1 OR r.code = 'super_admin'), u.status, u.last_login_at, u.created_at
+(u.is_super = 1 OR r.code = 'super_admin'), u.status,
+DATE_ADD(u.last_login_at, INTERVAL 8 HOUR), DATE_ADD(u.created_at, INTERVAL 8 HOUR)
 FROM mgr_user u JOIN mgr_role r ON r.id = u.role_id
 WHERE (? = 1 OR u.username <> 'admin999')
   AND (? = '' OR u.username LIKE ? OR u.display_name LIKE ?)

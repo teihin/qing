@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
+import { formatBeijingDateTime } from "../time";
 import type { TransactionItem, TransactionResponse } from "../types";
 
 interface TransactionFilters {
@@ -149,7 +150,7 @@ export default function TransactionsPage({ notify }: { notify: (message: string,
             {data.items.length === 0 ? <EmptyState title="没有符合条件的金币记录" description="可以重置筛选条件，或更换查询日期后再试。" /> : (
               <>
                 <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
-                  <table className="transaction-table"><thead><tr><th>时间</th><th>分类 / 类型</th><th>实际金币变化</th><th>变更前 → 变更后</th><th>业务金额</th><th>关联说明</th><th className="align-right">操作</th></tr></thead>
+                  <table className="transaction-table"><thead><tr><th>时间（北京时间）</th><th>分类 / 类型</th><th>实际金币变化</th><th>变更前 → 变更后</th><th>业务金额</th><th>关联说明</th><th className="align-right">操作</th></tr></thead>
                     <tbody>{data.items.map((item) => <TransactionRow key={item.id} item={item} onSelect={() => setSelected(item)} />)}</tbody></table>
                 </div>
                 <footer className="table-pagination"><span>显示 {firstRow}–{lastRow}，共 {data.total} 条</span><div><label>每页<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>下一页</button></div></footer>
@@ -173,7 +174,7 @@ function CategoryBadge({ category }: { category: TransactionItem["category"] }) 
 }
 
 function TransactionRow({ item, onSelect }: { item: TransactionItem; onSelect: () => void }) {
-  return <tr><td><strong>{item.date}</strong><small className="cell-subtitle">{item.time}</small></td><td><CategoryBadge category={item.category} /><small className="cell-subtitle">{item.optionType}</small></td><td><strong className={`gold-change gold-change--${item.direction}`}>{formatSigned(item.change)}</strong></td><td><span className="balance-route">{goldFormatter.format(item.oldBalance)}<i>→</i><strong>{goldFormatter.format(item.newBalance)}</strong></span></td><td>{formatSigned(item.businessAmount)}</td><td><TransactionDescription item={item} /></td><td><div className="row-actions"><button onClick={onSelect}>查看明细</button></div></td></tr>;
+  return <tr><td><strong>{formatBeijingDateTime(item.occurredAt)}</strong></td><td><CategoryBadge category={item.category} /><small className="cell-subtitle">{item.optionType}</small></td><td><strong className={`gold-change gold-change--${item.direction}`}>{formatSigned(item.change)}</strong></td><td><span className="balance-route">{goldFormatter.format(item.oldBalance)}<i>→</i><strong>{goldFormatter.format(item.newBalance)}</strong></span></td><td>{formatSigned(item.businessAmount)}</td><td><TransactionDescription item={item} /></td><td><div className="row-actions"><button onClick={onSelect}>查看明细</button></div></td></tr>;
 }
 
 function TransactionDescription({ item }: { item: TransactionItem }) {
@@ -185,7 +186,7 @@ function TransactionDescription({ item }: { item: TransactionItem }) {
 function TransactionDetail({ item, onClose }: { item: TransactionItem; onClose: () => void }) {
   const fields = readableTransactionFields(item, true);
   return <Modal wide title={`${item.optionType} · 金币明细`} eyebrow="GOLD CHANGE DETAIL" onClose={onClose}>
-    <div className="transaction-detail-heading"><CategoryBadge category={item.category} /><div><strong className={`gold-change gold-change--${item.direction}`}>{formatSigned(item.change)} 金币</strong><p>{item.occurredAt} · 流水ID {item.id}</p></div></div>
+    <div className="transaction-detail-heading"><CategoryBadge category={item.category} /><div><strong className={`gold-change gold-change--${item.direction}`}>{formatSigned(item.change)} 金币</strong><p>{formatBeijingDateTime(item.occurredAt)}（北京时间） · 流水ID {item.id}</p></div></div>
     <section className="player-detail-section"><h3>金币余额变化</h3><div className="transaction-balance-flow"><div><span>变更前</span><strong>{goldFormatter.format(item.oldBalance)}</strong></div><i>→</i><div className="is-final"><span>变更后</span><strong>{goldFormatter.format(item.newBalance)}</strong></div><div><span>原始业务金额</span><strong>{formatSigned(item.businessAmount)}</strong></div></div></section>
     <section className="player-detail-section"><h3>业务信息</h3><div className="player-detail-grid"><Detail label="玩家" value={`${item.playerName || "未设置昵称"}（${item.playerId}）`} /><Detail label="交易分类" value={categoryLabels[item.category]} /><Detail label="原始业务类型" value={item.optionType} /><Detail label="实际方向" value={item.direction === "in" ? "金币增加" : item.direction === "out" ? "金币减少" : "余额未变化"} /></div></section>
     {item.maintenanceReason && <section className="player-detail-section transaction-maintenance-section"><h3>客服维护信息</h3><div className="transaction-maintenance-reason"><span>维护原因</span><strong>{item.maintenanceReason}</strong></div><div className="player-detail-grid"><Detail label="后台操作人" value={item.maintenanceOperator || "—"} /><Detail label="维护工单号" value={item.maintenanceWorkOrder || "—"} /></div></section>}

@@ -7,12 +7,12 @@ import (
 )
 
 func TestDashboardNewPlayersUseDatabaseRegistrationDate(t *testing.T) {
-	if !strings.Contains(dashboardGameMetricsQuery, "sm_reg_time >= CURDATE()") ||
-		!strings.Contains(dashboardGameMetricsQuery, "sm_reg_time < DATE_ADD(CURDATE(), INTERVAL 1 DAY)") {
-		t.Fatal("new player metric must use the database registration calendar day")
+	if !strings.Contains(dashboardGameMetricsQuery, "sm_reg_time >= ?") ||
+		!strings.Contains(dashboardGameMetricsQuery, "sm_reg_time < ?") {
+		t.Fatal("new player metric must use explicit Beijing calendar boundaries")
 	}
-	if strings.Contains(dashboardGameMetricsQuery, "sm_reg_time >= ?") {
-		t.Fatal("new player metric must not reuse the UTC+8 login timestamp boundary")
+	if strings.Contains(dashboardGameMetricsQuery, "CURDATE()") {
+		t.Fatal("new player metric must not depend on the MySQL server UTC calendar day")
 	}
 }
 

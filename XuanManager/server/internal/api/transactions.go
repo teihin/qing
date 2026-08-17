@@ -224,11 +224,12 @@ func (s *Server) attachBalanceAdjustmentAudit(ctx context.Context, p principal, 
 		}
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT audit_row.operator_name, audit_row.request_json, audit_row.before_json,
-audit_row.after_json, audit_row.created_at, COALESCE(operator_user.username = 'admin999', 0)
+audit_row.after_json, DATE_ADD(audit_row.created_at, INTERVAL 8 HOUR), COALESCE(operator_user.username = 'admin999', 0)
 FROM mgr_audit_log audit_row
 LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
 WHERE audit_row.action = 'game.player.balance_adjust' AND audit_row.target_type = 'game_player' AND audit_row.target_id = ?
-  AND audit_row.created_at >= ? AND audit_row.created_at < DATE_ADD(?, INTERVAL 1 DAY)
+  AND audit_row.created_at >= DATE_SUB(?, INTERVAL 8 HOUR)
+  AND audit_row.created_at < DATE_SUB(DATE_ADD(?, INTERVAL 1 DAY), INTERVAL 8 HOUR)
 ORDER BY audit_row.created_at DESC, audit_row.id DESC`, playerID, startDate, endDate)
 	if err != nil {
 		return err

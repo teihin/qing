@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, formatDate, LoadingBlock, PageHeader } from "../components/ui";
+import { formatBeijingDateTime, fromBeijingDateTimeLocal, toBeijingDateTimeLocal } from "../time";
 import type { GameNotificationCarousel, GameNotificationHistoryItem } from "../types";
 
 interface NotificationHistoryResponse { items: GameNotificationHistoryItem[] }
@@ -41,7 +42,7 @@ export default function GameNotificationsPage({ can, notify }: {
       setCarousel(result);
       setCarouselEnabled(result.enabled);
       setCarouselInterval(result.intervalSeconds);
-      setCarouselStartAt(result.startAt ? toDateTimeLocal(result.startAt) : defaultCarouselStart());
+      setCarouselStartAt(result.startAt ? toBeijingDateTimeLocal(result.startAt) : defaultCarouselStart());
       setCarouselLoopCount(result.loopCount);
       setCarouselItems(result.items.length > 0 ? result.items.map((item) => ({ key: nextCarouselKey(), content: item.content })) : [{ key: nextCarouselKey(), content: "" }]);
       setCarouselConfirmed(false);
@@ -82,7 +83,7 @@ export default function GameNotificationsPage({ can, notify }: {
   const carouselHasLongItem = normalizedCarouselItems.some((item) => Array.from(item).length > 500);
   const carouselIntervalValid = Number.isInteger(carouselInterval) && carouselInterval >= 10 && carouselInterval <= 86400;
   const carouselLoopCountValid = Number.isInteger(carouselLoopCount) && carouselLoopCount >= 0 && carouselLoopCount <= 999;
-  const carouselStartValid = !carouselEnabled || Boolean(carouselStartAt && !Number.isNaN(new Date(carouselStartAt).getTime()));
+  const carouselStartValid = !carouselEnabled || Boolean(fromBeijingDateTimeLocal(carouselStartAt));
   const canUpdateCarousel = can("configuration.notification.carousel.update");
 
   const changeCarouselItem = (key: string, value: string) => {
@@ -117,11 +118,11 @@ export default function GameNotificationsPage({ can, notify }: {
     try {
       const result = await api<GameNotificationCarousel>("/api/configuration/notification-carousel", {
         method: "PUT",
-        ...jsonBody({ enabled: carouselEnabled, intervalSeconds: carouselInterval, startAt: carouselStartAt ? new Date(carouselStartAt).toISOString() : "", loopCount: carouselLoopCount, items: normalizedCarouselItems.map((item) => ({ content: item })), confirm: carouselEnabled }),
+        ...jsonBody({ enabled: carouselEnabled, intervalSeconds: carouselInterval, startAt: carouselStartAt ? fromBeijingDateTimeLocal(carouselStartAt) : "", loopCount: carouselLoopCount, items: normalizedCarouselItems.map((item) => ({ content: item })), confirm: carouselEnabled }),
       });
       setCarousel(result);
       setCarouselItems(result.items.length > 0 ? result.items.map((item) => ({ key: nextCarouselKey(), content: item.content })) : [{ key: nextCarouselKey(), content: "" }]);
-      setCarouselStartAt(result.startAt ? toDateTimeLocal(result.startAt) : defaultCarouselStart());
+      setCarouselStartAt(result.startAt ? toBeijingDateTimeLocal(result.startAt) : defaultCarouselStart());
       setCarouselLoopCount(result.loopCount);
       setCarouselConfirmed(false);
       notify(result.enabled ? "轮播公告已保存，将按开始时间执行" : "轮播公告配置已保存，当前未启用");
@@ -144,7 +145,7 @@ export default function GameNotificationsPage({ can, notify }: {
           <div className="notification-carousel__settings">
             <label className="notification-carousel-switch"><input type="checkbox" checked={carouselEnabled} disabled={!canUpdateCarousel || savingCarousel} onChange={(event) => { setCarouselEnabled(event.target.checked); setCarouselConfirmed(false); }} /><span><strong>启用自动轮播</strong><small>关闭后保留内容，但停止自动发送。</small></span></label>
             <label className="notification-carousel-interval"><span>播放间隔</span><div><input type="number" min={10} max={86400} step={1} value={carouselInterval} disabled={!canUpdateCarousel || savingCarousel} onChange={(event) => { setCarouselInterval(Number(event.target.value)); setCarouselConfirmed(false); }} /><em>秒</em></div><small>{carouselIntervalValid ? `约 ${formatInterval(carouselInterval)} 播放下一条` : "允许10秒到24小时"}</small></label>
-            <label className="notification-carousel-start"><span>开始时间</span><input type="datetime-local" value={carouselStartAt} disabled={!canUpdateCarousel || savingCarousel} onChange={(event) => { setCarouselStartAt(event.target.value); setCarouselConfirmed(false); }} /><small>时间已过则保存后尽快开始</small></label>
+            <label className="notification-carousel-start"><span>开始时间（北京时间）</span><input type="datetime-local" value={carouselStartAt} disabled={!canUpdateCarousel || savingCarousel} onChange={(event) => { setCarouselStartAt(event.target.value); setCarouselConfirmed(false); }} /><small>固定按 UTC+8 保存；时间已过则保存后尽快开始</small></label>
             <label className="notification-carousel-loops"><span>循环次数</span><div><input type="number" min={0} max={999} step={1} value={carouselLoopCount} disabled={!canUpdateCarousel || savingCarousel} onChange={(event) => { setCarouselLoopCount(Number(event.target.value)); setCarouselConfirmed(false); }} /><em>轮</em></div><small>0 表示持续循环；一轮会播放全部内容</small></label>
             <div className="notification-carousel-presets"><span>常用间隔</span>{[15, 30, 60, 120, 300, 600].map((seconds) => <button key={seconds} type="button" className={carouselInterval === seconds ? "is-active" : ""} disabled={!canUpdateCarousel || savingCarousel} onClick={() => { setCarouselInterval(seconds); setCarouselConfirmed(false); }}>{formatInterval(seconds)}</button>)}</div>
           </div>
@@ -160,7 +161,7 @@ export default function GameNotificationsPage({ can, notify }: {
             })}
           </div>
           <div className="notification-carousel-preview"><span>播放顺序预览</span><div>{normalizedCarouselItems.filter(Boolean).map((item, index) => <p key={`${item}-${index}`}><i>{index + 1}</i><strong>{item}</strong><em>{index === normalizedCarouselItems.filter(Boolean).length - 1 ? "回到第1条" : `等待 ${formatInterval(carouselIntervalValid ? carouselInterval : 0)}`}</em></p>)}</div></div>
-          {carouselEnabled && <label className={`notification-confirm ${carouselConfirmed ? "is-checked" : ""}`}><input type="checkbox" checked={carouselConfirmed} disabled={!canUpdateCarousel || carouselHasEmpty || carouselHasLongItem || !carouselIntervalValid || !carouselLoopCountValid || !carouselStartValid || savingCarousel} onChange={(event) => setCarouselConfirmed(event.target.checked)} /><span><strong>确认启用全服自动轮播</strong><small>将在 {carouselStartAt ? new Date(carouselStartAt).toLocaleString("zh-CN", { hour12: false }) : "设定时间"} 开始，每 {formatInterval(carouselIntervalValid ? carouselInterval : 0)} 播放一条，{carouselLoopCount === 0 ? "持续循环" : `播放 ${carouselLoopCount} 轮后自动停止`}。</small></span></label>}
+          {carouselEnabled && <label className={`notification-confirm ${carouselConfirmed ? "is-checked" : ""}`}><input type="checkbox" checked={carouselConfirmed} disabled={!canUpdateCarousel || carouselHasEmpty || carouselHasLongItem || !carouselIntervalValid || !carouselLoopCountValid || !carouselStartValid || savingCarousel} onChange={(event) => setCarouselConfirmed(event.target.checked)} /><span><strong>确认启用全服自动轮播</strong><small>将在 {carouselStartAt ? `${formatBeijingDateTime(carouselStartAt, { includeSeconds: false })}（北京时间）` : "设定时间"} 开始，每 {formatInterval(carouselIntervalValid ? carouselInterval : 0)} 播放一条，{carouselLoopCount === 0 ? "持续循环" : `播放 ${carouselLoopCount} 轮后自动停止`}。</small></span></label>}
           <div className="notification-carousel-footer"><div><span>最近播放</span><strong>{carousel.lastSentAt ? formatDate(carousel.lastSentAt) : "尚未自动播放"}</strong><small>{carousel.lastMessage || `当前已完成 ${carousel.completedLoops} 轮`}</small></div>{canUpdateCarousel ? <Button type="button" disabled={savingCarousel || carouselHasEmpty || carouselHasLongItem || !carouselIntervalValid || !carouselLoopCountValid || !carouselStartValid || (carouselEnabled && !carouselConfirmed)} onClick={() => void saveCarousel()}>{savingCarousel ? "正在保存…" : carouselEnabled ? "保存并启用轮播" : "保存轮播配置"}</Button> : <span className="readonly-badge"><i />当前角色仅可查看</span>}</div>
         </div>}
       </section>
@@ -189,7 +190,7 @@ export default function GameNotificationsPage({ can, notify }: {
       <section className="panel notification-history">
         <header className="configuration-panel-title"><div><span>SEND HISTORY</span><h2>最近发送记录</h2><p>记录发送内容、操作者、游戏服务接收结果和时间。</p></div><strong>{history?.length ?? 0} 条</strong></header>
         {!history ? <LoadingBlock label="正在读取通知记录" /> : history.length === 0 ? <EmptyState title="暂无通知记录" description="通过本页面发送第一条全服通知后会显示在这里。" /> : (
-          <div className="table-wrap"><table className="notification-history-table"><thead><tr><th>发送时间</th><th>通知内容</th><th>操作者</th><th>状态</th><th>结果说明</th></tr></thead><tbody>
+          <div className="table-wrap"><table className="notification-history-table"><thead><tr><th>发送时间（北京时间）</th><th>通知内容</th><th>操作者</th><th>状态</th><th>结果说明</th></tr></thead><tbody>
             {history.map((item) => <tr key={item.id}><td>{formatDate(item.createdAt)}</td><td><strong className="notification-history-content">{item.content || "—"}</strong></td><td>{item.operatorName || "系统"}</td><td><NotificationStatus status={item.status} /></td><td>{item.resultMessage || "—"}</td></tr>)}
           </tbody></table></div>
         )}
@@ -218,12 +219,6 @@ function formatInterval(seconds: number) {
   return `${seconds}秒`;
 }
 
-function toDateTimeLocal(value: string) {
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset() * 60_000;
-  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
-}
-
 function defaultCarouselStart() {
-  return toDateTimeLocal(new Date(Date.now() + 5 * 60_000).toISOString());
+  return toBeijingDateTimeLocal(new Date(Date.now() + 5 * 60_000));
 }

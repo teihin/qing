@@ -102,7 +102,7 @@ WHERE `+where, args...).Scan(&total); err != nil {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_role,
 a.sm_client_status, a.sm_agentID, a.sm_roomID, a.sm_client_version, a.sm_reg_time,
-FROM_UNIXTIME(NULLIF(k.lasttime, 0))
+DATE_ADD(FROM_UNIXTIME(NULLIF(k.lasttime, 0)), INTERVAL 8 HOUR)
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 WHERE `+where+`
@@ -172,7 +172,7 @@ WHERE `+where, args...).Scan(&total); err != nil {
 audit_row.id, audit_row.target_id,
 COALESCE(game_player.sm_wxID, ''), COALESCE(game_login.accountName, ''), COALESCE(game_player.sm_name, ''),
 audit_row.action, audit_row.operator_name, audit_row.request_json, audit_row.before_json, audit_row.after_json,
-audit_row.result_code, audit_row.result_message, audit_row.created_at
+audit_row.result_code, audit_row.result_message, DATE_ADD(audit_row.created_at, INTERVAL 8 HOUR)
 FROM mgr_audit_log audit_row
 LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
 LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
@@ -325,7 +325,7 @@ func (s *Server) enrichBanAuditMetadata(ctx context.Context, p principal, items 
 		placeholders[index] = "?"
 		args = append(args, item.PlayerID)
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT audit_row.target_id, audit_row.operator_name, audit_row.created_at,
+	rows, err := s.db.QueryContext(ctx, `SELECT audit_row.target_id, audit_row.operator_name, DATE_ADD(audit_row.created_at, INTERVAL 8 HOUR),
 COALESCE(operator_user.username = 'admin999', 0)
 FROM mgr_audit_log audit_row
 LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id

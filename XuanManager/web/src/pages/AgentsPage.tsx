@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
+import { formatBeijingDateTime } from "../time";
 import type { AgentBonusResponse, AgentChildItem, AgentChildrenResponse, AgentItem, AgentRelationship, AgentSummary } from "../types";
 
 interface AgentResponse {
@@ -157,7 +158,7 @@ export default function AgentsPage({ notify }: { notify: (message: string, kind?
           <>
             <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
               <table className="agent-table">
-                <thead><tr><th>代理账号</th><th>身份 / 等级</th><th>直属上级</th><th>直属下级</th><th>分红比例</th><th>授权链状态</th><th>成为代理时间</th><th className="align-right">操作</th></tr></thead>
+                <thead><tr><th>代理账号</th><th>身份 / 等级</th><th>直属上级</th><th>直属下级</th><th>分红比例</th><th>授权链状态</th><th>成为代理时间（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((agent) => (
                   <tr key={agent.id}>
                     <td><div className="user-cell"><span>{agent.isBoss ? "B" : agent.name.slice(0, 1) || "代"}</span><div><strong>{agent.name || "未设置名字"}</strong><small>ID：{agent.agentId} · {agent.loginName || "无登录名"}</small></div></div></td>
@@ -166,7 +167,7 @@ export default function AgentsPage({ notify }: { notify: (message: string, kind?
                     <td><strong>{agent.directAgentCount} 个代理</strong><small className="cell-subtitle">{agent.directPlayerCount} 名玩家</small></td>
                     <td><strong className="percent-value">盟主 {agent.bigPercent}%</strong><small className="cell-subtitle">合伙人 {agent.superPercent}%</small></td>
                     <td><ChainBadge state={agent.chainState} /></td>
-                    <td>{agent.registeredProxyAt || "—"}</td>
+                    <td>{formatBeijingDateTime(agent.registeredProxyAt)}</td>
                     <td><div className="row-actions"><button onClick={() => setSelected(agent)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
@@ -282,8 +283,8 @@ function AgentRelationshipModal({ agent, notify, onClose }: { agent: AgentItem; 
               <Detail label="盟主分红比例 / 授权上限" value={`${current.bigPercent}%`} highlight />
               <Detail label="合伙人分红比例" value={`${current.superPercent}%`} highlight />
               <Detail label="直属代理 / 玩家" value={`${current.directAgentCount} / ${current.directPlayerCount}`} />
-              <Detail label="成为代理时间" value={current.registeredProxyAt} />
-              <Detail label="账号注册时间" value={current.accountRegisteredAt} />
+              <Detail label="成为代理时间（北京时间）" value={formatBeijingDateTime(current.registeredProxyAt)} />
+              <Detail label="账号注册时间（北京时间）" value={formatBeijingDateTime(current.accountRegisteredAt)} />
               <Detail label="今日新增下级（记录值）" value={current.todayLowerCount} />
             </div>
           </section>
@@ -314,7 +315,7 @@ function AgentRelationshipModal({ agent, notify, onClose }: { agent: AgentItem; 
         ) : (
           <>
             <div className={`table-wrap agent-child-table-wrap ${childrenLoading ? "is-loading" : ""}`}>
-              <table className="agent-child-table"><thead><tr><th>下级账号</th><th>身份</th><th>所属上级</th><th>关系深度</th><th>获授盟主比例</th><th>合伙人比例</th><th>绑定时间</th></tr></thead>
+              <table className="agent-child-table"><thead><tr><th>下级账号</th><th>身份</th><th>所属上级</th><th>关系深度</th><th>获授盟主比例</th><th>合伙人比例</th><th>绑定时间（北京时间）</th></tr></thead>
                 <tbody>{children.items.map((child) => <ChildRow key={`${child.id}-${child.depth}`} child={child} />)}</tbody></table>
             </div>
             <footer className="table-pagination compact-pagination">
@@ -394,8 +395,8 @@ function AgentBonusPanel({ agentId, notify }: { agentId: string; notify: (messag
 
         {data.items.length === 0 ? <EmptyState title="没有红利流水" description="当前代理在所选条件下没有红利收入或提取记录。" /> : <>
           <div className={`table-wrap agent-bonus-table-wrap ${loading ? "is-loading" : ""}`}>
-            <table className="agent-bonus-table"><thead><tr><th>时间</th><th>类型</th><th>金额</th><th>红利来源</th><th>来源玩家</th><th>来源房间</th><th>计算依据</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
-              <td>{item.occurredAt || "—"}</td>
+            <table className="agent-bonus-table"><thead><tr><th>时间（北京时间）</th><th>类型</th><th>金额</th><th>红利来源</th><th>来源玩家</th><th>来源房间</th><th>计算依据</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
+              <td>{formatBeijingDateTime(item.occurredAt)}</td>
               <td><span className={`bonus-flow-type bonus-flow-type--${item.type}`}>{item.type === "income" ? "红利收入" : "红利提取"}</span></td>
               <td><strong className={item.amount >= 0 ? "bonus-amount bonus-amount--income" : "bonus-amount bonus-amount--withdrawal"}>{item.amount >= 0 ? "+" : "−"}{bonusFormatter.format(Math.abs(item.amount))}</strong></td>
               <td><strong>{item.sourceType}</strong><small className="cell-subtitle">{item.sourceDescription || "—"}</small></td>
@@ -418,7 +419,7 @@ function BonusMetric({ label, value, note, tone }: { label: string; value: numbe
 }
 
 function ChildRow({ child }: { child: AgentChildItem }) {
-  return <tr><td><strong>{child.name || "未设置名字"}</strong><small className="cell-subtitle">ID：{child.playerId} · {child.loginName || "无登录名"}</small></td><td><TypeBadge type={child.type} /><small className="cell-subtitle">等级 {child.level}</small></td><td>{child.parentName || "未知上级"}<small className="cell-subtitle">ID：{child.parentId}</small></td><td>第 {child.depth} 层</td><td><strong className="percent-value">{child.bigPercent}%</strong></td><td>{child.superPercent}%</td><td>{child.registeredProxyAt || "—"}</td></tr>;
+  return <tr><td><strong>{child.name || "未设置名字"}</strong><small className="cell-subtitle">ID：{child.playerId} · {child.loginName || "无登录名"}</small></td><td><TypeBadge type={child.type} /><small className="cell-subtitle">等级 {child.level}</small></td><td>{child.parentName || "未知上级"}<small className="cell-subtitle">ID：{child.parentId}</small></td><td>第 {child.depth} 层</td><td><strong className="percent-value">{child.bigPercent}%</strong></td><td>{child.superPercent}%</td><td>{formatBeijingDateTime(child.registeredProxyAt)}</td></tr>;
 }
 
 function Detail({ label, value, highlight = false }: { label: string; value: string | number; highlight?: boolean }) {

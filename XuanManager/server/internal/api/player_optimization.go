@@ -159,7 +159,7 @@ COALESCE((SELECT operator_user.username = 'admin999'
     AND audit_row.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')
   ORDER BY audit_row.id DESC LIMIT 1), 0),
 a.sm_optimize01_count, a.sm_optimize01_chance,
-COALESCE((SELECT DATE_FORMAT(MAX(log.created_at), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
+COALESCE((SELECT DATE_FORMAT(DATE_ADD(MAX(log.created_at), INTERVAL 8 HOUR), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
     AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')),
   (SELECT CONCAT(o.date, ' ', o.time) FROM kbedm.usr_opt_info o
@@ -235,7 +235,7 @@ WHERE `+where, args...).Scan(&total); err != nil {
 audit_row.id, audit_row.target_id,
 COALESCE(game_login.accountName, game_player.sm_wxID, ''), COALESCE(game_player.sm_name, ''),
 audit_row.action, audit_row.operator_name, audit_row.request_json, audit_row.before_json, audit_row.after_json,
-audit_row.result_code, audit_row.result_message, audit_row.created_at
+audit_row.result_code, audit_row.result_message, DATE_ADD(audit_row.created_at, INTERVAL 8 HOUR)
 FROM mgr_audit_log audit_row
 LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
 LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
@@ -683,7 +683,7 @@ COALESCE((SELECT operator_user.username = 'admin999'
     AND audit_row.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')
   ORDER BY audit_row.id DESC LIMIT 1), 0),
 a.sm_optimize01_count, a.sm_optimize01_chance,
-COALESCE((SELECT DATE_FORMAT(MAX(log.created_at), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
+COALESCE((SELECT DATE_FORMAT(DATE_ADD(MAX(log.created_at), INTERVAL 8 HOUR), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
   WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
     AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')),
   (SELECT CONCAT(o.date, ' ', o.time) FROM kbedm.usr_opt_info o

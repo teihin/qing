@@ -96,6 +96,7 @@ code { padding: 4px 7px; border-radius: 6px; color: #176e68; background: #eef8f6
 .topbar__breadcrumb i { color: #c7d2d4; font-style: normal; }
 .topbar__breadcrumb strong { color: #29434b; font-weight: 600; }
 .account-menu { display: flex; align-items: center; gap: 10px; }
+.topbar-timezone { padding: 6px 9px; border: 1px solid #d5e7e5; border-radius: 999px; color: #3d7772; background: #f0f8f7; font-size: 11px; font-weight: 750; white-space: nowrap; }
 .account-menu__avatar { display: grid; width: 35px; height: 35px; place-items: center; border: 1px solid #b9dfda; border-radius: 11px; color: #087a71; background: linear-gradient(145deg, #e3f7f4, #ccece8); font-size: 13px; font-weight: 800; }
 .account-menu strong, .account-menu small { display: block; }
 .account-menu strong { color: #263f47; font-size: 13px; }
@@ -1565,6 +1566,7 @@ td strong { color: #294149; }
   .topbar { height: 62px; }
   .topbar__breadcrumb { display: none; }
   .account-menu { margin-left: auto; }
+  .topbar-timezone { padding: 5px 7px; font-size: 10px; }
   .account-menu > div { display: none; }
   .content-area { padding: 20px 13px 32px; }
   .page-header { align-items: flex-start; flex-direction: column; }

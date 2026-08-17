@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
+import { beijingDateInput, dateInputDayCount, formatBeijingDateTime } from "../time";
 
 interface RevenueMetrics {
   normalWater: number;
@@ -99,23 +100,12 @@ const sourceLabels: Record<Exclude<RevenueSource, "all">, string> = {
   withdrawal_fee: "提现手续费",
 };
 
-function localDate(offsetDays = 0) {
-  const now = new Date();
-  now.setHours(12, 0, 0, 0);
-  now.setDate(now.getDate() + offsetDays);
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function monthStartDate() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  return `${beijingDateInput().slice(0, 8)}01`;
 }
 
 export default function PlatformRevenuePage({ notify }: { notify: (message: string, kind?: "success" | "error") => void }) {
-  const today = localDate();
+  const today = beijingDateInput();
   const [summary, setSummary] = useState<RevenueSummaryResponse | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [summaryRevision, refreshSummary] = useQueryRefresh();
@@ -170,7 +160,7 @@ export default function PlatformRevenuePage({ notify }: { notify: (message: stri
   const applyFilters = () => {
     if (!draft.dateFrom || !draft.dateTo) { notify("请选择开始日期和结束日期", "error"); return; }
     if (draft.dateTo < draft.dateFrom) { notify("结束日期不能早于开始日期", "error"); return; }
-    const dayCount = Math.floor((new Date(`${draft.dateTo}T12:00:00`).getTime() - new Date(`${draft.dateFrom}T12:00:00`).getTime()) / 86_400_000) + 1;
+    const dayCount = dateInputDayCount(draft.dateFrom, draft.dateTo);
     if (dayCount > 31) { notify("为了保护游戏数据库，单次最多查询 31 天", "error"); return; }
     setApplied({ ...draft });
     setPage(1);
@@ -181,7 +171,7 @@ export default function PlatformRevenuePage({ notify }: { notify: (message: stri
     const next = kind === "today"
       ? { dateFrom: today, dateTo: today }
       : kind === "seven"
-        ? { dateFrom: localDate(-6), dateTo: today }
+        ? { dateFrom: beijingDateInput(-6), dateTo: today }
         : { dateFrom: monthStartDate(), dateTo: today };
     setDraft((current) => ({ ...current, ...next }));
   };
@@ -213,7 +203,7 @@ export default function PlatformRevenuePage({ notify }: { notify: (message: stri
               <div className={`revenue-sync-state ${summary.cache.historyComplete ? "is-complete" : "is-syncing"}`}><i />{summary.cache.historyComplete ? "历史已同步" : "历史同步中"}</div>
             </header>
             <RevenueComposition metrics={summary.today.metrics} />
-            <footer><span>数据最早：{summary.cache.sourceFrom}</span><span>已同步：{summary.cache.syncedFrom} 至 {summary.cache.syncedTo}</span><span>最近刷新：{summary.cache.refreshedAt || "—"}</span></footer>
+            <footer><span>数据最早：{summary.cache.sourceFrom}</span><span>已同步：{summary.cache.syncedFrom} 至 {summary.cache.syncedTo}</span><span>最近刷新：{formatBeijingDateTime(summary.cache.refreshedAt)}</span></footer>
           </section>
 
           <section className="revenue-warning-panel">
@@ -256,7 +246,7 @@ export default function PlatformRevenuePage({ notify }: { notify: (message: stri
             <div className="toolbar player-toolbar"><div><strong>收益来源明细</strong><span>普通抽水已按日期、房间、玩家、时间和抽水额去重</span></div><span className="toolbar__count">共 {details.total} 条</span></div>
             {details.items.length === 0 ? <EmptyState title="所选范围没有收益流水" description="可以更换收益来源或查询其他日期。" /> : (
               <>
-                <div className={`table-wrap ${detailsLoading ? "is-loading" : ""}`}><table className="revenue-ledger-table"><thead><tr><th>时间</th><th>来源</th><th>玩家 / 房间</th><th>收入</th><th>代理支出</th><th>抽奖池转入</th><th>本条净收益</th><th>说明</th></tr></thead><tbody>{details.items.map((item) => <RevenueLedgerRow key={item.id} item={item} />)}</tbody></table></div>
+                <div className={`table-wrap ${detailsLoading ? "is-loading" : ""}`}><table className="revenue-ledger-table"><thead><tr><th>时间（北京时间）</th><th>来源</th><th>玩家 / 房间</th><th>收入</th><th>代理支出</th><th>抽奖池转入</th><th>本条净收益</th><th>说明</th></tr></thead><tbody>{details.items.map((item) => <RevenueLedgerRow key={item.id} item={item} />)}</tbody></table></div>
                 <footer className="table-pagination"><span>显示 {firstRow}–{lastRow}，共 {details.total} 条</span><div><label>每页<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label><button type="button" disabled={page <= 1 || detailsLoading} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || detailsLoading} onClick={() => setPage((value) => value + 1)}>下一页</button></div></footer>
               </>
             )}
@@ -293,7 +283,7 @@ function RevenueMiniMetric({ label, value, tone }: { label: string; value: numbe
 
 function RevenueLedgerRow({ item }: { item: RevenueDetailItem }) {
   const room = item.roomId ? `房间 ${item.roomId}${item.round && item.round !== "0" ? ` · 第 ${item.round} 局` : ""}` : item.sourceType === "withdrawal_fee" ? "提现订单" : "大厅消费";
-  return <tr><td><strong>{item.date}</strong><small className="cell-subtitle">{item.time}</small></td><td><span className={`revenue-source-badge revenue-source-badge--${item.sourceType}`}>{sourceLabels[item.sourceType]}</span>{item.consumeType && <small className="cell-subtitle">{item.consumeType}</small>}</td><td><strong>{item.playerName || "未设置昵称"}</strong><small className="cell-subtitle">ID {item.playerId} · {room}</small></td><td className="is-income">+{formatMoney(item.inflow)}</td><td className="is-expense">{item.proxyPayout ? `−${formatMoney(item.proxyPayout)}` : "—"}</td><td className="is-expense">{item.lotteryPoolTransfer ? `−${formatMoney(item.lotteryPoolTransfer)}` : "—"}</td><td><strong className={item.netRevenue >= 0 ? "is-positive" : "is-negative"}>{formatSignedMoney(item.netRevenue)}</strong></td><td><span className="revenue-ledger-note">{item.note || "—"}{item.rewardProxyPool > 0 && <small>代理奖池待分配 {formatMoney(item.rewardProxyPool)} 元</small>}</span></td></tr>;
+  return <tr><td><strong>{formatBeijingDateTime(item.occurredAt)}</strong></td><td><span className={`revenue-source-badge revenue-source-badge--${item.sourceType}`}>{sourceLabels[item.sourceType]}</span>{item.consumeType && <small className="cell-subtitle">{item.consumeType}</small>}</td><td><strong>{item.playerName || "未设置昵称"}</strong><small className="cell-subtitle">ID {item.playerId} · {room}</small></td><td className="is-income">+{formatMoney(item.inflow)}</td><td className="is-expense">{item.proxyPayout ? `−${formatMoney(item.proxyPayout)}` : "—"}</td><td className="is-expense">{item.lotteryPoolTransfer ? `−${formatMoney(item.lotteryPoolTransfer)}` : "—"}</td><td><strong className={item.netRevenue >= 0 ? "is-positive" : "is-negative"}>{formatSignedMoney(item.netRevenue)}</strong></td><td><span className="revenue-ledger-note">{item.note || "—"}{item.rewardProxyPool > 0 && <small>代理奖池待分配 {formatMoney(item.rewardProxyPool)} 元</small>}</span></td></tr>;
 }
 
 function formatMoney(value: number) { return money.format(Math.abs(value)); }
