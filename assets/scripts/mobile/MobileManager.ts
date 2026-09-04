@@ -842,7 +842,7 @@ export default class MobileManager extends cc.Component {
     }
 
     //拷贝数据到手机
-    public CopyToPhone(strTxt)
+    public CopyToPhone(strTxt):boolean
     {
         if(cc.sys.isBrowser)
         {
@@ -879,21 +879,30 @@ export default class MobileManager extends cc.Component {
 			if (originalRange) {
 				selection.removeAllRanges();
 				selection.addRange(originalRange);
-            return
+            }
+            // Browser copy is already complete. Always stop here; on iOS Web
+            // this must not fall through to the Native jsb reflection branch.
+            return success;
+        }
+        try
+        {
+            if(cc.sys.os == cc.sys.OS_ANDROID)
+            {
+                jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "CopyData", "(Ljava/lang/String;)V",strTxt);
+                return true;
+            }
+            else if(cc.sys.os == cc.sys.OS_IOS)
+            {
+                jsb.reflection.callStaticMethod("AppController","CopyData:",strTxt);
+                return true;
             }
         }
-        if(cc.sys.os == cc.sys.OS_ANDROID)
-        {            
-            jsb.reflection.callStaticMethod("org/cocos2dx/javascript/AppActivity", "CopyData", "(Ljava/lang/String;)V",strTxt);
-        }
-        else if(cc.sys.os == cc.sys.OS_IOS)
-        {            
-            jsb.reflection.callStaticMethod("AppController","CopyData:",strTxt);         
-        }
-        else
+        catch(err)
         {
-            console.log("非手机平台不支持");
+            console.log("复制失败",err);
         }
+        console.log("非手机平台不支持");
+        return false;
     }
     //获取剪切板数据
     public GetPasteData()

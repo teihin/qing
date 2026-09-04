@@ -616,7 +616,25 @@ export default class panelMain extends UIPanelViewBase {
 
     private RefreshAgentMenuVisibility()
     {
-        Tool.GetChild(this.node,"Main/我的/操作/代理").active = this.IsCurrentUserAgent();
+        let operation = Tool.GetChild(this.node,"Main/我的/操作");
+        let agent = Tool.GetChild(operation,"代理");
+        let isAgent = this.IsCurrentUserAgent();
+        agent.active = isAgent;
+
+        // 代理：六个入口按确认稿排列。非代理：隐藏“我的代理”，
+        // 后续五个按钮保持阅读顺序依次向前补位。
+        let names = isAgent
+            ? ["代理","推广二维码","资金明细","赠送","战绩","设置"]
+            : ["推广二维码","资金明细","赠送","战绩","设置"];
+        let slots = [
+            cc.v2(-172,111), cc.v2(170,111),
+            cc.v2(-172,0), cc.v2(170,0),
+            cc.v2(-172,-111), cc.v2(170,-111)
+        ];
+        for(let i=0;i<names.length;i++)
+        {
+            Tool.GetChild(operation,names[i]).setPosition(slots[i]);
+        }
     }
     public set_photo(old)
     {
@@ -669,6 +687,18 @@ export default class panelMain extends UIPanelViewBase {
         else if(button.node.name === "战绩")
         {
             UIManager.getInstance().showPanel("panelRecordList",ShowPanelMode.Cover);
+        }
+        else if(button.node.name === "复制ID")
+        {
+            let strID = Tool.GetChild(this.node,"Main/我的/信息/id").getComponent(cc.Label).string.trim();
+            if(strID === "")
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"玩家ID为空，暂时无法复制！");
+                return;
+            }
+            let copied = MobileManager.getInstance().CopyToPhone(strID);
+            let message = copied ? "玩家ID复制成功！" : "玩家ID复制失败，请稍后重试！";
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
         }
         else if(button.node.name === "查看数据")
         {

@@ -20,13 +20,11 @@ export default class ScrollItem extends ScrollItemBase {
         this.node.active = true;
         let room_id = jRoom[0] == null ? "" : jRoom[0].toString();
         let room_status = jRoom[1];
-        let remark = jRoom[2];
         let plays = jRoom[3];
         let max_plays = jRoom[4];
         let game_pi = jRoom[5];
         let game_time = jRoom[6];
         let room_name = jRoom[7];
-        let game_9 = jRoom[8] == 0 ? false:true; //地九王
 
         this.node.name = room_id;
 
@@ -39,13 +37,27 @@ export default class ScrollItem extends ScrollItemBase {
             this.node.opacity = 255
         }
 
+        // 当前大厅协议中的 room_name 采用“底皮-房间号”格式，例如
+        // “1-812193”。V7 卡片按确认稿拆成“房间 812193 / 底皮 1”，
+        // game_pi 则是局数（例如 1/3），不再把 remark 的分钟值塞进局数栏。
+        let rawRoomName = room_name == null || room_name === "" ? room_id : String(room_name);
+        let displayRoomID = rawRoomName.replace(/^房间\s*/, "");
+        let bottomSkin = "";
+        let roomNameParts = displayRoomID.match(/^(\d+)-(\d+)$/);
+        if(roomNameParts != null)
+        {
+            bottomSkin = roomNameParts[1];
+            displayRoomID = roomNameParts[2];
+        }
 
-        this.node.getChildByName("地九王").active = game_9;        
-        this.node.getChildByName("底皮").getComponent(cc.Label).string = String(game_pi || "").replace("底皮","");
+        // 确认稿卡片没有旧版“地九王”角标；玩法信息仍由房间数据和
+        // 进入后的规则面板保留，这里只关闭旧皮肤的叠加美术。
+        this.node.getChildByName("地九王").active = false;
+        this.node.getChildByName("底皮").getComponent(cc.Label).string = bottomSkin;
         this.node.getChildByName("人数").getComponent(cc.Label).string = plays+'/'+max_plays;
         this.node.getChildByName("时间").getComponent(cc.Label).string = game_time;
-        this.node.getChildByName("倒计时").getComponent(cc.Label).string = "剩余"+remark;
-        this.node.getChildByName("name").getComponent(cc.Label).string = room_name;
+        this.node.getChildByName("倒计时").getComponent(cc.Label).string = String(game_pi || "").replace("底皮", "").replace("局数", "");
+        this.node.getChildByName("name").getComponent(cc.Label).string = "房间 " + displayRoomID;
 
         const statusPath = "other/状态_"+room_status;
         const cachedStatus = ScrollItem.statusSpriteCache[statusPath];
