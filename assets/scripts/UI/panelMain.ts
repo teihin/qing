@@ -99,6 +99,7 @@ export default class panelMain extends UIPanelViewBase {
     };
     onLoad () {
         super.onLoad();
+        this.HidePromotionPanelOnLobbyOpen();
         
         KBEngine.Event.register("set_gold", this, "set_gold");
         KBEngine.Event.register("set_gold2", this, "set_gold");
@@ -213,8 +214,17 @@ export default class panelMain extends UIPanelViewBase {
     }
 
     onEnable(){
+        this.HidePromotionPanelOnLobbyOpen();
         GameDataManager.getInstance().dtLastSend = new Date().getTime();
         GameDataManager.getInstance().dtLastSuccess = new Date().getTime();
+    }
+
+    /** 大厅初次打开或重新启用时，推广分享页必须保持关闭。 */
+    private HidePromotionPanelOnLobbyOpen()
+    {
+        let promotionPanel = this.node.getChildByName("推广二维码");
+        if(promotionPanel)
+            promotionPanel.active = false;
     }
 
     start () {
@@ -700,6 +710,32 @@ export default class panelMain extends UIPanelViewBase {
             let message = copied ? "玩家ID复制成功！" : "玩家ID复制失败，请稍后重试！";
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
         }
+        else if(button.node.name === "复制推广ID")
+        {
+            let strID = Tool.GetChild(this.node,"推广二维码/V7推广ID")
+                .getComponent(cc.Label).string.replace(/^推广ID[：:]\s*/,"").trim();
+            if(strID === "" || strID === "--")
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"推广ID为空，暂时无法复制！");
+                return;
+            }
+            let copied = MobileManager.getInstance().CopyToPhone(strID);
+            let message = copied ? "推广ID复制成功！" : "推广ID复制失败，请稍后重试！";
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+        }
+        else if(button.node.name === "复制推广地址")
+        {
+            let strUrl = Tool.GetChild(this.node,"推广二维码/V7推广链接")
+                .getComponent(cc.Label).string.trim();
+            if(strUrl === "" || strUrl === "https://--")
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"游戏下载地址为空，暂时无法复制！");
+                return;
+            }
+            let copied = MobileManager.getInstance().CopyToPhone(strUrl);
+            let message = copied ? "游戏下载地址复制成功！" : "游戏下载地址复制失败，请稍后重试！";
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+        }
         else if(button.node.name === "查看数据")
         {
             if((GameDataManager.getAccount().gold+GameDataManager.getAccount().gold2/100)<0.5)
@@ -741,10 +777,21 @@ export default class panelMain extends UIPanelViewBase {
         else if(button.node.name == "推广二维码")
         {
             this.node.getChildByName("推广二维码").active = true;
+            let qrUrl = ConfigManager.getInstance().downloadurl+"/zc?guuid="+GameDataManager.getAccount().guuid;
+            let idLabel = Tool.GetChild(this.node,"推广二维码/V7推广ID");
+            if(idLabel && idLabel.getComponent(cc.Label))
+            {
+                idLabel.getComponent(cc.Label).string = "推广ID：" + GameDataManager.getAccount().guuid;
+            }
+            let linkLabel = Tool.GetChild(this.node,"推广二维码/V7推广链接");
+            if(linkLabel && linkLabel.getComponent(cc.Label))
+            {
+                linkLabel.getComponent(cc.Label).string = qrUrl;
+            }
             let img = Tool.GetChild(this.node ,"推广二维码/二维码/img").getComponent(cc.Graphics);
-            this.createQR(img,ConfigManager.getInstance().downloadurl+"/zc?guuid="+GameDataManager.getAccount().guuid);
+            this.createQR(img,qrUrl);
         }
-        else if(button.node.name === "分享二维码")
+        else if(button.node.name === "分享二维码" || button.node.name === "保存二维码")
         {
             MobileManager.getInstance().CaptureScreen();
         }
@@ -757,23 +804,39 @@ export default class panelMain extends UIPanelViewBase {
         {
             let strID = Tool.GetChild(button.node.parent,"用户id").getComponent(cc.EditBox).string;
             let strNum = Tool.GetChild(button.node.parent,"金额").getComponent(cc.EditBox).string;
+            let strPass = Tool.GetChild(button.node.parent,"V7交易密码").getComponent(cc.EditBox).string;
             if(strID.length != 6)
             {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入正确的用户ID！");
                 return;
             }
-            if(strNum !== "" && !/^0*[1-9][0-9]*$/.test(strNum))
+            if(strNum == "")
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入金额!");
+                return;
+            }
+            if(!/^0*[1-9][0-9]*$/.test(strNum))
             {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"赠送金额只能输入大于0的整数！");
                 return;
             }
-            // if(strNum === "")
-            // {
-            //     UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入金额!");
-            //     return;
-            // }
+            if(strPass == "")
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入密码!");
+                return;
+            }
 
-            UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,strID+","+strNum);
+            // V7赠送页已经包含交易密码输入框，直接沿用原确认弹窗的
+            // Exchange2协议提交，避免再次弹窗并重复输入密码。
+            let strParam = JSON.stringify({
+                header:"调用_方法_Exchange2",
+                target_guuid:strID,
+                money_value:strNum,
+                money_type:"gold",
+                user_pwd:strPass,
+                client_version:"2022032201"
+            });
+            GameDataManager.getAccount().reqAccountCommand(strParam, "P@调用_方法_Exchange2");
         }
         else if(button.node.name === "关闭上层")
         {
@@ -1781,6 +1844,10 @@ export default class panelMain extends UIPanelViewBase {
                 }
             }
         });
+
+        // 钱包确认稿是独立全屏页，顶部已有返回按钮；打开钱包时隐藏
+        // 大厅底栏，避免长屏下遮挡充值、提现与记录的底部操作区。
+        this.node.getChildByName("Down").active = strName !== "钱包";
     }
 
     private GetRoomListFilter():{roomType:string,haveFreeSit:number,key:string}
@@ -2337,6 +2404,7 @@ export default class panelMain extends UIPanelViewBase {
             this.GetAllExchangeInfo();
             Tool.GetChild(this.node,"赠送/操作/用户id").getComponent(cc.EditBox).string = "";
             Tool.GetChild(this.node,"赠送/操作/金额").getComponent(cc.EditBox).string = "";
+            Tool.GetChild(this.node,"赠送/操作/V7交易密码").getComponent(cc.EditBox).string = "";
         }
         else if (nCode == 0x302)
         {
@@ -2386,33 +2454,56 @@ export default class panelMain extends UIPanelViewBase {
     public setExchangeItemInfo(node:cc.Node,objOne:any)
     {
         node.active = true;
-        
+
         let strTarID = objOne["target_guuid"];
         let strTarName = objOne["target_name"];
         let strSrcID = objOne["user_guuid"];
         let strSrcName = objOne["user_name"];
 
-        let strDate:string = objOne["date"];
-        strDate  = strDate.replace(" ","\r\n");
-        let strStoneNum = objOne["stone_number"];
-        let strType = objOne["type"];
-
-        //判断是转入还是转出
-        let strUserID = GameDataManager.getAccount().guuid;
-
-        if (strUserID == strSrcID) //转出
+        // 确认稿的时间为单行“月/日 时:分”，不能沿用旧版两行日期。
+        let strDate:string = String(objOne["date"] || "").replace("T"," ").replace(/\r?\n/g," ");
+        let dateMatch = strDate.match(/^\d{4}[-\/]([0-9]{1,2})[-\/]([0-9]{1,2})\s+([0-9]{1,2}):([0-9]{2})/);
+        if(dateMatch)
         {
-            node.getChildByName("id").getComponent(cc.Label).string = strTarName+"\r\nID:"+strTarID;
-            node.getChildByName("count").getComponent(cc.Label).string = strStoneNum;
-            node.getChildByName("type").getComponent(cc.Label).string = "转出";
+            let month = dateMatch[1].length == 1 ? "0"+dateMatch[1] : dateMatch[1];
+            let day = dateMatch[2].length == 1 ? "0"+dateMatch[2] : dateMatch[2];
+            let hour = dateMatch[3].length == 1 ? "0"+dateMatch[3] : dateMatch[3];
+            strDate = month+"/"+day+" "+hour+":"+dateMatch[4];
         }
         else
         {
-            node.getChildByName("id").getComponent(cc.Label).string = strSrcName+"\r\nID:"+strSrcID;
-            node.getChildByName("count").getComponent(cc.Label).string = strStoneNum;
-            node.getChildByName("type").getComponent(cc.Label).string = "转入"
+            strDate = strDate.replace(/^\d{4}[-\/]/,"").replace(/:[0-9]{2}(\.[0-9]+)?$/,"");
         }
-        node.getChildByName("time").getComponent(cc.Label).string = strDate;        
+        let strStoneNum = objOne["stone_number"];
+
+        //判断是转入还是转出
+        let strUserID = GameDataManager.getAccount().guuid;
+        let strDisplayID = strTarID;
+        let strDisplayName = strTarName;
+
+        if (strUserID == strSrcID) //转出
+        {
+            node.getChildByName("type").getComponent(cc.Label).string = "赠送";
+        }
+        else
+        {
+            strDisplayID = strSrcID;
+            strDisplayName = strSrcName;
+            node.getChildByName("type").getComponent(cc.Label).string = "收到";
+        }
+        node.getChildByName("id").getComponent(cc.Label).string = strDisplayName+"\r\nID:"+strDisplayID;
+        node.getChildByName("count").getComponent(cc.Label).string = strStoneNum;
+        node.getChildByName("time").getComponent(cc.Label).string = strDate;
+
+        // 头像使用项目既有缓存/下载链路；圆形遮罩和金色外环已预制在行 Prefab。
+        let avatarRoot = node.getChildByName("头像");
+        let avatarMask = avatarRoot ? avatarRoot.getChildByName("mask") : null;
+        let avatarNode = avatarMask ? avatarMask.getChildByName("img") : null;
+        let avatar = avatarNode ? avatarNode.getComponent(cc.Sprite) : null;
+        if(avatar && !ImageManager.getInstance().GetImageByName(strDisplayID,"",avatar))
+        {
+            ImageManager.getInstance().AddWaitFreshImage2Catch(strDisplayID,avatar);
+        }
     }
     
     public onHallCommand(nCode:number, param:string)
@@ -2656,12 +2747,23 @@ export default class panelMain extends UIPanelViewBase {
             let forceUpdate = (label as any)._forceUpdateRenderData;
             if(typeof forceUpdate === "function")
                 forceUpdate.call(label, true);
-            let explicitLineHeight = Math.max(label.lineHeight, message.split("\n").length * label.lineHeight);
-            label.node.height = Math.max(label.node.height, explicitLineHeight);
+            // RESIZE_HEIGHT 会先根据620像素正文宽度算出自动换行后的真实高度；
+            // 不能只按显式换行数回写，否则一段很长但没有换行符的公告会被压成一行。
+            let explicitLineHeight = message.split("\n").length * label.lineHeight;
+            label.node.height = Math.max(label.lineHeight, label.node.height, explicitLineHeight);
             let layout = content.getComponent(cc.Layout);
-            if(layout != null)
+            if(layout != null && layout.enabled)
                 layout.updateLayout();
-            content.height = Math.max(scrollView.node.height,content.height);
+            // 公告详情的高清背景与标题均已预制在Prefab中；这里只根据
+            // 服务端正文长度扩展滚动范围，不在运行时生成或调整美术节点。
+            const v7MessageTop = 25;
+            const v7MessageBottomPadding = 30;
+            const v7ViewportHeight = content.parent == null ?
+                scrollView.node.height : content.parent.height;
+            content.height = Math.max(
+                v7ViewportHeight,
+                v7MessageTop + label.node.height + v7MessageBottomPadding
+            );
             scrollView.stopAutoScroll();
             scrollView.scrollToTop(0);
         },0);
@@ -2936,7 +3038,7 @@ export default class panelMain extends UIPanelViewBase {
             }
         },(err)=>{
             UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
+            // UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
         })
     }
 

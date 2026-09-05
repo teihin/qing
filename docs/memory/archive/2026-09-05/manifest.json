@@ -1,0 +1,127 @@
+{
+  "snapshot_date": "2026-09-05",
+  "source_path": "/Volumes/SSD/qing/AGENTS.md",
+  "source_bytes": 381476,
+  "source_sha256": "5a9add74967256bc41e70e43c7886ee63ca423b295c1f7e5d0dcf0557c0cfbcc",
+  "sections": [
+    {
+      "file": "00-preface.md",
+      "title": "项目记忆（Codex 自动读取）",
+      "start_line": 1,
+      "end_line": 6,
+      "body_sha256": "e6433f7756c32f4a1289c74ddda87d723e48f05e6df2c8c33f36404c138c2b43"
+    },
+    {
+      "file": "01-maintenance-history.md",
+      "title": "记忆维护规则",
+      "start_line": 7,
+      "end_line": 25,
+      "body_sha256": "b057ca411df47e064ad922e65540119d7e7e31322fa3583ce8488cb38fa5b556"
+    },
+    {
+      "file": "02-project-overview-and-handoffs.md",
+      "title": "项目概况",
+      "start_line": 26,
+      "end_line": 103,
+      "body_sha256": "16576c07d74049579484c6b72615562544a38ca0381305d30c9821aeb9ab22f5"
+    },
+    {
+      "file": "03-xuanmanager.md",
+      "title": "XuanManager 新后台管理系统",
+      "start_line": 104,
+      "end_line": 203,
+      "body_sha256": "f3932c1169178d04fa789d580ee8bad41cd7ea2a3908d6b30ee29f8414028f69"
+    },
+    {
+      "file": "04-chattool.md",
+      "title": "ChatTool 网页客服系统",
+      "start_line": 204,
+      "end_line": 236,
+      "body_sha256": "0452c260a12f411eaab8edacab546ca453118dba6463ba93758fbf57209efb25"
+    },
+    {
+      "file": "05-legacy-8l-ui.md",
+      "title": "8L 换皮方向（丁二黄扑克风格，已确认并落地）",
+      "start_line": 237,
+      "end_line": 289,
+      "body_sha256": "d073072272d651fb47a1aa62315791e87d2e671576037d33e725a3dbafcb860d"
+    },
+    {
+      "file": "06-startup-and-business.md",
+      "title": "启动与业务链路",
+      "start_line": 290,
+      "end_line": 316,
+      "body_sha256": "089cdcdef7db66aa7aec2f28728e4f84600982407513e08ecb2357b1192f7cd1"
+    },
+    {
+      "file": "07-network-protocol.md",
+      "title": "网络与牌局协议",
+      "start_line": 317,
+      "end_line": 327,
+      "body_sha256": "a8469f28a59f269fde3657c2748e0928344752461d0174fea47fbec31971fe90"
+    },
+    {
+      "file": "08-historical-priority-issues.md",
+      "title": "已确认的高优先级问题",
+      "start_line": 328,
+      "end_line": 386,
+      "body_sha256": "af66b988ee1f96224471aabf15c8098a2d6d6d8abb9d680eb1c535bcba25777b"
+    },
+    {
+      "file": "09-voice.md",
+      "title": "自研房间语音替换（服务端、Web、Android和iOS已实现）",
+      "start_line": 387,
+      "end_line": 419,
+      "body_sha256": "c596f1bcff4ab68757b8ecb3b36492d2ae9864c72dcbe3a2f1ada7526f98d79f"
+    },
+    {
+      "file": "10-custom-engine.md",
+      "title": "Cocos Creator 2.2.1 项目定制引擎审查",
+      "start_line": 420,
+      "end_line": 452,
+      "body_sha256": "b00e085374b34eb0192bfe2172146f470a27c52defb387cda961a515e68d72a8"
+    },
+    {
+      "file": "11-historical-unfinished-ui.md",
+      "title": "已知未完成界面需求",
+      "start_line": 453,
+      "end_line": 461,
+      "body_sha256": "4a7219bf0fee8a022639d650fb7cc0192fb0d4e2194d294483558af84cb20b6e"
+    },
+    {
+      "file": "12-legacy-art-directions.md",
+      "title": "换皮美术方向",
+      "start_line": 462,
+      "end_line": 573,
+      "body_sha256": "e3c43756f97b371c7917c15bdab42fbc71488252b6d5f5cdf54cca6d5b45159b"
+    },
+    {
+      "file": "13-asset-audit.md",
+      "title": "资源体积与未使用审计",
+      "start_line": 574,
+      "end_line": 582,
+      "body_sha256": "cf21b543fabcabec9210de6f5d113ac02e355564afa0ab96f984d3003d248ef8"
+    },
+    {
+      "file": "14-editing-constraints.md",
+      "title": "修改项目时的约束",
+      "start_line": 583,
+      "end_line": 592,
+      "body_sha256": "5e4fcc66fd5d5f570f8186848d2b794e27a1b92ae7a577e041afeab67c3a8cc2"
+    },
+    {
+      "file": "15-git-and-ssh.md",
+      "title": "GitHub 与 SSH",
+      "start_line": 593,
+      "end_line": 606,
+      "body_sha256": "0062c8e5c465d2df2948466f3c35e1f097ecb0cd93aff91c3b0117d452ae7a1a"
+    },
+    {
+      "file": "16-review-scope.md",
+      "title": "审查范围说明",
+      "start_line": 607,
+      "end_line": 609,
+      "body_sha256": "99fb6e234526767932c6ed54ef5c1fb237073450487eb6bc976a158eb5fb2ec7"
+    }
+  ]
+}

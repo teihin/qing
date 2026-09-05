@@ -223,6 +223,13 @@ export default class panelRecordInfo extends UIPanelViewBase {
         if(data == null)
             return;
         let jList = data["ClubRoomPlayedScore"];
+        // A refreshed settlement response must not accumulate the previous
+        // request's totals or award candidates.
+        this.nTotleIn = 0;
+        this.nMaxWin = -9999999;
+        this.nMinWin = 99999999;
+        this.nMaxIn = -1;
+        this.nLaoMo = 999999999;
         let arrayTask = []
         for(let i=0;i<jList.length;i++)
         {
@@ -250,7 +257,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
                 let task = new Promise((resolve,reject)=>{
                     return resolve([this.scrollRecordList.content.children[i],jItem])
                 })
-               // this.setRecordItemInfo(this.scrollRecordList.content.children[i],jItem,i==jList.length-1?this.UpdateMainShowInfo.bind(this):null);
+                arrayTask.push(task)
             }
         }
 
@@ -288,24 +295,24 @@ export default class panelRecordInfo extends UIPanelViewBase {
     public UpdateMainShowInfo()
     {
        //更新总体数据
-       Tool.GetChild(this.node,"基本/房间名").getComponent(cc.Label).string = this.strGameName;
+       Tool.GetChild(this.node,"基本/房间名").getComponent(cc.Label).string = "房间号:" + this.strRoomID;
        Tool.GetChild(this.node,"基本/时长").getComponent(cc.Label).string = this.strGameTime;
-       Tool.GetChild(this.node,"扩展/底皮").getComponent(cc.Label).string = this.strGameDipi;
+       Tool.GetChild(this.node,"扩展/底皮").getComponent(cc.Label).string = "底皮:" + this.FormatBottomStake(this.strGameDipi);
        Tool.GetChild(this.node,"扩展/总手数").getComponent(cc.Label).string = this.strRound;
        Tool.GetChild(this.node,"扩展/总带入").getComponent(cc.Label).string = this.nTotleIn.toString();
 
-       Tool.GetChild(this.node,"扩展/奖池").getComponent(cc.Label).string = this.strGameJiangChi;
+       Tool.GetChild(this.node,"扩展/奖池").getComponent(cc.Label).string = "总奖池:" + this.strGameJiangChi;
 
        if(Number(this.strGameJiangChi)>0)
        {
-            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(74, 211, 218, 255);
+            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(224, 181, 134, 255);
        }
        else if(Number(this.strGameJiangChi) == 0)
        {
-            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(205, 226, 235, 255);
+            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(224, 181, 134, 255);
        }
        else{
-            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(112, 172, 191, 255);
+            Tool.GetChild(this.node,"扩展/奖池").color = cc.color(224, 181, 134, 255);
        }
        
        //更新排行
@@ -367,7 +374,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
         let arrayTemp = strTemp.split(',');
 
         let arrayEx = strEx.split(',');
-        this.strGameTime = arrayEx[0] + "  " + arrayEx[1];
+        this.strGameTime = this.FormatSummaryTime(arrayEx.length > 1 ? arrayEx[1] : arrayEx[0]);
         this.strGameJiangChi = arrayEx[2];
         let strShou:string = arrayEx[3];
         this.strGameName = arrayEx[4];
@@ -411,24 +418,24 @@ export default class panelRecordInfo extends UIPanelViewBase {
         
         node.getChildByName("名字").getComponent(cc.Label).string = jItem["user_name"];
         node.getChildByName("id").getComponent(cc.Label).string = "ID:"+strID;
-        node.getChildByName("带入").getComponent(cc.Label).string = "带入:"+ this.CheckSmallPlay(strIn);
-        node.getChildByName("手数").getComponent(cc.Label).string = "手数:"+ strShou;
+        node.getChildByName("带入").getComponent(cc.Label).string = this.CheckSmallPlay(strIn);
+        node.getChildByName("手数").getComponent(cc.Label).string = strShou;
         
 
         if (Number(strScore) > 0)
         {
             node.getChildByName("输赢").getComponent(cc.Label).string = "+" + this.CheckSmallPlay(strScore);
-            node.getChildByName("输赢").color = cc.color(74, 211, 218, 255);
+            node.getChildByName("输赢").color = cc.color(246, 63, 54, 255);
         }
         else if (Number(strScore) < 0)
         {
             node.getChildByName("输赢").getComponent(cc.Label).string = this.CheckSmallPlay(strScore);;
-            node.getChildByName("输赢").color = cc.color(88, 178, 167, 255);
+            node.getChildByName("输赢").color = cc.color(139, 188, 25, 255);
         }
         else
         {
             node.getChildByName("输赢").getComponent(cc.Label).string = this.CheckSmallPlay(strScore);;
-            node.getChildByName("输赢").color = cc.color(205, 226, 235, 255);
+            node.getChildByName("输赢").color = cc.color(224, 181, 134, 255);
         }
 
         //惩罚问题
@@ -455,18 +462,18 @@ export default class panelRecordInfo extends UIPanelViewBase {
             ImageManager.getInstance().AddWaitFreshImage2Catch(strID, img);
         }
 
-        //索引
+        // 恢复玩家名次，并让个位/后续名次共用同一列位置。
         let idx:number = index+1;
-        if(idx<=3) //显示图片
+        if(idx<=3)
         {
-            node.getChildByName("idx").active = true;            
+            node.getChildByName("idx").active = true;
             node.getChildByName("idx2").active = false;
             node.getChildByName("idx").getComponent(cc.Label).string = idx.toString();
         }
         else
         {
-            node.getChildByName("idx").active = false;            
-            node.getChildByName("idx2").active = true;  
+            node.getChildByName("idx").active = false;
+            node.getChildByName("idx2").active = true;
             node.getChildByName("idx2").getComponent(cc.Label).string = idx.toString();
         }
         
@@ -475,6 +482,19 @@ export default class panelRecordInfo extends UIPanelViewBase {
             action();
         }
 
+    }
+
+    private FormatSummaryTime(raw:any):string
+    {
+        let value = raw == null ? "" : raw.toString().trim();
+        let match = value.match(/(\d{1,2}:\d{2})(?::\d{2})?/);
+        return match == null ? value : match[1];
+    }
+
+    private FormatBottomStake(raw:any):string
+    {
+        let value = raw == null ? "" : raw.toString().trim();
+        return value.replace(/^底皮\s*/, "");
     }
 
     //检测是否小皮玩法,

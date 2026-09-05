@@ -27,10 +27,12 @@ export default class panelQianBao extends UIPanelViewBase {
     @property(cc.SpriteFrame)
     paymentOtherIcon:cc.SpriteFrame = null;
 
-    private PAGE_PER_COUNT:number = 15;
+    private PAGE_PER_COUNT:number = 5;
     private paymentDefaultIconFrames:{[key:string]:cc.SpriteFrame} = {};
     private readonly paymentIconContextPrefix:string = "更新支付通道图标:";
     private strCurZhifuConfig:string = ""; //当前支付配置
+    private selectedPaymentChannelName:string = "";
+    private updatingPaymentChannels:boolean = false;
     private strZhifubTxt:string = "";
     private strYinlianTxt:string = "";
     private strUSDTTxt:string = ""
@@ -147,16 +149,10 @@ export default class panelQianBao extends UIPanelViewBase {
 
         this.node.getChildByName("选择银行").active = false;
 
-        if(cc.director.getScene().name == "drh8")
-        {
-            Tool.GetChild(this.node,"Title/关闭").active = true;
-            Tool.GetChild(this.node,"实名/Title/关闭").active = true;
-        }
-        else
-        {
-            Tool.GetChild(this.node,"Title/关闭").active = false;
-            Tool.GetChild(this.node,"实名/Title/关闭").active = false;
-        }
+        // V7钱包页顶部始终保留返回入口；Prefab内的高清箭头负责显示，
+        // 这里仅保证它在大厅和牌桌两个入口都可点击。
+        Tool.GetChild(this.node,"Title/关闭").active = true;
+        Tool.GetChild(this.node,"实名/Title/关闭").active = true;
         ConfigManager.getInstance().GetOneHashKey(GameDataManager.getAccount().guuid+"_提现预留_银联","更新提现预留");
 
         Tool.GetChild(this.node,"订单详情").active = false
@@ -180,7 +176,37 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(button.node.name === "关闭")
         {
-            UIManager.getInstance().closePanelByName(this.node.name);
+            // 大厅中的钱包是Main下的内嵌全屏页；返回时恢复大厅和底栏。
+            // 牌桌等其它入口仍保持原来的面板关闭逻辑。
+            if(this.node.parent != null && this.node.parent.name === "Main")
+            {
+                let mainRoot = this.node.parent;
+                let panelMain = mainRoot.parent;
+                this.node.active = false;
+                let discover = mainRoot.getChildByName("发现");
+                if(discover != null)
+                {
+                    discover.active = true;
+                }
+                let down = panelMain.getChildByName("Down");
+                if(down != null)
+                {
+                    down.active = true;
+                    let discoverToggle = down.getChildByName("发现");
+                    if(discoverToggle != null)
+                    {
+                        let toggle = discoverToggle.getComponent(cc.Toggle);
+                        if(toggle != null)
+                        {
+                            toggle.isChecked = true;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                UIManager.getInstance().closePanelByName(this.node.name);
+            }
         }
         else if(button.node.name === "客服")
         {
@@ -207,7 +233,7 @@ export default class panelQianBao extends UIPanelViewBase {
 
 
             //拿渠道
-            let arrayToggle = Tool.GetChild(this.node,"容器/充值/根/充值渠道").getComponentsInChildren(cc.Toggle);
+            let arrayToggle = Tool.GetChild(this.node,"容器/充值/根/通道视口/充值渠道").getComponentsInChildren(cc.Toggle);
             let strName:string = "";
             for(let item of arrayToggle)
             {
@@ -400,7 +426,7 @@ export default class panelQianBao extends UIPanelViewBase {
                         }
                     },(err)=>{
                         UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
-                        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
+                        // UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
                     })
                 }
                 else //其他走弹出   
@@ -461,7 +487,7 @@ export default class panelQianBao extends UIPanelViewBase {
             }
 
             //拿渠道
-            let arrayToggle = Tool.GetChild(this.node,"容器/充值/根/充值渠道").getComponentsInChildren(cc.Toggle);
+            let arrayToggle = Tool.GetChild(this.node,"容器/充值/根/通道视口/充值渠道").getComponentsInChildren(cc.Toggle);
             let strName:string = "";
             for(let item of arrayToggle)
             {
@@ -793,7 +819,7 @@ export default class panelQianBao extends UIPanelViewBase {
                     }
                 }
             },(err)=>{
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
+                // UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
             })
         }
         else if(button.node.name == "复制")
@@ -812,6 +838,8 @@ export default class panelQianBao extends UIPanelViewBase {
     {
         if(toggle.node.name === "充值")
         {
+            this.selectedPaymentChannelName = "";
+            this.strCurZhifuConfig = "";
             Tool.GetChild(this.node,"容器/充值/根").active = false;
             this.SwitchTab(toggle.node.name);
 
@@ -864,7 +892,7 @@ export default class panelQianBao extends UIPanelViewBase {
                     }
                 }
             },(err)=>{
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
+                // UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
             })
         }
         else if(toggle.node.name === "记录")
@@ -874,11 +902,13 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(toggle.node.parent.name === "充值渠道")
         {
-            if(toggle.isChecked)
+            if(!this.updatingPaymentChannels && toggle.isChecked && toggle.node.active)
             {
-                //更新选中的支付配置
-                ConfigManager.getInstance().GetOneHashKey("支付配置_"+toggle.node.name,"更新支付配置");
+                //批量初始化结束后和实际点击共用此入口，先清空旧配置再查询。
+                this.selectedPaymentChannelName = toggle.node.name;
                 this.strCurZhifuConfig = "";
+                this.SyncPaymentChannelCheckMarks();
+                ConfigManager.getInstance().GetOneHashKey("支付配置_"+toggle.node.name,"更新支付配置");
                // Tool.GetChild(this.node,"容器/充值/根/自行输入").active = false;
                // Tool.GetChild(this.node,"容器/充值/根/自行输入/input").getComponent(cc.EditBox).string = "";
                 if(toggle.node.name == "VIP充值" || toggle.node.name == "VIP充值2")
@@ -966,7 +996,14 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(toggle.node.parent.name === "金额")
         {
-           // Tool.GetChild(this.node,"容器/充值/根/自行输入/input").getComponent(cc.EditBox).string = "";
+            // 金额文字是实时配置，选中时只同步文字对比色；底板与位置均已
+            // 固化在Prefab，运行时不再承担换皮或布局职责。
+            let amountToggles = toggle.node.parent.getComponentsInChildren(cc.Toggle);
+            amountToggles.forEach((item)=>{
+                let label = item.node.getChildByName("txt");
+                if(label != null)
+                    label.color = item.isChecked ? new cc.Color(4,34,57,255) : new cc.Color(231,197,145,255);
+            });
         }
     }
 
@@ -986,6 +1023,8 @@ export default class panelQianBao extends UIPanelViewBase {
     }
     public SwitchTab(strName:string)
     {
+        if(strName !== "充值")
+            this.selectedPaymentChannelName = "";
         let arrayTemp = this.node.getChildByName("容器").children;
         arrayTemp.forEach((item,idx,array)=>{
             if(item.name == strName)
@@ -1073,76 +1112,48 @@ export default class panelQianBao extends UIPanelViewBase {
             }
 
 
+            //先完成可用通道和默认状态，再启用容器，避免 ToggleContainer
+            //在首次 onEnable 时选中 Prefab 中暂时隐藏的通道。
+            if(!this.node.activeInHierarchy || !Tool.GetChild(this.node,"容器/充值").active)
+                return;
+            let rechargeRoot = Tool.GetChild(this.node,"容器/充值/根");
+            let channelRoot = Tool.GetChild(rechargeRoot,"通道视口/充值渠道");
+            let arrayToggle = channelRoot.getComponentsInChildren(cc.Toggle);
+            let container = channelRoot.getComponent(cc.ToggleContainer);
+            let allowSwitchOff = container == null ? false : container.allowSwitchOff;
             let arrayMsg = strContent.split("#");
-            let arrayToggle = Tool.GetChild(this.node,"容器/充值/根/充值渠道").getComponentsInChildren(cc.Toggle);
-            // if(arrayMsg.length>1)
-            if(strContent.indexOf("支付")>=0 || strContent.indexOf("VIP")>=0) //至少有一个支付
-            {
-                Tool.GetChild(this.node,"容器/充值/根").active = true;                                
-            }
-            let bHaveOne = false;
+            let defaultToggle:cc.Toggle = null;
+            this.updatingPaymentChannels = true;
+            this.selectedPaymentChannelName = "";
+            this.strCurZhifuConfig = "";
+            rechargeRoot.active = false;
+            if(container != null)
+                container.allowSwitchOff = true;
             for(let item of arrayToggle)
             {
                 this.ApplyPaymentChannelIcon(item.node.name, "default");
-                let bFind = false;
-                for(let one of arrayMsg)
+                item.isChecked = false;
+                item.node.active = arrayMsg.indexOf(item.node.name) >= 0;
+                if(item.node.active)
                 {
-                    if(item.node.name === one)
-                    {
-                        bFind = true;
-                        break;
-                    }
-                }
-
-
-                if(bFind)
-                {
-                    item.node.active = true;
+                    if(defaultToggle == null)
+                        defaultToggle = item;
                     ConfigManager.getInstance().GetOneHashKey("支付配置_"+item.node.name,this.paymentIconContextPrefix+item.node.name);
-                    if(!bHaveOne)
-                    {
-                        //第一个默认选中
-                        if(item.isChecked)
-                        {
-                            
-                            if(item.node.name == "VIP充值" || item.node.name == "VIP充值2")
-                            {
-                                Tool.GetChild(this.node,"容器/充值/根/金额").active = false;
-                                // Tool.GetChild(this.node,"容器/充值/根/金额输入").active = false;
-                                // Tool.GetChild(this.node,"容器/充值/根/姓名输入").active = false;
-                            }
-                            else if(item.node.name === "自助充值")
-                            {
-                                Tool.GetChild(this.node,"容器/充值/根/金额").active = false;
-                                // Tool.GetChild(this.node,"容器/充值/根/金额输入").active = true;
-                                // Tool.GetChild(this.node,"容器/充值/根/姓名输入").active = true;
-                                ConfigManager.getInstance().GetOneHashKey(GameDataManager.getAccount().guuid+"_支付预留_"+item.node.name,"自助充值信息");
-                            }
-                            else
-                            {
-                                Tool.GetChild(this.node,"容器/充值/根/金额").active = true;
-                                // Tool.GetChild(this.node,"容器/充值/根/金额输入").active = false;
-                                // Tool.GetChild(this.node,"容器/充值/根/姓名输入").active = false;
-                                ConfigManager.getInstance().GetOneHashKey("支付配置_"+item.node.name,"更新支付配置");
-                            }
-                        }
-                        else
-                        {
-                            item.isChecked = true;
-                        }
-                        
-                        bHaveOne = true;
-                    }
-                    else
-                    {
-                        item.isChecked = false;
-                    }
-                    
                 }
-                else
-                {
-                    item.node.active = false;
-                }
+            }
+            if(defaultToggle != null)
+                defaultToggle.isChecked = true;
+            if(container != null)
+                container.allowSwitchOff = allowSwitchOff;
+            rechargeRoot.active = defaultToggle != null;
+            this.SyncPaymentChannelCheckMarks();
+            this.updatingPaymentChannels = false;
+            //isChecked 在迁移开关或值未变化时未必发出事件，显式加载一次。
+            if(defaultToggle != null)
+            {
+                this.onToggleClick(defaultToggle);
+                //每次回到默认通道时同步回到列表顶部，确保首项立即可见。
+                Tool.GetChild(rechargeRoot,"通道视口").getComponent(cc.ScrollView).scrollToTop(0);
             }
 
         }
@@ -1162,12 +1173,14 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(context === "更新支付配置")
         {
-            let test = Tool.Base64Decode(strContent);
+            let channelName = strKey.indexOf("支付配置_") === 0 ? strKey.substring("支付配置_".length) : "";
+            //快速切换通道或离开充值页后，旧回包不能覆盖当前通道的金额和配置。
+            if(channelName === "" || channelName !== this.selectedPaymentChannelName ||
+                !this.node.activeInHierarchy || !Tool.GetChild(this.node,"容器/充值").active)
+                return;
             let data = JSON.parse(Tool.Base64Decode(strContent));
-            Debug.Log(Tool.Base64Decode(strContent));
             if(data == null)
                 return;
-            let channelName = strKey.indexOf("支付配置_") === 0 ? strKey.substring("支付配置_".length) : "";
             if(channelName != "")
                 this.ApplyPaymentChannelIcon(channelName, data["icon"]);
             this.strCurZhifuConfig = Tool.Base64Decode(strContent);
@@ -1335,9 +1348,20 @@ export default class panelQianBao extends UIPanelViewBase {
         }
     }
 
+    private SyncPaymentChannelCheckMarks()
+    {
+        let channelRoot = Tool.GetChild(this.node,"容器/充值/根/通道视口/充值渠道");
+        for(let item of channelRoot.getComponentsInChildren(cc.Toggle))
+        {
+            //只同步交互状态；图案、尺寸和层级由正式 Prefab 决定。
+            if(item.checkMark != null)
+                item.checkMark.node.active = item.node.active && item.isChecked;
+        }
+    }
+
     private CapturePaymentChannelDefaultIcons()
     {
-        let channelRoot = Tool.GetChild(this.node,"容器/充值/根/充值渠道");
+        let channelRoot = Tool.GetChild(this.node,"容器/充值/根/通道视口/充值渠道");
         if(channelRoot == null)
             return;
         for(let channelNode of channelRoot.children)
@@ -1351,7 +1375,7 @@ export default class panelQianBao extends UIPanelViewBase {
 
     private ApplyPaymentChannelIcon(channelName:string, iconType:any)
     {
-        let channelRoot = Tool.GetChild(this.node,"容器/充值/根/充值渠道");
+        let channelRoot = Tool.GetChild(this.node,"容器/充值/根/通道视口/充值渠道");
         let channelNode = channelRoot == null ? null : channelRoot.getChildByName(channelName);
         let background = channelNode == null ? null : channelNode.getChildByName("Background");
         let sprite = background == null ? null : background.getComponent(cc.Sprite);
@@ -1537,9 +1561,14 @@ export default class panelQianBao extends UIPanelViewBase {
     {
         node.active = true;
 
-        node.getChildByName("type").getComponent(cc.Label).string = jItem["work_type"];
-        node.getChildByName("count").getComponent(cc.Label).string = jItem["money"];
-        node.getChildByName("time").getComponent(cc.Label).string = jItem["date"];
+        let strType = jItem["work_type"] == null ? "" : jItem["work_type"].toString();
+        let strMoney = jItem["money"] == null ? "" : jItem["money"].toString();
+        let strDate = jItem["date"] == null ? "" : jItem["date"].toString();
+        let bWithdraw = strType.indexOf("提现") >= 0 || Number(strMoney) < 0;
+
+        node.getChildByName("type").getComponent(cc.Label).string = strType;
+        node.getChildByName("count").getComponent(cc.Label).string = strMoney;
+        node.getChildByName("time").getComponent(cc.Label).string = this.FormatWalletRecordTime(strDate);
         //node.getChildByName("状态").getComponent(cc.Label).string = jItem["status"];
         node.getChildByName("id").getComponent(cc.Label).string = jItem["work_order"];
         if(jItem.hasOwnProperty("remark1"))
@@ -1547,10 +1576,34 @@ export default class panelQianBao extends UIPanelViewBase {
             node.getChildByName("txt").getComponent(cc.Label).string = jItem["remark1"];
         }
         
-        let strState = jItem["status"];
+        let strState = jItem["status"] == null ? "" : jItem["status"].toString();
         // let img = node.getChildByName("状态").getComponent(cc.Sprite);
         // Tool.LoadImg(img,"other/"+strState);
-        node.getChildByName("状态文字").getComponent(cc.Label).string = strState
+        let stateLabel = node.getChildByName("状态文字").getComponent(cc.Label);
+        stateLabel.string = strState;
+        let finished = strState.indexOf("完成") >= 0 && strState.indexOf("未") < 0;
+        let pending = strState.indexOf("审核") >= 0 || strState.indexOf("处理") >= 0;
+        stateLabel.node.color = finished ? new cc.Color(151,211,57,255) :
+                                pending ? new cc.Color(75,220,222,255) :
+                                          new cc.Color(231,197,145,255);
+        node.getChildByName("count").color = bWithdraw ?
+            new cc.Color(255,92,80,255) : new cc.Color(151,211,57,255);
+
+        let iconIn = node.getChildByName("V7充值图标");
+        let iconOut = node.getChildByName("V7提现图标");
+        if(iconIn != null)
+            iconIn.active = !bWithdraw;
+        if(iconOut != null)
+            iconOut.active = bWithdraw;
+    }
+
+    private FormatWalletRecordTime(value:string):string
+    {
+        // 服务端常见格式为 yyyy-MM-dd HH:mm:ss；仅压缩显示，不改变原值。
+        let match = value.match(/^(\d{4})[-\/]([0-9]{2})[-\/]([0-9]{2})[ T]([0-9]{2}):([0-9]{2})/);
+        if(match != null)
+            return match[2]+"/"+match[3]+" "+match[4]+":"+match[5];
+        return value;
     }
 
 

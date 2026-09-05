@@ -94,6 +94,25 @@ def bottom(p: Prefab, path: str, bottom_px: float, *, x: float = 0,
     })
 
 
+def center(p: Prefab, path: str, *, x: float = 0, y: float = 0,
+           width: float | None = None, height: float | None = None):
+    """Keep a fixed element centered against the current visible canvas."""
+    node_id = p.node(path)
+    node = p.data[node_id]
+    if width is not None:
+        node["_contentSize"]["width"] = width
+    if height is not None:
+        node["_contentSize"]["height"] = height
+    p.set_pos(node_id, x, y)
+    widget = ensure_widget(p, node_id)
+    widget.update({
+        "_enabled": True, "alignMode": 1, "_alignFlags": 18,
+        "_horizontalCenter": x, "_verticalCenter": y,
+        "_originalWidth": node["_contentSize"]["width"],
+        "_originalHeight": node["_contentSize"]["height"],
+    })
+
+
 def stretch(p: Prefab, path: str, top_px: float, bottom_px: float,
             *, left: float = 0, right: float = 0):
     node_id = p.node(path)
@@ -137,6 +156,112 @@ def repair_login():
 def repair_main():
     p = Prefab("assets/resources/UI/panelMain.prefab")
 
+    # 游戏推广顶部固定，中段前景相对可视屏幕中心定位。这样长屏新增
+    # 高度会平均分配到内容组上下方，而不是全部堆成底部空白。
+    try:
+        p.set_active(p.node("推广二维码"), False)
+        top(p, "推广二维码/V7游戏推广母版", 0, width=750, height=1800)
+        top(p, "推广二维码/title", 0, width=750, height=81,
+            stretch_x=True)
+        top(p, "推广二维码/V7游戏推广盾牌", 100, width=188, height=198)
+        top(p, "推广二维码/V7推广主标题", 320, width=640, height=78)
+        for path, x, y, width, height in (
+            ("V7推广说明", 0, 196, 520, 38),
+            ("二维码", 0, -30, 350, 374),
+            ("V7推广信息卡", 0, -358, 640, 190),
+            ("V7推广ID", -45, -313, 440, 42),
+            ("V7推广地址标题", -165, -368, 200, 34),
+            ("V7推广链接", -45, -416, 440, 44),
+            ("复制推广ID", 265, -313, 86, 40),
+            ("复制推广地址", 265, -416, 86, 40),
+            ("分享二维码", -145, -544, 270, 82),
+            ("保存二维码", 145, -544, 270, 82),
+        ):
+            center(p, f"推广二维码/{path}", x=x, y=y,
+                   width=width, height=height)
+    except KeyError:
+        pass
+
+    # 公告使用一张750x1800完整长图并顶部定位；短屏裁掉底部空桌面，
+    # 长屏显示更多同一张图。禁止九切、纵向缩放或第二张背景拼接。
+    try:
+        p.set_active(p.node("Main/公告/V7公告长屏补底"), False)
+        top(p, "Main/公告/V7公告菜单高清母版", 0,
+            width=750, height=1800)
+        announcement_home = p.node("Main/公告/主页")
+        p.set_pos(announcement_home, 0, 0, 750, 1334)
+        announcement_widget = ensure_widget(p, announcement_home)
+        announcement_widget.update({
+            "_enabled": True, "alignMode": 1, "_alignFlags": 45,
+            "_left": 0, "_right": 0, "_top": 0, "_bottom": 0,
+            "_originalWidth": 750, "_originalHeight": 1334,
+        })
+        for name, y, width, height in (
+            ("公告6", 241, 371, 144),
+            ("公告1", 82, 371, 140),
+            ("公告2", -75, 371, 140),
+            ("公告5", -235, 371, 142),
+        ):
+            top_px = 667 - y - height / 2
+            top(p, f"Main/公告/主页/{name}", top_px,
+                x=162, width=width, height=height)
+    except KeyError:
+        pass
+
+    # 公告详情页使用同一张1800高的顶部定位背景，以及固定81像素的赠送页
+    # 同款标题栏。三个固定页滚动完整正文；最新公告则固定屏内底框，只让
+    # 服务端正文在框内滚动，避免出现3000像素空框且无法拉到底。
+    try:
+        for page in ("公告1", "公告2", "公告5", "公告6"):
+            top(p, f"{page}/V7公告详情长背景", 0,
+                width=750, height=1800)
+            top(p, f"{page}/title", 0,
+                width=750, height=81, stretch_x=True)
+            stretch(p, f"{page}/list", 81, 0, left=0, right=0)
+            detail_view = p.node(f"{page}/list/view")
+            if page == "公告6":
+                p.set_pos(detail_view, 0, -37.5, 620, 1068)
+            else:
+                p.set_pos(detail_view, 0, 0, 750, 1253)
+            detail_view_widget = ensure_widget(p, detail_view)
+            if page == "公告6":
+                detail_view_widget.update({
+                    "_enabled": True, "alignMode": 1, "_alignFlags": 45,
+                    "_left": 65, "_right": 65, "_top": 130, "_bottom": 55,
+                    "_originalWidth": 620, "_originalHeight": 1068,
+                })
+                _, detail_mask = p.component(detail_view, "cc.Mask")
+                if detail_mask is not None:
+                    detail_mask["_enabled"] = True
+            else:
+                detail_view_widget.update({
+                    "_enabled": True, "alignMode": 1, "_alignFlags": 45,
+                    "_left": 0, "_right": 0, "_top": 0, "_bottom": 0,
+                    "_originalWidth": 750, "_originalHeight": 1253,
+                })
+            detail_content = p.node(f"{page}/list/view/content")
+            content_height = 1068 if page == "公告6" else 1719
+            content_width = 620 if page == "公告6" else 750
+            p.data[detail_content]["_contentSize"].update({
+                "width": content_width, "height": content_height,
+            })
+            p.data[detail_content]["_trs"]["array"][0:2] = [0, content_height / 2]
+            detail_content_widget = ensure_widget(p, detail_content)
+            detail_content_widget.update({
+                "_enabled": True, "alignMode": 1, "_alignFlags": 40,
+                "_top": 0, "_horizontalCenter": 0,
+                "_originalWidth": content_width, "_originalHeight": content_height,
+            })
+        latest_panel = p.node("公告6/list/V7公告正文高清母版")
+        latest_panel_widget = ensure_widget(p, latest_panel)
+        latest_panel_widget.update({
+            "_enabled": True, "alignMode": 1, "_alignFlags": 45,
+            "_left": 0, "_right": 0, "_top": 0, "_bottom": 0,
+            "_originalWidth": 750, "_originalHeight": 1253,
+        })
+    except KeyError:
+        pass
+
     top(p, "Main/发现/Title", 0, width=750, height=64, stretch_x=True)
     top(p, "Main/发现/LOGO", 64, width=750, height=530)
     for name, x in (("排行榜", -241), ("比赛场", 0), ("举报反馈", 241)):
@@ -171,69 +296,57 @@ def repair_main():
     # this crown overlaps the list instead of being cropped away.
     bottom(p, "Down", 0, width=750, height=155, stretch_x=True)
 
-    top(p, "赠送/title", 0, width=750, height=82, stretch_x=True)
-    top(p, "赠送/V7赠送主视觉", 82, width=750, height=323)
-    top(p, "赠送/操作", 360, width=750, height=430, stretch_x=True)
-    p.set_pos(p.node("赠送/操作/用户id"), 0, 140, 660, 92)
-    p.set_pos(p.node("赠送/操作/金额"), 0, 35, 660, 92)
+    # 赠送页沿用确认稿的750x1334基准切分；长屏新增空间全部给记录列表。
+    top(p, "赠送/title", 0, width=750, height=81, stretch_x=True)
+    top(p, "赠送/V7赠送主视觉", 81, width=750, height=300)
+    top(p, "赠送/操作", 380, width=750, height=378, stretch_x=True)
+    for path, y in (("赠送/操作/用户id", 148), ("赠送/操作/金额", 51)):
+        field = p.node(path)
+        field_x = p.data[field]["_trs"]["array"][0]
+        field_width = p.data[field]["_contentSize"]["width"]
+        p.set_pos(field, field_x, y, field_width, 82)
     try:
         password = p.node("赠送/操作/V7交易密码")
     except KeyError:
         password = p.clone_subtree(p.node("赠送/操作/金额"), p.node("赠送/操作"), "V7交易密码")
     p.set_active(password, True)
-    p.set_pos(password, 0, -70, 660, 92)
-    p.art(p.node("赠送/操作/V7交易密码/BACKGROUND_SPRITE"), "give_password.png", 0, 0, 660, 92)
+    password_x = p.data[password]["_trs"]["array"][0]
+    password_width = p.data[password]["_contentSize"]["width"]
+    p.set_pos(password, password_x, -46, password_width, 82)
     set_label(p, "赠送/操作/V7交易密码/PLACEHOLDER_LABEL", "请输入交易密码")
-    p.set_pos(p.node("赠送/操作/提交赠送"), 0, -147, 420, 92)
-    try:
-        history = p.node("赠送/V7赠送记录标题")
-    except KeyError:
-        history = p.clone_subtree(p.node("赠送/title/赠送_受赠记录"), p.node("赠送"), "V7赠送记录标题")
-    p.set_active(history, True)
-    p.art(history, "title_gift_history.png", 0, 0, 300, 58, hide=True)
-    top(p, "赠送/V7赠送记录标题", 778, width=300, height=58)
-    top(p, "赠送/标题", 828, width=710, height=70)
-    stretch(p, "赠送/赠送记录列表", 898, 82, left=20, right=20)
-    bottom(p, "赠送/分页", 16, width=710, height=66)
+    p.set_pos(p.node("赠送/操作/提交赠送"), 0, -148, 414, 84)
+    p.set_active(p.node("赠送/V7赠送记录标题"), False)
+    top(p, "赠送/标题", 784, width=708, height=106)
+    stretch(p, "赠送/赠送记录列表", 890, 167, left=21, right=21)
+    bottom(p, "赠送/分页", 59, width=708, height=107)
     p.save()
 
 
 def repair_records():
     p = Prefab("assets/resources/UI/panelRecordList.prefab")
-    top(p, "title", 0, width=750, height=82, stretch_x=True)
-    top(p, "统计", 120, width=310, height=327)
-    top(p, "条件", 439, width=670, height=72)
-    top(p, "标题", 520, width=720, height=72)
-    stretch(p, "战绩列表", 592, 30, left=15, right=15)
+    top(p, "title", 0, width=750, height=72, stretch_x=True)
+    top(p, "统计", 72, width=750, height=368)
+    top(p, "条件", 440, width=656, height=68)
+    top(p, "标题", 520, width=722, height=63)
+    stretch(p, "战绩列表", 583, 107, left=14, right=14)
     stretch(p, "战绩列表/view", 0, 0)
+    bottom(p, "分页", 0, width=708, height=107)
     p.save()
 
 
 def repair_settlement():
     p = Prefab("assets/resources/UI/panelRecordInfo.prefab")
-    top(p, "title", 0, width=750, height=78, stretch_x=True)
-    top(p, "排行", 78, width=700, height=330)
-    top(p, "基本", 411, width=700, height=62)
-    top(p, "扩展", 411, width=700, height=62)
-    p.disable(p.node("扩展"), "cc.Sprite")
-    p.set_active(p.node("扩展/底皮"), True)
-    p.set_pos(p.node("基本/房间名"), -245, 0, 190, 40)
-    p.set_pos(p.node("基本/时长"), 265, 0, 150, 40)
-    p.set_pos(p.node("扩展/底皮"), -85, 0, 130, 40)
-    p.set_pos(p.node("扩展/txt copy"), 55, 0)
-    p.set_pos(p.node("扩展/奖池"), 105, 0, 90, 40)
-    p.set_active(p.node("扩展/txt"), False)
-    # There are two legacy nodes named txt. Hide both hand-count/carry-in
-    # labels from the one-line summary used by the approved settlement art.
-    for ref in p.data[p.node("扩展")].get("_children", []):
-        child = p.data[ref["__id__"]]
-        if child.get("_name") == "txt":
-            child["_active"] = False
-    p.set_active(p.node("扩展/总手数"), False)
-    p.set_active(p.node("扩展/总带入"), False)
-    stretch(p, "战绩列表", 486, 190, left=25, right=25)
+    top(p, "title", 0, width=750, height=72, stretch_x=True)
+    top(p, "排行", 72, width=750, height=290)
+    top(p, "基本", 376, width=704, height=53)
+    top(p, "扩展", 376, width=704, height=53)
+    try:
+        top(p, "V7结算表头", 439, width=708, height=65)
+    except KeyError:
+        pass
+    stretch(p, "战绩列表", 504, 140, left=21, right=21)
     stretch(p, "战绩列表/view", 0, 0)
-    bottom(p, "关闭", 66, width=360, height=88)
+    bottom(p, "关闭", 55, width=300, height=67)
     p.save()
 
 
@@ -250,12 +363,68 @@ def repair_give_pad():
     p.save()
 
 
+def repair_wallet():
+    """Keep the accepted wallet composition stable on 1334-1778px screens."""
+    p = Prefab("assets/resources/Prefabs/钱包.prefab")
+    stretch(p, "钱包", 0, 0)
+    top(p, "钱包/bk", 0, width=750, height=1800)
+    top(p, "钱包/Title", 0, width=750, height=84, stretch_x=True)
+    top(p, "钱包/选项", 102, width=666, height=66)
+    stretch(p, "钱包/容器", 198, 0)
+
+    page_height = BASE_H - 198
+
+    def full_child(path: str):
+        node_id = p.node(path)
+        p.data[node_id]["_anchorPoint"] = {
+            "__type__": "cc.Vec2", "x": 0.5, "y": 0.5,
+        }
+        p.set_pos(node_id, 0, 0, 750, page_height)
+        value = ensure_widget(p, node_id)
+        value.update({
+            "_enabled": True, "alignMode": 1, "_alignFlags": 45,
+            "_left": 0, "_right": 0, "_top": 0, "_bottom": 0,
+            "_originalWidth": 750, "_originalHeight": page_height,
+        })
+
+    def fixed_page_top(path: str, top_px: float, width: float, height: float):
+        node_id = p.node(path)
+        p.data[node_id]["_anchorPoint"] = {
+            "__type__": "cc.Vec2", "x": 0.5, "y": 0.5,
+        }
+        p.set_pos(node_id, 0, page_height / 2 - top_px - height / 2,
+                  width, height)
+        value = ensure_widget(p, node_id)
+        value.update({
+            "_enabled": True, "alignMode": 1, "_alignFlags": 17,
+            "_top": top_px, "_horizontalCenter": 0,
+            "_originalWidth": width, "_originalHeight": height,
+        })
+
+    for path in (
+        "钱包/容器/充值", "钱包/容器/充值/根",
+        "钱包/容器/提现", "钱包/容器/提现/提现选项",
+        "钱包/容器/记录",
+    ):
+        full_child(path)
+
+    # These two fixed-coordinate legacy groups previously stayed vertically
+    # centered inside the growing page. Pinning their 1136px design box to the
+    # top prevents channels and amount cards drifting downward on tall phones.
+    from repair_v7_wallet_channel_selection import apply_channel_viewport
+    apply_channel_viewport(p)
+    fixed_page_top("钱包/容器/充值/根/金额", 0, 750, page_height)
+
+    p.save()
+
+
 def main():
     repair_login()
     repair_main()
     repair_records()
     repair_settlement()
     repair_give_pad()
+    repair_wallet()
 
 
 if __name__ == "__main__":

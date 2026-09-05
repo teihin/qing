@@ -15,20 +15,34 @@ export default class panelMsgView extends UIPanelViewBase {
     start () {
         super.start();
 
-        if(this.node.name.indexOf("panelNotifyView")>=0)
+        let isAnnouncement = this.node.name.indexOf("panelNotifyView")>=0;
+        if(isAnnouncement)
             this.strUserData = Tool.Base64Decode(this.strUserData);
         this.SetMessage(this.strUserData);
 
+        // 公告弹窗使用独立的“确定 + 右上关闭”Prefab热区，不参与普通弹窗
+        // 的单双按钮排版，避免查找V7双按钮节点时因节点不存在而中断初始化。
+        if(isAnnouncement)
+            return;
+
         let confirmButton = this.node.getChildByName("bk").getChildByName("确定");
         let cancelButton = this.node.getChildByName("bk").getChildByName("取消");
+        let dualButtonArt = this.node.getChildByName("bk").getChildByName("V7双按钮底");
         let isConfirmation = this.arrayEx != null && typeof this.arrayEx[0] === "function";
         cancelButton.active = isConfirmation;
+        if(dualButtonArt != null)
+            dualButtonArt.active = isConfirmation;
         if(isConfirmation)
         {
-            confirmButton.x = 155;
-            confirmButton.y = -150;
-            cancelButton.x = -155;
-            cancelButton.y = -150;
+            confirmButton.x = 135;
+            confirmButton.y = -112;
+            cancelButton.x = -135;
+            cancelButton.y = -112;
+        }
+        else
+        {
+            confirmButton.x = 0;
+            confirmButton.y = -94;
         }
 
     }
@@ -74,7 +88,7 @@ export default class panelMsgView extends UIPanelViewBase {
 
     onButtonClick(button:cc.Button)
     {
-        if(button.node.name == "取消" || button.node.name == "确定")
+        if(button.node.name == "取消" || button.node.name == "确定" || button.node.name == "关闭")
         {
             let callback = this.arrayEx != null && typeof this.arrayEx[0] === "function" ? this.arrayEx[0] : null;
             let confirmed = button.node.name == "确定";

@@ -580,9 +580,16 @@ export default class panelHongli extends UIPanelViewBase {
             // else
             {
                 this.node.getChildByName("推广二维码").active = true;
+                let qrUrl = ConfigManager.getInstance().downloadurl+"/zc?guuid="+strGuuid;
+                let idLabel = Tool.GetChild(this.node, "推广二维码/V7推广ID");
+                if(cc.isValid(idLabel))
+                    idLabel.getComponent(cc.Label).string = "推广ID："+strGuuid;
+                let linkLabel = Tool.GetChild(this.node, "推广二维码/V7推广链接");
+                if(cc.isValid(linkLabel))
+                    linkLabel.getComponent(cc.Label).string = qrUrl;
                // this.node.getChildByName("推广二维码2").active = false;
                 let img = Tool.GetChild(this.node ,"推广二维码/二维码/img").getComponent(cc.Graphics);
-                this.createQR(img,ConfigManager.getInstance().downloadurl+"/zc?guuid="+GameDataManager.getAccount().guuid);
+                this.createQR(img,qrUrl);
             }
 
 

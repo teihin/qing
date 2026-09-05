@@ -1,0 +1,172 @@
+{
+  "version": 1,
+  "active_docs": [
+    "AGENTS.md",
+    "docs/memory/CURRENT.md",
+    "docs/memory/DECISIONS.md",
+    "docs/memory/README.md",
+    "docs/memory/topics/build-release-environment.md",
+    "docs/memory/topics/chattool-voice.md",
+    "docs/memory/topics/client-game-network.md",
+    "docs/memory/topics/v7-ui.md",
+    "docs/memory/topics/xuanmanager.md",
+    "docs/memory/handoffs/2026-09-05-memory-migration.md",
+    "docs/memory/archive/2026-09-05/README.md"
+  ],
+  "required_headings": {
+    "AGENTS.md": [
+      "开始任务",
+      "共同约束",
+      "收尾与持续维护"
+    ],
+    "docs/memory/CURRENT.md": [
+      "本轮实时核对：记忆整理",
+      "最近报告的 UI 状态",
+      "待核实项与工作边界"
+    ],
+    "docs/memory/DECISIONS.md": [
+      "有效",
+      "被替代",
+      "已否决",
+      "待核实"
+    ],
+    "docs/memory/README.md": [
+      "更新约定"
+    ],
+    "docs/memory/handoffs/2026-09-05-memory-migration.md": [
+      "目标与范围",
+      "基线",
+      "改动与来源",
+      "验证",
+      "下一步"
+    ]
+  },
+  "budgets": {
+    "AGENTS.md": {
+      "warn_bytes": 6144,
+      "error_bytes": 16384
+    },
+    "docs/memory/CURRENT.md": {
+      "warn_bytes": 8192,
+      "error_bytes": 16384
+    },
+    "docs/memory/DECISIONS.md": {
+      "warn_bytes": 8192,
+      "error_bytes": 16384
+    },
+    "docs/memory/README.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/topics/build-release-environment.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/topics/chattool-voice.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/topics/client-game-network.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/topics/v7-ui.md": {
+      "warn_bytes": 16384,
+      "error_bytes": 32768
+    },
+    "docs/memory/topics/xuanmanager.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/handoffs/2026-09-05-memory-migration.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/archive/2026-09-05/README.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    }
+  },
+  "archives": [
+    {
+      "path": "docs/memory/archive/2026-09-05/00-preface.md",
+      "sha256": "1a4b0cc1d8fa58dc9069aa9d516a92eacf5ab44680b6edbe0f0d66556e33dbd7"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/01-maintenance-history.md",
+      "sha256": "c4cc3650b7f62ca8d6c2dcb4adeac9b09611cdd3a7b90c948f53b19874cabc15"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/02-project-overview-and-handoffs.md",
+      "sha256": "346c3eea8b6c9c61e332ab669368c3dab8f3b1157bcb770bd7461d3686cacdd2"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/03-xuanmanager.md",
+      "sha256": "894596ac419f2c39b40861a9ce94d21fddf818a1ab27fb1401c6f73f6170e90c"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/04-chattool.md",
+      "sha256": "8075c8f8804a564ab4e050da24190bf0ef1c2df4ac1e47b9f3ee2b8df4f11386"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/05-legacy-8l-ui.md",
+      "sha256": "2ff69aa6a1637138645e5f519ca6a011bad9ec45b8c581b9005d50089f352f3e"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/06-startup-and-business.md",
+      "sha256": "86d0cff798c9bbbb3c7ffe3fe18943d04524534786be4ec8da141f4793b5b113"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/07-network-protocol.md",
+      "sha256": "17eaf4f24d34cc2bf97d19c45d8a40f569ec0ebd278a2ee838b283f1423dd10c"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/08-historical-priority-issues.md",
+      "sha256": "8f6d5f19e72fe70496482714d83bf917f7bf20d0c0ef627b463e2bd093ebc1fd"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/09-voice.md",
+      "sha256": "f8f292e94f872381444d0f34e1bbb4a65c142952708fccf42db6fcf215d68df0"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/10-custom-engine.md",
+      "sha256": "61ac4acc8d314d1be6c268e6b9dbce26c9079daf73392979857aa0189b322f5d"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/11-historical-unfinished-ui.md",
+      "sha256": "11f656a79531b46bf47cd255bc36408cd96b2bb3735ae74bd2c71f396bb52790"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/12-legacy-art-directions.md",
+      "sha256": "d8cd9016a1f8aa4bde6fef80582192df66e9de17b38b9c34f4da93c9770caad8"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/13-asset-audit.md",
+      "sha256": "f8189516596f9ef225bb04b8dcc3f2b80c9bbb980aeb75f82974d48b3dc438a4"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/14-editing-constraints.md",
+      "sha256": "f94ed72c4564c3568840b9a899c75869fcefef767421d2f7502af1cc6f9867f3"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/15-git-and-ssh.md",
+      "sha256": "c2966ee4e9dbc32ed4a0d2fdb279b16245e5b9ad3d32dce7842405b2e3f49879"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/16-review-scope.md",
+      "sha256": "45d317dfbe238779726cddaf42d6fa5c184d62314a1a494f50ec0ad6a0704828"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/AGENTS.original.md",
+      "sha256": "5a9add74967256bc41e70e43c7886ee63ca423b295c1f7e5d0dcf0557c0cfbcc"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/README.md",
+      "sha256": "c0846d1edafc0ba3005d21f1a4fcc23ea94ee7b534da488b72d41366918e0cbd"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-05/manifest.json",
+      "sha256": "86ed44cb47b3fed36a1b74592e4afd70d49e2e8961ac5715f1848ce45bec109e"
+    }
+  ]
+}

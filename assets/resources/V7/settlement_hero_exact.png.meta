@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "0127f23a-e9e4-5f31-b2cd-8d31a8da0b19",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 750,
+  "height": 290,
+  "platformSettings": {},
+  "subMetas": {
+    "settlement_hero_exact": {
+      "ver": "1.0.6",
+      "uuid": "2eefe3e3-7ef9-5fb9-8d8c-4fe955872be5",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "0127f23a-e9e4-5f31-b2cd-8d31a8da0b19",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 750,
+      "height": 290,
+      "rawWidth": 750,
+      "rawHeight": 290,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

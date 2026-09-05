@@ -14,7 +14,7 @@ const {ccclass, property} = cc._decorator;
 @ccclass
 export default class panelRecordList extends UIPanelViewBase {
 
-    private PAGE_PER_COUNT:string = "10";
+    private PAGE_PER_COUNT:string = "6";
     private scrollRecordList:ScrollViewEx = null;
 
     onLoad () {
@@ -64,7 +64,7 @@ export default class panelRecordList extends UIPanelViewBase {
         {
             if(this.scrollRecordList.nTotlePage == 0)
                 return;
-            this.GetAllRecord(this.scrollRecordList.nTotlePage);
+            this.GetAllRecord(this.scrollRecordList.nTotlePage-1);
         }
         else if(button.node.name === "战绩对象")
         {
@@ -160,18 +160,17 @@ export default class panelRecordList extends UIPanelViewBase {
         node.getChildByName("房间号").getComponent(cc.Label).string = jItem["room_id"];
         node.getChildByName("带入").getComponent(cc.Label).string = buyIn;
         node.getChildByName("底皮").getComponent(cc.Label).string = remark.length > 5 && remark[5] != null ? remark[5].toString() : "--";
-        node.getChildByName("时间").getComponent(cc.Label).string = remark.length > 7 && remark[7] != null ? remark[7].toString() : "--";
         node.getChildByName("输赢").getComponent(cc.Label).string = jItem["score"];
 
         //node.getChildByName("s房间").color = jItem["creater_guuid"] == "694632"?cc.Color.WHITE:cc.Color.RED;
 
         if(Number(jItem["score"])>0)
         {
-            node.getChildByName("输赢").color = cc.color(196,86,66,255);
+            node.getChildByName("输赢").color = cc.color(246,63,54,255);
         }
         else if(Number(jItem["score"])<0)
         {
-            node.getChildByName("输赢").color = cc.color(92,156,111,255);
+            node.getChildByName("输赢").color = cc.color(139,188,25,255);
         }
 
         let btn = node.getComponent(cc.Button);

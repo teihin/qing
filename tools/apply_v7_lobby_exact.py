@@ -145,9 +145,11 @@ def apply() -> None:
     free_toggle = p.node("Main/发现/过滤/空位条件/有空位")
     p.set_pos(free_toggle, 0, 0, 112, 70)
     transparent_art(p, "Main/发现/过滤/空位条件/有空位/Background", 32, 32)
-    p.set_pos(p.node("Main/发现/过滤/空位条件/有空位/Background"), -44, 0, 32, 32)
+    # The checkbox outline is baked into filter_bar_exact at local x=235.
+    # 空位条件 is x=295, so both the hit target and tick must sit at -60.
+    p.set_pos(p.node("Main/发现/过滤/空位条件/有空位/Background"), -60, 0, 32, 32)
     check = p.node("Main/发现/过滤/空位条件/有空位/checkmark")
-    p.art(check, "filter_check_exact.png", -44, 0, 32, 32, hide=True)
+    p.art(check, "filter_check_exact.png", -60, 0, 32, 32, hide=True)
     untint(p, check)
     p.set_active(p.node("Main/发现/过滤/空位条件/有空位/空位文字"), False)
 
