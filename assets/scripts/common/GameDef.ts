@@ -44,7 +44,7 @@ export const SERVER_URL:string = "";
 
 // Web Mobile/浏览器专用的KB WSS入口。原生客户端继续使用上面的IP、端口和WS配置。
 // BaseApp端口来自登录服下发，只允许连接服务器已明确开放的代理端口。
-export const WEB_PUBLIC_HOST:string = "154-37-155-17.sslip.io";
+export const WEB_PUBLIC_HOST:string = "154-37-155-17.nip.io";
 export const WEB_PUBLIC_HTTPS_ORIGIN:string = "https://" + WEB_PUBLIC_HOST;
 export const WEB_PUBLIC_WSS_ORIGIN:string = "wss://" + WEB_PUBLIC_HOST;
 export const WEB_KB_WSS_PROXY_BASE_URL:string = WEB_PUBLIC_WSS_ORIGIN + "/ws/";
