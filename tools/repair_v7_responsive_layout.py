@@ -145,11 +145,11 @@ def set_label(p: Prefab, path: str, value: str):
 def repair_login():
     p = Prefab("assets/resources/UI/panelLogin.prefab")
     top(p, "登录LOGO", 166, width=360, height=379)
-    top(p, "手机号", 603, width=620, height=112)
-    top(p, "密码", 735, width=620, height=112)
-    top(p, "忘记密码", 875, x=-210, width=210, height=54)
-    top(p, "注册账号", 875, x=210, width=210, height=54)
-    top(p, "登陆", 970, width=550, height=100)
+    top(p, "手机号", 603, width=527, height=112)
+    top(p, "密码", 735, width=527, height=112)
+    top(p, "忘记密码", 875, x=-190, width=210, height=54)
+    top(p, "注册账号", 875, x=190, width=210, height=54)
+    top(p, "登陆", 970, width=527, height=100)
     p.save()
 
 

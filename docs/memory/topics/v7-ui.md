@@ -1,6 +1,6 @@
 # V7 已确认页面与实施入口
 
-更新时间：2026-09-06
+更新时间：2026-09-07
 
 本文索引已有确认稿和实施记录；未列页面不得直接套用 V7。状态见 [CURRENT.md](../CURRENT.md)，取舍见 [DECISIONS.md](../DECISIONS.md)。
 
@@ -22,7 +22,7 @@
 | 页面 | 确认稿/正式 Prefab | 专用工具与原文来源 |
 |---|---|---|
 | 启动加载、网页 Splash、热更新 | `design-previews/2026-09-06-V7启动加载界面效果图-v1/`；`assets/resources/UI/panelUpdate.prefab`、`panelLoading.prefab`、`build-templates/web-mobile/splash.png` | `tools/generate_v7_startup_loading_assets.py`、`tools/apply_v7_startup_loading.py`、`tools/validate_v7_startup_loading.py`；见[交接](../handoffs/2026-09-06-startup-loading-v7.md) |
-| 登录、大厅 | 六页目录；`assets/resources/UI/panelLogin.prefab`、`assets/resources/UI/panelMain.prefab` | 大厅精修：`tools/extract_v7_lobby_exact_assets.py`、`tools/apply_v7_lobby_exact.py`。第 56、58–59 行 |
+| 登录、大厅 | 六页目录；`assets/resources/UI/panelLogin.prefab`、`assets/resources/UI/panelMain.prefab` | 登录精修：`tools/extract_v7_login_exact_assets.py`、`tools/apply_v7_login_exact.py`、`tools/validate_v7_login_exact.py`；大厅精修：`tools/extract_v7_lobby_exact_assets.py`、`tools/apply_v7_lobby_exact.py`。见[登录交接](../handoffs/2026-09-07-login-exact-art.md)及第 56、58–59 行 |
 | 登录快速注册弹窗 | 确认稿 `design-previews/2026-09-06-V7快速注册弹窗效果图-v3/01-快速注册弹窗-大字版.png`；`assets/resources/UI/panelLogin.prefab` 内 `注册弹窗` | 已实施；`tools/extract_v7_login_register_exact_assets.py`、`tools/apply_v7_login_register_exact.py`、`tools/validate_v7_login_register_exact.py`；见[交接](../handoffs/2026-09-06-login-quick-register-preview.md) |
 | 我的 | 六页目录 `03-我的.png`；`assets/resources/UI/panelMain.prefab` | `tools/extract_v7_mine_exact_assets.py`、`tools/apply_v7_mine_exact.py`。第 57 行 |
 | 战绩 | 六页目录 `04-战绩.png`；`assets/resources/UI/panelRecordList.prefab`、`assets/resources/Prefabs/战绩对象.prefab` | `tools/extract_v7_record_exact_assets.py`、`tools/apply_v7_record_exact.py`。第 53 行 |
@@ -62,6 +62,9 @@
 
 ### 登录快速注册
 
+- 登录主界面以六页最终目录的 `01-登录.png` 为唯一依据。`login_input_account_exact.png`、`login_input_password_exact.png`、`login_hint_*_exact.png`、`login_link_*_exact.png` 与 `login_button_exact.png` 都由确认稿直接切取；旧生成资源 `input_user.png`、`input_password.png`、`login_button.png` 的椭圆高光纹路不得恢复。两行输入框和登录按钮按确认稿等比映射为 527 宽，iPhone 6 和长屏只改变页面可见背景，不拉宽控件。
+- 账号和密码是动态 EditBox；空闲空值用 Prefab 内的直切占位美术字，编辑或有值时隐藏。确认稿没有右侧清除叉号，因此只隐藏 `CHACHA` 显示节点，不能删除清空事件热区或登录逻辑。
+
 - “快速注册”是覆盖在登录页上的模态弹窗，不是独立完整页面；后方 V7 登录页、盾牌、账号/密码输入与按钮仍应可辨认，弹窗仅增加遮罩、居中资料框和右上关闭按钮。不得使用独立页面标题栏或返回箭头。
 - 必须保留现有 Prefab 的真实结构和文案：头像选择、邀请码、昵称、账号、密码、确认密码、防盗号保护、状态提示、确认注册及安全提示；不得凭效果图增加手机号、验证码、邮箱、协议或第三方登录。
 - V3 大字版已于 2026-09-06 写入正式 Prefab。确认稿中 731×1299 的完整弹窗区域直接作为整图底，按 `750/941` 等比映射为固定 583×1035 并整体居中；1334/1500/1624/1778 高度只能增加弹窗外留白，禁止拉伸弹窗或重新分配内部行距。空状态使用确认稿自带的输入行、美术标题、图标、箭头、关闭和提交按钮；原生 EditBox 只在输入时显示动态文字。动态头像为 174×174，位于确认稿直切的 180×180 干净透明圆环下方，既铺满内沿又不覆盖金边。
@@ -100,7 +103,8 @@
 - 公告弹窗隐藏右侧滚动条图形，保留触控滚动；右上“关闭”和底部“确定”均有透明热区。公告初始化设置正文后必须退出普通单双按钮排版，否则会查找不存在节点造成空引用，使关闭看似失效。来源：第 51 行。
 - 公告弹窗正文承载区必须是一块连续生成的蓝色面，不得采用横向复制、逐条擦除或修补带示例文字的旧图；后者会留下密集横条并在不同高度下放大。标题、双层金边和按钮仍保持独立固定区域，动态正文只在内层 ScrollView 中滚动。
 - 大厅的通用提示、公告、头像确认、加入房间及登录异常弹窗统一 V7 蓝金；创建房间、客服等业务页面不套用普通弹窗底图。
-- 2026-09-06 桌内弹窗和侧边菜单形成一组**待确认、未实施**效果图：右侧抽屉菜单、悬浮牌局设置、带入积分、解散确认和举报界面。该组只决定新方向，不能在用户确认前运行应用工具或修改 `assets/resources/UI/panelGameView.prefab`；后续落地仍须保持八个现有侧边功能、动态头像/牌面/数值和原事件。
+- 2026-09-07 `design-previews/2026-09-07-V7桌内统一风格重设计-v6/` 替代旧偏黄黑金、圆桌背景和过大侧栏方向。其中小型两列牌局菜单已经用户确认并正式写入 `assets/resources/UI/panelGameView.prefab`、`assets/Scenes/drh8.fire`：面板与八个菜单入口采用确认稿直切资源；业务节点、事件和权限显隐保留，`cc.Layout` 以两列网格自动忽略非激活子项，因此隐藏入口不会留下空格。首轮从概念图缩取的快捷图标因内图形偏小/错位被否决，六个桌边快捷图标已改为统一 128×128 冷蓝金三环圆盘，图形统一放大居中，“菜单”和“记录”保持不同语义。首版纯文字空位圆环因缺乏设计感被否决，八个坐下按钮现统一使用软包贵宾椅、入座加号和底部“空位”铭牌构成的透明冷蓝金徽标；不通过运行时代码生成或重排。其余全高半屏实时战绩、全高半屏牌局回顾、顶部奖池弹窗和玩家信息弹窗仍是待确认/未实施概念；实时战绩不显示头像，回顾使用紧凑玩家行和放大牌面，桌面背景为当前全桌面而非圆桌。
+- `design-previews/2026-09-07-V7带入积分弹窗效果图-v1/01-带入积分.png` 是待用户确认的新版带入弹窗方向：941×1672 冷蓝金细边悬浮卡，保留大数值、补充按钮、滑杆、0/∞、已带入/总金币和取消/确定；标题必须准确写为“带入积分”。效果图采用等比居中并仅延展外部背景，尚未切图或写入 Prefab。
 
 ## 检查与工具风险
 

@@ -43,6 +43,8 @@ export default class panelLogin extends UIPanelViewBase {
     // 注册界面布局全部维护在 panelLogin.prefab；本脚本只处理交互、校验和接口请求。
     private _loginUserName:string = "";
     private _loginPass:string = "";
+    private _loginInputEditing:{[key:string]:boolean} = {};
+    private _loginInputPlaceholderArt:{[key:string]:cc.Node} = {};
     private strLastMMSMask:string = "";
     private _registerPanel:cc.Node = null;
     private _registerDialog:cc.Node = null;
@@ -95,6 +97,7 @@ export default class panelLogin extends UIPanelViewBase {
         this._loginPass = Tool.GetConfigString("pass","");
         this.node.getChildByName("手机号").getComponent(cc.EditBox).string = this._loginUserName;
         this.node.getChildByName("密码").getComponent(cc.EditBox).string = this._loginPass;
+        this.initLoginInputArt();
 
         this.initRegisterUI();
 
@@ -111,6 +114,38 @@ export default class panelLogin extends UIPanelViewBase {
         //Debug.Error("https://mcybde.com/chat/text/chat_04RAVp.html?extradata="+Tool.encrypt("{\"vipid\":\"999999\",\"name\":\"黄澄澄\"}"))
 
         
+    }
+
+    private initLoginInputArt()
+    {
+        let artNames:{[key:string]:string} = {
+            "手机号":"V7账号占位美术字",
+            "密码":"V7密码占位美术字"
+        };
+        for(let fieldName in artNames)
+        {
+            let editBox = this.node.getChildByName(fieldName).getComponent(cc.EditBox);
+            this._loginInputEditing[fieldName] = false;
+            this._loginInputPlaceholderArt[fieldName] = editBox.node.getChildByName(artNames[fieldName]);
+            editBox.node.on("text-changed",()=>this.refreshLoginInputArt(fieldName),this);
+            editBox.node.on("editing-did-began",()=>{
+                this._loginInputEditing[fieldName] = true;
+                this.refreshLoginInputArt(fieldName);
+            },this);
+            editBox.node.on("editing-did-ended",()=>{
+                this._loginInputEditing[fieldName] = false;
+                this.refreshLoginInputArt(fieldName);
+            },this);
+            this.refreshLoginInputArt(fieldName);
+        }
+    }
+
+    private refreshLoginInputArt(fieldName:string)
+    {
+        let editBox = this.node.getChildByName(fieldName).getComponent(cc.EditBox);
+        let art = this._loginInputPlaceholderArt[fieldName];
+        if(editBox != null && art != null)
+            art.active = !this._loginInputEditing[fieldName] && editBox.string.length == 0;
     }
 
     private initRegisterUI()
@@ -441,6 +476,8 @@ export default class panelLogin extends UIPanelViewBase {
                 cc.sys.localStorage.setItem("registrationAvatar_" + data.loginName,data.avatarIndex);
                 this.node.getChildByName("手机号").getComponent(cc.EditBox).string = data.loginName;
                 this.node.getChildByName("密码").getComponent(cc.EditBox).string = "";
+                this.refreshLoginInputArt("手机号");
+                this.refreshLoginInputArt("密码");
                 this.closeRegisterPanel();
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
                 return;
@@ -613,6 +650,7 @@ export default class panelLogin extends UIPanelViewBase {
         else if(button.node.name === "清除用户" || button.node.name === "清除密码")
         {
             button.node.parent.getComponent(cc.EditBox).string = ""
+            this.refreshLoginInputArt(button.node.parent.name);
         }
     }
     //登陆游戏

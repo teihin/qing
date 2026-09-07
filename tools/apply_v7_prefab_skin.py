@@ -162,19 +162,19 @@ def skin_login():
     p = Prefab("assets/resources/UI/panelLogin.prefab")
     p.sprite(p.root, "casino_bg.png")
     p.art(p.node("登录LOGO"), "shield_hd.png", 0, 350, 360, 379)
-    for path, asset, y in [("手机号", "input_user.png", 70), ("密码", "input_password.png", -55)]:
+    for path, asset, y in [("手机号", "login_input_account_exact.png", 70), ("密码", "login_input_password_exact.png", -55)]:
         field = p.node(path)
-        p.set_pos(field, 0, y, 620, 112)
+        p.set_pos(field, 0, y, 527, 112)
         bg = p.node(path + "/BACKGROUND_SPRITE")
-        p.art(bg, asset, 0, 0, 620, 112)
+        p.art(bg, asset, 0, 0, 527, 112)
         for child in p.data[field].get("_children", []):
             name = p.data[child["__id__"]].get("_name")
             if name in ("线条", "线条 copy", "sj", "mm"):
                 p.set_active(child["__id__"], False)
-    p.art(p.node("登陆"), "login_button.png", 0, -240, 550, 100, hide=True)
+    p.art(p.node("登陆"), "login_button_exact.png", 0, -240, 527, 100, hide=True)
     forgot = p.node("忘记密码"); p.set_active(forgot, True)
-    p.art(forgot, "link_reset.png", -210, -145, 210, 54, hide=True)
-    p.art(p.node("注册账号"), "link_register.png", 210, -145, 210, 54, hide=True)
+    p.art(forgot, "login_link_reset_exact.png", -190, -145, 210, 54, hide=True)
+    p.art(p.node("注册账号"), "login_link_register_exact.png", 190, -145, 210, 54, hide=True)
     p.style_labels(); p.save()
 
 
