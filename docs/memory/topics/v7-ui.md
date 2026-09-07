@@ -1,15 +1,16 @@
 # V7 已确认页面与实施入口
 
-更新时间：2026-09-05
+更新时间：2026-09-06
 
-本文是 V7 专题索引，适用于已有确认稿和实施记录的页面。牌桌、动画或未列入范围的页面不得仅因本文存在就套用 V7 或废弃其原设计。当前状态见 [CURRENT.md](../CURRENT.md)，旧新取舍见 [DECISIONS.md](../DECISIONS.md)。
+本文索引已有确认稿和实施记录；未列页面不得直接套用 V7。状态见 [CURRENT.md](../CURRENT.md)，取舍见 [DECISIONS.md](../DECISIONS.md)。
 
-证据来源：[原始记忆归档](../archive/2026-09-05/AGENTS.original.md)；下文引用“原文第 N 行”均指该文件。2026-09-05 本轮只核对所列主要目录/文件存在，未运行生成器、校验器、Creator 或账号测试。所有“已实施”“已通过”均是原文对应日期的报告，不是本轮重复验收。
+证据来源：[原始记忆归档](../archive/2026-09-05/AGENTS.original.md)；“原文第 N 行”均指该文件。2026-09-05 只核对路径存在，未运行工具、Creator 或账号测试；“已实施/已通过”均为旧报告，不是本轮复验。
 
 ## 视觉依据和实现契约
 
-- 六页主目录：`design-previews/2026-09-04-V7确认风格六页统一版/`；大厅最终风格来源为 `design-previews/2026-09-04-上一版蓝色与美术字校色/大厅-美术字-参考图边框-顺滑盾牌-v7.png`。六页保持 V7 的蓝色、纹理层次、蓝灰低浮雕边框、美术字和顺滑盾牌；不同稿件像素尺寸不相同，不能把截图像素当成所有 Prefab 的设计尺寸。来源：原文第 59 行。
+- 六页主目录：`design-previews/2026-09-04-V7确认风格六页统一版/`。2026-09-06 用户再次明确：后续所有页面的主风格、蓝色明度、香槟金冷暖、文字及边框都只以该目录内六页确认稿为母版，尤其对照 `01-登录.png`、`02-大厅.png`、`03-我的.png`；不得混入 `1jpg严格统一风格-v2`、早期大厅校色稿或近期偏黄效果图。旧“大厅最终风格来源”只作为历史过程，不再是后续设计的并列色调依据。不同稿件像素尺寸不相同，不能把截图像素当成所有 Prefab 的设计尺寸。
 - 必须把视觉写入正式 Prefab/Scene，并引用 `assets/resources/V7/` 等正式资源；源母版在 `art_sources/v7/` 等对应目录。运行脚本只负责业务、交互和真实动态值，不为换肤批量造美术节点或覆盖布局。来源：第 58 行。
+- 用户确认的效果图进入游戏时，确认稿中的美术字、图标、徽章、按钮字样和其他固定装饰必须直接从该确认图按原像素切取并作为独立正式资源引用，禁止重新生成、重新绘制或用近似图标/系统字替换。只有需要九切的纯底板、动态内容留空区和确认图未提供的交互状态，才允许在不改变确认稿观感的前提下制作干净可伸缩资源；输入值、头像、二维码、ID、记录等继续使用动态节点。
 - 通用伸缩约束：页面容器四边拉伸；顶部标题/主视觉 Top 固定，底栏/返回 Bottom 固定，列表 Top+Bottom 伸缩。新增屏幕高度只进入中间区。原文常用 750×1334 基准，并检查高度 1334/1500/1624/1778；具体页固定区尺寸以专题和最新 Prefab 为准。
 - 可拉伸底板用九宫格；盾牌、Logo、图标、美术字独立高清、保持比例。固定 750×1800 长母版 Top 固定、禁止整图九切。公告内框可采用专门九切底框；不能把“长母版禁九切”误解成禁用所有九宫格。来源：第 45、47、50、58 行。
 - 原交互、动态字段、头像加载和用户保护的节点继续保留；确认稿的示例数字不代表真实账号。不得因换肤改变服务端业务语义或为缺失功能造数据。来源：第 41、45、52、55、57–58 行。
@@ -20,15 +21,19 @@
 
 | 页面 | 确认稿/正式 Prefab | 专用工具与原文来源 |
 |---|---|---|
+| 启动加载、网页 Splash、热更新 | `design-previews/2026-09-06-V7启动加载界面效果图-v1/`；`assets/resources/UI/panelUpdate.prefab`、`panelLoading.prefab`、`build-templates/web-mobile/splash.png` | `tools/generate_v7_startup_loading_assets.py`、`tools/apply_v7_startup_loading.py`、`tools/validate_v7_startup_loading.py`；见[交接](../handoffs/2026-09-06-startup-loading-v7.md) |
 | 登录、大厅 | 六页目录；`assets/resources/UI/panelLogin.prefab`、`assets/resources/UI/panelMain.prefab` | 大厅精修：`tools/extract_v7_lobby_exact_assets.py`、`tools/apply_v7_lobby_exact.py`。第 56、58–59 行 |
+| 登录快速注册弹窗 | 确认稿 `design-previews/2026-09-06-V7快速注册弹窗效果图-v3/01-快速注册弹窗-大字版.png`；`assets/resources/UI/panelLogin.prefab` 内 `注册弹窗` | 已实施；`tools/extract_v7_login_register_exact_assets.py`、`tools/apply_v7_login_register_exact.py`、`tools/validate_v7_login_register_exact.py`；见[交接](../handoffs/2026-09-06-login-quick-register-preview.md) |
 | 我的 | 六页目录 `03-我的.png`；`assets/resources/UI/panelMain.prefab` | `tools/extract_v7_mine_exact_assets.py`、`tools/apply_v7_mine_exact.py`。第 57 行 |
 | 战绩 | 六页目录 `04-战绩.png`；`assets/resources/UI/panelRecordList.prefab`、`assets/resources/Prefabs/战绩对象.prefab` | `tools/extract_v7_record_exact_assets.py`、`tools/apply_v7_record_exact.py`。第 53 行 |
 | 赠送 | 六页目录 `05-赠送.png`；`assets/resources/UI/panelMain.prefab`、`assets/resources/Prefabs/赠送记录对象.prefab` | `tools/extract_v7_gift_exact_assets.py`、`tools/apply_v7_gift_exact.py`。第 54–55 行 |
 | 结算 | 六页目录 `06-结算.png`；`assets/resources/UI/panelRecordInfo.prefab`、`assets/resources/Prefabs/战绩玩家对象.prefab` | `tools/extract_v7_settlement_exact_assets.py`、`tools/apply_v7_settlement_exact.py`。第 52 行 |
+| 结算牌局回顾 | `assets/resources/UI/panelRecordInfo.prefab` 内“牌局回顾”；`assets/resources/Prefabs/回顾对象2.prefab`、`文字牌谱对象2.prefab` | `tools/extract_v7_review_exact_assets.py`、`tools/apply_v7_review_exact.py`；见[本轮交接](../handoffs/2026-09-06-settlement-review-and-ingame-concepts.md) |
 | 钱包充值/提现/记录 | `design-previews/2026-09-05-V7钱包三页效果图-v1/`；`assets/resources/Prefabs/钱包.prefab`、`assets/resources/Prefabs/交易查询对象.prefab` | `tools/extract_v7_wallet_exact_assets.py`、`tools/apply_v7_wallet_exact.py`。第 39 行 |
+| 钱包首次进入实名认证 | `design-previews/2026-09-06-V7钱包实名认证首次进入效果图-v1/`；`assets/resources/Prefabs/钱包.prefab`“实名” | `tools/extract_v7_wallet_realname_exact_assets.py`、`tools/apply_v7_wallet_realname_exact.py`；见[交接](../handoffs/2026-09-06-wallet-realname-preview.md) |
 | 公告菜单 | `design-previews/2026-09-04-V7公告菜单高清效果图-v1/`；`assets/resources/UI/panelMain.prefab` | 正式长图 `assets/resources/V7/announcement_menu_long_exact.png`；对应约束由响应式工具维护。第 50 行 |
 | 公告四个详情 | `design-previews/2026-09-04-V7公告详情四页效果图-v2/`；`assets/resources/UI/panelMain.prefab` 内 `公告1/2/5/6` | `tools/apply_v7_announcement_detail_exact.py`；最新公告框为 `tools/extract_v7_announcement_detail_latest_panel.py`。第 47 行 |
-| 公告和提示弹窗 | `design-previews/2026-09-04-V7弹窗效果图-v2/`；`assets/resources/UI/panelNotifyView.prefab`、`panelNotifyViewCZ.prefab`、`panelNotifyViewHD.prefab`、`panelMsgView.prefab`（后三项同目录） | 按原文查对应 Prefab 与 `panelMsgView.ts` 的业务分支，未指定新生成器。第 51 行 |
+| 公告和提示弹窗 | 弹窗 V2；`assets/resources/UI/panelNotifyView*.prefab`、`panelMsgView.prefab`、`panelLoginErrorEx.prefab` | `tools/extract_v7_popup_exact_assets.py`、`tools/apply_v7_popup_exact.py`；统一 V7 蓝金。第 51 行 |
 | 后续模块 V3 | `design-previews/2026-09-05-V7后续模块全套效果图-v3/`；主页面/代理/排行榜/预留信息，见下节 | `tools/extract_v7_followup_exact_assets.py` 及对应页面应用工具。第 45 行 |
 
 `tools/apply_v7_prefab_skin.py`、`tools/generate_v7_runtime_skin.py` 是原文第 58 行的早期 V7 实施入口；同段及后续记录已有页面专用精修。不得因为文件名含 V7 就默认重跑全套并覆盖精修。
@@ -43,25 +48,41 @@
 
 ## 容易回退的页面细节
 
+### 启动加载
+
+- 网页进入页和原生热更新页共用 `panelUpdate.prefab`；正式进度条、百分比、状态和错误重试继续由原 `panelUpdate.ts` 驱动，不把假进度或版本结果烘焙进图片。`panelLoading.prefab` 是游戏内通用加载遮罩，只换小型加载卡与旋转环，不改业务生命周期。
+- 背景使用完整 750×1800 冷蓝赌场长图并 Top 固定；短屏裁切、长屏显示新增区域。盾牌、标题、分隔、进度组件和底部提示均为独立固定比例资源，不能把长屏差值分摊到它们。网页版构建模板 `splash.png` 与 Prefab 使用同一高清盾牌视觉。
+- 游戏不是俱乐部模式。启动页标题固定为“正在进入游戏”，不得恢复“私人俱乐部”或 `PRIVATE CLUB` 等俱乐部语义；英文只保留安全连接与资源加载语义。
+
 ### 大厅、我的
 
 - 大厅底栏顺序为“公告、客服、8L、钱包、我的”，独立留底部安全区；房间值来自真实服务端数组映射，不把确认图数字写成运行数据。`ScrollItem.ts` 承担字段映射，不承担换肤布局。大厅“排行榜、比赛场、举报反馈”等入口与业务实现状态分别判断。来源：第 56、58 行。
 - 2026-09-05 大厅筛选栏“有空位”选中勾修正：`filter_bar_exact.png` 内置方框中心约为素材 x=587.5；其父节点“空位条件”位于 x=295，因此 `有空位/Background` 与 `有空位/checkmark` 均固定为 x=-60、y=0、32×32。应用工具和响应式校验保持同一约束，不能回退到导致勾向右偏 16px 的 x=-44；业务 Toggle 与筛选逻辑不变。详见[本轮交接](../handoffs/2026-09-05-lobby-free-seat-checkbox.md)。
 - 我的资料卡保留真实头像、昵称、ID、金币和五项统计；五档底皮手数原记录仍为静态 0。复制 ID 使用独立透明 Button 和真实返回结果。Prefab 默认非代理五入口，真实代理账号恢复六入口，不能为统一静态截图删除该差异。来源：第 57 行。
 
+### 登录快速注册
+
+- “快速注册”是覆盖在登录页上的模态弹窗，不是独立完整页面；后方 V7 登录页、盾牌、账号/密码输入与按钮仍应可辨认，弹窗仅增加遮罩、居中资料框和右上关闭按钮。不得使用独立页面标题栏或返回箭头。
+- 必须保留现有 Prefab 的真实结构和文案：头像选择、邀请码、昵称、账号、密码、确认密码、防盗号保护、状态提示、确认注册及安全提示；不得凭效果图增加手机号、验证码、邮箱、协议或第三方登录。
+- V3 大字版已于 2026-09-06 写入正式 Prefab。确认稿中 731×1299 的完整弹窗区域直接作为整图底，按 `750/941` 等比映射为固定 583×1035 并整体居中；1334/1500/1624/1778 高度只能增加弹窗外留白，禁止拉伸弹窗或重新分配内部行距。空状态使用确认稿自带的输入行、美术标题、图标、箭头、关闭和提交按钮；原生 EditBox 只在输入时显示动态文字。动态头像为 174×174，位于确认稿直切的 180×180 干净透明圆环下方，既铺满内沿又不覆盖金边。
+- 防盗号切换会把固定默认状态替换成动态提示；专用蓝色清底必须排在动态状态文字和图标下方，不能因勾选开关遮挡提示。
+- 头像选择弹窗保留原随机 20 个头像和“换一批头像”逻辑。关闭图标、刷新底板和刷新文字使用位于弹窗根下的独立显示层，透明 Button 只负责事件，避免 Cocos 2.4.13 同节点 Sprite/Label 覆盖导致按钮可点但文字或图标消失。
+
 ### 战绩、结算
 
 - 战绩日期协议 `0=今日、-1=昨日、-2=前日`，默认今日；每页 6 条，尾页请求为 `nTotlePage-1`。字段为房间号、底注、带入、输赢；确认稿未画分页，原记录按用户要求复用赠送五键分页。来源：第 53 行。
 - 结算荣誉语义为“土豪=最高带入、MVP=最高输赢、大鱼=最低输赢”，不能改成亚军/季军。保留原 `排行/排队` Button、`排行/排队/pd` Spine 和业务显隐；历史战绩打开结算时按原逻辑隐藏。来源：第 52 行。
 - 头像和金属框应分层，源稿人像孔先清为统一深蓝，再提取抗锯齿框，避免残留参考人像。原记录发现人物根/前景框旧缩放分别为 0.84/1.15 导致错位，应用工具已显式恢复相关节点为 1.0；不能仅凭静态合成判断真实 Prefab 正确。来源：第 52 行。
+- 牌局回顾采用完整 `wallet_bg_exact.png` 750×1800 长背景，标题、模式信息条、双标签和分页分别为独立资源；回顾根必须是 `panelRecordInfo` 最后一个子节点，避免主结算“V7结算表头”和“返回大厅”覆盖子页。`回顾对象2` 为 708×184，动态牌面 70×98、头像与 118×118 金属环分层；顶部/分页固定，中部回顾列表或文字牌谱在 150/205 边距间伸缩。真实牌、头像、玩家名、分数和牌谱继续由原逻辑填充。
 
 ### 赠送、钱包
 
 - 赠送直接读取页内 ID、金额、交易密码并沿用原提交协议，已取消二次密码弹窗；成功后刷新记录并清空三项，失败保留输入。真实转账成功/失败回包未验证，不能从静态断言推导资金流程通过。来源：第 54 行。
 - 赠送真实记录的头像继续使用既有 `ImageManager`；原预览记录为空，有数据列表仍待验。钱包记录每页 5 条，与战绩每页 6 条不同。来源：第 39、53、55 行。
-- 2026-09-05 赠送页视觉修正：用户否定顶部两只写实手部，并指出列表背景擦除不净。`gift_hero_exact.png` 已改为无人物、无手部的冷蓝筹码/金币流光主视觉；`gift_list_panel_exact.png` 不再从三条样例记录中擦除，而由连续 V7 蓝色材质重建，禁止保留横向样例分层。正式 UUID、Prefab 节点、输入区、动态记录行和头像逻辑不变，详见[本轮交接](../handoffs/2026-09-05-gift-visual-cleanup.md)。
+- 2026-09-05 赠送页顶部改为无人物/手部的冷蓝筹码金币主视觉；列表底板由连续材质重建，不能擦除带样例行的效果图再九切。动态记录、头像和业务节点不变，见[交接](../handoffs/2026-09-05-gift-visual-cleanup.md)。
 - 钱包充值渠道/金额组按 Top 固定，页面四边拉伸，中部承接新增高度；嵌入大厅时隐藏共享 `Down`，返回恢复发现页及底栏；独立钱包按原方式关闭。第 39 行是换肤记录，不能据此把第 458 行旧充值临时拦截认定已解除。
-- 2026-09-05 通道修复：`Background` 使用正式 V7 卡片，`checkMark` 使用共用透明金框和勾角标，禁止选中层再烘焙固定图标/文字。Sprite 始终启用，由 Toggle 控制节点显隐，选中层最后绘制。原通道 1/3、2/4 同位置会遮挡，已迁入“根/通道视口/充值渠道”的原生两列 Grid 和纵向 ScrollView；首次/重入选首项后滚回顶部。TS 保留服务端图标映射，四个 `payment*Icon` 绑定 V7；应用与布局工具同步规则，详见[本轮交接](../handoffs/2026-09-05-wallet-channel-selection.md)。钱包记录面板和记录行仍只用无示例数据的干净底板。
+- 充值通道使用动态卡片和透明选中框，原生两列纵向 ScrollView 首次/重入选首项并回顶；TS 保留服务端图标映射。记录页只用无样例数据的干净底板，见[通道交接](../handoffs/2026-09-05-wallet-channel-selection.md)。
+- 2026-09-06 首次实名确认稿已写入 Prefab：完整长背景、独立盾牌/美术字、五个原生 EditBox、银行点击区和提交事件保留。实机反馈后又放大文字和提示、清除银行标题重叠，银行选择及大厅遗留弹层统一 V7；详见[实施交接](../handoffs/2026-09-06-wallet-realname-and-lobby-popups.md)。
 
 ### 推广、金币流向、列表和分页
 
@@ -78,6 +99,8 @@
 - 最新公告使用 `announcement_detail_latest_exact.png` 固定框和标题，正文单独在内层视口滚动；原约束为左右 65、上 130、下 55，正文宽 570、字号 24、行高 38；内容高度取真实排版高度与内框高度的较大者。旧 3000 像素空框已否决。来源：第 47 行。
 - 公告弹窗隐藏右侧滚动条图形，保留触控滚动；右上“关闭”和底部“确定”均有透明热区。公告初始化设置正文后必须退出普通单双按钮排版，否则会查找不存在节点造成空引用，使关闭看似失效。来源：第 51 行。
 - 公告弹窗正文承载区必须是一块连续生成的蓝色面，不得采用横向复制、逐条擦除或修补带示例文字的旧图；后者会留下密集横条并在不同高度下放大。标题、双层金边和按钮仍保持独立固定区域，动态正文只在内层 ScrollView 中滚动。
+- 大厅的通用提示、公告、头像确认、加入房间及登录异常弹窗统一 V7 蓝金；创建房间、客服等业务页面不套用普通弹窗底图。
+- 2026-09-06 桌内弹窗和侧边菜单形成一组**待确认、未实施**效果图：右侧抽屉菜单、悬浮牌局设置、带入积分、解散确认和举报界面。该组只决定新方向，不能在用户确认前运行应用工具或修改 `assets/resources/UI/panelGameView.prefab`；后续落地仍须保持八个现有侧边功能、动态头像/牌面/数值和原事件。
 
 ## 检查与工具风险
 

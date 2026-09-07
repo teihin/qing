@@ -51,8 +51,8 @@
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
-      "x": 0.5904291176435978,
-      "y": 0.5131202475964083
+      "x": 0.5,
+      "y": 0.5
     },
     "_trs": {
       "__type__": "TypedArray",
@@ -92,13 +92,13 @@
     },
     "_children": [
       {
+        "__id__": 10
+      },
+      {
         "__id__": 3
       },
       {
         "__id__": 6
-      },
-      {
-        "__id__": 10
       }
     ],
     "_active": true,
@@ -113,17 +113,17 @@
     "_prefab": {
       "__id__": 16
     },
-    "_opacity": 174,
+    "_opacity": 188,
     "_color": {
       "__type__": "cc.Color",
-      "r": 0,
-      "g": 0,
-      "b": 0,
+      "r": 2,
+      "g": 18,
+      "b": 32,
       "a": 255
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 749.8218383789062,
+      "width": 750,
       "height": 1334
     },
     "_anchorPoint": {
@@ -135,8 +135,8 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -67.8057272345049,
-        -17.502410293608705,
+        0,
+        0,
         0,
         0,
         0,
@@ -168,7 +168,7 @@
       "__id__": 2
     },
     "_children": [],
-    "_active": false,
+    "_active": true,
     "_components": [
       {
         "__id__": 4
@@ -180,15 +180,15 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 255,
-      "g": 255,
-      "b": 255,
+      "r": 240,
+      "g": 213,
+      "b": 164,
       "a": 255
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 177.68,
-      "height": 50.4
+      "width": 190,
+      "height": 42
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -200,7 +200,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        0,
+        -67,
         0,
         0,
         0,
@@ -238,11 +238,11 @@
       }
     ],
     "_useOriginalSize": false,
-    "_string": "Loading...",
-    "_N$string": "Loading...",
-    "_fontSize": 40,
-    "_lineHeight": 40,
-    "_enableWrapText": true,
+    "_string": "加载中…",
+    "_N$string": "加载中…",
+    "_fontSize": 26,
+    "_lineHeight": 32,
+    "_enableWrapText": false,
     "_N$file": {
       "__uuid__": "fd7307b2-666e-4c26-963d-59f787cad6fb"
     },
@@ -252,7 +252,7 @@
     "_N$horizontalAlign": 1,
     "_N$verticalAlign": 1,
     "_N$fontFamily": "Arial",
-    "_N$overflow": 0,
+    "_N$overflow": 1,
     "_N$cacheMode": 0,
     "_id": ""
   },
@@ -297,8 +297,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 160,
-      "height": 160
+      "width": 124,
+      "height": 124
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -310,14 +310,14 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        0,
+        24,
         0,
         0,
         0,
         0,
         1,
-        0.5,
-        0.5,
+        1,
+        1,
         1
       ]
     },
@@ -350,10 +350,10 @@
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
     "_spriteFrame": {
-      "__uuid__": "274c818a-717f-4323-87c5-a8c488ffcb64"
+      "__uuid__": "23693fe6-4142-58e4-bafa-1d1f463101bb"
     },
     "_type": 0,
-    "_sizeMode": 1,
+    "_sizeMode": 0,
     "_fillType": 0,
     "_fillCenter": {
       "__type__": "cc.Vec2",
@@ -362,7 +362,7 @@
     },
     "_fillStart": 0,
     "_fillRange": 0,
-    "_isTrimmedMode": true,
+    "_isTrimmedMode": false,
     "_atlas": null,
     "_id": ""
   },
@@ -398,13 +398,13 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "1",
+    "_name": "V7加载底板",
     "_objFlags": 0,
     "_parent": {
       "__id__": 2
     },
     "_children": [],
-    "_active": false,
+    "_active": true,
     "_components": [
       {
         "__id__": 11
@@ -426,8 +426,8 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 150,
-      "height": 150
+      "width": 260,
+      "height": 210
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -478,9 +478,11 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_spriteFrame": null,
-    "_type": 0,
-    "_sizeMode": 1,
+    "_spriteFrame": {
+      "__uuid__": "c86aa394-5d86-59ef-a07a-6896f9982ca5"
+    },
+    "_type": 1,
+    "_sizeMode": 0,
     "_fillType": 0,
     "_fillCenter": {
       "__type__": "cc.Vec2",
@@ -489,7 +491,7 @@
     },
     "_fillStart": 0,
     "_fillRange": 0,
-    "_isTrimmedMode": true,
+    "_isTrimmedMode": false,
     "_atlas": null,
     "_id": ""
   },
@@ -500,7 +502,7 @@
     "node": {
       "__id__": 10
     },
-    "_enabled": true,
+    "_enabled": false,
     "_defaultClip": null,
     "_clips": [],
     "playOnLoad": true,

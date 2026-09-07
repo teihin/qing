@@ -215,6 +215,35 @@ def apply_message() -> None:
     p.save()
 
 
+def apply_login_error() -> None:
+    """Remove the last legacy lobby dialogue without changing its callbacks."""
+    p = Prefab("assets/resources/UI/panelLoginErrorEx.prefab")
+    normalize_fullscreen(p)
+    bk = p.node("bk")
+    p.art(bk, "popup_message_single_exact.png", 0, 13, 532, 366)
+    untint(p, bk)
+    p.data[bk]["_trs"]["array"][6:9] = [1, 1, 1]
+
+    message = p.node("bk/msg")
+    p.set_pos(message, 0, 35, 450, 132)
+    style_dynamic_label(
+        p, message, width=450, height=132, font_size=30, line_height=40,
+        align=1, vertical=1, overflow=2,
+        preview="账号登录状态异常，请切换账号后重新登录。",
+    )
+
+    switch = p.node("bk/切换账号")
+    p.art(switch, "popup_switch_account_button_exact.png", 0, -94, 210, 64)
+    untint(p, switch)
+    _, button = p.component(switch, "cc.Button")
+    if button is not None:
+        button["transition"] = 0
+        button["_N$transition"] = 0
+    p.set_active(switch, True)
+    p.set_active(p.node("bk/取消"), False)
+    p.save()
+
+
 def main() -> None:
     preview = "健康游戏提示\n理性娱乐  适度游戏\n\n请合理安排游戏时间，避免沉迷。\n请勿修改充值金额。"
     apply_announcement(
@@ -230,7 +259,8 @@ def main() -> None:
         "popup_announcement_activity_exact_nobar.png", preview,
     )
     apply_message()
-    print("已把V7长公告和普通弹窗单双按钮两套状态写入Prefab。")
+    apply_login_error()
+    print("已把V7长公告、普通弹窗和登录异常弹窗写入Prefab。")
 
 
 if __name__ == "__main__":

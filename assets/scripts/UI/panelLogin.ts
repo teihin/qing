@@ -47,7 +47,10 @@ export default class panelLogin extends UIPanelViewBase {
     private _registerPanel:cc.Node = null;
     private _registerDialog:cc.Node = null;
     private _registerInputs:{[key:string]:cc.EditBox} = {};
+    private _registerInputEditing:{[key:string]:boolean} = {};
     private _registerStatus:cc.Label = null;
+    private _registerStatusBackground:cc.Node = null;
+    private _registerStatusIcon:cc.Node = null;
     private _registerAvatarSprite:cc.Sprite = null;
     private _registerAvatarLabel:cc.Label = null;
     private _registerAvatarPicker:cc.Node = null;
@@ -115,6 +118,8 @@ export default class panelLogin extends UIPanelViewBase {
         this._registerPanel = this.node.getChildByName("注册弹窗");
         this._registerDialog = Tool.GetChild(this._registerPanel,"注册资料框");
         this._registerStatus = Tool.GetChild(this._registerDialog,"注册状态").getComponent(cc.Label);
+        this._registerStatusBackground = Tool.GetChild(this._registerDialog,"V7注册动态状态底");
+        this._registerStatusIcon = Tool.GetChild(this._registerDialog,"V7注册状态图标");
         this._registerInputs["invitationCode"] = Tool.GetChild(this._registerDialog,"邀请码/输入").getComponent(cc.EditBox);
         this._registerInputs["nickname"] = Tool.GetChild(this._registerDialog,"昵称/输入").getComponent(cc.EditBox);
         this._registerInputs["loginName"] = Tool.GetChild(this._registerDialog,"账号/输入").getComponent(cc.EditBox);
@@ -130,7 +135,19 @@ export default class panelLogin extends UIPanelViewBase {
         DeviceIdentityManager.getInstance().prepare();
 
         for(let key in this._registerInputs)
+        {
+            this._registerInputEditing[key] = false;
             this._registerInputs[key].node.on("text-changed",()=>this.onRegisterInputChanged(key),this);
+            this._registerInputs[key].node.on("editing-did-began",()=>{
+                this._registerInputEditing[key] = true;
+                this.refreshRegisterInputArt(key);
+            },this);
+            this._registerInputs[key].node.on("editing-did-ended",()=>{
+                this._registerInputEditing[key] = false;
+                this.refreshRegisterInputArt(key);
+            },this);
+            this.refreshRegisterInputArt(key);
+        }
     }
 
     private setRegisterAvatar(avatarValue:any)
@@ -141,6 +158,14 @@ export default class panelLogin extends UIPanelViewBase {
         this.refreshRegisterAvatarPickerSelection();
         if(!this._registerSubmitting)
             this.showRegisterStatus("已选择头像 " + this._registerAvatarIndex,false);
+    }
+
+    private stepRegisterAvatar(offset:number)
+    {
+        let imageManager = ImageManager.getInstance();
+        let current = Number(imageManager.NormalizeAvatarIndex(this._registerAvatarIndex));
+        let next = ((current - 1 + offset) % imageManager.AVATAR_COUNT + imageManager.AVATAR_COUNT) % imageManager.AVATAR_COUNT + 1;
+        this.setRegisterAvatar(next.toString());
     }
 
     private openRegisterAvatarPicker()
@@ -209,8 +234,20 @@ export default class panelLogin extends UIPanelViewBase {
         if(filtered !== editBox.string)
             editBox.string = filtered;
 
+        this.refreshRegisterInputArt(key);
+
         if(!this._registerSubmitting)
             this.showRegisterStatus("请完整填写注册资料",false);
+    }
+
+    private refreshRegisterInputArt(key:string)
+    {
+        let editBox = this._registerInputs[key];
+        if(editBox == null)
+            return;
+        let rowSprite = editBox.node.parent.getComponent(cc.Sprite);
+        if(rowSprite != null)
+            rowSprite.enabled = this._registerInputEditing[key] || editBox.string.length > 0;
     }
 
     private openRegisterPanel()
@@ -220,6 +257,8 @@ export default class panelLogin extends UIPanelViewBase {
         this._registerAvatarPicker.active = false;
         this.setRegisterAvatar(ImageManager.getInstance().RandomAvatarIndex());
         this.showRegisterStatus("请完整填写注册资料",false);
+        for(let key in this._registerInputs)
+            this.refreshRegisterInputArt(key);
         this._registerPanel.active = true;
         this._registerDialog.stopAllActions();
         this._registerDialog.opacity = 0;
@@ -357,7 +396,13 @@ export default class panelLogin extends UIPanelViewBase {
     private showRegisterStatus(message:string,isHighlight:boolean)
     {
         this._registerStatus.string = message;
-        this._registerStatus.node.color = isHighlight ? new cc.Color(218,187,112,255) : new cc.Color(131,157,170,255);
+        this._registerStatus.node.color = isHighlight ? new cc.Color(249,226,181,255) : new cc.Color(236,202,149,255);
+        let useApprovedDefault = message === "请完整填写注册资料" && !isHighlight;
+        this._registerStatus.node.active = !useApprovedDefault;
+        if(this._registerStatusBackground != null)
+            this._registerStatusBackground.active = !useApprovedDefault;
+        if(this._registerStatusIcon != null)
+            this._registerStatusIcon.active = !useApprovedDefault;
     }
 
     private requestRegister(data:RegisterFormData)
@@ -491,6 +536,14 @@ export default class panelLogin extends UIPanelViewBase {
         else if(button.node.name === "头像预览")
         {
             this.openRegisterAvatarPicker();
+        }
+        else if(button.node.name === "上一头像")
+        {
+            this.stepRegisterAvatar(-1);
+        }
+        else if(button.node.name === "下一头像")
+        {
+            this.stepRegisterAvatar(1);
         }
         else if(button.node.name === "关闭头像选择")
         {

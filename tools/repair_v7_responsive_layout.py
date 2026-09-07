@@ -291,6 +291,16 @@ def repair_main():
     p.data[p.node("Main/我的/操作")]["_anchorPoint"]["y"] = 0.5
     top(p, "Main/我的/操作", 664, width=700, height=317)
 
+    # Remaining lobby overlays stay centered while the full-screen mask grows.
+    for popup, panel_size in (
+        ("确定修改个人信息", (532, 366)),
+        ("确定随机头像提示面板", (532, 366)),
+        ("加入房间", (600, 690)),
+        ("选择银行", (646, 920)),
+    ):
+        stretch(p, popup, 0, 0)
+        center(p, f"{popup}/bk", width=panel_size[0], height=panel_size[1])
+
     # The navigation artwork is 155px tall because the center 8L shield rises
     # 21px above the 134px bar body. Keep the room list's 134px bottom inset so
     # this crown overlaps the list instead of being cropped away.
@@ -348,6 +358,48 @@ def repair_settlement():
     stretch(p, "战绩列表/view", 0, 0)
     bottom(p, "关闭", 55, width=300, height=67)
     p.save()
+
+
+def repair_settlement_review():
+    """Preserve the fixed-edge V7 review layout on tall portrait screens."""
+    p = Prefab("assets/resources/UI/panelRecordInfo.prefab")
+    stretch(p, "牌局回顾", 0, 0)
+    top(p, "牌局回顾/V7回顾长背景", 0, width=750, height=1800)
+    top(p, "牌局回顾/title", 0, width=750, height=72, stretch_x=True)
+    stretch(p, "牌局回顾/回顾列表", 150, 205, left=21, right=21)
+    stretch(p, "牌局回顾/回顾列表/view", 0, 0)
+    stretch(p, "牌局回顾/文字牌谱", 150, 205, left=21, right=21)
+    stretch(p, "牌局回顾/文字牌谱/view", 0, 0)
+    bottom(p, "牌局回顾/操作", 117, width=516, height=64)
+    bottom(p, "牌局回顾/分页", 8, width=708, height=107)
+    p.save()
+
+    row = Prefab("assets/resources/Prefabs/回顾对象2.prefab")
+    row.set_pos(row.root, 0, 0, 708, 184, disable_widget=True)
+    row.set_pos(row.node("head"), -292, 24, 104, 104, disable_widget=True)
+    row.set_pos(row.node("head/img"), 0, 0, 104, 104, disable_widget=True)
+    row.set_pos(row.node("V7头像框"), -292, 24, 118, 118, disable_widget=True)
+    row.set_pos(row.node("手牌"), -20, -8, 374, 172, disable_widget=True)
+    row.disable(row.node("手牌"), "cc.Layout")
+    for group, group_x in (("牌组1", -100), ("牌组2", 100)):
+        group_path = f"手牌/{group}"
+        row.set_pos(row.node(group_path), group_x, -8, 144, 126,
+                    disable_widget=True)
+        row.disable(row.node(group_path), "cc.Layout")
+        for card, card_x in (("handbig", -37), ("handbig copy", 37)):
+            card_path = f"{group_path}/{card}"
+            row.set_pos(row.node(card_path), card_x, -2, 70, 98,
+                        disable_widget=True)
+            for face in ("BK1", "BK0"):
+                row.set_pos(row.node(f"{card_path}/{face}"), 0, 0, 70, 98,
+                            disable_widget=True)
+    row.set_pos(row.node("list"), 270, 0, 160, 174, disable_widget=True)
+    row.disable(row.node("list"), "cc.Layout")
+    row.save()
+
+    text_row = Prefab("assets/resources/Prefabs/文字牌谱对象2.prefab")
+    text_row.set_pos(text_row.root, 0, 0, 704, 52, disable_widget=True)
+    text_row.save()
 
 
 def repair_give_pad():
@@ -415,6 +467,31 @@ def repair_wallet():
     apply_channel_viewport(p)
     fixed_page_top("钱包/容器/充值/根/金额", 0, 750, page_height)
 
+    # The first-entry real-name screen is a full-screen sibling of the normal
+    # wallet tabs.  Keep its accepted top composition fixed and let only the
+    # continuous 1800px background reveal more area on taller phones.
+    stretch(p, "钱包/实名", 0, 0)
+    top(p, "钱包/实名/bk", 0, width=750, height=1800)
+    top(p, "钱包/实名/Title", 0, width=750, height=83, stretch_x=True)
+    stretch(p, "钱包/实名/信息", 0, 0)
+    for path, top_px, width, height in (
+        ("钱包/实名/信息/钱包-实名认证", 104, 142, 149),
+        ("钱包/实名/信息/V7实名主标题", 261, 540, 68),
+        ("钱包/实名/信息/V7实名副标题", 327, 500, 48),
+        ("钱包/实名/信息/V7实名表单底", 385, 642, 490),
+        ("钱包/实名/信息/姓名", 401, 602, 78),
+        ("钱包/实名/信息/银行", 493, 602, 78),
+        ("钱包/实名/信息/卡号", 585, 602, 78),
+        ("钱包/实名/信息/交易密码", 677, 602, 78),
+        ("钱包/实名/信息/确认密码", 769, 602, 78),
+        ("钱包/实名/信息/提交实名信息", 887, 430, 82),
+        ("钱包/实名/信息/V7实名重要提示", 997, 614, 300),
+    ):
+        top(p, path, top_px, width=width, height=height)
+
+    stretch(p, "钱包/选择银行", 0, 0)
+    center(p, "钱包/选择银行/bk", width=646, height=920)
+
     p.save()
 
 
@@ -423,6 +500,7 @@ def main():
     repair_main()
     repair_records()
     repair_settlement()
+    repair_settlement_review()
     repair_give_pad()
     repair_wallet()
 

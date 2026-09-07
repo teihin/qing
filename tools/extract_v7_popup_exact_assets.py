@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import json
 import random
 from pathlib import Path
 
@@ -211,15 +212,57 @@ def message_panel(path: Path, box: tuple[int, int, int, int], seed: int) -> Imag
     return message_alpha(panel)
 
 
+def switch_account_button(panel: Image.Image) -> Image.Image:
+    """Reuse the accepted single-dialogue button and replace only its wording."""
+    button = panel.crop((161, 241, 371, 305)).convert("RGBA")
+    scale = 4
+    work = button.resize((button.width * scale, button.height * scale),
+                         Image.Resampling.BICUBIC)
+    pixels = work.load()
+    # The button face is a shallow vertical gold gradient.  Sample clean pixels
+    # on both sides of the old two-character title, then interpolate across the
+    # middle so the replacement remains a single continuous metal surface.
+    x0, x1 = 38 * scale, 172 * scale
+    for y in range(10 * scale, 54 * scale):
+        left = [pixels[x, y] for x in range(27 * scale, 37 * scale)]
+        right = [pixels[x, y] for x in range(173 * scale, 183 * scale)]
+        for x in range(x0, x1):
+            t = (x - x0) / max(1, x1 - x0 - 1)
+            li = left[(x + y) % len(left)]
+            ri = right[(x + y * 3) % len(right)]
+            pixels[x, y] = tuple(round(a * (1 - t) + b * t)
+                                 for a, b in zip(li, ri))
+
+    draw = ImageDraw.Draw(work, "RGBA")
+    label_font = ImageFont.truetype(str(FONT_PATH), 27 * scale)
+    draw.text((105 * scale, 32 * scale), "切换账号", font=label_font,
+              fill=(2, 25, 44, 255), anchor="mm",
+              stroke_width=1 * scale, stroke_fill=(218, 178, 112, 130))
+    return work.resize(button.size, Image.Resampling.LANCZOS)
+
+
+def save_unpacked(image: Image.Image, name: str) -> None:
+    """Keep text-bearing popup art out of the dynamic atlas for crisp display."""
+    save(image, name)
+    meta_path = OUT / f"{name}.meta"
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["packable"] = False
+    meta_path.write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     for key, image in announcement_variants().items():
         save(image, f"popup_announcement_{key}_exact_nobar.png")
-    save(message_panel(MESSAGE_SINGLE, (136, 590, 805, 1050), 7721),
-         "popup_message_single_exact.png")
+    single = message_panel(MESSAGE_SINGLE, (136, 590, 805, 1050), 7721)
+    save(single, "popup_message_single_exact.png")
     save(message_panel(MESSAGE_DUAL, (136, 590, 805, 1050), 7722),
          "popup_message_dual_exact.png")
-    print("已从V7弹窗确认稿提取公告三标题及普通弹窗单双按钮高清资源。")
+    save_unpacked(switch_account_button(single),
+                  "popup_switch_account_button_exact.png")
+    print("已从V7弹窗确认稿提取公告、普通弹窗及切换账号高清资源。")
 
 
 if __name__ == "__main__":

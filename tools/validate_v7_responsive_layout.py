@@ -112,6 +112,28 @@ def validate_widgets() -> None:
     widget(main, "赠送/标题", 17, top=784)
     widget(main, "赠送/赠送记录列表", 45, left=21, right=21, top=890, bottom=167)
     widget(main, "赠送/分页", 20, bottom=59)
+    for popup in ("确定修改个人信息", "确定随机头像提示面板",
+                  "加入房间", "选择银行"):
+        full(main, popup)
+    for popup in ("确定修改个人信息", "确定随机头像提示面板"):
+        _, panel_sprite = main.component(main.node(f"{popup}/bk"), "cc.Sprite")
+        require(panel_sprite is not None and panel_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+                sprite_uuid("popup_message_dual_exact.png"),
+                f"大厅确认弹窗仍使用旧皮: {popup}")
+        _, msg_label = main.component(main.node(f"{popup}/bk/msg"), "cc.Label")
+        require(msg_label is not None and msg_label.get("_fontSize") == 28,
+                f"大厅确认弹窗正文不清晰: {popup}")
+    _, join_sprite = main.component(main.node("加入房间/bk"), "cc.Sprite")
+    require(join_sprite is not None and join_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("popup_join_room_panel_exact.png"),
+            "加入房间弹窗仍使用旧皮")
+    _, join_layout = main.component(main.node("加入房间/bk/键盘"), "cc.Layout")
+    require(join_layout is not None and join_layout.get("_enabled") is False,
+            "加入房间数字键盘仍会被旧 Layout 重排")
+    _, hall_picker = main.component(main.node("选择银行/bk"), "cc.Sprite")
+    require(hall_picker is not None and hall_picker.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("wallet_bank_picker_panel_exact.png"),
+            "大厅序列化银行弹窗仍使用旧皮")
 
     records = Prefab("assets/resources/UI/panelRecordList.prefab")
     full(records, "panelRecordList")
@@ -133,6 +155,17 @@ def validate_widgets() -> None:
     widget(settlement, "战绩列表", 45, left=21, right=21, top=504, bottom=140)
     full(settlement, "战绩列表/view")
     widget(settlement, "关闭", 20, bottom=55)
+    full(settlement, "牌局回顾")
+    widget(settlement, "牌局回顾/V7回顾长背景", 17, top=0)
+    widget(settlement, "牌局回顾/title", 41, left=0, right=0, top=0)
+    widget(settlement, "牌局回顾/回顾列表", 45,
+           left=21, right=21, top=150, bottom=205)
+    full(settlement, "牌局回顾/回顾列表/view")
+    widget(settlement, "牌局回顾/文字牌谱", 45,
+           left=21, right=21, top=150, bottom=205)
+    full(settlement, "牌局回顾/文字牌谱/view")
+    widget(settlement, "牌局回顾/操作", 20, bottom=117)
+    widget(settlement, "牌局回顾/分页", 20, bottom=8)
 
     give_pad = Prefab("assets/resources/UI/panelGivePad.prefab")
     widget(give_pad, "bk", 18)
@@ -182,6 +215,49 @@ def validate_widgets() -> None:
     require(draw_order.index(wallet.node("钱包/容器/记录/列表")) <
             draw_order.index(wallet.node("钱包/容器/记录/标题")),
             "钱包记录表头仍可能被列表底板遮挡")
+
+    full(wallet, "钱包/实名")
+    widget(wallet, "钱包/实名/bk", 17, top=0)
+    widget(wallet, "钱包/实名/Title", 41, left=0, right=0, top=0)
+    full(wallet, "钱包/实名/信息")
+    realname_fixed = (
+        ("钱包/实名/信息/钱包-实名认证", 104),
+        ("钱包/实名/信息/V7实名主标题", 261),
+        ("钱包/实名/信息/V7实名副标题", 327),
+        ("钱包/实名/信息/V7实名表单底", 385),
+        ("钱包/实名/信息/姓名", 401),
+        ("钱包/实名/信息/银行", 493),
+        ("钱包/实名/信息/卡号", 585),
+        ("钱包/实名/信息/交易密码", 677),
+        ("钱包/实名/信息/确认密码", 769),
+        ("钱包/实名/信息/提交实名信息", 887),
+        ("钱包/实名/信息/V7实名重要提示", 997),
+    )
+    for path, top_value in realname_fixed:
+        widget(wallet, path, 17, top=top_value)
+    for row in ("姓名", "银行", "卡号", "交易密码", "确认密码"):
+        centered(wallet, f"钱包/实名/信息/{row}/input/TEXT_LABEL")
+        centered(wallet, f"钱包/实名/信息/{row}/input/PLACEHOLDER_LABEL")
+    _, realname_layout = wallet.component(wallet.node("钱包/实名/信息"), "cc.Layout")
+    require(realname_layout is not None and realname_layout.get("_enabled") is False,
+            "实名表单仍会被旧 Layout 重排")
+    require(wallet.data[wallet.node("钱包/实名/Title/客服")].get("_active") is False and
+            wallet.data[wallet.node("钱包/实名/信息/实名文本")].get("_active") is False and
+            wallet.data[wallet.node("钱包/实名/信息/银行/银行名称")].get("_active") is False,
+            "实名页仍叠加旧客服、提示或银行名称")
+    full(wallet, "钱包/选择银行")
+    _, picker_sprite = wallet.component(wallet.node("钱包/选择银行/bk"), "cc.Sprite")
+    require(picker_sprite is not None and picker_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("wallet_bank_picker_panel_exact.png"),
+            "钱包银行选择弹窗仍使用旧皮")
+    bank_row = Prefab("assets/resources/Prefabs/银行对象.prefab")
+    _, bank_sprite = bank_row.component(bank_row.root, "cc.Sprite")
+    _, bank_label = bank_row.component(bank_row.node("银行对象/txt"), "cc.Label")
+    require(bank_sprite is not None and bank_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("wallet_bank_picker_row_exact.png") and
+            bank_label is not None and bank_label.get("_fontSize") == 28 and
+            bank_row.data[bank_row.node("银行对象/right")].get("_active") is False,
+            "银行列表项未使用清晰 V7 动态行")
 
     channel_assets = {
         "支付1": "wallet_channel_bank", "支付3": "wallet_channel_bank",
@@ -263,6 +339,7 @@ def validate_height_math() -> None:
         "战绩列表": (583, 107),
         "赠送记录": (890, 167),
         "结算玩家列表": (504, 140),
+        "牌局回顾内容": (150, 205),
         "钱包记录列表": (223, 128),
         "金币流向列表": (310, 107),
         "代理我的玩家列表": (255, 107),
@@ -318,7 +395,7 @@ def validate_followup_modules() -> None:
     widget(main, "资金明细/资金明细列表", 45,
            left=57, right=57, top=310, bottom=107)
     widget(main, "资金明细/分页", 20, bottom=6)
-    widget(main, "推广二维码/title", 17, top=0)
+    widget(main, "推广二维码/title", 41, left=0, right=0, top=0)
     widget(main, "推广二维码/V7游戏推广盾牌", 17, top=100)
     widget(main, "推广二维码/V7推广主标题", 17, top=320)
     for path, x, y in (
@@ -495,10 +572,16 @@ def validate_v7_assets() -> None:
         "settlement_table_header_exact.png", "settlement_list_panel_exact.png",
         "settlement_row_exact.png", "settlement_return_exact.png",
         "settlement_review_exact.png",
+        "review_header_exact.png", "review_info_bar_exact.png",
+        "review_row_exact.png", "review_avatar_ring_exact.png",
+        "review_tab_cards_off_exact.png", "review_tab_cards_on_exact.png",
+        "review_tab_text_off_exact.png", "review_tab_text_on_exact.png",
+        "review_section_header_exact.png", "review_text_row_exact.png",
         "popup_announcement_latest_exact_nobar.png",
         "popup_announcement_recharge_exact_nobar.png",
         "popup_announcement_activity_exact_nobar.png",
         "popup_message_single_exact.png", "popup_message_dual_exact.png",
+        "popup_switch_account_button_exact.png",
         "announcement_menu_long_exact.png",
         "announcement_detail_bg_long_exact.png",
         "announcement_detail_header_exact.png",
@@ -534,6 +617,27 @@ def validate_v7_assets() -> None:
         "wallet_record_header_exact.png", "wallet_record_row_exact.png",
         "wallet_record_icon_in_exact.png", "wallet_record_icon_out_exact.png",
         "wallet_record_pagination_exact.png",
+        "wallet_realname_header_exact.png",
+        "wallet_realname_shield_exact.png",
+        "wallet_realname_hero_title_exact.png",
+        "wallet_realname_hero_subtitle_exact.png",
+        "wallet_realname_form_panel_exact.png",
+        "wallet_realname_row_name_exact.png",
+        "wallet_realname_row_bank_exact.png",
+        "wallet_realname_row_card_exact.png",
+        "wallet_realname_row_password_exact.png",
+        "wallet_realname_row_confirm_exact.png",
+        "wallet_realname_submit_exact.png",
+        "wallet_realname_warning_exact.png",
+        "wallet_bank_picker_panel_exact.png",
+        "wallet_bank_picker_row_exact.png",
+        "popup_close_exact.png",
+        "popup_join_room_panel_exact.png",
+        "popup_join_room_input_exact.png",
+        "popup_key_1_exact.png", "popup_key_2_exact.png", "popup_key_3_exact.png",
+        "popup_key_4_exact.png", "popup_key_5_exact.png", "popup_key_6_exact.png",
+        "popup_key_7_exact.png", "popup_key_8_exact.png", "popup_key_9_exact.png",
+        "popup_key_reset_exact.png", "popup_key_0_exact.png", "popup_key_delete_exact.png",
     ):
         require((V7 / exact).is_file(), f"V7确认稿资源缺失: {exact}")
 
@@ -585,6 +689,7 @@ def validate_v7_assets() -> None:
         "popup_announcement_activity_exact_nobar.png": (632, 840),
         "popup_message_single_exact.png": (532, 366),
         "popup_message_dual_exact.png": (532, 366),
+        "popup_switch_account_button_exact.png": (210, 64),
         "announcement_menu_long_exact.png": (750, 1800),
         "announcement_detail_bg_long_exact.png": (750, 1800),
         "announcement_detail_header_exact.png": (750, 81),
@@ -631,6 +736,45 @@ def validate_v7_assets() -> None:
         "wallet_record_icon_in_exact.png": (52, 54),
         "wallet_record_icon_out_exact.png": (52, 53),
         "wallet_record_pagination_exact.png": (604, 112),
+        "wallet_realname_header_exact.png": (750, 83),
+        "wallet_realname_shield_exact.png": (284, 298),
+        "wallet_realname_hero_title_exact.png": (540, 68),
+        "wallet_realname_hero_subtitle_exact.png": (500, 48),
+        "wallet_realname_form_panel_exact.png": (642, 492),
+        "wallet_realname_row_name_exact.png": (602, 78),
+        "wallet_realname_row_bank_exact.png": (602, 78),
+        "wallet_realname_row_card_exact.png": (602, 78),
+        "wallet_realname_row_password_exact.png": (602, 78),
+        "wallet_realname_row_confirm_exact.png": (602, 78),
+        "wallet_realname_submit_exact.png": (430, 82),
+        "wallet_realname_warning_exact.png": (614, 300),
+        "wallet_bank_picker_panel_exact.png": (646, 920),
+        "wallet_bank_picker_row_exact.png": (560, 78),
+        "popup_close_exact.png": (58, 58),
+        "popup_join_room_panel_exact.png": (600, 690),
+        "popup_join_room_input_exact.png": (480, 82),
+        "popup_key_1_exact.png": (150, 78),
+        "popup_key_2_exact.png": (150, 78),
+        "popup_key_3_exact.png": (150, 78),
+        "popup_key_4_exact.png": (150, 78),
+        "popup_key_5_exact.png": (150, 78),
+        "popup_key_6_exact.png": (150, 78),
+        "popup_key_7_exact.png": (150, 78),
+        "popup_key_8_exact.png": (150, 78),
+        "popup_key_9_exact.png": (150, 78),
+        "popup_key_reset_exact.png": (150, 78),
+        "popup_key_0_exact.png": (150, 78),
+        "popup_key_delete_exact.png": (150, 78),
+        "review_header_exact.png": (750, 72),
+        "review_info_bar_exact.png": (708, 64),
+        "review_row_exact.png": (708, 184),
+        "review_avatar_ring_exact.png": (118, 118),
+        "review_tab_cards_off_exact.png": (248, 62),
+        "review_tab_cards_on_exact.png": (248, 62),
+        "review_tab_text_off_exact.png": (248, 62),
+        "review_tab_text_on_exact.png": (248, 62),
+        "review_section_header_exact.png": (704, 60),
+        "review_text_row_exact.png": (704, 52),
     }
     for name, expected in expected_sizes.items():
         meta = json.loads((V7 / f"{name}.meta").read_text(encoding="utf-8"))
@@ -650,6 +794,19 @@ def validate_v7_assets() -> None:
     require(max_row_jump < 4,
             f"赠送列表底板仍有未清干净的横向分层: jump={max_row_jump:.2f}")
     used = 0
+    # Quick registration uses the accepted full dialog crop as its exact
+    # empty-state visual.  These Prefab-authored clean row layers are enabled
+    # only while an EditBox is focused or contains live text, so their Sprite
+    # components are intentionally disabled in the editor/default state.
+    allowed_disabled_v7 = {
+        sprite_uuid(name) for name in (
+            "register_row_invite_exact.png",
+            "register_row_nickname_exact.png",
+            "register_row_account_exact.png",
+            "register_row_password_exact.png",
+            "register_row_confirm_exact.png",
+        )
+    }
     prefab_paths = (
         "assets/resources/UI/panelLogin.prefab",
         "assets/resources/UI/panelMain.prefab",
@@ -674,6 +831,8 @@ def validate_v7_assets() -> None:
         "assets/resources/Prefabs/红利提取记录对象.prefab",
         "assets/resources/Prefabs/排行榜.prefab",
         "assets/resources/Prefabs/排行榜对象.prefab",
+        "assets/resources/Prefabs/回顾对象2.prefab",
+        "assets/resources/Prefabs/文字牌谱对象2.prefab",
     )
     for relative in prefab_paths:
         p = Prefab(relative)
@@ -685,7 +844,7 @@ def validate_v7_assets() -> None:
             if uuid not in frame_uuids:
                 continue
             used += 1
-            require(item.get("_enabled") is True,
+            require(item.get("_enabled") is True or uuid in allowed_disabled_v7,
                     f"{relative} 有未启用的 V7 Sprite: {uuid}")
     require(used >= 35, f"Prefab 中只找到 {used} 个 V7 Sprite 引用，数量异常")
 
@@ -1107,6 +1266,96 @@ def validate_popups() -> None:
     require('button.node.name == "关闭"' in source,
             "公告右上关闭热区没有接入关闭逻辑")
 
+    login_error = Prefab("assets/resources/UI/panelLoginErrorEx.prefab")
+    error_bk = login_error.node("bk")
+    _, error_sprite = login_error.component(error_bk, "cc.Sprite")
+    require(tuple(login_error.data[error_bk]["_trs"]["array"][:2]) == (0, 13) and
+            (login_error.data[error_bk]["_contentSize"]["width"],
+             login_error.data[error_bk]["_contentSize"]["height"]) == (532, 366),
+            "登录异常弹窗没有使用V7普通弹窗尺寸")
+    require(error_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("popup_message_single_exact.png"),
+            "登录异常弹窗仍引用旧版背景")
+    switch = login_error.node("bk/切换账号")
+    _, switch_sprite = login_error.component(switch, "cc.Sprite")
+    require(tuple(login_error.data[switch]["_trs"]["array"][:2]) == (0, -94) and
+            switch_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("popup_switch_account_button_exact.png"),
+            "登录异常弹窗的切换账号按钮仍是旧版美术")
+    require(login_error.data[login_error.node("bk/取消")].get("_active") is False,
+            "登录异常单按钮弹窗仍显示旧取消按钮")
+
+
+def validate_settlement_review() -> None:
+    settlement = Prefab("assets/resources/UI/panelRecordInfo.prefab")
+    review = settlement.node("牌局回顾")
+    root_children = [ref["__id__"] for ref in settlement.data[settlement.root]["_children"]]
+    require(root_children[-1] == review,
+            "牌局回顾不是结算页最后渲染节点，上层表头或返回按钮会穿透")
+    require(settlement.data[review].get("_active") is False,
+            "牌局回顾不应在结算页打开时默认显示")
+    review_children = [ref["__id__"] for ref in settlement.data[review]["_children"]]
+    background = settlement.node("牌局回顾/V7回顾长背景")
+    require(review_children[0] == background,
+            "牌局回顾长背景不是最底层节点")
+    _, background_sprite = settlement.component(background, "cc.Sprite")
+    require(background_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("wallet_bg_exact.png"),
+            "牌局回顾没有使用完整1800px赌场长背景")
+    _, header_sprite = settlement.component(settlement.node("牌局回顾/title"), "cc.Sprite")
+    require(header_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("review_header_exact.png"),
+            "牌局回顾顶部未统一到V7战绩风格")
+    _, info_sprite = settlement.component(
+        settlement.node("牌局回顾/title/line"), "cc.Sprite")
+    require(info_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("review_info_bar_exact.png"),
+            "牌局回顾模式和图例信息条仍是旧版")
+    for name, asset in (
+        ("牌局回顾/操作/牌局回顾/Background", "review_tab_cards_off_exact.png"),
+        ("牌局回顾/操作/牌局回顾/checkmark", "review_tab_cards_on_exact.png"),
+        ("牌局回顾/操作/文字牌谱/Background", "review_tab_text_off_exact.png"),
+        ("牌局回顾/操作/文字牌谱/checkmark", "review_tab_text_on_exact.png"),
+    ):
+        _, sprite = settlement.component(settlement.node(name), "cc.Sprite")
+        require(sprite.get("_spriteFrame", {}).get("__uuid__") == sprite_uuid(asset),
+                f"牌局回顾选项卡美术错误: {name}")
+    _, pager_sprite = settlement.component(settlement.node("牌局回顾/分页"), "cc.Sprite")
+    require(pager_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("gift_pagination_exact.png"),
+            "牌局回顾翻页栏没有复用赠送页确认稿")
+
+    row = Prefab("assets/resources/Prefabs/回顾对象2.prefab")
+    size = row.data[row.root]["_contentSize"]
+    require((size["width"], size["height"]) == (708, 184),
+            "牌局回顾动态行不是708x184高清紧凑尺寸")
+    _, row_sprite = row.component(row.root, "cc.Sprite")
+    require(row_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("review_row_exact.png"),
+            "牌局回顾动态行仍使用旧背景")
+    ring = row.node("V7头像框")
+    require(row.data[row.root]["_children"][-1]["__id__"] == ring,
+            "牌局回顾头像金属环没有覆盖在动态头像上方")
+    for group in ("牌组1", "牌组2"):
+        for card in ("handbig", "handbig copy"):
+            for face in ("BK1", "BK0"):
+                node = row.node(f"手牌/{group}/{card}/{face}")
+                card_size = row.data[node]["_contentSize"]
+                require((card_size["width"], card_size["height"]) == (70, 98),
+                        f"牌局回顾牌面没有放大到70x98: {group}/{card}/{face}")
+    _, name_label = row.component(row.node("name"), "cc.Label")
+    require(name_label.get("_fontSize") == 24,
+            "牌局回顾玩家名仍过小")
+
+    text_row = Prefab("assets/resources/Prefabs/文字牌谱对象2.prefab")
+    text_size = text_row.data[text_row.root]["_contentSize"]
+    require((text_size["width"], text_size["height"]) == (704, 52),
+            "文字牌谱动态行尺寸未统一")
+    _, text_sprite = text_row.component(text_row.root, "cc.Sprite")
+    require(text_sprite.get("_spriteFrame", {}).get("__uuid__") ==
+            sprite_uuid("review_text_row_exact.png"),
+            "文字牌谱动态行仍是旧版空白样式")
+
 
 def validate_prefab_references() -> None:
     prefab_paths = (
@@ -1116,6 +1365,7 @@ def validate_prefab_references() -> None:
         "assets/resources/UI/panelRecordInfo.prefab",
         "assets/resources/UI/panelGivePad.prefab",
         "assets/resources/UI/panelMsgView.prefab",
+        "assets/resources/UI/panelLoginErrorEx.prefab",
         "assets/resources/UI/panelNotifyView.prefab",
         "assets/resources/UI/panelNotifyViewCZ.prefab",
         "assets/resources/UI/panelNotifyViewHD.prefab",
@@ -1124,6 +1374,8 @@ def validate_prefab_references() -> None:
         "assets/resources/Prefabs/赠送记录对象.prefab",
         "assets/resources/Prefabs/钱包.prefab",
         "assets/resources/Prefabs/交易查询对象.prefab",
+        "assets/resources/Prefabs/回顾对象2.prefab",
+        "assets/resources/Prefabs/文字牌谱对象2.prefab",
     )
 
     def visit(value, size: int, source: str) -> None:
@@ -1162,6 +1414,7 @@ def main() -> None:
     validate_v7_assets()
     validate_followup_modules()
     validate_popups()
+    validate_settlement_review()
     validate_prefab_references()
     validate_gift_submit_flow()
     print("V7 响应式校验通过：Prefab 锚点、四档竖屏高度、资源引用与显示状态均正常。")
