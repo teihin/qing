@@ -49,3 +49,6 @@ runtime-src.zip
 .hot-update-config.json
 .hot-update-upload-config.json
 hot-update-output/
+
+# Local Codex repair backups (conversation logs and private databases)
+/.codex-repair-backup*/

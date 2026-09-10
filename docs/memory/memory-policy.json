@@ -11,7 +11,10 @@
     "docs/memory/topics/v7-ui.md",
     "docs/memory/topics/xuanmanager.md",
     "docs/memory/handoffs/2026-09-05-memory-migration.md",
-    "docs/memory/archive/2026-09-05/README.md"
+    "docs/memory/archive/2026-09-05/README.md",
+    "design-previews/README.md",
+    "docs/memory/handoffs/2026-09-10-art-final-and-push.md",
+    "docs/memory/archive/2026-09-10/README.md"
   ],
   "required_headings": {
     "AGENTS.md": [
@@ -85,6 +88,18 @@
     "docs/memory/archive/2026-09-05/README.md": {
       "warn_bytes": 12288,
       "error_bytes": 32768
+    },
+    "design-previews/README.md": {
+      "warn_bytes": 8192,
+      "error_bytes": 16384
+    },
+    "docs/memory/handoffs/2026-09-10-art-final-and-push.md": {
+      "warn_bytes": 8192,
+      "error_bytes": 16384
+    },
+    "docs/memory/archive/2026-09-10/README.md": {
+      "warn_bytes": 8192,
+      "error_bytes": 16384
     }
   },
   "archives": [
@@ -167,6 +182,10 @@
     {
       "path": "docs/memory/archive/2026-09-05/manifest.json",
       "sha256": "86ed44cb47b3fed36a1b74592e4afd70d49e2e8961ac5715f1848ce45bec109e"
+    },
+    {
+      "path": "docs/memory/archive/2026-09-10/CURRENT.before-art-final.md",
+      "sha256": "c8419f74bb3f52e5c8b58ceecae96f82ffa18cb40dfe6f587c927fb64113b172"
     }
   ]
 }
