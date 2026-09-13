@@ -1,12 +1,112 @@
 [
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_bg_exact.png","box":[0,0,1024,1536],"sideField":true},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_header_exact.png","box":[0,0,1024,86]},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_hero_exact.png","box":[0,86,1024,467],"holes":[[120,207,303,386],[417,133,608,367],[715,208,900,387]]},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_award_frames_exact.png","box":[0,86,1024,467],"foreground":"gold","ink":[246,205,135],"inkBounds":[90,25,930,310]},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_summary_exact.png","box":[31,472,993,551],"horizontalClear":[[80,484,325,535],[349,484,535,535],[559,484,762,535],[789,484,950,535]]},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_table_header_exact.png","box":[31,551,993,641]},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_list_panel_exact.png","box":[31,641,993,1335],"bandClear":[[35,650,989,1330,645,650]]},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_row_exact.png","box":[50,650,974,746],"horizontalClear":[[86,661,300,733],[391,661,485,733],[610,661,730,733],[804,661,946,733]]},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_return_exact.png","box":[299,1364,725,1457],"radius":22},
- {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_review_exact.png","box":[773,13,1002,76],"radius":26}
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_header_exact.png",
+    "output": "assets/resources/V7/settlement_header_exact.png",
+    "box": [
+      0,
+      0,
+      363,
+      88
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_award_frames_exact.png",
+    "output": "assets/resources/V7/settlement_award_frames_exact.png",
+    "box": [
+      0,
+      0,
+      1024,
+      341
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_badge_th.png",
+    "output": "assets/resources/V7/settlement_badge_th.png",
+    "box": [
+      0,
+      0,
+      130,
+      54
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_badge_mvp.png",
+    "output": "assets/resources/V7/settlement_badge_mvp.png",
+    "box": [
+      0,
+      0,
+      160,
+      60
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_badge_dy.png",
+    "output": "assets/resources/V7/settlement_badge_dy.png",
+    "box": [
+      0,
+      0,
+      122,
+      54
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_v8_summary.png",
+    "output": "assets/resources/V7/settlement_v8_summary.png",
+    "box": [
+      0,
+      0,
+      964,
+      75
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_table_header_exact.png",
+    "output": "assets/resources/V7/settlement_table_header_exact.png",
+    "box": [
+      0,
+      0,
+      964,
+      88
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_v8_list_panel.png",
+    "output": "assets/resources/V7/settlement_v8_list_panel.png",
+    "box": [
+      0,
+      0,
+      256,
+      320
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_row_exact.png",
+    "output": "assets/resources/V7/settlement_row_exact.png",
+    "box": [
+      0,
+      0,
+      924,
+      2
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_return_exact.png",
+    "output": "assets/resources/V7/settlement_return_exact.png",
+    "box": [
+      0,
+      0,
+      429,
+      98
+    ]
+  },
+  {
+    "source": "art_sources/v8-repairs/settlement/prepared/settlement_review_exact.png",
+    "output": "assets/resources/V7/settlement_review_exact.png",
+    "box": [
+      0,
+      0,
+      230,
+      67
+    ]
+  }
 ]

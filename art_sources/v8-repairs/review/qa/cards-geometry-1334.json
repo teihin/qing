@@ -1,0 +1,1076 @@
+{
+  "panelRecordInfo/牌局回顾": [
+    0,
+    0,
+    750,
+    1334
+  ],
+  "panelRecordInfo/牌局回顾/V7回顾长背景": [
+    0,
+    0,
+    750,
+    1875
+  ],
+  "panelRecordInfo/牌局回顾/title": [
+    0,
+    0,
+    750,
+    72
+  ],
+  "panelRecordInfo/牌局回顾/title/line": [
+    21,
+    74,
+    729,
+    138
+  ],
+  "panelRecordInfo/牌局回顾/title/平台": [
+    160,
+    85,
+    430,
+    127
+  ],
+  "panelRecordInfo/牌局回顾/title/关闭上上层": [
+    0,
+    0,
+    90,
+    72
+  ],
+  "panelRecordInfo/牌局回顾/title/关闭上上层/关闭": [
+    22,
+    14,
+    68,
+    58
+  ],
+  "panelRecordInfo/牌局回顾/title/图例1": [
+    504,
+    104,
+    530,
+    108
+  ],
+  "panelRecordInfo/牌局回顾/title/图例1/label": [
+    531,
+    88,
+    595,
+    124
+  ],
+  "panelRecordInfo/牌局回顾/title/图例2": [
+    632,
+    104,
+    658,
+    108
+  ],
+  "panelRecordInfo/牌局回顾/title/图例2/label": [
+    659,
+    88,
+    723,
+    124
+  ],
+  "panelRecordInfo/牌局回顾/title/V8标题文字": [
+    65,
+    10,
+    275,
+    62
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表": [
+    21,
+    150,
+    729,
+    1129
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view": [
+    21,
+    150,
+    729,
+    1129
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content": [
+    21,
+    150,
+    729,
+    260
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0": [
+    21,
+    150,
+    729,
+    334
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/head": [
+    46,
+    166,
+    150,
+    270
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/head/img": [
+    46,
+    166,
+    150,
+    270
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/name": [
+    22,
+    289,
+    174,
+    327
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/庄": [
+    24,
+    153,
+    58,
+    187
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/state": [
+    47,
+    256,
+    119,
+    288
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌": [
+    168,
+    164,
+    542,
+    336
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组1": [
+    183,
+    195,
+    327,
+    321
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组1/handbig": [
+    183,
+    211,
+    253,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组1/handbig/BK1": [
+    183,
+    211,
+    253,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组1/handbig copy": [
+    257,
+    211,
+    327,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组1/handbig copy/BK1": [
+    257,
+    211,
+    327,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组2": [
+    383,
+    195,
+    527,
+    321
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组2/handbig": [
+    383,
+    211,
+    453,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组2/handbig/BK1": [
+    383,
+    211,
+    453,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组2/handbig copy": [
+    457,
+    211,
+    527,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌组2/handbig copy/BK1": [
+    457,
+    211,
+    527,
+    309
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌型1": [
+    180,
+    169,
+    330,
+    207
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/手牌/牌型2": [
+    380,
+    169,
+    530,
+    207
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/list": [
+    565,
+    155,
+    725,
+    329
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/list/1": [
+    565,
+    167,
+    725,
+    209
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/list/2": [
+    565,
+    221,
+    725,
+    263
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/list/3": [
+    565,
+    275,
+    725,
+    317
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-0/V7头像框": [
+    39,
+    159,
+    157,
+    277
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1": [
+    21,
+    340,
+    729,
+    524
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/head": [
+    46,
+    356,
+    150,
+    460
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/head/img": [
+    46,
+    356,
+    150,
+    460
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/name": [
+    22,
+    479,
+    174,
+    517
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/庄": [
+    24,
+    343,
+    58,
+    377
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/state": [
+    47,
+    446,
+    119,
+    478
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌": [
+    168,
+    354,
+    542,
+    526
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组1": [
+    183,
+    385,
+    327,
+    511
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组1/handbig": [
+    183,
+    401,
+    253,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组1/handbig/BK1": [
+    183,
+    401,
+    253,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组1/handbig copy": [
+    257,
+    401,
+    327,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组1/handbig copy/BK1": [
+    257,
+    401,
+    327,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组2": [
+    383,
+    385,
+    527,
+    511
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组2/handbig": [
+    383,
+    401,
+    453,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组2/handbig/BK1": [
+    383,
+    401,
+    453,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组2/handbig copy": [
+    457,
+    401,
+    527,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌组2/handbig copy/BK1": [
+    457,
+    401,
+    527,
+    499
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌型1": [
+    180,
+    359,
+    330,
+    397
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/手牌/牌型2": [
+    380,
+    359,
+    530,
+    397
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/list": [
+    565,
+    345,
+    725,
+    519
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/list/1": [
+    565,
+    357,
+    725,
+    399
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/list/2": [
+    565,
+    411,
+    725,
+    453
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/list/3": [
+    565,
+    465,
+    725,
+    507
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-1/V7头像框": [
+    39,
+    349,
+    157,
+    467
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2": [
+    21,
+    530,
+    729,
+    714
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/head": [
+    46,
+    546,
+    150,
+    650
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/head/img": [
+    46,
+    546,
+    150,
+    650
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/name": [
+    22,
+    669,
+    174,
+    707
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/庄": [
+    24,
+    533,
+    58,
+    567
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/state": [
+    47,
+    636,
+    119,
+    668
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌": [
+    168,
+    544,
+    542,
+    716
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组1": [
+    183,
+    575,
+    327,
+    701
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组1/handbig": [
+    183,
+    591,
+    253,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组1/handbig/BK1": [
+    183,
+    591,
+    253,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组1/handbig copy": [
+    257,
+    591,
+    327,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组1/handbig copy/BK1": [
+    257,
+    591,
+    327,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组2": [
+    383,
+    575,
+    527,
+    701
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组2/handbig": [
+    383,
+    591,
+    453,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组2/handbig/BK1": [
+    383,
+    591,
+    453,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组2/handbig copy": [
+    457,
+    591,
+    527,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌组2/handbig copy/BK1": [
+    457,
+    591,
+    527,
+    689
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌型1": [
+    180,
+    549,
+    330,
+    587
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/手牌/牌型2": [
+    380,
+    549,
+    530,
+    587
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/list": [
+    565,
+    535,
+    725,
+    709
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/list/1": [
+    565,
+    547,
+    725,
+    589
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/list/2": [
+    565,
+    601,
+    725,
+    643
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/list/3": [
+    565,
+    655,
+    725,
+    697
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-2/V7头像框": [
+    39,
+    539,
+    157,
+    657
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3": [
+    21,
+    720,
+    729,
+    904
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/head": [
+    46,
+    736,
+    150,
+    840
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/head/img": [
+    46,
+    736,
+    150,
+    840
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/name": [
+    22,
+    859,
+    174,
+    897
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/庄": [
+    24,
+    723,
+    58,
+    757
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/state": [
+    47,
+    826,
+    119,
+    858
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌": [
+    168,
+    734,
+    542,
+    906
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组1": [
+    183,
+    765,
+    327,
+    891
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组1/handbig": [
+    183,
+    781,
+    253,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组1/handbig/BK1": [
+    183,
+    781,
+    253,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组1/handbig copy": [
+    257,
+    781,
+    327,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组1/handbig copy/BK1": [
+    257,
+    781,
+    327,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组2": [
+    383,
+    765,
+    527,
+    891
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组2/handbig": [
+    383,
+    781,
+    453,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组2/handbig/BK1": [
+    383,
+    781,
+    453,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组2/handbig copy": [
+    457,
+    781,
+    527,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌组2/handbig copy/BK1": [
+    457,
+    781,
+    527,
+    879
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌型1": [
+    180,
+    739,
+    330,
+    777
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/手牌/牌型2": [
+    380,
+    739,
+    530,
+    777
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/list": [
+    565,
+    725,
+    725,
+    899
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/list/1": [
+    565,
+    737,
+    725,
+    779
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/list/2": [
+    565,
+    791,
+    725,
+    833
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/list/3": [
+    565,
+    845,
+    725,
+    887
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-3/V7头像框": [
+    39,
+    729,
+    157,
+    847
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4": [
+    21,
+    910,
+    729,
+    1094
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/head": [
+    46,
+    926,
+    150,
+    1030
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/head/img": [
+    46,
+    926,
+    150,
+    1030
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/name": [
+    22,
+    1049,
+    174,
+    1087
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/庄": [
+    24,
+    913,
+    58,
+    947
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/state": [
+    47,
+    1016,
+    119,
+    1048
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌": [
+    168,
+    924,
+    542,
+    1096
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组1": [
+    183,
+    955,
+    327,
+    1081
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组1/handbig": [
+    183,
+    971,
+    253,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组1/handbig/BK1": [
+    183,
+    971,
+    253,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组1/handbig copy": [
+    257,
+    971,
+    327,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组1/handbig copy/BK1": [
+    257,
+    971,
+    327,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组2": [
+    383,
+    955,
+    527,
+    1081
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组2/handbig": [
+    383,
+    971,
+    453,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组2/handbig/BK1": [
+    383,
+    971,
+    453,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组2/handbig copy": [
+    457,
+    971,
+    527,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌组2/handbig copy/BK1": [
+    457,
+    971,
+    527,
+    1069
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌型1": [
+    180,
+    929,
+    330,
+    967
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/手牌/牌型2": [
+    380,
+    929,
+    530,
+    967
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/list": [
+    565,
+    915,
+    725,
+    1089
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/list/1": [
+    565,
+    927,
+    725,
+    969
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/list/2": [
+    565,
+    981,
+    725,
+    1023
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/list/3": [
+    565,
+    1035,
+    725,
+    1077
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-4/V7头像框": [
+    39,
+    919,
+    157,
+    1037
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5": [
+    21,
+    1100,
+    729,
+    1284
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/head": [
+    46,
+    1116,
+    150,
+    1220
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/head/img": [
+    46,
+    1116,
+    150,
+    1220
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/name": [
+    22,
+    1239,
+    174,
+    1277
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/庄": [
+    24,
+    1103,
+    58,
+    1137
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/state": [
+    47,
+    1206,
+    119,
+    1238
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌": [
+    168,
+    1114,
+    542,
+    1286
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组1": [
+    183,
+    1145,
+    327,
+    1271
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组1/handbig": [
+    183,
+    1161,
+    253,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组1/handbig/BK1": [
+    183,
+    1161,
+    253,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组1/handbig copy": [
+    257,
+    1161,
+    327,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组1/handbig copy/BK1": [
+    257,
+    1161,
+    327,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组2": [
+    383,
+    1145,
+    527,
+    1271
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组2/handbig": [
+    383,
+    1161,
+    453,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组2/handbig/BK1": [
+    383,
+    1161,
+    453,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组2/handbig copy": [
+    457,
+    1161,
+    527,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌组2/handbig copy/BK1": [
+    457,
+    1161,
+    527,
+    1259
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌型1": [
+    180,
+    1119,
+    330,
+    1157
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/手牌/牌型2": [
+    380,
+    1119,
+    530,
+    1157
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/list": [
+    565,
+    1105,
+    725,
+    1279
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/list/1": [
+    565,
+    1117,
+    725,
+    1159
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/list/2": [
+    565,
+    1171,
+    725,
+    1213
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/list/3": [
+    565,
+    1225,
+    725,
+    1267
+  ],
+  "panelRecordInfo/牌局回顾/回顾列表/view/content/qa-row-5/V7头像框": [
+    39,
+    1109,
+    157,
+    1227
+  ],
+  "panelRecordInfo/牌局回顾/分页": [
+    21,
+    1229,
+    729,
+    1309
+  ],
+  "panelRecordInfo/牌局回顾/分页/首页": [
+    61,
+    1227,
+    149,
+    1311
+  ],
+  "panelRecordInfo/牌局回顾/分页/首页/11": [
+    69,
+    1233,
+    141,
+    1305
+  ],
+  "panelRecordInfo/牌局回顾/分页/上一页": [
+    173,
+    1227,
+    261,
+    1311
+  ],
+  "panelRecordInfo/牌局回顾/分页/上一页/11": [
+    181,
+    1233,
+    253,
+    1305
+  ],
+  "panelRecordInfo/牌局回顾/分页/下一页": [
+    489,
+    1227,
+    577,
+    1311
+  ],
+  "panelRecordInfo/牌局回顾/分页/下一页/11": [
+    497,
+    1233,
+    569,
+    1305
+  ],
+  "panelRecordInfo/牌局回顾/分页/尾页": [
+    601,
+    1227,
+    689,
+    1311
+  ],
+  "panelRecordInfo/牌局回顾/分页/尾页/11": [
+    609,
+    1233,
+    681,
+    1305
+  ],
+  "panelRecordInfo/牌局回顾/分页/V8页码底框": [
+    285,
+    1237,
+    465,
+    1301
+  ],
+  "panelRecordInfo/牌局回顾/分页/页码": [
+    291,
+    1243,
+    459,
+    1295
+  ],
+  "panelRecordInfo/牌局回顾/操作": [
+    117,
+    1153,
+    633,
+    1217
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾": [
+    122,
+    1154,
+    370,
+    1216
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾/Background": [
+    122,
+    1154,
+    370,
+    1216
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾/Background/V8标签文字": [
+    133,
+    1161,
+    359,
+    1209
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾/checkmark": [
+    122,
+    1154,
+    370,
+    1216
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾/checkmark/V8标签文字": [
+    133,
+    1161,
+    359,
+    1209
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱": [
+    380,
+    1154,
+    628,
+    1216
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱/Background": [
+    380,
+    1154,
+    628,
+    1216
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱/Background/V8标签文字": [
+    391,
+    1161,
+    617,
+    1209
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "source": "design-previews/效果图V8-new/01-主页面/06-结算.png",
+  "source_sha256": "89779b41fa3442e87d2c20c77da90641ad3798dca14294b649ce21e68b08d3fc",
+  "assets": {
+    "settlement_header_exact.png": {
+      "box": [
+        0,
+        0,
+        363,
+        88
+      ],
+      "size": [
+        363,
+        88
+      ],
+      "border": 0,
+      "sha256": "f8fbf13899329204cc9dcb370696bcc2c37dcdf96808001b4fc6752653374fff"
+    },
+    "settlement_award_frames_exact.png": {
+      "box": [
+        0,
+        86,
+        1024,
+        427
+      ],
+      "size": [
+        1024,
+        341
+      ],
+      "border": 0,
+      "sha256": "a45983735cddbc6c395c2ea1a884fa9b76100056eebbdce35d0d6b467f8a7475"
+    },
+    "settlement_badge_th.png": {
+      "box": [
+        145,
+        369,
+        275,
+        423
+      ],
+      "size": [
+        130,
+        54
+      ],
+      "border": 0,
+      "sha256": "7803f3a59c85041741533b035136dd203166ede0763cc4efe19d3fdf38490cf9"
+    },
+    "settlement_badge_mvp.png": {
+      "box": [
+        432,
+        363,
+        592,
+        423
+      ],
+      "size": [
+        160,
+        60
+      ],
+      "border": 0,
+      "sha256": "27df9885f7c091bff14f530574fddb98395cfc6ce6f8ba87b6c72cd7262d80b8"
+    },
+    "settlement_badge_dy.png": {
+      "box": [
+        754,
+        369,
+        876,
+        423
+      ],
+      "size": [
+        122,
+        54
+      ],
+      "border": 0,
+      "sha256": "629662a707894b371fdc28061a3c2421a29031b073ce2edbfc113a0c64a31bee"
+    },
+    "settlement_v8_summary.png": {
+      "box": [
+        30,
+        472,
+        994,
+        547
+      ],
+      "size": [
+        964,
+        75
+      ],
+      "border": 0,
+      "sha256": "277fcbbc97532595baa5a71feded26ffa31f1537cb5c722b4f19e67e03a610cf"
+    },
+    "settlement_table_header_exact.png": {
+      "box": [
+        30,
+        558,
+        994,
+        646
+      ],
+      "size": [
+        964,
+        88
+      ],
+      "border": 0,
+      "sha256": "7eca2a80889f0d59a2e2afeb0236297c17e4d7145a1599d6b7e14e9c9968c3dd"
+    },
+    "settlement_v8_list_panel.png": {
+      "box": [
+        30,
+        641,
+        994,
+        1335
+      ],
+      "size": [
+        256,
+        320
+      ],
+      "border": 25,
+      "sha256": "685a0397b07fcbee7bfc1029c2bc301c7985ea86ac5cc1f6ecb5ff418caf475a"
+    },
+    "settlement_row_exact.png": {
+      "box": [
+        50,
+        735,
+        974,
+        737
+      ],
+      "size": [
+        924,
+        2
+      ],
+      "border": 0,
+      "sha256": "7ae301465253f09982185492b61bd1c01ff39a8f567a734d81c56342a63cef05"
+    },
+    "settlement_return_exact.png": {
+      "box": [
+        298,
+        1362,
+        727,
+        1460
+      ],
+      "size": [
+        429,
+        98
+      ],
+      "border": 0,
+      "sha256": "f6304cb767a4af6daee2d1c5e6cc73e441445d70f9c6de2060dc5e8ea0f69481"
+    },
+    "settlement_review_exact.png": {
+      "box": [
+        771,
+        11,
+        1001,
+        78
+      ],
+      "size": [
+        230,
+        67
+      ],
+      "border": 0,
+      "sha256": "7fa856fd5987a97e644c4c31e4f7e98232a843ec99c73529319fcaab5b762a46"
+    }
+  }
+}

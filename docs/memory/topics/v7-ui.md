@@ -30,7 +30,7 @@
 | 战绩 | 六页目录 `04-战绩.png`；`assets/resources/UI/panelRecordList.prefab`、`assets/resources/Prefabs/战绩对象.prefab` | `tools/extract_v7_record_exact_assets.py`、`tools/apply_v7_record_exact.py`。第 53 行 |
 | 赠送 | 六页目录 `05-赠送.png`；`assets/resources/UI/panelMain.prefab`、`assets/resources/Prefabs/赠送记录对象.prefab` | `tools/extract_v7_gift_exact_assets.py`、`tools/apply_v7_gift_exact.py`。第 54–55 行 |
 | 结算 | 六页目录 `06-结算.png`；`assets/resources/UI/panelRecordInfo.prefab`、`assets/resources/Prefabs/战绩玩家对象.prefab` | `tools/extract_v7_settlement_exact_assets.py`、`tools/apply_v7_settlement_exact.py`。第 52 行 |
-| 结算牌局回顾 | `assets/resources/UI/panelRecordInfo.prefab` 内“牌局回顾”；`assets/resources/Prefabs/回顾对象2.prefab`、`文字牌谱对象2.prefab` | `tools/extract_v7_review_exact_assets.py`、`tools/apply_v7_review_exact.py`；见[本轮交接](../handoffs/2026-09-06-settlement-review-and-ingame-concepts.md) |
+| 结算牌局回顾 | `assets/resources/UI/panelRecordInfo.prefab` 内“牌局回顾”；`assets/resources/Prefabs/回顾对象2.prefab`、`文字牌谱对象2.prefab` | `tools/apply_v8_review.py`、`tools/validate_v8_review.py`；见[V8-new 回顾交接](../handoffs/2026-09-13-review-v8.md) |
 | 钱包充值/提现/记录 | `design-previews/2026-09-05-V7钱包三页效果图-v1/`；`assets/resources/Prefabs/钱包.prefab`、`assets/resources/Prefabs/交易查询对象.prefab` | `tools/extract_v7_wallet_exact_assets.py`、`tools/apply_v7_wallet_exact.py`。第 39 行 |
 | 钱包首次进入实名认证 | `design-previews/2026-09-06-V7钱包实名认证首次进入效果图-v1/`；`assets/resources/Prefabs/钱包.prefab`“实名” | `tools/extract_v7_wallet_realname_exact_assets.py`、`tools/apply_v7_wallet_realname_exact.py`；见[交接](../handoffs/2026-09-06-wallet-realname-preview.md) |
 | 公告菜单 | `design-previews/2026-09-04-V7公告菜单高清效果图-v1/`；`assets/resources/UI/panelMain.prefab` | 正式长图 `assets/resources/V7/announcement_menu_long_exact.png`；对应约束由响应式工具维护。第 50 行 |
@@ -40,7 +40,17 @@
 
 `tools/apply_v7_prefab_skin.py`、`tools/generate_v7_runtime_skin.py` 是原文第 58 行的早期 V7 实施入口；同段及后续记录已有页面专用精修。不得因为文件名含 V7 就默认重跑全套并覆盖精修。
 
+## 系统设置 V8-new 当前实现
+
+2026-09-13 用户要求按真实功能替换整张效果图。`panelMain.prefab` 的设置子树已组件化，复用大厅背景、独立盾牌/标题/金色图标/蓝色行框，恢复真实防盗号状态提示；密码分流、语音/音效、防盗号和切换账号事件保留；用户随后停用设置中的“修改预留信息”，现为六项，下方开关/状态上移补齐空位并已核对导入和网页。截图修正后移除七个图标旁横杠，标题分隔保留。当前入口为 `tools/apply_v8_settings.py`，不得重跑旧后续模块全图设置样式。Creator 全部导入、五档静态布局、20 项离线回归及网页 iPhone 6/X 画面通过，真实账号/构建/真机待验；见[系统设置交接](../handoffs/2026-09-13-settings-v8.md)。本节替代下方系统设置历史实施状态。
+
+## 代理 V8-new 当前实现
+
+2026-09-13 `panelHongli.prefab` 和五类行已按 08–23 定稿组件化。按最新对照反馈补底框柔光/景深、原稿浅金动态数字、标题及数据分隔；权限隐藏按钮按原生 Grid 连续排两行。63 PNG 和数字 fnt 为正式资源；三项输入、原始事件及服务器数据保留。现为 18 个独立视图，推广按用户最新要求共用“我的”同一正式页面。18 视图五档静态、25 代理及 14 共用推广回归、Grid 五种组合和 EditBox 引擎检查通过；最新 Creator 导入已一致，代理首页和推广长短屏网页样例已查，两入口/返回一致，真实账号和其他页最新视觉仍待验，见[共用推广交接](../handoffs/2026-09-13-promotion-shared.md)。工具、边界和下一步见[代理交接](../handoffs/2026-09-13-agent-v8.md)，本节替代下方代理历史状态。
+
 ## 后续模块 V3 的历史实施记录
+
+2026-09-13 登录密码、交易密码和初始化交易密码页已停用全图母版，改为大厅共用背景及独立真实表单；8 个 EditBox 的锚点和文字框、返回/确定位置已修复。入口 `tools/apply_v8_password_pages.py`，原脚本/事件/输入模式不变。初版已导入且长屏入口已查，补验后的占位/溢出兼容字段尚待导入，后续交互及钱包测试准确性说明见[密码页交接](../handoffs/2026-09-13-password-pages-v8.md)。本条替代下方密码页历史实施方式。
 
 2026-09-05 V3 报告已落入正式 Prefab：推广、金币流向、系统设置及密码页在 `assets/resources/UI/panelMain.prefab`；代理首页、列表、推广和确认层在 `assets/resources/UI/panelHongli.prefab` 及其五类代理行 Prefab；排行榜为 `assets/resources/Prefabs/排行榜.prefab`、`assets/resources/Prefabs/排行榜对象.prefab`；预留信息为 `assets/resources/UI/修改预留信息.prefab`。原文第 45 行；第 41/43 行 V1/V2“仅生成效果图”只保留历史，不再代表当前报告状态。
 
@@ -74,6 +84,10 @@
 - 头像选择弹窗保留原随机 20 个头像和“换一批头像”逻辑。关闭图标、刷新底板和刷新文字使用位于弹窗根下的独立显示层，透明 Button 只负责事件，避免 Cocos 2.4.13 同节点 Sprite/Label 覆盖导致按钮可点但文字或图标消失。
 
 ### 战绩、结算
+
+- 2026-09-13 结算内回顾已改为大厅共用背景、蓝金面板/双标签/分页与清晰浅金文字。用户截图修正后，轮次标题底框保留，每条文字操作仅用横线分隔；决策图标恢复 49×36 原比例，扑克牌及用户在 Creator 保存的高亮线布局保留。Creator、iPhone 6/X 引擎样例、分页边界和返回重入通过，真实回包/真机待验；见[V8-new 回顾交接](../handoffs/2026-09-13-review-v8.md)。本条替代下方旧背景描述。
+
+- 2026-09-13 结算实施由 [V8-new 结算交接](../handoffs/2026-09-13-settlement-v8.md) 替代下方历史布局记录：大厅完整背景、独立荣誉框/称号/列表，原排队按钮移至回顾左侧；用户确认土豪/MVP/大鱼语义不变。随后按用户截图放大提亮文字、统一信息栏字体并加强横线；五档静态、21 项回归、全部 Creator 导入和 iPhone 6/X 引擎样例验证通过。真实牌局排队/真机待验。
 
 - 2026-09-13 用户补充要求：效果图虽无分页，战绩底部仍须常驻首页/上一页/下一页/尾页与页码。正式 Prefab 启用分页、隐藏同位保留提示，脚本不再按总页数隐藏；空回包重置旧分页并显示 1/1。10 项分页/日期回归、四档六行布局、Creator 导入与脚本编译通过；网页点击被自动审批阻止，见[分页修复](../handoffs/2026-09-13-record-pagination.md)。本条替代上一轮默认显示提示、多页才分页的行为。
 

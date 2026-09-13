@@ -6,7 +6,7 @@ import UIManager from "../common/UIManager";
 import ScrollViewEx from "../common/ScrollViewEx";
 import { ShowPanelMode } from "../common/GameDef";
 import ConfigManager from "../logic/ConfigManager";
-import MobileManager from "../mobile/MobileManager";
+import panelMain from "./panelMain";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -34,6 +34,36 @@ export default class panelHongli extends UIPanelViewBase {
     private scrollZhongZhanji:ScrollViewEx = null; //玩家总战绩授权列表
 
     private strPTGuuid:string = ''; //平台GUUID
+
+    // The V8 summary repeats existing server-backed values in other views.
+    // Only text is synchronized here; all artwork and layout live in the Prefab.
+    private refreshAgentSummary()
+    {
+        const copyValue = (from:string, to:string) => {
+            const source = Tool.GetChild(this.node, from);
+            const target = Tool.GetChild(this.node, to);
+            if (cc.isValid(source) && cc.isValid(target))
+                target.getComponent(cc.Label).string = source.getComponent(cc.Label).string;
+        };
+        copyValue("数据/今日新增", "我的玩家/V8今日新增");
+        copyValue("红利统计/今日红利", "统计/V8今日红利");
+        copyValue("统计/累计总提取/num", "提取记录/V8累计提取");
+        copyValue("红利余额/num", "提取记录/V8可提取红利");
+        copyValue("奖池收益/bk/奖池收益余额", "奖池提取记录/V8奖池余额");
+        copyValue("奖池收益/bk/累计提取", "奖池提取记录/V8累计提取");
+        copyValue("我的盟主/统计/今日贡献/num", "盟主收益/bk/今日收益");
+        copyValue("我的盟主/统计/累计贡献/num", "盟主收益/bk/累计收益");
+        const account = GameDataManager.getAccount();
+        for (const entry of [
+            ["提取红利面板", Math.trunc(Number(account.hongli) / 100)],
+            ["提取奖池收益面板", Math.trunc(Number(account.hongli2) / 100)],
+            ["提取分红面板", Number(account.fenhong)]
+        ]) {
+            const target = Tool.GetChild(this.node, entry[0]+"/bk/V8可提取金额");
+            if (cc.isValid(target))
+                target.getComponent(cc.Label).string = "可提取金额："+(isFinite(Number(entry[1])) ? entry[1] : "—");
+        }
+    }
 
     onLoad () {
         super.onLoad();
@@ -150,6 +180,19 @@ export default class panelHongli extends UIPanelViewBase {
 
     // update (dt) {}
 
+    // Permission changes compact the existing Prefab buttons in reading order.
+    // Keep two fixed rows; the native Layout owns positions and spacing.
+    private refreshAgentActions()
+    {
+        const actions = Tool.GetChild(this.node, "操作");
+        const names = ["我的玩家", "我的业绩", "我的盟主", "提取记录", "推广", "总业绩"];
+        const count = names.filter(name => actions.getChildByName(name).active).length;
+        const columns = count <= 4 ? 2 : 3;
+        actions.width = columns * 204 + (columns - 1) * 14;
+        const layout = actions.getComponent(cc.Layout);
+        if (layout) layout.updateLayout();
+    }
+
     public set_role(old = null)
     {
         let role = GameDataManager.getAccount().role;
@@ -184,10 +227,12 @@ export default class panelHongli extends UIPanelViewBase {
             Tool.GetChild(this.node,"总业绩/列表").active = false
         }
 
+        this.refreshAgentActions();
     }
     public set_hongli(old = null)
     {
         Tool.GetChild(this.node,"红利余额/num").getComponent(cc.Label).string = parseInt((Number(GameDataManager.getAccount().hongli)/100).toString()).toString();
+        this.refreshAgentSummary();
     }
     public set_all_hongli(old = null)
     {
@@ -196,6 +241,7 @@ export default class panelHongli extends UIPanelViewBase {
     public set_use_hongli(old = null)
     {
         Tool.GetChild(this.node,"统计/累计总提取/num").getComponent(cc.Label).string = parseInt((Number(GameDataManager.getAccount().use_hongli)/100).toString()).toString();
+        this.refreshAgentSummary();
     }
 
     public set_big_percent(old = null)
@@ -206,6 +252,7 @@ export default class panelHongli extends UIPanelViewBase {
     public set_hongli2(old = null)
     {
         Tool.GetChild(this.node,"奖池收益/bk/奖池收益余额").getComponent(cc.Label).string = parseInt((Number(GameDataManager.getAccount().hongli2)/100).toString()).toString();
+        this.refreshAgentSummary();
     }
     public set_all_hongli2(old = null)
     {
@@ -214,6 +261,7 @@ export default class panelHongli extends UIPanelViewBase {
     public set_use_hongli2(old = null)
     {
         Tool.GetChild(this.node,"奖池收益/bk/累计提取").getComponent(cc.Label).string = parseInt((Number(GameDataManager.getAccount().use_hongli2)/100).toString()).toString();
+        this.refreshAgentSummary();
     }
     public set_client_prop(old = null)
     {
@@ -227,10 +275,12 @@ export default class panelHongli extends UIPanelViewBase {
         {
             Tool.GetChild(this.node,"操作/总业绩").active = false;
         }
+        this.refreshAgentActions();
     }
 
     public onButtonClick(button:cc.Button)
     {
+        this.refreshAgentSummary();
         if(button.node.name === "关闭上层")
         {
             button.node.parent.active = false;
@@ -403,6 +453,18 @@ export default class panelHongli extends UIPanelViewBase {
         }
         else if(button.node.name == "我的分红")
         {
+            // This build uses the compact share dialog; the legacy full-page
+            // node is absent. Reuse the existing guarded withdrawal flow.
+            if (!cc.isValid(this.node.getChildByName("我的分红")))
+            {
+                if (!(Number(GameDataManager.getAccount().fenhong) > 0))
+                {
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"没有分红，不能提取！");
+                    return;
+                }
+                this.node.getChildByName("提取分红面板").active = true;
+                return;
+            }
             this.node.getChildByName("我的分红").active = true;
             this.GetTodayFenhong();
             Tool.GetChild(this.node,"我的分红/分红余额/num").getComponent(cc.Label).string = GameDataManager.getAccount().fenhong;
@@ -568,36 +630,10 @@ export default class panelHongli extends UIPanelViewBase {
         }
         else if(button.node.name == "推广")
         {
-            //根据当前代理上级是否平台码 显示不同节目
-            let strGuuid = GameDataManager.getAccount().guuid;
-            // if(strGuuid == this.strPTGuuid)
-            // {
-            //     this.node.getChildByName("推广二维码2").active = true;
-            //     this.node.getChildByName("推广二维码").active = false;
-            //     let img = Tool.GetChild(this.node ,"推广二维码2/二维码/img").getComponent(cc.Graphics);
-            //     this.createQR2(img,ConfigManager.getInstance().downloadurl+"/zc?guuid="+GameDataManager.getAccount().guuid);
-            // }
-            // else
-            {
-                this.node.getChildByName("推广二维码").active = true;
-                let qrUrl = ConfigManager.getInstance().downloadurl+"/zc?guuid="+strGuuid;
-                let idLabel = Tool.GetChild(this.node, "推广二维码/V7推广ID");
-                if(cc.isValid(idLabel))
-                    idLabel.getComponent(cc.Label).string = "推广ID："+strGuuid;
-                let linkLabel = Tool.GetChild(this.node, "推广二维码/V7推广链接");
-                if(cc.isValid(linkLabel))
-                    linkLabel.getComponent(cc.Label).string = qrUrl;
-               // this.node.getChildByName("推广二维码2").active = false;
-                let img = Tool.GetChild(this.node ,"推广二维码/二维码/img").getComponent(cc.Graphics);
-                this.createQR(img,qrUrl);
-            }
-
-
-
-        }
-        else if(button.node.name === "分享二维码")
-        {
-            MobileManager.getInstance().CaptureScreen();
+            const mainNode = this.node.parent && this.node.parent.getChildByName("panelMain");
+            const main = cc.isValid(mainNode) ? mainNode.getComponent(panelMain) : null;
+            if(!main || !main.OpenPromotionPanel(this.node))
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"推广页面暂未就绪，请返回大厅后重试！");
         }
         else if(button.node.name === "总业绩")
         {
@@ -755,7 +791,8 @@ export default class panelHongli extends UIPanelViewBase {
             return;
         }
         let msg = data["GetTodayLowerCount"];
-        Tool.GetChild(this.node,"数据/今日新增").getComponent(cc.Label).string = msg["today_lower_count"];  
+        Tool.GetChild(this.node,"数据/今日新增").getComponent(cc.Label).string = msg["today_lower_count"];
+        this.refreshAgentSummary();
     }
 
     public onHallCommand(nCode:number, param:string)
@@ -867,6 +904,7 @@ export default class panelHongli extends UIPanelViewBase {
                 Tool.GetChild(this.node,"红利统计/今日红利").getComponent(cc.Label).string = data[0];
                 Tool.GetChild(this.node,"红利统计/昨日红利").getComponent(cc.Label).string = data[1];
                 Tool.GetChild(this.node,"红利统计/前日红利").getComponent(cc.Label).string = data[2];
+                this.refreshAgentSummary();
             }
         }
         else if(param.indexOf("异步_查询_提取分红_详细信息")>=0)
@@ -1149,8 +1187,7 @@ export default class panelHongli extends UIPanelViewBase {
         {
             Tool.GetChild(this.node,"奖池收益/bk/今日收益").getComponent(cc.Label).string = upper_today_income;  
         }
-        
-         
+        this.refreshAgentSummary();
     }
     public OnChuanXiaoPlayerTotalTaxRecord(strMsg:string)
     {
@@ -1183,8 +1220,7 @@ export default class panelHongli extends UIPanelViewBase {
         {
             Tool.GetChild(this.node,"奖池收益/bk/累计收益").getComponent(cc.Label).string = upper_total_income;           
         }
-            
-
+        this.refreshAgentSummary();
     }
     public GetHongliList(nPage:number = 0)
     {        
@@ -1359,6 +1395,7 @@ export default class panelHongli extends UIPanelViewBase {
     }
     public set_fenhong(old)
     {
+        this.refreshAgentSummary();
         if(Tool.GetChild(this.node,"我的分红/分红余额/num") == undefined)
             return;
         Tool.GetChild(this.node,"我的分红/分红余额/num").getComponent(cc.Label).string = GameDataManager.getAccount().fenhong;
@@ -1388,6 +1425,7 @@ export default class panelHongli extends UIPanelViewBase {
             {
                 Tool.GetChild(this.node,"操作/推广").active = false;
             }
+            this.refreshAgentActions();
         }
     }
     public GetHehuorenList(nPage:number = 0)
@@ -1509,59 +1547,6 @@ export default class panelHongli extends UIPanelViewBase {
         Tool.GetChild(node,"info/1").getComponent(cc.Label).string = "代理:"+arrayAll[1];
         Tool.GetChild(node,"info/2").getComponent(cc.Label).string = "总计:"+arrayAll[2];
     }
-    public createQR(ctx:cc.Graphics,url:string) 
-    {
-        Debug.Log(url);
-		let qrcode:QRCode = new QRCode(-1, QRErrorCorrectLevel.H);
-		qrcode.addData(url);
-		qrcode.make();
-
-        ctx.fillColor = cc.Color.BLACK;  
-        
-		//块宽高
-		let tileW = ctx.node.width / qrcode.getModuleCount();
-		let tileH = ctx.node.height / qrcode.getModuleCount();
-
-		// draw in the Graphics
-		for (let row = 0; row < qrcode.getModuleCount(); row++) {
-			for (let col = 0; col < qrcode.getModuleCount(); col++) {
-				if (qrcode.isDark(row, col)) {
-					// ctx.fillColor = cc.Color.BLACK;
-					let w = (Math.ceil((col + 1) * tileW) - Math.floor(col * tileW));
-					let h = (Math.ceil((row + 1) * tileW) - Math.floor(row * tileW));
-					ctx.rect(Math.round(col * tileW)-ctx.node.width/2 , Math.round(row * tileH)-ctx.node.height/2, w, h);
-					ctx.fill();
-				}
-			}
-		}
-    }
-    public createQR2(ctx:cc.Graphics,url:string) 
-    {
-        Debug.Log(url);
-		let qrcode:QRCode = new QRCode(-1, QRErrorCorrectLevel.H);
-		qrcode.addData(url);
-		qrcode.make();
-
-        ctx.fillColor = cc.Color.RED;  
-        
-		//块宽高
-		let tileW = ctx.node.width / qrcode.getModuleCount();
-		let tileH = ctx.node.height / qrcode.getModuleCount();
-
-		// draw in the Graphics
-		for (let row = 0; row < qrcode.getModuleCount(); row++) {
-			for (let col = 0; col < qrcode.getModuleCount(); col++) {
-				if (qrcode.isDark(row, col)) {
-					// ctx.fillColor = cc.Color.BLACK;
-					let w = (Math.ceil((col + 1) * tileW) - Math.floor(col * tileW));
-					let h = (Math.ceil((row + 1) * tileW) - Math.floor(row * tileW));
-					ctx.rect(Math.round(col * tileW)-ctx.node.width/2 , Math.round(row * tileH)-ctx.node.height/2, w, h);
-					ctx.fill();
-				}
-			}
-		}
-    }
-
     //查询代理昨日总业绩
     public GetDailiZhongYeji()
     {

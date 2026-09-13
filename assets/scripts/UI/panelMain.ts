@@ -69,6 +69,7 @@ export default class panelMain extends UIPanelViewBase {
     private walletOpening:boolean = false;
     private walletOpenRequest:number = 0;
     private updatingMainTabSelection:boolean = false;
+    private promotionReturnPanel:cc.Node = null;
 
     private animateSet:dragonBones.ArmatureDisplay = null;
 
@@ -226,9 +227,42 @@ export default class panelMain extends UIPanelViewBase {
     /** 大厅初次打开或重新启用时，推广分享页必须保持关闭。 */
     private HidePromotionPanelOnLobbyOpen()
     {
-        let promotionPanel = this.node.getChildByName("推广二维码");
-        if(promotionPanel)
+        this.ClosePromotionPanel();
+    }
+
+    /** “我的”和代理入口共用这一个正式推广页，关闭后恢复打开它的页面。 */
+    public OpenPromotionPanel(returnPanel:cc.Node = null):boolean
+    {
+        const promotionPanel = this.node.getChildByName("推广二维码");
+        if(!cc.isValid(promotionPanel) || !this.node.activeInHierarchy)
+            return false;
+
+        const qrUrl = ConfigManager.getInstance().downloadurl+"/zc?guuid="+GameDataManager.getAccount().guuid;
+        const idLabel = Tool.GetChild(promotionPanel,"V7推广ID");
+        if(idLabel && idLabel.getComponent(cc.Label))
+            idLabel.getComponent(cc.Label).string = "推广ID：" + GameDataManager.getAccount().guuid;
+        const linkLabel = Tool.GetChild(promotionPanel,"V7推广链接");
+        if(linkLabel && linkLabel.getComponent(cc.Label))
+            linkLabel.getComponent(cc.Label).string = qrUrl;
+        this.createQR(Tool.GetChild(promotionPanel,"二维码/img").getComponent(cc.Graphics),qrUrl);
+
+        this.promotionReturnPanel = cc.isValid(returnPanel) && returnPanel !== this.node &&
+            returnPanel.parent === this.node.parent ? returnPanel : null;
+        promotionPanel.active = true;
+        if(this.promotionReturnPanel)
+            this.promotionReturnPanel.active = false;
+        return true;
+    }
+
+    private ClosePromotionPanel()
+    {
+        const promotionPanel = this.node.getChildByName("推广二维码");
+        if(cc.isValid(promotionPanel))
             promotionPanel.active = false;
+        const returnPanel = this.promotionReturnPanel;
+        this.promotionReturnPanel = null;
+        if(cc.isValid(returnPanel) && returnPanel.parent === this.node.parent)
+            returnPanel.active = true;
     }
 
     start () {
@@ -774,20 +808,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name == "推广二维码")
         {
-            this.node.getChildByName("推广二维码").active = true;
-            let qrUrl = ConfigManager.getInstance().downloadurl+"/zc?guuid="+GameDataManager.getAccount().guuid;
-            let idLabel = Tool.GetChild(this.node,"推广二维码/V7推广ID");
-            if(idLabel && idLabel.getComponent(cc.Label))
-            {
-                idLabel.getComponent(cc.Label).string = "推广ID：" + GameDataManager.getAccount().guuid;
-            }
-            let linkLabel = Tool.GetChild(this.node,"推广二维码/V7推广链接");
-            if(linkLabel && linkLabel.getComponent(cc.Label))
-            {
-                linkLabel.getComponent(cc.Label).string = qrUrl;
-            }
-            let img = Tool.GetChild(this.node ,"推广二维码/二维码/img").getComponent(cc.Graphics);
-            this.createQR(img,qrUrl);
+            this.OpenPromotionPanel();
         }
         else if(button.node.name === "分享二维码" || button.node.name === "保存二维码")
         {
@@ -842,7 +863,10 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "关闭上上层")
         {
-            button.node.parent.parent.active = false;
+            if(button.node.parent.parent === this.node.getChildByName("推广二维码"))
+                this.ClosePromotionPanel();
+            else
+                button.node.parent.parent.active = false;
         }
         else if(button.node.name === "设置")
         {
@@ -2402,6 +2426,7 @@ export default class panelMain extends UIPanelViewBase {
     }
     public createQR(ctx:cc.Graphics,url:string) 
     {
+        ctx.clear();
         Debug.Log(url);
 		let qrcode:QRCode = new QRCode(-1, QRErrorCorrectLevel.H);
 		qrcode.addData(url);

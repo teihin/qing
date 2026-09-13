@@ -1,0 +1,572 @@
+{
+  "panelRecordInfo/牌局回顾": [
+    0,
+    0,
+    750,
+    1624
+  ],
+  "panelRecordInfo/牌局回顾/V7回顾长背景": [
+    0,
+    0,
+    750,
+    1875
+  ],
+  "panelRecordInfo/牌局回顾/title": [
+    0,
+    0,
+    750,
+    72
+  ],
+  "panelRecordInfo/牌局回顾/title/line": [
+    21,
+    74,
+    729,
+    138
+  ],
+  "panelRecordInfo/牌局回顾/title/平台": [
+    160,
+    85,
+    430,
+    127
+  ],
+  "panelRecordInfo/牌局回顾/title/关闭上上层": [
+    0,
+    0,
+    90,
+    72
+  ],
+  "panelRecordInfo/牌局回顾/title/关闭上上层/关闭": [
+    22,
+    14,
+    68,
+    58
+  ],
+  "panelRecordInfo/牌局回顾/title/图例1": [
+    504,
+    104,
+    530,
+    108
+  ],
+  "panelRecordInfo/牌局回顾/title/图例1/label": [
+    531,
+    88,
+    595,
+    124
+  ],
+  "panelRecordInfo/牌局回顾/title/图例2": [
+    632,
+    104,
+    658,
+    108
+  ],
+  "panelRecordInfo/牌局回顾/title/图例2/label": [
+    659,
+    88,
+    723,
+    124
+  ],
+  "panelRecordInfo/牌局回顾/title/V8标题文字": [
+    65,
+    10,
+    275,
+    62
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱": [
+    21,
+    150,
+    729,
+    1419
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view": [
+    21,
+    150,
+    729,
+    1419
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content": [
+    23,
+    150,
+    727,
+    496
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1": [
+    23,
+    160,
+    727,
+    224
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/标题": [
+    23,
+    162,
+    727,
+    222
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/标题/New Label": [
+    40,
+    171,
+    260,
+    213
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/标题/New Label copy": [
+    555,
+    171,
+    725,
+    213
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list": [
+    23,
+    224,
+    727,
+    224
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-0": [
+    23,
+    224,
+    727,
+    282
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-0/name": [
+    30,
+    233,
+    350,
+    273
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-0/决策": [
+    396,
+    232,
+    438,
+    274
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-0/操作": [
+    450,
+    233,
+    600,
+    273
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-0/剩余": [
+    608,
+    233,
+    708,
+    273
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-1": [
+    23,
+    286,
+    727,
+    344
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-1/name": [
+    30,
+    295,
+    350,
+    335
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-1/决策": [
+    396,
+    294,
+    438,
+    336
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-1/操作": [
+    450,
+    295,
+    600,
+    335
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-1/剩余": [
+    608,
+    295,
+    708,
+    335
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-2": [
+    23,
+    348,
+    727,
+    406
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-2/name": [
+    30,
+    357,
+    350,
+    397
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-2/决策": [
+    396,
+    356,
+    438,
+    398
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-2/操作": [
+    450,
+    357,
+    600,
+    397
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/1/list/qa-row-2/剩余": [
+    608,
+    357,
+    708,
+    397
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2": [
+    23,
+    226,
+    727,
+    290
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/标题": [
+    23,
+    228,
+    727,
+    288
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/标题/New Label": [
+    40,
+    237,
+    260,
+    279
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/标题/New Label copy": [
+    555,
+    237,
+    725,
+    279
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list": [
+    23,
+    290,
+    727,
+    290
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-0": [
+    23,
+    290,
+    727,
+    348
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-0/name": [
+    30,
+    299,
+    350,
+    339
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-0/决策": [
+    396,
+    298,
+    438,
+    340
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-0/操作": [
+    450,
+    299,
+    600,
+    339
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-0/剩余": [
+    608,
+    299,
+    708,
+    339
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-1": [
+    23,
+    352,
+    727,
+    410
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-1/name": [
+    30,
+    361,
+    350,
+    401
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-1/决策": [
+    396,
+    360,
+    438,
+    402
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-1/操作": [
+    450,
+    361,
+    600,
+    401
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-1/剩余": [
+    608,
+    361,
+    708,
+    401
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-2": [
+    23,
+    414,
+    727,
+    472
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-2/name": [
+    30,
+    423,
+    350,
+    463
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-2/决策": [
+    396,
+    422,
+    438,
+    464
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-2/操作": [
+    450,
+    423,
+    600,
+    463
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/2/list/qa-row-2/剩余": [
+    608,
+    423,
+    708,
+    463
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3": [
+    23,
+    292,
+    727,
+    396
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/标题": [
+    23,
+    314,
+    727,
+    374
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/标题/New Label": [
+    40,
+    323,
+    260,
+    365
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/标题/New Label copy": [
+    555,
+    323,
+    725,
+    365
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list": [
+    23,
+    356,
+    727,
+    396
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-0": [
+    23,
+    376,
+    727,
+    434
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-0/name": [
+    30,
+    385,
+    350,
+    425
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-0/决策": [
+    396,
+    384,
+    438,
+    426
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-0/操作": [
+    450,
+    385,
+    600,
+    425
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-0/剩余": [
+    608,
+    385,
+    708,
+    425
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-1": [
+    23,
+    438,
+    727,
+    496
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-1/name": [
+    30,
+    447,
+    350,
+    487
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-1/决策": [
+    396,
+    446,
+    438,
+    488
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-1/操作": [
+    450,
+    447,
+    600,
+    487
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-1/剩余": [
+    608,
+    447,
+    708,
+    487
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-2": [
+    23,
+    500,
+    727,
+    558
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-2/name": [
+    30,
+    509,
+    350,
+    549
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-2/决策": [
+    396,
+    508,
+    438,
+    550
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-2/操作": [
+    450,
+    509,
+    600,
+    549
+  ],
+  "panelRecordInfo/牌局回顾/文字牌谱/view/content/3/list/qa-row-2/剩余": [
+    608,
+    509,
+    708,
+    549
+  ],
+  "panelRecordInfo/牌局回顾/分页": [
+    21,
+    1519,
+    729,
+    1599
+  ],
+  "panelRecordInfo/牌局回顾/分页/首页": [
+    61,
+    1517,
+    149,
+    1601
+  ],
+  "panelRecordInfo/牌局回顾/分页/首页/11": [
+    69,
+    1523,
+    141,
+    1595
+  ],
+  "panelRecordInfo/牌局回顾/分页/上一页": [
+    173,
+    1517,
+    261,
+    1601
+  ],
+  "panelRecordInfo/牌局回顾/分页/上一页/11": [
+    181,
+    1523,
+    253,
+    1595
+  ],
+  "panelRecordInfo/牌局回顾/分页/下一页": [
+    489,
+    1517,
+    577,
+    1601
+  ],
+  "panelRecordInfo/牌局回顾/分页/下一页/11": [
+    497,
+    1523,
+    569,
+    1595
+  ],
+  "panelRecordInfo/牌局回顾/分页/尾页": [
+    601,
+    1517,
+    689,
+    1601
+  ],
+  "panelRecordInfo/牌局回顾/分页/尾页/11": [
+    609,
+    1523,
+    681,
+    1595
+  ],
+  "panelRecordInfo/牌局回顾/分页/V8页码底框": [
+    285,
+    1527,
+    465,
+    1591
+  ],
+  "panelRecordInfo/牌局回顾/分页/页码": [
+    291,
+    1533,
+    459,
+    1585
+  ],
+  "panelRecordInfo/牌局回顾/操作": [
+    117,
+    1443,
+    633,
+    1507
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾": [
+    122,
+    1444,
+    370,
+    1506
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾/Background": [
+    122,
+    1444,
+    370,
+    1506
+  ],
+  "panelRecordInfo/牌局回顾/操作/牌局回顾/Background/V8标签文字": [
+    133,
+    1451,
+    359,
+    1499
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱": [
+    380,
+    1444,
+    628,
+    1506
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱/Background": [
+    380,
+    1444,
+    628,
+    1506
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱/Background/V8标签文字": [
+    391,
+    1451,
+    617,
+    1499
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱/checkmark": [
+    380,
+    1444,
+    628,
+    1506
+  ],
+  "panelRecordInfo/牌局回顾/操作/文字牌谱/checkmark/V8标签文字": [
+    391,
+    1451,
+    617,
+    1499
+  ]
+}

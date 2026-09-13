@@ -1,0 +1,1161 @@
+{
+  "agent_v8_header_8.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      0,
+      0,
+      941,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      941,
+      90
+    ],
+    "sha256": "6e0f1fa0a7e57723c101d8f76ec0a92426526b2e46fb9e1d73de95ac49577b2d"
+  },
+  "agent_v8_header_9.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      0,
+      0,
+      941,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      941,
+      90
+    ],
+    "sha256": "20a868e65dc712b9cff1a5479880c0b24029bac66d7360fda6ca77a63e7695ad"
+  },
+  "agent_v8_header_10.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/10-代理-我的业绩.png",
+    "box": [
+      0,
+      0,
+      941,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      941,
+      90
+    ],
+    "sha256": "0854b2e19ff24a9e37c50e64d0a0db1b7bb1f617371de2a3aff6562f3ea686fd"
+  },
+  "agent_v8_header_11.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/11-代理-我的盟主.png",
+    "box": [
+      0,
+      0,
+      941,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      941,
+      90
+    ],
+    "sha256": "43a62e0976af80eb7b4d7a12ca4036acf7f5996660cc1199a5d2fd2b0107988a"
+  },
+  "agent_v8_header_12.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/12-代理-总业绩.png",
+    "box": [
+      0,
+      0,
+      941,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      941,
+      90
+    ],
+    "sha256": "68242897c5e38124a6bbcb54620a44f15767e007299bb16ec909da413d2ca25b"
+  },
+  "agent_v8_header_13.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/13-代理-红利提取记录.png",
+    "box": [
+      0,
+      0,
+      941,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      941,
+      90
+    ],
+    "sha256": "61ab82f70ced60f39b7b4e40113b753d3fb534fd97773425b0920b17cef8ce86"
+  },
+  "agent_v8_header_14.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/14-代理-奖池提取记录.png",
+    "box": [
+      0,
+      0,
+      941,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      941,
+      90
+    ],
+    "sha256": "bb5b3c91e37020b2d944c8332fc89262fbc95ad105c20684ced26f8cfc76aeec"
+  },
+  "agent_v8_header_15.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/15-代理-推广二维码.png",
+    "box": [
+      0,
+      0,
+      946,
+      90
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      946,
+      90
+    ],
+    "sha256": "88a0f0a0864303b8a5b7c352840b35c3f04a8a73da600de267145bd82d43e973"
+  },
+  "agent_v8_hero.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      69,
+      136,
+      873,
+      357
+    ],
+    "radius": 27,
+    "clean": true,
+    "border": 30,
+    "glyph": false,
+    "size": [
+      360,
+      176
+    ],
+    "sha256": "d35258dfa10e242d59bd3777f0f3e86063dfab59822c81774f8a71ecce973c09"
+  },
+  "agent_v8_summary.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      69,
+      378,
+      873,
+      549
+    ],
+    "radius": 25,
+    "clean": true,
+    "border": 30,
+    "glyph": false,
+    "size": [
+      360,
+      136
+    ],
+    "sha256": "adfb4769b79a1f11ea3b0cc790000d7d7c7d2ffbe7d231374e7f69f247e20750"
+  },
+  "agent_v8_data.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      69,
+      896,
+      873,
+      1219
+    ],
+    "radius": 25,
+    "clean": true,
+    "border": 30,
+    "glyph": false,
+    "size": [
+      360,
+      258
+    ],
+    "sha256": "6a3b340bca7583419bcf2516f36e4f3ce439ac9391b07c5fd7ee9b1a631a2c7b"
+  },
+  "agent_v8_row.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      78,
+      396,
+      863,
+      490
+    ],
+    "radius": 17,
+    "clean": 22,
+    "border": 20,
+    "glyph": false,
+    "size": [
+      360,
+      75
+    ],
+    "sha256": "afaa6c5033898417ac610fd20c1c5683271101ccadb7310c4541455ea1b78cce"
+  },
+  "agent_v8_table_base.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      69,
+      318,
+      873,
+      387
+    ],
+    "radius": 20,
+    "clean": 24,
+    "border": 21,
+    "glyph": false,
+    "size": [
+      360,
+      55
+    ],
+    "sha256": "6b880ef71021f4d54fcc5cd4fbc814c0c0954bb42fd6755b6ae0b97c5d139b77"
+  },
+  "agent_v8_list.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      69,
+      920,
+      873,
+      1457
+    ],
+    "radius": 22,
+    "clean": false,
+    "border": 25,
+    "glyph": false,
+    "size": [
+      420,
+      428
+    ],
+    "sha256": "ba6486ac3db527effc8bf03c13a38b0808ab737d45feac09d9a41138a870d00b"
+  },
+  "agent_v8_pager.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/10-代理-我的业绩.png",
+    "box": [
+      23,
+      1477,
+      918,
+      1616
+    ],
+    "radius": 12,
+    "clean": true,
+    "border": 17,
+    "glyph": false,
+    "size": [
+      420,
+      111
+    ],
+    "sha256": "0862d705af8fd2205bc479453b4fdb46c3c261278efb8a861edf803b567da7d2"
+  },
+  "agent_v8_page_value.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      346,
+      1512,
+      593,
+      1597
+    ],
+    "radius": 16,
+    "clean": true,
+    "border": 19,
+    "glyph": false,
+    "size": [
+      197,
+      68
+    ],
+    "sha256": "da60c9537c60c42582dd7718e6c47de7c1331262523a95aca73d0f0ff423dce8"
+  },
+  "agent_v8_button_base.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      652,
+      218,
+      842,
+      302
+    ],
+    "radius": 20,
+    "clean": true,
+    "border": 23,
+    "glyph": false,
+    "size": [
+      151,
+      67
+    ],
+    "sha256": "d4e0bb73ea4d68e1abfd366c8809961ef9e6a2b8af99a81f9930f417384b16ec"
+  },
+  "agent_v8_popup.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/17-代理-奖池收益.png",
+    "box": [
+      128,
+      508,
+      814,
+      1132
+    ],
+    "radius": 34,
+    "clean": true,
+    "border": 34,
+    "glyph": false,
+    "size": [
+      460,
+      497
+    ],
+    "sha256": "3027b387151e79c907d178104dfb929b3de7352594f2bb64a6df3e48e1f2d5f0"
+  },
+  "agent_v8_ratio_popup.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/23-代理-比例设置.png",
+    "box": [
+      75,
+      581,
+      736,
+      1281
+    ],
+    "radius": 34,
+    "clean": true,
+    "border": 34,
+    "glyph": false,
+    "size": [
+      460,
+      558
+    ],
+    "sha256": "35cc70d0e84e43f8a771d349ea7af02682c797a81d6b0fc583dfeaed5dc178ba"
+  },
+  "agent_v8_home_players.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      76,
+      620,
+      348,
+      734
+    ],
+    "radius": 24,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      272,
+      114
+    ],
+    "sha256": "3e44b2ecadc76a0f5b228b362614b976c254e9dc52c2845f5ab5d5506cb12e5b"
+  },
+  "agent_v8_home_performance.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      360,
+      620,
+      625,
+      734
+    ],
+    "radius": 24,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      265,
+      114
+    ],
+    "sha256": "f7288a1237b7ff09e6babac24421668dbb50983fdc4d6ff083e4a743066188e9"
+  },
+  "agent_v8_home_leaders.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      637,
+      620,
+      868,
+      734
+    ],
+    "radius": 24,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      231,
+      114
+    ],
+    "sha256": "791f58fac25d9d9fc5b53570b76caa9e7f81faeb3b89fc0f7784400c522eb626"
+  },
+  "agent_v8_home_history.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      76,
+      754,
+      348,
+      870
+    ],
+    "radius": 24,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      272,
+      116
+    ],
+    "sha256": "52aee9cfb8741925c1966240e8ec213551ae450b95f979c0cc8ef9d7d0538180"
+  },
+  "agent_v8_home_promotion.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      360,
+      754,
+      625,
+      870
+    ],
+    "radius": 24,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      265,
+      116
+    ],
+    "sha256": "aab95ed2d17b5374857235b86275e6dfd9b47b774f2e26be6e664f3edafd7fda"
+  },
+  "agent_v8_home_total.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      637,
+      754,
+      868,
+      870
+    ],
+    "radius": 24,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      231,
+      116
+    ],
+    "sha256": "028586abc595399a4b6610dc9ba8a0e24e06142cb1d7bae58e7819dd903d6127"
+  },
+  "agent_v8_home_withdraw.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      651,
+      217,
+      843,
+      303
+    ],
+    "radius": 20,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      192,
+      86
+    ],
+    "sha256": "89f7321bb567fdce5f998642dff7a4ef3d5eeedddb5fb4d1041f29729b3a87d3"
+  },
+  "agent_v8_caption_manage.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      371,
+      563,
+      574,
+      611
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      203,
+      48
+    ],
+    "sha256": "acacfa71dde5dea6c3f2723ca6151263018ffc975f572f354769056c7f31f7bc"
+  },
+  "agent_v8_caption_data.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      369,
+      925,
+      575,
+      974
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      206,
+      49
+    ],
+    "sha256": "22b0d8ee157821878bd1fcfd67feb5862c1d5beb2dfd014a589a66b3f4c71d62"
+  },
+  "agent_v8_rule_title.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      90,
+      584,
+      352,
+      587
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      262,
+      3
+    ],
+    "sha256": "2c33dde9beb9de0a9ad4747abbfa01a41a6d1eedb606f0959d889bd11821dff8"
+  },
+  "agent_v8_rule_data.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      89,
+      947,
+      362,
+      950
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      273,
+      3
+    ],
+    "sha256": "7ab3ef4ebbdb33b8426d2c7d2e84f5364347e17ceb773b7d66335048fb814792"
+  },
+  "agent_v8_rule_horizontal.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      108,
+      1106,
+      832,
+      1109
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      724,
+      3
+    ],
+    "sha256": "4a050037946a95122dcd96db22c65966a01634d15cd7b5e384e2a4c2589f3ec1"
+  },
+  "agent_v8_rule_vertical.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      279,
+      1003,
+      282,
+      1080
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      3,
+      77
+    ],
+    "sha256": "b05766c62303dcef55b6be3ef693a65097c0d271f59487077aacd5f9f6f42d0e"
+  },
+  "agent_v8_hero_title.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      297,
+      169,
+      450,
+      211
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      153,
+      42
+    ],
+    "sha256": "23db7d509dd91d10d1a022eeb455eb38fa025ea96bd9fabc170b1ad9134fff9f"
+  },
+  "agent_v8_shield.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/08-代理首页.png",
+    "box": [
+      118,
+      164,
+      259,
+      328
+    ],
+    "polygon": [
+      [
+        69,
+        2
+      ],
+      [
+        88,
+        11
+      ],
+      [
+        116,
+        20
+      ],
+      [
+        119,
+        34
+      ],
+      [
+        136,
+        48
+      ],
+      [
+        130,
+        100
+      ],
+      [
+        118,
+        127
+      ],
+      [
+        92,
+        148
+      ],
+      [
+        69,
+        162
+      ],
+      [
+        48,
+        150
+      ],
+      [
+        22,
+        128
+      ],
+      [
+        11,
+        102
+      ],
+      [
+        2,
+        47
+      ],
+      [
+        18,
+        35
+      ],
+      [
+        22,
+        18
+      ],
+      [
+        45,
+        13
+      ]
+    ],
+    "size": [
+      141,
+      164
+    ]
+  },
+  "agent_v8_page_first.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      89,
+      1512,
+      173,
+      1596
+    ],
+    "radius": 40,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      84,
+      84
+    ],
+    "sha256": "cf684b2549fda6e436c49b5ae9c051cc183c5617231c1448f87bf50b560e585c"
+  },
+  "agent_v8_page_prev.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      229,
+      1512,
+      314,
+      1596
+    ],
+    "radius": 40,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      85,
+      84
+    ],
+    "sha256": "ba8e525b27d31017a2e48ec4f83e8f5f83ef6c002767919b45a7922f1ecadb7c"
+  },
+  "agent_v8_page_next.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      625,
+      1512,
+      712,
+      1596
+    ],
+    "radius": 40,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      87,
+      84
+    ],
+    "sha256": "5aaeee4462da49971d29ad6219888780487cc6efe927969eb2eb0cc622b29735"
+  },
+  "agent_v8_page_last.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/09-代理-我的玩家.png",
+    "box": [
+      765,
+      1512,
+      851,
+      1596
+    ],
+    "radius": 40,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      86,
+      84
+    ],
+    "sha256": "4f76d15bd2bac3c53ea9b134bcfc0789935bc94428768fa5b13efebcfab3cd87"
+  },
+  "agent_v8_tabs.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/10-代理-我的业绩.png",
+    "box": [
+      87,
+      137,
+      855,
+      218
+    ],
+    "radius": 25,
+    "clean": true,
+    "border": 26,
+    "glyph": false,
+    "size": [
+      400,
+      65
+    ],
+    "sha256": "417373c46dfe182931a9a96b8ad5996ae4801bf1187ea51b5fa60a354bfc85ac"
+  },
+  "agent_v8_tab_active.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/10-代理-我的业绩.png",
+    "box": [
+      96,
+      143,
+      348,
+      211
+    ],
+    "radius": 18,
+    "clean": true,
+    "border": 20,
+    "glyph": false,
+    "size": [
+      201,
+      54
+    ],
+    "sha256": "1fdbf5bdf49cbf2e272e9cdac4a0e8af398c9bf19e63189627ac8e71c5c989a1"
+  },
+  "agent_v8_title_leader.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/16-代理-盟主收益.png",
+    "box": [
+      353,
+      543,
+      590,
+      601
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      237,
+      58
+    ],
+    "sha256": "fcc2b7fe67856bfc8d342c26518eee8da5711d441f925ea465d2fab0a70085f3"
+  },
+  "agent_v8_title_pool.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/17-代理-奖池收益.png",
+    "box": [
+      353,
+      543,
+      590,
+      601
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      237,
+      58
+    ],
+    "sha256": "b5746b0449d557346047b6acc8040f4dc0d097e5f2a9a5aa40972c0321687dae"
+  },
+  "agent_v8_title_region.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/18-代理-大区收益.png",
+    "box": [
+      353,
+      543,
+      590,
+      601
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      237,
+      58
+    ],
+    "sha256": "b47cf5259e5e88df00c27cd05b03443abb77faf3ff7a6564ca06838f65f0cb4a"
+  },
+  "agent_v8_title_share.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/19-代理-我的分红.png",
+    "box": [
+      353,
+      543,
+      590,
+      601
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      237,
+      58
+    ],
+    "sha256": "45c1d920c61449c8d075dd656c13d466a7b259c5ec02c862cb33bdd3713df75d"
+  },
+  "agent_v8_title_add.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/20-代理-添加代理确认.png",
+    "box": [
+      365,
+      543,
+      578,
+      601
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      213,
+      58
+    ],
+    "sha256": "a828cc1ef89a1ca8d78e5a7d67904edceffe08465d662c8be44207742518238e"
+  },
+  "agent_v8_title_delete.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/21-代理-删除授权确认.png",
+    "box": [
+      384,
+      554,
+      562,
+      602
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      178,
+      48
+    ],
+    "sha256": "07d3068da1a99f991a1e74ae9f017dd4826ff6fbd9adc000e5921b69d826f72c"
+  },
+  "agent_v8_title_withdraw.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/22-代理-提取红利确认.png",
+    "box": [
+      383,
+      546,
+      565,
+      598
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      182,
+      52
+    ],
+    "sha256": "e93613b30860ffd5be65025ec7611bfab83c0c35ff1e9bc80e1379c356838c98"
+  },
+  "agent_v8_title_ratio.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/23-代理-比例设置.png",
+    "box": [
+      313,
+      629,
+      499,
+      684
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      186,
+      55
+    ],
+    "sha256": "fbf6f93b6739026376b7ff18097a53cf24022cccf1b5d2dde6d547e0b3342fd1"
+  },
+  "agent_v8_button_cancel.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/17-代理-奖池收益.png",
+    "box": [
+      180,
+      1010,
+      456,
+      1098
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      276,
+      88
+    ],
+    "sha256": "f3a88b1274220d7c0c8eb31ff83a2e1cbac0ff9805746231e155b0d4b34e0f36"
+  },
+  "agent_v8_button_income.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/17-代理-奖池收益.png",
+    "box": [
+      488,
+      1010,
+      762,
+      1098
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      274,
+      88
+    ],
+    "sha256": "37bf284ecd3c51599cb583f16385d970ac7ee4251a7a43216fdb704abf4d5912"
+  },
+  "agent_v8_button_ok.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/16-代理-盟主收益.png",
+    "box": [
+      280,
+      1006,
+      665,
+      1100
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      385,
+      94
+    ],
+    "sha256": "7de1d4b751493445895c2e282088a5c68933c56d143ca9a526f992077394c76f"
+  },
+  "agent_v8_button_add.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/20-代理-添加代理确认.png",
+    "box": [
+      486,
+      1025,
+      797,
+      1123
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      311,
+      98
+    ],
+    "sha256": "176d750f54a62e34fa9f94507c0b3922559f4f8a959f4b4d10f657d04f34d7ab"
+  },
+  "agent_v8_button_delete.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/21-代理-删除授权确认.png",
+    "box": [
+      490,
+      992,
+      771,
+      1083
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      281,
+      91
+    ],
+    "sha256": "902d0fc39e424a045f2abc3222208ede7c47de3a67e5daecf7b62df8a2d8a66a"
+  },
+  "agent_v8_button_withdraw.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/22-代理-提取红利确认.png",
+    "box": [
+      489,
+      992,
+      772,
+      1091
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      283,
+      99
+    ],
+    "sha256": "3cd9665af2d6e19b8dacdd6383182b9f5f0caa6356e2c8011469207e157c993b"
+  },
+  "agent_v8_button_ratio.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/23-代理-比例设置.png",
+    "box": [
+      418,
+      1141,
+      700,
+      1238
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      282,
+      97
+    ],
+    "sha256": "77af564fd00bd899832b704b05b90678d2fef29cc1e9f1d7802f32d558c72b2e"
+  },
+  "agent_v8_promotion_banner.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/15-代理-推广二维码.png",
+    "box": [
+      67,
+      130,
+      878,
+      316
+    ],
+    "radius": 27,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      811,
+      186
+    ],
+    "sha256": "3d8893a6d5cdea20a0da5cf1f6301ca19a4943b7ef5fca2e35d4587e94321ac1"
+  },
+  "agent_v8_promotion_title.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/15-代理-推广二维码.png",
+    "box": [
+      327,
+      374,
+      618,
+      424
+    ],
+    "radius": 0,
+    "clean": false,
+    "border": 0,
+    "glyph": true,
+    "size": [
+      291,
+      50
+    ],
+    "sha256": "0a6d828dea9b28cac6e225d3ecd093f8f9870e66776142cbccee7824a4e10e1b"
+  },
+  "agent_v8_promotion_panel.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/15-代理-推广二维码.png",
+    "box": [
+      101,
+      346,
+      843,
+      1477
+    ],
+    "radius": 34,
+    "clean": true,
+    "border": 34,
+    "glyph": false,
+    "size": [
+      460,
+      500
+    ],
+    "sha256": "040e9f91b55ae311bdf91a031edac7e6aa7a643d3e0fcc4ed731fa35d27b7be9"
+  },
+  "agent_v8_qr_back.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/15-代理-推广二维码.png",
+    "box": [
+      291,
+      460,
+      656,
+      818
+    ],
+    "radius": 20,
+    "clean": true,
+    "border": 23,
+    "glyph": false,
+    "size": [
+      291,
+      285
+    ],
+    "sha256": "c0e0f48afaaaac1d2af776094677cc82277217f64b2bd09aaa7657b6c47de67d"
+  },
+  "agent_v8_promotion_share.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/15-代理-推广二维码.png",
+    "box": [
+      239,
+      1118,
+      705,
+      1226
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      466,
+      108
+    ],
+    "sha256": "0707b4859616dd36e88eb70302ee7ea84d13bedb47553c3a73ce9cad77f26430"
+  },
+  "agent_v8_promotion_save.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/15-代理-推广二维码.png",
+    "box": [
+      239,
+      1243,
+      705,
+      1352
+    ],
+    "radius": 23,
+    "clean": false,
+    "border": 0,
+    "glyph": false,
+    "size": [
+      466,
+      109
+    ],
+    "sha256": "2d40ff7597f05d18fefe047d8309455992df44f57b4063bdc442b54716eae23a"
+  }
+}

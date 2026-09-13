@@ -1,0 +1,560 @@
+{
+  "panelRecordInfo/bg": [
+    0,
+    0,
+    750,
+    1875
+  ],
+  "panelRecordInfo/排行": [
+    0,
+    63,
+    750,
+    342
+  ],
+  "panelRecordInfo/排行/土豪": [
+    97,
+    162,
+    212,
+    277
+  ],
+  "panelRecordInfo/排行/土豪/mask": [
+    97,
+    162,
+    212,
+    277
+  ],
+  "panelRecordInfo/排行/土豪/mask/img": [
+    97,
+    162,
+    212,
+    277
+  ],
+  "panelRecordInfo/排行/土豪/name": [
+    57,
+    307,
+    251,
+    345
+  ],
+  "panelRecordInfo/排行/MVP": [
+    289,
+    109,
+    459,
+    279
+  ],
+  "panelRecordInfo/排行/MVP/mask": [
+    289,
+    109,
+    459,
+    279
+  ],
+  "panelRecordInfo/排行/MVP/mask/img": [
+    289,
+    109,
+    459,
+    279
+  ],
+  "panelRecordInfo/排行/MVP/name": [
+    278,
+    307,
+    471,
+    345
+  ],
+  "panelRecordInfo/排行/大鱼": [
+    539,
+    165,
+    655,
+    281
+  ],
+  "panelRecordInfo/排行/大鱼/mask": [
+    539,
+    165,
+    655,
+    281
+  ],
+  "panelRecordInfo/排行/大鱼/mask/img": [
+    539,
+    165,
+    655,
+    281
+  ],
+  "panelRecordInfo/排行/大鱼/name": [
+    500,
+    307,
+    694,
+    345
+  ],
+  "panelRecordInfo/排行/排队": [
+    450,
+    9,
+    557,
+    56
+  ],
+  "panelRecordInfo/排行/排队/pd": [
+    394,
+    -11,
+    612,
+    75
+  ],
+  "panelRecordInfo/排行/V7荣誉框前景": [
+    0,
+    63,
+    750,
+    313
+  ],
+  "panelRecordInfo/排行/V8称号_th": [
+    106,
+    270,
+    201,
+    310
+  ],
+  "panelRecordInfo/排行/V8称号_th/文字": [
+    111,
+    272,
+    197,
+    307
+  ],
+  "panelRecordInfo/排行/V8称号_mvp": [
+    316,
+    266,
+    434,
+    310
+  ],
+  "panelRecordInfo/排行/V8称号_dy": [
+    552,
+    270,
+    642,
+    310
+  ],
+  "panelRecordInfo/排行/V8称号_dy/文字": [
+    557,
+    272,
+    637,
+    307
+  ],
+  "panelRecordInfo/基本": [
+    22,
+    346,
+    728,
+    401
+  ],
+  "panelRecordInfo/基本/房间名": [
+    40,
+    354,
+    231,
+    392
+  ],
+  "panelRecordInfo/基本/时长": [
+    578,
+    354,
+    708,
+    392
+  ],
+  "panelRecordInfo/扩展": [
+    22,
+    346,
+    728,
+    401
+  ],
+  "panelRecordInfo/扩展/底皮": [
+    245,
+    354,
+    379,
+    392
+  ],
+  "panelRecordInfo/扩展/奖池": [
+    401,
+    354,
+    560,
+    392
+  ],
+  "panelRecordInfo/V7结算表头": [
+    22,
+    409,
+    728,
+    473
+  ],
+  "panelRecordInfo/战绩列表": [
+    22,
+    469,
+    728,
+    1187
+  ],
+  "panelRecordInfo/战绩列表/view": [
+    22,
+    469,
+    728,
+    1187
+  ],
+  "panelRecordInfo/战绩列表/view/content": [
+    22,
+    469,
+    728,
+    699
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0": [
+    37,
+    469,
+    713,
+    537
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0/line": [
+    37,
+    534,
+    713,
+    537
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0/idx": [
+    35,
+    483,
+    81,
+    523
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0/名字": [
+    67,
+    474,
+    270,
+    506
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0/id": [
+    67,
+    506,
+    270,
+    532
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0/带入": [
+    242,
+    483,
+    374,
+    524
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0/手数": [
+    398,
+    483,
+    530,
+    524
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-0/输赢": [
+    561,
+    483,
+    693,
+    524
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1": [
+    37,
+    537,
+    713,
+    604
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1/line": [
+    37,
+    601,
+    713,
+    604
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1/idx": [
+    35,
+    551,
+    81,
+    591
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1/名字": [
+    67,
+    541,
+    270,
+    573
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1/id": [
+    67,
+    573,
+    270,
+    600
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1/带入": [
+    242,
+    550,
+    374,
+    591
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1/手数": [
+    398,
+    550,
+    530,
+    591
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-1/输赢": [
+    561,
+    550,
+    693,
+    591
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2": [
+    37,
+    604,
+    713,
+    672
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2/line": [
+    37,
+    669,
+    713,
+    672
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2/idx": [
+    35,
+    618,
+    81,
+    658
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2/名字": [
+    67,
+    609,
+    270,
+    641
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2/id": [
+    67,
+    641,
+    270,
+    667
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2/带入": [
+    242,
+    617,
+    374,
+    658
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2/手数": [
+    398,
+    617,
+    530,
+    658
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-2/输赢": [
+    561,
+    617,
+    693,
+    658
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3": [
+    37,
+    672,
+    713,
+    739
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3/line": [
+    37,
+    736,
+    713,
+    739
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3/idx": [
+    35,
+    685,
+    81,
+    725
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3/名字": [
+    67,
+    676,
+    270,
+    708
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3/id": [
+    67,
+    708,
+    270,
+    735
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3/带入": [
+    242,
+    685,
+    374,
+    726
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3/手数": [
+    398,
+    685,
+    530,
+    726
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-3/输赢": [
+    561,
+    685,
+    693,
+    726
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4": [
+    37,
+    739,
+    713,
+    806
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4/line": [
+    37,
+    803,
+    713,
+    806
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4/idx": [
+    35,
+    753,
+    81,
+    793
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4/名字": [
+    67,
+    743,
+    270,
+    776
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4/id": [
+    67,
+    776,
+    270,
+    802
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4/带入": [
+    242,
+    752,
+    374,
+    793
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4/手数": [
+    398,
+    752,
+    530,
+    793
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-4/输赢": [
+    561,
+    752,
+    693,
+    793
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5": [
+    37,
+    806,
+    713,
+    874
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5/line": [
+    37,
+    871,
+    713,
+    874
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5/idx": [
+    35,
+    820,
+    81,
+    860
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5/名字": [
+    67,
+    811,
+    270,
+    843
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5/id": [
+    67,
+    843,
+    270,
+    869
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5/带入": [
+    242,
+    820,
+    374,
+    861
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5/手数": [
+    398,
+    820,
+    530,
+    861
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-5/输赢": [
+    561,
+    820,
+    693,
+    861
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6": [
+    37,
+    874,
+    713,
+    941
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6/line": [
+    37,
+    938,
+    713,
+    941
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6/idx": [
+    35,
+    887,
+    81,
+    927
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6/名字": [
+    67,
+    878,
+    270,
+    910
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6/id": [
+    67,
+    910,
+    270,
+    937
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6/带入": [
+    242,
+    887,
+    374,
+    928
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6/手数": [
+    398,
+    887,
+    530,
+    928
+  ],
+  "panelRecordInfo/战绩列表/view/content/qa-row-6/输赢": [
+    561,
+    887,
+    693,
+    928
+  ],
+  "panelRecordInfo/关闭": [
+    218,
+    1207,
+    532,
+    1278
+  ],
+  "panelRecordInfo/title": [
+    0,
+    0,
+    750,
+    63
+  ],
+  "panelRecordInfo/title/V8标题底图": [
+    0,
+    0,
+    266,
+    64
+  ],
+  "panelRecordInfo/title/关闭": [
+    1,
+    0,
+    83,
+    63
+  ],
+  "panelRecordInfo/title/牌局回顾": [
+    565,
+    8,
+    733,
+    57
+  ]
+}

@@ -1,0 +1,176 @@
+{
+  "source_sha256": "ce72d8545d024095763769b505295311b9b462a37be2d7170491a30588538470",
+  "icons": {
+    "settings_v8_icon_gear.png": {
+      "cell": [
+        0,
+        0,
+        418,
+        418
+      ],
+      "crop": [
+        79,
+        104,
+        400,
+        418
+      ],
+      "size": [
+        321,
+        314
+      ],
+      "sha256": "7bce90c8dd84da608f75844e588935626402e19718e6afe7ba2c5550b442034b"
+    },
+    "settings_v8_icon_login.png": {
+      "cell": [
+        418,
+        0,
+        836,
+        418
+      ],
+      "crop": [
+        85,
+        98,
+        333,
+        414
+      ],
+      "size": [
+        248,
+        316
+      ],
+      "sha256": "cbc0fec23e345ad387d2f27face7817b7e53461700b7308fd166857c1e06ada5"
+    },
+    "settings_v8_icon_trade.png": {
+      "cell": [
+        836,
+        0,
+        1254,
+        418
+      ],
+      "crop": [
+        49,
+        113,
+        317,
+        418
+      ],
+      "size": [
+        268,
+        305
+      ],
+      "sha256": "1ed422dc00bdf8f1348417dbab8fdd9c41917e411d0a43e5bb7e7abf37ddbb98"
+    },
+    "settings_v8_icon_info.png": {
+      "cell": [
+        0,
+        418,
+        418,
+        836
+      ],
+      "crop": [
+        84,
+        117,
+        393,
+        346
+      ],
+      "size": [
+        309,
+        229
+      ],
+      "sha256": "e64eccfb51723fbf5510d7ea93a4995d6f9caa6b8d1c7e477a3b8d28c358910e"
+    },
+    "settings_v8_icon_voice.png": {
+      "cell": [
+        418,
+        418,
+        836,
+        836
+      ],
+      "crop": [
+        62,
+        85,
+        356,
+        368
+      ],
+      "size": [
+        294,
+        283
+      ],
+      "sha256": "196eb1bac0951ea19f3fa79bfe355d495efdcd61c4624ced5e92026f78100109"
+    },
+    "settings_v8_icon_audio.png": {
+      "cell": [
+        836,
+        418,
+        1254,
+        836
+      ],
+      "crop": [
+        45,
+        100,
+        339,
+        370
+      ],
+      "size": [
+        294,
+        270
+      ],
+      "sha256": "d1f6bf1a6aced2bd06d262a18dad07a8430b3bba09306a9a03fad8a2826ca40c"
+    },
+    "settings_v8_icon_security.png": {
+      "cell": [
+        0,
+        836,
+        418,
+        1254
+      ],
+      "crop": [
+        103,
+        23,
+        369,
+        323
+      ],
+      "size": [
+        266,
+        300
+      ],
+      "sha256": "1b90616c1d95b82d274e3e384262aa241a0a66942df910e8525da3daa59f575c"
+    },
+    "settings_v8_icon_logout.png": {
+      "cell": [
+        418,
+        836,
+        836,
+        1254
+      ],
+      "crop": [
+        80,
+        40,
+        375,
+        320
+      ],
+      "size": [
+        295,
+        280
+      ],
+      "sha256": "70f57207065556c9435bb0ff3d00075a66bec4f26ab06e41a49d34b1d58a2e16"
+    },
+    "settings_v8_icon_chevron.png": {
+      "cell": [
+        836,
+        836,
+        1254,
+        1254
+      ],
+      "crop": [
+        121,
+        60,
+        272,
+        290
+      ],
+      "size": [
+        151,
+        230
+      ],
+      "sha256": "ed26f442ab279c264d6dd1df3baee45001f8eb5d00d2e5977a32a706442eed73"
+    }
+  }
+}

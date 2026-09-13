@@ -64,6 +64,8 @@ function nodePath(id) {
 }
 let count = 0;
 for (const raw of prefab.filter(c => c.__type__ === 'cc.EditBox')) {
+  if (process.argv[3] && !process.argv[3].split(',').some(name =>
+      nodePath(raw.node.__id__).includes('/'+name+'/'))) continue;
   const owner = makeNode(prefab[raw.node.__id__]);
   const edit = Object.assign(new EditBox(), raw, {node: owner,
     inputMode: raw._N$inputMode, inputFlag: raw._N$inputFlag});
@@ -73,8 +75,8 @@ for (const raw of prefab.filter(c => c.__type__ === 'cc.EditBox')) {
     const widget = {...n._components.map(r => prefab[r.__id__]).find(c => c.__type__ === 'cc.Widget')};
     widget.isStretchWidth = (widget._alignFlags & 40) === 40;
     widget.isStretchHeight = (widget._alignFlags & 5) === 5;
-    return {node, widget, string: c._string, horizontalAlign: c._N$horizontalAlign,
-      verticalAlign: c._N$verticalAlign, overflow: c._overflow, enableWrapText: c._enableWrapText};
+    return {node, widget, string: c._N$string ?? c._string, horizontalAlign: c._N$horizontalAlign,
+      verticalAlign: c._N$verticalAlign, overflow: c._N$overflow ?? c._overflow, enableWrapText: c._enableWrapText};
   });
   [edit.textLabel, edit.placeholderLabel] = labels;
   const name = nodePath(raw.node.__id__);
@@ -125,5 +127,5 @@ for (const raw of prefab.filter(c => c.__type__ === 'cc.EditBox')) {
   }
   count++;
 }
-assert.equal(count, 20);
-console.log(`PASS: ${count} wallet EditBoxes / ${count*2} labels; actual engine preload, text/placeholder, password, re-entry and resize alignment. Creator not launched.`);
+assert.equal(count, Number(process.argv[4] || 20));
+console.log(`PASS: ${count} EditBoxes / ${count*2} labels; actual engine preload, text/placeholder, password, re-entry and resize alignment. Creator not launched.`);

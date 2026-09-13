@@ -7,9 +7,9 @@
   "filterMode": "bilinear",
   "premultiplyAlpha": false,
   "genMipmaps": false,
-  "packable": true,
+  "packable": false,
   "width": 924,
-  "height": 96,
+  "height": 2,
   "platformSettings": {},
   "subMetas": {
     "settlement_row_exact": {
@@ -25,9 +25,9 @@
       "trimX": 0,
       "trimY": 0,
       "width": 924,
-      "height": 96,
+      "height": 2,
       "rawWidth": 924,
-      "rawHeight": 96,
+      "rawHeight": 2,
       "borderTop": 0,
       "borderBottom": 0,
       "borderLeft": 0,
