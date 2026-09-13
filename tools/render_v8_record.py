@@ -11,7 +11,8 @@ OUT=Path(__file__).resolve().parents[1]/'art_sources/v8-repairs/record/qa'
 def prepare(selected='-1',multi=False):
     p=Prefab('assets/resources/UI/panelRecordList.prefab')
     for key in ['0','-1','-2']:p.set_active(p.node('条件/'+key+'/checkmark'),key==selected)
-    p.set_active(p.node('分页'),multi);p.set_active(p.node('V8保留提示'),not multi)
+    # 直接验证正式 Prefab 的常驻分页，不在预览里改写显隐。
+    p.component(p.node('分页/页码'),'cc.Label')[1]['_string']='2/3' if multi else '1/1'
     parent=p.node('战绩列表/view/content')
     rows=[('496535','20/40','3000','-3000'),('392150','20/40','4000','+9063'),
           ('843617','20/40','2000','-260'),('738468','5/10','1000','-1000'),
@@ -35,7 +36,7 @@ def render_record(height,p,name):
                 fields.append((parent['_name']+'/'+node['_name'],obj['_string'],obj['_fontSize'],node['_color']))
                 obj['_enabled']=False
     im,boxes=render(height,p,name,OUT)
-    atlas=Image.open(OUT.parent/'prepared/v8_record_digits.png').convert('RGBA')
+    atlas=Image.open(Path(__file__).resolve().parents[1]/'assets/resources/V7/v8_record_digits.png').convert('RGBA')
     for path,text,size,color in fields:
         box=next(v for k,v in boxes.items() if k.endswith('/'+path))
         factor=size/31.68;w=round(len(text)*18*factor);h=round(36*factor)

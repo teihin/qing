@@ -104,6 +104,9 @@ export default class panelRecordList extends UIPanelViewBase {
             return;
 
         let jList = data["PlayerAllScore"];
+        // 空列表也要清掉上一次日期/页码的状态，防止继续请求旧分页。
+        this.scrollRecordList.nCurPage = 0;
+        this.scrollRecordList.nTotlePage = 0;
         for(let i=0;i<jList.length;i++)
         {
             let jItem = jList[i];
@@ -140,12 +143,9 @@ export default class panelRecordList extends UIPanelViewBase {
             item.destroy();
         }
 
-        //更新底栏
-        Tool.GetChild(this.node,"分页/页码").getComponent(cc.Label).string = (this.scrollRecordList.nCurPage+1).toString()+"/"+this.scrollRecordList.nTotlePage.toString();
-        const hasMorePages = jList.length > 0 && this.scrollRecordList.nTotlePage > 1;
-        this.node.getChildByName("分页").active = hasMorePages;
-        const retention = this.node.getChildByName("V8保留提示");
-        if(retention) retention.active = !hasMorePages;
+        // 分页由 Prefab 常驻显示；空记录显示 1/1，实际总页数仍为 0。
+        const displayPageCount = Math.max(1, this.scrollRecordList.nTotlePage);
+        Tool.GetChild(this.node,"分页/页码").getComponent(cc.Label).string = (this.scrollRecordList.nCurPage+1).toString()+"/"+displayPageCount.toString();
 
     }
     public setRecordItemInfo(node:cc.Node,jItem:any)

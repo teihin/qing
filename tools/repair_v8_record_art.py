@@ -169,8 +169,9 @@ def apply():
     ensure_widget(p,c).update(_enabled=True,_alignFlags=41,_left=0,_right=0,_top=0,alignMode=1)
     p.component(c,'cc.Layout')[1].update(_enabled=True,**{'_N$layoutType':2,'_N$resizeMode':1,'_N$paddingTop':15*S,'_N$paddingBottom':12*S,'_N$spacingY':15*S})
     n=child(p,p.root,'V8战绩列表底框');p.sprite(n,'record_list_panel_exact.png',sliced=True);stretch(p,'V8战绩列表底框',730*S,37*S,left=18*S,right=18*S)
-    n=p.node('V8保留提示');reset(p,n);p.hide_children(n);p.set_active(n,True);p.sprite(n,'v8_record_retention.png');bottom(p,'V8保留提示',62*S,width=856*S,height=44*S)
-    n=p.node('分页');reset(p,n);p.disable(n,'cc.Sprite');p.disable(n,'cc.Layout');bottom(p,'分页',45*S,width=905*S,height=73*S);p.set_active(n,False)
+    # 用户补充要求分页常驻；沿用底部独立区域，不与保留提示重叠。
+    n=p.node('V8保留提示');reset(p,n);p.hide_children(n);p.set_active(n,False);p.sprite(n,'v8_record_retention.png');bottom(p,'V8保留提示',62*S,width=856*S,height=44*S)
+    n=p.node('分页');reset(p,n);p.disable(n,'cc.Sprite');p.disable(n,'cc.Layout');bottom(p,'分页',45*S,width=905*S,height=73*S);p.set_active(n,True)
     for name,key,x in [('首页','first',185),('上一页','prev',305),('下一页','next',636),('尾页','last',756)]:
         n=p.node('分页/'+name);reset(p,n);p.art(n,'money_v8_page_'+key+'.png',(x-470.5)*S,0,67*S,67*S,hide=True);p.disable(n,'cc.Widget')
     n=child(p,p.node('分页'),'V8页码底框');p.art(n,'money_v8_page_value.png',0,0,207*S,69*S,sliced=True)
