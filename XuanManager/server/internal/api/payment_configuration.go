@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
@@ -20,17 +21,22 @@ import (
 )
 
 const (
-	paymentListKey         = "支付管理"
-	paymentDomainKey       = "支付域名"
-	paymentBranchKey       = "提现需要支行"
-	paymentAlipayTextKey   = "提现文本_支付宝"
-	paymentUnionPayTextKey = "提现文本_银联"
-	paymentUSDTTextKey     = "提现文本_USDT"
-	paymentIconDefault     = "default"
-	paymentIconAlipay      = "alipay"
-	paymentIconUnionPay    = "unionpay"
-	paymentIconWeChat      = "wechat"
-	paymentIconOther       = "other"
+	paymentListKey           = "支付管理"
+	paymentDomainKey         = "支付域名"
+	paymentBranchKey         = "提现需要支行"
+	paymentAlipayTextKey     = "提现文本_支付宝"
+	paymentUnionPayTextKey   = "提现文本_银联"
+	paymentUSDTTextKey       = "提现文本_USDT"
+	paymentBankEnabledKey    = "银行卡提现"
+	paymentAlipayEnabledKey  = "支付宝提现"
+	paymentUSDTEnabledKey    = "USDT提现"
+	paymentUSDTRateKey       = "USDT汇率"
+	paymentLegacyWithdrawKey = "提现类型"
+	paymentIconDefault       = "default"
+	paymentIconAlipay        = "alipay"
+	paymentIconUnionPay      = "unionpay"
+	paymentIconWeChat        = "wechat"
+	paymentIconOther         = "other"
 )
 
 var paymentConfigurationMutationMu sync.Mutex
@@ -57,26 +63,34 @@ type paymentChannelConfig struct {
 }
 
 type paymentConfigurationState struct {
-	Channels             []paymentChannelConfig `json:"channels"`
-	PaymentDomain        string                 `json:"paymentDomain"`
-	RequireBankBranch    bool                   `json:"requireBankBranch"`
-	AlipayWithdrawalText string                 `json:"alipayWithdrawalText"`
-	UnionWithdrawalText  string                 `json:"unionWithdrawalText"`
-	USDTWithdrawalText   string                 `json:"usdtWithdrawalText"`
-	Revision             string                 `json:"revision"`
-	LastUpdatedBy        string                 `json:"lastUpdatedBy"`
-	LastUpdatedAt        *time.Time             `json:"lastUpdatedAt"`
+	Channels                []paymentChannelConfig `json:"channels"`
+	PaymentDomain           string                 `json:"paymentDomain"`
+	RequireBankBranch       bool                   `json:"requireBankBranch"`
+	AlipayWithdrawalText    string                 `json:"alipayWithdrawalText"`
+	UnionWithdrawalText     string                 `json:"unionWithdrawalText"`
+	USDTWithdrawalText      string                 `json:"usdtWithdrawalText"`
+	BankWithdrawalEnabled   bool                   `json:"bankWithdrawalEnabled"`
+	AlipayWithdrawalEnabled bool                   `json:"alipayWithdrawalEnabled"`
+	USDTWithdrawalEnabled   bool                   `json:"usdtWithdrawalEnabled"`
+	USDTExchangeRate        string                 `json:"usdtExchangeRate"`
+	Revision                string                 `json:"revision"`
+	LastUpdatedBy           string                 `json:"lastUpdatedBy"`
+	LastUpdatedAt           *time.Time             `json:"lastUpdatedAt"`
 }
 
 type updatePaymentConfigurationRequest struct {
-	Channels             []paymentChannelConfig `json:"channels"`
-	PaymentDomain        string                 `json:"paymentDomain"`
-	RequireBankBranch    bool                   `json:"requireBankBranch"`
-	AlipayWithdrawalText string                 `json:"alipayWithdrawalText"`
-	UnionWithdrawalText  string                 `json:"unionWithdrawalText"`
-	USDTWithdrawalText   string                 `json:"usdtWithdrawalText"`
-	Revision             string                 `json:"revision"`
-	Confirm              bool                   `json:"confirm"`
+	Channels                []paymentChannelConfig `json:"channels"`
+	PaymentDomain           string                 `json:"paymentDomain"`
+	RequireBankBranch       bool                   `json:"requireBankBranch"`
+	AlipayWithdrawalText    string                 `json:"alipayWithdrawalText"`
+	UnionWithdrawalText     string                 `json:"unionWithdrawalText"`
+	USDTWithdrawalText      string                 `json:"usdtWithdrawalText"`
+	BankWithdrawalEnabled   *bool                  `json:"bankWithdrawalEnabled"`
+	AlipayWithdrawalEnabled *bool                  `json:"alipayWithdrawalEnabled"`
+	USDTWithdrawalEnabled   *bool                  `json:"usdtWithdrawalEnabled"`
+	USDTExchangeRate        string                 `json:"usdtExchangeRate"`
+	Revision                string                 `json:"revision"`
+	Confirm                 bool                   `json:"confirm"`
 }
 
 type paymentClientConfig struct {
@@ -109,6 +123,10 @@ func (s *Server) handleGetPaymentConfiguration(w http.ResponseWriter, r *http.Re
 func (s *Server) handleUpdatePaymentConfiguration(w http.ResponseWriter, r *http.Request, p principal) {
 	var input updatePaymentConfigurationRequest
 	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if input.BankWithdrawalEnabled == nil || input.AlipayWithdrawalEnabled == nil || input.USDTWithdrawalEnabled == nil {
+		writeError(w, http.StatusBadRequest, "WITHDRAWAL_SWITCHES_REQUIRED", "请刷新支付配置页面，核对三个提现开关后重新保存")
 		return
 	}
 	if !input.Confirm {
@@ -170,9 +188,10 @@ func (s *Server) handleUpdatePaymentConfiguration(w http.ResponseWriter, r *http
 func (s *Server) queryPaymentConfiguration(ctx context.Context, p principal) (paymentConfigurationState, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT hash_key, COALESCE(hash_content, '')
 FROM kbedm.usr_hash_info
-WHERE hash_key IN (?, ?, ?, ?, ?, ?)
+WHERE hash_key IN (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	   OR LEFT(hash_key, CHAR_LENGTH('支付配置_')) = '支付配置_'
-ORDER BY id`, paymentListKey, paymentDomainKey, paymentBranchKey, paymentAlipayTextKey, paymentUnionPayTextKey, paymentUSDTTextKey)
+ORDER BY id`, paymentListKey, paymentDomainKey, paymentBranchKey, paymentAlipayTextKey, paymentUnionPayTextKey, paymentUSDTTextKey,
+		paymentBankEnabledKey, paymentAlipayEnabledKey, paymentUSDTEnabledKey, paymentUSDTRateKey, paymentLegacyWithdrawKey)
 	if err != nil {
 		return paymentConfigurationState{}, err
 	}
@@ -209,6 +228,7 @@ ORDER BY id`, paymentListKey, paymentDomainKey, paymentBranchKey, paymentAlipayT
 		AlipayWithdrawalText: values[paymentAlipayTextKey], UnionWithdrawalText: values[paymentUnionPayTextKey],
 		USDTWithdrawalText: values[paymentUSDTTextKey],
 	}
+	applyPaymentWithdrawalValues(&state, values)
 	for _, name := range channelNames {
 		channel := paymentChannelConfig{Name: name, Enabled: enabled[name], IconType: paymentIconDefault, InfoFields: []string{}}
 		encoded, configured := values["支付配置_"+name]
@@ -250,6 +270,17 @@ ORDER BY id`, paymentListKey, paymentDomainKey, paymentBranchKey, paymentAlipayT
 }
 
 func normalizeAndValidatePaymentRequest(input *updatePaymentConfigurationRequest) error {
+	input.USDTExchangeRate = strings.TrimSpace(input.USDTExchangeRate)
+	if input.USDTExchangeRate != "" {
+		rate, err := strconv.ParseFloat(input.USDTExchangeRate, 64)
+		if err != nil || math.IsNaN(rate) || math.IsInf(rate, 0) || rate <= 0 || rate > 1e6 {
+			return errors.New("USDT 汇率必须大于 0 且不超过 1000000，表示 1 USDT 对应的人民币金额")
+		}
+		input.USDTExchangeRate = strconv.FormatFloat(rate, 'f', -1, 64)
+	}
+	if paymentSwitchEnabled(input.USDTWithdrawalEnabled) && input.USDTExchangeRate == "" {
+		return errors.New("开启 USDT 提现前请填写 USDT 汇率")
+	}
 	input.PaymentDomain = strings.TrimSpace(input.PaymentDomain)
 	if utf8.RuneCountInString(input.PaymentDomain) > 500 {
 		return errors.New("支付域名不能超过 500 个字符")
@@ -386,8 +417,21 @@ func paymentHashWrites(input updatePaymentConfigurationRequest) (map[string]stri
 	writes := map[string]string{
 		paymentDomainKey: input.PaymentDomain, paymentBranchKey: strconv.FormatBool(input.RequireBankBranch),
 		paymentAlipayTextKey: input.AlipayWithdrawalText, paymentUnionPayTextKey: input.UnionWithdrawalText,
-		paymentUSDTTextKey: input.USDTWithdrawalText,
+		paymentUSDTTextKey:      input.USDTWithdrawalText,
+		paymentBankEnabledKey:   paymentSwitchText(input.BankWithdrawalEnabled),
+		paymentAlipayEnabledKey: paymentSwitchText(input.AlipayWithdrawalEnabled),
+		paymentUSDTEnabledKey:   paymentSwitchText(input.USDTWithdrawalEnabled),
+		paymentUSDTRateKey:      input.USDTExchangeRate,
 	}
+	// Keep older clients' bank/Alipay bitmask in sync with the new switches.
+	legacy := 0
+	if paymentSwitchEnabled(input.BankWithdrawalEnabled) {
+		legacy |= 1
+	}
+	if paymentSwitchEnabled(input.AlipayWithdrawalEnabled) {
+		legacy |= 2
+	}
+	writes[paymentLegacyWithdrawKey] = strconv.Itoa(legacy)
 	enabled := strings.Builder{}
 	for _, channel := range input.Channels {
 		if channel.Enabled {
@@ -508,12 +552,27 @@ func paymentStateMismatchFields(state paymentConfigurationState, input updatePay
 	expected := paymentConfigurationState{
 		Channels: input.Channels, PaymentDomain: input.PaymentDomain, RequireBankBranch: input.RequireBankBranch,
 		AlipayWithdrawalText: input.AlipayWithdrawalText, UnionWithdrawalText: input.UnionWithdrawalText, USDTWithdrawalText: input.USDTWithdrawalText,
+		BankWithdrawalEnabled:   paymentSwitchEnabled(input.BankWithdrawalEnabled),
+		AlipayWithdrawalEnabled: paymentSwitchEnabled(input.AlipayWithdrawalEnabled),
+		USDTWithdrawalEnabled:   paymentSwitchEnabled(input.USDTWithdrawalEnabled), USDTExchangeRate: input.USDTExchangeRate,
 	}
 	for index := range expected.Channels {
 		expected.Channels[index].Configured = true
 		expected.Channels[index].EncodingError = false
 	}
 	mismatches := []string{}
+	if state.BankWithdrawalEnabled != expected.BankWithdrawalEnabled {
+		mismatches = append(mismatches, "bankWithdrawalEnabled")
+	}
+	if state.AlipayWithdrawalEnabled != expected.AlipayWithdrawalEnabled {
+		mismatches = append(mismatches, "alipayWithdrawalEnabled")
+	}
+	if state.USDTWithdrawalEnabled != expected.USDTWithdrawalEnabled {
+		mismatches = append(mismatches, "usdtWithdrawalEnabled")
+	}
+	if state.USDTExchangeRate != expected.USDTExchangeRate {
+		mismatches = append(mismatches, "usdtExchangeRate")
+	}
 	if state.PaymentDomain != expected.PaymentDomain {
 		mismatches = append(mismatches, "paymentDomain")
 	}
@@ -591,7 +650,33 @@ func paymentAuditSummary(input updatePaymentConfigurationRequest) map[string]any
 		bankCounts[channel.Name] = len(splitHashListOrdered(channel.Banks))
 		iconTypes[channel.Name] = channel.IconType
 	}
-	return map[string]any{"enabledChannels": enabled, "channelCount": len(input.Channels), "bankCounts": bankCounts, "iconTypes": iconTypes, "paymentDomain": input.PaymentDomain, "requireBankBranch": input.RequireBankBranch}
+	return map[string]any{"enabledChannels": enabled, "channelCount": len(input.Channels), "bankCounts": bankCounts, "iconTypes": iconTypes, "paymentDomain": input.PaymentDomain, "requireBankBranch": input.RequireBankBranch,
+		"bankWithdrawalEnabled": paymentSwitchEnabled(input.BankWithdrawalEnabled), "alipayWithdrawalEnabled": paymentSwitchEnabled(input.AlipayWithdrawalEnabled),
+		"usdtWithdrawalEnabled": paymentSwitchEnabled(input.USDTWithdrawalEnabled), "usdtExchangeRate": input.USDTExchangeRate}
+}
+
+func paymentSwitchEnabled(value *bool) bool { return value != nil && *value }
+
+func paymentSwitchText(value *bool) string {
+	if paymentSwitchEnabled(value) {
+		return "开"
+	}
+	return "关"
+}
+
+func applyPaymentWithdrawalValues(state *paymentConfigurationState, values map[string]string) {
+	legacy := strings.TrimSpace(values[paymentLegacyWithdrawKey])
+	state.BankWithdrawalEnabled = legacy == "1" || legacy == "3"
+	state.AlipayWithdrawalEnabled = legacy == "2" || legacy == "3"
+	// Only absent new keys inherit old settings; explicit 关 always wins.
+	if value, exists := values[paymentBankEnabledKey]; exists {
+		state.BankWithdrawalEnabled = strings.TrimSpace(value) == "开"
+	}
+	if value, exists := values[paymentAlipayEnabledKey]; exists {
+		state.AlipayWithdrawalEnabled = strings.TrimSpace(value) == "开"
+	}
+	state.USDTWithdrawalEnabled = strings.TrimSpace(values[paymentUSDTEnabledKey]) == "开"
+	state.USDTExchangeRate = strings.TrimSpace(values[paymentUSDTRateKey])
 }
 
 func splitHashList(value string) map[string]bool {

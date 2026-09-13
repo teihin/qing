@@ -412,8 +412,13 @@ def style_settings(p: Prefab) -> None:
     root = p.node("设置")
     full_screen(p, root)
     hide_legacy_visuals(p, root)
-    add_master(p, root, "设置/V7系统设置母版",
-               "followup_settings_master_long.png")
+    master = add_master(p, root, "设置/V7系统设置母版",
+                        "followup_settings_v8_full_exact.png")
+    # The approved V8 settings page is a 941x1672 composition.  Keep the
+    # whole authored page at its natural aspect ratio instead of the legacy
+    # 750x1800 stretch used by the V7 master.
+    p.art(master, "followup_settings_v8_full_exact.png", 0, 0, 750, 1672 * (750 / 941), hide=True)
+    fixed_top(p, master, 0, 750, 1672 * (750 / 941))
     transparent_button(p, "设置/title/关闭上上层", -325, 0, 100, 84)
 
     group = p.node("设置/列表")
@@ -476,11 +481,16 @@ def style_editbox(p: Prefab, row_path: str, placeholder: str) -> None:
 
 def style_password_page(p: Prefab, root_name: str, asset: str,
                         rows: tuple[tuple[str, str], ...],
-                        ok_name: str) -> None:
+                        ok_name: str, row_tops: tuple[float, ...],
+                        button_top: float) -> None:
     root = p.node(root_name)
     full_screen(p, root)
     hide_legacy_visuals(p, root)
-    add_master(p, root, f"{root_name}/V7密码页面母版", asset)
+    master = add_master(p, root, f"{root_name}/V7密码页面母版", asset)
+    # V8-new pages are 941x1672 complete compositions. Keep the artwork at
+    # its native aspect ratio; the live EditBoxes sit over the baked rows.
+    p.art(master, asset, 0, 0, 750, 1672 * (750 / 941), hide=True)
+    fixed_top(p, master, 0, 750, 1672 * (750 / 941))
     transparent_button(p, f"{root_name}/title copy/关闭上上层", -325, 0, 100, 84)
 
     group = p.node(f"{root_name}/列表")
@@ -488,11 +498,10 @@ def style_password_page(p: Prefab, root_name: str, asset: str,
     center_anchor(p, group)
     p.disable(group, "cc.Layout")
     fixed_top(p, group, 0, 750, BASE_H)
-    start_y = 369
     for index, (name, placeholder) in enumerate(rows):
         row = p.node(f"{root_name}/列表/{name}")
         center_anchor(p, row)
-        top = start_y + index * 101
+        top = row_tops[index]
         p.set_pos(row, 0, BASE_H / 2 - top - 73 / 2, 542, 73,
                   disable_widget=True)
         style_editbox(p, f"{root_name}/列表/{name}", placeholder)
@@ -500,7 +509,7 @@ def style_password_page(p: Prefab, root_name: str, asset: str,
     ok = p.node(f"{root_name}/列表/ok/{ok_name}")
     p.set_active(ok, True)
     transparent(p, ok, 438, 83, hide_children=True)
-    p.set_pos(ok, 0, BASE_H / 2 - 965 - 83 / 2, 438, 83,
+    p.set_pos(ok, 0, BASE_H / 2 - button_top - 83 / 2, 438, 83,
               disable_widget=True)
 
 
@@ -510,24 +519,24 @@ def apply() -> None:
     style_money(p)
     style_settings(p)
     style_password_page(
-        p, "修改登陆密码", "followup_password_login_master_long.png",
+        p, "修改登陆密码", "followup_password_login_v8_full_exact.png",
         (("原有密码", "请输入目前使用的密码"),
          ("新密码1", "请输入新密码"),
          ("新密码2", "请再次输入新密码")),
-        "确定修改登陆密码",
+        "确定修改登陆密码", (460, 558, 656), 764,
     )
     style_password_page(
-        p, "修改交易密码", "followup_password_trade_master_long.png",
+        p, "修改交易密码", "followup_password_trade_v8_full_exact.png",
         (("原有密码", "请输入目前使用的密码"),
          ("新密码1", "请输入新密码"),
          ("新密码2", "请再次输入新密码")),
-        "确定修改交易密码",
+        "确定修改交易密码", (808, 930, 1052), 1191,
     )
     style_password_page(
-        p, "初始化交易密码", "followup_password_init_master_long.png",
+        p, "初始化交易密码", "followup_password_init_v8_full_exact.png",
         (("新密码1", "请输入新密码"),
          ("新密码2", "请再次输入新密码")),
-        "确定初始化交易密码",
+        "确定初始化交易密码", (808, 930), 1191,
     )
     p.save()
     style_money_row()

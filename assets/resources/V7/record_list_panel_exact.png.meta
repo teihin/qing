@@ -7,9 +7,9 @@
   "filterMode": "bilinear",
   "premultiplyAlpha": false,
   "genMipmaps": false,
-  "packable": true,
-  "width": 722,
-  "height": 722,
+  "packable": false,
+  "width": 905,
+  "height": 820,
   "platformSettings": {},
   "subMetas": {
     "record_list_panel_exact": {
@@ -24,14 +24,14 @@
       "offsetY": 0,
       "trimX": 0,
       "trimY": 0,
-      "width": 722,
-      "height": 722,
-      "rawWidth": 722,
-      "rawHeight": 722,
-      "borderTop": 28,
-      "borderBottom": 28,
-      "borderLeft": 28,
-      "borderRight": 28,
+      "width": 905,
+      "height": 820,
+      "rawWidth": 905,
+      "rawHeight": 820,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
       "subMetas": {}
     }
   }

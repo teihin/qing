@@ -7,9 +7,9 @@
   "filterMode": "bilinear",
   "premultiplyAlpha": false,
   "genMipmaps": false,
-  "packable": true,
-  "width": 706,
-  "height": 135,
+  "packable": false,
+  "width": 883,
+  "height": 133,
   "platformSettings": {},
   "subMetas": {
     "room_card_exact": {
@@ -24,14 +24,14 @@
       "offsetY": 0,
       "trimX": 0,
       "trimY": 0,
-      "width": 706,
-      "height": 135,
-      "rawWidth": 706,
-      "rawHeight": 135,
-      "borderTop": 28,
-      "borderBottom": 28,
-      "borderLeft": 28,
-      "borderRight": 28,
+      "width": 883,
+      "height": 133,
+      "rawWidth": 883,
+      "rawHeight": 133,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
       "subMetas": {}
     }
   }

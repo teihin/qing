@@ -8,6 +8,8 @@
 |---|---|---|
 | 方案、用户纠正、版本冲突 | [决策记录](DECISIONS.md) | 有效、被替代、已否决、待核实 |
 | 当前美术定稿、唯一视觉依据 | [定稿入口](../../design-previews/README.md)、[定稿清理交接](handoffs/2026-09-10-art-final-and-push.md) | 效果图V8-new、56 张、历史设计删除、设计与实施分开 |
+| 登录控件重叠、长屏背景接缝 | [登录修复交接](handoffs/2026-09-10-login-overlap-fix.md) | V8、完整背景、轮廓切图、输入、未提交 |
+| V8 全套按序实施、当前任务进度 | [全套进度](handoffs/2026-09-11-v8-all-pages.md)、[注册实施](handoffs/2026-09-11-register-v8-exact.md) | 56 张、长短屏、静态原图、动态控件 |
 | 已有 V7 实现、资源、长屏、钱包、公告、后续模块 | [V7 实施记录](topics/v7-ui.md) | Prefab、UUID、四档高度、历史实现；旧图不再作为设计依据 |
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |

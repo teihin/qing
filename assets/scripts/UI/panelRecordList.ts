@@ -142,6 +142,10 @@ export default class panelRecordList extends UIPanelViewBase {
 
         //更新底栏
         Tool.GetChild(this.node,"分页/页码").getComponent(cc.Label).string = (this.scrollRecordList.nCurPage+1).toString()+"/"+this.scrollRecordList.nTotlePage.toString();
+        const hasMorePages = jList.length > 0 && this.scrollRecordList.nTotlePage > 1;
+        this.node.getChildByName("分页").active = hasMorePages;
+        const retention = this.node.getChildByName("V8保留提示");
+        if(retention) retention.active = !hasMorePages;
 
     }
     public setRecordItemInfo(node:cc.Node,jItem:any)

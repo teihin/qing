@@ -583,6 +583,7 @@ def validate_v7_assets() -> None:
         "popup_message_single_exact.png", "popup_message_dual_exact.png",
         "popup_switch_account_button_exact.png",
         "announcement_menu_long_exact.png",
+        "announcement_menu_floor_exact.png",
         "announcement_detail_bg_long_exact.png",
         "announcement_detail_header_exact.png",
         "announcement_detail_latest_exact.png",
@@ -690,7 +691,8 @@ def validate_v7_assets() -> None:
         "popup_message_single_exact.png": (532, 366),
         "popup_message_dual_exact.png": (532, 366),
         "popup_switch_account_button_exact.png": (210, 64),
-        "announcement_menu_long_exact.png": (750, 1800),
+        "announcement_menu_long_exact.png": (941, 1519),
+        "announcement_menu_floor_exact.png": (250, 99),
         "announcement_detail_bg_long_exact.png": (750, 1800),
         "announcement_detail_header_exact.png": (750, 81),
         "announcement_detail_latest_exact.png": (750, 1253),
@@ -853,9 +855,13 @@ def validate_v7_assets() -> None:
     announcement_children = [ref["__id__"] for ref in
                              main.data[announcement].get("_children", [])]
     floor = main.node("Main/公告/V7公告长屏补底")
+    extension = main.node("Main/公告/V8公告延展底纹")
     body = main.node("Main/公告/V7公告菜单高清母版")
-    require(announcement_children[:2] == [body, floor],
+    require(announcement_children[:3] == [extension, body, floor],
             "公告完整长图没有位于透明点击层下方")
+    _, extension_sprite = main.component(extension, "cc.Sprite")
+    require(extension_sprite is not None and extension_sprite.get("_type") == 2,
+            "公告长屏延展层没有使用平铺地面材质")
     require(main.data[floor].get("_active") is False,
             "公告仍启用了第二张长屏补底，运行时会出现拼接")
     _, body_sprite = main.component(body, "cc.Sprite")

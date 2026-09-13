@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "2e917701-f9f3-5d98-9dc1-15896dc06d1c",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 1136,
+  "height": 516,
+  "platformSettings": {},
+  "subMetas": {
+    "wallet_channel_selected_overlay": {
+      "ver": "1.0.6",
+      "uuid": "e61e38db-e366-55ef-8dcc-b1aac2df11fb",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "2e917701-f9f3-5d98-9dc1-15896dc06d1c",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 1136,
+      "height": 516,
+      "rawWidth": 1136,
+      "rawHeight": 516,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

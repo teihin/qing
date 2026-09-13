@@ -35,9 +35,27 @@ def transparent_node(p: Prefab, path: str, x: float, y: float,
 
 def apply_page() -> None:
     p = Prefab("assets/resources/UI/panelRecordInfo.prefab")
-    p.sprite(p.root, "settlement_bg_exact.png")
-    untint(p, p.root)
-    p.set_active(p.node("bg"), False)
+    # Keep the scene plate separate from all live settlement controls. The
+    # approved 1024x1536 art is shown at natural ratio; a tiled floor layer
+    # fills extra height behind the fixed return/list sections.
+    p.disable(p.root, "cc.Sprite")
+    bg = p.node("bg")
+    p.set_active(bg, True)
+    p.hide_children(bg)
+    p.art(bg, "settlement_scene_clean_v8.png", 0, 0, 750, 750*1536/1024)
+    untint(p, bg)
+    top(p, "bg", 0, width=750, height=750*1536/1024)
+    try:
+        extend = p.node("V8结算延展底纹")
+    except KeyError:
+        extend = p.clone_subtree(bg, p.root, "V8结算延展底纹")
+    p.hide_children(extend); p.set_active(extend, True)
+    p.art(extend, "mine_floor_tile_v8.png", 0, 0, 750, 1100)
+    untint(p, extend); p.disable(extend, "cc.Widget")
+    _, tile = p.component(extend, "cc.Sprite"); tile["_type"] = 2; tile["_sizeMode"] = 0
+    bottom(p, "V8结算延展底纹", 0, width=750, height=1100)
+    children = p.data[p.root].get("_children", [])
+    children[:] = [{"__id__": extend}, {"__id__": bg}] + [r for r in children if r.get("__id__") not in (extend, bg)]
 
     # Exact header includes the back icon and art title.  Both interactions are
     # real Prefab Buttons over the bitmap, so they are visible in the editor.

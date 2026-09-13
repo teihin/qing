@@ -1,0 +1,150 @@
+[
+  {
+    "path": "assets/resources/V7/followup_money_list_header_exact.png",
+    "bytes": 15000
+  },
+  {
+    "path": "assets/resources/V7/followup_money_list_panel_exact.png",
+    "bytes": 80403
+  },
+  {
+    "path": "assets/resources/V7/followup_money_master_long.png",
+    "bytes": 1431160
+  },
+  {
+    "path": "assets/resources/V7/followup_money_row_exact.png",
+    "bytes": 13476
+  },
+  {
+    "path": "assets/resources/V7/wallet_bank_picker_row_exact.png",
+    "bytes": 20332
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_body_v8_exact.png",
+    "bytes": 384931
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_form_panel_exact.png",
+    "bytes": 74869
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_header_exact.png",
+    "bytes": 125017
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_hero_subtitle_exact.png",
+    "bytes": 22111
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_hero_title_exact.png",
+    "bytes": 37094
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_row_bank_exact.png",
+    "bytes": 27720
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_row_card_exact.png",
+    "bytes": 26159
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_row_confirm_exact.png",
+    "bytes": 28766
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_row_name_exact.png",
+    "bytes": 24294
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_row_password_exact.png",
+    "bytes": 28277
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_shield_exact.png",
+    "bytes": 116954
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_submit_exact.png",
+    "bytes": 43749
+  },
+  {
+    "path": "assets/resources/V7/wallet_realname_warning_exact.png",
+    "bytes": 158762
+  },
+  {
+    "path": "assets/resources/V7/wallet_record_header_exact.png",
+    "bytes": 63173
+  },
+  {
+    "path": "assets/resources/V7/wallet_record_icon_in_exact.png",
+    "bytes": 6185
+  },
+  {
+    "path": "assets/resources/V7/wallet_record_icon_out_exact.png",
+    "bytes": 6136
+  },
+  {
+    "path": "assets/resources/V7/wallet_record_pagination_exact.png",
+    "bytes": 86505
+  },
+  {
+    "path": "assets/resources/V7/wallet_record_panel_exact.png",
+    "bytes": 120169
+  },
+  {
+    "path": "assets/resources/V7/wallet_record_row_exact.png",
+    "bytes": 20598
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_balance_exact.png",
+    "bytes": 201183
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_form_exact.png",
+    "bytes": 99895
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_input_amount_exact.png",
+    "bytes": 43990
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_input_bank_exact.png",
+    "bytes": 41376
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_input_card_exact.png",
+    "bytes": 40106
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_input_generic_exact.png",
+    "bytes": 29998
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_input_name_exact.png",
+    "bytes": 42322
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_input_password_exact.png",
+    "bytes": 41241
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_submit_exact.png",
+    "bytes": 102491
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_type_alipay_exact.png",
+    "bytes": 17756
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_type_bank_exact.png",
+    "bytes": 25459
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_type_usdt_exact.png",
+    "bytes": 16942
+  },
+  {
+    "path": "assets/resources/V7/wallet_withdraw_types_base_exact.png",
+    "bytes": 47953
+  }
+]

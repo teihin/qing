@@ -1,0 +1,13 @@
+[
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_hero_exact.png","box":[0,0,1023,459]},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_bg_exact.png","box":[0,459,1023,1371],"sideField":true},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_profile_exact.png","box":[55,457,968,897],"radius":40,"holes":[[110,486,252,626]],"stripClear":[[738,511,852,554,674,680]],"horizontalClear":[[282,503,413,552],[371,568,458,608],[190,665,220,706],[358,665,452,706],[570,665,601,706],[733,665,764,706],[886,665,918,706],[145,751,195,799],[310,751,362,799],[475,751,526,799],[649,751,701,799],[820,751,872,799]]},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_avatar_ring_exact.png","box":[105,479,258,633],"holes":[[110,486,252,626]]},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_agent_exact.png","box":[55,912,498,1049],"radius":22},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_promotion_exact.png","box":[514,912,968,1049],"radius":22},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_money_exact.png","box":[55,1064,498,1202],"radius":22},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_gift_exact.png","box":[514,1064,968,1202],"radius":22},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_record_exact.png","box":[55,1216,498,1353],"radius":22},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/mine_settings_exact.png","box":[514,1216,968,1353],"radius":22},
+  {"source":"design-previews/效果图V8-new/01-主页面/03-我的.png","output":"assets/resources/V7/v8_mine_footer.png","box":[0,1349,1023,1537],"polygon":[[0,22],[428,22],[470,11],[505,0],[540,11],[579,22],[1023,22],[1023,188],[0,188]]}
+]

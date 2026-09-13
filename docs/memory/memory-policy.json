@@ -14,7 +14,10 @@
     "docs/memory/archive/2026-09-05/README.md",
     "design-previews/README.md",
     "docs/memory/handoffs/2026-09-10-art-final-and-push.md",
-    "docs/memory/archive/2026-09-10/README.md"
+    "docs/memory/handoffs/2026-09-10-login-overlap-fix.md",
+    "docs/memory/archive/2026-09-10/README.md",
+    "docs/memory/handoffs/2026-09-11-register-v8-exact.md",
+    "docs/memory/handoffs/2026-09-11-v8-all-pages.md"
   ],
   "required_headings": {
     "AGENTS.md": [
@@ -94,6 +97,10 @@
       "error_bytes": 16384
     },
     "docs/memory/handoffs/2026-09-10-art-final-and-push.md": {
+      "warn_bytes": 8192,
+      "error_bytes": 16384
+    },
+    "docs/memory/handoffs/2026-09-10-login-overlap-fix.md": {
       "warn_bytes": 8192,
       "error_bytes": 16384
     },

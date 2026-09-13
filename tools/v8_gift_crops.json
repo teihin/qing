@@ -1,0 +1,18 @@
+[
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_header_exact.png","box":[0,0,941,97]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_hero_exact.png","box":[0,97,941,509]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_bg_exact.png","box":[0,509,941,1672],"sideField":true},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/v8_gift_form_backdrop.png","box":[0,509,941,1141],"horizontalClear":[[262,541,438,584],[365,663,567,707],[365,785,567,829]]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_input_id_exact.png","box":[57,509,884,611],"horizontalClear":[[262,541,438,584]],"radius":19},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_input_amount_exact.png","box":[57,629,884,733],"horizontalClear":[[365,663,567,707]],"radius":19},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_input_password_exact.png","box":[57,751,884,856],"horizontalClear":[[365,785,567,829]],"radius":19},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/v8_gift_hint_id.png","box":[262,541,438,584]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/v8_gift_hint_amount.png","box":[365,663,567,707]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/v8_gift_hint_password.png","box":[365,785,567,829]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_confirm_exact.png","box":[215,879,726,982],"radius":19},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_history_header_exact.png","box":[27,1008,913,1141]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_list_panel_exact.png","box":[27,1141,913,1485],"bandClear":[[29,1141,911,1485,1144,1151]]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/v8_gift_pagination.png","box":[27,1485,913,1613],"horizontalClear":[[421,1529,517,1583]],"polygon":[[0,0],[886,0],[886,108],[882,118],[874,126],[865,128],[20,128],[9,124],[2,115],[0,103]]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_record_row_exact.png","box":[29,1141,911,1254],"horizontalClear":[[90,1178,168,1222],[210,1152,440,1245],[540,1178,607,1228],[706,1180,875,1226]]},
+  {"source":"design-previews/效果图V8-new/01-主页面/05-赠送.png","output":"assets/resources/V7/gift_avatar_ring_exact.png","box":[216,1155,303,1243],"holes":[[219,1158,300,1240]]}
+]

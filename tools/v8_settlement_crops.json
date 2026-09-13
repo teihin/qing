@@ -1,0 +1,12 @@
+[
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_bg_exact.png","box":[0,0,1024,1536],"sideField":true},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_header_exact.png","box":[0,0,1024,86]},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_hero_exact.png","box":[0,86,1024,467],"holes":[[120,207,303,386],[417,133,608,367],[715,208,900,387]]},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_award_frames_exact.png","box":[0,86,1024,467],"foreground":"gold","ink":[246,205,135],"inkBounds":[90,25,930,310]},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_summary_exact.png","box":[31,472,993,551],"horizontalClear":[[80,484,325,535],[349,484,535,535],[559,484,762,535],[789,484,950,535]]},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_table_header_exact.png","box":[31,551,993,641]},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_list_panel_exact.png","box":[31,641,993,1335],"bandClear":[[35,650,989,1330,645,650]]},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_row_exact.png","box":[50,650,974,746],"horizontalClear":[[86,661,300,733],[391,661,485,733],[610,661,730,733],[804,661,946,733]]},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_return_exact.png","box":[299,1364,725,1457],"radius":22},
+ {"source":"design-previews/效果图V8-new/01-主页面/06-结算.png","output":"assets/resources/V7/settlement_review_exact.png","box":[773,13,1002,76],"radius":26}
+]

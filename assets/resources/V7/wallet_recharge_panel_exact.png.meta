@@ -8,8 +8,8 @@
   "premultiplyAlpha": false,
   "genMipmaps": false,
   "packable": true,
-  "width": 642,
-  "height": 1063,
+  "width": 180,
+  "height": 256,
   "platformSettings": {},
   "subMetas": {
     "wallet_recharge_panel_exact": {
@@ -24,14 +24,14 @@
       "offsetY": 0,
       "trimX": 0,
       "trimY": 0,
-      "width": 642,
-      "height": 1063,
-      "rawWidth": 642,
-      "rawHeight": 1063,
-      "borderTop": 28,
-      "borderBottom": 28,
-      "borderLeft": 28,
-      "borderRight": 28,
+      "width": 180,
+      "height": 256,
+      "rawWidth": 180,
+      "rawHeight": 256,
+      "borderTop": 32,
+      "borderBottom": 32,
+      "borderLeft": 32,
+      "borderRight": 32,
       "subMetas": {}
     }
   }

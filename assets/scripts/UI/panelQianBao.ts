@@ -33,9 +33,18 @@ export default class panelQianBao extends UIPanelViewBase {
     private strCurZhifuConfig:string = ""; //当前支付配置
     private selectedPaymentChannelName:string = "";
     private updatingPaymentChannels:boolean = false;
-    private strZhifubTxt:string = "";
-    private strYinlianTxt:string = "";
-    private strUSDTTxt:string = ""
+    private refreshingRechargeLayout:boolean = false;
+    private readonly rechargeFollowingNodes:string[] = [
+        "V7选择充值金额", "金额", "V7充值提示框", "充值提示", "V8默认充值提示", "确认充值"
+    ];
+    private rechargeLayoutBase:{viewportHeight:number, panelHeight:number,
+        followingTops:{[name:string]:number}} = null;
+    private withdrawRowBase:{node:cc.Node, top:number, height:number}[] = null;
+    private readonly defaultRechargeNotice:string = "请使用实名认证名下的银行卡充值，\n准确按照订单金额进行转账。";
+    private readonly defaultWithdrawNotice:string = "请核对提现信息，提交后不可修改。";
+    private strZhifubTxt:string = this.defaultWithdrawNotice;
+    private strYinlianTxt:string = this.defaultWithdrawNotice;
+    private strUSDTTxt:string = this.defaultWithdrawNotice;
 
     private scrollExchange:ScrollViewEx = null;
 
@@ -45,6 +54,18 @@ export default class panelQianBao extends UIPanelViewBase {
 
     private dataHisDD:any = null //历史订单
     private bNeedInitJYPwd:boolean = false;  //是否需要初始化交易密码
+    private updatingWalletSelection:boolean = false;
+    private selectedWithdrawType:string = "";
+    private readonly withdrawInfoContextPrefix:string = "钱包提现预留:";
+    private static withdrawInfoRequestId:number = 0;
+    private withdrawInfoRequests:{[type:string]:{key:string, context:string}} = {};
+    private realnamePasswordCheckPending:boolean = false;
+    private readonly withdrawOptionsContextPrefix:string = "钱包提现开关:";
+    private readonly withdrawOptionKeys:string[] = ["银行卡提现","支付宝提现","USDT提现","USDT汇率","提现类型"];
+    private withdrawOptionsContext:string = "";
+    private withdrawOptionValues:{[key:string]:string} = {};
+    private withdrawOptionReplies:{[key:string]:boolean} = {};
+    private withdrawEnabled:{[type:string]:boolean} = {"银联":false,"支付宝":false,"USDT":false};
     private nTotleSecLeftDD:number = 0; //历史订单剩余时间
 
     private nZhifu5HandCount = 0 ;//支付5最低手数要求
@@ -52,6 +73,9 @@ export default class panelQianBao extends UIPanelViewBase {
         super.onLoad();
 
         this.CapturePaymentChannelDefaultIcons();
+        this.CaptureRechargeChannelLayout();
+        Tool.GetChild(this.node,"容器/充值/根").on(cc.Node.EventType.SIZE_CHANGED,
+            this.RefreshRechargeChannelLayout,this);
 
         KBEngine.Event.register("set_gold", this, "set_gold");
         KBEngine.Event.register("set_gold2", this, "set_gold");
@@ -104,12 +128,12 @@ export default class panelQianBao extends UIPanelViewBase {
         //监控rmb输入变化，调整usdt
         let editRMB = Tool.GetChild(this.node,"容器/提现/提现选项/RMB金额/input").getComponent(cc.EditBox)
         let editUSDT = Tool.GetChild(this.node,"容器/提现/提现选项/USDT数量/input").getComponent(cc.EditBox)
-        let txtHuilv = Tool.GetChild(this.node,"容器/提现/提现选项/汇率/txt").getComponent(cc.Label)
         editRMB.node.on("text-changed",()=>{
             Debug.Log(editRMB.string)
             editRMB.string =  (Number(editRMB.string)*100/100).toString()
 
-            let nHuilv = txtHuilv.string == ""?1:Number(txtHuilv.string)
+            let nHuilv = this.GetUSDTRate()
+            if(nHuilv === 0) return;
             //实时更新usdt数据
             if(editRMB.string != "")
             {
@@ -124,7 +148,8 @@ export default class panelQianBao extends UIPanelViewBase {
             Debug.Log(editUSDT.string)
             editUSDT.string =  (Number(editUSDT.string)*1000/1000).toString()
 
-            let nHuilv = txtHuilv.string == ""?1:Number(txtHuilv.string)
+            let nHuilv = this.GetUSDTRate()
+            if(nHuilv === 0) return;
             //实时更新usdt数据
             if(editUSDT.string != "")
             {
@@ -139,13 +164,108 @@ export default class panelQianBao extends UIPanelViewBase {
 
     }
 
+    private CaptureRechargeChannelLayout():void
+    {
+        if(this.rechargeLayoutBase != null)
+            return;
+        const root = Tool.GetChild(this.node,"容器/充值/根");
+        const followingTops:{[name:string]:number} = {};
+        for(const name of this.rechargeFollowingNodes)
+            followingTops[name] = root.getChildByName(name).getComponent(cc.Widget).top;
+        this.rechargeLayoutBase = {
+            viewportHeight:root.getChildByName("通道视口").height,
+            panelHeight:root.getChildByName("V7充值面板").height,
+            followingTops
+        };
+    }
+
+    private RefreshWithdrawBankRows():void
+    {
+        const root = Tool.GetChild(this.node,"容器/提现/提现选项");
+        if(this.withdrawRowBase == null)
+            this.withdrawRowBase = ["金额","姓名","银行","支行","卡号","密码"].map(name => {
+                const node = root.getChildByName(name);
+                return {node,top:node.getComponent(cc.Widget).top,height:node.height};
+            });
+        const rows = this.withdrawRowBase;
+        const hasBranch = root.getChildByName("银行").active && root.getChildByName("支行").active;
+        // Six bank fields share the same form span when a branch is required.
+        // Only the empty row bases resize; text, icons and inputs retain their size.
+        const gap = (rows[1].top-rows[0].top-rows[0].height)/2;
+        const height = (rows[5].top+rows[5].height-rows[0].top-gap*5)/6;
+        rows.forEach((row,index) => {
+            const widget = row.node.getComponent(cc.Widget);
+            row.node.height = hasBranch ? height : row.height;
+            widget.top = hasBranch ? rows[0].top+index*(height+gap) : row.top;
+            widget.updateAlignment();
+        });
+    }
+
+    private RefreshRechargeChannelLayout():void
+    {
+        const root = Tool.GetChild(this.node,"容器/充值/根");
+        if(!root.activeInHierarchy || this.updatingPaymentChannels || this.refreshingRechargeLayout)
+            return;
+        this.CaptureRechargeChannelLayout();
+        this.refreshingRechargeLayout = true;
+        try
+        {
+            // updateAlignment also aligns ancestors, so a same-frame resize or
+            // reopen uses the current phone height before the server list is laid out.
+            root.getComponent(cc.Widget).updateAlignment();
+            const viewport = root.getChildByName("通道视口");
+            const content = viewport.getChildByName("充值渠道");
+            const visible = content.children.filter(child => child.active && child.getComponent(cc.Toggle) != null);
+            if(visible.length === 0)
+                return;
+            // The Prefab's native two-column Grid measures only active channels:
+            // 1–2 = one row, 3–4 = two rows, etc. Art sizes and gaps stay in the Prefab.
+            content.getComponent(cc.Layout).updateLayout();
+            const panel = root.getChildByName("V7充值面板");
+            const panelWidget = panel.getComponent(cc.Widget);
+            const base = this.rechargeLayoutBase;
+            const fixedHeight = base.panelHeight-base.viewportHeight;
+            const availableHeight = root.height-panelWidget.top-panelWidget.bottom-fixedHeight;
+            const viewportHeight = Math.min(content.height,Math.max(visible[0].height,availableHeight));
+            const delta = viewportHeight-base.viewportHeight;
+            const scroll = viewport.getComponent(cc.ScrollView);
+            scroll.stopAutoScroll();
+            viewport.height = viewportHeight;
+            viewport.getComponent(cc.Widget).updateAlignment();
+            for(const name of this.rechargeFollowingNodes)
+            {
+                const widget = root.getChildByName(name).getComponent(cc.Widget);
+                widget.top = base.followingTops[name]+delta;
+                widget.updateAlignment();
+            }
+            panel.height = base.panelHeight+delta;
+            panelWidget.updateAlignment();
+            scroll.vertical = content.height > viewportHeight+0.1;
+            content.getComponent(cc.Widget).updateAlignment();
+            // Clamp/reset only the channel content; the rest of the page stays fixed.
+            scroll.scrollToTop(0);
+        }
+        finally
+        {
+            this.refreshingRechargeLayout = false;
+        }
+    }
+
     // update (dt) {}
 
     onEnable(){
         Debug.Log("显示");
 
+        this.withdrawInfoRequests = {};
+        this.selectedWithdrawType = "";
+        this.realnamePasswordCheckPending = false;
+        this.bNeedInitJYPwd = false;
+        this.strUserName = "";
+        Tool.GetChild(this.node,"实名").active = false;
+        for(const field of ["姓名","银行","卡号","交易密码","确认密码"])
+            Tool.GetChild(this.node,"实名/信息/"+field+"/input").getComponent(cc.EditBox).string = "";
         let toggle = Tool.GetChild(this.node,"选项/充值").getComponent(cc.Toggle);
-        this.onToggleClick(toggle);
+        this.SelectWalletToggle(toggle);
 
         this.node.getChildByName("选择银行").active = false;
 
@@ -153,9 +273,165 @@ export default class panelQianBao extends UIPanelViewBase {
         // 这里仅保证它在大厅和牌桌两个入口都可点击。
         Tool.GetChild(this.node,"Title/关闭").active = true;
         Tool.GetChild(this.node,"实名/Title/关闭").active = true;
-        ConfigManager.getInstance().GetOneHashKey(GameDataManager.getAccount().guuid+"_提现预留_银联","更新提现预留");
+        this.RequestWithdrawInfo("银联");
 
         Tool.GetChild(this.node,"订单详情").active = false
+    }
+
+    onDisable(){
+        this.withdrawInfoRequests = {};
+        this.selectedWithdrawType = "";
+        this.realnamePasswordCheckPending = false;
+        this.withdrawOptionsContext = "";
+    }
+
+    private SelectWalletToggle(toggle:cc.Toggle):void
+    {
+        // isChecked may emit both selection and deselection callbacks in 2.4.
+        this.updatingWalletSelection = true;
+        try { toggle.isChecked = true; }
+        finally { this.updatingWalletSelection = false; }
+        this.onToggleClick(toggle);
+    }
+
+    private RequestWithdrawInfo(type:string):void
+    {
+        const key = GameDataManager.getAccount().guuid+"_提现预留_"+type;
+        const pending = this.withdrawInfoRequests[type];
+        if(pending != null && pending.key === key)
+            return;
+        const context = this.withdrawInfoContextPrefix+(++panelQianBao.withdrawInfoRequestId);
+        this.withdrawInfoRequests[type] = {key, context};
+        ConfigManager.getInstance().GetOneHashKey(key,context);
+    }
+
+    private TakeWithdrawInfoReply(key:string,context:string):string
+    {
+        if(!this.node.activeInHierarchy)
+            return null;
+        for(const type of Object.keys(this.withdrawInfoRequests))
+        {
+            const pending = this.withdrawInfoRequests[type];
+            if(pending.key === key && pending.context === context &&
+                key === GameDataManager.getAccount().guuid+"_提现预留_"+type)
+            {
+                delete this.withdrawInfoRequests[type];
+                return type;
+            }
+        }
+        return null;
+    }
+
+    private ShowMissingRealname():void
+    {
+        Tool.GetChild(this.node,"实名").active = true;
+        if(this.realnamePasswordCheckPending)
+            return;
+        this.realnamePasswordCheckPending = true;
+        const strParam = JSON.stringify({header:"校验_玩家_交易密码",old_pwd:""});
+        GameDataManager.getAccount().reqHallCommand(strParam,"P@校验_玩家_交易密码");
+    }
+
+    private ApplyWithdrawInfo(type:string,content:string):void
+    {
+        const fields = (content || "").split("#");
+        const value = (index:number):string => fields[index] || "";
+        // Only the bank profile is the existing real-name source. Alipay/USDT
+        // records are optional form defaults, not evidence of missing identity.
+        if(type === "银联")
+        {
+            for(const pair of [["姓名",1],["银行",2],["卡号",5]])
+                Tool.GetChild(this.node,"实名/信息/"+pair[0]+"/input").getComponent(cc.EditBox).string = value(Number(pair[1]));
+            this.strUserName = value(1);
+            if(value(1) && value(2) && value(5))
+            {
+                Tool.GetChild(this.node,"实名").active = false;
+                this.realnamePasswordCheckPending = false;
+                this.bNeedInitJYPwd = false;
+            }
+            else
+                this.ShowMissingRealname();
+        }
+        if(type !== this.selectedWithdrawType || !Tool.GetChild(this.node,"容器/提现").activeInHierarchy)
+            return;
+        const root = "容器/提现/提现选项/";
+        if(type === "USDT")
+            Tool.GetChild(this.node,root+"TRC20地址/input").getComponent(cc.EditBox).string = value(6);
+        else if(type === "支付宝")
+        {
+            Tool.GetChild(this.node,root+"姓名/input").getComponent(cc.EditBox).string = value(1) || this.strUserName;
+            Tool.GetChild(this.node,root+"支付宝/input").getComponent(cc.EditBox).string = value(4);
+        }
+        else
+            for(const pair of [["姓名",1],["银行",2],["支行",3],["卡号",5]])
+                Tool.GetChild(this.node,root+pair[0]+"/input").getComponent(cc.EditBox).string = value(Number(pair[1]));
+    }
+
+    private RequestWithdrawOptions():void
+    {
+        this.withdrawOptionsContext = this.withdrawOptionsContextPrefix+(++panelQianBao.withdrawInfoRequestId);
+        this.withdrawOptionValues = {};
+        this.withdrawOptionReplies = {};
+        this.withdrawEnabled = {"银联":false,"支付宝":false,"USDT":false};
+        this.selectedWithdrawType = "";
+        this.ResetTxInfo();
+        this.ApplyWithdrawOptions();
+        for(const key of this.withdrawOptionKeys)
+            ConfigManager.getInstance().GetOneHashKey(key,this.withdrawOptionsContext);
+    }
+
+    private ReceiveWithdrawOption(key:string,context:string,value:string,missing:boolean):void
+    {
+        if(context !== this.withdrawOptionsContext || !this.node.activeInHierarchy ||
+            !Tool.GetChild(this.node,"容器/提现").activeInHierarchy || this.withdrawOptionKeys.indexOf(key) < 0 ||
+            this.withdrawOptionReplies[key])
+            return;
+        this.withdrawOptionReplies[key] = true;
+        if(!missing)
+            this.withdrawOptionValues[key] = (value || "").trim();
+        if(this.withdrawOptionKeys.some(item => !this.withdrawOptionReplies[item]))
+            return;
+        const values = this.withdrawOptionValues;
+        const legacy = values["提现类型"];
+        // Existing bank/Alipay settings survive migration until their new keys
+        // are saved. Missing USDT configuration always means disabled.
+        this.withdrawEnabled["银联"] = values["银行卡提现"] === undefined ? legacy === "1" || legacy === "3" : values["银行卡提现"] === "开";
+        this.withdrawEnabled["支付宝"] = values["支付宝提现"] === undefined ? legacy === "2" || legacy === "3" : values["支付宝提现"] === "开";
+        const rate = Number(values["USDT汇率"]);
+        const validRate = Number.isFinite(rate) && rate > 0 && rate <= 1000000;
+        this.withdrawEnabled["USDT"] = values["USDT提现"] === "开" && validRate;
+        Tool.GetChild(this.node,"容器/提现/提现选项/汇率/txt").getComponent(cc.Label).string = validRate ? values["USDT汇率"] : "";
+        this.ApplyWithdrawOptions();
+    }
+
+    private ApplyWithdrawOptions():void
+    {
+        const root = Tool.GetChild(this.node,"容器/提现");
+        const types = root.getChildByName("类型选择");
+        let selected:cc.Toggle = null;
+        this.updatingWalletSelection = true;
+        try
+        {
+            for(const pair of [["银联","银行卡提现"],["支付宝","支付宝提现"],["USDT","USDT提现"]])
+            {
+                const node = types.getChildByName(pair[1]);
+                node.active = this.withdrawEnabled[pair[0]];
+                if(node.active && (selected == null || pair[0] === this.selectedWithdrawType))
+                    selected = node.getComponent(cc.Toggle);
+            }
+            types.active = selected != null;
+            root.getChildByName("提现选项").active = selected != null;
+            root.getChildByName("全部提现").active = selected != null;
+        }
+        finally { this.updatingWalletSelection = false; }
+        if(selected != null)
+            this.SelectWalletToggle(selected);
+    }
+
+    private GetUSDTRate():number
+    {
+        const rate = Number(Tool.GetChild(this.node,"容器/提现/提现选项/汇率/txt").getComponent(cc.Label).string);
+        return Number.isFinite(rate) && rate > 0 && rate <= 1000000 ? rate : 0;
     }
 
     set_gold(num:number = null)
@@ -176,12 +452,17 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(button.node.name === "关闭")
         {
-            // 大厅中的钱包是Main下的内嵌全屏页；返回时恢复大厅和底栏。
-            // 牌桌等其它入口仍保持原来的面板关闭逻辑。
+            // 内嵌钱包由 Main 恢复本次打开来源；牌桌仍走原面板关闭逻辑。
             if(this.node.parent != null && this.node.parent.name === "Main")
             {
                 let mainRoot = this.node.parent;
                 let panelMain = mainRoot.parent;
+                const owner = panelMain.getComponent("panelMain") as cc.Component & { CloseWallet:()=>void };
+                if(owner != null && typeof owner.CloseWallet === "function")
+                {
+                    owner.CloseWallet();
+                    return;
+                }
                 this.node.active = false;
                 let discover = mainRoot.getChildByName("发现");
                 if(discover != null)
@@ -588,8 +869,8 @@ export default class panelQianBao extends UIPanelViewBase {
             //计算
             let editRMB = Tool.GetChild(this.node,"容器/提现/提现选项/RMB金额/input").getComponent(cc.EditBox)
             let editUSDT = Tool.GetChild(this.node,"容器/提现/提现选项/USDT数量/input").getComponent(cc.EditBox)
-            let txtHuilv = Tool.GetChild(this.node,"容器/提现/提现选项/汇率/txt").getComponent(cc.Label)
-            let nHuilv = txtHuilv.string == ""?1:Number(txtHuilv.string)
+            let nHuilv = this.GetUSDTRate()
+            if(nHuilv === 0) return;
             //实时更新usdt数据
             if(editRMB.string != "")
             {
@@ -599,6 +880,11 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(button.node.name === "申请提现")
         {
+            if(!this.withdrawEnabled[this.selectedWithdrawType])
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"当前提现方式未开启，请重新进入提现页面");
+                return;
+            }
             let inMoney = null
             if(Tool.GetChild(this.node,"容器/提现/类型选择/USDT提现").getComponent(cc.Toggle).isChecked)
             {
@@ -776,6 +1062,8 @@ export default class panelQianBao extends UIPanelViewBase {
             }
 
             let strMsg = "#"+strName+"#"+strBank+"###"+strCard;
+            delete this.withdrawInfoRequests["银联"];
+            this.realnamePasswordCheckPending = false;
             ConfigManager.getInstance().SetOneHashKey(GameDataManager.getAccount().guuid+"_提现预留_银联",strMsg);
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"提交成功!");
             Tool.GetChild(this.node,"实名").active = false
@@ -836,10 +1124,22 @@ export default class panelQianBao extends UIPanelViewBase {
     }
     public onToggleClick(toggle:cc.Toggle)
     {
+        if(this.updatingWalletSelection)
+            return;
+        // An amount may be switched off by another selection or by a repeat
+        // click. Its color must update for both directions, including none.
+        if(toggle.node.parent.name === "金额")
+        {
+            this.SyncRechargeAmountSelection();
+            return;
+        }
+        if(!toggle.isChecked)
+            return;
         if(toggle.node.name === "充值")
         {
             this.selectedPaymentChannelName = "";
             this.strCurZhifuConfig = "";
+            this.ResetRechargeAmountSelection();
             Tool.GetChild(this.node,"容器/充值/根").active = false;
             this.SwitchTab(toggle.node.name);
 
@@ -860,40 +1160,11 @@ export default class panelQianBao extends UIPanelViewBase {
             ConfigManager.getInstance().GetOneHashKey("提现文本_USDT","提现文本_USDT");
             ConfigManager.getInstance().GetOneHashKey("提现文本_银联","提现文本_银联");
             ConfigManager.getInstance().GetOneHashKey("支付配置_提现","更新提现银行");
-            ConfigManager.getInstance().GetOneHashKey("提现类型","提现类型");
+            this.RequestWithdrawOptions();
 
             ConfigManager.getInstance().GetOneHashKey("预留信息_"+GameDataManager.getAccount().guuid,"预留信息");
 
-            //默认银联提现
-            let item = Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").getComponent(cc.Toggle);
-            this.onToggleClick(item);
-            //tab也切换到默认
-            item.isChecked = true;
 
-
-            //查询是否支持usdt提现
-            Tool.HTTP_GET("http://"+WEB_TX_IP+"/api/JsonPay/hasUSDT?uuid="+GameDataManager.getAccount().guuid,(ret)=>{
-                if(ret.status == 200)
-                {
-                    let jRet = JSON.parse(ret.response)
-                    Debug.Log(jRet)
-                    let data = jRet["data"]
-                   // data["USE_USDT"] = true
-                    if(data["USE_USDT"])
-                    {
-                        Tool.GetChild(this.node,"容器/提现/类型选择/USDT提现").active = true
-
-                        //更新汇率
-                        Tool.GetChild(this.node,"容器/提现/提现选项/汇率/txt").getComponent(cc.Label).string = data["USDT_RATE"]
-                    }
-                    else
-                    {
-                        Tool.GetChild(this.node,"容器/提现/类型选择/USDT提现").active = false
-                    }
-                }
-            },(err)=>{
-                // UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"支付网络异常！")
-            })
         }
         else if(toggle.node.name === "记录")
         {
@@ -907,6 +1178,7 @@ export default class panelQianBao extends UIPanelViewBase {
                 //批量初始化结束后和实际点击共用此入口，先清空旧配置再查询。
                 this.selectedPaymentChannelName = toggle.node.name;
                 this.strCurZhifuConfig = "";
+                this.ResetRechargeAmountSelection();
                 this.SyncPaymentChannelCheckMarks();
                 ConfigManager.getInstance().GetOneHashKey("支付配置_"+toggle.node.name,"更新支付配置");
                // Tool.GetChild(this.node,"容器/充值/根/自行输入").active = false;
@@ -934,6 +1206,8 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(toggle.node.name === "支付宝提现")
         {
+            if(!this.withdrawEnabled["支付宝"]) return;
+            this.selectedWithdrawType = "支付宝";
             this.ResetTxInfo();
             Tool.GetChild(this.node,"容器/提现/提现选项/金额").active = true;
             Tool.GetChild(this.node,"容器/提现/提现选项/姓名").active = true;
@@ -948,12 +1222,15 @@ export default class panelQianBao extends UIPanelViewBase {
             Tool.GetChild(this.node,"容器/提现/提现选项/TRC20地址").active = false;
 
             Tool.GetChild(this.node,"容器/提现/提现选项/提现文本").getComponent(cc.Label).string = this.strZhifubTxt;
+            this.RefreshWithdrawBankRows();
 
             //获取配置            
-            ConfigManager.getInstance().GetOneHashKey(GameDataManager.getAccount().guuid+"_提现预留_支付宝","更新提现预留");
+            this.RequestWithdrawInfo("支付宝");
         }
         else if(toggle.node.name === "银行卡提现")
         {
+            if(!this.withdrawEnabled["银联"]) return;
+            this.selectedWithdrawType = "银联";
             this.ResetTxInfo();
             Tool.GetChild(this.node,"容器/提现/提现选项/金额").active = true;
             Tool.GetChild(this.node,"容器/提现/提现选项/姓名").active = true;
@@ -970,12 +1247,15 @@ export default class panelQianBao extends UIPanelViewBase {
 
 
             Tool.GetChild(this.node,"容器/提现/提现选项/提现文本").getComponent(cc.Label).string = this.strYinlianTxt;
+            this.RefreshWithdrawBankRows();
 
             ConfigManager.getInstance().GetOneHashKey("提现需要支行","提现需要支行");            
-            ConfigManager.getInstance().GetOneHashKey(GameDataManager.getAccount().guuid+"_提现预留_银联","更新提现预留");
+            this.RequestWithdrawInfo("银联");
         }
         else if(toggle.node.name == "USDT提现")
         {
+            if(!this.withdrawEnabled["USDT"]) return;
+            this.selectedWithdrawType = "USDT";
             this.ResetTxInfo();
             Tool.GetChild(this.node,"容器/提现/提现选项/金额").active = false;
             Tool.GetChild(this.node,"容器/提现/提现选项/姓名").active = false;
@@ -992,18 +1272,8 @@ export default class panelQianBao extends UIPanelViewBase {
             Tool.GetChild(this.node,"容器/提现/提现选项/TRC20地址").active = true;
 
             Tool.GetChild(this.node,"容器/提现/提现选项/提现文本").getComponent(cc.Label).string = this.strUSDTTxt;
-            ConfigManager.getInstance().GetOneHashKey(GameDataManager.getAccount().guuid+"_提现预留_USDT","更新提现预留USDT");
-        }
-        else if(toggle.node.parent.name === "金额")
-        {
-            // 金额文字是实时配置，选中时只同步文字对比色；底板与位置均已
-            // 固化在Prefab，运行时不再承担换皮或布局职责。
-            let amountToggles = toggle.node.parent.getComponentsInChildren(cc.Toggle);
-            amountToggles.forEach((item)=>{
-                let label = item.node.getChildByName("txt");
-                if(label != null)
-                    label.color = item.isChecked ? new cc.Color(4,34,57,255) : new cc.Color(231,197,145,255);
-            });
+            this.RefreshWithdrawBankRows();
+            this.RequestWithdrawInfo("USDT");
         }
     }
 
@@ -1023,6 +1293,8 @@ export default class panelQianBao extends UIPanelViewBase {
     }
     public SwitchTab(strName:string)
     {
+        if(strName !== "提现")
+            this.withdrawOptionsContext = "";
         if(strName !== "充值")
             this.selectedPaymentChannelName = "";
         let arrayTemp = this.node.getChildByName("容器").children;
@@ -1065,19 +1337,21 @@ export default class panelQianBao extends UIPanelViewBase {
         let strKey:string = info["key"];
         let strContent:string = info["content"];
         let context:string = info["context"];
-        if(context.indexOf(this.paymentIconContextPrefix) === 0)
+        if(context.indexOf(this.withdrawOptionsContextPrefix) === 0)
+            this.ReceiveWithdrawOption(strKey,context,"",true);
+        else if(context.indexOf(this.paymentIconContextPrefix) === 0)
         {
             let channelName = context.substring(this.paymentIconContextPrefix.length);
             this.ApplyPaymentChannelIcon(channelName, "default");
         }
-        else if(context === "更新提现预留")
+        else if(context.indexOf(this.withdrawInfoContextPrefix) === 0)
         {
-            //没有查询到实名信息
-            Tool.GetChild(this.node,"实名").active = true;
-
-            //查询是否设置过交易密码
-            let strParam = "{\"header\":\"校验_玩家_交易密码\",\"old_pwd\":\"\"}";
-            GameDataManager.getAccount().reqHallCommand(strParam, "P@校验_玩家_交易密码");
+            const type = this.TakeWithdrawInfoReply(strKey,context);
+            if(type === "银联")
+                this.ShowMissingRealname();
+            else if(type === "支付宝" && this.selectedWithdrawType === type &&
+                Tool.GetChild(this.node,"容器/提现").activeInHierarchy)
+                Tool.GetChild(this.node,"容器/提现/提现选项/姓名/input").getComponent(cc.EditBox).string = this.strUserName;
         }
     }
     public OnUserHashInfo(strMsg:string)
@@ -1152,8 +1426,7 @@ export default class panelQianBao extends UIPanelViewBase {
             if(defaultToggle != null)
             {
                 this.onToggleClick(defaultToggle);
-                //每次回到默认通道时同步回到列表顶部，确保首项立即可见。
-                Tool.GetChild(rechargeRoot,"通道视口").getComponent(cc.ScrollView).scrollToTop(0);
+                this.RefreshRechargeChannelLayout();
             }
 
         }
@@ -1194,16 +1467,25 @@ export default class panelQianBao extends UIPanelViewBase {
                 {
                     let one = arrayToggle[i];
         
-                    if (arrayAll.Length <= i) //没有配置
+                    one.isChecked = false;
+                    one.node.active = i < arrayAll.length && arrayAll[i].trim() !== "";
+                    if(!one.node.active)
                         continue;
         
                     one.node.name = arrayAll[i] + "元";
                     one.node.getChildByName("txt").getComponent(cc.Label).string = one.node.name;
-                    one.isChecked = false;
                 }
             }
+            this.ResetRechargeAmountSelection();
             //更新通知
-            Tool.GetChild(this.node,"容器/充值/根/充值提示").getComponent(cc.Label).string = data["notify"];
+            // 未配置通道说明时保留页面默认提示，避免空回包把提示框清空。
+            let notice = data["notify"];
+            let hasNotice = typeof notice === "string" && notice.trim() !== "";
+            let defaultNotice = Tool.GetChild(this.node,"容器/充值/根").getChildByName("V8默认充值提示");
+            if(defaultNotice != null)
+                defaultNotice.active = !hasNotice;
+            Tool.GetChild(this.node,"容器/充值/根/充值提示").getComponent(cc.Label).string =
+                hasNotice ? notice : (defaultNotice == null ? this.defaultRechargeNotice : "");
             //自行输入
             //Tool.GetChild(this.node,"容器/充值/根/自行输入").active = data["bOpenInput"];
             //Tool.GetChild(this.node,"容器/充值/根/自行输入/inputrange").getComponent(cc.Label).string = data["inputrange"];
@@ -1228,23 +1510,25 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(context === "提现需要支行")
         {
-            Tool.GetChild(this.node,"容器/提现/提现选项/支行").active = strContent=="true"?true:false;
+            const bankSelected = Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").getComponent(cc.Toggle).isChecked;
+            Tool.GetChild(this.node,"容器/提现/提现选项/支行").active = bankSelected && strContent=="true";
+            this.RefreshWithdrawBankRows();
         }
         else if(context === "提现文本_支付宝")
         {
-            this.strZhifubTxt = strContent;
+            this.strZhifubTxt = strContent && strContent.trim() ? strContent : this.defaultWithdrawNotice;
         }
         else if(context === "提现文本_银联")
         {
-            this.strYinlianTxt = strContent;
+            this.strYinlianTxt = strContent && strContent.trim() ? strContent : this.defaultWithdrawNotice;
             if(Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").getComponent(cc.Toggle).isChecked)
             {
-                Tool.GetChild(this.node,"容器/提现/提现选项/提现文本").getComponent(cc.Label).string = strContent;
+                Tool.GetChild(this.node,"容器/提现/提现选项/提现文本").getComponent(cc.Label).string = this.strYinlianTxt;
             }
         }
         else if(context === "提现文本_USDT")
         {
-            this.strUSDTTxt = strContent;
+            this.strUSDTTxt = strContent && strContent.trim() ? strContent : this.defaultWithdrawNotice;
         }
         else if(context === "更新提现银行")
         {
@@ -1254,85 +1538,14 @@ export default class panelQianBao extends UIPanelViewBase {
             //     Tool.GetChild(this.node,"容器/提现/提现选项/提现文本").getComponent(cc.Label).string = this.strCurZhifuConfig;
             // }
         }
-        else if(context == "更新提现预留")
+        else if(context.indexOf(this.withdrawInfoContextPrefix) === 0)
         {
-            let arrayInfo = strContent.split("#");
-            //Tool.GetChild(this.node,"容器/提现/提现选项/金额/input").getComponent(cc.EditBox).string = arrayInfo[0];
-            Tool.GetChild(this.node,"容器/提现/提现选项/姓名/input").getComponent(cc.EditBox).string = arrayInfo[1];
-            Tool.GetChild(this.node,"容器/提现/提现选项/银行/input").getComponent(cc.EditBox).string = arrayInfo[2];
-            Tool.GetChild(this.node,"容器/提现/提现选项/支行/input").getComponent(cc.EditBox).string = arrayInfo[3];
-            Tool.GetChild(this.node,"容器/提现/提现选项/支付宝/input").getComponent(cc.EditBox).string = arrayInfo[4];  
-            Tool.GetChild(this.node,"容器/提现/提现选项/卡号/input").getComponent(cc.EditBox).string = arrayInfo[5];
-            Tool.GetChild(this.node,"容器/提现/提现选项/TRC20地址/input").getComponent(cc.EditBox).string = arrayInfo[6]==undefined?"":arrayInfo[6];
-
-            //同时更新实名界面信息
-            Tool.GetChild(this.node,"实名/信息/姓名/input").getComponent(cc.EditBox).string = arrayInfo[1];
-            Tool.GetChild(this.node,"实名/信息/银行/input").getComponent(cc.EditBox).string = arrayInfo[2];
-            Tool.GetChild(this.node,"实名/信息/卡号/input").getComponent(cc.EditBox).string = arrayInfo[5]; 
-
-            this.strUserName = arrayInfo[1]
+            const type = this.TakeWithdrawInfoReply(strKey,context);
+            if(type != null)
+                this.ApplyWithdrawInfo(type,strContent);
         }
-        else if(context == "更新提现预留USDT")
-        {
-            let arrayInfo = strContent.split("#");
-            Tool.GetChild(this.node,"容器/提现/提现选项/TRC20地址/input").getComponent(cc.EditBox).string = arrayInfo[6]==undefined?"":arrayInfo[6];
-
-        }
-        else if(context == "提现类型")
-        {
-            if(cc.sys.isBrowser)
-            {
-                strContent = '3';
-            }
-            if(strContent == '0') //都不允许
-            {
-                Tool.GetChild(this.node,"容器/提现/全部提现").active = false;
-                Tool.GetChild(this.node,"容器/提现/类型选择").active = false;
-                Tool.GetChild(this.node,"容器/提现/提现选项").active = false;
-            }
-            else if(strContent == '1') //银联
-            {
-                Tool.GetChild(this.node,"容器/提现/全部提现").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择/支付宝提现").active = false;
-                Tool.GetChild(this.node,"容器/提现/提现选项").active = true;
-
-                //默认银联提现
-                let item = Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").getComponent(cc.Toggle);
-                this.onToggleClick(item);
-                //tab也切换到默认
-                item.isChecked = true;
-            }
-            else if(strContent == '2') //支付宝
-            {
-                Tool.GetChild(this.node,"容器/提现/全部提现").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").active = false;
-                Tool.GetChild(this.node,"容器/提现/类型选择/支付宝提现").active = true;
-                Tool.GetChild(this.node,"容器/提现/提现选项").active = true;
-
-                //默认银联提现
-                let item = Tool.GetChild(this.node,"容器/提现/类型选择/支付宝提现").getComponent(cc.Toggle);
-                this.onToggleClick(item);
-                //tab也切换到默认
-                item.isChecked = true;
-            }
-            else //都允许
-            {
-                Tool.GetChild(this.node,"容器/提现/全部提现").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").active = true;
-                Tool.GetChild(this.node,"容器/提现/类型选择/支付宝提现").active = true;
-                Tool.GetChild(this.node,"容器/提现/提现选项").active = true;
-
-                //默认银联提现
-                let item = Tool.GetChild(this.node,"容器/提现/类型选择/银行卡提现").getComponent(cc.Toggle);
-                this.onToggleClick(item);
-                //tab也切换到默认
-                item.isChecked = true;
-            }
-        }
+        else if(context.indexOf(this.withdrawOptionsContextPrefix) === 0)
+            this.ReceiveWithdrawOption(strKey,context,strContent,false);
         else if(context == "预留信息")
         {
             this.strYLInfo = Tool.Base64Decode(strContent);
@@ -1345,6 +1558,34 @@ export default class panelQianBao extends UIPanelViewBase {
         else if(context == "支付5_手数")
         {
             this.nZhifu5HandCount = Number(strContent)
+        }
+    }
+
+    private ResetRechargeAmountSelection():void
+    {
+        const previous = this.updatingWalletSelection;
+        this.updatingWalletSelection = true;
+        try
+        {
+            const amounts = Tool.GetChild(this.node,"容器/充值/根/金额");
+            for(const item of amounts.getComponentsInChildren(cc.Toggle))
+                item.isChecked = false;
+        }
+        finally { this.updatingWalletSelection = previous; }
+        this.SyncRechargeAmountSelection();
+    }
+
+    private SyncRechargeAmountSelection():void
+    {
+        const amounts = Tool.GetChild(this.node,"容器/充值/根/金额");
+        for(const item of amounts.getComponentsInChildren(cc.Toggle))
+        {
+            const checked = item.node.active && item.isChecked;
+            const label = item.node.getChildByName("txt");
+            if(label != null)
+                label.color = checked ? new cc.Color(4,34,57,255) : new cc.Color(255,237,202,255);
+            if(item.checkMark != null)
+                item.checkMark.node.active = checked;
         }
     }
 
@@ -1499,6 +1740,10 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(param.indexOf("校验_玩家_交易密码")>=0)
         {
+            if(!this.realnamePasswordCheckPending || !this.node.activeInHierarchy ||
+                !Tool.GetChild(this.node,"实名").active)
+                return;
+            this.realnamePasswordCheckPending = false;
             if (nCode == 0x200)
             {
                 let msg = JSON.parse(param);

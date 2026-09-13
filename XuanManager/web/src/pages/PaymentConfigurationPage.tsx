@@ -4,6 +4,11 @@ import { Button, EmptyState, Field, LoadingBlock, PageHeader } from "../componen
 import type { PaymentChannelConfig, PaymentConfigurationState } from "../types";
 
 const commonInfoFields = ["姓名", "手机"];
+const withdrawalSwitches = [
+  { key: "bankWithdrawalEnabled", label: "银行卡提现" },
+  { key: "alipayWithdrawalEnabled", label: "支付宝提现" },
+  { key: "usdtWithdrawalEnabled", label: "USDT 提现" },
+] as const;
 const paymentIconOptions: Array<{ value: PaymentChannelConfig["iconType"]; label: string; hint: string; mark: string }> = [
   { value: "default", label: "客户端默认", hint: "旧配置兼容", mark: "默认" },
   { value: "alipay", label: "支付宝", hint: "官方蓝色", mark: "支" },
@@ -152,7 +157,17 @@ export default function PaymentConfigurationPage({ can, notify }: { can: (permis
             <p className="payment-bank-footnote">此处直接维护每个充值或提现通道自己的银行列表；页面保存时仍会转换为客户端兼容的 <code>bank</code> 字段并回读核对。</p>
           </div>
         </section>}
-        <section className="panel payment-global-settings"><header className="configuration-card-heading"><div><span className="eyebrow">GLOBAL PAYMENT</span><h2>全局支付与提现设置</h2><p>这些内容由钱包页面直接读取，对所有支付通道生效。</p></div></header><div className="configuration-section"><Field label="支付服务地址" hint="必须是完整的 http:// 或 https:// 地址"><input value={draft.paymentDomain} onChange={(event) => updateGlobal("paymentDomain", event.target.value)} placeholder="http://pay.example.com" /></Field><label className="switch-row"><div><strong>银联提现要求填写支行</strong><small>启用后玩家提交银行卡提现时需要补充开户支行</small></div><input type="checkbox" checked={draft.requireBankBranch} onChange={(event) => updateGlobal("requireBankBranch", event.target.checked)} /></label><div className="withdrawal-copy-grid"><Field label="支付宝提现说明"><textarea rows={4} value={draft.alipayWithdrawalText} onChange={(event) => updateGlobal("alipayWithdrawalText", event.target.value)} /></Field><Field label="银联提现说明"><textarea rows={4} value={draft.unionWithdrawalText} onChange={(event) => updateGlobal("unionWithdrawalText", event.target.value)} /></Field><Field label="USDT 提现说明"><textarea rows={4} value={draft.usdtWithdrawalText} onChange={(event) => updateGlobal("usdtWithdrawalText", event.target.value)} /></Field></div></div></section>
+        <section className="panel payment-global-settings"><header className="configuration-card-heading"><div><span className="eyebrow">GLOBAL PAYMENT</span><h2>全局支付与提现设置</h2><p>这些内容由钱包页面直接读取，对所有支付通道生效。</p></div></header><div className="configuration-section"><Field label="支付服务地址" hint="必须是完整的 http:// 或 https:// 地址"><input value={draft.paymentDomain} onChange={(event) => updateGlobal("paymentDomain", event.target.value)} placeholder="http://pay.example.com" /></Field><label className="switch-row"><div><strong>银联提现要求填写支行</strong><small>启用后玩家提交银行卡提现时需要补充开户支行</small></div><input type="checkbox" checked={draft.requireBankBranch} onChange={(event) => updateGlobal("requireBankBranch", event.target.checked)} /></label><div className="configuration-section">
+            <h3>提现方式开关</h3>
+            <p>三种方式分别控制；玩家重新进入提现页后读取最新设置。USDT 未配置时默认关闭。</p>
+            {withdrawalSwitches.map(({ key, label }) => <label className="switch-row" key={key}>
+              <div><strong>{label}</strong><small>{draft[key] ? "开启" : "关闭"}</small></div>
+              <input type="checkbox" aria-label={label} checked={draft[key]} disabled={!canUpdate || busy} onChange={(event) => updateGlobal(key, event.target.checked)} />
+            </label>)}
+            <Field label="USDT 汇率" hint="1 USDT 对应的人民币金额；开启 USDT 提现前必须填写有效汇率。">
+              <input type="number" min="0.000001" max="1000000" step="any" inputMode="decimal" value={draft.usdtExchangeRate} disabled={!canUpdate || busy} onChange={(event) => updateGlobal("usdtExchangeRate", event.target.value)} placeholder="请输入汇率" />
+            </Field>
+          </div><div className="withdrawal-copy-grid"><Field label="支付宝提现说明"><textarea rows={4} value={draft.alipayWithdrawalText} onChange={(event) => updateGlobal("alipayWithdrawalText", event.target.value)} /></Field><Field label="银联提现说明"><textarea rows={4} value={draft.unionWithdrawalText} onChange={(event) => updateGlobal("unionWithdrawalText", event.target.value)} /></Field><Field label="USDT 提现说明"><textarea rows={4} value={draft.usdtWithdrawalText} onChange={(event) => updateGlobal("usdtWithdrawalText", event.target.value)} /></Field></div></div></section>
       </div>
     </section>
     <section className={`configuration-savebar ${dirty ? "is-dirty" : ""}`}><div><strong>{dirty ? `共有 ${changeCount} 处待保存修改` : "当前内容与游戏配置一致"}</strong><p>保存会整体校验、写入并回读；发现其他管理员已修改时会拒绝覆盖。</p></div><label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={!dirty} /><span>我已核对启用通道和玩家展示内容</span></label><Button variant="secondary" disabled={!dirty || busy} onClick={() => { setDraft(cloneState(original)); setConfirmed(false); }}>放弃修改</Button><Button disabled={!dirty || !confirmed || busy || !can("configuration.payment.update")} onClick={() => void save()}>{busy ? "正在保存并校验…" : "保存全部支付配置"}</Button></section>
@@ -160,14 +175,17 @@ export default function PaymentConfigurationPage({ can, notify }: { can: (permis
 }
 
 function stripMeta(state: PaymentConfigurationState) {
-  return { channels: state.channels, paymentDomain: state.paymentDomain, requireBankBranch: state.requireBankBranch, alipayWithdrawalText: state.alipayWithdrawalText, unionWithdrawalText: state.unionWithdrawalText, usdtWithdrawalText: state.usdtWithdrawalText };
+  return { channels: state.channels, paymentDomain: state.paymentDomain, requireBankBranch: state.requireBankBranch, alipayWithdrawalText: state.alipayWithdrawalText, unionWithdrawalText: state.unionWithdrawalText, usdtWithdrawalText: state.usdtWithdrawalText,
+    bankWithdrawalEnabled: state.bankWithdrawalEnabled, alipayWithdrawalEnabled: state.alipayWithdrawalEnabled,
+    usdtWithdrawalEnabled: state.usdtWithdrawalEnabled, usdtExchangeRate: state.usdtExchangeRate };
 }
 
 function countPaymentChanges(before: PaymentConfigurationState | null, after: PaymentConfigurationState | null) {
   if (!before || !after) return 0;
   let count = 0;
   const beforeGlobal = stripMeta(before); const afterGlobal = stripMeta(after);
-  for (const key of ["paymentDomain", "requireBankBranch", "alipayWithdrawalText", "unionWithdrawalText", "usdtWithdrawalText"] as const) if (beforeGlobal[key] !== afterGlobal[key]) count++;
+  for (const key of ["paymentDomain", "requireBankBranch", "alipayWithdrawalText", "unionWithdrawalText", "usdtWithdrawalText",
+    "bankWithdrawalEnabled", "alipayWithdrawalEnabled", "usdtWithdrawalEnabled", "usdtExchangeRate"] as const) if (beforeGlobal[key] !== afterGlobal[key]) count++;
   for (let index = 0; index < after.channels.length; index++) if (JSON.stringify(before.channels[index]) !== JSON.stringify(after.channels[index])) count++;
   return count;
 }

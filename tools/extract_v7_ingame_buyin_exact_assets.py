@@ -15,12 +15,7 @@ from PIL import Image, ImageDraw, ImageFilter
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = (
-    ROOT
-    / "design-previews"
-    / "2026-09-07-V7带入积分弹窗效果图-v1"
-    / "01-带入积分.png"
-)
+SOURCE = ROOT / "design-previews/效果图V8-new/06-桌内界面/06-带入积分.png"
 OUT = ROOT / "assets" / "resources" / "V7"
 UUID_NAMESPACE = uuid.UUID("9728f9cc-34af-4a03-ab02-cc55e4c174ce")
 

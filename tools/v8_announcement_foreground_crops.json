@@ -1,0 +1,82 @@
+[
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_header_v8_exact.png",
+    "box": [
+      0,
+      0,
+      941,
+      140
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_shield_v8_exact.png",
+    "box": [
+      65,
+      617,
+      405,
+      1024
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_latest_button_v8_exact.png",
+    "box": [
+      445,
+      472,
+      907,
+      646
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_rules_button_v8_exact.png",
+    "box": [
+      445,
+      665,
+      907,
+      840
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_bonus_button_v8_exact.png",
+    "box": [
+      445,
+      860,
+      907,
+      1036
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_penalty_button_v8_exact.png",
+    "box": [
+      445,
+      1056,
+      907,
+      1233
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_cards_v8_exact.png",
+    "box": [
+      0,
+      1030,
+      443,
+      1377
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_chips_right_v8_exact.png",
+    "box": [
+      814,
+      1277,
+      941,
+      1500
+    ]
+  }
+]

@@ -65,6 +65,10 @@ export default class panelMain extends UIPanelViewBase {
     };
 
     private listSet = ['战绩','代理','资金明细','赠送','设置'];
+    private walletReturnToCashWater:boolean = false;
+    private walletOpening:boolean = false;
+    private walletOpenRequest:number = 0;
+    private updatingMainTabSelection:boolean = false;
 
     private animateSet:dragonBones.ArmatureDisplay = null;
 
@@ -332,24 +336,10 @@ export default class panelMain extends UIPanelViewBase {
      */
     private EnsureLocalAvatarSelector(editNode:cc.Node)
     {
-        let avatarNode = Tool.GetChild(editNode,"头像");
         let chooseTitle = Tool.GetChild(editNode,"选择头像");
-        let nicknameNode = Tool.GetChild(editNode,"昵称");
-        let submitNode = Tool.GetChild(editNode,editNode.name);
 
-        // 原Widget按旧布局定位，关闭后改用头像列表版固定坐标。
-        for(let node of [avatarNode,chooseTitle,nicknameNode,submitNode])
-        {
-            if(node == null)
-                continue;
-            let widget = node.getComponent(cc.Widget);
-            if(widget != null)
-                widget.enabled = false;
-        }
-        avatarNode.setPosition(0,450);
-        nicknameNode.setPosition(32.861,285);
-        chooseTitle.setPosition(0,185);
-        submitNode.setPosition(-2.187,-410);
+        // 静态节点的尺寸和位置由正式 Prefab 维护，避免运行时再次覆盖
+        // 换皮布局；这里只保留动态头像列表的创建与刷新。
 
         // “选择头像”图片现在作为列表标题，不再按一下切换一张。
         let chooseButton = chooseTitle.getComponent(cc.Button);
@@ -358,12 +348,23 @@ export default class panelMain extends UIPanelViewBase {
 
         let listNode = editNode.getChildByName("本地头像列表");
         if(listNode != null)
+        {
+            this.PositionLocalAvatarSelector(editNode,listNode);
             return;
+        }
 
         listNode = new cc.Node("本地头像列表");
         listNode.setContentSize(640,430);
-        listNode.setPosition(0,-90);
+        this.PositionLocalAvatarSelector(editNode,listNode);
         editNode.addChild(listNode);
+
+        // Widget alignment can finish after this page is activated. Reapply
+        // the same top offset once on the next frame so the first opening and
+        // later avatar refreshes use exactly the same position.
+        this.scheduleOnce(()=>{
+            if(cc.isValid(editNode) && cc.isValid(listNode))
+                this.PositionLocalAvatarSelector(editNode,listNode);
+        },0);
 
         for(let index = 1; index <= 20; index++)
         {
@@ -422,6 +423,13 @@ export default class panelMain extends UIPanelViewBase {
             },this);
         }
         this.RefreshEditAvatarBatch(editNode);
+    }
+
+    private PositionLocalAvatarSelector(editNode:cc.Node,listNode:cc.Node)
+    {
+        let visibleHeight = cc.view.getVisibleSize().height;
+        let layoutHeight = Math.max(editNode.height,visibleHeight);
+        listNode.setPosition(0,layoutHeight/2-542-215);
     }
 
     private RefreshEditAvatarBatch(editNode:cc.Node)
@@ -542,6 +550,9 @@ export default class panelMain extends UIPanelViewBase {
     set_gold(num:number)
     {
         Tool.GetChild(this.node,"Main/我的/信息/gold").getComponent(cc.Label).string = GameDataManager.getAccount().gold.toString()+(GameDataManager.getAccount().gold2==0?"":("."+GameDataManager.getAccount().gold2.toString().padStart(2,"0")));
+        const summary = Tool.GetChild(this.node,"资金明细/V8资金概况/当前金币");
+        if(summary != null)
+            summary.getComponent(cc.Label).string = Tool.GetChild(this.node,"Main/我的/信息/gold").getComponent(cc.Label).string;
     }
     set_name(name:string)
     {
@@ -631,20 +642,7 @@ export default class panelMain extends UIPanelViewBase {
         let isAgent = this.IsCurrentUserAgent();
         agent.active = isAgent;
 
-        // 代理：六个入口按确认稿排列。非代理：隐藏“我的代理”，
-        // 后续五个按钮保持阅读顺序依次向前补位。
-        let names = isAgent
-            ? ["代理","推广二维码","资金明细","赠送","战绩","设置"]
-            : ["推广二维码","资金明细","赠送","战绩","设置"];
-        let slots = [
-            cc.v2(-172,111), cc.v2(170,111),
-            cc.v2(-172,0), cc.v2(170,0),
-            cc.v2(-172,-111), cc.v2(170,-111)
-        ];
-        for(let i=0;i<names.length;i++)
-        {
-            Tool.GetChild(operation,names[i]).setPosition(slots[i]);
-        }
+        // 原生 Prefab Grid 按已激活入口自动补位，布局不再使用旧稿坐标。
     }
     public set_photo(old)
     {
@@ -940,7 +938,12 @@ export default class panelMain extends UIPanelViewBase {
         else if(button.node.name === "资金明细")
         {
             this.node.getChildByName("资金明细").active = true;
+            this.set_gold(0);
             this.GetLiuShuiInfo();
+        }
+        else if(button.node.name === "金币充值")
+        {
+            this.OpenWallet(true);
         }
         else if(button.node.name === "奖励")
         {
@@ -1532,7 +1535,9 @@ export default class panelMain extends UIPanelViewBase {
     }
 
     onToggleClick(toggle:cc.Toggle)
-    {        
+    {
+        if(this.updatingMainTabSelection)
+            return;
         if(toggle.node.name === "发现")
         {
             this.switchTabSel(toggle.node.name);
@@ -1580,34 +1585,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(toggle.node.name === "钱包")
         {
-            Debug.Log("进入");
-            this.switchTabSel(toggle.node.name);
-
-            if(!Tool.GetChild(this.node,"Main/钱包"))
-            {
-                Debug.Log("没有！！！！！！！！");
-                WebLoadingManager.loadBlockingRes("Prefabs/钱包","正在加载钱包",(err,obj)=>{
-                    if(err)
-                    {
-                        cc.error(err.message || err);
-                        Debug.Log("错误！！！！！！！！！");
-                        return null;
-                    }
-                    if(this.node == null)
-                        return;
-
-                    let node = cc.instantiate(obj);
-                    node.active = true;
-                    node.name = "钱包";
-                    node.parent =this.node.getChildByName("Main");
-                });
-            }
-            else
-            {
-                Debug.Log("有!!!!!!!!!!!!");
-            }
-
-
+            this.OpenWallet(false);
         }
         else if(toggle.node.name === "我的")
         {
@@ -1812,8 +1790,62 @@ export default class panelMain extends UIPanelViewBase {
         this.RefreshAntiTheftSetting(message,isError);
     }
 
+    private OpenWallet(returnToCashWater:boolean):void
+    {
+        if(this.walletOpening)
+            return;
+        this.walletOpening = true;
+        this.walletReturnToCashWater = returnToCashWater;
+        const request = ++this.walletOpenRequest;
+        this.node.getChildByName("资金明细").active = false;
+        this.switchTabSel("钱包");
+        const main = this.node.getChildByName("Main");
+        if(main.getChildByName("钱包") != null)
+        {
+            this.walletOpening = false;
+            return;
+        }
+        WebLoadingManager.loadBlockingRes("Prefabs/钱包","正在加载钱包",(err,obj)=>{
+            if(!cc.isValid(this.node) || request !== this.walletOpenRequest)
+                return;
+            this.walletOpening = false;
+            if(err)
+            {
+                cc.error(err.message || err);
+                this.CloseWallet();
+                return;
+            }
+            const node = cc.instantiate(obj);
+            node.active = false;
+            node.name = "钱包";
+            node.parent = main;
+            node.active = true;
+        });
+    }
+
+    public CloseWallet():void
+    {
+        const returnToCashWater = this.walletReturnToCashWater;
+        // switchTabSel also invalidates a pending load and consumes its origin.
+        this.switchTabSel(returnToCashWater ? "我的" : "发现");
+        if(returnToCashWater)
+        {
+            this.node.getChildByName("资金明细").active = true;
+            this.set_gold(0);
+            // Retain the existing records, page and scroll offset on return.
+        }
+        else
+            this.getAllRooms();
+    }
+
     switchTabSel(strName:string)
     {
+        if(strName !== "钱包")
+        {
+            ++this.walletOpenRequest;
+            this.walletOpening = false;
+            this.walletReturnToCashWater = false;
+        }
         let arrayTemp = this.node.getChildByName("Main").children;
         arrayTemp.forEach((item,idx,array)=>{
             if(item.name == strName)
@@ -1828,22 +1860,22 @@ export default class panelMain extends UIPanelViewBase {
 
         //复位Toggle
         let arrayToggle = this.node.getChildByName("Down").getComponentsInChildren(cc.Toggle);
-        arrayToggle.forEach((item,idx,array)=>{
-            if(item.node.name === strName)
-            {
-                if(!item.isChecked)
+        this.updatingMainTabSelection = true;
+        try
+        {
+            arrayToggle.forEach((item,idx,array)=>{
+                if(item.node.name === strName)
                 {
-                    item.isChecked = true;
+                    if(!item.isChecked)
+                        item.isChecked = true;
                 }
-            }
-            else
-            {
-                if(item.isChecked)
+                else if(item.isChecked)
                 {
                     item.isChecked = false;
                 }
-            }
-        });
+            });
+        }
+        finally { this.updatingMainTabSelection = false; }
 
         // 钱包确认稿是独立全屏页，顶部已有返回按钮；打开钱包时隐藏
         // 大厅底栏，避免长屏下遮挡充值、提现与记录的底部操作区。
@@ -2648,15 +2680,30 @@ export default class panelMain extends UIPanelViewBase {
         let countText = this.FormatCashWaterNumber(change);
         countNode.getComponent(cc.Label).string = change > 0 ? "+" + countText : countText;
         node.getChildByName("now").getComponent(cc.Label).string = this.FormatCashWaterNumber(newBalance);
-        node.getChildByName("time").getComponent(cc.Label).string = jItem["date"];
+        const date = jItem["date"] == null ? "" : jItem["date"].toString();
+        const match = date.match(/^\d{4}[-\/]([0-9]{2})[-\/]([0-9]{2})[ T]([0-9]{2}):([0-9]{2})/);
+        node.getChildByName("time").getComponent(cc.Label).string = match ?
+            match[1]+"/"+match[2]+" "+match[3]+":"+match[4] : date;
+        const type = jItem["option_type"] == null ? "" : jItem["option_type"].toString();
+        // These server operation names are game transactions, too (same as the
+        // management backend's transactionGameCondition).
+        const gameOperations = ["带入", "打局", "结算", "芒皮", "揍芒", "休芒"];
+        const iconType = type.indexOf("充值") >= 0 ? "in" : type.indexOf("提现") >= 0 ? "out" :
+            (type.indexOf("赠送") >= 0 || type.indexOf("受赠") >= 0) ? "gift" :
+            (type.indexOf("游戏") >= 0 || type.indexOf("牌局") >= 0 || gameOperations.indexOf(type) >= 0) ? "game" : "";
+        for(const key of ["in","out","gift","game"])
+        {
+            const icon = node.getChildByName("V8类型图标_"+key);
+            if(icon != null) icon.active = key === iconType;
+        }
 
         if(change > 0)
         {
-            countNode.color = cc.Color.RED;
+            countNode.color = new cc.Color(167,231,29,255);
         }
         else if(change < 0)
         {
-            countNode.color = cc.Color.GREEN;
+            countNode.color = new cc.Color(255,65,52,255);
         }
         else
             countNode.color = new cc.Color(239,225,194,255);

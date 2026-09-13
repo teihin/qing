@@ -1,0 +1,22 @@
+[
+  {
+    "source": "design-previews/效果图V8-new/05-后续模块/03-系统设置.png",
+    "output": "assets/resources/V7/followup_settings_v8_full_exact.png",
+    "box": [0, 0, 941, 1672]
+  },
+  {
+    "source": "design-previews/效果图V8-new/05-后续模块/04-修改登录密码.png",
+    "output": "assets/resources/V7/followup_password_login_v8_full_exact.png",
+    "box": [0, 0, 941, 1672]
+  },
+  {
+    "source": "design-previews/效果图V8-new/05-后续模块/05-修改交易密码.png",
+    "output": "assets/resources/V7/followup_password_trade_v8_full_exact.png",
+    "box": [0, 0, 941, 1672]
+  },
+  {
+    "source": "design-previews/效果图V8-new/05-后续模块/06-初始化交易密码.png",
+    "output": "assets/resources/V7/followup_password_init_v8_full_exact.png",
+    "box": [0, 0, 941, 1672]
+  }
+]

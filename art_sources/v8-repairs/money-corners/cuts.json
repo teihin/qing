@@ -1,0 +1,171 @@
+{
+  "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+  "source_sha256": "ceb07f5f0e358768414ed4ca8b0fee85f363ed0aa2cb9fe98b07581f81d9bb16",
+  "assets": {
+    "money_v8_header_exact.png": {
+      "box": [
+        0,
+        0,
+        941,
+        90
+      ],
+      "kind": "crop",
+      "border": 0,
+      "size": [
+        941,
+        90
+      ],
+      "sha256": "5365b9caef9e2289ea1984e46d6aa203e7ff8f5c0d51d001dd63b1371e9e4f12"
+    },
+    "money_v8_summary_panel.png": {
+      "box": [
+        24,
+        500,
+        918,
+        804
+      ],
+      "kind": "source-contour-clean-base",
+      "border": 48,
+      "size": [
+        713,
+        242
+      ],
+      "sha256": "99c4728c2cea7070ab5a979d84d20b4ec883c55aa240746ba830a218c264f489"
+    },
+    "money_v8_list_panel.png": {
+      "box": [
+        25,
+        971,
+        917,
+        1593
+      ],
+      "kind": "source-contour-clean-base",
+      "border": 26,
+      "size": [
+        711,
+        496
+      ],
+      "sha256": "76c046666592a8eb53be9d015f7817714df9191b38182bc47981d7eab44fb257"
+    },
+    "money_v8_row_panel.png": {
+      "box": [
+        34,
+        986,
+        908,
+        1092
+      ],
+      "kind": "source-contour-clean-base",
+      "border": 23,
+      "size": [
+        697,
+        84
+      ],
+      "sha256": "98e2687f3d4bfced9a4e68c59ee0b56440a8bbbe610a498242b5d173d2887511"
+    },
+    "money_v8_page_value.png": {
+      "box": [
+        355,
+        1471,
+        587,
+        1564
+      ],
+      "kind": "source-contour-clean-base",
+      "border": 16,
+      "size": [
+        185,
+        74
+      ],
+      "sha256": "daccebf41ef24d05e68a628b78923ee927bdf2a8cff28f4ef05f74de3e52d29a"
+    },
+    "money_v8_table_exact.png": {
+      "box": [
+        25,
+        887,
+        917,
+        998
+      ],
+      "kind": "crop",
+      "border": 0,
+      "size": [
+        892,
+        111
+      ],
+      "sha256": "9f804b739f2f47fef4a64af4654ff01e5f9aaab00915254b19ce7afa830962ce"
+    },
+    "money_v8_page_first.png": {
+      "box": [
+        120,
+        1470,
+        214,
+        1565
+      ],
+      "kind": "crop",
+      "border": 0,
+      "size": [
+        94,
+        95
+      ],
+      "sha256": "0d2d4b358d6089e81d061d67914ecdf704666db1d937db7a1b01927b380610b4"
+    },
+    "money_v8_page_prev.png": {
+      "box": [
+        247,
+        1470,
+        341,
+        1565
+      ],
+      "kind": "crop",
+      "border": 0,
+      "size": [
+        94,
+        95
+      ],
+      "sha256": "9cb65efaa418a25a7c758446cbb7725e192cd9fa9a6ff2319f7ab7b08f21fd4e"
+    },
+    "money_v8_page_next.png": {
+      "box": [
+        606,
+        1470,
+        700,
+        1565
+      ],
+      "kind": "crop",
+      "border": 0,
+      "size": [
+        94,
+        95
+      ],
+      "sha256": "1294d563ee4873e363f7b78750b5584cb4ab8f9de5378e02bb71311c6a1d8571"
+    },
+    "money_v8_page_last.png": {
+      "box": [
+        728,
+        1470,
+        823,
+        1565
+      ],
+      "kind": "crop",
+      "border": 0,
+      "size": [
+        95,
+        95
+      ],
+      "sha256": "e6f399e3b74d3b8be446af06df10d62e411a37c9ebaff492d729691b3b1f873f"
+    },
+    "money_v8_row_rule.png": {
+      "box": [
+        507,
+        1015,
+        510,
+        1066
+      ],
+      "kind": "crop",
+      "border": 0,
+      "size": [
+        3,
+        51
+      ],
+      "sha256": "ab0421daeeb8b9b34952774b7e2bfc9d358aabbc06410f76c791742af92dfd2b"
+    }
+  }
+}

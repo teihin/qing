@@ -1,0 +1,356 @@
+{
+  "panelMain/资金明细": [
+    0,
+    0,
+    750,
+    1778
+  ],
+  "panelMain/资金明细/V7金币流向母版": [
+    0,
+    0,
+    750,
+    1875
+  ],
+  "panelMain/资金明细/V8盾牌": [
+    265,
+    112,
+    483,
+    378
+  ],
+  "panelMain/资金明细/V8资金概况": [
+    19,
+    399,
+    732,
+    572
+  ],
+  "panelMain/资金明细/V8资金概况/V8金币图标": [
+    45,
+    428,
+    187,
+    544
+  ],
+  "panelMain/资金明细/V8资金概况/V8当前金币": [
+    238,
+    428,
+    358,
+    465
+  ],
+  "panelMain/资金明细/V8资金概况/当前金币": [
+    228,
+    465,
+    470,
+    540
+  ],
+  "panelMain/资金明细/V8资金概况/金币充值": [
+    496,
+    455,
+    705,
+    536
+  ],
+  "panelMain/资金明细/V8资金概况/V8金币分隔": [
+    209,
+    434,
+    210,
+    531
+  ],
+  "panelMain/资金明细/V8记录标题": [
+    18,
+    591,
+    728,
+    636
+  ],
+  "panelMain/资金明细/标题": [
+    20,
+    642,
+    731,
+    730
+  ],
+  "panelMain/资金明细/资金明细列表": [
+    20,
+    709,
+    731,
+    1714
+  ],
+  "panelMain/资金明细/资金明细列表/view": [
+    28,
+    724,
+    723,
+    1591
+  ],
+  "panelMain/资金明细/资金明细列表/view/content": [
+    28,
+    724,
+    723,
+    824
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0": [
+    28,
+    724,
+    723,
+    809
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/type": [
+    286,
+    740,
+    391,
+    794
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/count": [
+    426,
+    740,
+    537,
+    794
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/now": [
+    580,
+    740,
+    711,
+    794
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/time": [
+    43,
+    740,
+    194,
+    794
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/V8类型图标_in": [
+    218,
+    738,
+    277,
+    796
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/V8列分隔0": [
+    194,
+    748,
+    196,
+    788
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/V8列分隔1": [
+    404,
+    748,
+    406,
+    788
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-0/V8列分隔2": [
+    563,
+    748,
+    565,
+    788
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1": [
+    28,
+    820,
+    723,
+    905
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/type": [
+    286,
+    835,
+    391,
+    889
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/count": [
+    426,
+    835,
+    537,
+    889
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/now": [
+    580,
+    835,
+    711,
+    889
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/time": [
+    43,
+    835,
+    194,
+    889
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/V8类型图标_game": [
+    218,
+    834,
+    277,
+    892
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/V8列分隔0": [
+    194,
+    843,
+    196,
+    884
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/V8列分隔1": [
+    404,
+    843,
+    406,
+    884
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-1/V8列分隔2": [
+    563,
+    843,
+    565,
+    884
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2": [
+    28,
+    916,
+    723,
+    1000
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/type": [
+    286,
+    931,
+    391,
+    985
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/count": [
+    426,
+    931,
+    537,
+    985
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/now": [
+    580,
+    931,
+    711,
+    985
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/time": [
+    43,
+    931,
+    194,
+    985
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/V8类型图标_gift": [
+    218,
+    929,
+    277,
+    988
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/V8列分隔0": [
+    194,
+    939,
+    196,
+    980
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/V8列分隔1": [
+    404,
+    939,
+    406,
+    980
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-2/V8列分隔2": [
+    563,
+    939,
+    565,
+    980
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3": [
+    28,
+    1011,
+    723,
+    1096
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/type": [
+    286,
+    1027,
+    391,
+    1081
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/count": [
+    426,
+    1027,
+    537,
+    1081
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/now": [
+    580,
+    1027,
+    711,
+    1081
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/time": [
+    43,
+    1027,
+    194,
+    1081
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/V8类型图标_out": [
+    218,
+    1025,
+    277,
+    1083
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/V8列分隔0": [
+    194,
+    1035,
+    196,
+    1075
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/V8列分隔1": [
+    404,
+    1035,
+    406,
+    1075
+  ],
+  "panelMain/资金明细/资金明细列表/view/content/qa-row-3/V8列分隔2": [
+    563,
+    1035,
+    565,
+    1075
+  ],
+  "panelMain/资金明细/分页": [
+    62,
+    1612,
+    688,
+    1692
+  ],
+  "panelMain/资金明细/分页/首页": [
+    96,
+    1616,
+    171,
+    1691
+  ],
+  "panelMain/资金明细/分页/上一页": [
+    197,
+    1616,
+    272,
+    1691
+  ],
+  "panelMain/资金明细/分页/下一页": [
+    483,
+    1616,
+    558,
+    1691
+  ],
+  "panelMain/资金明细/分页/尾页": [
+    580,
+    1616,
+    656,
+    1691
+  ],
+  "panelMain/资金明细/分页/V8页码底框": [
+    283,
+    1616,
+    468,
+    1691
+  ],
+  "panelMain/资金明细/分页/页码": [
+    311,
+    1612,
+    439,
+    1692
+  ],
+  "panelMain/资金明细/title copy": [
+    0,
+    0,
+    750,
+    72
+  ],
+  "panelMain/资金明细/title copy/关闭上上层": [
+    14,
+    8,
+    80,
+    67
+  ]
+}

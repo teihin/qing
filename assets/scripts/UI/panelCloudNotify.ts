@@ -42,8 +42,7 @@ export default class panelCloudNotify extends UIPanelViewBase {
         {
             strMsg = strMsg.replace("####","");
         }
-        // 系统公告与普通通知统一使用相同背景，不再用橙色区分。
-        this.node.getChildByName("msk").color = cc.color(0,0,0,145);
+        // 通知底板的颜色与不透明度由正式 Prefab 固定，避免穿透健康提示。
 
         //开始动画        
         let txtItem = this.node.getChildByName("txt").getComponent(cc.Label);

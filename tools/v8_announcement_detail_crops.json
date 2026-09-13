@@ -1,0 +1,6 @@
+[
+  {"source": "design-previews/效果图V8-new/02-公告/01-最新公告.png", "output": "assets/resources/V7/announcement_detail_latest_exact.png", "box": [0, 0, 941, 1672]},
+  {"source": "design-previews/效果图V8-new/02-公告/02-还原地道打旋.png", "output": "assets/resources/V7/announcement_detail_rules_exact.png", "box": [0, 0, 941, 1672]},
+  {"source": "design-previews/效果图V8-new/02-公告/03-红利说明.png", "output": "assets/resources/V7/announcement_detail_bonus_exact.png", "box": [0, 0, 941, 1672]},
+  {"source": "design-previews/效果图V8-new/02-公告/04-赢家逃跑惩罚机制.png", "output": "assets/resources/V7/announcement_detail_penalty_exact.png", "box": [0, 0, 941, 1672]}
+]

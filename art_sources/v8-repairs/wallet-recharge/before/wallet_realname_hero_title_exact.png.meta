@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "7d77e4fb-cbd6-5fcd-933e-cc23bfd85774",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 540,
+  "height": 68,
+  "platformSettings": {},
+  "subMetas": {
+    "wallet_realname_hero_title_exact": {
+      "ver": "1.0.6",
+      "uuid": "82fbc830-b45c-560a-a463-ff0588c80c34",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "7d77e4fb-cbd6-5fcd-933e-cc23bfd85774",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 540,
+      "height": 68,
+      "rawWidth": 540,
+      "rawHeight": 68,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

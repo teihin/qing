@@ -53,6 +53,9 @@ class CheckPrefab:
 
 def check_assets() -> None:
     sizes = {
+        # The approved 750x1334 composition is kept intact at the top of this
+        # long-phone plate; the added lower area is continuous marble floor.
+        "startup_scene_long_v8.png": (941, 2574),
         "startup_title_exact.png": (430, 68),
         "startup_subtitle_exact.png": (520, 36),
         "startup_tip_exact.png": (420, 38),
@@ -82,19 +85,23 @@ def check_update() -> None:
     assert root_sprite["_enabled"] is False
     children = [ref["__id__"] for ref in p.data[p.root]["_children"]]
     assert p.data[children[0]]["_name"] == "V7启动背景"
-    p.assert_sprite("V7启动背景", "announcement_detail_bg_long_exact.png", sliced=False)
+    p.assert_sprite("V7启动背景", "startup_scene_long_v8.png", sliced=False)
     p.assert_sprite("V7启动盾牌", "shield_hd.png", sliced=False)
     p.assert_sprite("V7启动标题", "startup_title_exact.png", sliced=False)
     p.assert_sprite("V7启动副标题", "startup_subtitle_exact.png", sliced=False)
     p.assert_sprite("V7启动分隔", "register_header_rule_exact.png", sliced=False)
     p.assert_sprite("V7启动安全提示", "startup_tip_exact.png", sliced=False)
+    for legacy in ("V7启动盾牌", "V7启动标题", "V7启动副标题", "V7启动分隔", "V7启动安全提示"):
+        assert p.data[p.node(legacy)]["_active"] is False, f"{legacy} must stay hidden over the V8 full artwork"
     p.assert_sprite("bk/大小进度", "startup_progress_track_exact.png", sliced=True)
     p.assert_sprite("bk/大小进度/bar", "startup_progress_fill_exact.png", sliced=True)
     p.assert_sprite("网络异常/bk", "startup_retry_panel_exact.png", sliced=True)
     p.assert_sprite("网络异常/bk/重试", "startup_retry_button_exact.png", sliced=False)
 
     bg = p.data[p.node("V7启动背景")]
-    assert bg["_contentSize"] == {"__type__": "cc.Size", "width": 750, "height": 1800}
+    assert bg["_contentSize"]["width"] == 750
+    assert bg["_contentSize"]["height"] >= 2000
+    assert bg["_anchorPoint"]["y"] == 1
     assert bg["_anchorPoint"]["y"] == 1
     logo = p.data[p.node("V7启动盾牌")]
     assert logo["_contentSize"]["width"] == 340 and logo["_contentSize"]["height"] == 358

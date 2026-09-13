@@ -342,6 +342,10 @@ export interface PaymentConfigurationState {
   alipayWithdrawalText: string;
   unionWithdrawalText: string;
   usdtWithdrawalText: string;
+  bankWithdrawalEnabled: boolean;
+  alipayWithdrawalEnabled: boolean;
+  usdtWithdrawalEnabled: boolean;
+  usdtExchangeRate: string;
   revision: string;
   lastUpdatedBy: string;
   lastUpdatedAt: string | null;

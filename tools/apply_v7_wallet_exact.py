@@ -9,9 +9,10 @@ the Prefabs; no runtime skin or layout construction is introduced.
 from __future__ import annotations
 
 import copy
+import struct
 
 from apply_v7_lobby_exact import style_label, untint
-from apply_v7_prefab_skin import Prefab
+from apply_v7_prefab_skin import Prefab, ASSET_DIR
 from repair_v7_responsive_layout import ensure_widget
 from repair_v7_wallet_channel_selection import apply_channel_selection, apply_channel_viewport, CHANNEL_PATH
 
@@ -492,9 +493,15 @@ def apply_wallet() -> None:
     p = Prefab("assets/resources/Prefabs/钱包.prefab")
     full_widget(p, p.root, 750, BASE_H)
     background = p.node("钱包/bk")
-    p.art(background, "wallet_bg_exact.png", 0, 0, 750, 1800)
+    # Wallet pages share the same complete long lobby scene.  Page chrome,
+    # panels and controls remain separate SpriteFrames; never serialize the
+    # flattened wallet effect image as the page background.
+    scene_path = ASSET_DIR / "lobby_scene_long_v8.png"
+    scene_w, scene_h = struct.unpack(">II", scene_path.read_bytes()[16:24])
+    body_h = scene_h * 750 / scene_w
+    p.art(background, "lobby_scene_long_v8.png", 0, 0, 750, body_h)
     untint(p, background)
-    root_top(p, background, 0, 750, 1800)
+    root_top(p, background, 0, 750, body_h)
 
     title = p.node("钱包/Title")
     p.art(title, "wallet_header_exact.png", 0, 0, 750, 84)
@@ -521,6 +528,10 @@ def apply_wallet() -> None:
     style_withdraw(p)
     style_record(p)
     apply_channel_selection(p)
+    # The recharge branch now has its own V8-new source cuts and layout.
+    # Preserve those when this historical full-wallet migration is invoked.
+    from apply_v8_wallet_recharge import apply as apply_v8_recharge
+    apply_v8_recharge(p)
     p.save()
 
 

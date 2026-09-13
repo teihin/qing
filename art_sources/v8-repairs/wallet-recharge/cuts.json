@@ -1,0 +1,328 @@
+{
+  "source": "design-previews/效果图V8-new/03-钱包/01-充值.png",
+  "source_sha256": "039b9521eee2a93f1aead4cb59ff77c49541f9d4107f1b4ea260681a536524e1",
+  "assets": {
+    "wallet_header_exact.png": {
+      "box": [
+        0,
+        0,
+        941,
+        103
+      ],
+      "kind": "clean-header",
+      "size": [
+        941,
+        103
+      ],
+      "sha256": "97dbbdff5ccea77de81a5af098f3f6b22eb5e38a7b1b3323f829b5f2b30ddb61"
+    },
+    "wallet_header_back_v8.png": {
+      "box": [
+        27,
+        22,
+        94,
+        85
+      ],
+      "kind": "foreground",
+      "size": [
+        67,
+        63
+      ],
+      "sha256": "eac29bf270f68fa060a38eb1e59347115976b412e022d6e20e17f35b6f69ea38"
+    },
+    "wallet_header_title_v8.png": {
+      "box": [
+        410,
+        20,
+        533,
+        87
+      ],
+      "kind": "foreground",
+      "size": [
+        123,
+        67
+      ],
+      "sha256": "40c5513f2708ee9c24c02dadcf61f48c2b701953bd2ae283e98510bd52d3bc86"
+    },
+    "wallet_header_service_v8.png": {
+      "box": [
+        719,
+        22,
+        920,
+        85
+      ],
+      "kind": "foreground",
+      "size": [
+        201,
+        63
+      ],
+      "sha256": "3b6f8da0b8b26b2838433b0d4a4527f67f3b81bdfd677648c07200ede9508b7e"
+    },
+    "wallet_tabs_base_v8.png": {
+      "box": [
+        53,
+        127,
+        888,
+        207
+      ],
+      "kind": "clean-tabs",
+      "size": [
+        835,
+        80
+      ],
+      "sha256": "054d36bfdaadf64278a8ee9f9554db8ab0bcc4bdd978b90181828ea804cc1be9"
+    },
+    "wallet_tabs_recharge_exact.png": {
+      "box": [
+        53,
+        128,
+        328,
+        207
+      ],
+      "kind": "selected-tab",
+      "size": [
+        275,
+        79
+      ],
+      "sha256": "0a66d6578916f26a2376b2e4df5976d882fe6fe5f30959841336a42f9be4b4a8"
+    },
+    "wallet_tabs_withdraw_exact.png": {
+      "box": [
+        336,
+        128,
+        605,
+        207
+      ],
+      "kind": "selected-tab",
+      "size": [
+        269,
+        79
+      ],
+      "sha256": "cf858d199b2d9ee0a839bd35e0e13227fd26a06cc5e6894cdf9095a8c49d52fc"
+    },
+    "wallet_tabs_record_exact.png": {
+      "box": [
+        612,
+        128,
+        888,
+        207
+      ],
+      "kind": "selected-tab",
+      "size": [
+        276,
+        79
+      ],
+      "sha256": "c02de959d6717ab41dba5e19cc280955fada12adbb20fa48cd269a1b0e49860f"
+    },
+    "wallet_tab_recharge_normal_v8.png": {
+      "box": [
+        150,
+        143,
+        232,
+        193
+      ],
+      "kind": "tab-foreground",
+      "size": [
+        82,
+        50
+      ],
+      "sha256": "5bb9d59237345c9292df382e5d5fdbfb63fa506d931f3aae6253d5306f397ad0"
+    },
+    "wallet_tab_withdraw_normal_v8.png": {
+      "box": [
+        428,
+        143,
+        513,
+        193
+      ],
+      "kind": "tab-foreground",
+      "size": [
+        85,
+        50
+      ],
+      "sha256": "edd76ed58b2dae1004721410b8e923b9155915e8d3e8c787e43320a1b8c3be45"
+    },
+    "wallet_tab_record_normal_v8.png": {
+      "box": [
+        708,
+        143,
+        795,
+        193
+      ],
+      "kind": "tab-foreground",
+      "size": [
+        87,
+        50
+      ],
+      "sha256": "0b3a78ddee8be554aa68f43dd1b0c1956ec8ff078f53aff3841ddf74f9f18ffe"
+    },
+    "wallet_recharge_panel_exact.png": {
+      "box": [
+        65,
+        299,
+        876,
+        1614
+      ],
+      "kind": "compact-clean-panel",
+      "size": [
+        180,
+        256
+      ],
+      "sha256": "500eecdb587383103038f478b97ae51bbe6e14fc29fc922e0c69328338a13919"
+    },
+    "wallet_channel_bank_exact.png": {
+      "box": [
+        102,
+        408,
+        460,
+        576
+      ],
+      "kind": "crop",
+      "size": [
+        358,
+        168
+      ],
+      "sha256": "0d26f8d4083982465c8474e6979e5432df538736b96af0797ac55132b8ba2e52"
+    },
+    "wallet_channel_alipay_exact.png": {
+      "box": [
+        480,
+        408,
+        839,
+        576
+      ],
+      "kind": "crop",
+      "size": [
+        359,
+        168
+      ],
+      "sha256": "df59ae7ab164aaae6447167a7f78bf5c3b25837e436b28a56a7a5c5ca0b07636"
+    },
+    "wallet_channel_wechat_exact.png": {
+      "box": [
+        102,
+        595,
+        460,
+        763
+      ],
+      "kind": "crop",
+      "size": [
+        358,
+        168
+      ],
+      "sha256": "ef8f37dfa3ada02956d3778de34b8eb34143fe1983bca65170f2f38201f856d3"
+    },
+    "wallet_channel_other_exact.png": {
+      "box": [
+        480,
+        595,
+        839,
+        763
+      ],
+      "kind": "crop",
+      "size": [
+        359,
+        168
+      ],
+      "sha256": "51c6cd85afd30a5e1e7c93aeb050d0257759b157d1127a83dd6715ab6aeb9f33"
+    },
+    "wallet_recharge_channel_title_exact.png": {
+      "box": [
+        103,
+        329,
+        839,
+        383
+      ],
+      "kind": "foreground",
+      "size": [
+        736,
+        54
+      ],
+      "sha256": "d635d0e3a45ab7ca7e5b454196e9b4b5bb6c45dddf5577a71b9cb18e1ae6fd50"
+    },
+    "wallet_recharge_amount_title_exact.png": {
+      "box": [
+        103,
+        810,
+        839,
+        865
+      ],
+      "kind": "foreground",
+      "size": [
+        736,
+        55
+      ],
+      "sha256": "059bd4d62c28042bbc89dc7acbe7bbaf101c47104103ce3a1024334d81f5c5c2"
+    },
+    "wallet_amount_off_exact.png": {
+      "box": [
+        102,
+        889,
+        333,
+        1036
+      ],
+      "kind": "live-value-base",
+      "size": [
+        231,
+        147
+      ],
+      "sha256": "2efc752ae2f19c94c663df7d59e43995f9ddbf16d90a3524a0c7bfc0e27d7401"
+    },
+    "wallet_amount_on_exact.png": {
+      "box": [
+        602,
+        888,
+        842,
+        1038
+      ],
+      "kind": "live-value-base",
+      "size": [
+        240,
+        150
+      ],
+      "sha256": "ff74b041b8186e1bd6d6de2a61e3b462f617a6bf912face76c63a2c5053c4081"
+    },
+    "wallet_recharge_notice_exact.png": {
+      "box": [
+        102,
+        1241,
+        839,
+        1391
+      ],
+      "kind": "live-value-base",
+      "size": [
+        737,
+        150
+      ],
+      "sha256": "422e9817b51629632e361f97c9a04035a4bf5721fa52d8ea2fd6fa8b9db2d3af"
+    },
+    "wallet_recharge_notice_text_v8.png": {
+      "box": [
+        240,
+        1260,
+        810,
+        1370
+      ],
+      "kind": "foreground",
+      "size": [
+        570,
+        110
+      ],
+      "sha256": "fba94f6a601b5ccc86a747cb50bad0222db8c276f0b878d4ace65604dd74adb3"
+    },
+    "wallet_recharge_confirm_exact.png": {
+      "box": [
+        104,
+        1436,
+        837,
+        1573
+      ],
+      "kind": "crop",
+      "size": [
+        733,
+        137
+      ],
+      "sha256": "6f35352b107d060cee79f4a159382ab6ba223389d57eca1a02ca1b91ea1a4187"
+    }
+  }
+}

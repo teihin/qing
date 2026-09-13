@@ -1,0 +1,29 @@
+[
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_menu_long_exact.png",
+    "box": [
+      0,
+      0,
+      941,
+      1519
+    ]
+  },
+  {
+    "source": "design-previews/效果图V8-new/02-公告/01-公告菜单主页.png",
+    "output": "assets/resources/V7/announcement_menu_floor_exact.png",
+    "box": [
+      0,
+      0,
+      750,
+      99
+    ],
+    "tiledStrip": true,
+    "sourceBox": [
+      560,
+      1380,
+      700,
+      1430
+    ]
+  }
+]

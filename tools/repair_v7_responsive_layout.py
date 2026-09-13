@@ -11,6 +11,8 @@ through the flexible middle region.
 from __future__ import annotations
 
 import copy
+import struct
+from pathlib import Path
 
 from apply_v7_prefab_skin import MATERIAL_UUID, Prefab
 
@@ -419,7 +421,10 @@ def repair_wallet():
     """Keep the accepted wallet composition stable on 1334-1778px screens."""
     p = Prefab("assets/resources/Prefabs/钱包.prefab")
     stretch(p, "钱包", 0, 0)
-    top(p, "钱包/bk", 0, width=750, height=1800)
+    scene_path = Path(__file__).resolve().parents[1] / "assets/resources/V7/lobby_scene_long_v8.png"
+    scene_w, scene_h = struct.unpack(">II", scene_path.read_bytes()[16:24])
+    top(p, "钱包/bk", 0, width=BASE_W,
+        height=scene_h * BASE_W / scene_w)
     top(p, "钱包/Title", 0, width=750, height=84, stretch_x=True)
     top(p, "钱包/选项", 102, width=666, height=66)
     stretch(p, "钱包/容器", 198, 0)
@@ -492,6 +497,8 @@ def repair_wallet():
     stretch(p, "钱包/选择银行", 0, 0)
     center(p, "钱包/选择银行/bk", width=646, height=920)
 
+    from apply_v8_wallet_recharge import apply as apply_v8_recharge
+    apply_v8_recharge(p)
     p.save()
 
 

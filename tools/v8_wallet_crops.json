@@ -1,0 +1,13 @@
+[
+  {
+    "source": "design-previews/效果图V8-new/03-钱包/01-充值.png",
+    "output": "assets/resources/V7/wallet_header_exact.png",
+    "box": [
+      0,
+      0,
+      941,
+      103
+    ],
+    "foreground": "separated-header-controls"
+  }
+]

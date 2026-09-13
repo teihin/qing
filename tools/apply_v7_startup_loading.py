@@ -108,7 +108,11 @@ def skin_update() -> None:
         background = p.node("V7启动背景")
     except KeyError:
         background = p.clone_subtree(old_logo, p.root, "V7启动背景")
-    p.art(background, "announcement_detail_bg_long_exact.png", 0, 0, 750, 1800)
+    # V8 startup artwork keeps the approved upper composition and adds a continuous
+    # marble-floor extension for long phones (about 2050 logical pixels high).
+    # Keep the source aspect ratio; the live progress nodes below remain
+    # separate and continue to be driven by panelUpdate.ts.
+    p.art(background, "startup_scene_long_v8.png", 0, 0, 750, 2050.0)
     set_anchor(p, background, 0.5, 1)
     set_widget(p, background, 1 | 16, top=0, horizontal=0)
     # clone_subtree appends; the background must be the first render sibling.
@@ -118,13 +122,15 @@ def skin_update() -> None:
     p.rename(old_logo, "V7启动盾牌")
     p.art(old_logo, "shield_hd.png", 0, 0, 340, 358)
     set_anchor(p, old_logo, 0.5, 0.5)
-    set_widget(p, old_logo, 1 | 16, top=170, horizontal=0)
+    # The logo and fixed title are already part of the approved startup
+    # composition; leave the legacy overlays hidden to avoid doubling them.
+    p.set_active(old_logo, False)
 
-    add_root_art(p, old_logo, "V7启动标题", "startup_title_exact.png", 430, 68, 548)
-    add_root_art(p, old_logo, "V7启动副标题", "startup_subtitle_exact.png", 520, 36, 614)
-    add_root_art(p, old_logo, "V7启动分隔", "register_header_rule_exact.png", 335, 24, 657)
-    tip = add_root_art(p, old_logo, "V7启动安全提示", "startup_tip_exact.png", 420, 38, 0)
-    set_widget(p, tip, 4 | 16, bottom=92, horizontal=0)
+    for name in ("V7启动标题", "V7启动副标题", "V7启动分隔", "V7启动安全提示"):
+        try:
+            p.set_active(p.node(name), False)
+        except KeyError:
+            pass
 
     container = p.node("bk")
     set_anchor(p, container, 0.5, 0.5)

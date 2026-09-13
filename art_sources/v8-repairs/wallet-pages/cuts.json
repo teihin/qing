@@ -1,0 +1,737 @@
+{
+  "wallet_v8_panel.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      66,
+      280,
+      875,
+      616
+    ],
+    "kind": "clean-panel",
+    "size": [
+      180,
+      200
+    ],
+    "sha256": "a284efb1bfa6f0c66ae94ddd8ccad72fbaee7dce276edf0c9f1e00fa1bad21f4"
+  },
+  "wallet_v8_field.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      94,
+      757,
+      848,
+      858
+    ],
+    "kind": "clean-field",
+    "size": [
+      196,
+      84
+    ],
+    "sha256": "dfea7ef8a9b319c803e9252246a0ca56325e1c4c90bd8f15445620b10c51f561"
+  },
+  "wallet_v8_gold_button.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      342,
+      502,
+      597,
+      582
+    ],
+    "kind": "clean-button",
+    "size": [
+      160,
+      76
+    ],
+    "sha256": "3e00500b61de08e998d14762ac0b3ad5af6a93b6c1baed40785b2884df953ad4"
+  },
+  "wallet_v8_balance_title.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      197,
+      320,
+      744,
+      380
+    ],
+    "kind": "foreground",
+    "size": [
+      547,
+      60
+    ],
+    "sha256": "96cc88ba3463d20d53632277d7dbffc18a6f1d9aeee3d5158bae7e06986272a5"
+  },
+  "wallet_v8_withdraw_all.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      340,
+      501,
+      600,
+      584
+    ],
+    "kind": "crop",
+    "size": [
+      260,
+      83
+    ],
+    "sha256": "c070d4707ec7ae6349b3e08a7eddaf72579c5fb3da65c3dda306bf497df2580c"
+  },
+  "wallet_v8_withdraw_submit.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      99,
+      1445,
+      841,
+      1578
+    ],
+    "kind": "crop",
+    "size": [
+      742,
+      133
+    ],
+    "sha256": "eab37fe1b7da759349fe76890a2e43a4461d48d2419b65ec314ba60f09dfda64"
+  },
+  "wallet_v8_type_bank.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      127,
+      672,
+      315,
+      720
+    ],
+    "kind": "derived-normal-state",
+    "size": [
+      188,
+      48
+    ],
+    "sha256": "2074905134642fc21698e380de3beb9349ffb00964e4ec36553c99a316d46884"
+  },
+  "wallet_v8_type_alipay.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      384,
+      672,
+      567,
+      720
+    ],
+    "kind": "foreground",
+    "size": [
+      183,
+      48
+    ],
+    "sha256": "8b4d518678db88ff5337f053d5e8681f12c776065ce73efb989f63a111a6f603"
+  },
+  "wallet_v8_type_usdt.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      646,
+      672,
+      831,
+      720
+    ],
+    "kind": "foreground",
+    "size": [
+      185,
+      48
+    ],
+    "sha256": "3427775627d99f174c8d0fe73a660bcef61d814def9797b9f4fca38e9201913a"
+  },
+  "wallet_v8_type_bank_on.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      91,
+      653,
+      351,
+      735
+    ],
+    "kind": "crop",
+    "size": [
+      260,
+      82
+    ],
+    "sha256": "760327c4e5973ef0a83f73f69df5c25c81fa285cffd7b3fbe1d3bf9fac110833"
+  },
+  "wallet_v8_field_amount.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      117,
+      769,
+      350,
+      845
+    ],
+    "kind": "foreground",
+    "size": [
+      233,
+      76
+    ],
+    "sha256": "6c6c61f29a60676d3a99f35f5fc166529e0ca85e9b6908333884642792ade5e1"
+  },
+  "wallet_v8_field_name.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      117,
+      892,
+      350,
+      968
+    ],
+    "kind": "foreground",
+    "size": [
+      233,
+      76
+    ],
+    "sha256": "6e771d80f118012eb68fc09f0e66198ea3c4fe2f3deb2e9f2fa229f937659f12"
+  },
+  "wallet_v8_field_bank.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      117,
+      1015,
+      350,
+      1091
+    ],
+    "kind": "foreground",
+    "size": [
+      233,
+      76
+    ],
+    "sha256": "0bc88bb9e18799b6f2c3c5cf4dbfd0f2dac8c2e6587e9b9fc45d26d5eec619bd"
+  },
+  "wallet_v8_field_card.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      117,
+      1138,
+      350,
+      1214
+    ],
+    "kind": "foreground",
+    "size": [
+      233,
+      76
+    ],
+    "sha256": "4edfd832e24352b3da71fccf92ff06dc883987e1bdeda8ed2618f8e16830cb19"
+  },
+  "wallet_v8_field_password.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/02-提现.png",
+    "box": [
+      117,
+      1261,
+      350,
+      1337
+    ],
+    "kind": "foreground",
+    "size": [
+      233,
+      76
+    ],
+    "sha256": "ac73ce181fbd996cd62c66a396964e1f00a6c6dd170fa2b330d0ee8a5a771389"
+  },
+  "wallet_v8_record_header.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      90,
+      349,
+      848,
+      412
+    ],
+    "kind": "foreground",
+    "size": [
+      758,
+      63
+    ],
+    "sha256": "990fb1df7be05c0f209c441fd74f96bb8fd54d7d618a5c02f5ad6278db5a5e85"
+  },
+  "wallet_v8_rule.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      360,
+      334,
+      562,
+      336
+    ],
+    "kind": "crop",
+    "size": [
+      202,
+      2
+    ],
+    "sha256": "d401d5f23bbde75895f779711c1e1fc803c16886b24b4286517bb0f31868370b"
+  },
+  "wallet_v8_record_in.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      108,
+      492,
+      171,
+      555
+    ],
+    "kind": "foreground",
+    "size": [
+      63,
+      63
+    ],
+    "sha256": "08a758c5dfebe7c8b7bb9ce9b041a94888694a1cabf51968d472316d7886ef82"
+  },
+  "wallet_v8_record_out.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      108,
+      668,
+      172,
+      731
+    ],
+    "kind": "foreground",
+    "size": [
+      64,
+      63
+    ],
+    "sha256": "73b7473ad8f75c7bbedf45aadb7db6d0e7378d80e96e769fa500c4385a7fba57"
+  },
+  "wallet_v8_page_first.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      149,
+      1376,
+      222,
+      1451
+    ],
+    "kind": "crop",
+    "size": [
+      73,
+      75
+    ],
+    "sha256": "d587f7824dd223b601810e00ef2d3d8c20209f4d675f37e1603a1026b210c857"
+  },
+  "wallet_v8_page_prev.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      280,
+      1376,
+      352,
+      1451
+    ],
+    "kind": "crop",
+    "size": [
+      72,
+      75
+    ],
+    "sha256": "c65e01a4c41366c0d89c235671d1f021bca01a51d620db81e18ad1d94cc261c0"
+  },
+  "wallet_v8_page_next.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      588,
+      1376,
+      660,
+      1451
+    ],
+    "kind": "crop",
+    "size": [
+      72,
+      75
+    ],
+    "sha256": "ed4e88a5b9f3d198af01ae5bb3657af7485176062a68b7314cfe1b414cdaf181"
+  },
+  "wallet_v8_page_last.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/03-记录.png",
+    "box": [
+      717,
+      1376,
+      789,
+      1451
+    ],
+    "kind": "crop",
+    "size": [
+      72,
+      75
+    ],
+    "sha256": "1c8f9e2eb35678bd16871f3efdc16794e2cde3fc6611864a5ec647a43e0d3a06"
+  },
+  "wallet_v8_realname_title.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      386,
+      34,
+      558,
+      83
+    ],
+    "kind": "foreground",
+    "size": [
+      172,
+      49
+    ],
+    "sha256": "2908e968e9446386e6898cc7c257286986374a577f11e40138cd76632d39c285"
+  },
+  "wallet_v8_realname_hero_title.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      210,
+      307,
+      733,
+      366
+    ],
+    "kind": "foreground",
+    "size": [
+      523,
+      59
+    ],
+    "sha256": "f385c7dd723cf3ea20c86ef99032740ff5781e359044bf8eb5849b4f241ea4f9"
+  },
+  "wallet_v8_realname_subtitle.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      189,
+      378,
+      747,
+      418
+    ],
+    "kind": "foreground",
+    "size": [
+      558,
+      40
+    ],
+    "sha256": "0bc2ca784fc03e9374bb99b8d199e3aea97069ad731a36b6e9c06b2742507a1c"
+  },
+  "wallet_v8_realname_submit.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      197,
+      1081,
+      713,
+      1179
+    ],
+    "kind": "crop",
+    "size": [
+      516,
+      98
+    ],
+    "sha256": "c42ea450ea437ec80c76ea9ce1baf604cb34be61f48945a436c0cc62d68ec049"
+  },
+  "wallet_v8_realname_warning.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      109,
+      1224,
+      830,
+      1507
+    ],
+    "kind": "foreground",
+    "size": [
+      721,
+      283
+    ],
+    "sha256": "70fd295653014fcb8b922475dada708870761d1c1b7f0e7350161aae59ff2e5e"
+  },
+  "wallet_v8_realname_name.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      128,
+      491,
+      329,
+      551
+    ],
+    "kind": "foreground",
+    "size": [
+      201,
+      60
+    ],
+    "sha256": "e6a8522e85af9c7f47736ce7fadaa6f23e2ea0ebc221641517167222a085299b"
+  },
+  "wallet_v8_realname_bank.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      128,
+      604,
+      329,
+      664
+    ],
+    "kind": "foreground",
+    "size": [
+      201,
+      60
+    ],
+    "sha256": "ffb0a69f124f11358f392b40cb581061c702ff2123158c44fa934eae2b0e074b"
+  },
+  "wallet_v8_realname_card.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      128,
+      716,
+      329,
+      776
+    ],
+    "kind": "foreground",
+    "size": [
+      201,
+      60
+    ],
+    "sha256": "2e47f1c6f225e35a228c54688f39da4d3fa73978ce85353087ea2fe67747e425"
+  },
+  "wallet_v8_realname_password.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      128,
+      828,
+      329,
+      888
+    ],
+    "kind": "foreground",
+    "size": [
+      201,
+      60
+    ],
+    "sha256": "2089ffdcd8d94c464b86195e17f74b7745eb5db270d48b1878819b28d7ca846c"
+  },
+  "wallet_v8_realname_confirm.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      128,
+      940,
+      329,
+      1000
+    ],
+    "kind": "foreground",
+    "size": [
+      201,
+      60
+    ],
+    "sha256": "89102dfd726b71a0235f86f302d6b55791c73fbe56a64e65ecacc945241fcec4"
+  },
+  "wallet_v8_vertical_rule.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      350,
+      499,
+      352,
+      548
+    ],
+    "kind": "crop",
+    "size": [
+      2,
+      49
+    ],
+    "sha256": "aaf72759e32fbe268d6bddf707f0a03718c4e05359fbc1cb7898edf3e166af6b"
+  },
+  "wallet_v8_realname_shield.png": {
+    "source": "design-previews/效果图V8-new/03-钱包/04-实名认证与交易密码设置.png",
+    "box": [
+      400,
+      139,
+      533,
+      291
+    ],
+    "kind": "contour",
+    "size": [
+      133,
+      152
+    ],
+    "sha256": "68f1cc6eb1a303024f63542f351eff32560ab3f9e6defc68c0ae01ae1c092a30"
+  },
+  "money_v8_title.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      108,
+      14,
+      322,
+      76
+    ],
+    "kind": "foreground",
+    "size": [
+      214,
+      62
+    ],
+    "sha256": "b6fc85086459b5acdd9d3efc8be146db2b26a9aec1af03ab3e391d3d37345ae8"
+  },
+  "money_v8_coins.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      57,
+      544,
+      234,
+      690
+    ],
+    "kind": "foreground",
+    "size": [
+      177,
+      146
+    ],
+    "sha256": "a13e39b972f1c253945c10a4a3d46e8b84eeac04ebcc96df3381b7ecce80a32c"
+  },
+  "money_v8_current_title.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      298,
+      544,
+      449,
+      590
+    ],
+    "kind": "foreground",
+    "size": [
+      151,
+      46
+    ],
+    "sha256": "1899b90248a040cb2119d8a0ff24fa5ef471e7d04fdecb6920f5aaa88ad40137"
+  },
+  "money_v8_recharge.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      622,
+      578,
+      884,
+      679
+    ],
+    "kind": "crop",
+    "size": [
+      262,
+      101
+    ],
+    "sha256": "4ad37c2dc46b0c3a0d75962fe6923e8bba233c2dea0337564788ff1bdc31298c"
+  },
+  "money_v8_record_title.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      23,
+      823,
+      914,
+      880
+    ],
+    "kind": "foreground",
+    "size": [
+      891,
+      57
+    ],
+    "sha256": "e6777cda25849db6a51fe6b48b4fdecb29b88bce0db0d530f3ac8513bd7cb590"
+  },
+  "money_v8_record_header.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      26,
+      889,
+      914,
+      975
+    ],
+    "kind": "crop",
+    "size": [
+      888,
+      86
+    ],
+    "sha256": "88f02a42fda8d9213c0abeefe0682acdc162e93c173b22d28922ce2990221e97"
+  },
+  "money_v8_total_charged.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      61,
+      730,
+      181,
+      776
+    ],
+    "kind": "foreground",
+    "size": [
+      120,
+      46
+    ],
+    "sha256": "9c811969229926bba1ffed34c8a1fda3e14f57d68b565db85d61968b1547922b"
+  },
+  "money_v8_total_given.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      369,
+      730,
+      487,
+      776
+    ],
+    "kind": "foreground",
+    "size": [
+      118,
+      46
+    ],
+    "sha256": "21c0fdfa8b7921be18a102ece42454321fa05e11fd9558d2ad6c4ab60dc20135"
+  },
+  "money_v8_total_withdrawn.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      676,
+      730,
+      796,
+      776
+    ],
+    "kind": "foreground",
+    "size": [
+      120,
+      46
+    ],
+    "sha256": "a7f7f8c7fd004b2d1a3511b2879af1063709ff88eaac79ef049bd200290ee1a7"
+  },
+  "money_v8_icon_in.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      273,
+      1003,
+      347,
+      1076
+    ],
+    "kind": "foreground",
+    "size": [
+      74,
+      73
+    ],
+    "sha256": "8708b5e25449e95861669073810963d6967b3e006c32f4969c85d578d2213036"
+  },
+  "money_v8_icon_game.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      273,
+      1116,
+      347,
+      1189
+    ],
+    "kind": "foreground",
+    "size": [
+      74,
+      73
+    ],
+    "sha256": "1f684c790903fd40dc41e615a53dae2c0522d95f84e56c9545f68ba8f5b7338c"
+  },
+  "money_v8_icon_gift.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      273,
+      1230,
+      347,
+      1303
+    ],
+    "kind": "foreground",
+    "size": [
+      74,
+      73
+    ],
+    "sha256": "359cf99ea365dc74b60925cef13e40dcc1a76d8bb6fc2a91bad9ab5b89f36da6"
+  },
+  "money_v8_icon_out.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      273,
+      1350,
+      347,
+      1423
+    ],
+    "kind": "foreground",
+    "size": [
+      74,
+      73
+    ],
+    "sha256": "5a549a23e9a5b17263e7e45a795758d304d10dd286ef7b5a50af61bec185236f"
+  },
+  "money_v8_shield.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/02-金币流向.png",
+    "box": [
+      333,
+      141,
+      606,
+      474
+    ],
+    "kind": "contour",
+    "size": [
+      273,
+      333
+    ],
+    "sha256": "63b71aa102d41ca9d1dcf36c6dbbf533bc19f096f83c77800b3093aeb0a8862e"
+  }
+}

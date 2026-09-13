@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "8610094f-ae4a-5030-a8fd-ae6ab43e4ec7",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 183,
+  "height": 48,
+  "platformSettings": {},
+  "subMetas": {
+    "wallet_v8_type_alipay": {
+      "ver": "1.0.6",
+      "uuid": "ee472418-dd1e-5421-a5ee-3d41a78fca3d",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "8610094f-ae4a-5030-a8fd-ae6ab43e4ec7",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 183,
+      "height": 48,
+      "rawWidth": 183,
+      "rawHeight": 48,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}
