@@ -305,15 +305,19 @@ export default class panelQianBao extends UIPanelViewBase {
         ConfigManager.getInstance().GetOneHashKey(key,context);
     }
 
-    private TakeWithdrawInfoReply(key:string,context:string):string
+    private TakeWithdrawInfoReply(key:string,context:string,missing:boolean = false):string
     {
         if(!this.node.activeInHierarchy)
             return null;
         for(const type of Object.keys(this.withdrawInfoRequests))
         {
             const pending = this.withdrawInfoRequests[type];
-            if(pending.key === key && pending.context === context &&
-                key === GameDataManager.getAccount().guuid+"_提现预留_"+type)
+            // Missing-profile replies contain only context. Its unique request
+            // ID still identifies the stored key; verify that key against the
+            // current account, and reject any explicitly mismatched reply key.
+            const keyMatches = pending.key === key || (missing && key == null);
+            if(keyMatches && pending.context === context &&
+                pending.key === GameDataManager.getAccount().guuid+"_提现预留_"+type)
             {
                 delete this.withdrawInfoRequests[type];
                 return type;
@@ -1346,7 +1350,7 @@ export default class panelQianBao extends UIPanelViewBase {
         }
         else if(context.indexOf(this.withdrawInfoContextPrefix) === 0)
         {
-            const type = this.TakeWithdrawInfoReply(strKey,context);
+            const type = this.TakeWithdrawInfoReply(strKey,context,true);
             if(type === "银联")
                 this.ShowMissingRealname();
             else if(type === "支付宝" && this.selectedWithdrawType === type &&

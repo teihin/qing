@@ -8,8 +8,8 @@
   "premultiplyAlpha": false,
   "genMipmaps": false,
   "packable": false,
-  "width": 905,
-  "height": 820,
+  "width": 224,
+  "height": 240,
   "platformSettings": {},
   "subMetas": {
     "record_list_panel_exact": {
@@ -24,14 +24,14 @@
       "offsetY": 0,
       "trimX": 0,
       "trimY": 0,
-      "width": 905,
-      "height": 820,
-      "rawWidth": 905,
-      "rawHeight": 820,
-      "borderTop": 0,
-      "borderBottom": 0,
-      "borderLeft": 0,
-      "borderRight": 0,
+      "width": 224,
+      "height": 240,
+      "rawWidth": 224,
+      "rawHeight": 240,
+      "borderTop": 26,
+      "borderBottom": 26,
+      "borderLeft": 26,
+      "borderRight": 26,
       "subMetas": {}
     }
   }

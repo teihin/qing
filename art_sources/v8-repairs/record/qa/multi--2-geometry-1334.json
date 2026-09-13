@@ -1,0 +1,368 @@
+{
+  "panelRecordList/bg": [
+    0,
+    0,
+    750,
+    1875
+  ],
+  "panelRecordList/统计": [
+    244,
+    117,
+    496,
+    420
+  ],
+  "panelRecordList/条件": [
+    43,
+    438,
+    705,
+    506
+  ],
+  "panelRecordList/条件/-2": [
+    477,
+    438,
+    698,
+    506
+  ],
+  "panelRecordList/条件/-2/Background": [
+    556,
+    454,
+    618,
+    491
+  ],
+  "panelRecordList/条件/-2/checkmark": [
+    477,
+    443,
+    698,
+    501
+  ],
+  "panelRecordList/条件/-2/checkmark/V8日期文字": [
+    556,
+    454,
+    618,
+    491
+  ],
+  "panelRecordList/条件/-1": [
+    259,
+    438,
+    480,
+    506
+  ],
+  "panelRecordList/条件/-1/Background": [
+    334,
+    454,
+    404,
+    491
+  ],
+  "panelRecordList/条件/0": [
+    43,
+    438,
+    264,
+    506
+  ],
+  "panelRecordList/条件/0/Background": [
+    122,
+    454,
+    185,
+    491
+  ],
+  "panelRecordList/V8战绩列表底框": [
+    14,
+    582,
+    736,
+    1305
+  ],
+  "panelRecordList/标题": [
+    14,
+    518,
+    736,
+    582
+  ],
+  "panelRecordList/战绩列表": [
+    14,
+    582,
+    736,
+    1237
+  ],
+  "panelRecordList/战绩列表/view": [
+    14,
+    582,
+    736,
+    1237
+  ],
+  "panelRecordList/战绩列表/view/content": [
+    14,
+    582,
+    736,
+    768
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-0": [
+    22,
+    594,
+    728,
+    689
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-0/房间号": [
+    119,
+    618,
+    242,
+    666
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-0/带入": [
+    411,
+    618,
+    530,
+    666
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-0/底皮": [
+    262,
+    618,
+    378,
+    666
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-0/输赢": [
+    571,
+    618,
+    707,
+    666
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-0/V8查看回放": [
+    39,
+    607,
+    112,
+    677
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-1": [
+    22,
+    701,
+    728,
+    797
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-1/房间号": [
+    119,
+    725,
+    242,
+    773
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-1/带入": [
+    411,
+    725,
+    530,
+    773
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-1/底皮": [
+    262,
+    725,
+    378,
+    773
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-1/输赢": [
+    571,
+    725,
+    707,
+    773
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-1/V8查看回放": [
+    39,
+    715,
+    112,
+    785
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-2": [
+    22,
+    809,
+    728,
+    905
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-2/房间号": [
+    119,
+    833,
+    242,
+    881
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-2/带入": [
+    411,
+    833,
+    530,
+    881
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-2/底皮": [
+    262,
+    833,
+    378,
+    881
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-2/输赢": [
+    571,
+    833,
+    707,
+    881
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-2/V8查看回放": [
+    39,
+    823,
+    112,
+    893
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-3": [
+    22,
+    917,
+    728,
+    1012
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-3/房间号": [
+    119,
+    940,
+    242,
+    988
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-3/带入": [
+    411,
+    940,
+    530,
+    988
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-3/底皮": [
+    262,
+    940,
+    378,
+    988
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-3/输赢": [
+    571,
+    940,
+    707,
+    988
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-3/V8查看回放": [
+    39,
+    930,
+    112,
+    1000
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-4": [
+    22,
+    1024,
+    728,
+    1120
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-4/房间号": [
+    119,
+    1048,
+    242,
+    1096
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-4/带入": [
+    411,
+    1048,
+    530,
+    1096
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-4/底皮": [
+    262,
+    1048,
+    378,
+    1096
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-4/输赢": [
+    571,
+    1048,
+    707,
+    1096
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-4/V8查看回放": [
+    39,
+    1038,
+    112,
+    1108
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-5": [
+    22,
+    1132,
+    728,
+    1227
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-5/房间号": [
+    119,
+    1156,
+    242,
+    1204
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-5/带入": [
+    411,
+    1156,
+    530,
+    1204
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-5/底皮": [
+    262,
+    1156,
+    378,
+    1204
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-5/输赢": [
+    571,
+    1156,
+    707,
+    1204
+  ],
+  "panelRecordList/战绩列表/view/content/qa-row-5/V8查看回放": [
+    39,
+    1145,
+    112,
+    1215
+  ],
+  "panelRecordList/分页": [
+    14,
+    1240,
+    736,
+    1298
+  ],
+  "panelRecordList/分页/首页": [
+    121,
+    1242,
+    174,
+    1296
+  ],
+  "panelRecordList/分页/上一页": [
+    216,
+    1242,
+    270,
+    1296
+  ],
+  "panelRecordList/分页/下一页": [
+    480,
+    1242,
+    534,
+    1296
+  ],
+  "panelRecordList/分页/尾页": [
+    576,
+    1242,
+    629,
+    1296
+  ],
+  "panelRecordList/分页/V8页码底框": [
+    293,
+    1242,
+    457,
+    1297
+  ],
+  "panelRecordList/分页/页码": [
+    297,
+    1243,
+    453,
+    1295
+  ],
+  "panelRecordList/title": [
+    0,
+    0,
+    750,
+    72
+  ],
+  "panelRecordList/title/关闭": [
+    0,
+    0,
+    90,
+    72
+  ]
+}

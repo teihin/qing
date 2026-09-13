@@ -84,8 +84,11 @@ def main():
     style_label(p,pager+'/页码',x=0,y=-3*S,width=215*S,height=82*S,size=round(48*S),preview='1/1',align=1)
     p.save()
     r=Prefab('assets/resources/Prefabs/赠送记录对象.prefab');r.art(r.root,'gift_record_row_exact.png',0,0,882*S,113*S);r.disable(r.root,'cc.Widget');untint(r,r.root)
-    for name,x,y,w,h,size,text,align in [('type',128,0,110,65,32,'赠送',1),('id',318,0,194,91,29,'小小羊\nID:659348',0),('count',576,0,132,68,40,'88',1),('time',789,0,200,68,31,'08/17 22:31',1)]:
+    for name,x,y,w,h,size,text,align in [('type',132,0,110,65,32,'赠送',1),('id',318,0,194,91,29,'小小羊\nID:659348',0),('count',576,0,132,68,40,'88',1),('time',789,0,200,68,31,'08/17 22:31',1)]:
         style_label(r,name,x=(x-470)*S,y=y,width=w*S,height=h*S,size=round(size*S),preview=text,align=align);r.disable(r.node(name),'cc.Widget')
+    # This position is the header's type-column centre. The legacy left
+    # anchor otherwise shifts the centred label right by half its width.
+    r.data[r.node('type')]['_anchorPoint']={'__type__':'cc.Vec2','x':0.5,'y':0.5}
     r.data[r.node('type')]['_color']={'__type__':'cc.Color','r':136,'g':237,'b':0,'a':255}
     a=r.node('头像');r.art(a,'transparent.png',(259.5-470)*S,0,87*S,88*S);r.disable(a,'cc.Widget')
     m=r.node('头像/mask');r.set_pos(m,0,0,81*S,82*S,disable_widget=True);_,mc=r.component(m,'cc.Mask');mc['_type']=1

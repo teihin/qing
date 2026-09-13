@@ -1,0 +1,230 @@
+{
+  "source": "design-previews/效果图V8-new/01-主页面/04-战绩.png",
+  "source_sha256": "84b4d32e01060f3d4f46f46f11db4ed3b9749646bc120fedc8fb4fe1f880e6aa",
+  "assets": {
+    "record_header_exact.png": {
+      "sourceBox": [
+        0,
+        0,
+        941,
+        90
+      ],
+      "size": [
+        941,
+        90
+      ],
+      "border": 0,
+      "sha256": "3642d3244790c7ee919fc73baf26dcc48e8c34a181e4acf66adf58b0453d5e63"
+    },
+    "record_hero_exact.png": {
+      "sourceBox": [
+        306,
+        147,
+        622,
+        527
+      ],
+      "size": [
+        316,
+        380
+      ],
+      "border": 0,
+      "sha256": "9cb00a7abbc883b013b759dc541ff9c45eda33e4742c254dbc002e6e76ec85f1"
+    },
+    "v8_record_tabs_base.png": {
+      "sourceBox": [
+        54,
+        550,
+        885,
+        635
+      ],
+      "size": [
+        240,
+        68
+      ],
+      "border": 33,
+      "sha256": "f041ab01be7922f327d02a26c5d90e36ecf980278f87d32e3f84f7a0cd1d337a"
+    },
+    "v8_record_selected_base.png": {
+      "sourceBox": [
+        325,
+        557,
+        602,
+        630
+      ],
+      "size": [
+        112,
+        58
+      ],
+      "border": 20,
+      "sha256": "f0ce41934ca476ec6b636c0d72cb35499662962f77eb73598f5eb49414835567"
+    },
+    "v8_record_today_normal.png": {
+      "sourceBox": [
+        155,
+        570,
+        234,
+        617
+      ],
+      "size": [
+        79,
+        47
+      ],
+      "border": 0,
+      "sha256": "71fea66a0b0045c5eea1a3ffc25bc851af1bca7735b513d5e6aed20ed3fbde5f"
+    },
+    "v8_record_today_selected.png": {
+      "sourceBox": [
+        155,
+        570,
+        234,
+        617
+      ],
+      "size": [
+        79,
+        47
+      ],
+      "border": 0,
+      "sha256": "27bbaa256fd82fd14cc39d12b919273c15055868faaae384d63d91da29d765bc"
+    },
+    "v8_record_yesterday_normal.png": {
+      "sourceBox": [
+        420,
+        570,
+        508,
+        618
+      ],
+      "size": [
+        88,
+        48
+      ],
+      "border": 0,
+      "sha256": "41ad59e07081339c041b9ef0b2e45f8709b62db8448241f2662c3611ae2e09f3"
+    },
+    "v8_record_yesterday_selected.png": {
+      "sourceBox": [
+        420,
+        570,
+        508,
+        618
+      ],
+      "size": [
+        88,
+        48
+      ],
+      "border": 0,
+      "sha256": "54759d50524b97cd8c93ff11c0dd0c9ed286b16718a9f1454662f2854d0f25a7"
+    },
+    "v8_record_before_normal.png": {
+      "sourceBox": [
+        697,
+        570,
+        775,
+        617
+      ],
+      "size": [
+        78,
+        47
+      ],
+      "border": 0,
+      "sha256": "b832fde72f230a52d25944a7dfc2ad6dffe8bff13851da8d5d20a82b5b88f97f"
+    },
+    "v8_record_before_selected.png": {
+      "sourceBox": [
+        697,
+        570,
+        775,
+        617
+      ],
+      "size": [
+        78,
+        47
+      ],
+      "border": 0,
+      "sha256": "bb78cb808497c8cf49bddf38000588bd466bd2e6f7ef85fb9c18e60939a145e7"
+    },
+    "record_table_header_exact.png": {
+      "sourceBox": [
+        18,
+        650,
+        923,
+        730
+      ],
+      "size": [
+        905,
+        80
+      ],
+      "border": 0,
+      "sha256": "a7e8fc9329a32c3585e39659671c4d028ab597ebe04151a7e6c212ee982fc522"
+    },
+    "record_list_panel_exact.png": {
+      "sourceBox": [
+        18,
+        730,
+        923,
+        1635
+      ],
+      "size": [
+        224,
+        240
+      ],
+      "border": 26,
+      "sha256": "d1a1f0dfbec9a1ce8a30e687f7e3789dd7bd4d5b987781840289e11d8c7033ec"
+    },
+    "record_row_exact.png": {
+      "sourceBox": [
+        27,
+        745,
+        913,
+        865
+      ],
+      "size": [
+        224,
+        96
+      ],
+      "border": 20,
+      "sha256": "297edc9f9c27fe488ea20cdc049124b7043f8588e4c0d4d371402b927022e7fb"
+    },
+    "v8_record_replay.png": {
+      "sourceBox": [
+        48,
+        762,
+        140,
+        850
+      ],
+      "size": [
+        92,
+        88
+      ],
+      "border": 0,
+      "sha256": "b9d84485a6201a78c5b868f6da894a1ff2e2906b8c9c09eec7e5711ba9741946"
+    },
+    "v8_record_retention.png": {
+      "sourceBox": [
+        40,
+        1566,
+        896,
+        1610
+      ],
+      "size": [
+        856,
+        44
+      ],
+      "border": 0,
+      "sha256": "21175e29a135d494fda58cb6fcec14991ba077fe9d888df996ce7475bdf7c0fc"
+    },
+    "v8_record_digits.png": {
+      "sourceBox": [
+        174,
+        782,
+        849,
+        1096
+      ],
+      "size": [
+        270,
+        36
+      ],
+      "border": 0,
+      "sha256": "2c3209ed138df8ad50a26faa62046e3788043733d1c1d9dca642d7e7b901f760"
+    }
+  }
+}

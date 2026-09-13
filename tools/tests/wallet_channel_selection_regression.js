@@ -437,7 +437,10 @@ function withdrawalFixture(triggerEvents, autoOptions = true) {
   const latest = type => requests.filter(r => r.key===account.guuid+'_提现预留_'+type).at(-1);
   const reply = (request,content='',error=false) => {
     assert.ok(request,'expected pending profile request');
-    panel[error?'OnUserHashError':'OnUserHashInfo'](JSON.stringify({UserHashInfo:{...request,content}}));
+    // The live server omits key/content on a missing profile and echoes only
+    // its context. Do not invent a key in identity failure/race regressions.
+    const info = error && request.key.includes('_提现预留_') ? {context:request.context} : {...request,content};
+    panel[error?'OnUserHashError':'OnUserHashInfo'](JSON.stringify({UserHashInfo:info}));
   };
   const optionKeys = ['银行卡提现','支付宝提现','USDT提现','USDT汇率','提现类型'];
   const optionRequests = () => requests.filter(r=>optionKeys.includes(r.key)).slice(-5);
@@ -456,6 +459,36 @@ const savedBank = '#测试甲#测试银行#测试支行##12345678';
 const savedAlipay = '#测试乙###alipay-test#87654321';
 let realnameCases = 0;
 for (const events of [false,true]) {
+  {
+    const f = withdrawalFixture(events), request = f.latest('银联');
+    const send = (info,error=true) => f.panel[error?'OnUserHashError':'OnUserHashInfo'](JSON.stringify({UserHashInfo:info}));
+    send({key:'other-account_提现预留_银联',context:request.context});
+    send({context:request.context+'-unknown'});
+    send({context:request.context,content:savedBank},false);
+    assert.equal(f.visible(),false,'wrong key, unknown context and keyless success cannot resolve identity');
+    assert.equal(hallRequests.length,0);
+    f.reply(request,'',true);
+    assert.equal(f.visible(),true,'first open resolves keyless missing-profile error without entering withdrawal');
+    assert.equal(f.ensure('容器/提现').active,false);
+    f.reply(request,'',true);
+    assert.equal(hallRequests.length,1,'a missing-profile reply is consumed once');
+    realnameCases++;
+  }
+  {
+    const f = withdrawalFixture(events), request = f.latest('银联');
+    f.panel.OnUserHashError(JSON.stringify({UserHashInfo:{...request,content:''}}));
+    assert.equal(f.visible(),true,'keyed missing-profile replies remain supported');
+    realnameCases++;
+  }
+  {
+    const f = withdrawalFixture(events), old = f.latest('银联');
+    f.closePanel(); f.reopen();
+    f.reply(old,'',true);
+    assert.equal(f.visible(),false,'keyless error from a previous opening is rejected');
+    f.reply(f.latest('银联'),'',true);
+    assert.equal(f.visible(),true,'current missing-profile reply still opens setup after reopening');
+    realnameCases++;
+  }
   for (const errorFirst of [false,true]) {
     const f = withdrawalFixture(events);
     f.reply(f.latest('银联'),savedBank);
