@@ -2,11 +2,11 @@
   "use strict";
 
   const DEFAULT_CONFIG = Object.freeze({
-    siteName: "8L 官方下载",
-    gameName: "8L",
+    siteName: "BY 官方下载",
+    gameName: "BY",
     versionText: "官方最新版",
-    androidApkUrl: "./downloads/8L.apk",
-    iosProfileUrl: "./downloads/8L.mobileconfig",
+    androidApkUrl: "./downloads/BY.apk",
+    iosProfileUrl: "./downloads/BY.mobileconfig",
     iosGameUrl: "https://154-37-155-17.sslip.io/"
   });
 
@@ -295,7 +295,7 @@
     elements.sheetBackdrop.addEventListener("click", () => closeSheets());
     document.querySelectorAll("[data-close-sheet]").forEach((button) => button.addEventListener("click", () => closeSheets()));
     elements.downloadProfileAction.addEventListener("click", () => {
-      showToast("正在下载8L苹果签名版…");
+      showToast("正在下载BY苹果签名版…");
       window.setTimeout(() => window.location.assign(absoluteUrl(state.config.iosProfileUrl)), 160);
     });
     elements.copyAddressAction.addEventListener("click", copyPageAddress);

@@ -1,4 +1,4 @@
-# 8L 官方下载站
+# BY 官方下载站
 
 这是一个零依赖静态下载站，支持：
 
@@ -19,8 +19,8 @@ WebHome/
 ├── site-config.json
 ├── assets/
 ├── downloads/
-│   ├── 8L.mobileconfig
-│   └── 8L.apk              # 上传时由app/release唯一APK映射，不需手工复制
+│   ├── BY.mobileconfig
+│   └── BY.apk              # 上传时由app/release唯一APK映射，不需手工复制
 └── scripts/generate_mobileconfig.py
 ```
 
@@ -37,7 +37,7 @@ WebHome/
 
 ```bash
 python3 WebHome/scripts/generate_mobileconfig.py
-plutil -lint WebHome/downloads/8L.mobileconfig
+plutil -lint WebHome/downloads/BY.mobileconfig
 ```
 
 ## 本地预览

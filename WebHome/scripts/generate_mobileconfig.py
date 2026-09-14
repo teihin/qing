@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""根据 WebHome/site-config.json 生成带8L图标的 Web Clip 描述文件。"""
+"""根据 WebHome/site-config.json 生成带BY图标的 Web Clip 描述文件。"""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from urllib.parse import urlparse
 
 WEB_HOME = Path(__file__).resolve().parents[1]
 CONFIG_PATH = WEB_HOME / "site-config.json"
-ICON_PATH = WEB_HOME / "assets" / "8l-app-icon.png"
-OUTPUT_PATH = WEB_HOME / "downloads" / "8L.mobileconfig"
+ICON_PATH = WEB_HOME / "assets" / "by-app-icon.png"
+OUTPUT_PATH = WEB_HOME / "downloads" / "BY.mobileconfig"
 UUID_NAMESPACE = uuid.UUID("d922629f-d6a1-44a3-9498-1f373e8c5fb7")
 
 

@@ -58,7 +58,7 @@ button {
 .scene__image {
   position: absolute;
   inset: -5%;
-  background: url("assets/8l-login-background.png") center 37% / cover no-repeat;
+  background: url("assets/by-login-background.png") center 37% / cover no-repeat;
   opacity: 0.54;
   filter: saturate(1.15) contrast(1.06);
   transform: scale(1.035);

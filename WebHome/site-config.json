@@ -1,12 +1,12 @@
 {
-  "siteName": "8L 官方下载",
-  "gameName": "8L",
+  "siteName": "BY 官方下载",
+  "gameName": "BY",
   "versionText": "官方最新版",
   "promotionSiteUrl": "https://154-37-155-17.sslip.io/webhome/",
-  "androidApkUrl": "./downloads/8L.apk",
-  "iosProfileUrl": "./downloads/8L.mobileconfig",
+  "androidApkUrl": "./downloads/BY.apk",
+  "iosProfileUrl": "./downloads/BY.mobileconfig",
   "iosGameUrl": "https://154-37-155-17.sslip.io/web-mobile/",
   "profileIdentifier": "io.sslip.154-37-155-17.eightl.webclip",
-  "profileOrganization": "8L",
-  "profileDescription": "8L苹果签名版"
+  "profileOrganization": "BY",
+  "profileDescription": "BY苹果签名版"
 }

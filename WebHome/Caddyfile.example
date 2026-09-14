@@ -15,7 +15,7 @@ handle_path /webhome/* {
 
     @apk path /downloads/*.apk
     header @apk Content-Type "application/vnd.android.package-archive"
-    header @apk Content-Disposition "attachment; filename=8L.apk"
+    header @apk Content-Disposition "attachment; filename=BY.apk"
 
     @entry path / /index.html *.html *.htm *.js *.css *.json
     header @entry {
