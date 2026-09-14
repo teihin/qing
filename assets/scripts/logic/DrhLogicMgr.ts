@@ -1544,7 +1544,19 @@ export default class DrhLogicMgr extends cc.Component {
     //更新奖池数据
     public UpdateCurJiangChi(strNum:string)
     {
-        Tool.GetChild(this.node,"奖池条/num").getComponent(cc.Label).string = strNum;
+        // 至少七格；仅补前导零，保留服务器原值的所有位数和精度。
+        // 格子与数字共用位图字形，长金额整体缩小，不会跨格错位。
+        let display = strNum == null ? "0" : String(strNum).trim();
+        if (/^\d+$/.test(display))
+        {
+            while (display.length < 7) display = "0" + display;
+        }
+        const label = Tool.GetChild(this.node,"奖池条/num").getComponent(cc.Label);
+        // 本字体每格 72×96。Creator 2.4 的 SHRINK 只检查字形中心，
+        // 恰好多一格时会漏判；先用完整格宽计算字号，避免首尾越框。
+        label.fontSize = Math.min(label.lineHeight,
+            Math.floor(label.node.width * 4 / (Math.max(1, display.length) * 3)));
+        label.string = display;
     }
 
     //增加屏蔽语音

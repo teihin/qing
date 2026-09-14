@@ -1,0 +1,557 @@
+{
+  "leaderboard_v8_header.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      0,
+      0,
+      418,
+      110
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      418,
+      110
+    ],
+    "sha256": "3aaaeb2f1cd5de2d4a79819c3fa26d9d4cd2a4c3099c190e7be63b66e951ed4f"
+  },
+  "leaderboard_v8_hero.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      28,
+      147,
+      913,
+      419
+    ],
+    "kind": "source-clean-face-complete-corners",
+    "border": 27,
+    "size": [
+      705,
+      217
+    ],
+    "sha256": "d437bca43080e026e12702904bb046dcb3106a342da68c9eb45418801a941bc3"
+  },
+  "leaderboard_v8_hero_title.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      282,
+      170,
+      544,
+      235
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      262,
+      65
+    ],
+    "sha256": "0934332178f0762e102f008c7adabc7efd6d22d02e98e3775494b488f35290e8"
+  },
+  "leaderboard_v8_shield.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      55,
+      174,
+      250,
+      398
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      195,
+      224
+    ],
+    "sha256": "f735de7d26704e231b5b169b13ba51175a689d02945ddcaa84e3f4701b05cae9"
+  },
+  "leaderboard_v8_claim.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      693,
+      317,
+      895,
+      400
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      202,
+      83
+    ],
+    "sha256": "8a66600e7d865ad8e9f6c11e8938800c2fa8380862297f50c6d56f124761efe6"
+  },
+  "leaderboard_v8_tabs_base.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      30,
+      437,
+      913,
+      525
+    ],
+    "kind": "common-normal-tab-bar-from-approved-states",
+    "border": 0,
+    "size": [
+      883,
+      88
+    ],
+    "sha256": "6a0be6f5f9b5b2de3d0ea97bc168a3c5e348d4990ded21122170675f36fcaaf0"
+  },
+  "leaderboard_v8_tab_hands_on.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      30,
+      437,
+      323,
+      525
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      293,
+      88
+    ],
+    "sha256": "b6c0ded8e6f72a9e3589715d4160296267eb8561c69ffb26f0054cc28023d166"
+  },
+  "leaderboard_v8_tab_hands_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/25-排行榜-玩家赢分榜.png",
+    "box": [
+      30,
+      437,
+      323,
+      525
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      293,
+      88
+    ],
+    "sha256": "3ec705b5bc3d3af117491d90604cb2aa3e777ca198704468784b6cb61065417b"
+  },
+  "leaderboard_v8_tab_win_on.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/25-排行榜-玩家赢分榜.png",
+    "box": [
+      323,
+      437,
+      619,
+      525
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      296,
+      88
+    ],
+    "sha256": "906db4affd7ace0f7976ff405d31f00a4935d77ffc10e0b8480a92dfcf3b28e8"
+  },
+  "leaderboard_v8_tab_win_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      323,
+      437,
+      619,
+      525
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      296,
+      88
+    ],
+    "sha256": "63875a51cb8df12770be532ad7288b20ece4225beb64bb1b7aa44738848683b1"
+  },
+  "leaderboard_v8_tab_agent_on.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/26-排行榜-代理红利榜.png",
+    "box": [
+      619,
+      437,
+      913,
+      525
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      294,
+      88
+    ],
+    "sha256": "6043005e461d64502b7e595dce09c81a2f8b5bdad4ca4d8e30214d0a46705ba6"
+  },
+  "leaderboard_v8_tab_agent_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      619,
+      437,
+      913,
+      525
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      294,
+      88
+    ],
+    "sha256": "d8edb9afc6959220811217ec0efccdbf05bacd68ae621a9cdd31b6fb3a88c2f3"
+  },
+  "leaderboard_v8_filter_1_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      30,
+      545,
+      205,
+      620
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      175,
+      75
+    ],
+    "sha256": "04b038095c940c57dd1bbbe88c8b372345e771d5ae263450031ac87cb42ec1e2"
+  },
+  "leaderboard_v8_filter_2_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      205,
+      545,
+      378,
+      620
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      173,
+      75
+    ],
+    "sha256": "2d48dcbf348856d6ee16e29f2823a79f5c66eebd3edb4dfc705148ef4c2ca2c0"
+  },
+  "leaderboard_v8_filter_5_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      378,
+      545,
+      553,
+      620
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      175,
+      75
+    ],
+    "sha256": "a2c37df6fe4b99bf9d288335c0f48fb09715a20edddf774a2fc599435ee59246"
+  },
+  "leaderboard_v8_filter_10_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      553,
+      545,
+      729,
+      620
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      176,
+      75
+    ],
+    "sha256": "f6de90c0b18fc41f8a3baae94389eb8c67c2d45f532d01fcf744c4d8e37955c0"
+  },
+  "leaderboard_v8_filter_20_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      729,
+      545,
+      913,
+      620
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      184,
+      75
+    ],
+    "sha256": "62d7e23fffc7a6c95f44f0377228c3772fb0bc8abb9829950e226b686ad9f924"
+  },
+  "leaderboard_v8_filter_on.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      30,
+      545,
+      205,
+      620
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      175,
+      75
+    ],
+    "sha256": "0dea003f715685c328e9bc883ef20c388180dd31ed44e039a47f5b576bb7710b"
+  },
+  "leaderboard_v8_filter_off.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      205,
+      545,
+      378,
+      620
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      173,
+      75
+    ],
+    "sha256": "5e0d95280cac389920e6cd666b67f817c2eca78486e00ff475e57d5bc5ed8d62"
+  },
+  "leaderboard_v8_list.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      28,
+      635,
+      913,
+      1447
+    ],
+    "kind": "source-clean-face-complete-corners",
+    "border": 27,
+    "size": [
+      705,
+      647
+    ],
+    "sha256": "8fadb701a5bc54a23fb6acbb0c9ee295257ef71db0f2d35835ebca3ab03264d2"
+  },
+  "leaderboard_v8_table_hands.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      28,
+      635,
+      913,
+      719
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      885,
+      84
+    ],
+    "sha256": "1f62fae0b8a7cc49a54949afe1e1a0f87b9b647a60571578574106fc621d462f"
+  },
+  "leaderboard_v8_table_win.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/25-排行榜-玩家赢分榜.png",
+    "box": [
+      28,
+      545,
+      913,
+      638
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      885,
+      93
+    ],
+    "sha256": "fe722add6c4af3675eeb3ded4970728fedbc4fbd987ff669b772192ce2726967"
+  },
+  "leaderboard_v8_table_agent.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/26-排行榜-代理红利榜.png",
+    "box": [
+      28,
+      545,
+      913,
+      638
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      885,
+      93
+    ],
+    "sha256": "d02c8672ded58b41f411bc24c090bbd34e7270cfc6a1297ad1ee6e26abdfbb90"
+  },
+  "leaderboard_v8_crown_1.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      54,
+      730,
+      151,
+      819
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      97,
+      89
+    ],
+    "sha256": "ce2ebffcbbfbd6c0e20307fc592e00eac1d152067e04ecaffa53243f9f75705e"
+  },
+  "leaderboard_v8_crown_2.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      54,
+      848,
+      151,
+      934
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      97,
+      86
+    ],
+    "sha256": "148f9f2a527318906c3daf2eb54add994f4db10d5c92e5b4ba3d106f0bac1f10"
+  },
+  "leaderboard_v8_crown_3.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      55,
+      963,
+      151,
+      1053
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      96,
+      90
+    ],
+    "sha256": "a33a62d82677d2e820da3fe105d9ce655ae51e548484f8a68d6a50367cebecf6"
+  },
+  "leaderboard_v8_rule_horizontal.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      45,
+      832,
+      894,
+      833
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      849,
+      1
+    ],
+    "sha256": "4a5483c872c06991fd804ffb845ab7a3fe8f8b32978ba28789d57bf1e9ff0611"
+  },
+  "leaderboard_v8_rule_vertical.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      470,
+      743,
+      471,
+      820
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      1,
+      77
+    ],
+    "sha256": "7747b2ddc92eaf7908bdab7ad5bbd1a06d5ab6b33e810cd6c320b3c3a8dda941"
+  },
+  "leaderboard_v8_pager.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      28,
+      1469,
+      913,
+      1614
+    ],
+    "kind": "source-clean-face-complete-corners",
+    "border": 26,
+    "size": [
+      705,
+      116
+    ],
+    "sha256": "957ec8e27c034e4f93b3af963fa537e638540fdc09a9563d131c335ff3856b9e"
+  },
+  "leaderboard_v8_page_value.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      344,
+      1489,
+      599,
+      1593
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      255,
+      104
+    ],
+    "sha256": "6ebae8c3b0c4bffb819abe80f37d823845559e43379cf105631cf6643d3589c6"
+  },
+  "leaderboard_v8_page_first.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      70,
+      1491,
+      172,
+      1595
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      102,
+      104
+    ],
+    "sha256": "3bcde540e5f8c3f343bcd323519e8bf1b399bc1de4c5c1ac20e40a968d468473"
+  },
+  "leaderboard_v8_page_prev.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      216,
+      1491,
+      318,
+      1595
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      102,
+      104
+    ],
+    "sha256": "d0daa214d2494fe1befa785124cf1ea9b064f9c4272acc7346c22c863a526eab"
+  },
+  "leaderboard_v8_page_next.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      623,
+      1491,
+      726,
+      1595
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      103,
+      104
+    ],
+    "sha256": "27f6b2b94c59078eb8de4a5f914f3857fbeb39ae5c700825676a5b8663f94a80"
+  },
+  "leaderboard_v8_page_last.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": [
+      769,
+      1491,
+      872,
+      1595
+    ],
+    "kind": "source-cut",
+    "border": 0,
+    "size": [
+      103,
+      104
+    ],
+    "sha256": "e823955e74bb574c6147798c0e10eebb33a160f2c043366c31cb7629ab829d81"
+  },
+  "leaderboard_v8_digits.png": {
+    "source": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+    "box": null,
+    "kind": "live-source-glyph-atlas",
+    "border": 0,
+    "size": [
+      1024,
+      128
+    ],
+    "sha256": "f161643701df579911704ba93669d94474fc97f58e650f93f27f6113c34c714a"
+  }
+}

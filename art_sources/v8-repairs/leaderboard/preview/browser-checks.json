@@ -1,0 +1,274 @@
+{
+  "fixtureOnly": true,
+  "liveAccount": false,
+  "viewports": [
+    {
+      "width": 375,
+      "height": 812
+    },
+    {
+      "width": 375,
+      "height": 667
+    }
+  ],
+  "filterChecks": [
+    {
+      "filter": [
+        "2皮",
+        "2皮"
+      ],
+      "selected": [
+        "2皮"
+      ]
+    },
+    {
+      "filter": [
+        "5皮",
+        "5皮"
+      ],
+      "selected": [
+        "5皮"
+      ]
+    },
+    {
+      "filter": [
+        "10皮",
+        "10皮"
+      ],
+      "selected": [
+        "10皮"
+      ]
+    },
+    {
+      "filter": [
+        "20皮",
+        "20皮"
+      ],
+      "selected": [
+        "20皮"
+      ]
+    },
+    {
+      "filter": [
+        "1皮",
+        "1皮"
+      ],
+      "selected": [
+        "1皮"
+      ]
+    }
+  ],
+  "pagingChecks": [
+    {
+      "action": "下一页",
+      "board": "玩家手数榜",
+      "page": "2/3",
+      "rank": "31",
+      "rows": 6
+    },
+    {
+      "action": "尾页",
+      "board": "玩家手数榜",
+      "page": "3/3",
+      "rank": "61",
+      "rows": 1
+    },
+    {
+      "action": "上一页",
+      "board": "玩家手数榜",
+      "page": "2/3",
+      "rank": "31",
+      "rows": 6
+    },
+    {
+      "action": "首页",
+      "board": "玩家手数榜",
+      "page": "1/3",
+      "rank": "1",
+      "rows": 6
+    },
+    {
+      "action": "下一页",
+      "board": "玩家赢分榜",
+      "page": "2/3",
+      "rank": "31",
+      "rows": 6
+    },
+    {
+      "action": "尾页",
+      "board": "玩家赢分榜",
+      "page": "3/3",
+      "rank": "61",
+      "rows": 1
+    },
+    {
+      "action": "上一页",
+      "board": "玩家赢分榜",
+      "page": "2/3",
+      "rank": "31",
+      "rows": 6
+    },
+    {
+      "action": "首页",
+      "board": "玩家赢分榜",
+      "page": "1/3",
+      "rank": "1",
+      "rows": 6
+    },
+    {
+      "action": "下一页",
+      "board": "代理红利榜",
+      "page": "2/3",
+      "rank": "31",
+      "rows": 6
+    },
+    {
+      "action": "尾页",
+      "board": "代理红利榜",
+      "page": "3/3",
+      "rank": "61",
+      "rows": 1
+    },
+    {
+      "action": "上一页",
+      "board": "代理红利榜",
+      "page": "2/3",
+      "rank": "31",
+      "rows": 6
+    },
+    {
+      "action": "首页",
+      "board": "代理红利榜",
+      "page": "1/3",
+      "rank": "1",
+      "rows": 6
+    }
+  ],
+  "shortChecks": [
+    {
+      "board": "玩家手数榜",
+      "listHeight": 602.9394261424017,
+      "pagerHeight": 90,
+      "selected": [
+        "玩家手数榜"
+      ],
+      "win": {
+        "height": 1334,
+        "width": 750
+      }
+    },
+    {
+      "board": "玩家赢分榜",
+      "listHeight": 674.6716259298618,
+      "pagerHeight": 90,
+      "selected": [
+        "玩家赢分榜"
+      ],
+      "win": {
+        "height": 1334,
+        "width": 750
+      }
+    },
+    {
+      "board": "代理红利榜",
+      "listHeight": 674.6716259298618,
+      "pagerHeight": 90,
+      "selected": [
+        "代理红利榜"
+      ],
+      "win": {
+        "height": 1334,
+        "width": 750
+      }
+    }
+  ],
+  "scroll": {
+    "beforeRequests": 37,
+    "after": {
+      "activeRows": 30,
+      "layout": true,
+      "offset": {
+        "divSelf": {},
+        "mag": {},
+        "magSqr": {},
+        "mulSelf": {},
+        "negSelf": {},
+        "scaleSelf": {},
+        "subSelf": {},
+        "x": 0,
+        "y": 692.7336601053019,
+        "z": 0
+      },
+      "page": "1/3",
+      "requests": 37
+    }
+  },
+  "empty": {
+    "empty": true,
+    "page": "0/0",
+    "rows": 0
+  },
+  "reentry": {
+    "boards": [
+      {
+        "active": true,
+        "checked": true,
+        "name": "玩家手数榜",
+        "page": "1/3",
+        "pagerHeight": 90
+      },
+      {
+        "active": false,
+        "checked": false,
+        "name": "玩家赢分榜",
+        "page": "1/3",
+        "pagerHeight": 90
+      },
+      {
+        "active": false,
+        "checked": false,
+        "name": "代理红利榜",
+        "page": "1/3",
+        "pagerHeight": 90
+      }
+    ],
+    "filters": [
+      {
+        "checked": false,
+        "mark": false,
+        "markOnTop": true,
+        "name": "1皮"
+      },
+      {
+        "checked": false,
+        "mark": false,
+        "markOnTop": true,
+        "name": "2皮"
+      },
+      {
+        "checked": false,
+        "mark": false,
+        "markOnTop": true,
+        "name": "5皮"
+      },
+      {
+        "checked": false,
+        "mark": false,
+        "markOnTop": true,
+        "name": "10皮"
+      },
+      {
+        "checked": true,
+        "mark": true,
+        "markOnTop": true,
+        "name": "20皮"
+      }
+    ],
+    "rect": {
+      "height": 667,
+      "width": 375,
+      "x": 1088.5,
+      "y": 309.5
+    }
+  }
+}

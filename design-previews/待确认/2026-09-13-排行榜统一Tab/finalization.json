@@ -1,0 +1,38 @@
+{
+  "status": "confirmed_and_replaced",
+  "date": "2026-09-13",
+  "files": [
+    {
+      "target": "design-previews/效果图V8-new/05-后续模块/24-排行榜-玩家手数榜.png",
+      "source": "design-previews/待确认/2026-09-13-排行榜统一Tab/02-玩家手数榜-单屏大图-v3.png",
+      "size": [
+        941,
+        1672
+      ],
+      "before_sha256": "f392f1be5c32f3f85c08955b0f1d56759440fa7998b190457a06b7abb9bc2796",
+      "sha256": "a5d3c4d066c0c5577386684a0d86b17e3bcf3a253ee81425222bd7ecc4a9f362"
+    },
+    {
+      "target": "design-previews/效果图V8-new/05-后续模块/25-排行榜-玩家赢分榜.png",
+      "source": "/Users/yy/.codex/generated_images/01a09957-2173-76f2-a179-3a8003093b33/exec-408fdf80-7c45-4b58-b9f9-f368755146c9.png",
+      "size": [
+        941,
+        1672
+      ],
+      "before_sha256": "b06f7324e5ee3d8c29c6ebfb78f1e4dddc91bebbfd56be2146527743f0ccba95",
+      "sha256": "bf4fb07964467ff2ef03618e646fe4aa3a178ab6d4d6223863fae04db4546606"
+    },
+    {
+      "target": "design-previews/效果图V8-new/05-后续模块/26-排行榜-代理红利榜.png",
+      "source": "/Users/yy/.codex/generated_images/01a09957-2173-76f2-a179-3a8003093b33/exec-9d628ad9-1fb3-4a09-9ecf-8707ee7d0288.png",
+      "size": [
+        941,
+        1672
+      ],
+      "before_sha256": "a426f31dda468469086a35e23d9b884d0fd2d9143199270a25c8e4930441bfbb",
+      "sha256": "2db8ced7105d61e9ad6d87ed0ef084a566cbd6677ced6a081ddc90f32bdef771"
+    }
+  ],
+  "png_count": 56,
+  "other_pngs_unchanged": 53
+}

@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "769870cd-3342-5ce2-a8fe-6dcb0324c034",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 1024,
+  "height": 128,
+  "platformSettings": {},
+  "subMetas": {
+    "ingame_jackpot_cells_v8": {
+      "ver": "1.0.6",
+      "uuid": "df554fd5-32a0-5aa0-9475-2787f3a6eef2",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "769870cd-3342-5ce2-a8fe-6dcb0324c034",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 1024,
+      "height": 128,
+      "rawWidth": 1024,
+      "rawHeight": 128,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}
