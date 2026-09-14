@@ -1,0 +1,268 @@
+{
+  "panel": {
+    "box": [
+      76,
+      280,
+      949,
+      1312
+    ],
+    "size": [
+      873,
+      1032
+    ],
+    "sha256": "c3b155093a4d1b84e172b17fdaa3ecbf75400c9372cc2a0fe049fa0b77cd1565"
+  },
+  "selection": {
+    "box": [
+      130,
+      396,
+      894,
+      817
+    ],
+    "size": [
+      764,
+      421
+    ],
+    "sha256": "f5d315808aae7104ed8ad2cf9dc83b46eece63aa8f8aef18a9a50a380b4f1a44"
+  },
+  "amount": {
+    "box": [
+      177,
+      489,
+      847,
+      639
+    ],
+    "size": [
+      670,
+      150
+    ],
+    "sha256": "7fdf0dc250d087921888b5a6f2c9157227e05e306094849f6fde1c5c076faf16"
+  },
+  "balance": {
+    "box": [
+      130,
+      841,
+      894,
+      1047
+    ],
+    "size": [
+      764,
+      206
+    ],
+    "sha256": "b17d36ba5d2f7b37daca1b58cb4f78bd420031eb6c6d5ff542930b285c748836"
+  },
+  "caption": {
+    "box": [
+      419,
+      422,
+      605,
+      468
+    ],
+    "size": [
+      186,
+      46
+    ],
+    "sha256": "89e2276b4e5012dd065bdcbee49bc9fc7bf4fe0e2cd89f615dee2e5f5441922a"
+  },
+  "already": {
+    "box": [
+      170,
+      874,
+      288,
+      916
+    ],
+    "size": [
+      118,
+      42
+    ],
+    "sha256": "e8086f8a3ae11ef2108a50aaeea19de597c0d8d43e8993a1a9a2bb433f4e5533"
+  },
+  "balance_label": {
+    "box": [
+      170,
+      971,
+      327,
+      1013
+    ],
+    "size": [
+      157,
+      42
+    ],
+    "sha256": "f0a86461f8feca30b7fc363c9a01e53b372fe3971a75f6d60ee8bdd726c5d0d8"
+  },
+  "minimum": {
+    "box": [
+      158,
+      741,
+      228,
+      779
+    ],
+    "size": [
+      70,
+      38
+    ],
+    "sha256": "0ebbb5c8d434354429bfae74f686bacee7d7244708b963614aa68056762b5d57"
+  },
+  "maximum": {
+    "box": [
+      708,
+      741,
+      775,
+      779
+    ],
+    "size": [
+      67,
+      38
+    ],
+    "sha256": "5545bb340e84cf4eb6707b557e6329804e7ee01717d5209fcf5035cebf968c6c"
+  },
+  "hint": {
+    "box": [
+      343,
+      1080,
+      680,
+      1120
+    ],
+    "size": [
+      337,
+      40
+    ],
+    "sha256": "aaf7a0d0bb27ebddab02bd0633b3fa4d6f0ae24d597736da8a2b09dcf4804097"
+  },
+  "cancel": {
+    "box": [
+      131,
+      1149,
+      500,
+      1263
+    ],
+    "size": [
+      369,
+      114
+    ],
+    "sha256": "5c13f7a43aed4e6503a042c99c805df313a2025a0e685e8fb2ae83c49d0fa7ad"
+  },
+  "confirm": {
+    "box": [
+      526,
+      1149,
+      894,
+      1263
+    ],
+    "size": [
+      368,
+      114
+    ],
+    "sha256": "2f63c00d321272cbbe7c85d126b39800e542c6ac373b1ea47a4e8c0e61a852d4"
+  },
+  "recharge": {
+    "box": [
+      716,
+      957,
+      869,
+      1027
+    ],
+    "size": [
+      153,
+      70
+    ],
+    "sha256": "2bec791fb09d715f33331f96f19a01b589868849834a30a3b646b3d85a1878fa"
+  },
+  "title": {
+    "box": [
+      278,
+      242,
+      747,
+      343
+    ],
+    "size": [
+      469,
+      101
+    ],
+    "sha256": "14ea623be09a085d3b09203649eb4e623dfa7fbb8f4b813c6bf8f41bb6322184"
+  },
+  "close": {
+    "box": [
+      861,
+      309,
+      923,
+      372
+    ],
+    "size": [
+      62,
+      63
+    ],
+    "sha256": "1025b1d60dd3ed1c510f62ef9f5567e12b3e0708d4b1ab00abe92d37c3defa8d"
+  },
+  "handle": {
+    "box": [
+      375,
+      670,
+      434,
+      730
+    ],
+    "size": [
+      59,
+      60
+    ],
+    "sha256": "ba6a32177c9ffcaf534e1b2515f245ceeee25ab4970f361ccab8150980434d86"
+  },
+  "track": {
+    "box": null,
+    "size": [
+      419,
+      24
+    ],
+    "sha256": "4f20bb012b31d95c30d8f829f935a9fa25443d7c0c26bf66ead5ca10508c3f4c"
+  },
+  "fill": {
+    "box": null,
+    "size": [
+      200,
+      25
+    ],
+    "sha256": "2d4815c83939f476319286f61a448c2670eb7b59fc96973217f7479b8bf25873"
+  },
+  "dim": {
+    "box": null,
+    "size": [
+      4,
+      4
+    ],
+    "sha256": "ecd2bddf8004ada57ba98e23c9b58d06d483e26f56d993bcdd000867dbca8752"
+  },
+  "notice_panel": {
+    "box": null,
+    "size": [
+      764,
+      206
+    ],
+    "sha256": "b17d36ba5d2f7b37daca1b58cb4f78bd420031eb6c6d5ff542930b285c748836"
+  },
+  "large_digits": {
+    "box": [
+      338,
+      510,
+      685,
+      628
+    ],
+    "size": [
+      1024,
+      256
+    ],
+    "sha256": "8ba25677080c77a1c79750e3ceebebe3868292fdd97dab8d0f4ca67113749e3d"
+  },
+  "digits": {
+    "box": [
+      587,
+      972,
+      703,
+      1016
+    ],
+    "size": [
+      1024,
+      256
+    ],
+    "sha256": "c1759f65c929e0e6f99bf3640d899ef22cef0ca6866c137df76ad630d3e99da3"
+  }
+}

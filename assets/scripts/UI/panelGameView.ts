@@ -6,7 +6,7 @@ import Tool from "../common/Tool";
 import Debug from "../common/Debug";
 import DrhLogicMgr from "../logic/DrhLogicMgr";
 import GpsManager from "../logic/GpsManager";
-import SliderEx from "../common/SliderEx";
+import BuyinDisplay from "../common/BuyinDisplay";
 import PKCardInfoScript from "../logic/PKCardInfoScript";
 import DrhNameManager from "../logic/DrhNameManager";
 import ImageManager from "../logic/ImageManager";
@@ -18,6 +18,7 @@ import QueueMatchManager, { QueueMatchSnapshot } from "../logic/QueueMatchManage
 import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
+import { jackpotAmount, jackpotTier, jackpotTime } from "../common/JackpotDisplay";
 
 var KBEngine = require("kbengine");
 
@@ -55,6 +56,8 @@ export default class panelGameView extends UIPanelViewBase {
     public displayQP3:dragonBones.ArmatureDisplay = null; //切牌动画\
 
     private scrollJCList:ScrollViewEx = null;
+    private jackpotRecordVersion = 0;
+    private realtimeRecordVersion = 0;
 
     // 新玩家坐下分两步处理：先预坐锁座，收到PlayerList确认后再选择带入。
     private preSitState:string = "idle"; // idle / waiting / selecting / submitting
@@ -334,12 +337,8 @@ export default class panelGameView extends UIPanelViewBase {
         },this);
 
 
-        Tool.GetChild(this.node,"实时战绩").on(cc.Node.EventType.TOUCH_START,()=>{
-            this.CloseAllShow();
-        },this);
-        Tool.GetChild(this.node,"牌局回顾").on(cc.Node.EventType.TOUCH_START,()=>{
-            this.CloseAllShow();
-        },this);
+        Tool.GetChild(this.node,"实时战绩").on(cc.Node.EventType.TOUCH_START,this.OnRealtimeRecordTouch,this);
+        Tool.GetChild(this.node,"牌局回顾").on(cc.Node.EventType.TOUCH_START,this.OnReviewTouch,this);
 
         Tool.GetChild(this.node,"奖池面板").on(cc.Node.EventType.TOUCH_END,()=>{
             Tool.GetChild(this.node,"奖池面板").active = false;
@@ -611,6 +610,7 @@ export default class panelGameView extends UIPanelViewBase {
         {
            // cc.sys.localStorage.setItem("搓牌开关",toggle.isChecked?"Ture":"False");
            GameDataManager.getAccount().setDefinedProperty("player_setting",toggle.isChecked?"True":"False");
+           this.UpdateRealtimeSqueezeState(toggle.isChecked);
         }
         else if(toggle.node.name === "音乐开关")
         {
@@ -660,6 +660,7 @@ export default class panelGameView extends UIPanelViewBase {
                 Tool.GetChild(this.node,"牌局回顾/文字牌谱").active = true;  
                 this.ShowHistoryPaiPuInfo(this.nCurPage);
             }
+            this.UpdateReviewChrome();
         }
     }
 
@@ -756,10 +757,10 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "确认带入")
         {
-            let strMsg = Tool.GetChild(this.node,"带入窗口/msg").getComponent(cc.Label).string;
-            strMsg = strMsg.replace("带入积分:", "");
+            // Submit the numeric value, never the display string with thousands separators.
+            let strMsg = String(Tool.GetChild(this.node,"带入窗口").getComponent(BuyinDisplay).currentAmount);
 
-            if (Number(strMsg) <= 0)
+            if (!Number.isFinite(Number(strMsg)) || Number(strMsg) <= 0)
             {
                 this.ShowMsg("带入积分必须大于0！");
                 return;
@@ -929,34 +930,15 @@ export default class panelGameView extends UIPanelViewBase {
 
             let  strSet:string = GameDataManager.getAccount().roomSetting;
             let strGold = GameDataManager.getAccount().gold;
-            let nMax = Number(strGold) - Number(strGold) * 10 / 100;
-
-            let nPos = strSet.indexOf("底皮");
-            let nEnd = strSet.indexOf(" ", nPos);
-            let strDi = strSet.substr(nPos, nEnd - nPos);
-
-            nPos = strSet.indexOf("最小带入");
-            nEnd = strSet.indexOf(" ", nPos);
-            let strMin = strSet.substr(nPos, nEnd - nPos);
-            strMin = strMin.replace("最小带入", "");
-
-            let strMaxIn = strGold;
-
-            let nCount = Number(strMaxIn) / Number(strMin);
-
-            let slider = Tool.GetChild(this.node,"带入窗口/Slider").getComponent(SliderEx);              
-            slider.maxValue = nCount-1;
-
-
-            //找到自己的历史带入
+            const minimumMatch = strSet.match(/最小带入\s*([0-9]+(?:\.[0-9]+)?)/);
+            const strMin = minimumMatch ? minimumMatch[1] : "0";
             let nHisIn = Number(this.gameLogic.GetPlayerCtlByID(0).info.begin_score);
-   
-            Tool.GetChild(this.node,"带入窗口/gold").getComponent(cc.Label).string = strGold;
-            Tool.GetChild(this.node,"带入窗口/已带入").getComponent(cc.Label).string = this.CheckSmallPlay(nHisIn.toString()) + "/" + strMaxIn;
+            Tool.GetChild(this.node,"带入窗口").getComponent(BuyinDisplay).configure(
+                Number(strMin), Number(strGold), Number(this.CheckSmallPlay(nHisIn.toString())));
             
 
 
-            if (Number(strMaxIn) < Number(strMin))
+            if (Number(strGold) < Number(strMin))
             {
                 Tool.GetChild(this.node,"带入窗口/余额不足提示").active = true;
                 Tool.GetChild(this.node,"带入窗口/余额不足提示/txt").getComponent(cc.Label).string = "金币余额不足" + Number(strMin) + "，请先充值！";
@@ -966,19 +948,6 @@ export default class panelGameView extends UIPanelViewBase {
                 Tool.GetChild(this.node,"带入窗口/余额不足提示").active = false;                
             }
 
-
-            Tool.GetChild(this.node,"带入窗口/msg").getComponent(cc.Label).string = strMin;
-
-            
-
-            slider.progress = 0;
-            let callback = ()=>{                
-                let nBei = slider.curValue + 1;
-                let nNew = Number(strMin) * nBei;
-                Tool.GetChild(this.node,"带入窗口/msg").getComponent(cc.Label).string = nNew.toString();
-            };
-            slider.node.off("onValueChange",callback,this);
-            slider.node.on("onValueChange",callback,this);
 
         }
         else if (button.node.name == "确定扯牌")
@@ -1047,14 +1016,15 @@ export default class panelGameView extends UIPanelViewBase {
 
             let strCuo = GameDataManager.getAccount().player_setting;
             Tool.GetChild(this.node,"实时战绩/搓牌开关").getComponent(cc.Toggle).isChecked = strCuo=="True"?true:false;
+            this.UpdateRealtimeSqueezeState(strCuo === "True");
         }
         else if(button.node.name === "信息")
         {
             this.node.getChildByName("牌局回顾").active = true;
 
-            //显示战绩，隐藏牌谱
-
-
+            // Reopen on the card view even when the previous visit ended on text.
+            Tool.GetChild(this.node,"牌局回顾/回顾列表").active = true;
+            Tool.GetChild(this.node,"牌局回顾/文字牌谱").active = false;
             Tool.GetChild(this.node,"牌局回顾/操作/牌局回顾").getComponent(cc.Toggle).isChecked = true;
 
             this.ShowHistoryInfo(Number(this.gameLogic.round_count) - 1);
@@ -1065,9 +1035,10 @@ export default class panelGameView extends UIPanelViewBase {
                 Tool.GetChild(this.node,"牌局回顾/地方").active = true;
             }
             else
-            {                
+            {
                 Tool.GetChild(this.node,"牌局回顾/地方").active = false;
             }
+            this.UpdateReviewChrome();
         }
         else if(button.node.name == "返回大厅")
         {
@@ -1540,10 +1511,7 @@ export default class panelGameView extends UIPanelViewBase {
     //查询奖池记录
     public GetAllJiangDetal()
     {
-        let strSet:string = GameDataManager.getAccount().roomSetting;
-        let nPos = strSet.indexOf("底皮");
-        let nEnd = strSet.indexOf(" ", nPos);
-        let strDi = strSet.substr(nPos, nEnd - nPos);
+        const strDi = jackpotTier(GameDataManager.getAccount().roomSetting);
 
         let strParam = "{\"header\":\"查询_奖池_记录\",\"score_type\":\"" + strDi + "\"}";
         GameDataManager.getAccount().reqHallCommand(strParam, "P@查询_奖池_记录");
@@ -2046,9 +2014,14 @@ export default class panelGameView extends UIPanelViewBase {
     }
     public GetReadRecordInfo()
     {
+        this.realtimeRecordVersion++;
+        Tool.GetChild(this.node,"实时战绩/战绩列表/view/content").removeAllChildren();
+        Tool.GetChild(this.node,"实时战绩/战绩列表").getComponent(cc.ScrollView).scrollToTop();
+        const state = Tool.GetChild(this.node,"实时战绩/V8列表状态");
+        state.active = true;
+        state.getComponent(cc.Label).string = "正在加载…";
         let strParam = "{\"header\":\"获取_游戏内玩家_信息_命令\"}";
         GameDataManager.getAccount().reqAccountCommand(strParam, "P@获取_游戏内玩家_信息_命令");
-        Tool.GetChild(this.node,"实时战绩/战绩列表/view/content").removeAllChildren();
         
     }
 
@@ -2057,127 +2030,95 @@ export default class panelGameView extends UIPanelViewBase {
         let strParam = "{\"header\":\"获取_游戏内旁观_信息_命令\"}";
         GameDataManager.getAccount().reqAccountCommand(strParam, "P@获取_游戏内旁观_信息_命令");
         Tool.GetChild(this.node,"实时战绩/围观列表/view/content").removeAllChildren(); 
+        this.scrollGuanZhan.scrollToTop();
     }
+    private OnRealtimeRecordTouch(event:cc.Event.EventTouch)
+    {
+        const drawer = Tool.GetChild(this.node,"实时战绩/bg");
+        const point = drawer.convertToNodeSpaceAR(event.getLocation());
+        // Labels and list children can bubble here. Only the outside veil closes.
+        if (Math.abs(point.x) > drawer.width / 2 || Math.abs(point.y) > drawer.height / 2)
+            this.CloseAllShow();
+    }
+
+    private UpdateRealtimeSqueezeState(checked:boolean)
+    {
+        Tool.GetChild(this.node,"实时战绩/搓牌开关/V8状态").getComponent(cc.Label).string = checked ? "已开启" : "已关闭";
+    }
+
+    private FormatRealtimeValue(value:string):string
+    {
+        const parts = value.split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        return parts.join(".");
+    }
+
     public onGamePlayerListInfo(strParam:string)
     {
-        let data = JSON.parse(strParam);
+        const panel = Tool.GetChild(this.node,"实时战绩");
+        if (!panel.active) return;
+        let data:any;
+        try { data = JSON.parse(strParam); }
+        catch (error) { Debug.Error("查询实时战绩消息 json格式异常！"); return; }
+        if (!data || !Array.isArray(data.GamePlayerListInfo)) return;
 
-        if (data == null)
-        {
-            Debug.Error("查询实时战绩消息 json格式异常！");
-            return;
-        }
-
-        let transParent = Tool.GetChild(this.node,"实时战绩/战绩列表/view/content");
+        const version = ++this.realtimeRecordVersion;
+        const transParent = Tool.GetChild(this.node,"实时战绩/战绩列表/view/content");
         transParent.removeAllChildren();
-        let strUserID = GameDataManager.getAccount().guuid;
-
-
-        let nTotleIn = 0;
-        let nTotleScore = 0; //总得分
-
-        let  jList = data["GamePlayerListInfo"];
-        for (let i = 0; i < jList.length; i++)
+        const account = GameDataManager.getAccount();
+        const strUserID = String(account.guuid);
+        const roomID = account.roomID;
+        const jList = data.GamePlayerListInfo;
+        const state = Tool.GetChild(this.node,"实时战绩/V8列表状态");
+        state.active = jList.length === 0;
+        state.getComponent(cc.Label).string = "暂无战绩";
+        let totalIn = 0;
+        let totalScore = 0;
+        for (const one of jList)
         {
-            let one = jList[i];
-            let strID = one["id"].toString();
-            let strName = one["name"].toString();
-            let strMoney = one["money_score"].toString();
-            let strIn = one["init_money"].toString();
-            let strScore = one["total_score"].toString();
+            totalIn += Number(one.init_money);
+            if (Number(one.total_score) > 0) totalScore += Number(one.total_score);
+        }
+        // Keep the existing server units and positive-score-only total semantics.
+        Tool.GetChild(this.node,"实时战绩/总带入").getComponent(cc.Label).string = this.FormatRealtimeValue(String(totalIn));
+        Tool.GetChild(this.node,"实时战绩/总得分").getComponent(cc.Label).string = this.FormatRealtimeValue(String(totalScore));
+        Tool.GetChild(this.node,"实时战绩/奖池").getComponent(cc.Label).string = this.FormatRealtimeValue(String(data.reward_pool));
+        if (!jList.length) return;
 
-            nTotleIn += Number(strIn);
-            if(Number(strScore)>0)
-                nTotleScore += Number(strScore);
-            WebLoadingManager.loadBlockingRes("Prefabs/带入记录","正在加载带入记录",(err,obj)=>{
-                if(!cc.isValid(this.node) || !cc.isValid(transParent))
-                    return;
-                if(err)
-                {
-                    cc.error(err.message || err);
-                    return null;
-                }
-                let node:cc.Node = cc.instantiate(obj);
+        // Load the shared row once, then append in server order. A previous load
+        // cannot repaint a newer response, a reopened drawer or another account.
+        WebLoadingManager.loadBlockingRes("Prefabs/带入记录","正在加载带入记录",(err,obj)=>{
+            if (!cc.isValid(this.node) || !cc.isValid(transParent) || !panel.active ||
+                version !== this.realtimeRecordVersion ||
+                GameDataManager.getAccount() !== account || account.roomID !== roomID) return;
+            if (err)
+            {
+                cc.error(err.message || err);
+                state.active = true;
+                state.getComponent(cc.Label).string = "加载失败，请重新打开";
+                return;
+            }
+            jList.forEach((one:any,index:number)=>{
+                const node:cc.Node = cc.instantiate(obj);
                 node.parent = transParent;
-
-                node.getChildByName("name").getComponent(cc.Label).string = strName;
-                node.getChildByName("in").getComponent(cc.Label).string = this.CheckSmallPlay( strIn);                
-                
-    
-                if (strID == strUserID)
-                {
-                    node.getChildByName("name").color = cc.color(74, 149, 251, 255);
-                    node.getChildByName("in").color = cc.color(74, 149, 251, 255);
-                }
-                else
-                {
-                    node.getChildByName("name").color = cc.color(255,255,255,255);
-                    node.getChildByName("in").color = cc.color(255,255,255,255);
-                }
-    
-                if (Number(strScore) > 0)
-                {
-                    node.getChildByName("score").getComponent(cc.Label).string = "+" + this.CheckSmallPlay( strScore);
-                    node.getChildByName("score").color = cc.Color.RED;
-
-                    
-                }
-                else if (Number(strScore) < 0)
-                {
-                    node.getChildByName("score").getComponent(cc.Label).string = this.CheckSmallPlay( strScore);
-                    node.getChildByName("score").color = cc.color(21, 255, 139, 255);
-                }
-                else
-                {
-                    node.getChildByName("score").getComponent(cc.Label).string = this.CheckSmallPlay( strScore);
-                }
-    
-    
-                //检测玩家是否在位置上            
-                let bFind = false;
-                for(let player of this.gameLogic.arrayPlayer)
-                {
-                    if(strID == player.info.strUserID)
-                    {
-                        bFind = true;
-                        break;
-                    }
-                }
-                if(!bFind)
-                {
-                    let arrayAllTxt = node.getComponentsInChildren(cc.Label);
-                    for(let txt of arrayAllTxt)
-                    {
-                        txt.node.color = cc.color(124,124,124,255);
-                    }
-                }
-    
+                const id = String(one.id);
+                const isSelf = id === strUserID;
+                const seated = this.gameLogic.arrayPlayer.some(player=>id === player.info.strUserID);
+                const score = Number(one.total_score);
+                node.getChildByName("name").getComponent(cc.Label).string = String(one.name);
+                node.getChildByName("in").getComponent(cc.Label).string = this.FormatRealtimeValue(this.CheckSmallPlay(String(one.init_money)));
+                node.getChildByName("score").getComponent(cc.Label).string = (score > 0 ? "+" : "") + this.FormatRealtimeValue(this.CheckSmallPlay(String(one.total_score)));
+                node.getChildByName("V8隔行").active = index % 2 === 1;
+                node.getChildByName("V8本人底").active = isSelf && seated;
+                node.getChildByName("V8本人").active = isSelf;
+                node.getChildByName("V8离桌").active = !seated;
+                // Only data-dependent sign/presence state changes at runtime.
+                node.getChildByName("score").color = score > 0 ? cc.color(255,112,117) : score < 0 ? cc.color(189,216,76) : cc.color(250,240,214);
+                if (!seated)
+                    for (const text of node.getComponentsInChildren(cc.Label)) text.node.color = cc.color(133,158,179);
             });
-        }
-
-        Tool.GetChild(this.node,"实时战绩/总带入").getComponent(cc.Label).string =  nTotleIn.toString();
-        // if(data.hasOwnProperty("boss_xi_money"))
-        // {
-        //     Tool.GetChild(this.node,"实时战绩/平台").getComponent(cc.Label).string = data["boss_xi_money"];
-        // }
-        // if(data.hasOwnProperty("player_xi_money"))
-        // {
-        //     Tool.GetChild(this.node,"实时战绩/喜金").getComponent(cc.Label).string = data["player_xi_money"];
-        // }
-        Tool.GetChild(this.node,"实时战绩/奖池").getComponent(cc.Label).string = data["reward_pool"].toString();
-        if(Number(data["reward_pool"])>0)
-        {
-            Tool.GetChild(this.node,"实时战绩/奖池").color = cc.Color.RED;
-        }
-        else if(Number(data["reward_pool"]) == 0)
-        {
-            Tool.GetChild(this.node,"实时战绩/奖池").color = cc.Color.WHITE;
-        }
-        else{
-            Tool.GetChild(this.node,"实时战绩/奖池").color = cc.Color.GREEN;
-        }
-        Tool.GetChild(this.node,"实时战绩/总得分").getComponent(cc.Label).string = nTotleScore.toString();
-        
+            transParent.getComponent(cc.Layout).updateLayout();
+        });
     }
     public onGameWatcherListInfo(strParam:string)
     {
@@ -2197,6 +2138,36 @@ export default class panelGameView extends UIPanelViewBase {
 
     
     private nCurPage = 1;
+    private OnReviewTouch(event:cc.Event.EventTouch)
+    {
+        const drawer = Tool.GetChild(this.node,"牌局回顾/BG2");
+        const point = drawer.convertToNodeSpaceAR(event.getLocation());
+        if (Math.abs(point.x) > drawer.width / 2 || Math.abs(point.y) > drawer.height / 2)
+            this.CloseAllShow();
+    }
+
+    private UpdateReviewChrome()
+    {
+        const root = Tool.GetChild(this.node,"牌局回顾");
+        const total = Math.max(0, Number(this.gameLogic.round_count) - 1);
+        const showText = root.getChildByName("文字牌谱").active;
+        const report = total > 0 && this.strShowPai === "秀";
+        root.getChildByName("举报").active = report;
+        root.getChildByName("图例1").active = !showText && !report;
+        root.getChildByName("图例2").active = !showText && !report;
+        root.getChildByName("V8局数").getComponent(cc.Label).string = total > 0 ? "第" + this.nCurPage + "局" : "暂无已完成牌局";
+        root.getChildByName("V8空记录").active = total <= 0;
+        if (total <= 0)
+        {
+            this.nCurPage = 0;
+            Tool.GetChild(root,"分页/页码").getComponent(cc.Label).string = "0 / 0";
+            root.getChildByName("奖池").getComponent(cc.Label).string = "0";
+            this.scrollHuiGu.content.removeAllChildren();
+            for (const round of ["1", "2", "3"])
+                Tool.GetChild(root,"文字牌谱/view/content/" + round + "/list").removeAllChildren();
+        }
+    }
+
     public ShowHistoryInfo(nRound:number)
     {
         //如果当前是查看牌谱则掉查询牌谱
@@ -2210,7 +2181,8 @@ export default class panelGameView extends UIPanelViewBase {
         if (nRound > 0)
         {
             this.nCurPage = nRound;
-            Tool.GetChild(this.node,"牌局回顾/分页/页码").getComponent(cc.Label).string = nRound.toString()+"/"+(Number(this.gameLogic.round_count)-1);
+            Tool.GetChild(this.node,"牌局回顾/分页/页码").getComponent(cc.Label).string = nRound.toString()+" / "+(Number(this.gameLogic.round_count)-1);
+            this.UpdateReviewChrome();
             let strParam = "{\"header\":\"查询_房间_玩家_战绩_信息\",\"room_id\":\"" + GameDataManager.getAccount().roomID + "\",\"round_id\":\"" + nRound.toString() + "\"}";
             GameDataManager.getAccount().reqAccountCommand(strParam, "@查询_房间_玩家_战绩_信息");
         }
@@ -2221,7 +2193,8 @@ export default class panelGameView extends UIPanelViewBase {
         if (nRound > 0)
         {
             this.nCurPage = nRound;
-            Tool.GetChild(this.node,"牌局回顾/分页/页码").getComponent(cc.Label).string = nRound.toString()+"/"+(Number(this.gameLogic.round_count)-1);
+            Tool.GetChild(this.node,"牌局回顾/分页/页码").getComponent(cc.Label).string = nRound.toString()+" / "+(Number(this.gameLogic.round_count)-1);
+            this.UpdateReviewChrome();
             let strParam = "{\"header\":\"查询_房间_玩家_牌谱_信息\",\"room_id\":\"" + GameDataManager.getAccount().roomID + "\",\"round_id\":\"" + nRound.toString() + "\"}";
             GameDataManager.getAccount().reqAccountCommand(strParam, "@查询_房间_玩家_牌谱_信息");
         }
@@ -2280,14 +2253,7 @@ export default class panelGameView extends UIPanelViewBase {
         }
 
 
-        if(this.strShowPai === "秀")
-        {
-            Tool.GetChild(this.node,"牌局回顾/举报").active = true
-        }
-        else
-        {
-            Tool.GetChild(this.node,"牌局回顾/举报").active = false
-        }
+        this.UpdateReviewChrome();
 
     }
 
@@ -2366,6 +2332,8 @@ export default class panelGameView extends UIPanelViewBase {
            //刷新显示数据                    
            objNew.getChildByName("name").getComponent(cc.Label).string = strName;
            objNew.getChildByName("id").getComponent(cc.Label).string = "ID:" + strID;
+           const selfHighlight = objNew.getChildByName("V8本人底");
+           if (selfHighlight) selfHighlight.active = strID === GameDataManager.getAccount().guuid;
 
            //objNew.getChildByName("小家").active = (strPeiXiaoJia == "赔小家" ? true : false);
 
@@ -3688,40 +3656,16 @@ export default class panelGameView extends UIPanelViewBase {
             {
                 let json = JSON.parse(param);
                 let data = json["result"];
-                let strTotle = data["all_rewards"].toString();
-                let jList = data["rewards"];
-
-                let str02 = jList["底皮0.2/0.5"].toString();
-                let str1 = jList["底皮1/3"].toString();
-                let str2 = jList["底皮2/5"].toString();
-                let str5 = jList["底皮5/10"].toString();
-                let str10 = jList["底皮10/20"].toString();
-                let str20 = jList["底皮20/40"].toString();
-                let str50 = jList["底皮50/100"].toString();
-
-                Tool.GetChild(this.node,"奖池面板/容器/奖池总览/总金额/num").getComponent(cc.Label).string = strTotle;
-
-                Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/底皮1-3").getComponent(cc.Label).string = str1;
-                Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/底皮2-5").getComponent(cc.Label).string = str2;
-                Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/底皮5-10").getComponent(cc.Label).string = str5;
-                Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/底皮10-20").getComponent(cc.Label).string = str10;
-                Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/底皮20-40").getComponent(cc.Label).string = str20;
-                Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/底皮50-100").getComponent(cc.Label).string = str50;
-
-                let strSet:string = GameDataManager.getAccount().roomSetting;
-                let nPos = strSet.indexOf("底皮");
-                let nEnd = strSet.indexOf(" ", nPos);
-                let strDi = strSet.substr(nPos, nEnd - nPos).replace("/", "-");
-
-                let strCount = "0";
-                if(Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/"+strDi) != undefined)
-                {
-                    strCount = Tool.GetChild(this.node,"奖池面板/容器/奖池总览/各级奖池奖励设定/"+strDi).getComponent(cc.Label).string;
-                }
-
-                
-               // Tool.GetChild(this.node,"奖池面板/容器/奖池/txt").getComponent(cc.Label).string = strDi+"奖池总金额";
-                Tool.GetChild(this.node,"奖池面板/容器/奖池/金额/num").getComponent(cc.Label).string = strCount;
+                const rewards = data["rewards"] || {};
+                const overview = "奖池面板/容器/奖池总览/";
+                Tool.GetChild(this.node, overview + "总金额/num").getComponent(cc.Label).string = jackpotAmount(data["all_rewards"]);
+                ["1/3", "2/5", "5/10", "10/20", "20/40", "50/100"].forEach(tier => {
+                    Tool.GetChild(this.node, overview + "各级奖池奖励设定/底皮" + tier.replace("/", "-"))
+                        .getComponent(cc.Label).string = jackpotAmount(rewards["底皮" + tier]);
+                });
+                const tier = jackpotTier(GameDataManager.getAccount().roomSetting);
+                Tool.GetChild(this.node, "奖池面板/容器/奖池/金额/num").getComponent(cc.Label).string = jackpotAmount(rewards[tier]);
+                Tool.GetChild(this.node, "奖池面板/容器/奖池/当前级别").getComponent(cc.Label).string = tier ? tier.replace("底皮", "底皮 ") : "底皮 —";
             }
         }
         else if(param.indexOf("举报_玩家_信息")>=0)
@@ -3878,40 +3822,51 @@ export default class panelGameView extends UIPanelViewBase {
     }
     public RewardPoolRec(strMsg:string)
     {
-        let data = JSON.parse(strMsg);
+        const msg = JSON.parse(strMsg)["RewardPoolRec"] || {};
+        const winner = msg["max_winner"] || [];
+        const root = Tool.GetChild(this.node, "奖池面板/容器/奖池记录");
+        const winnerRoot = root.getChildByName("最大赢家");
+        winnerRoot.getChildByName("name").getComponent(cc.Label).string = winner.length ? String(winner[0]) : "暂无赢家";
+        winnerRoot.getChildByName("type").getComponent(cc.Label).string = winner.length ? String(winner[1]) : "—";
+        winnerRoot.getChildByName("gold").getComponent(cc.Label).string = jackpotAmount(winner[2]);
+        winnerRoot.getChildByName("time").getComponent(cc.Label).string = jackpotTime(winner[3]);
 
-        let msg = data["RewardPoolRec"];
-        let arrayWin = msg["max_winner"];
-        if(arrayWin.length>0)
-        {
-            Tool.GetChild(this.node,"奖池面板/容器/奖池记录/最大赢家/name").getComponent(cc.Label).string = arrayWin[0].toString();
-            Tool.GetChild(this.node,"奖池面板/容器/奖池记录/最大赢家/type").getComponent(cc.Label).string = arrayWin[1].toString();
-            Tool.GetChild(this.node,"奖池面板/容器/奖池记录/最大赢家/gold").getComponent(cc.Label).string = arrayWin[2].toString();
-            Tool.GetChild(this.node,"奖池面板/容器/奖池记录/最大赢家/time").getComponent(cc.Label).string = arrayWin[3].toString();
+        const transRoot = Tool.GetChild(root, "记录列表/view/content");
+        transRoot.children.slice().forEach(child => { child.removeFromParent(); child.destroy(); });
+        const rows = Array.isArray(msg["history_list"]) ? msg["history_list"] : [];
+        const version = ++this.jackpotRecordVersion;
+        const status = root.getChildByName("V8记录状态");
+        const hint = root.getChildByName("V8滚动提示");
+        status.active = rows.length === 0;
+        status.getComponent(cc.Label).string = "暂无获奖记录";
+        hint.active = false;
+        if (!rows.length) {
+            transRoot.getComponent(cc.Layout).updateLayout();
+            if (this.scrollJCList) this.scrollJCList.scrollToTop();
+            return;
         }
-
-        let transRoot = Tool.GetChild(this.node,"奖池面板/容器/奖池记录/记录列表/view/content");
-        transRoot.removeAllChildren();
-
-        for(let one of msg["history_list"])
-        {
-            WebLoadingManager.loadBlockingRes("Prefabs/奖池记录对象","正在加载奖池记录",(err,obj)=>{
-                if(!cc.isValid(this.node) || !cc.isValid(transRoot))
-                    return;
-                if(err)
-                {
-                    cc.error(err.message || err);
-                    return null;
-                }
-                let node = cc.instantiate(obj);
+        // Load once and instantiate in server order. Ignore an older load callback
+        // if a newer response arrived while the prefab was importing/loading.
+        WebLoadingManager.loadBlockingRes("Prefabs/奖池记录对象", "正在加载奖池记录", (err, obj) => {
+            if (!cc.isValid(this.node) || !cc.isValid(transRoot) || version !== this.jackpotRecordVersion) return;
+            if (err) {
+                cc.error(err.message || err);
+                status.active = true;
+                status.getComponent(cc.Label).string = "记录加载失败，请重新打开";
+                return;
+            }
+            rows.forEach(one => {
+                const node = cc.instantiate(obj);
                 node.parent = transRoot;
-                node.getChildByName("name").getComponent(cc.Label).string = one[0].toString();
-                node.getChildByName("type").getComponent(cc.Label).string = one[1].toString();
-                node.getChildByName("gold").getComponent(cc.Label).string = one[2].toString();
-                node.getChildByName("time").getComponent(cc.Label).string = one[3].toString();
+                node.getChildByName("name").getComponent(cc.Label).string = String(one[0]);
+                node.getChildByName("type").getComponent(cc.Label).string = String(one[1]);
+                node.getChildByName("gold").getComponent(cc.Label).string = jackpotAmount(one[2]);
+                node.getChildByName("time").getComponent(cc.Label).string = jackpotTime(one[3], true);
             });
-        }
-    
+            transRoot.getComponent(cc.Layout).updateLayout();
+            hint.active = rows.length > 5;
+            if (this.scrollJCList) this.scrollJCList.scrollToTop();
+        });
     }
     public GetZhuanPanList()
     {
@@ -4000,7 +3955,8 @@ export default class panelGameView extends UIPanelViewBase {
             console.log('null')
         }
         objNew.active = true;
-        objNew.getChildByName("name").getComponent(cc.Label).string = one[1]+'('+one[2]+')'
+        objNew.getChildByName("name").getComponent(cc.Label).string = one[1];
+        objNew.getChildByName("V8玩家ID").getComponent(cc.Label).string = 'ID:' + one[2];
         let img = objNew.getChildByName("决策").getComponent(cc.Sprite);
         Tool.LoadImg(img,"other/牌谱/"+one[5]);
         objNew.getChildByName("操作").getComponent(cc.Label).string = one[6];

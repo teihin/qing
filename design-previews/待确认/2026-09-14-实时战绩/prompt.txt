@@ -1,0 +1,25 @@
+Use case: ui-mockup
+Asset type: Chinese portrait mobile card-game in-game real-time results drawer, final art concept.
+Primary request: Redesign the in-game bottom-left Record popup in exactly the V8-new visual family shown by the reference images. Transform the reference UI design into a new real-time results drawer, not a lobby or historical match record page.
+Input images: reference 1 is the authoritative blue-cyan and pale champagne-gold surface/material and typography style. Reference 2 is the authoritative results-list readability, table and positive/negative score treatment. Both are STYLE REFERENCES, not the required content or composition.
+Output: one high fidelity 1024 x 1536 portrait screenshot, flat straight-on pixel-aligned UI, no phone frame, no presentation board, no callout annotations.
+Composition: an OPEN LEFT DRAWER occupies exactly the left 76 percent of the canvas, x=0 to approximately 778, and the full 1536 height. It is anchored flush to the left/top/bottom of the screen. The remaining 24 percent on the right shows a subtle dimmed game background strip in desaturated blue/teal with a few partial seated-player circular frames. This strip is background context only and visually subdued. Do not invent an oval poker table; use a full-screen flat blue table surface. No visible brand name, logo, shield or 8L anywhere. No lobby/bar illustration. The left drawer is the overwhelmingly dominant subject.
+Style: match the references' medium-bright sapphire-to-cyan blue panel gradients, soft edge highlights, fine pale champagne gold double border, lightly luminous ivory-gold Chinese text, elegant clean rounded corners and restrained dimensionality. Be readable and polished, NOT dark black/navy, NOT yellow/orange gold, NOT ornate fantasy, NOT neon sci-fi. Smooth panel surfaces, no vertical stripes, no repeated stitched textures.
+Typography: large sharp Chinese text, strong hierarchy, generous row spacing, aligned numeric columns; concise UI labels, all text accurate verbatim. Titles 44-48px, list 30-34px, secondary 24-28px at final dimensions.
+Layout inside left drawer:
+1. Top header y~35-132: large centered title "实时战绩" flanked by fine decorative rules; a modest gold outlined circular X close control at the top right of the DRAWER, not the whole image. No logo.
+2. y~154-342: compact elegant summary group. Top line "奖池" and prominent number "128.60" centered, no coin illustration. Underneath, two equal statistic columns separated by one thin vertical line: "总带入" above "12,000", and "总得分" above "2,160". Do not change these labels or invent balances.
+3. Main results table y~370-1110, the largest area. Header exactly "昵称" / "带入" / "积分", with nickname left aligned and both numeric columns right aligned. Eight full rows, absolutely NO PLAYER AVATARS, no trophies, no rank medals, no playing cards in this results table. Use restrained alternating blue row backgrounds and thin separators, not eight heavy floating buttons. First row has a subtle brighter cyan-tinted background and a small "我" tag after name. Positive scores muted bright coral-red; negative scores soft clear jade-green; zero if used ivory. Do not color all numbers gold. Precisely these rows:
+"两棵树" [small 我 tag] | "2,000" | "+1,280"
+"清风徐来" | "2,000" | "-680"
+"山海之间" | "2,000" | "+560"
+"云淡风轻" | "1,500" | "-420"
+"一叶知秋" | "1,000" | "+320"
+"星河" | "1,000" | "-560"
+"南风" | "1,000" | "-200"
+"听雨" | "1,500" | "-300"
+The last row represents someone who left the table: gray text, small unobtrusive "已离桌" beneath the name. Keep the full row readable.
+A subtle narrow scroll indicator along the inner right of the table.
+4. Footer pinned to drawer bottom, separated from table. At y~1150, a short row with "围观" on left and a tiny outline clock plus "00:42:18" on right. At y~1210-1340, four compact circular watcher avatar placeholders with neutral tasteful generic portraits, small pale-gold rings, and names "小满", "木木", "阿远", "晴天". These avatars belong ONLY to watchers in this bottom area, not the eight result rows.
+5. Bottom y~1410: one simple line of controls "搓牌" left and an elegant compact ON toggle right (cyan-blue track, pale ivory-gold knob at right), with small "已开启" text. Leave clean bottom safe margin.
+Constraints: Entire drawer all visible; no cropped title or footer. Header and footer fixed, middle table visually scrollable. No extra tabs, pagination, confirm buttons, recharge buttons, historical dates, hand counts, rank numbers, service controls, promotional copy, watermarks or English text. This is an in-game left overlay, NOT a centered modal and NOT a full-screen standalone page. Spend visual space on the eight readable rows. Preserve the exact data and interface labels above.

@@ -1,0 +1,142 @@
+[
+  {
+    "name": "ingame_menu_v8_panel.png",
+    "source_box": [
+      28,
+      210,
+      642,
+      1059
+    ],
+    "size": [
+      614,
+      849
+    ],
+    "sha256": "40ebb1ecb2c04dd0364b6c5a8fe6f4a0f4b3d5b885ca0845a10ce838ac03c703"
+  },
+  {
+    "name": "ingame_menu_v8_watch.png",
+    "source_box": [
+      53,
+      355,
+      328,
+      512
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "b8fd49f8e1b2038b221246d8e210627aef145246bfd83d40f7431c71fcd6da6c"
+  },
+  {
+    "name": "ingame_menu_v8_chips.png",
+    "source_box": [
+      342,
+      355,
+      617,
+      512
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "0c27130dc39232d27d9d520656e648473a2bd614fd3a3dde57062b0982f6644d"
+  },
+  {
+    "name": "ingame_menu_v8_seat.png",
+    "source_box": [
+      53,
+      530,
+      328,
+      687
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "12f945f12e8855aa1e768914abd77e8e769b0697180b4e7343c3822eb1c58d64"
+  },
+  {
+    "name": "ingame_menu_v8_cards.png",
+    "source_box": [
+      342,
+      530,
+      617,
+      687
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "09afa50895648dfb531413ecfab70f8e98ad4146323540d74a830004a8d21f2f"
+  },
+  {
+    "name": "ingame_menu_v8_settings.png",
+    "source_box": [
+      53,
+      704,
+      328,
+      861
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "4f12c7cc819e38ce9ebf08f08130f263dc2f13fdd9f3d4073f7abe3db9e26d58"
+  },
+  {
+    "name": "ingame_menu_v8_dissolve.png",
+    "source_box": [
+      342,
+      704,
+      617,
+      861
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "d09aa189288c3f493c1fe8abdbd4ae2ab7bc387e6f37f5bf999ed7a7e46176ee"
+  },
+  {
+    "name": "ingame_menu_v8_service.png",
+    "source_box": [
+      53,
+      878,
+      328,
+      1035
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "7c19d2caa8f327b5ccf83512a29269d3964284db0f7f860cdebebdff2d05ca75"
+  },
+  {
+    "name": "ingame_menu_v8_exit.png",
+    "source_box": [
+      342,
+      878,
+      617,
+      1035
+    ],
+    "size": [
+      275,
+      157
+    ],
+    "sha256": "ce13d2c26c18ea31f0194c08f62f359c030eb9ac4edc880f10e03d78f3471264"
+  },
+  {
+    "name": "ingame_menu_v8_trigger.png",
+    "source_box": [
+      28,
+      128,
+      111,
+      212
+    ],
+    "size": [
+      83,
+      84
+    ],
+    "sha256": "ac8dd097b2fef3e4becfee43624c2cb95a13ad366c2b1000736585e6fe1c307f"
+  }
+]

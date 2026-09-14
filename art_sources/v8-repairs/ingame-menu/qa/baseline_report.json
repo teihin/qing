@@ -1,0 +1,64 @@
+{
+  "purpose": "drh8 隐藏弹层 Creator Sprite SizeMode 预加载问题基线预览",
+  "scene": "/Volumes/SSD/qing/assets/Scenes/drh8.fire",
+  "scene_sha256": "101497951440b2239500463ab796c29c6ae4cf84a29877ee5103f27862b7cb2e",
+  "canvas": [
+    750,
+    1334
+  ],
+  "isolation": "只保留 panelGameView/BK、目标弹层及其必要子状态",
+  "simulate_creator_size_mode": true,
+  "sprite_size_mode_behavior": "RAW 使用 SpriteFrame rawWidth/rawHeight，TRIMMED 使用 meta width/height，CUSTOM 保持 drh8.fire 序列化 contentSize。",
+  "widget_handling": "使用 Creator 在 750x1334 设计分辨率下已序列化的 Widget 对齐后坐标；Sprite SizeMode 只覆盖节点 contentSize，并沿用序列化锚点和位置。",
+  "known_limitations": [
+    "ScrollView 中由业务脚本运行时创建的数据条目不会出现在静态场景基线图中。",
+    "非矩形、椭圆或反向 cc.Mask 仍按轴对齐矩形近似裁剪。",
+    "粒子、Graphics、Spine 和运行时动画状态不由离线渲染器复现。",
+    "动态 Label 只显示 drh8.fire 当前序列化的占位值。"
+  ],
+  "outputs": [
+    {
+      "key": "config_menu",
+      "title": "配置菜单",
+      "file": "08_配置菜单.png",
+      "target": "Canvas/Normal/panelGameView/ConfigMain",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1261,
+        "nodes_active": 24,
+        "nodes_inactive": 1237,
+        "sprites_total": 12,
+        "sprites_rendered": 12,
+        "sprites_inactive": 692,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 3,
+        "labels_rendered": 2,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 116,
+        "sprite_size_nodes_changed": 60,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [],
+      "creator_size_mode_changes_including_inactive": [],
+      "creator_size_mode_errors": []
+    }
+  ],
+  "errors": []
+}

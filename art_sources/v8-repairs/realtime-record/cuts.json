@@ -1,0 +1,317 @@
+{
+  "panel": {
+    "source_box": [
+      26,
+      104,
+      789,
+      379
+    ],
+    "size": [
+      144,
+      144
+    ],
+    "border": 24,
+    "bytes": 8914,
+    "rgba_bytes": 82944,
+    "sha256": "d54177eebcf3e2c62c219e7a29011bc35631833cbe4bdcf01fc3d9d77be65bfe"
+  },
+  "drawer": {
+    "source_box": [
+      0,
+      0,
+      810,
+      1536
+    ],
+    "size": [
+      112,
+      160
+    ],
+    "border": 12,
+    "bytes": 6442,
+    "rgba_bytes": 71680,
+    "sha256": "aa0ccee95608a432d0c2552ad15cd4bc8a3829880f26eaa8698957bb7547b73b"
+  },
+  "title": {
+    "source_box": [
+      282,
+      20,
+      538,
+      88
+    ],
+    "size": [
+      256,
+      68
+    ],
+    "border": 0,
+    "bytes": 32508,
+    "rgba_bytes": 69632,
+    "sha256": "cc3f115f1ec0813a6f017c3d7569765b8adaaf5edf7ce26e4e6f834216929216"
+  },
+  "title_rule": {
+    "source_box": [
+      145,
+      46,
+      262,
+      68
+    ],
+    "size": [
+      117,
+      22
+    ],
+    "border": 0,
+    "bytes": 3332,
+    "rgba_bytes": 10296,
+    "sha256": "9a7cab6b2cd3c9b8af4fd3ba08c96c905c091d2f3c5bfab9dfc87b8365be4b12"
+  },
+  "pool_label": {
+    "source_box": [
+      370,
+      121,
+      447,
+      163
+    ],
+    "size": [
+      77,
+      42
+    ],
+    "border": 0,
+    "bytes": 7769,
+    "rgba_bytes": 12936,
+    "sha256": "18d413dfe32a81e721a28d6415e7a233a84870a006d4c1911655d084c857bc71"
+  },
+  "total_in": {
+    "source_box": [
+      183,
+      268,
+      305,
+      305
+    ],
+    "size": [
+      122,
+      37
+    ],
+    "border": 0,
+    "bytes": 9126,
+    "rgba_bytes": 18056,
+    "sha256": "95dbdc1bb7ff341042a5ffbf10d5850836084fe6606b10d4b33149127a34ab21"
+  },
+  "total_score": {
+    "source_box": [
+      515,
+      267,
+      637,
+      305
+    ],
+    "size": [
+      122,
+      38
+    ],
+    "border": 0,
+    "bytes": 9595,
+    "rgba_bytes": 18544,
+    "sha256": "580717124f22434bcb6d30c6b35219060452dacd38630a99e67ac6fbce64f81c"
+  },
+  "nickname": {
+    "source_box": [
+      65,
+      417,
+      139,
+      462
+    ],
+    "size": [
+      74,
+      45
+    ],
+    "border": 0,
+    "bytes": 7119,
+    "rgba_bytes": 13320,
+    "sha256": "9bcd50d00cbf08d567d99f0f39e1a742fd3b3773ee7b6c4442a36a56406feb4a"
+  },
+  "buyin": {
+    "source_box": [
+      451,
+      417,
+      518,
+      462
+    ],
+    "size": [
+      67,
+      45
+    ],
+    "border": 0,
+    "bytes": 6428,
+    "rgba_bytes": 12060,
+    "sha256": "404d63695358bf2d87f6fc60c8cf3079deb0e84d5c5ec9fcaf50b15f0f66d51e"
+  },
+  "score": {
+    "source_box": [
+      667,
+      417,
+      740,
+      462
+    ],
+    "size": [
+      73,
+      45
+    ],
+    "border": 0,
+    "bytes": 7234,
+    "rgba_bytes": 13140,
+    "sha256": "b9dcd8c8c58052dbb886d82c026ad38a6d263c0df277a0ae31d370dd56ad2681"
+  },
+  "watch": {
+    "source_box": [
+      58,
+      1161,
+      135,
+      1204
+    ],
+    "size": [
+      77,
+      43
+    ],
+    "border": 0,
+    "bytes": 6887,
+    "rgba_bytes": 13244,
+    "sha256": "bddcb7a3dacc4a80c5bf6e55443353460d67c358679decf95f6acd00e13ff27c"
+  },
+  "clock": {
+    "source_box": [
+      607,
+      1163,
+      645,
+      1200
+    ],
+    "size": [
+      38,
+      37
+    ],
+    "border": 0,
+    "bytes": 3504,
+    "rgba_bytes": 5624,
+    "sha256": "e4f3c6346a54d98210e2b6cae3be44aa7c6ce8c0fe49cf5f3b918b5c066a3930"
+  },
+  "squeeze": {
+    "source_box": [
+      58,
+      1437,
+      138,
+      1484
+    ],
+    "size": [
+      80,
+      47
+    ],
+    "border": 0,
+    "bytes": 8042,
+    "rgba_bytes": 15040,
+    "sha256": "ffe10d9bef1a5c4fb5d4b84f97e42c5ad9345e16926cba383514bd145264a5eb"
+  },
+  "close": {
+    "source_box": [
+      719,
+      18,
+      797,
+      95
+    ],
+    "size": [
+      78,
+      77
+    ],
+    "border": 0,
+    "bytes": 11800,
+    "rgba_bytes": 24024,
+    "sha256": "25fa23ff2d4f7f5240cc1c0543c6fa612bafdc2a4950948f9854ba083bf2d1a5"
+  },
+  "self": {
+    "source_box": [
+      185,
+      491,
+      241,
+      535
+    ],
+    "size": [
+      56,
+      44
+    ],
+    "border": 0,
+    "bytes": 5528,
+    "rgba_bytes": 9856,
+    "sha256": "a200812ef959e6cded236ba0b2edbd8c946da70baf5890cf8b30b6a9c266a5d2"
+  },
+  "switch": {
+    "source_box": [
+      519,
+      1427,
+      655,
+      1495
+    ],
+    "size": [
+      136,
+      68
+    ],
+    "border": 0,
+    "bytes": 14330,
+    "rgba_bytes": 36992,
+    "sha256": "af041e02605820ec11c38db8c2c1c97af65645b79572287a8f226dcbb3b35255"
+  },
+  "row": {
+    "source_box": [
+      260,
+      557,
+      380,
+      626
+    ],
+    "size": [
+      48,
+      32
+    ],
+    "border": 0,
+    "bytes": 1357,
+    "rgba_bytes": 6144,
+    "sha256": "928dabc599e5468b09b0946bf8b04a6195ab863444f999159c10735448605d4a"
+  },
+  "selected": {
+    "source_box": [
+      260,
+      472,
+      380,
+      551
+    ],
+    "size": [
+      48,
+      40
+    ],
+    "border": 0,
+    "bytes": 1799,
+    "rgba_bytes": 7680,
+    "sha256": "9d47eb6c79343209c8a539415936282653a16ce85600ba8d618470f7c376d95a"
+  },
+  "rule": {
+    "source_box": null,
+    "size": [
+      2,
+      2
+    ],
+    "border": 0,
+    "bytes": 78,
+    "rgba_bytes": 16,
+    "sha256": "dde4f298d0e614f5a29da71fd3ffb4589d323025d880f201692ecd01fdda6a01"
+  },
+  "avatar_ring": {
+    "source_box": [
+      60,
+      1218,
+      189,
+      1345
+    ],
+    "size": [
+      100,
+      100
+    ],
+    "border": 0,
+    "bytes": 7912,
+    "rgba_bytes": 40000,
+    "sha256": "5fbe6837ce65ca3d586648a0c67619a4e14f995f72100f4291dc57dcba6cee33"
+  }
+}

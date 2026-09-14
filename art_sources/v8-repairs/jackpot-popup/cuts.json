@@ -1,0 +1,467 @@
+{
+  "panel": {
+    "box": [
+      60,
+      130,
+      964,
+      1450
+    ],
+    "source": null,
+    "size": [
+      904,
+      1320
+    ],
+    "sha256": "6909f0dde94223777b57af634ba1f912c894a2cf6dbc6dbd3d8fb11e5fb27898"
+  },
+  "title": {
+    "box": [
+      419,
+      154,
+      611,
+      256
+    ],
+    "source": null,
+    "size": [
+      192,
+      102
+    ],
+    "sha256": "e59afa5924ce7e22119d694abc4c27c11c6687c58d07b188f1258eb06ee58a14"
+  },
+  "title_rule": {
+    "box": [
+      280,
+      257,
+      805,
+      293
+    ],
+    "source": null,
+    "size": [
+      525,
+      36
+    ],
+    "sha256": "c573a8b0d17d6efe0645e99ff799fafb7fbf88b6f95901844068e284f286d36d"
+  },
+  "close": {
+    "box": null,
+    "source": null,
+    "size": [
+      84,
+      84
+    ],
+    "sha256": "7259dac259980aaaae27134669057b0a779707a5c21161d7033932e0db2e37f0"
+  },
+  "tab_0_on": {
+    "box": [
+      85,
+      314,
+      373,
+      412
+    ],
+    "source": null,
+    "size": [
+      288,
+      98
+    ],
+    "sha256": "e6a72a107c9dc57d14c728709f774ab2ed93f51e73e29b159cf864748641d8a5"
+  },
+  "tab_0_off": {
+    "box": [
+      85,
+      314,
+      373,
+      412
+    ],
+    "source": null,
+    "size": [
+      288,
+      98
+    ],
+    "sha256": "55bdcd53659e9ae499b5fd9e9a0a8ef323d8f67d64bf95449be133715dad3a80"
+  },
+  "tab_1_on": {
+    "box": [
+      373,
+      314,
+      653,
+      412
+    ],
+    "source": null,
+    "size": [
+      280,
+      98
+    ],
+    "sha256": "1e83b609f58cd36d7e63949ffa52fb4edcd635c5fe9902cb1112a824abef0efe"
+  },
+  "tab_1_off": {
+    "box": [
+      373,
+      314,
+      653,
+      412
+    ],
+    "source": null,
+    "size": [
+      280,
+      98
+    ],
+    "sha256": "50c66952022fd2ea58fb160f0edc3da6dcabb585864828b65c2a34d13ed3da0b"
+  },
+  "tab_2_on": {
+    "box": [
+      653,
+      314,
+      940,
+      412
+    ],
+    "source": null,
+    "size": [
+      287,
+      98
+    ],
+    "sha256": "89a082b758ad1953a9ac472f52237828c87468b6d5202b02b2c36bc81e2c65b5"
+  },
+  "tab_2_off": {
+    "box": [
+      653,
+      314,
+      940,
+      412
+    ],
+    "source": null,
+    "size": [
+      287,
+      98
+    ],
+    "sha256": "5dfb3a0b9e2d1f3bc46eb3712f20176ad04713483bcbd41f2b0dd6d4eea9de7e"
+  },
+  "hero_0": {
+    "box": [
+      85,
+      431,
+      940,
+      742
+    ],
+    "source": null,
+    "size": [
+      855,
+      311
+    ],
+    "sha256": "fdbb85d3d033deb65f95cb4ed89b5ec36309e8675bd11327f12373c86190a9cc"
+  },
+  "hero_1": {
+    "box": [
+      85,
+      431,
+      940,
+      742
+    ],
+    "source": null,
+    "size": [
+      855,
+      311
+    ],
+    "sha256": "5690e47c740cba9ddf58763dddc29d3aca38151bd2ab19d26117ed117c02c061"
+  },
+  "hero_2": {
+    "box": [
+      85,
+      431,
+      940,
+      751
+    ],
+    "source": null,
+    "size": [
+      855,
+      320
+    ],
+    "sha256": "4e96836124e5716daa8f0b7ed40649d161f469dc3907191d18eda62f52f162d1"
+  },
+  "section_0": {
+    "box": [
+      90,
+      757,
+      934,
+      809
+    ],
+    "source": null,
+    "size": [
+      844,
+      52
+    ],
+    "sha256": "0c9c10380ad1aa16ce6faba1e25cc80bfd1911ff8e702f61622c043fab9c6288"
+  },
+  "section_1": {
+    "box": [
+      90,
+      752,
+      934,
+      807
+    ],
+    "source": null,
+    "size": [
+      844,
+      55
+    ],
+    "sha256": "e527bba4b8bfab13ecbb06ff19b23e60d8b7ceab5f11cf519807449a845cc782"
+  },
+  "section_2": {
+    "box": [
+      90,
+      765,
+      934,
+      817
+    ],
+    "source": null,
+    "size": [
+      844,
+      52
+    ],
+    "sha256": "fc5685de09bd3ab3172749c309a7a0b16a6ba55a90612236dc8beeb4c32d98e9"
+  },
+  "tier_0": {
+    "box": [
+      85,
+      818,
+      505,
+      947
+    ],
+    "source": null,
+    "size": [
+      420,
+      129
+    ],
+    "sha256": "2a9347f2cc4d920bf1e8068d4f3a36edbbae8e6c768b67e42d4c37fb8de79b42"
+  },
+  "tier_1": {
+    "box": [
+      520,
+      818,
+      940,
+      947
+    ],
+    "source": null,
+    "size": [
+      420,
+      129
+    ],
+    "sha256": "1af5b6fc30bdfa2e5ad47b5593a5583f4053e55c212334a09e91c92031db4a39"
+  },
+  "tier_2": {
+    "box": [
+      85,
+      962,
+      505,
+      1091
+    ],
+    "source": null,
+    "size": [
+      420,
+      129
+    ],
+    "sha256": "80e2ae4351c25b6273438ecb63ae7766493901a3329329454d88f10ca21b101d"
+  },
+  "tier_3": {
+    "box": [
+      520,
+      962,
+      940,
+      1091
+    ],
+    "source": null,
+    "size": [
+      420,
+      129
+    ],
+    "sha256": "b202acfab688811f5e15354af4ab419426d6b6d1dfed2f7e8691f05c70cb9202"
+  },
+  "tier_4": {
+    "box": [
+      85,
+      1106,
+      505,
+      1235
+    ],
+    "source": null,
+    "size": [
+      420,
+      129
+    ],
+    "sha256": "da48f03775efad298ae001dd56e827f7a4b2a664f5cc0be0e238aee51ea4312a"
+  },
+  "tier_5": {
+    "box": [
+      520,
+      1106,
+      940,
+      1235
+    ],
+    "source": null,
+    "size": [
+      420,
+      129
+    ],
+    "sha256": "9e9acc29257c26e73ea66e5c343bb7b8217a1041f715cfefee73cd510d0e38fd"
+  },
+  "rule_overview": {
+    "box": [
+      85,
+      1251,
+      940,
+      1429
+    ],
+    "source": null,
+    "size": [
+      855,
+      178
+    ],
+    "sha256": "53e061ec909e2dee9df722d9bb3bc5bdc8aaa70ec0ab6a58ebc76cf067716457"
+  },
+  "detail_header": {
+    "box": [
+      85,
+      809,
+      940,
+      867
+    ],
+    "source": null,
+    "size": [
+      855,
+      58
+    ],
+    "sha256": "2d08f4a68f07584b04c84672ca3308c2aa577a0bcdd47749ea97d9c3ba1fdad9"
+  },
+  "hand_0": {
+    "box": [
+      85,
+      864,
+      940,
+      1014
+    ],
+    "source": null,
+    "size": [
+      855,
+      150
+    ],
+    "sha256": "2abe273d31e815dbcd7e8478774b51404c254e93364ed088ee72f162f6d6b667"
+  },
+  "hand_1": {
+    "box": [
+      85,
+      1024,
+      940,
+      1174
+    ],
+    "source": null,
+    "size": [
+      855,
+      150
+    ],
+    "sha256": "80009b72eea725c95f4a0e4daa1f5af674c811793e3e3af7090f6a59e97d2298"
+  },
+  "hand_2": {
+    "box": [
+      85,
+      1183,
+      940,
+      1333
+    ],
+    "source": null,
+    "size": [
+      855,
+      150
+    ],
+    "sha256": "0d6833d9345ff9e17ae2fc7b47a7c5b561ca030c7693489590c75275babb17aa"
+  },
+  "rule_detail": {
+    "box": [
+      85,
+      1347,
+      940,
+      1431
+    ],
+    "source": null,
+    "size": [
+      855,
+      84
+    ],
+    "sha256": "4318e584ea7354a6d9ddc089e97e162cf79b6b6ea315c94fd23030324a4c99de"
+  },
+  "list": {
+    "box": null,
+    "source": null,
+    "size": [
+      855,
+      606
+    ],
+    "sha256": "ec5e5b7079b4ff493201ac4a2e09bfdd0c4bb322b37b6db7e0bcfe20e72a8bdb"
+  },
+  "list_header": {
+    "box": [
+      103,
+      842,
+      921,
+      893
+    ],
+    "source": null,
+    "size": [
+      818,
+      51
+    ],
+    "sha256": "d52e11b603be9ec497c04593869dfd006b09c52d31820d7a7be7079e0eeb7a33"
+  },
+  "list_hint": {
+    "box": [
+      383,
+      1350,
+      641,
+      1386
+    ],
+    "source": null,
+    "size": [
+      258,
+      36
+    ],
+    "sha256": "0cf7ea8267e1009e0f7e3a7ed7e20835bee3bdcd7c278796fe0d75b22addcc4d"
+  },
+  "row_rule": {
+    "box": [
+      104,
+      974,
+      919,
+      975
+    ],
+    "source": null,
+    "size": [
+      815,
+      1
+    ],
+    "sha256": "6e49c3a331a5bfccc29176a85d4edff63921c3f153a71b492e4fecbc00e40e25"
+  },
+  "dim": {
+    "box": null,
+    "source": null,
+    "size": [
+      4,
+      4
+    ],
+    "sha256": "649fd64235804d0bca0a8363b3c88c27b56aeeda4970df42e722b7e96e8c648d"
+  },
+  "serif_digits": {
+    "box": null,
+    "source": "Approved jackpot number glyphs; missing glyphs use matching native serif/sans font",
+    "size": [
+      1024,
+      256
+    ],
+    "sha256": "9a3daa23197daba46702a2448bd43a90e784d4296375a271f887b0ee91155cb0"
+  },
+  "digits": {
+    "box": null,
+    "source": "Approved jackpot number glyphs; missing glyphs use matching native serif/sans font",
+    "size": [
+      1024,
+      256
+    ],
+    "sha256": "09cacc85a19f55e1836d4de0516e300ec349c0a9bb57302439ccb2edb85c1c3e"
+  }
+}
