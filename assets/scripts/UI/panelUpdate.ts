@@ -330,6 +330,7 @@ export default class panelUpdate extends UIPanelViewBase {
         if(!cc.sys.isNative)
             return;
         let path = jsb.fileUtils.getWritablePath()+"Remote";
+        this._storagePath = path;
         let file = path+"/project.manifest";
         if(!jsb.fileUtils.isFileExist(file))
         {
@@ -366,10 +367,169 @@ export default class panelUpdate extends UIPanelViewBase {
             Debug.Error("version.manifest已存在!");
         }
 
+        //启动自检：把上次没下载完/写坏的热更文件从清单里剔除，
+        //并把本地清单版本降一位，促使下次启动真正执行一次 update() 把它们补回来
+        if(this.RepairIncompleteDownloads(path))
+        {
+            Debug.Error("启动自检发现未完成的热更文件，已安排重新下载");
+        }
+
         let arrayAll:string[] = jsb.fileUtils.listFiles(path);
         for(var item of arrayAll)
         {
             Debug.Error(item);
+        }
+    }
+
+    /**
+     * 递归收集目录下的所有文件（目录项以 / 结尾）。
+     */
+    private CollectFiles(root:string,out:string[],depth:number){
+        if(depth > 8 || out.length > 20000)
+            return;
+        let list:string[] = jsb.fileUtils.listFiles(root);
+        for(let one of list)
+        {
+            if(one.indexOf("/./") >= 0 || one.indexOf("/../") >= 0)
+                continue;
+            if(one.lastIndexOf("/") === one.length - 1)
+                this.CollectFiles(one,out,depth+1);
+            else
+                out.push(one);
+        }
+    }
+
+    /**
+     * 启动时自检热更目录，找出"没下完/写坏"的文件：
+     * 1) 残留的 *.tmp 说明那次下载没有完成；
+     * 2) 已经落地的文件如果大小与清单记录不符，说明内容不完整。
+     * 命中后把这些文件从本地清单里剔除并删除坏文件，返回 true 让上层安排重新下载。
+     * 否则本地清单会一直声称它已下载，引擎只能回落到安装包里的旧资源，
+     * 而且再也不会补下（2026-09-16 启动背景图显示 8L 老图就是这个原因）。
+     * 注意：project.manifest / version.manifest 的资源条目是自引用的
+     * （清单里记的 size 是上一版清单的大小），核对时必须跳过，否则每次启动都会误判。
+     */
+    private RepairIncompleteDownloads(storagePath:string):boolean{
+        // 自检绝不能影响启动：整个过程包在 try 里，任何异常都当作"没发现问题"
+        try{
+        if(!cc.sys.isNative)
+            return false;
+        if(!jsb.fileUtils.isFileExist(storagePath))
+            return false;
+
+        let files:string[] = [];
+        this.CollectFiles(storagePath,files,0);
+        if(files.length === 0)
+            return false;
+
+        // 需要同步修复的清单文件：<storage>/project.manifest 以及资源目录里的清单副本
+        let manifestFiles:string[] = [storagePath+"/project.manifest"];
+        for(let one of files)
+        {
+            if(one.lastIndexOf(".manifest") === one.length - 9)
+                manifestFiles.push(one);
+        }
+        let manifests:any[] = [];
+        let prefixLen = storagePath.length + 1;
+        for(let one of manifestFiles)
+        {
+            if(!jsb.fileUtils.isFileExist(one))
+                continue;
+            let data:any = null;
+            try{
+                data = JSON.parse(jsb.fileUtils.getStringFromFile(one));
+            }
+            catch(e){
+                // 清单文件本身没下完整：删掉，由 CheckLocalConfig 重新写一份
+                Debug.Error("清单文件不完整，已删除待重建:"+one);
+                jsb.fileUtils.removeFile(one);
+                continue;
+            }
+            if(data === null || data === undefined || typeof data !== "object")
+                continue;
+            if(data.assets === null || data.assets === undefined || typeof data.assets !== "object")
+                continue;
+            manifests.push({ "path":one, "data":data });
+        }
+        if(manifests.length === 0)
+            return false;
+
+        let broken:string[] = [];
+        for(let one of files)
+        {
+            let relative = one.substring(prefixLen);
+            if(relative.lastIndexOf(".tmp") === relative.length - 4)
+            {
+                broken.push(relative.substring(0,relative.length-4));
+                continue;
+            }
+            if(relative.lastIndexOf(".manifest") === relative.length - 9)
+                continue;  // 清单是自引用的，不能按 size 核对
+            let asset = manifests[0].data.assets[relative];
+            if(asset === null || asset === undefined)
+                continue;  // 不是热更文件（备份等），跳过
+            if(asset.compressed) continue;  // 压缩资源落盘大小与清单不同，不参与核对
+            if(jsb.fileUtils.getFileSize(one) !== asset.size)
+                broken.push(relative);
+        }
+        if(broken.length === 0)
+            return false;
+
+        for(let relative of broken)
+        {
+            for(let one of manifests)
+            {
+                let asset = one.data.assets[relative];
+                if(asset !== null && asset !== undefined)
+                    delete one.data.assets[relative];
+            }
+            jsb.fileUtils.removeFile(storagePath+"/"+relative);
+            jsb.fileUtils.removeFile(storagePath+"/"+relative+".tmp");
+            Debug.Error("热更文件不完整，已从清单移除并安排重新下载:"+relative);
+        }
+        //本地清单版本降一位：引擎在"已最新"状态下 update() 不会执行任何下载
+        //（AssetsManagerEx 的 UP_TO_DATE 不在 update() 的状态分支里），
+        //只有让本地版本低于服务器，下次启动才会走 NEW_VERSION_FOUND ->
+        //hotUpdate() 的正常路径，把上面被剔除的文件补回来。
+        //只降最后一位、不动主/次版本，避免触发强制换包流程。
+        for(let one of manifests)
+        {
+            let oldVersion:string = one.data.version;
+            if(typeof oldVersion === "string" && oldVersion.length > 0)
+            {
+                let parts:string[] = oldVersion.split(".");
+                let lastPart:number = parseInt(parts[parts.length-1]);
+                if(isNaN(lastPart) === false && lastPart > 0)
+                {
+                    parts[parts.length-1] = String(lastPart - 1);
+                    one.data.version = parts.join(".");
+                    Debug.Error("热更自检：本地清单版本 "+oldVersion+" -> "+one.data.version);
+                }
+            }
+            jsb.fileUtils.writeStringToFile(JSON.stringify(one.data),one.path);
+        }
+        //同步复位 tempver：它与本地清单版本不一致时，checkCb 会走"缓存版本过旧"
+        //分支调用 DeleteAllFiles 清空整个热更目录（那是基础包升级时的复位逻辑），
+        //这里必须避免误触发。以写盘后的实际内容为准。
+        let appliedVersion:string = null;
+        try{
+            let check:any = JSON.parse(jsb.fileUtils.getStringFromFile(storagePath+"/project.manifest"));
+            if(check !== null && check !== undefined && typeof check.version === "string")
+                appliedVersion = check.version;
+        }
+        catch(e2){ }
+        if(appliedVersion === null && manifests[0] !== undefined && manifests[0].data !== undefined &&
+           typeof manifests[0].data.version === "string")
+        {
+            appliedVersion = manifests[0].data.version;
+        }
+        if(appliedVersion !== null)
+            cc.sys.localStorage.setItem("tempver",appliedVersion);
+        return true;
+        }
+        catch(e){
+            Debug.Error("热更自检异常，已跳过:"+e);
+            return false;
         }
     }
 

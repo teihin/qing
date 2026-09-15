@@ -1,8 +1,17 @@
 # qing 当前状态
 
-更新时间：2026-09-15
+更新时间：2026-09-16
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。历史验证不代表当前结果。
+
+## 2026-09-16 热更新"清单说有、磁盘没有"自愈
+
+- 根因（真机实测）：`Remote/…/native/5e/5e7fa6f0-….png` 只下到 53% 留了 `.tmp`，本地清单却已记新图 md5 ⇒ 引擎回落安装包旧图且永不再补下。差异对比用 `<storage>/project.manifest`；`AssetsManagerEx::update()` 无 `UP_TO_DATE` 分支，不能用"发现坏了直接 `update()`"修。
+- 修法：`panelUpdate.ts` 纯新增 160 行启动自检（`.tmp`/落地文件大小核对 ⇒ 剔除记录、删坏文件、版本降末位、复位 `tempver`，`try/catch` 兜底）；真机只读验证 0 误判、正例精确抓出、≈90ms，触发机制已端到端实测。**未重建、未出包上传。**详见[交接](handoffs/2026-09-16-hotupdate-incomplete-file.md)。
+
+## 2026-09-16 大厅房间行：BY 卡面 + 独立图标
+
+- 大厅→发现→房间列表每行改为「筹码+底皮值 / 时钟+时长 / 人数+人数 / 剩余时间 12:12」，字段取压缩数组 `[5]/[6]/[3][4]/[2]`；`ScrollItem.ts`、`panelMain.prefab` 房间行已改，卡面重绘为只含 `BY` 盾牌的 1426×260 底框（直接缩放不抠图，UUID 未变），筹码/时钟/人数三个图标独立成 `assets/V7/room_icon_*.png`。见[交接](handoffs/2026-09-16-lobby-room-row-by.md)；未 Creator 导入、未构建。
 
 ## 2026-09-15 资源打包体积与 V7 移出 resources
 

@@ -20,6 +20,7 @@ export default class ScrollItem extends ScrollItemBase {
         this.node.active = true;
         let room_id = jRoom[0] == null ? "" : jRoom[0].toString();
         let room_status = jRoom[1];
+        let remark = jRoom[2];
         let plays = jRoom[3];
         let max_plays = jRoom[4];
         let game_pi = jRoom[5];
@@ -53,10 +54,11 @@ export default class ScrollItem extends ScrollItemBase {
         // 确认稿卡片没有旧版“地九王”角标；玩法信息仍由房间数据和
         // 进入后的规则面板保留，这里只关闭旧皮肤的叠加美术。
         this.node.getChildByName("地九王").active = false;
-        this.node.getChildByName("底皮").getComponent(cc.Label).string = bottomSkin;
+        // 下排按竞品顺序：筹码图标 + 底皮值 / 时钟 + 时长 / 人数图标 + 人数 / 剩余时间
+        this.node.getChildByName("底皮").getComponent(cc.Label).string = String(game_pi || "").replace("底皮", "").replace("局数", "");
         this.node.getChildByName("人数").getComponent(cc.Label).string = plays+'/'+max_plays;
         this.node.getChildByName("时间").getComponent(cc.Label).string = game_time;
-        this.node.getChildByName("倒计时").getComponent(cc.Label).string = String(game_pi || "").replace("底皮", "").replace("局数", "");
+        this.node.getChildByName("倒计时").getComponent(cc.Label).string = "剩余时间 " + (remark == null || remark === "" ? "--" : remark);
         this.node.getChildByName("name").getComponent(cc.Label).string = "房间 " + displayRoomID;
 
         const statusPath = "other/状态_"+room_status;
