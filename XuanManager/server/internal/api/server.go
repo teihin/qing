@@ -31,14 +31,16 @@ type contextKey string
 const principalKey contextKey = "xuan-principal"
 
 type Server struct {
-	db                  *sql.DB
-	gameDB              *sql.DB
-	cfg                 config.Config
-	mux                 *http.ServeMux
-	logger              *slog.Logger
-	registrationLimiter *registrationRateLimiter
-	gameHTTPClient      httpDoer
-	platformRevenueSem  chan struct{}
+	db                     *sql.DB
+	gameDB                 *sql.DB
+	cfg                    config.Config
+	mux                    *http.ServeMux
+	logger                 *slog.Logger
+	registrationLimiter    *registrationRateLimiter
+	passwordAccountLimiter *passwordAttemptLimiter
+	passwordIPLimiter      *passwordAttemptLimiter
+	gameHTTPClient         httpDoer
+	platformRevenueSem     chan struct{}
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, principal)
@@ -49,14 +51,16 @@ func New(db *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 
 func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 	s := &Server{
-		db:                  db,
-		gameDB:              gameDB,
-		cfg:                 cfg,
-		mux:                 http.NewServeMux(),
-		logger:              logger,
-		registrationLimiter: newRegistrationRateLimiter(10, 10*time.Minute),
-		gameHTTPClient:      &http.Client{Timeout: 6 * time.Second},
-		platformRevenueSem:  make(chan struct{}, 1),
+		db:                     db,
+		gameDB:                 gameDB,
+		cfg:                    cfg,
+		mux:                    http.NewServeMux(),
+		logger:                 logger,
+		registrationLimiter:    newRegistrationRateLimiter(10, 10*time.Minute),
+		passwordAccountLimiter: newPasswordAttemptLimiter(5, time.Hour, 30*time.Minute),
+		passwordIPLimiter:      newPasswordAttemptLimiter(20, time.Hour, 30*time.Minute),
+		gameHTTPClient:         &http.Client{Timeout: 6 * time.Second},
+		platformRevenueSem:     make(chan struct{}, 1),
 	}
 	s.routes()
 	return s.securityHeaders(s.mux)
@@ -67,6 +71,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("OPTIONS /api/game/registrations", s.handleRegistrationOptions)
 	s.mux.HandleFunc("POST /api/game/registrations", s.handleCreateGameRegistration)
+	s.mux.HandleFunc("OPTIONS /api/game/change-login-password", s.handleChangePasswordOptions)
+	s.mux.HandleFunc("POST /api/game/change-login-password", s.handleChangePlayerLoginPassword)
 	s.mux.Handle("GET /api/auth/me", s.authorized("", false, s.handleMe))
 	s.mux.Handle("POST /api/auth/logout", s.authorized("", true, s.handleLogout))
 	s.mux.Handle("PUT /api/auth/password", s.authorized("", true, s.handleChangePassword))

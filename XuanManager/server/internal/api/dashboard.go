@@ -16,6 +16,7 @@ type auditItem struct {
 	Action        string    `json:"action"`
 	TargetType    string    `json:"targetType"`
 	TargetID      string    `json:"targetId"`
+	TargetName    string    `json:"targetName"`
 	ResultCode    int       `json:"resultCode"`
 	ResultMessage string    `json:"resultMessage"`
 	IP            string    `json:"ip"`
@@ -133,8 +134,12 @@ WHERE (? = 1 OR `+nonRootAuditVisibilitySQL+`)
 func (s *Server) queryAudits(r *http.Request, p principal, keyword string, page, size int) ([]auditItem, error) {
 	like := "%" + keyword + "%"
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
-id, operator_name, action, target_type, target_id, result_code, result_message, ip, DATE_ADD(created_at, INTERVAL 8 HOUR)
+audit_row.id, audit_row.operator_name, audit_row.action, audit_row.target_type, audit_row.target_id,
+COALESCE(NULLIF(TRIM(game_player.sm_name), ''), COALESCE(game_login.accountName, ''), ''),
+audit_row.result_code, audit_row.result_message, audit_row.ip, DATE_ADD(audit_row.created_at, INTERVAL 8 HOUR)
 FROM mgr_audit_log audit_row
+LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
+LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
 WHERE (? = 1 OR `+nonRootAuditVisibilitySQL+`)
   AND (? = '' OR audit_row.operator_name LIKE ? OR audit_row.action LIKE ? OR audit_row.target_id LIKE ?)
 ORDER BY audit_row.id DESC LIMIT ? OFFSET ?`, canSeeProtectedRootFlag(p), keyword, like, like, like, size, (page-1)*size)
@@ -146,7 +151,7 @@ ORDER BY audit_row.id DESC LIMIT ? OFFSET ?`, canSeeProtectedRootFlag(p), keywor
 	for rows.Next() {
 		var item auditItem
 		if err := rows.Scan(&item.ID, &item.OperatorName, &item.Action, &item.TargetType, &item.TargetID,
-			&item.ResultCode, &item.ResultMessage, &item.IP, &item.CreatedAt); err != nil {
+			&item.TargetName, &item.ResultCode, &item.ResultMessage, &item.IP, &item.CreatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)

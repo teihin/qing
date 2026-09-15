@@ -16,6 +16,7 @@ export default class ConfigManager extends cc.Component {
     public resetPwdUrl:string = "http://www.163.com";
     public kefuUrl:string = "http://154.37.155.17/chattool/player?d={info}";
     public registrationUrl:string = "http://154.37.155.17/xuanmanager/api/game/registrations";
+    public changeLoginPasswordUrl:string = "http://154.37.155.17/xuanmanager/api/game/change-login-password";
 
     static instance: ConfigManager
     static getInstance() {

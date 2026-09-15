@@ -69,6 +69,7 @@ export default class panelLogin extends UIPanelViewBase {
     private _resetInputEditing:{[key:string]:boolean} = {};
     private _resetColoredPlaceholders:{[key:string]:cc.Color} = {};
     private _resetSubmitting:boolean = false;
+    private _resetRequest:XMLHttpRequest = null;
     onLoad(){
         super.onLoad();
 
@@ -344,6 +345,11 @@ export default class panelLogin extends UIPanelViewBase {
 
     private closeResetPanel()
     {
+        if(this._resetRequest != null)
+        {
+            this._resetRequest.abort();
+            this._resetRequest = null;
+        }
         for(let key in this._resetInputs)
         {
             this._resetInputs[key].blur();
@@ -393,12 +399,56 @@ export default class panelLogin extends UIPanelViewBase {
         });
     }
 
-    // 重置密码接口由服务端提供后再替换这里的实现；当前只完成输入校验与占位返回。
+    // 登录前自助改密：POST /api/game/change-login-password，身份核验只依赖交易密码。
     private requestResetPassword(params:{[key:string]:string})
     {
-        this._resetSubmitting = false;
-        Debug.Log("重置密码提交(接口待接入):"+params["loginName"]);
-        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"重置密码接口待接入");
+        let request = new XMLHttpRequest();
+        let completed = false;
+        this._resetRequest = request;
+        let finish = (message:string,ok:boolean)=>{
+            if(completed)
+                return;
+            completed = true;
+            this._resetRequest = null;
+            this._resetSubmitting = false;
+            if(ok)
+            {
+                this.closeResetPanel();
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+                return;
+            }
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+        };
+        request.onreadystatechange = ()=>{
+            if(request.readyState !== 4)
+                return;
+            let payload:any = null;
+            try{ payload = JSON.parse(request.responseText); }catch(e){ payload = null; }
+            if(payload == null)
+            {
+                finish("无法连接服务器，请检查网络后重试",false);
+                return;
+            }
+            // 与后台统一使用 ok/data 信封
+            if(payload.ok === true)
+            {
+                finish("登录密码修改成功，请使用新密码登录",true);
+                return;
+            }
+            let message:string = payload.error != null && payload.error.message != null ? payload.error.message : "";
+            if(message === "") message = "修改失败，请稍后再试";
+            finish(message,false);
+        };
+        request.onerror = ()=>finish("无法连接服务器，请检查网络后重试",false);
+        request.ontimeout = ()=>finish("请求超时，请稍后再试",false);
+        request.open("POST",ConfigManager.getInstance().changeLoginPasswordUrl,true);
+        request.timeout = 12000;
+        request.setRequestHeader("Content-Type","application/json");
+        request.send(JSON.stringify({
+            account:params["loginName"],
+            pay_pwd:params["tradePassword"],
+            new_pwd:params["password"]
+        }));
     }
 
     private openRegisterPanel()

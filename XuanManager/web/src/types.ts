@@ -412,6 +412,7 @@ export interface AuditItem {
   action: string;
   targetType: string;
   targetId: string;
+  targetName: string;
   resultCode: number;
   resultMessage: string;
   ip: string;
