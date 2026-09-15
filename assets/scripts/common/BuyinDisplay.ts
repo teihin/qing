@@ -16,8 +16,18 @@ export default class BuyinDisplay extends cc.Component {
     private count = 0;
     public currentAmount = 0;
 
-    onLoad() { this.slider.node.on('slide', this.onSlide, this); }
-    onDestroy() { this.slider.node.off('slide', this.onSlide, this); }
+    onLoad() {
+        if (this.slider != null && cc.isValid(this.slider.node))
+            this.slider.node.on('slide', this.onSlide, this);
+    }
+
+    // 销毁场景时引擎先销毁子节点再销毁父节点组件，slider 的 node 可能已被置空。
+    // 这里必须判空，否则 onDestroy 抛出的异常会中断引擎的销毁/切场景流程，
+    // 表现为退出房间时 Error 5000 刷屏与画面反复闪烁。
+    onDestroy() {
+        if (this.slider != null && cc.isValid(this.slider.node))
+            this.slider.node.off('slide', this.onSlide, this);
+    }
 
     public configure(minimum: number, balance: number, already: number) {
         this.step = Number.isFinite(minimum) && minimum > 0 ? minimum : 0;
