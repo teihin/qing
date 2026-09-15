@@ -8,7 +8,6 @@
   {"source":"design-previews/效果图V8-new/01-主页面/02-大厅.png","output":"assets/resources/V7/filter_small_exact_sel.png","box":[40,595,161,671],"stripClear":[[53,608,151,659,49,53]],"glyphOverlay":[193,615,260,652],"ink":[8,26,36]},
   {"source":"design-previews/效果图V8-new/01-主页面/02-大厅.png","output":"assets/resources/V7/filter_middle_exact_sel.png","box":[40,595,161,671],"stripClear":[[53,608,151,659,49,53]],"glyphOverlay":[304,615,373,652],"ink":[8,26,36]},
   {"source":"design-previews/效果图V8-new/01-主页面/02-大厅.png","output":"assets/resources/V7/filter_large_exact_sel.png","box":[40,595,161,671],"stripClear":[[53,608,151,659,49,53]],"glyphOverlay":[416,615,481,652],"ink":[8,26,36]},
-  {"source":"design-previews/效果图V8-new/01-主页面/02-大厅.png","output":"assets/resources/V7/room_card_exact.png","box":[29,694,912,827],"radius":20,"horizontalClear":[[198,708,708,770],[277,777,316,817],[474,776,539,818],[607,776,707,818],[785,775,865,818],[754,706,887,769]]},
   {"source":"design-previews/效果图V8-new/01-主页面/02-大厅.png","output":"assets/resources/V7/lobby_list_bg_exact.png","box":[0,694,941,1537],"sideField":true},
   {"source":"design-previews/效果图V8-new/01-主页面/02-大厅.png","output":"assets/resources/V7/nav_bar_exact.png","box":[0,1519,941,1672],"polygon":[[0,18],[393,18],[408,11],[436,0],[505,0],[533,11],[548,18],[941,18],[941,153],[0,153]]},
   {"source":"design-previews/效果图V8-new/01-主页面/02-大厅.png","output":"assets/resources/other/状态_游戏中.png","box":[758,711,884,761]},

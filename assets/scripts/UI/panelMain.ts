@@ -114,6 +114,7 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_role", this, "set_role");
         KBEngine.Event.register("set_photo", this, "set_photo");
         KBEngine.Event.register("set_anti_theft_on", this, "set_anti_theft_on");
+        KBEngine.Event.register("set_playcount_count", this, "set_playcount_count");
         KBEngine.Event.register("onAccountCommand", this, "onAccountCommand");
 
         this.antiTheftToggle = Tool.GetChild(this.node,"设置/列表/item/防盗号/防盗号开关").getComponent(cc.Toggle);
@@ -286,6 +287,7 @@ export default class panelMain extends UIPanelViewBase {
         this.set_guuid("");
 
         this.set_photo(null);
+        this.set_playcount_count();
     }
 
     /**
@@ -598,6 +600,34 @@ export default class panelMain extends UIPanelViewBase {
         Tool.GetChild(this.node,"Main/我的/信息/id").getComponent(cc.Label).string = KBEngine.app.player().guuid;
         MobileManager.getInstance().SetAccount();
     }
+
+    /**
+     * “我的”资料卡的五档底皮手数取自 Account.playcount_count。
+     * 服务端按底皮档位升序以“#”分隔下发：0.1/0.3、0.2/0.5、1/3、2/5、5/10、10/20、20/40、50/100，
+     * 所以 1、2、5、10、20 皮分别对应下标 2~6；字段缺失时保留占位“—”，不回退静态数字。
+     */
+    public set_playcount_count()
+    {
+        let account = GameDataManager.getAccount();
+        let raw = account == null ? null : account.playcount_count;
+        let strRaw = raw == null ? "" : raw.toString().trim();
+        let arrayCount = strRaw == "" ? [] : strRaw.split("#");
+        // 底皮档位与对应下标必须成对维护，不能只改其中一侧。
+        let arrayStake:number[] = [1,2,5,10,20];
+        let arrayIndex:number[] = [2,3,4,5,6];
+        for(let i = 0;i < arrayStake.length;i++)
+        {
+            let labelNode = Tool.GetChild(this.node,"Main/我的/数据/V8" + arrayStake[i] + "皮手数");
+            if(labelNode == null)
+                continue;
+            let label = labelNode.getComponent(cc.Label);
+            if(label == null)
+                continue;
+            let value = arrayCount[arrayIndex[i]];
+            label.string = (value == null || value === "") ? "—" : value;
+        }
+    }
+
     set_level(id:string)
     {
         this.RefreshAgentMenuVisibility();
