@@ -27,6 +27,7 @@
 ## 内嵌 WebView 与布局
 
 - 游戏内使用 embed=game、透明背景，只中间消息区滚动，顶部/状态/输入区固定；独立网页能力仍保留。尺寸按实际 CSS 视口分级，不用高 DPR 或单个 max-width:1280px 判断手机字号。
+- 2026-09-15 调整：只有牌桌内“联系客服”保持透明以透出牌桌；大厅、钱包、上分、排行榜等游戏外入口由 `panelKefu` 追加 `bg=opaque`。玩家页仍保留 `embed=game` 的会话、轮询和媒体行为，但不再套用透明文档类与 `player-shell-embedded`，外观改用完整网页版的浅色不透明样式。ChatTool 前端已构建并部署到 `/www/html/.chattool/web`（2026-09-15 17:08，回滚点 `web.previous-embed-opaque-20260915-1708`），公网回读到含 `bg=opaque` 的新包；游戏端尚未重新构建或热更，牌桌外入口当前仍走旧透明皮肤，真机未验收。
 - 内嵌随机会话令牌仅在 sessionStorage，通过 X-Player-Embedded-Token 请求头认证；媒体换取限定会话/媒体的短票据，不把完整会话放进媒体 URL。内嵌 2 秒轮询替代不能带头的 EventSource；独立网页继续 Cookie/SSE。
 - 内嵌 Bearer 认证不依赖 Cookie-CSRF；普通 Cookie 路径仍强制 CSRF。轮询返回未携带 CSRF 时不能把已存值清空，避免再次 BAD_CSRF。
 - 只允许 /player 被嵌入，/agent 和 API 继续防嵌入。首次打开须先绑定 loaded/error/message 再导航；chattool:player-ready 校验来源域名和 iframe 窗口，超时仅有界重试。

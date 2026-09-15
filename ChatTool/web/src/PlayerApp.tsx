@@ -5,7 +5,12 @@ import { Avatar, LoadingScreen, MessageBubble } from './components'
 import type { Message, PlayerState } from './types'
 
 export default function PlayerApp() {
-  const embedded = useRef(new URLSearchParams(location.search).get('embed') === 'game').current
+  const initialParams = useRef(new URLSearchParams(location.search)).current
+  const embedded = initialParams.get('embed') === 'game'
+  // 游戏外入口会带 bg=opaque：保留嵌入模式的会话与媒体行为，但外观改用完整网页版的浅色不透明样式。
+  const opaqueBackground = embedded && initialParams.get('bg') === 'opaque'
+  // 只有牌桌内的“联系客服”继续使用透明深色皮肤，让牌桌透出。
+  const embeddedSkin = embedded && !opaqueBackground
 	const embeddedTokenKey = 'chattool.playerEmbeddedToken'
 	const embeddedCSRFKey = 'chattool.playerEmbeddedCSRF'
   const [state, setState] = useState<PlayerState | null>(null)
@@ -30,12 +35,12 @@ export default function PlayerApp() {
 
   useLayoutEffect(() => {
     document.documentElement.classList.add('chattool-player-document')
-    if (embedded) document.documentElement.classList.add('chattool-embedded-document')
+    if (embeddedSkin) document.documentElement.classList.add('chattool-embedded-document')
     return () => {
       document.documentElement.classList.remove('chattool-player-document')
       document.documentElement.classList.remove('chattool-embedded-document')
     }
-  }, [embedded])
+  }, [embeddedSkin])
 
   const loadMessages = useCallback(async () => {
     const result = await api<{ items: Message[] }>('/api/player/messages')
@@ -112,6 +117,7 @@ export default function PlayerApp() {
 			const cleanParams = new URLSearchParams()
 			if (result.sessionRef) cleanParams.set('sessionRef', result.sessionRef)
 			if (embedded) cleanParams.set('embed', 'game')
+			if (opaqueBackground) cleanParams.set('bg', 'opaque')
 			const cleanQuery = cleanParams.toString()
 			const cleanURL = `${appURL('/player')}${cleanQuery ? `?${cleanQuery}` : ''}`
 			history.replaceState(null, '', cleanURL)
@@ -128,7 +134,7 @@ export default function PlayerApp() {
         setError(reason instanceof ApiError ? reason.message : '暂时无法连接客服中心，请返回游戏后重试')
       }
     })()
-  }, [embedded, embeddedCSRFKey, embeddedTokenKey, loadMessages])
+  }, [embedded, embeddedCSRFKey, embeddedTokenKey, loadMessages, opaqueBackground])
 
   useEffect(() => {
     if (!embedded || parentReadySent.current || (!state && !error) || window.parent === window) return
@@ -237,9 +243,9 @@ export default function PlayerApp() {
     } catch (reason) { setError(reason instanceof ApiError ? reason.message : '无法结束咨询') }
   }
 
-  if (!state && !error) return <LoadingScreen embedded={embedded} />
+  if (!state && !error) return <LoadingScreen embedded={embeddedSkin} />
   if (!state) return (
-    <main className={`player-shell player-error-page ${embedded ? 'player-shell-embedded player-error-page-embedded' : ''}`}>
+    <main className={`player-shell player-error-page ${embeddedSkin ? 'player-shell-embedded player-error-page-embedded' : ''}`}>
       <div className="brand-mark">8L</div><h1>无法进入在线客服</h1><p>{error}</p><button type="button" onClick={() => location.reload()}>重新连接</button><small>为保障账号安全，请从游戏内的“客服”入口进入。</small>
     </main>
   )
@@ -248,7 +254,7 @@ export default function PlayerApp() {
 	const unavailable = conversation.status !== 'closed' && state.onlineAgents === 0
 	const hasPlayerMessage = messages.some((message) => message.senderType === 'player')
   return (
-    <main className={`player-shell ${embedded ? 'player-shell-embedded' : ''}`}>
+    <main className={`player-shell ${embeddedSkin ? 'player-shell-embedded' : ''}`}>
       <header className="player-header">
 		<div className="player-brand"><span className="brand-mark brand-mark-small">8L</span><div><strong>在线客服</strong><small>{conversation.category} · 专属服务</small></div></div>
         <button className="header-action" type="button" onClick={endConversation} disabled={conversation.status === 'closed'}>结束咨询</button>

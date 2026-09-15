@@ -91,6 +91,12 @@ export default class panelKefu extends UIPanelViewBase {
         // 默认在游戏内打开；原有外部网页版协议保留，但游戏界面不显示跳出按钮。
         this.externalUrl = strUrl;
         this.embeddedUrl = this.AppendQuery(strUrl, "embed", "game");
+        // 只有牌桌内“联系客服”需要透出牌桌；大厅、钱包、排行榜等游戏外入口改用不透明底，
+        // 避免客服页面继续透出大厅背景影响阅读。
+        if(!this.IsInnerSceneEntry())
+        {
+            this.embeddedUrl = this.AppendQuery(this.embeddedUrl, "bg", "opaque");
+        }
         this.expectedWebOrigin = this.GetWebOrigin(this.embeddedUrl);
 
         this.loading = Tool.GetChild(this.node,"进度/img").getComponent(cc.ProgressBar);
@@ -137,6 +143,13 @@ export default class panelKefu extends UIPanelViewBase {
             // 外部网页版继续兼容，但游戏内入口不向玩家展示跳出按钮。
             popup.active = false;
         }
+    }
+
+    // 牌桌内的“联系客服”通过 arrayEx 传入“游戏内”，保持透出牌桌的半透明背景；
+    // 其余入口一律按游戏外处理，使用不透明底。
+    private IsInnerSceneEntry():boolean
+    {
+        return this.arrayEx != null && this.arrayEx.length > 0 && this.arrayEx[0] == "游戏内";
     }
 
     private ConfigureTransparentWebView()

@@ -714,7 +714,8 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "联系客服")
         {
-            UIManager.getInstance().showPanel("panelKefu",ShowPanelMode.Cover);
+            // 牌桌内打开客服保留透明背景，可以透出牌桌；其他入口按游戏外使用不透明底。
+            UIManager.getInstance().showPanel("panelKefu",ShowPanelMode.Cover,"",["游戏内"]);
         }
         else if(button.node.name === "退出房间")
         {
