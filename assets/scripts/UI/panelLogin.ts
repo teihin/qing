@@ -62,6 +62,13 @@ export default class panelLogin extends UIPanelViewBase {
     private _registerAvatarBySlot:{[slotName:string]:string} = {};
     private _registerSubmitting:boolean = false;
     private _registerRequest:XMLHttpRequest = null;
+    // 重置密码界面布局全部维护在 panelLogin.prefab；本脚本只处理交互、校验和接口请求。
+    private _resetPanel:cc.Node = null;
+    private _resetDialog:cc.Node = null;
+    private _resetInputs:{[key:string]:cc.EditBox} = {};
+    private _resetInputEditing:{[key:string]:boolean} = {};
+    private _resetColoredPlaceholders:{[key:string]:cc.Color} = {};
+    private _resetSubmitting:boolean = false;
     onLoad(){
         super.onLoad();
 
@@ -100,6 +107,8 @@ export default class panelLogin extends UIPanelViewBase {
         this.initLoginInputArt();
 
         this.initRegisterUI();
+
+        this.initResetUI();
 
         let forcedLogoutMessage = GameDataManager.getInstance().consumeForcedLogoutMessage();
         if(forcedLogoutMessage != "")
@@ -283,6 +292,113 @@ export default class panelLogin extends UIPanelViewBase {
         let rowSprite = editBox.node.parent.getComponent(cc.Sprite);
         if(rowSprite != null)
             rowSprite.enabled = this._registerInputEditing[key] || editBox.string.length > 0;
+    }
+
+    private initResetUI()
+    {
+        this._resetPanel = this.node.getChildByName("重置密码弹窗");
+        this._resetDialog = Tool.GetChild(this._resetPanel,"重置资料框");
+        let rows:{[key:string]:string} = {
+            "loginName":"账号",
+            "password":"新密码",
+            "confirmPassword":"确认密码",
+            "tradePassword":"交易密码"
+        };
+        for(let key in rows)
+        {
+            let editBox = Tool.GetChild(this._resetDialog,rows[key]+"/输入").getComponent(cc.EditBox);
+            this._resetInputs[key] = editBox;
+            this._resetInputEditing[key] = false;
+            this.bindResetPlaceholder(key,editBox);
+        }
+        this._resetPanel.active = false;
+    }
+
+    // Prefab 内的占位文字由 EditBox 自身接管，颜色在这里保留（新密码行为红色警示）。
+    private bindResetPlaceholder(key:string,editBox:cc.EditBox)
+    {
+        let label = editBox.placeholderLabel;
+        if(label == null)
+            return;
+        let color = label.node.color.clone();
+        this._resetColoredPlaceholders[key] = color;
+        editBox.placeholder = label.string;
+        editBox.placeholderFontSize = label.fontSize;
+        label.node.color = color;
+    }
+
+    private openResetPanel()
+    {
+        this._resetSubmitting = false;
+        for(let key in this._resetInputs)
+        {
+            this._resetInputs[key].string = "";
+            this.bindResetPlaceholder(key,this._resetInputs[key]);
+        }
+        this._resetPanel.active = true;
+        this._resetDialog.stopAllActions();
+        this._resetDialog.opacity = 0;
+        this._resetDialog.scale = 0.96;
+        cc.tween(this._resetDialog).to(0.18,{opacity:255,scale:1},{easing:"backOut"}).start();
+    }
+
+    private closeResetPanel()
+    {
+        for(let key in this._resetInputs)
+        {
+            this._resetInputs[key].blur();
+            if(key !== "loginName")
+                this._resetInputs[key].string = "";
+        }
+        this._resetSubmitting = false;
+        this._resetPanel.active = false;
+    }
+
+    private onResetSubmit()
+    {
+        if(this._resetSubmitting)
+            return;
+        let strAccount = this._resetInputs["loginName"].string.trim();
+        let strPassword = this._resetInputs["password"].string;
+        let strConfirm = this._resetInputs["confirmPassword"].string;
+        let strTrade = this._resetInputs["tradePassword"].string;
+        if(strAccount.length < 1)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入账号");
+            return;
+        }
+        if(strPassword.length < 6 || strPassword.length > 32 || strPassword.trim().length != strPassword.length)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"新密码需为6-32位，首尾不能有空格");
+            return;
+        }
+        if(strPassword !== strConfirm)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"两次输入的密码不一致");
+            return;
+        }
+        if(strTrade.length < 1)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入交易密码");
+            return;
+        }
+        for(let key in this._resetInputs)
+            this._resetInputs[key].blur();
+        this._resetSubmitting = true;
+        this.requestResetPassword({
+            loginName:strAccount,
+            password:strPassword,
+            confirmPassword:strConfirm,
+            tradePassword:strTrade
+        });
+    }
+
+    // 重置密码接口由服务端提供后再替换这里的实现；当前只完成输入校验与占位返回。
+    private requestResetPassword(params:{[key:string]:string})
+    {
+        this._resetSubmitting = false;
+        Debug.Log("重置密码提交(接口待接入):"+params["loginName"]);
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"重置密码接口待接入");
     }
 
     private openRegisterPanel()
@@ -623,8 +739,15 @@ export default class panelLogin extends UIPanelViewBase {
         }
         else if(button.node.name === "忘记密码")
         {
-            //this.node.getChildByName("修改密码").active = true;
-            cc.sys.openURL(ConfigManager.getInstance().resetPwdUrl);
+            this.openResetPanel();
+        }
+        else if(button.node.name === "关闭重置")
+        {
+            this.closeResetPanel();
+        }
+        else if(button.node.name === "确认修改")
+        {
+            this.onResetSubmit();
         }
         else if(button.node.name === "获取验证码")
         {
