@@ -14,7 +14,7 @@
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |
 | 客服、分配、在线状态、语音链路 | [客服与语音](topics/chattool-voice.md) | agent、ChatTool、AudioServer、WebRTC |
-| 原生构建、热更新、资源审计、磁盘和开发环境 | [构建与环境](topics/build-release-environment.md) | runtime-src、build、Manifest、动态资源、SSD |
+| 原生构建、热更新、资源审计、包体体积、磁盘和开发环境 | [构建与环境](topics/build-release-environment.md)、[资源打包交接](handoffs/2026-09-15-asset-bundle-audit.md) | runtime-src、build、Manifest、动态资源、resources 全量打包、SSD |
 | 本次整理交接 | [记忆迁移记录](handoffs/2026-09-05-memory-migration.md) | 保存范围、检查、待验证 |
 | 旧文全文和原章节 | [完整历史索引](archive/2026-09-05/README.md) | 原行号、历史日期、原记录命令 |
 | 2026-09-10 定稿前的完整当前状态 | [快照说明](archive/2026-09-10/README.md) | V8 重绘经过、既有实现、原样保存 |

@@ -51,6 +51,7 @@
 - 动态保护范围至少有表情2、pk2、zuotype、本地头像、道具/音效、other/<服务端状态值>、other/drh、other/牌谱、动态 UI/条目、KBE 实体及全局脚本。没有直接 UUID 引用不等于未使用。
 - 字体承载服务端公告/玩家名/聊天等任意动态文本，不能只收集源码汉字生成极小字库；保留文件名/.meta 也需验证字符覆盖、布局和三端显示。
 - 包体按产物逻辑/压缩字节看，不用 exFAT 的 du 分配占用推断。源码候选未进入构建不等于可节省 APK/IPA 体积；历史数量/测算均非今日保证。
+- 2026-09-15 复核：`assets/resources/` 是 Cocos 唯一**整目录全量打包**的目录，构建器不分析 `cc.loader.loadRes` 的拼接路径，未引用资源同样进包。非 resources 资源只打包被引用部分（实测 `assets/ImagesLuck` 588 张只进 356 张），且被 `resources` 内 Prefab 引用者会经依赖闭包归入 `resources` 包 —— 移出 resources 不丧失热更新能力。判定“未引用”必须把 `.meta` 纳入扫描（BMFont/LabelAtlas 贴图只经 `.fnt.meta`/`.labelatlas.meta` 关联），并排除 `project.manifest`/`version.manifest` 等全量清单。详见[资源打包交接](../handoffs/2026-09-15-asset-bundle-audit.md)。
 - 图片优化应在源 assets，保留 .meta/UUID、仅更小时替换；后续需重建、重做热更摘要、核对颜色/Alpha/图集切片及 Native 旧格式兼容。不直接改 build 冒充源修改。
 
 来源：原记忆第 73、574–581 行。历史审计产物定位：`reports/cocos-unused-assets-audit-2026-07-29.md`、对应 candidates CSV 与 dynamic-assets-retained CSV。
