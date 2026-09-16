@@ -4,6 +4,12 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。历史验证不代表当前结果。
 
+## 2026-09-16 表情动画替换（hh-poker EMOJI）
+
+- 点头像→表情面板→选择后播的表情动画换成 hh-poker 素材（VP9 240×240 **纯黑底无 Alpha** webm）。抠底＝阈值＋膨胀 6px＋从画布边界洪泛暗区，与边界连通的暗区判为背景，**还原原画自带黑描边**（描边与背景同色，无法按颜色切）。主体统一 100px（原 99×101）且按**主体中心**对齐，特效长出来时表情仍在头像正中；全帧同画布＋`.meta` 写 `trimType: none`，防逐帧自动裁剪抖动。按真实 30fps 时间轴压帧，10 组 373 帧 / 3.69 MB。
+- 映射 1 冰冷→cold、2 发怒→enraged、3 囧→explode、4 困→no、5 大笑→joy、6 微笑→beaming、7 感动→cry1、8 拇指→biceps、9 拜拜→devil、10 色心→hot（未用顶边被裁平的 `hahaha`；`locoff/lost` 是定位图标不是表情）。面板图标同步换新静帧。
+- `表情2/<n>.prefab`、`panelTalk.prefab` 图标靠**保留原 uuid** 自动换图未改；`DrhPlayerLogic.ts` 表情存活时长由固定 2s 改读剪辑时长。脚本 `tools/convert_hh_emoji_anim.py`、`tools/make_emoji_preview.py`，预览 `temp/emoji-preview.html`。**未 Creator 导入、未构建、未真机。**见[交接](handoffs/2026-09-16-emoji-anim-replace.md)。
+
 ## 2026-09-16 热更新"清单说有、磁盘没有"自愈
 
 - 根因（真机实测）：`Remote/…/native/5e/5e7fa6f0-….png` 只下到 53% 留了 `.tmp`，本地清单却已记新图 md5 ⇒ 引擎回落安装包旧图且永不再补下。差异对比用 `<storage>/project.manifest`；`AssetsManagerEx::update()` 无 `UP_TO_DATE` 分支，不能用"发现坏了直接 `update()`"修。

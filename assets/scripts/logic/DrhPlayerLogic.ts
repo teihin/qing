@@ -3332,9 +3332,17 @@ export default class DrhPlayerLogic extends cc.Component {
                 node.name = "表情";
                 node.parent = this.node;
 
+                //按动画自身时长播放完整一轮（新表情动画时长 1.5s~3.7s 不等）
+                let animate = node.getComponent(cc.Animation);
+                let fDelay = 2;
+                if (animate != null && animate.defaultClip != null && animate.defaultClip.duration > 0)
+                {
+                    fDelay = animate.defaultClip.duration;
+                }
+
                 this.scheduleOnce(()=>{
                     node.destroy()
-                },2)
+                },fDelay)
                 // let animate = node.getComponent(dragonBones.ArmatureDisplay);
                 // animate.addEventListener(dragonBones.EventObject.COMPLETE,()=>{
                 //     node.destroy();
