@@ -117,3 +117,32 @@
 - 根因：一开始没确认「这个元素到底要不要动」。它只是一行提示文字，主人可能本来就没打算大改。
 - **规则**：同一素材被否 ≥3 次，停下问清方向（"要更轻/换色" 还是 "干脆别改"），不要自己一路迭代。
 - 退回用 `git checkout HEAD -- <path>`；若 `.meta` 从未动过（`trimType:null` 类素材）就不需要一起回滚。
+
+## 盘点旧名别只扫 assets/ —— build-templates 也要扫（2026-09-18）
+- 改名任务扫 `assets/` 会漏掉 **`build-templates/`（构建模板）** 里的启动图/加载图。
+  网页版全屏 loading 中央的盾徽 `build-templates/web-mobile/splash.png` 就这样残留了 BL。
+- `build/` 是构建产物（未纳入 git），改它只为让当前部署立即生效；**源在 build-templates**。
+
+## 抠白底：AI 会给 LOGO 加一圈灰色实心描边，判据要用「彩色 or 暗色」（2026-09-18）
+- 症状：抠完放深色底，LOGO 外沿一圈灰白边；诊断发现是 **alpha=255 的灰色实心带**
+  （实测 rgb `(212,212,212)`、alpha 中位 255），不是半透明掺白，修 RGB 没用。
+- 根因：AI 重绘盾徽/LOGO 几乎总会自动补一圈灰色投影；`hard = mn<230` 会把灰当前景。
+- **正解**：`hard = (sat>0.18) | (mn<130)`（彩色 or 暗色）。实测占位 0.5775→0.5047、
+  bbox 比例 0.881→0.890，与原图 0.5094 / 0.892 吻合。再补一刀
+  `kill=(al>0)&(mn>170)&(sat<0.12)`，外沿近白像素 607→35。
+- 另：**LANCZOS 缩放前必须预乘 alpha**，否则 bbox 框外的白色会在缩放时混进边缘。
+- 详见技能 `art-text-swap`「透明底处理」。
+
+## 主人说「某个界面里的文字要改」时，先分清「贴图文字」还是「DOM/引擎文字」（2026-09-18）
+- 教训来源：主人说「网页版全屏 loading 里还有 8L，改成 BY」。
+  我第一次去改了 `build-templates/web-mobile/splash.png`（贴图盾徽）——**改错地方**，
+  主人只能再发一张截图指正。
+- **网页版的 loading / 启动层不是贴图**：全屏 UI 由 `assets/scripts/common/WebLoadingManager.ts`
+  用 `ensureDOM()` 注入内联 HTML+CSS 实现，文字就在字符串里
+  （第 255 行 `'<div class="qing-mark">8L</div>'`）。标题来自 `WebSceneLoader.ts` 的 `sceneTitle()`。
+- **定位口诀**：先 Grep 界面上的**中文文案**（"正在进入牌桌" / "正在下载场景资源"）
+  → 命中哪个 .ts 就去读那个文件，别猜图片。
+- 改完记得**同步构建产物**（`build/web-mobile/assets/main/index.*.js`、`build/jsb-link/.../main.index.js`），
+  build 未纳入 git，但改它可让当前部署免重建立即生效；源码改动仍需重新构建才进发布包。
+- ⚠️ 压缩后的 js 里短词 `8L` 可能同时是 uuid 片段（如 `"95deb362KlHwJUYKk8LMtGv"`），
+  **必须逐处看上下文**，改完用 `count(新词)==1 && count(旧词)==预期` 自检。

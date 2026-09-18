@@ -252,7 +252,7 @@ export default class WebLoadingManager {
         overlay.id = "qing-web-loading";
         overlay.innerHTML =
             '<div class="qing-card" role="status" aria-live="polite">' +
-            '<div class="qing-mark">8L</div>' +
+            '<div class="qing-mark">BY</div>' +
             '<div class="qing-title"></div>' +
             '<div class="qing-detail"></div>' +
             '<div class="qing-track"><div class="qing-fill qing-indeterminate"></div></div>' +
