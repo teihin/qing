@@ -12906,7 +12906,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 147,
+      "width": 148,
       "height": 57
     },
     "_anchorPoint": {
@@ -12918,8 +12918,8 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        173.13400268554688,
-        0,
+        2.003,
+        129.136,
         0,
         0,
         0,
@@ -12927,7 +12927,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -13098,7 +13098,7 @@
       "__uuid__": "7ea381ba-b4e1-4cfe-bdc8-8a70e77c26dd"
     },
     "_type": 0,
-    "_sizeMode": 1,
+    "_sizeMode": 2,
     "_fillType": 0,
     "_fillCenter": {
       "__type__": "cc.Vec2",
@@ -87028,7 +87028,7 @@
       "ctor": "Float64Array",
       "array": [
         -0.347,
-        18.541,
+        12.136,
         0,
         0,
         0,
@@ -87069,7 +87069,7 @@
     "_dstBlendFactor": 771,
     "_string": "22",
     "_N$string": "22",
-    "_fontSize": 30,
+    "_fontSize": 35,
     "_lineHeight": 40,
     "_enableWrapText": true,
     "_N$file": {
