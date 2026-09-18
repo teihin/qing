@@ -2613,8 +2613,12 @@ export default class panelGameView extends UIPanelViewBase {
 
         let arrayAll = strContent.split(',');
 
-        let strRoomID = GameDataManager.getAccount().roomID;
-        if(strRoomID == arrayAll[2])
+        // 全服通知的房间字段恒为空（后台固定发送 ",,,," + 内容）。旧写法 roomID == arrayAll[2]
+        // 在结算等 account.roomID 已被清空/归零的阶段会与空串弱相等命中，误播喜金音效。
+        // 现只认「非 0 的有效房间号」，并统一按数值比较。
+        let account = GameDataManager.getAccount();
+        let nMsgRoomID = Number(arrayAll[2]);
+        if(account != null && isFinite(nMsgRoomID) && nMsgRoomID > 0 && nMsgRoomID === Number(account.roomID))
         {
             let strUserID = GameDataManager.getAccount().guuid;
 
