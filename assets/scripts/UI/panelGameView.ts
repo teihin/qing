@@ -1708,14 +1708,47 @@ export default class panelGameView extends UIPanelViewBase {
 
     showMsg(strMsg:string)
     {
-        Tool.GetChild(this.node,"提示").active = true;
         Tool.GetChild(this.node,"提示/txt").getComponent(cc.Label).string = strMsg;
+        this.PlayTipShowAnimate();
         this.unschedule(this.delayCloseMsg);
         this.scheduleOnce(this.delayCloseMsg,2);
     }
     delayCloseMsg()
     {
-        this.node.getChildByName("提示").active = false;
+        this.PlayTipHideAnimate();
+    }
+    //提示弹入：从小快速蹦出（带一点过冲回弹）
+    private PlayTipShowAnimate()
+    {
+        let transTip = this.node.getChildByName("提示");
+        if (transTip == null || !cc.isValid(transTip))
+            return;
+
+        transTip.stopAllActions();
+        transTip.active = true;
+        transTip.opacity = 255;
+        transTip.scale = 0.2;
+        transTip.runAction(cc.scaleTo(0.18, 1).easing(cc.easeBackOut()));
+    }
+    //提示收起：缩小并淡出
+    private PlayTipHideAnimate()
+    {
+        let transTip = this.node.getChildByName("提示");
+        if (transTip == null || !cc.isValid(transTip))
+            return;
+
+        transTip.stopAllActions();
+        transTip.runAction(cc.sequence(
+            cc.spawn(cc.scaleTo(0.15, 0.2).easing(cc.easeBackIn()), cc.fadeTo(0.15, 0)),
+            cc.callFunc(()=>{
+                if (cc.isValid(transTip))
+                {
+                    transTip.active = false;
+                    transTip.scale = 1;
+                    transTip.opacity = 255;
+                }
+            })
+        ));
     }
 
     showGameInfo(strMsg:string)
@@ -1848,14 +1881,14 @@ export default class panelGameView extends UIPanelViewBase {
     {
         Tool.GetChild(this.node,"提示/txt").getComponent(cc.Label).string = strMsg;
         
-        this.node.getChildByName("提示").active = true;
+        this.PlayTipShowAnimate();
         this.unschedule(this.delayCloseMsg);
         this.scheduleOnce(this.delayCloseMsg,2);
 
     }
     public DelayCloseMsg()
     {
-        this.node.getChildByName("提示").active = false;
+        this.PlayTipHideAnimate();
     }
     //检测GPS是否有相近得玩家
     public CheckCanSitByGps():boolean
