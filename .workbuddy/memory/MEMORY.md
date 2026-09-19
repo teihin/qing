@@ -9,6 +9,9 @@
 - Seedream 4.5 显式像素尺寸下限 **≥ 3,686,400 px**（不是文档写的 1280×720）。
 - **中间产物一律不留**：交付后立即删试错版/草稿/临时脚本/对比图，只留成品。过程要短，先出可用结果。
 - 本机 shell 里 `grep`/`rg` 直接调不可靠，**查文本一律用 Grep 工具**。
+- 改完 Cocos 脚本想快速自检：本机无 `tsc`，用 managed node 调
+  `~/.workbuddy/binaries/node/workspace/node_modules/typescript` 的
+  `ts.transpileModule(src,{reportDiagnostics:true})` 只查语法（0 诊断即通过），别指望完整类型检查。
 
 ## 代码排查（本项目特有）
 - `GameDataManager.getAccount()` = `KBEngine.app.player()` = `entities[entity_id]`。
