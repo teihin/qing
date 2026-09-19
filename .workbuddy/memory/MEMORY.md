@@ -27,6 +27,9 @@
 - 改完 Prefab/贴图后 `library/` 需 Creator 重新导入；`assets/resources/project.manifest` 是构建产物，跑 `1生成热更新包.command` 重建，**不要手改**。
 - **Creator 开着时覆盖 PNG，`.meta` 会被自动改写**（`trimType:"auto"` 重算 trim，使 `_sizeMode=0` 元素放大约 5%）。
   根治：按原 trim 矩形给新图四边补 `alpha=2` 边界像素；收尾 `git checkout HEAD -- <每个 .meta>`。判断是否在跑：`pgrep -fl CocosCreator`。
+- **覆盖 PNG 后 Creator 不会自动重导**，两步必做：① `touch` 目标 PNG（`cp -p` 会带旧 mtime，Creator 判定"没变"）；
+  ② `osascript -e 'tell application "CocosCreator" to activate'`（窗口不前台就不扫描资源；走 System Events 会被拒）。
+  是否真导入只看 `library/imports/<uuid前2位>/<uuid>.png` 的 md5 与 mtime。
 - 放大贴图必须**同时改三处**：顶层 `width/height`、`subMetas.*.width/height`、`subMetas.*.rawWidth/rawHeight`。
 - 换图只覆盖同名 PNG，`.meta` 只改必要数字 → UUID 不变，Creator 不用重挂引用。
 - 改图脚本输入必须先 `git show HEAD:<path> > /tmp/原图.png` 导出，防二次处理。
@@ -40,3 +43,11 @@
 - 验收四步：尺寸/`.meta`/体积 → alpha 覆盖率 → 分块梯度能量 → OCR 复扫旧名。**小图必须按真机 px 1:1 看**。
 - 同一素材被否 ≥3 次就**停下问方向**，不要自己一路迭代。
 - 改界面上文字前先分清**贴图文字**还是 **DOM/引擎文字**（网页版 loading 是 `WebLoadingManager.ts` 注入的 HTML，不是图）。
+
+## 音效素材（网上找；**禁止用 numpy 从零合成波形**，已被主人否决）
+- 首选 **Mixkit**：直链 `https://assets.mixkit.co/active_storage/sfx/<id>/<id>-preview.mp3`，免费商用、preview 就是完整时长。
+- 次选 free-sound-effects.net：页面 `data-download` 属性里直接给 mp3 直链，可 curl 批量取。
+- Pixabay 反爬抓不到（curl 只回空壳）；freesound 只有低质预览、许可各异。
+- 判据：欢呼＝中频 500-3k 占比 >85% 且质心≈1kHz；礼花＝低频强瞬态。
+- **但注意**：报奖音效试过「合成」和「找素材混音」两条路，主人**都不满意**（2026-09-19）。
+  再遇到音效需求，**先问清他想要什么**（要现成成品文件 / 还是给参考音），别自己先做。
