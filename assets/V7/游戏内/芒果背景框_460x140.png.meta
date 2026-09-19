@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "c7912a0d-2a45-471f-beaa-942e686b26bc",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 460,
+  "height": 140,
+  "platformSettings": {},
+  "subMetas": {
+    "芒果背景框_460x140": {
+      "ver": "1.0.6",
+      "uuid": "1846fe7f-2738-4b77-b8e0-e0f96eb9389a",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "c7912a0d-2a45-471f-beaa-942e686b26bc",
+      "trimType": "custom",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 460,
+      "height": 140,
+      "rawWidth": 460,
+      "rawHeight": 140,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}
