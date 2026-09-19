@@ -7,6 +7,7 @@ import ImageManager from "../logic/ImageManager";
 import GameDataManager from "../GameDataManager";
 import Debug from "../common/Debug";
 import WebLoadingManager from "../common/WebLoadingManager";
+import MobileManager from "../mobile/MobileManager";
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
 
@@ -64,7 +65,22 @@ export default class panelUserInfo extends UIPanelViewBase {
     // update (dt) {}
     public onButtonClick(button:cc.Button)
     {
-        if(button.node.name === "看一下")
+        if(button.node.name === "关闭")
+        {
+            UIManager.getInstance().closePanelByName(this.node.name,ClosePanelMode.Normal);
+        }
+        else if(button.node.name === "复制ID")
+        {
+            let strID = Tool.GetChild(this.node,"数据/id").getComponent(cc.Label).string.trim();
+            if(strID === "")
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"玩家ID为空，暂时无法复制！");
+                return;
+            }
+            let copied = MobileManager.getInstance().CopyToPhone(strID);
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,copied ? "玩家ID复制成功！" : "玩家ID复制失败，请稍后重试！");
+        }
+        else if(button.node.name === "看一下")
         {
             if((GameDataManager.getAccount().gold+GameDataManager.getAccount().gold2/100)<0.2)
             {

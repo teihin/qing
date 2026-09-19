@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "965c715e-2ae4-580d-be2d-ea640fd68b0c",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": true,
+  "width": 161,
+  "height": 98,
+  "platformSettings": {},
+  "subMetas": {
+    "player_info_v8_icon_gun": {
+      "ver": "1.0.6",
+      "uuid": "5529d924-3705-519a-9142-1de62e343880",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "965c715e-2ae4-580d-be2d-ea640fd68b0c",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 161,
+      "height": 98,
+      "rawWidth": 161,
+      "rawHeight": 98,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}
