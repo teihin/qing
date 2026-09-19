@@ -2436,6 +2436,7 @@ export default class DrhPlayerLogic extends cc.Component {
             let move = cc.moveTo(0.2,cc.Vec2.ZERO);
             let end = cc.callFunc(()=>{
                 add.destroy();
+                this.PlayBeiCountPopAnimate();
             },this);
             let action = cc.sequence(delay,move,end);
             add.runAction(action);
@@ -2443,6 +2444,23 @@ export default class DrhPlayerLogic extends cc.Component {
                 this.PlayAudio(0,"下注");
         });
     
+    }
+    //筹码落入下注区后，下注数字快速放大再缩回
+    private PlayBeiCountPopAnimate()
+    {
+        if(!this.CanRunRoomAnimation())
+            return;
+
+        let transBei = Tool.GetChild(this.node,"goldshow/count");
+        if(transBei == null || !cc.isValid(transBei))
+            return;
+
+        transBei.stopAllActions();
+        transBei.scale = 1;
+        transBei.runAction(cc.sequence(
+            cc.scaleTo(0.08, 1.35).easing(cc.easeBackOut()),
+            cc.scaleTo(0.12, 1).easing(cc.easeSineOut())
+        ));
     }
     public ShowCurState(bShow:boolean = true,bAnimate:boolean = true)       
     {
@@ -2570,9 +2588,10 @@ export default class DrhPlayerLogic extends cc.Component {
                     // let spawn = cc.spawn(move);
                     // let action = cc.sequence(spawn,end);
                     // add.runAction(action);
+                    //飞向中间：位置 0.3s 到位；旋转放慢，飞行段、淡出段各转半圈，全程正好一整圈
                     cc.tween(add)
-                    .to(0.3,{position:transSrc.convertToNodeSpaceAR(transEnd.convertToWorldSpaceAR(cc.v2(0,0)))})
-                    .to(0.3,{opacity:0})
+                    .to(0.3,{position:transSrc.convertToNodeSpaceAR(transEnd.convertToWorldSpaceAR(cc.v2(0,0))),angle:180})
+                    .to(0.3,{opacity:0,angle:360})
                     .call(()=>{
                         add.destroy();
                     })
