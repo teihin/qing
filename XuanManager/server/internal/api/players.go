@@ -22,6 +22,8 @@ type playerFilters struct {
 	ClientVersion  string
 	RegisteredFrom string
 	RegisteredTo   string
+	LoginFrom      string
+	LoginTo        string
 	Level          *int64
 	RoomID         *int64
 	MinBalance     *float64
@@ -80,6 +82,8 @@ WHERE ` + where
 	}
 
 	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
+	// 时间口径：MySQL 会话时区为 SYSTEM（Asia/Shanghai），库里的 DATETIME、NOW()、
+	// CURRENT_TIMESTAMP、FROM_UNIXTIME() 拿到的都已经是北京时间墙上时间，查询时不得再叠加 8 小时。
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 a.id, a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_photo,
 a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
@@ -87,7 +91,7 @@ a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
 a.sm_vip, a.sm_vip_level, a.sm_agentID, COALESCE(agent.sm_name, ''),
 a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status,
 a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
-DATE_ADD(FROM_UNIXTIME(NULLIF(k.lasttime, 0)), INTERVAL 8 HOUR), COALESCE(k.numlogin, 0), a.sm_remark
+FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
@@ -147,6 +151,8 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 		ClientVersion:  strings.TrimSpace(query.Get("clientVersion")),
 		RegisteredFrom: strings.TrimSpace(query.Get("registeredFrom")),
 		RegisteredTo:   strings.TrimSpace(query.Get("registeredTo")),
+		LoginFrom:      strings.TrimSpace(query.Get("loginFrom")),
+		LoginTo:        strings.TrimSpace(query.Get("loginTo")),
 	}
 	for _, value := range []string{
 		filters.Keyword, filters.PlayerID, filters.Name, filters.LoginName, filters.AgentID,
@@ -172,7 +178,12 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 	if filters.MinBalance != nil && filters.MaxBalance != nil && *filters.MinBalance > *filters.MaxBalance {
 		return playerFilters{}, errors.New("最低余额不能大于最高余额")
 	}
-	for label, value := range map[string]string{"开始日期": filters.RegisteredFrom, "结束日期": filters.RegisteredTo} {
+	for label, value := range map[string]string{
+		"注册开始日期": filters.RegisteredFrom,
+		"注册结束日期": filters.RegisteredTo,
+		"登录开始日期": filters.LoginFrom,
+		"登录结束日期": filters.LoginTo,
+	} {
 		if value != "" {
 			if _, err := time.Parse("2006-01-02", value); err != nil {
 				return playerFilters{}, fmt.Errorf("%s格式必须是 YYYY-MM-DD", label)
@@ -180,7 +191,10 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 		}
 	}
 	if filters.RegisteredFrom != "" && filters.RegisteredTo != "" && filters.RegisteredFrom > filters.RegisteredTo {
-		return playerFilters{}, errors.New("开始日期不能晚于结束日期")
+		return playerFilters{}, errors.New("注册开始日期不能晚于注册结束日期")
+	}
+	if filters.LoginFrom != "" && filters.LoginTo != "" && filters.LoginFrom > filters.LoginTo {
+		return playerFilters{}, errors.New("登录开始日期不能晚于登录结束日期")
 	}
 	return filters, nil
 }
@@ -241,6 +255,16 @@ k.accountName = ? OR a.sm_agentID = ? OR agent.sm_name LIKE ?)`)
 	if filters.RegisteredTo != "" {
 		clauses = append(clauses, "a.sm_reg_time <= CONCAT(?, ' 23:59:59')")
 		args = append(args, filters.RegisteredTo)
+	}
+	// 登录时间取 kbe_accountinfos.lasttime（Unix 秒）。会话时区为 +08，
+	// UNIX_TIMESTAMP 按北京时间解释日期串，所以日界就是北京时间当天 00:00:00–23:59:59。
+	if filters.LoginFrom != "" {
+		clauses = append(clauses, "k.lasttime >= UNIX_TIMESTAMP(CONCAT(?, ' 00:00:00'))")
+		args = append(args, filters.LoginFrom)
+	}
+	if filters.LoginTo != "" {
+		clauses = append(clauses, "k.lasttime <= UNIX_TIMESTAMP(CONCAT(?, ' 23:59:59'))")
+		args = append(args, filters.LoginTo)
 	}
 	return strings.Join(clauses, " AND "), args
 }

@@ -616,7 +616,7 @@ func (s *Server) queryPlatformRevenueSummary(ctx context.Context, today time.Tim
 		return platformRevenueSummaryResponse{}, err
 	}
 	var refreshedAt string
-	_ = s.db.QueryRowContext(ctx, `SELECT COALESCE(DATE_FORMAT(DATE_ADD(MAX(refreshed_at), INTERVAL 8 HOUR), '%Y-%m-%d %H:%i:%s'), '')
+	_ = s.db.QueryRowContext(ctx, `SELECT COALESCE(DATE_FORMAT(MAX(refreshed_at), '%Y-%m-%d %H:%i:%s'), '')
 FROM mgr_platform_revenue_daily`).Scan(&refreshedAt)
 	if !historyComplete {
 		warnings = append(warnings, "历史收益正在按 31 天一批补齐；同步完成前，总收益卡片只统计已缓存的连续日期。")

@@ -28,6 +28,8 @@ interface PlayerFilters {
   maxBalance: string;
   registeredFrom: string;
   registeredTo: string;
+  loginFrom: string;
+  loginTo: string;
 }
 
 const emptyFilters: PlayerFilters = {
@@ -46,6 +48,8 @@ const emptyFilters: PlayerFilters = {
   maxBalance: "",
   registeredFrom: "",
   registeredTo: "",
+  loginFrom: "",
+  loginTo: "",
 };
 
 function playerFiltersFromHash(): PlayerFilters {
@@ -147,6 +151,8 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
               <Field label="最高余额"><input type="number" step="0.01" value={draft.maxBalance} onChange={(event) => update("maxBalance", event.target.value)} /></Field>
               <Field label="注册开始日期"><input type="date" value={draft.registeredFrom} onChange={(event) => update("registeredFrom", event.target.value)} /></Field>
               <Field label="注册结束日期"><input type="date" value={draft.registeredTo} onChange={(event) => update("registeredTo", event.target.value)} /></Field>
+              <Field label="登录开始日期" hint="按北京时间当天 00:00 起算，从未登录过的玩家不会被筛选出来"><input type="date" value={draft.loginFrom} onChange={(event) => update("loginFrom", event.target.value)} /></Field>
+              <Field label="登录结束日期" hint="含当天 23:59"><input type="date" value={draft.loginTo} onChange={(event) => update("loginTo", event.target.value)} /></Field>
               <div className="filter-actions"><Button type="submit">应用组合条件</Button><Button type="button" variant="secondary" onClick={resetFilters}>重置</Button></div>
             </div>
           )}

@@ -23,7 +23,7 @@
 
 ## 统计、金额和时间的权威来源
 
-- 2026-08-16 时间统一北京时间，但按字段来源转换：mgr_ 默认时间/审计等来源为 UTC；游戏业务字符串已是北京时间；Unix 时间按时区渲染。禁止全局加 8 小时或贸然修改数据库连接时区。今日新增用 Go 生成北京时间日界，不依赖曾返回 UTC 的 CURDATE()。
+- **时间口径（2026-09-19 实测修正）**：正式服务器操作系统与 MySQL 会话时区都是 UTC+8（`@@time_zone = SYSTEM`），所以 `NOW()`/`CURRENT_TIMESTAMP`/`FROM_UNIXTIME()` 与全部 `DATETIME` 列存的都是**北京时间墙上时间** —— `mgr_` 默认时间/审计、Unix 登录时间、游戏业务字符串（`sm_reg_time`、`usr_cash_water`、`third_marketing_info.date/time`、轮播 `start_at`）**一律原值返回，后端不得再加 8 小时**。2026-08-16 记的「mgr_ 与 FROM_UNIXTIME 为 UTC、需按来源转换」是错的（据此写的 `DATE_ADD(..., INTERVAL 8 HOUR)` 让玩家管理/后台用户/审计/封禁/防盗号整页偏 8 小时，北京时间 16:00 后跨到次日）；已删除全部该包装、工作台今日审计日界改按北京时间、数据库连接 `Loc` 固定 `Asia/Shanghai`（不用 `time.Local`）。今日新增仍用 Go 生成北京时间日界，不依赖 `CURDATE()`。
 - 金币完整流水为 `usr_cash_water`，不合并同构辅助表。钱包真实变动用 `new_money - old_money`；add_money 在部分业务中不是收支方向。消费前后余额也用 old_money/new_money，“余X分”不是总余额。
 - remark 字段按 option_type 解释。结算场景码不是金额/局数/时长；客服加减分原因在 mgr_audit_log，不在游戏流水 remark 中，关联必须匹配玩家、余额、方向和有限时间窗。
 - 房间最终输赢优先“结算返还－累计带入”，无结算才回退原始战绩；保留差异标记。历史地九王用 `usr_total_score.remark` 索引 10，不能混用大厅压缩数组索引。牌谱映射与阶段解析查原协议。

@@ -58,7 +58,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request, p princ
 (SELECT COUNT(*) FROM mgr_audit_log audit_row
  WHERE audit_row.created_at >= ? AND audit_row.created_at < ? AND (? = 1 OR `+nonRootAuditVisibilitySQL+`))`,
 		canSeeSuper, canSeeSuper,
-		beijingDayStart.UTC().Format("2006-01-02 15:04:05"), beijingDayEnd.UTC().Format("2006-01-02 15:04:05"), canSeeSuper).Scan(
+		beijingDayStart.In(dashboardLocation).Format("2006-01-02 15:04:05"), beijingDayEnd.In(dashboardLocation).Format("2006-01-02 15:04:05"), canSeeSuper).Scan(
 		&userCount, &enabledUserCount, &roleCount, &moduleCount, &todayAuditCount,
 	)
 	if err != nil {
@@ -136,7 +136,7 @@ func (s *Server) queryAudits(r *http.Request, p principal, keyword string, page,
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 audit_row.id, audit_row.operator_name, audit_row.action, audit_row.target_type, audit_row.target_id,
 COALESCE(NULLIF(TRIM(game_player.sm_name), ''), COALESCE(game_login.accountName, ''), ''),
-audit_row.result_code, audit_row.result_message, audit_row.ip, DATE_ADD(audit_row.created_at, INTERVAL 8 HOUR)
+audit_row.result_code, audit_row.result_message, audit_row.ip, audit_row.created_at
 FROM mgr_audit_log audit_row
 LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
 LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id

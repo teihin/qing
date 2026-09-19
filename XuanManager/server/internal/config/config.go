@@ -11,6 +11,10 @@ import (
 	"github.com/go-sql-driver/mysql"
 )
 
+// beijingLocation 固定北京时间。XuanManager 一律按北京时间解释库里的墙上时间，
+// 不能依赖 time.Local（服务器系统时区被改成 UTC 时会把返回给前端的偏移整体算错 8 小时）。
+var beijingLocation = time.FixedZone("Asia/Shanghai", 8*60*60)
+
 type Config struct {
 	HTTPAddr                   string
 	StaticDir                  string
@@ -127,7 +131,10 @@ func mysqlDSN(user, password, host, port, name string) string {
 	mc.Addr = host + ":" + port
 	mc.DBName = name
 	mc.ParseTime = true
-	mc.Loc = time.Local
+	// 固定用北京时间解释库里的 DATETIME：MySQL 会话时区为 SYSTEM（Asia/Shanghai），
+	// 库里 DATETIME、NOW()、CURRENT_TIMESTAMP、FROM_UNIXTIME() 存的都是北京时间墙上时间，
+	// 因此 SQL 里不得再叠加 +8 小时，这里也不能用 time.Local。
+	mc.Loc = beijingLocation
 	mc.Timeout = 5 * time.Second
 	mc.ReadTimeout = 10 * time.Second
 	mc.WriteTimeout = 10 * time.Second
