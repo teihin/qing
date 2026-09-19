@@ -2251,7 +2251,10 @@ export default class DrhPlayerLogic extends cc.Component {
         // 正常切牌加发牌可能持续数秒，先观察5秒再把“双缺失”判定为异常。
         if(this.bActionUiRecoveryAttempted || this.bActionUiFullStateRequested || nTotle <= 0 || nCur <= 0 || nTotle - nCur < 50)
             return;
-        if(this.playerPos != PlayerPos.self || this.info.strUserID != GameDataManager.getAccount().guuid || this.info.is_action != "True")
+        // 断线重连期间 KBEngine.app.reset() 会清空实体（entity_id=0、entities={}），
+        // 此时 getAccount() 返回 undefined，直接取 .guuid 会每个计时器周期抛异常。
+        let accountSelf = GameDataManager.getAccount();
+        if(this.playerPos != PlayerPos.self || accountSelf == null || this.info.strUserID != accountSelf.guuid || this.info.is_action != "True")
             return;
         if(this.gameLogic == null || !cc.isValid(this.gameLogic.node) || this.gameLogic.IsLeavingRoom() || this.gameLogic.strGameState != "running")
             return;
