@@ -579,7 +579,7 @@ export default class panelGameView extends UIPanelViewBase {
     }
     public UpdateBackImg()
     {
-        let strName = Tool.GetConfigString("牌背","1");
+        let strName = Tool.GetCardBackIndex();
         let arrayAll = Tool.GetChild(this.node,"UserInfo").getComponentsInChildren(PKCardInfoScript);
         for(let one of arrayAll)
         {
@@ -890,7 +890,7 @@ export default class panelGameView extends UIPanelViewBase {
             Tool.GetChild(this.node,"系统设置/设置/声音/语音/语音开关").getComponent(cc.Toggle).isChecked = nLiaoAudio==1?true:false;
             Tool.GetChild(this.node,"系统设置/设置/聚光灯/聚光灯开关").getComponent(cc.Toggle).isChecked = Tool.GetConfigNumber("下注聚光灯",1)==1;
 
-            let strBack = Tool.GetConfigString("牌背","1");
+            let strBack = Tool.GetCardBackIndex();
             let arrayToggle2 = Tool.GetChild(this.node,"系统设置/设置/牌背").getComponentsInChildren(cc.Toggle);
             for(let one of arrayToggle2)
             {
@@ -2422,7 +2422,7 @@ export default class panelGameView extends UIPanelViewBase {
            let handCard:Array<PKCardInfoScript> = objNew.getChildByName("手牌").getComponentsInChildren(PKCardInfoScript);
 
            //修改牌面
-           let strPN = Tool.GetConfigString("牌背","1");
+           let strPN = Tool.GetCardBackIndex();
            for(let one of handCard)
            {
                let img = one.node.getChildByName("BK1").getComponent(cc.Sprite);

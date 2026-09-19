@@ -96,6 +96,18 @@ export default class Tool extends cc.Component{
             return item;
         }
     }
+    //牌背编号：可用资源为 zuotype/牌背0(红)、牌背1(蓝)、牌背2(紫)
+    //历史界面选项为 1/2/3，旧值 3(深色款)现已无对应资源，统一迁移到 0
+    public static GetCardBackIndex():string
+    {
+        let strItem = cc.sys.localStorage.getItem("牌背");
+        if(strItem == null || ["0","1","2"].indexOf(strItem) < 0)
+        {
+            strItem = "0";
+            cc.sys.localStorage.setItem("牌背",strItem);
+        }
+        return strItem;
+    }
     public static SendMMS(strPhone:string):string
     {
         let mobile = strPhone; 

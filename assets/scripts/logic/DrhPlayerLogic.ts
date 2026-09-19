@@ -2552,7 +2552,7 @@ export default class DrhPlayerLogic extends cc.Component {
                     let add:cc.Node = cc.instantiate(obj);
                     add.parent = transSrc;
                     add.position = cc.Vec2.ZERO;
-                    let strName = Tool.GetConfigString("牌背","1");
+                    let strName = Tool.GetCardBackIndex();
                     for(let one of add.children)
                     {
                         let img = one.getChildByName("BK1").getComponent(cc.Sprite);
@@ -3061,22 +3061,22 @@ export default class DrhPlayerLogic extends cc.Component {
                 return;
             if(bQiePai)
             {
-                let strName = Tool.GetConfigString("牌背","1");
-                if(strName == "1")
+                let strName = Tool.GetCardBackIndex();
+                if(strName == "0")
                 {
                     this.gameLogic.playingView.displayQP1.node.active = true;
                     this.gameLogic.playingView.displayQP2.node.active = false;
                     this.gameLogic.playingView.displayQP3.node.active = false;
                     this.gameLogic.playingView.displayQP1.playAnimation("pai3",1);
                 }
-                else if(strName == "2")
+                else if(strName == "1")
                 {
                     this.gameLogic.playingView.displayQP1.node.active = false;
                     this.gameLogic.playingView.displayQP2.node.active = true;
                     this.gameLogic.playingView.displayQP3.node.active = false;
                     this.gameLogic.playingView.displayQP2.playAnimation("pai1",1);
                 }
-                else if(strName == "3")
+                else if(strName == "2")
                 {
                     this.gameLogic.playingView.displayQP1.node.active = false;
                     this.gameLogic.playingView.displayQP2.node.active = false;

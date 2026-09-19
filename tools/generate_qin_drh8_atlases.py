@@ -24,6 +24,23 @@ Use ``--check-structure`` before the masters arrive to validate the existing
 atlas JSON and target metadata without writing any art.
 """
 
+# ---------------------------------------------------------------------------
+# 2026-09-19 重要状态：除 --check-structure（只读）外请勿执行本脚本。
+#
+#   * 运行时牌背编号已由 1/2/3 改为 0/1/2，界面三项 = 牌背0(红) / 牌背1(蓝) / 牌背2(紫)；
+#     panelGameView.prefab 与 drh8.fire 的三项引用、Tool.GetCardBackIndex() 均已同步。
+#   * hand_tex.png 的 9 张切牌切片已按新编号重建：
+#       编号 0 -> 名字带 3 的那组（放牌3/下牌3/上牌3）
+#       编号 1 -> 无后缀那组（放牌/下牌/上牌）
+#       编号 2 -> 名字带 2 的那组（放牌2/下牌2/上牌2）
+#     搓背3 也已与牌背3 逐字节对齐，zuotype 下已无 8L 残留牌背。
+#   * 但本脚本的 CARD_SOURCES 仍指向 8L 秦风母版 qin_card_back_variantN_source.png，
+#     build() 会用它重写 zuotype 下全部 牌背0-3 / 搓背0-3，并按下面的旧 mapping 重刷切片
+#     —— **直接运行会把 09-18 的亮色牌背与切牌切片全部打回 8L 旧款**。
+#   * 因此本脚本现仅作历史实现线索保留。若要重新生成，必须先把 CARD_SOURCES 换成
+#     当前生效的亮色母版，并把 replace_hand_cards() 的 mapping 键改为 0/1/2。
+# ---------------------------------------------------------------------------
+
 from __future__ import annotations
 
 import argparse

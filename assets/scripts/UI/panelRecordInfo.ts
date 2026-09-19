@@ -744,7 +744,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
            let handCard:Array<PKCardInfoScript> = objNew.getChildByName("手牌").getComponentsInChildren(PKCardInfoScript);
 
         //修改牌面
-        let strPN = Tool.GetConfigString("牌背","1");
+        let strPN = Tool.GetCardBackIndex();
         for(let one of handCard)
         {
             let img = one.node.getChildByName("BK1").getComponent(cc.Sprite);
