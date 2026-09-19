@@ -30,6 +30,8 @@
 - **覆盖 PNG 后 Creator 不会自动重导**，两步必做：① `touch` 目标 PNG（`cp -p` 会带旧 mtime，Creator 判定"没变"）；
   ② `osascript -e 'tell application "CocosCreator" to activate'`（窗口不前台就不扫描资源；走 System Events 会被拒）。
   是否真导入只看 `library/imports/<uuid前2位>/<uuid>.png` 的 md5 与 mtime。
+- **`cp -p` 还会带源文件的权限位**：从旧工程拷 PNG 过来常是 `755`，提交时会出现
+  `mode change 100644 => 100755`。拷贝后收尾 `chmod 644 <文件>` 再提交。
 - 放大贴图必须**同时改三处**：顶层 `width/height`、`subMetas.*.width/height`、`subMetas.*.rawWidth/rawHeight`。
 - 换图只覆盖同名 PNG，`.meta` 只改必要数字 → UUID 不变，Creator 不用重挂引用。
 - 改图脚本输入必须先 `git show HEAD:<path> > /tmp/原图.png` 导出，防二次处理。
