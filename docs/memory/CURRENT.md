@@ -1,8 +1,13 @@
 # qing 当前状态
 
-更新时间：2026-09-16
+更新时间：2026-09-19
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。历史验证不代表当前结果。
+
+## 2026-09-19 大厅「发现」两个入口行为调整
+
+- `panelMain.onButtonClick` 新增两个分支（原无分支、点击无响应）：`举报反馈` 直接 `showPanel("panelKefu",Cover)`，不传 `strUserData`，走默认客服 URL 与 `general` 渠道；`比赛场` 走 `panelMsgView` 弹「暂无比赛，敬请期待！」。
+- 只改脚本，`panelMain.prefab` 未动（三个节点的 Button 与统一事件注册均已存在）。**未 Creator 编译、未构建、未真机**；需重新构建后生效。
 
 ## 2026-09-16 表情动画替换（hh-poker EMOJI）
 
