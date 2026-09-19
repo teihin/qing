@@ -27,6 +27,9 @@
   `客服`/`VIP充值`/`VIP充值2` 三种 `strUserData`，传别的值 `strUrl` 为空）。
 
 ## Cocos Prefab / 贴图（硬约束，别忘）
+- **`panelXxx` 面板一律是 `UIManager.showPanel` 用 `cc.loader.loadRes("UI/" + 名字)` + `cc.instantiate` 动态创建的**
+  —— 要改面板外观/尺寸就改 `assets/resources/UI/panelXxx.prefab`（双击进 prefab 编辑模式）。
+  改场景 `drh8.fire` 里的同名节点**对运行无效**（那只是编辑器里的残留实例，2026-09-19 提示节点踩过）。
 - 改完 Prefab/贴图后 `library/` 需 Creator 重新导入；`assets/resources/project.manifest` 是构建产物，跑 `1生成热更新包.command` 重建，**不要手改**。
 - **Creator 开着时覆盖 PNG，`.meta` 会被自动改写**（`trimType:"auto"` 重算 trim，使 `_sizeMode=0` 元素放大约 5%）。
   根治：按原 trim 矩形给新图四边补 `alpha=2` 边界像素；收尾 `git checkout HEAD -- <每个 .meta>`。判断是否在跑：`pgrep -fl CocosCreator`。
