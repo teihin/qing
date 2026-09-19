@@ -1,6 +1,6 @@
 # 玩家信息弹窗 V8-new 实施
 
-- 工作区 `/Volumes/SSD/qing`，分支 `main`；未提交、未推送。
+- 工作区 `/Volumes/SSD/qing`，分支 `main`；已提交并推送 `f04a05b`（含删除 `design-previews/待确认/` 历史设计目录、修复该目录删除后 `design-previews/README.md` 的失效链接）。
 - 唯一设计 `design-previews/效果图V8-new/04-登录与弹窗/05-玩家信息弹窗.png`；用户明确修正参考图中的椭圆头像为正圆。
 - 正式修改 `assets/resources/UI/panelUserInfo.prefab`、`assets/scripts/UI/panelUserInfo.ts`；新增 `assets/V7/player_info_v8_*` 19 张 PNG 与 meta。
 - 面板、按钮、统计底框、道具格使用紧凑九宫格；标题/装饰/关闭/复制/麦克风/头像框/开关/道具独立。19 张 PNG 共272,168字节、213,771像素，未压缩RGBA约0.815 MiB；六格共用一张80×96底框，底板为128×384。
