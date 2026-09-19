@@ -1154,6 +1154,16 @@ export default class panelMain extends UIPanelViewBase {
         {
             UIManager.getInstance().showPanel("panelManager",ShowPanelMode.Cover);
         }
+        else if(button.node.name === "举报反馈")
+        {
+            //大厅"发现"下的举报反馈入口不做独立举报流程，直接进入客服界面
+            UIManager.getInstance().showPanel("panelKefu",ShowPanelMode.Cover);
+        }
+        else if(button.node.name === "比赛场")
+        {
+            //比赛场暂未开放，点击只弹提示
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"暂无比赛，敬请期待！");
+        }
 
 
 
