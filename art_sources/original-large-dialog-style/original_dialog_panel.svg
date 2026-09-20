@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <defs>
+    <linearGradient id="bg" x2="0" y2="1"><stop stop-color="#07527b"/><stop offset="1" stop-color="#00304e"/></linearGradient>
+    <pattern id="diamond" width="28" height="28" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0H28V28H0Z" fill="none" stroke="#2c7d9d" stroke-opacity=".23"/></pattern>
+  </defs>
+  <rect x="2" y="2" width="636" height="636" rx="30" fill="#032c49"/>
+  <rect x="5" y="5" width="630" height="630" rx="28" fill="none" stroke="#d8b46f" stroke-width="2"/>
+  <rect x="11" y="11" width="618" height="618" rx="23" fill="url(#bg)" stroke="#f9e6b7" stroke-width="2"/>
+  <rect x="17" y="17" width="606" height="606" rx="19" fill="url(#diamond)" opacity=".45"/>
+  <path d="M27 25H613" fill="none" stroke="#7dc4dc" stroke-opacity=".38"/>
+</svg>

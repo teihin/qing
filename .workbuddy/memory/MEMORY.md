@@ -2,7 +2,7 @@
 
 > 项目状态/决策/进度在 `docs/memory/`（入口 `AGENTS.md`）。
 > 本文件只放**跨任务高频**的操作约定；改图/抠图的详细踩坑记录已移到同目录 `ART-NOTES.md`，
-> 更结构化的流程在技能 `art-text-swap` / `cocos-ui-element-reskin` / `art-asset-text-audit`。
+> 更结构化的流程在技能 `art-text-swap` / `cocos-ui-element-reskin` / `art-asset-text-audit` / `cocos-touch-passthrough-fix`。
 
 ## 通用
 - 图片处理用 `/Users/yy/.workbuddy/binaries/python/envs/default/bin/python`（numpy + Pillow 12）；系统 `/usr/bin/python3` 无 numpy。
@@ -25,6 +25,10 @@
   事件由 `common/UIViewBase.onLoad` 用 `getComponentsInChildren(cc.Button)` 统一注册到各面板 `onButtonClick`。
   提示弹窗统一 `showPanel("panelMsgView",ShowPanelMode.Cover,"文本")`；客服界面 `panelKefu`（`start` 只认
   `客服`/`VIP充值`/`VIP充值2` 三种 `strUserData`，传别的值 `strUrl` 为空）。
+- **界面点击穿透 = 该节点没有触摸监听**：Creator 2.4 触摸候选按 **z-order** 派发（与注册先后无关，非 active 的排最后），
+  有监听的节点被 `swallowTouches` 吞掉，下层收不到；命中范围 = 监听节点自己的 `_contentSize`（与子节点无关），
+  所以遮罩节点必须自己全屏。修法：在面板 `onLoad` 给该节点注册 `TOUCH_END`（既有写法见
+  `panelGameView` 的「奖池面板」/「牌型提示」），不用等激活、不用动 prefab。详见技能 `cocos-touch-passthrough-fix`。
 
 ## Cocos Prefab / 贴图（硬约束，别忘）
 - **`panelXxx` 面板一律是 `UIManager.showPanel` 用 `cc.loader.loadRes("UI/" + 名字)` + `cc.instantiate` 动态创建的**

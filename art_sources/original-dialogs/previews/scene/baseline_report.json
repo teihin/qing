@@ -1,0 +1,106 @@
+{
+  "purpose": "drh8 隐藏弹层当前美术问题基线预览",
+  "scene": "/Volumes/SSD/qing/assets/Scenes/drh8.fire",
+  "scene_sha256": "a3b88a485f5e76ec408ad076ba61886a57baa66ad0666099ad30918a2117f690",
+  "canvas": [
+    750,
+    1334
+  ],
+  "isolation": "只保留 panelGameView/BK、目标弹层及其必要子状态",
+  "simulate_creator_size_mode": false,
+  "sprite_size_mode_behavior": "关闭；全部节点沿用 drh8.fire 序列化 contentSize。",
+  "widget_handling": "使用 Creator 在 750x1334 设计分辨率下已序列化的 Widget 对齐后坐标；Sprite SizeMode 只覆盖节点 contentSize，并沿用序列化锚点和位置。",
+  "known_limitations": [
+    "ScrollView 中由业务脚本运行时创建的数据条目不会出现在静态场景基线图中。",
+    "非矩形、椭圆或反向 cc.Mask 仍按轴对齐矩形近似裁剪。",
+    "粒子、Graphics、Spine 和运行时动画状态不由离线渲染器复现。",
+    "动态 Label 只显示 drh8.fire 当前序列化的占位值。"
+  ],
+  "outputs": [
+    {
+      "key": "hand_type_tip",
+      "title": "牌型提示",
+      "file": "06_牌型提示.png",
+      "target": "Canvas/Normal/panelGameView/牌型提示",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1305,
+        "nodes_active": 20,
+        "nodes_inactive": 1285,
+        "sprites_total": 7,
+        "sprites_rendered": 7,
+        "sprites_inactive": 717,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 4,
+        "labels_rendered": 3,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 0,
+        "sprite_size_nodes_changed": 0,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [],
+      "creator_size_mode_changes_including_inactive": [],
+      "creator_size_mode_errors": []
+    },
+    {
+      "key": "report",
+      "title": "举报窗口",
+      "file": "09_举报窗口.png",
+      "target": "Canvas/Normal/panelGameView/举报窗口",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1305,
+        "nodes_active": 64,
+        "nodes_inactive": 1241,
+        "sprites_total": 27,
+        "sprites_rendered": 11,
+        "sprites_inactive": 697,
+        "sprites_unresolved": 0,
+        "sprites_empty": 16,
+        "labels_total": 16,
+        "labels_rendered": 11,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 10,
+        "masks_approximate": 8,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 0,
+        "sprite_size_nodes_changed": 0,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [],
+      "creator_size_mode_changes_including_inactive": [],
+      "creator_size_mode_errors": []
+    }
+  ],
+  "errors": []
+}

@@ -4,6 +4,19 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。历史验证不代表当前结果。
 
+## 2026-09-20 桌内牌局设置 V8
+
+- `panelGameView.prefab` 与 `drh8.fire` 的 `系统设置` 已按 `效果图V8-new/06-桌内界面/10-牌局设置.png` 组件化换肤：本轮新增 31 张 `assets/V7/settings_v8_*` 透明 PNG 与 `.meta`，主框、顶饰、金色标题、五桌面预览、三牌背预览、选中态及控制区均为独立 Sprite。
+- Creator 已导入，短屏实测通过；隔离 `panelGameView` handler 的 15 个真实 Cocos 控件测试通过（五桌面、三牌背、三开关双态及关闭；storage/gameLogic 均为 mock）。未登录、未构建、未真机、未提交。见[交接](handoffs/2026-09-20-game-settings-v8.md)。
+
+## 2026-09-20 桌内提醒与功能弹窗 V8
+
+- **后续用户修正：恢复原版温馨提示风格。** `panelMsgView` 已完整退回本轮修改前版本；五个桌内提示与VIP购买确认复用原版整图，其余排队/邀请/会员/表情/举报/牌型提示改用同款组件。静态回调/引用检查通过，Creator新资源导入及真实交互仍待验；见[最新交接](handoffs/2026-09-20-original-dialog-style.md)。此决定替代下方同批弹窗的新V8标题方案，系统设置另按已确认稿保留。
+
+
+- 系统设置、芒果/扣费/解散/GPS/举报提醒、内嵌及独立排队、通用消息、邀请、VIP、表情面板已写入正式Prefab/Scene；仅新增两张共享九宫格约13KB。`panelGameView/提示` 按用户要求保留原半透明效果。
+- 静态与部分离线引擎显示检查已做，修复旧Sprite与新Label竞争渲染导致文字消失；Creator完整重导入、真实长短屏交互/登录回包、构建真机待验，未提交。见[交接](handoffs/2026-09-20-ingame-dialogs-v8.md)。
+
 ## 2026-09-20 玩家信息弹窗 V8-new
 
 - 正式 `panelUserInfo.prefab` 已按新稿组件化换肤，头像修成正圆；仅显示六个对应道具，其余四项仅隐藏。19张独立/九宫格PNG约272KB，RGBA约0.815MiB。动态数据、VIP权限及原道具协议保留，新增关闭/复制ID。

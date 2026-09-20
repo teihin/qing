@@ -1,0 +1,33 @@
+{
+  "scope": [
+    "assets/resources/UI/panelGameView.prefab",
+    "assets/resources/UI/panelQueueMatch.prefab",
+    "assets/resources/UI/panelMsgView.prefab",
+    "assets/resources/UI/panelRoomInvite.prefab",
+    "assets/resources/UI/panelVipInfo.prefab",
+    "assets/resources/UI/panelTalk.prefab",
+    "assets/Scenes/drh8.fire"
+  ],
+  "checks": {
+    "git_diff_check": "passed",
+    "json_parse": "passed: all 7 files parse as JSON",
+    "prefab_headers": "passed: all 6 prefabs contain cc.Prefab and cc.PrefabInfo records",
+    "business_contracts": "passed: required named nodes remain present for queue, message, invite, VIP statistics/purchase, talk EditBox/gold, and game-view popup/menu flows",
+    "scene_prefab_pair": "passed: drh8.fire remains parseable and contains panelGameView popup nodes",
+    "sprite_label_conflict": "not observed in static name/component scan",
+    "mask_order": "structurally present; visual stacking requires Creator/runtime QA",
+    "runtime_visual": "not verified"
+  },
+  "key_contracts": {
+    "panelQueueMatch": ["排队面板", "排队状态", "排队人员列表", "申请或取消排队", "关闭排队"],
+    "panelMsgView": ["bk/msg", "确定", "取消", "V7双按钮底"],
+    "panelRoomInvite": ["卡片/本次登录不再弹出", "卡片/忽略", "卡片/前往"],
+    "panelVipInfo": ["基础数据", "VIP数据", "确认购买VIP"],
+    "panelTalk": ["bk/gold", "文本", "发送"],
+    "panelGameView": ["系统设置", "扣费提示", "芒果提示", "举报窗口", "举报扣费提示", "排队弹窗", "GPS警告", "牌型提示"]
+  },
+  "limitations": [
+    "No Creator import, runtime interaction, or visual occlusion verification was performed.",
+    "The report file is the only newly written validation artifact; formal assets were not edited by this check."
+  ]
+}

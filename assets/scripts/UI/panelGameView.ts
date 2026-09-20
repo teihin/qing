@@ -344,6 +344,11 @@ export default class panelGameView extends UIPanelViewBase {
             Tool.GetChild(this.node,"奖池面板").active = false;
         },this);
 
+        //牌型提示：全屏吞掉触摸，避免点穿到后面的座位；点击界面内任意位置直接关闭
+        Tool.GetChild(this.node,"牌型提示").on(cc.Node.EventType.TOUCH_END,()=>{
+            Tool.GetChild(this.node,"牌型提示").active = false;
+        },this);
+
         this.scrollJCList = Tool.GetChild(this.node,"奖池面板/容器/奖池记录/记录列表").getComponent(ScrollViewEx);
         this.scrollJCList.callBackFresh = this.GetAllJiangDetal.bind(this);
     }

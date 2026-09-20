@@ -1,0 +1,20 @@
+{
+  "header": {
+    "size": [
+      144,
+      58
+    ],
+    "pngBytes": 8065,
+    "alphaInteriorHoles": 0,
+    "antialiasedPixels": 1001
+  },
+  "gold_button": {
+    "size": [
+      96,
+      66
+    ],
+    "pngBytes": 5383,
+    "alphaInteriorHoles": 0,
+    "antialiasedPixels": 912
+  }
+}
