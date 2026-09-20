@@ -55,7 +55,7 @@ export default class DrhPlayerLogic extends cc.Component {
 
     private nTableNum = 0;      //缓存的桌面分数
 
-    public moveAction:cc.Action = null; //状态动画action
+    public moveAction:cc.Action = null; //状态图标动画实例（每次播放新建，不要复用）
     public moveActionTar:cc.Action = null;
 
     // onLoad () {}
@@ -70,11 +70,6 @@ export default class DrhPlayerLogic extends cc.Component {
     start () {
         this.ShowHideLightBK(false);
         this.ShowHideZhuang(false);
-
-        let move = cc.moveTo(0.3,cc.v2(0,58));
-        this.moveAction = move.easing(cc.easeBounceOut());
-
-
     }
 
     
@@ -2462,6 +2457,39 @@ export default class DrhPlayerLogic extends cc.Component {
             cc.scaleTo(0.12, 1).easing(cc.easeSineOut())
         ));
     }
+    // ===== 状态图标(PlayerInfo/animateOut)的位置动画 =====
+    // Creator 默认开启 cc.macro.ENABLE_STACKABLE_ACTIONS，MoveTo 在飞行期间若被外部
+    // 直接改坐标，引擎会把这段位移累加进动作起点，结束时就会比目标位置多跑一截。
+    // 点“延时”时服务器会补推当前玩家消息，非动画分支在弹跳途中把坐标写回 (0,58)，
+    // “分牌中”图标因此被顶到上家的牌上。故所有入口统一：先停动作，再改坐标。
+    private StopAnimateOutAction():void
+    {
+        if(this.transAnimateOut == null || !cc.isValid(this.transAnimateOut))
+            return;
+        this.transAnimateOut.stopAllActions();
+        this.moveActionTar = null;
+    }
+
+    //无动画定位：必须先停掉正在飞的动作，否则位移会被叠加
+    private SetAnimateOutPos(vcPos:cc.Vec2):void
+    {
+        if(this.transAnimateOut == null || !cc.isValid(this.transAnimateOut))
+            return;
+        this.StopAnimateOutAction();
+        this.transAnimateOut.position = vcPos;
+    }
+
+    //从原地弹跳到 (0,58)；每次新建动作实例，避免共用同一个 action 重复 runAction
+    private PlayAnimateOutUp():void
+    {
+        if(this.transAnimateOut == null || !cc.isValid(this.transAnimateOut))
+            return;
+        this.StopAnimateOutAction();
+        this.transAnimateOut.position = cc.Vec2.ZERO;
+        this.moveAction = cc.moveTo(0.3,cc.v2(0,58)).easing(cc.easeBounceOut());
+        this.moveActionTar = this.transAnimateOut.runAction(this.moveAction);
+    }
+
     public ShowCurState(bShow:boolean = true,bAnimate:boolean = true)       
     {
         if (this.transAnimateOut == null)
@@ -2545,11 +2573,7 @@ export default class DrhPlayerLogic extends cc.Component {
 
         if(bAnimate)
         {
-            this.transAnimateOut.stopAction(this.moveActionTar);
-            this.transAnimateOut.position = cc.Vec2.ZERO;
-            // let move = cc.moveTo(0.3,cc.v2(0,0));
-            // let action = move.easing(cc.easeBounceOut());
-            this.moveActionTar = this.transAnimateOut.runAction(this.moveAction);
+            this.PlayAnimateOutUp();
 
             if(this.info.bei_shu_type == "-7")
             {
@@ -2610,7 +2634,7 @@ export default class DrhPlayerLogic extends cc.Component {
         }
         else
         {
-            this.transAnimateOut.position = cc.v2(0,58);
+            this.SetAnimateOutPos(cc.v2(0,58));
         }
     }
     public SetOneCardInfo(nPos:number)
@@ -2703,18 +2727,12 @@ export default class DrhPlayerLogic extends cc.Component {
         if (bAnimate)
         {
 
-            this.transAnimateOut.stopAction(this.moveActionTar);
-            this.transAnimateOut.position = cc.Vec2.ZERO;
-            let move = cc.moveTo(0.3,cc.v2(0,58));
-            let action = move.easing(cc.easeBounceOut());
-            this.moveActionTar = this.transAnimateOut.runAction(this.moveAction);
-
-
+            this.PlayAnimateOutUp();
             this.PlayAudio(0, "扯牌");
         }
         else
         {
-            this.transAnimateOut.position = cc.v2(0,58);
+            this.SetAnimateOutPos(cc.v2(0,58));
         }
     }
     public ShowKanPaiZhong(bShow:boolean = true,bAnimate:boolean = true)
@@ -2734,18 +2752,12 @@ export default class DrhPlayerLogic extends cc.Component {
         if (bAnimate)
         {
 
-            this.transAnimateOut.stopAction(this.moveActionTar);
-            this.transAnimateOut.position = cc.Vec2.ZERO;
-            let move = cc.moveTo(0.3,cc.v2(0,58));
-            let action = move.easing(cc.easeBounceOut());
-            this.moveActionTar = this.transAnimateOut.runAction(this.moveAction);
-
-
+            this.PlayAnimateOutUp();
             this.PlayAudio(0, "扯牌");
         }
         else
         {
-            this.transAnimateOut.position = cc.v2(0,58);
+            this.SetAnimateOutPos(cc.v2(0,58));
         }
 
 
@@ -2779,18 +2791,12 @@ export default class DrhPlayerLogic extends cc.Component {
 
         if (bAnimate)
         {
-            this.transAnimateOut.stopAction(this.moveActionTar);
-            this.transAnimateOut.position = cc.Vec2.ZERO;
-            let move = cc.moveTo(0.3,cc.v2(0,58));
-            let action = move.easing(cc.easeBounceOut());
-            this.moveActionTar = this.transAnimateOut.runAction(this.moveAction);
-
-
+            this.PlayAnimateOutUp();
             this.PlayAudio(0, "扯牌");
         }
         else
         {
-            this.transAnimateOut.position = cc.v2(0,58);
+            this.SetAnimateOutPos(cc.v2(0,58));
         }
     }
 

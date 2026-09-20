@@ -41,6 +41,10 @@
 - 网页版走 WSS 反代：`wss://154-37-155-17.nip.io/ws/<port>/`（`WEB_KB_WSS_PROXY_BASE_URL`，端口白名单见 `GameDef.ts`）。
   `GET /ws/20013/` 返回 **502 = 反代后端不通**；`404` = 该端口不在白名单。原生端仍直连 `154.37.155.17:20013`。
 - 连通性自检：用 `node`（22.x 自带全局 `WebSocket`）连一下比看日志快。
+- **动画飞行期间禁止直接改坐标**：`cc.moveTo/moveBy` 播放中若被外部 `node.position = …`，Creator 2.4 默认
+  `ENABLE_STACKABLE_ACTIONS=true`，引擎会把这段位移累加进动作起点（`MoveBy.update` 的 `_previousPosition` 校准），
+  收尾比目标位置多跑一截（实测 58 → 110）。统一写法：**先 `stopAllActions()` 再设坐标；动作实例每次新建不复用**。
+  现成踩坑点：`DrhPlayerLogic` 的 `PlayerInfo/animateOut`（分/搓牌中/大跟敲休/丢），点「延时」后服务端补推消息撞进 0.3s 弹跳窗口。
 - **UI 按钮点击无反应 → 先查 `panelMain.onButtonClick` 缺分支**：Prefab 里 Button 的 `clickEvents` 恒为空，
   事件由 `common/UIViewBase.onLoad` 用 `getComponentsInChildren(cc.Button)` 统一注册到各面板 `onButtonClick`。
   提示弹窗统一 `showPanel("panelMsgView",ShowPanelMode.Cover,"文本")`；客服界面 `panelKefu`（`start` 只认
