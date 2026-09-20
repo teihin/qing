@@ -4,6 +4,8 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。历史验证不代表当前结果。
 
+客服顶部换肤已查，运行待验：[交接](handoffs/2026-09-20-kefu-header-v8.md)。
+
 ## 2026-09-20 桌内牌局设置 V8
 
 - `panelGameView.prefab` 与 `drh8.fire` 的 `系统设置` 已按 `效果图V8-new/06-桌内界面/10-牌局设置.png` 组件化换肤：本轮新增 31 张 `assets/V7/settings_v8_*` 透明 PNG 与 `.meta`，主框、顶饰、金色标题、五桌面预览、三牌背预览、选中态及控制区均为独立 Sprite。

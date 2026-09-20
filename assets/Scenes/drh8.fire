@@ -111808,7 +111808,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 626,
-      "height": 0
+      "height": 184
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -111881,8 +111881,8 @@
     "_enabled": true,
     "_layoutSize": {
       "__type__": "cc.Size",
-      "width": 573,
-      "height": 108
+      "width": 626,
+      "height": 184
     },
     "_resize": 1,
     "_N$layoutType": 2,
@@ -119807,7 +119807,7 @@
     "_prefab": {
       "__id__": 3344
     },
-    "_opacity": 151,
+    "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
       "r": 0,
@@ -147694,7 +147694,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 288,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -147758,7 +147758,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 288,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -147865,7 +147865,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 288,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -148068,7 +148068,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 280,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -148132,7 +148132,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 280,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -148239,7 +148239,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 280,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -148442,7 +148442,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 287,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -148506,7 +148506,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 287,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -148613,7 +148613,7 @@
     },
     "_contentSize": {
       "__type__": "cc.Size",
-      "width": 287,
+      "width": 270,
       "height": 98
     },
     "_anchorPoint": {
@@ -161698,7 +161698,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
@@ -162100,7 +162100,7 @@
         1,
         1,
         1,
-        1
+        0
       ]
     },
     "_eulerAngles": {
