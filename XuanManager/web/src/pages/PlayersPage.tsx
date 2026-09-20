@@ -170,7 +170,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <>
             <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
               <table className="player-table">
-                <thead><tr><th>玩家</th><th>登录账号</th><th>现金余额</th><th>等级 / 角色</th><th>直属代理</th><th>房间 / 客户端</th><th>注册 / 登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
+                <thead><tr><th>玩家</th><th>登录账号</th><th>现金余额</th><th>等级 / 角色</th><th>直属代理</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
                   <tr key={player.id}>
                     <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small></div></div></td>
@@ -179,7 +179,8 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
                     <td><strong>等级 {player.level}</strong><small className="cell-subtitle">{player.role || "无角色标记"}</small></td>
                     <td>{player.agentId ? <><strong>{player.agentName || "未知代理"}</strong><small className="cell-subtitle">ID：{player.agentId}</small></> : <span className="muted">无直属代理</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
-                    <td>{formatDate(player.registrationTime)}<small className="cell-subtitle">最近：{formatDate(player.lastLoginAt)}</small></td>
+                    <td>{formatDate(player.registrationTime)}</td>
+                    <td>{formatDate(player.lastLoginAt)}</td>
                     <td><div className="row-actions">{can("game.player.balance_adjust") && <button className="success-link" onClick={() => setAdjusting(player)}>加减分</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>

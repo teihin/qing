@@ -223,7 +223,7 @@ td strong { color: #294149; }
 .action-tag { padding: 5px 8px; border-radius: 5px; color: #466d79; background: #eef4f5; font-family: ui-monospace, monospace; font-size: 12px; }
 .max-cell { max-width: 270px; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #a2b0b3; }
-.player-table { min-width: 1120px; }
+.player-table { min-width: 1220px; }
 .money-value { color: #117b72; font-family: Georgia, "Songti SC", serif; font-size: 16px; }
 
 /* Operational controls: player balance, live rooms, payment channels and activities. */
