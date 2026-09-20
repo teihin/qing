@@ -135,15 +135,26 @@ export default class panelGivePad extends UIPanelViewBase {
 
 
     public UserName(strMsg:string)
-    {        
-        let data = JSON.parse(strMsg);
-        
-        if(data == null)
+    {
+        let data:any = null;
+        try
+        {
+            data = JSON.parse(strMsg);
+        }
+        catch (error)
+        {
+            return;
+        }
+
+        if(data == null || data["id"] == null)
             return;
 
-        let strID:string = data["id"].toString();        
-        let strName:string = data["name"];
-        let avatarIndex:string = data.hasOwnProperty("photo") ? data["photo"].toString() : "";
+        let strID:string = data["id"].toString();
+        if(strID != this.strID)
+            return;
+
+        let strName:string = data["name"] == null ? "" : data["name"].toString();
+        let avatarIndex:string = data["photo"] == null ? "" : data["photo"].toString();
 
         Tool.GetChild(this.node,"bk/name").getComponent(cc.Label).string  = strName;
         let img = Tool.GetChild(this.node,"bk/头像/mask/img").getComponent(cc.Sprite);

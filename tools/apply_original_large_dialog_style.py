@@ -35,7 +35,6 @@ LEGACY_BLUE_FRAMES = {
 
 TARGETS = {
     "assets/resources/UI/panelQueueMatch.prefab": (("排队面板",), ()),
-    "assets/resources/UI/panelRoomInvite.prefab": (("卡片",), ()),
     # VIP purchase confirmation intentionally belongs to the separate
     # confirmation-dialog pass and must retain its own visual treatment.
     "assets/resources/UI/panelVipInfo.prefab": (("",), ("确认购买面板",)),

@@ -2330,12 +2330,12 @@ export default class DrhPlayerLogic extends cc.Component {
 
         if(nCount>0)
         {
-            this.txtCheTime.string = "扯牌倒计时:"+ parseInt(nCount.toString()) + "s";
+            this.txtCheTime.string = ""+ parseInt(nCount.toString()) + "s";
             this.transCheTimeBar.progress = nCount/nTotle;
         }
         else
         {
-            this.txtCheTime.string = "扯牌倒计时:0s";
+            this.txtCheTime.string = "0";
             this.transCheTimeBar.progress = 0;
         }
     }

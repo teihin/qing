@@ -40,8 +40,8 @@ export default class panelRoomInvite extends UIPanelViewBase {
         let people = "--";
         if(this.invite.maxPlayers > 0)
             people = this.invite.currentPlayers.toString() + "/" + this.invite.maxPlayers.toString();
-        Tool.GetChild(this.node, "卡片/房间详情").getComponent(cc.Label).string = "底皮  " + (this.invite.bottom || "--") + "     当前人数  " + people;
-        Tool.GetChild(this.node, "卡片/邀请文案").getComponent(cc.Label).string = this.invite.text || "房间正在等待玩家，点击前往即可加入";
+        Tool.GetChild(this.node, "卡片/底皮值").getComponent(cc.Label).string = this.invite.bottom || "--";
+        Tool.GetChild(this.node, "卡片/人数值").getComponent(cc.Label).string = people;
         this.suppressToggle = Tool.GetChild(this.node, "卡片/本次登录不再弹出").getComponent(cc.Toggle);
         this.suppressToggle.isChecked = false;
         if(this.suppressToggle.checkMark != null && this.suppressToggle.checkMark.node != null)
@@ -50,7 +50,7 @@ export default class panelRoomInvite extends UIPanelViewBase {
 
     onButtonClick(button:cc.Button)
     {
-        if(button.node.name == "忽略")
+        if(button.node.name == "忽略" || button.node.name == "关闭")
         {
             RoomInviteManager.getInstance().handleDialogAction(this.invite, false, this.suppressToggle != null && this.suppressToggle.isChecked);
         }

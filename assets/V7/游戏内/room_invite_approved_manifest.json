@@ -1,0 +1,134 @@
+{
+  "source_size": [
+    940,
+    1672
+  ],
+  "panel_bbox": [
+    59,
+    321,
+    822,
+    934
+  ],
+  "dynamic_holes": {
+    "invite_text": [
+      218,
+      516,
+      507,
+      71
+    ],
+    "room_number": [
+      296,
+      665,
+      352,
+      105
+    ],
+    "stake_value": [
+      273,
+      824,
+      106,
+      69
+    ],
+    "player_value": [
+      617,
+      824,
+      108,
+      69
+    ],
+    "description": [
+      221,
+      927,
+      499,
+      70
+    ]
+  },
+  "slices": {
+    "panel_clean": {
+      "path": "assets/V7/游戏内/room_invite_approved_panel_clean.png",
+      "bbox": [
+        59,
+        321,
+        822,
+        934
+      ],
+      "source": "clean",
+      "note": "modal frame and all cleaned dynamic holes"
+    },
+    "header": {
+      "path": "assets/V7/游戏内/room_invite_approved_header.png",
+      "bbox": [
+        187,
+        351,
+        565,
+        130
+      ],
+      "source": "original",
+      "note": "fixed title, subtitle and two ornaments"
+    },
+    "close": {
+      "path": "assets/V7/游戏内/room_invite_approved_close.png",
+      "bbox": [
+        806,
+        353,
+        42,
+        39
+      ],
+      "source": "original",
+      "note": "close art"
+    },
+    "info_card": {
+      "path": "assets/V7/游戏内/room_invite_approved_info_card.png",
+      "bbox": [
+        120,
+        597,
+        700,
+        318
+      ],
+      "source": "clean",
+      "note": "card decoration, labels and empty dynamic value holes"
+    },
+    "checkbox_ring": {
+      "path": "assets/V7/游戏内/room_invite_approved_checkbox_ring.png",
+      "bbox": [
+        334,
+        1009,
+        47,
+        47
+      ],
+      "source": "original",
+      "note": "unselected circle"
+    },
+    "checkbox_label": {
+      "path": "assets/V7/游戏内/room_invite_approved_checkbox_label.png",
+      "bbox": [
+        399,
+        1012,
+        230,
+        39
+      ],
+      "source": "original",
+      "note": "fixed checkbox label"
+    },
+    "button_ignore": {
+      "path": "assets/V7/游戏内/room_invite_approved_button_ignore.png",
+      "bbox": [
+        126,
+        1088,
+        324,
+        96
+      ],
+      "source": "original",
+      "note": "fixed ignore button with lettering"
+    },
+    "button_go_room": {
+      "path": "assets/V7/游戏内/room_invite_approved_button_go_room.png",
+      "bbox": [
+        476,
+        1088,
+        339,
+        96
+      ],
+      "source": "original",
+      "note": "fixed go-room button with lettering"
+    }
+  }
+}
