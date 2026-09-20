@@ -121543,7 +121543,7 @@
     "_prefab": {
       "__id__": 3391
     },
-    "_opacity": 255,
+    "_opacity": 0,
     "_color": {
       "__type__": "cc.Color",
       "r": 255,
@@ -121650,7 +121650,7 @@
     "_prefab": {
       "__id__": 3394
     },
-    "_opacity": 255,
+    "_opacity": 0,
     "_color": {
       "__type__": "cc.Color",
       "r": 255,
