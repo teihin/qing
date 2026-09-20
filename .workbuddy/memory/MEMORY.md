@@ -16,6 +16,22 @@
 - 改完 Cocos 脚本想快速自检：本机无 `tsc`，用 managed node 调
   `~/.workbuddy/binaries/node/workspace/node_modules/typescript` 的
   `ts.transpileModule(src,{reportDiagnostics:true})` 只查语法（0 诊断即通过），别指望完整类型检查。
+- **Android Studio 构建 `build/jsb-link/.../proj.android-studio` 的 Gradle project cache 必须在持久目录**
+  （现为 `~/Library/Caches/qing-android-gradle-project-cache`）：工程内 `.gradle` 是软链接，`gradlew` 里另有
+  `--project-cache-dir`，**两处必须指向同一路径** —— AS 不读 gradlew，它直接用 `<projectDir>/.gradle`。
+  历史上指过 `/private/tmp`，重启被系统清空 → 软链接悬空 → `Cannot create directory .../.gradle/8.9/fileHashes`。
+  该路径不受 git 跟踪（`git ls-files` 为空），改动零 git 影响。
+- **同工程的 Gradle daemon 堆必须显式调大**（`gradle.properties` 的 `org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m`）：
+  默认只有 512m，release 打包（R8 + 资源压缩 + 双 ABI APK）会 OOM，而 AS 只报看不出所以然的
+  `PackageAndroidArtifact$IncrementalSplitterRunnable`。**判别口诀：先看工程目录里有没有
+  `java_pid<daemonPid>.hprof`** —— 配了 `+HeapDumpOnOutOfMemoryError`，只有真 OOM 才落堆转储，
+  时间戳对上失败时刻即可定案（**这些 hprof 是 OOM 证据，别当垃圾先删**）。
+- **`proj.android-studio` 是 Cocos 生成的**（模板 `cocos2d-x/templates/js-template-link/...`，系干净原版，
+  那行 jvmargs 在模板里就是注释的 —— OOM 根子）。**在 Creator 里重新构建原生 Android 会覆盖本目录**，
+  把 4G 堆配置、`.gradle` 软链接、`gradlew`/`build.gradle` 的 hack 全冲掉。
+  要持久化就镜像到 `build-templates/<构建输出目录名>/`（约定：`build-templates/web-mobile/` ↔ `build/web-mobile`，
+  故原生 link 用 `build-templates/jsb-link/...`）；**软链接没法靠模板复制**。
+  日常的 1/2/3/4 号 `.command`（热更/上传）**不会**重建原生工程，所以平时碰不到这个口子。
 
 ## 代码排查（本项目特有）
 - `GameDataManager.getAccount()` = `KBEngine.app.player()` = `entities[entity_id]`。
