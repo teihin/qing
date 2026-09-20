@@ -38,7 +38,7 @@
 - 已删除后端全部 22 处 +8 包装（玩家/封禁/防盗号/后台用户/审计/公告/发牌优化/交易筛选/平台收益），工作台今日审计日界改按北京时间，数据库连接 `Loc` 固定 `Asia/Shanghai`。前端无需改动（线上产物即本地 `web/dist`，`Asia/Shanghai` 口径正确）。
 - 验证：`go vet`/`go test` 全过；新二进制 `INTERVAL 8 HOUR` 计数 0；部署前用同源比对确认本地源码 = 线上二进制；重启后 `/api/health` 200，只读回读时间与北京时间一致。**未登录页面做视觉复核；改动未提交。**见[交接](handoffs/2026-09-19-xuanmanager-timezone-fix.md)。
 - 同批新增「玩家管理 → 更多条件 → 登录日期范围」（`loginFrom`/`loginTo`）：按北京时间日界用 `UNIX_TIMESTAMP` 换算后比 `kbe_accountinfos.lasttime`，未登录账号不落范围；后端单测 + 前端 lint/tsc/build 通过，只读 SQL 与 `FROM_UNIXTIME` 参照口径一致，后端与前端已一同部署正式 8891（回滚点 `backups/xuanmanager.20260919-2331-loginrange-rollback`、`web.previous-login-range-20260919`）。**未登录页面点击验收；改动未提交。**见[交接](handoffs/2026-09-19-xuanmanager-player-login-range.md)。
-- 09-20：玩家列表「注册 / 登录」拆为「注册时间（北京时间）」+「最近登录（北京时间）」两列（`.player-table` `min-width` 1120→1220px，时间口径未变），lint/tsc/build 通过并部署正式 8891，线上回读新表头命中、旧表头 0 命中，提交 `7865427`（未推送；回滚点 `web.previous-player-time-split-20260920`）。**未登录页面视觉复核**，见[交接](handoffs/2026-09-20-xuanmanager-player-time-split.md)。
+- 09-20：玩家列表「注册 / 登录」拆为「注册时间（北京时间）」+「最近登录（北京时间）」两列（`.player-table` 1120→1220px，时间口径未变），lint/tsc/build 通过并部署正式 8891，线上回读新表头命中、旧表头 0 命中，提交/推送 `7865427`、`ba38c31`（回滚点 `web.previous-player-time-split-20260920`）。**未登录页面视觉复核**，见[交接](handoffs/2026-09-20-xuanmanager-player-time-split.md)。
 
 ## 2026-09-19 大厅「发现」两个入口行为调整
 
