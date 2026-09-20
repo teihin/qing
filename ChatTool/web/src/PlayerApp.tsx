@@ -234,15 +234,6 @@ export default function PlayerApp() {
     } finally { setUploading(false) }
   }
 
-  const endConversation = async () => {
-    if (!confirm('确认结束本次咨询吗？结束后需要从游戏内重新进入客服。')) return
-    stopPlayerTyping()
-    try {
-      await api('/api/player/end', { method: 'POST', body: jsonBody({}) })
-      await loadState()
-    } catch (reason) { setError(reason instanceof ApiError ? reason.message : '无法结束咨询') }
-  }
-
   if (!state && !error) return <LoadingScreen embedded={embeddedSkin} />
   if (!state) return (
     <main className={`player-shell player-error-page ${embeddedSkin ? 'player-shell-embedded player-error-page-embedded' : ''}`}>
@@ -257,7 +248,6 @@ export default function PlayerApp() {
     <main className={`player-shell ${embeddedSkin ? 'player-shell-embedded' : ''}`}>
       <header className="player-header">
 		<div className="player-brand"><span className="brand-mark brand-mark-small">8L</span><div><strong>在线客服</strong><small>{conversation.category} · 专属服务</small></div></div>
-        <button className="header-action" type="button" onClick={endConversation} disabled={conversation.status === 'closed'}>结束咨询</button>
       </header>
       <section className={`service-banner banner-${conversation.status} ${unavailable ? 'banner-unavailable' : ''}`}>
         <span className="service-avatar"><Avatar name={conversation.agentName || '客'} size="large" /><i /></span>
