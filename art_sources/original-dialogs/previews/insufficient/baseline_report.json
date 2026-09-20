@@ -1,0 +1,64 @@
+{
+  "purpose": "drh8 隐藏弹层当前美术问题基线预览",
+  "scene": "/Volumes/SSD/qing/assets/Scenes/drh8.fire",
+  "scene_sha256": "e8ffbe6e1820af41b304cbc1825a786f5895e2eec7238b788c8d14b05aa8db09",
+  "canvas": [
+    750,
+    1334
+  ],
+  "isolation": "只保留 panelGameView/BK、目标弹层及其必要子状态",
+  "simulate_creator_size_mode": false,
+  "sprite_size_mode_behavior": "关闭；全部节点沿用 drh8.fire 序列化 contentSize。",
+  "widget_handling": "使用 Creator 在 750x1334 设计分辨率下已序列化的 Widget 对齐后坐标；Sprite SizeMode 只覆盖节点 contentSize，并沿用序列化锚点和位置。",
+  "known_limitations": [
+    "ScrollView 中由业务脚本运行时创建的数据条目不会出现在静态场景基线图中。",
+    "非矩形、椭圆或反向 cc.Mask 仍按轴对齐矩形近似裁剪。",
+    "粒子、Graphics、Spine 和运行时动画状态不由离线渲染器复现。",
+    "动态 Label 只显示 drh8.fire 当前序列化的占位值。"
+  ],
+  "outputs": [
+    {
+      "key": "buy_in_insufficient",
+      "title": "带入窗口－余额不足",
+      "file": "03_带入窗口_余额不足.png",
+      "target": "Canvas/Normal/panelGameView/带入窗口",
+      "resolution": [
+        750,
+        1334
+      ],
+      "note": "嵌套在带入窗口内的二级提示状态。",
+      "isolation_errors": [],
+      "statistics": {
+        "nodes_total": 1308,
+        "nodes_active": 52,
+        "nodes_inactive": 1256,
+        "sprites_total": 27,
+        "sprites_rendered": 27,
+        "sprites_inactive": 694,
+        "sprites_unresolved": 0,
+        "sprites_empty": 0,
+        "labels_total": 12,
+        "labels_rendered": 11,
+        "labels_empty": 1,
+        "labels_failed": 0,
+        "dragonbones_total": 0,
+        "dragonbones_rendered": 0,
+        "dragonbones_inactive": 12,
+        "dragonbones_failed": 0,
+        "masks_active": 1,
+        "masks_approximate": 0,
+        "unsupported_components": 0,
+        "sprite_size_mode_applied": 0,
+        "sprite_size_nodes_changed": 0,
+        "sprite_size_mode_unresolved": 0
+      },
+      "unresolved_uuids": {},
+      "unresolved_assets": {},
+      "unsupported_visual_components": {},
+      "creator_size_mode_changes": [],
+      "creator_size_mode_changes_including_inactive": [],
+      "creator_size_mode_errors": []
+    }
+  ],
+  "errors": []
+}
