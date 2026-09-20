@@ -16,7 +16,7 @@ class AppErrorBoundary extends Component<{ children: ReactNode }, { failed: bool
 
   render() {
     if (this.state.failed) {
-      return <main className="loading-screen runtime-error-page"><div className="brand-mark">8L</div><h1>页面需要重新加载</h1><p>聊天记录已经安全保存，请刷新页面继续处理。</p><button type="button" onClick={() => location.reload()}>立即刷新</button></main>
+      return <main className="loading-screen runtime-error-page"><div className="brand-mark">BY</div><h1>页面需要重新加载</h1><p>聊天记录已经安全保存，请刷新页面继续处理。</p><button type="button" onClick={() => location.reload()}>立即刷新</button></main>
     }
     return this.props.children
   }

@@ -59,7 +59,7 @@ export function EmptyState({ icon, title, text }: { icon: string; title: string;
 }
 
 export function LoadingScreen({ label = '正在连接客服中心', embedded = false }: { label?: string; embedded?: boolean }) {
-  return <div className={`loading-screen ${embedded ? 'loading-screen-embedded' : ''}`}><div className="brand-mark">8L</div><span className="loading-spinner" /><p>{label}</p></div>
+  return <div className={`loading-screen ${embedded ? 'loading-screen-embedded' : ''}`}><div className="brand-mark">BY</div><span className="loading-spinner" /><p>{label}</p></div>
 }
 
 export function formatBytes(bytes: number) {

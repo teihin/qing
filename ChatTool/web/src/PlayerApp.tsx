@@ -237,7 +237,7 @@ export default function PlayerApp() {
   if (!state && !error) return <LoadingScreen embedded={embeddedSkin} />
   if (!state) return (
     <main className={`player-shell player-error-page ${embeddedSkin ? 'player-shell-embedded player-error-page-embedded' : ''}`}>
-      <div className="brand-mark">8L</div><h1>无法进入在线客服</h1><p>{error}</p><button type="button" onClick={() => location.reload()}>重新连接</button><small>为保障账号安全，请从游戏内的“客服”入口进入。</small>
+      <div className="brand-mark">BY</div><h1>无法进入在线客服</h1><p>{error}</p><button type="button" onClick={() => location.reload()}>重新连接</button><small>为保障账号安全，请从游戏内的“客服”入口进入。</small>
     </main>
   )
 
@@ -247,7 +247,7 @@ export default function PlayerApp() {
   return (
     <main className={`player-shell ${embeddedSkin ? 'player-shell-embedded' : ''}`}>
       <header className="player-header">
-		<div className="player-brand"><span className="brand-mark brand-mark-small">8L</span><div><strong>在线客服</strong><small>{conversation.category} · 专属服务</small></div></div>
+		<div className="player-brand"><span className="brand-mark brand-mark-small">BY</span><div><strong>在线客服</strong><small>{conversation.category} · 专属服务</small></div></div>
       </header>
       <section className={`service-banner banner-${conversation.status} ${unavailable ? 'banner-unavailable' : ''}`}>
         <span className="service-avatar"><Avatar name={conversation.agentName || '客'} size="large" /><i /></span>

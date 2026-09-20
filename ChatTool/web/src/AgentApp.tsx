@@ -77,9 +77,9 @@ function AgentLogin({ notice, onLogin }: { notice: string; onLogin: (agent: Agen
     finally { setLoading(false) }
   }
   return <main className="agent-login-page">
-    <section className="login-showcase"><div className="showcase-content"><span className="brand-mark brand-mark-login">8L</span><p>玩家服务中枢</p><h1>每一次回应，<br />都让服务更有温度。</h1><div className="showcase-points"><span>实时会话</span><span>智能分配</span><span>安全留痕</span></div></div></section>
+    <section className="login-showcase"><div className="showcase-content"><span className="brand-mark brand-mark-login">BY</span><p>玩家服务中枢</p><h1>每一次回应，<br />都让服务更有温度。</h1><div className="showcase-points"><span>实时会话</span><span>智能分配</span><span>安全留痕</span></div></div></section>
     <section className="login-panel"><form className="login-card" onSubmit={submit}>
-      <header><span className="mobile-login-mark">8L</span><small>客服工作台</small><h2>欢迎回来</h2><p>登录后开始处理玩家咨询</p></header>
+      <header><span className="mobile-login-mark">BY</span><small>客服工作台</small><h2>欢迎回来</h2><p>登录后开始处理玩家咨询</p></header>
       <label><span>客服账号</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" maxLength={32} placeholder="请输入客服账号" autoFocus /></label>
       <label><span>登录密码</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" maxLength={72} placeholder="请输入登录密码" /></label>
 	  {(error || notice) && <div className="form-error">{error || notice}</div>}
@@ -329,7 +329,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   ] as { value: typeof scope; label: string; count: number }[], [agent.role, dashboard])
 
   return <main className="agent-shell">
-    <header className="agent-topbar"><div className="agent-logo"><span className="brand-mark brand-mark-small">8L</span><div><strong>玩家服务中枢</strong><small>{agent.channelName}</small></div></div>
+    <header className="agent-topbar"><div className="agent-logo"><span className="brand-mark brand-mark-small">BY</span><div><strong>玩家服务中枢</strong><small>{agent.channelName}</small></div></div>
       <div className="topbar-metrics"><span><b>{dashboard.queued}</b> 人待接入</span><span><b>{dashboard.myActive}</b> 个接待中</span><span><b>{dashboard.onlineAgents}</b> 位客服在线</span></div>
       <div className="agent-account"><StatusDot status={presence} /><select value={presence} onChange={(event) => void changePresence(event.target.value as Agent['presence'])}><option value="online">在线接待</option><option value="away">暂时离开</option><option value="offline">停止接待</option></select><Avatar name={agent.displayName} /><div><strong>{agent.displayName}</strong><small>{agent.role === 'supervisor' ? '客服主管' : '在线客服'}</small></div><button className={`sound-toggle ${soundEnabled ? 'active' : ''}`} type="button" aria-pressed={soundEnabled} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); writeAgentSoundPreference(next); if (next) void playIncomingMessageSound() }}>{soundEnabled ? '声音开' : '声音关'}</button><button type="button" onClick={() => setShowPassword(true)}>改密码</button>{agent.role === 'supervisor' && <button type="button" onClick={() => setShowTeam(true)}>团队</button>}<button className="logout-button" type="button" onClick={() => void logout()}>退出</button></div>
     </header>
@@ -341,7 +341,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
         <div className="conversation-list">{conversations.length === 0 ? <EmptyState icon="聊" title="暂无会话" text={scope === 'queue' ? '当前没有玩家等待接入' : '新的玩家咨询会显示在这里'} /> : conversations.map((item) => <ConversationCard key={item.id} item={item} selected={selectedID === item.id} onClick={() => selectConversation(item.id)} />)}</div>
       </aside>
       <section className="agent-chat-panel">
-        {!detail ? <EmptyState icon="8L" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
+        {!detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
           <header className="chat-header"><button className="mobile-back" onClick={() => setDetailOpen(false)} aria-label="返回会话列表">‹</button><Avatar name={detail.nickname} url={detail.avatarUrl} /><div className="chat-person"><strong>{detail.nickname}<small>ID {detail.playerId} · {detail.category}</small></strong><span><i className={detail.status === 'active' ? 'active' : ''} />{detail.status === 'active' ? '接待中' : detail.status === 'queued' ? '等待接入' : '已结束'}</span></div><div className="chat-actions">{detail.status === 'queued' && <button className="primary-small" onClick={() => void claim()}>立即接入</button>}{detail.status !== 'queued' && <button className="danger-light" disabled={clearing} onClick={() => void clearHistory()}>{clearing ? '清空中…' : '清空记录'}</button>}{detail.status === 'active' && <><button onClick={() => setShowTransfer(true)}>转接</button><button className="danger-light" onClick={() => void close()}>结束会话</button></>}</div></header>
           <div className="agent-message-list">{detail.status === 'queued' && agent.role !== 'supervisor' ? <div className="claim-prompt"><span>待</span><h3>玩家正在等待客服</h3><p>接入后可查看完整聊天记录并开始回复。</p><button onClick={() => void claim()}>接入此会话</button></div> : <>{messages.map((message) => <MessageBubble key={message.id} message={message} own={(message.senderType === 'agent' || message.senderType === 'note') && message.senderId === String(agent.id)} onImage={setPreviewImage} />)}{playerTyping && <div className="agent-typing">玩家正在输入 <i /><i /><i /></div>}<div ref={listEnd} /></>}</div>
           {error && <div className="workspace-error">{error}<button onClick={() => setError('')}>×</button></div>}
