@@ -32,12 +32,13 @@
 - 正式 `panelUserInfo.prefab` 已按新稿组件化换肤，头像修成正圆；仅显示六个对应道具，其余四项仅隐藏。19张独立/九宫格PNG约272KB，RGBA约0.815MiB。动态数据、VIP权限及原道具协议保留，新增关闭/复制ID。
 - Creator导入与本地引擎长短屏离线预览已查；未真实登录交互、未构建真机。已提交并推送 `f04a05b`。见[交接](handoffs/2026-09-20-player-info-v8.md)。
 
-## 2026-09-19 XuanManager 时间口径修复（正式已部署）
+## 2026-09-19～20 XuanManager 时间口径修复 + 玩家列表拆列（正式已部署）
 
 - 玩家管理「最近登录」等页面时间多 8 小时、16:00 后跨到次日。根因：误判「MySQL 存的是 UTC」，而实测正式服务器系统与 MySQL 会话时区都是 `Asia/Shanghai`（`@@time_zone = SYSTEM`），`NOW()`/`CURRENT_TIMESTAMP`/`FROM_UNIXTIME()` 与全部 `DATETIME` 列**本来就是北京时间**，那层 `DATE_ADD(…, INTERVAL 8 HOUR)` 成了第二次 +8。
 - 已删除后端全部 22 处 +8 包装（玩家/封禁/防盗号/后台用户/审计/公告/发牌优化/交易筛选/平台收益），工作台今日审计日界改按北京时间，数据库连接 `Loc` 固定 `Asia/Shanghai`。前端无需改动（线上产物即本地 `web/dist`，`Asia/Shanghai` 口径正确）。
 - 验证：`go vet`/`go test` 全过；新二进制 `INTERVAL 8 HOUR` 计数 0；部署前用同源比对确认本地源码 = 线上二进制；重启后 `/api/health` 200，只读回读时间与北京时间一致。**未登录页面做视觉复核；改动未提交。**见[交接](handoffs/2026-09-19-xuanmanager-timezone-fix.md)。
 - 同批新增「玩家管理 → 更多条件 → 登录日期范围」（`loginFrom`/`loginTo`）：按北京时间日界用 `UNIX_TIMESTAMP` 换算后比 `kbe_accountinfos.lasttime`，未登录账号不落范围；后端单测 + 前端 lint/tsc/build 通过，只读 SQL 与 `FROM_UNIXTIME` 参照口径一致，后端与前端已一同部署正式 8891（回滚点 `backups/xuanmanager.20260919-2331-loginrange-rollback`、`web.previous-login-range-20260919`）。**未登录页面点击验收；改动未提交。**见[交接](handoffs/2026-09-19-xuanmanager-player-login-range.md)。
+- 09-20：玩家列表「注册 / 登录」拆为「注册时间（北京时间）」+「最近登录（北京时间）」两列（`.player-table` `min-width` 1120→1220px，时间口径未变），lint/tsc/build 通过并部署正式 8891，线上回读新表头命中、旧表头 0 命中，提交 `7865427`（未推送；回滚点 `web.previous-player-time-split-20260920`）。**未登录页面视觉复核**，见[交接](handoffs/2026-09-20-xuanmanager-player-time-split.md)。
 
 ## 2026-09-19 大厅「发现」两个入口行为调整
 
@@ -46,24 +47,23 @@
 
 ## 2026-09-16 表情动画替换（hh-poker EMOJI）
 
-- 点头像→表情面板→选择后播的表情动画换成 hh-poker 素材（VP9 240×240 **纯黑底无 Alpha** webm）。抠底＝阈值＋膨胀 6px＋从画布边界洪泛暗区，与边界连通的暗区判为背景，**还原原画自带黑描边**（描边与背景同色，无法按颜色切）。主体统一 100px（原 99×101）且按**主体中心**对齐，特效长出来时表情仍在头像正中；全帧同画布＋`.meta` 写 `trimType: none`，防逐帧自动裁剪抖动。按真实 30fps 时间轴压帧，10 组 373 帧 / 3.69 MB。
-- 映射 1 冰冷→cold、2 发怒→enraged、3 囧→explode、4 困→no、5 大笑→joy、6 微笑→beaming、7 感动→cry1、8 拇指→biceps、9 拜拜→devil、10 色心→hot（未用顶边被裁平的 `hahaha`；`locoff/lost` 是定位图标不是表情）。面板图标同步换新静帧。
+- 表情动画换成 hh-poker 素材（VP9 240×240 **纯黑底无 Alpha** webm）：抠底＝阈值＋膨胀 6px＋从画布边界洪泛暗区，**保住原画自带黑描边**（描边与背景同色，不能按颜色切）；主体统一 100px（原 99×101）按**主体中心**对齐，特效长出来时表情仍在头像正中；全帧同画布＋`.meta` 写 `trimType: none`，防逐帧自动裁剪抖动；按真实 30fps 时间轴压帧，10 组 373 帧 / 3.69 MB。
+- 映射 1～10 → cold/enraged/explode/no/joy/beaming/cry1/biceps/devil/hot（不用顶边被裁平的 `hahaha`；`locoff/lost` 是定位图标不是表情）。
 - `表情2/<n>.prefab`、`panelTalk.prefab` 图标靠**保留原 uuid** 自动换图未改；`DrhPlayerLogic.ts` 表情存活时长由固定 2s 改读剪辑时长。脚本 `tools/convert_hh_emoji_anim.py`、`tools/make_emoji_preview.py`，预览 `temp/emoji-preview.html`。**未 Creator 导入、未构建、未真机。**见[交接](handoffs/2026-09-16-emoji-anim-replace.md)。
 
 ## 2026-09-16 热更新"清单说有、磁盘没有"自愈
 
 - 根因（真机实测）：`Remote/…/native/5e/5e7fa6f0-….png` 只下到 53% 留了 `.tmp`，本地清单却已记新图 md5 ⇒ 引擎回落安装包旧图且永不再补下。差异对比用 `<storage>/project.manifest`；`AssetsManagerEx::update()` 无 `UP_TO_DATE` 分支，不能用"发现坏了直接 `update()`"修。
-- 修法：`panelUpdate.ts` 纯新增 160 行启动自检（`.tmp`/落地文件大小核对 ⇒ 剔除记录、删坏文件、版本降末位、复位 `tempver`，`try/catch` 兜底）；真机只读验证 0 误判、正例精确抓出、≈90ms，触发机制已端到端实测。**未重建、未出包上传。**详见[交接](handoffs/2026-09-16-hotupdate-incomplete-file.md)。
+- 修法：`panelUpdate.ts` 纯新增 160 行启动自检（`.tmp`/落地文件大小核对 ⇒ 剔除记录、删坏文件、版本降末位、复位 `tempver`）；真机只读验证 0 误判、≈90ms，触发机制已端到端实测。**未重建、未出包上传。**详见[交接](handoffs/2026-09-16-hotupdate-incomplete-file.md)。
 
 ## 2026-09-16 大厅房间行：BY 卡面 + 独立图标
 
-- 大厅→发现→房间列表每行改为「筹码+底皮值 / 时钟+时长 / 人数+人数 / 剩余时间 12:12」，字段取压缩数组 `[5]/[6]/[3][4]/[2]`；`ScrollItem.ts`、`panelMain.prefab` 房间行已改，卡面重绘为只含 `BY` 盾牌的 1426×260 底框（直接缩放不抠图，UUID 未变），筹码/时钟/人数三个图标独立成 `assets/V7/room_icon_*.png`。见[交接](handoffs/2026-09-16-lobby-room-row-by.md)；未 Creator 导入、未构建。
+- 大厅→发现→房间列表每行改为「筹码+底皮 / 时钟+时长 / 人数 / 剩余时间」，字段取压缩数组 `[5]/[6]/[3][4]/[2]`；`ScrollItem.ts`、`panelMain.prefab` 已改，卡面重绘为只含 `BY` 盾牌的 1426×260 底框（直接缩放不抠图，UUID 未变），筹码/时钟/人数图标独立成 `assets/V7/room_icon_*.png`。见[交接](handoffs/2026-09-16-lobby-room-row-by.md)；未 Creator 导入、未构建。
 
 ## 2026-09-15 资源打包体积与 V7 移出 resources
 
-- `assets/resources/` 是 Cocos 唯一“整目录无条件打包”的目录，构建器不分析 `cc.loader.loadRes` 的拼接路径，未引用资源同样进包。对照实测 `assets/ImagesLuck`（非 resources）588 张只打进 356 张，被 `resources` 内 Prefab 引用者仍归入 `resources` 包。
-- `assets/resources/V7/` 原有 658 张 PNG（114.16 MB），其中 169 张（60.88 MB）无任何引用也被打包。用户已将整个 `V7/` 移到 `assets/V7/`（提交 `5249135`，1333 文件全 R100、`.meta`/UUID 未变、引用完整）。
-- 19:23 重建 jsb-link 实测：489 张（53.28 MB）进包、169 张不再进包，`assets/resources` 由约 169.5 MB 降至 108.60 MB，净减约 60.9 MB；此后新增的未引用图也不再自动进包。
+- `assets/resources/` 是 Cocos 唯一“整目录无条件打包”的目录，构建器不分析 `cc.loader.loadRes` 的拼接路径，未引用资源同样进包（对照：非 resources 的 `assets/ImagesLuck` 588 张只打进 356 张）。
+- 原 `assets/resources/V7/` 658 张 PNG（114.16 MB）中有 169 张（60.88 MB）无引用也被打包；用户已把整个 `V7/` 移到 `assets/V7/`（提交 `5249135`，1333 文件全 R100、`.meta`/UUID 未变、引用完整）。19:23 重建 jsb-link 实测：489 张（53.28 MB）进包，`assets/resources` 由约 169.5 MB 降至 108.60 MB，净减约 60.9 MB；此后新增的未引用图也不再自动进包。
 - 判定要点：反查引用必须把 `.meta` 纳入扫描（BMFont 贴图只经 `.fnt.meta` 关联，曾误判 8 张在用字体贴图）；`manifest` 全量清单单独排除；`avatars`/`pk2`/`zuotype`/`Audio`/`道具`/`other`/`UI`/`Prefabs` 等由代码拼接路径加载，不得按“未引用”处理。
 - 未验：Creator 重新导入复核、热更新清单一致性、网页版体积。详见[交接](handoffs/2026-09-15-asset-bundle-audit.md)。
 
@@ -74,8 +74,7 @@
 
 ## 本轮实时核对：记忆整理
 
-- 当前目录 `/Volumes/SSD/qing`，Creator 配置版本 2.4.13；进入新任务仍须重查分支与未提交修改。09-13 用户已明确要求提交并推送全部改动，见[提交交接](handoffs/2026-09-13-commit-all.md)。
-- 精简入口、当前状态、专题、完整原文归档及只读检查已安装；迁移证据见[整理交接](handoffs/2026-09-05-memory-migration.md)。`build` 原生工程与 `runtime-src.zip` 均保留，不能当普通缓存删除。
+- 当前目录 `/Volumes/SSD/qing`，Creator 2.4.13；进入新任务仍须重查分支与未提交修改。记忆体系（入口/状态/专题/归档/只读检查）迁移证据见[整理交接](handoffs/2026-09-05-memory-migration.md)；`build` 原生工程与 `runtime-src.zip` 均保留，不能当普通缓存删除。09-13 的提交推送授权见[提交交接](handoffs/2026-09-13-commit-all.md)。
 
 ## 2026-09-11 V8 全套实施
 
@@ -97,7 +96,7 @@
 共同边界：以下为历史模块记录，登录页已由上方 2026-09-10 修复状态替代；历史阶段未执行 Creator 构建，不能把其他版本的构建成功算到 V7 上。
 
 - 逐页“最近报告 / 保留的未完成验证 / 来源行号”完整表格已移至[归档](archive/2026-09-15/ui-status-table.md)；当前进度以[全套进度](handoffs/2026-09-11-v8-all-pages.md)为准。
-- 高频未验证项：原生热更新下载与异常重试、启动与模板 Splash 停留态；登录动态输入与快速注册回包；大厅真实筛选/权限/动态值；战绩、结算与回顾回包及回放；排行榜排行领奖；实名页登录态提交与真实交易。
+- 高频未验证项：原生热更新下载与异常重试、启动/模板 Splash 停留态；登录动态输入与注册回包；大厅真实筛选与动态值；战绩/结算/回顾回包与回放；排行榜领奖；实名页提交与真实交易。
 
 ## V7 历史实施边界
 
