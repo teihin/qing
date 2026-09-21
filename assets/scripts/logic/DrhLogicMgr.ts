@@ -10,6 +10,7 @@ import GpsManager from "./GpsManager";
 import MobileManager from "../mobile/MobileManager";
 import ScrollViewEx from "../common/ScrollViewEx";
 import QueueMatchManager from "./QueueMatchManager";
+import RoomCountdown from "./RoomCountdown";
 
 var KBEngine = require("kbengine");
 
@@ -80,6 +81,11 @@ export default class DrhLogicMgr extends cc.Component {
     public arraySaySave = new Array<string>(); //语音队列缓存
     public bSaying = false; //是否正在播放语音
 
+    private roomCountdown = new RoomCountdown();
+    private roomClockLabel:cc.Label = null;
+    private roomClockSuspended = false;
+    private roomClockConnected = true;
+
     public game_end_time = 1800; //房间剩余时间
 
     public self;
@@ -114,12 +120,22 @@ export default class DrhLogicMgr extends cc.Component {
 
         this.self = this;
 
+        const clockNode = Tool.GetChild(this.node, "RoomFrame/info/游戏时间");
+        this.roomClockLabel = clockNode ? clockNode.getComponent(cc.Label) : null;
+        KBEngine.Event.register("onDisconnected", this, "OnRoomClockDisconnected");
+        KBEngine.Event.register("onReloginBaseappSuccessfully", this, "OnRoomClockReconnected");
+        this.schedule(this.RefreshRoomCountdown, 0.2);
+
         //注册程序切换后台前台消息
         cc.game.on(cc.game.EVENT_HIDE,()=>{
+            this.roomClockSuspended = true;
+            this.InvalidateRoomCountdown();
             //程序进入后台            
             KBEngine.Event.deregister("状态鸡", this, "OnServerPlayEvent");
         },this);
         cc.game.on(cc.game.EVENT_SHOW,()=>{
+            this.roomClockSuspended = false;
+            this.InvalidateRoomCountdown();
             //程序进入前台            
             KBEngine.Event.register("状态鸡", this, "OnServerPlayEvent");
             KBEngine.Event.fire("OnPlayNextAudio"); 
@@ -166,6 +182,7 @@ export default class DrhLogicMgr extends cc.Component {
         if(this.bLeavingRoom)
             return;
         this.bLeavingRoom = true;
+        this.InvalidateRoomCountdown();
         this.bettingSpotlightRefreshPending = false;
         this.bettingSpotlightActionPlayer = null;
         this.bettingSpotlightDealAnimationRunning = false;
@@ -187,6 +204,62 @@ export default class DrhLogicMgr extends cc.Component {
             let time = new Date();
             this.txtTime.string = time.getHours().toString().padStart(2,"0")+":"+time.getMinutes().toString().padStart(2,"0");
         }
+    }
+
+    private RoomClockNow():number {
+        return typeof performance !== "undefined" && typeof performance.now === "function" ?
+            performance.now() : Date.now();
+    }
+
+    public GetRoomRemainingSeconds():number {
+        const account = GameDataManager.getAccount();
+        if (this.bLeavingRoom || this.roomClockSuspended || !this.roomClockConnected || !account ||
+            !this.strMsgRoomID || this.strMsgRoomID !== String(account.roomID)) return null;
+        return this.roomCountdown.remaining(this.RoomClockNow(), Date.now(),
+            typeof performance !== "undefined" && typeof performance.now === "function");
+    }
+
+    private InvalidateRoomCountdown():void {
+        this.roomCountdown.invalidate();
+        if (this.roomClockLabel) this.roomClockLabel.node.active = false;
+    }
+
+    public OnRoomClockDisconnected():void {
+        this.roomClockConnected = false;
+        this.InvalidateRoomCountdown();
+    }
+
+    public OnRoomClockReconnected():void {
+        this.roomClockConnected = true;
+        this.InvalidateRoomCountdown();
+        // A one-shot recovery snapshot; normal play is calibrated by pushed messages.
+        const account = GameDataManager.getAccount();
+        if (!this.bLeavingRoom && !this.roomClockSuspended && account && account.roomID && account.roomID !== "0")
+            account.reqPlayerList();
+    }
+
+    private RefreshRoomCountdown():void {
+        const seconds = this.GetRoomRemainingSeconds();
+        if (this.roomClockLabel) {
+            this.roomClockLabel.node.active = seconds !== null;
+            if (seconds !== null) {
+                const text = "剩余时间 " + RoomCountdown.format(seconds);
+                if (this.roomClockLabel.string !== text) this.roomClockLabel.string = text;
+            }
+        }
+    }
+
+    public SyncRoomCountdownFromPlayMessage(data:any):void {
+        const account = GameDataManager.getAccount();
+        if (this.bLeavingRoom || this.roomClockSuspended || !this.roomClockConnected || !account ||
+            !this.strMsgRoomID || this.strMsgRoomID !== String(account.roomID) || this.strGameState === "end") return;
+        if (data["room_id"] != null && String(data["room_id"]) !== this.strMsgRoomID) return;
+        // This is the existing held-hand message, routed through the current seat map.
+        // It has no guaranteed server timestamp/sequence, so don't pretend to compensate latency.
+        const started = this.roomCountdown.started || this.strGameState === "running" ||
+            Number(this.round_count) > 0 || data["event"] === "玩家_开局_事件";
+        this.roomCountdown.sync(data["game_end_time"], started, this.RoomClockNow(), Date.now());
+        this.RefreshRoomCountdown();
     }
 
     initLogic()
@@ -487,7 +560,7 @@ export default class DrhLogicMgr extends cc.Component {
 
     }
 
-    OnUpdatePlayerList(strMsg:string)
+    OnUpdatePlayerList(strMsg:string, replay:boolean = false)
     {
         if(this.bLeavingRoom)
             return;
@@ -498,6 +571,12 @@ export default class DrhLogicMgr extends cc.Component {
             Debug.Log("PlayList 解析失败！");
             return;
         }
+
+        // Reject another room before any fields (including clock/state) are mutated.
+        const currentRoomID = String(GameDataManager.getAccount().roomID || "");
+        const incomingRoomID = data["room_id"] == null ? "" : String(data["room_id"]);
+        if (currentRoomID !== incomingRoomID && !(currentRoomID === "0" && data["GameStatus"] === "end"))
+            return;
 
         let nMaxNum = -99999;
         //房间游戏状态
@@ -593,6 +672,13 @@ export default class DrhLogicMgr extends cc.Component {
             return;
         }
         this.strMsgRoomID = strPlayerListRoomID;
+        if (!replay && !this.roomClockSuspended && this.roomClockConnected) {
+            const started = data["GameStatus"] !== "end" &&
+                (data["GameStatus"] === "running" || Number(data["round_count"]) > 0);
+            if (!started || data.hasOwnProperty("game_end_time"))
+                this.roomCountdown.sync(data["game_end_time"], started, this.RoomClockNow(), Date.now());
+            this.RefreshRoomCountdown();
+        }
         QueueMatchManager.getInstance().rememberEnteredRoom(strPlayerListRoomID);
 
         if (this.bShowOverAnimate) //动画过程中不处理内容
@@ -1062,7 +1148,7 @@ export default class DrhLogicMgr extends cc.Component {
                         {
                             let strMsg = this.strLastDelayMsg;
                             this.strLastDelayMsg = "";
-                            this.OnUpdatePlayerList(strMsg);
+                            this.OnUpdatePlayerList(strMsg, true);
                         }
                         break;
                     }
@@ -1093,7 +1179,7 @@ export default class DrhLogicMgr extends cc.Component {
                     {
                         let strMsg = this.strLastDelayMsg;
                         this.strLastDelayMsg = "";
-                        this.OnUpdatePlayerList(strMsg);
+                        this.OnUpdatePlayerList(strMsg, true);
                     }
                     this.node.getChildByName("cmd6").active = false;
 

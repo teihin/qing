@@ -746,6 +746,7 @@ export default class DrhPlayerLogic extends cc.Component {
             if (data.hasOwnProperty("game_end_time"))
             {
                 this.gameLogic.game_end_time = data["game_end_time"];
+                this.gameLogic.SyncRoomCountdownFromPlayMessage(data);
             }
 
             if (data.hasOwnProperty("table_times"))

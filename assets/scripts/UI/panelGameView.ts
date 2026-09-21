@@ -5,6 +5,7 @@ import { ClosePanelMode, RoomType, ShowPanelMode, CardInfo, PlayerState, PlayerP
 import Tool from "../common/Tool";
 import Debug from "../common/Debug";
 import DrhLogicMgr from "../logic/DrhLogicMgr";
+import RoomCountdown from "../logic/RoomCountdown";
 import GpsManager from "../logic/GpsManager";
 import BuyinDisplay from "../common/BuyinDisplay";
 import PKCardInfoScript from "../logic/PKCardInfoScript";
@@ -1015,7 +1016,7 @@ export default class panelGameView extends UIPanelViewBase {
             this.GetReadRecordInfo();
             this.GetWatchList();
 
-            this.nCurRoomTime = this.gameLogic.game_end_time;
+            this.callbackRoomTimeCount();
             this.unschedule(this.callbackRoomTimeCount);
             //启动房间刷新倒计时                    
             this.schedule(this.callbackRoomTimeCount,1,cc.macro.REPEAT_FOREVER,0.1);
@@ -2580,17 +2581,13 @@ export default class panelGameView extends UIPanelViewBase {
     //房间倒计时
     public callbackRoomTimeCount()
     {
-        //刷新数据
-        if (this.nCurRoomTime > 0 && this.gameLogic.round_count!="0")
-            this.nCurRoomTime--;
-        
         if(this.txtRoomTime === null)
-        {
             this.txtRoomTime = Tool.GetChild(this.node,"实时战绩/title2/倒计时").getComponent(cc.Label);
-        }
-        let time = new Date(0,0,0,0,0,this.nCurRoomTime,0);
-        this.txtRoomTime.string = time.getHours().toString().padStart(2,"0")+":"+time.getMinutes().toString().padStart(2,"0")+":"+time.getSeconds().toString().padStart(2,"0");
+        const seconds = this.gameLogic.GetRoomRemainingSeconds();
+        this.nCurRoomTime = seconds;
+        this.txtRoomTime.string = seconds === null ? "--:--:--" : RoomCountdown.format(seconds, true);
     }
+
     public OnOtherInfo(strParam:string)
     {
         let data = JSON.parse(strParam);
