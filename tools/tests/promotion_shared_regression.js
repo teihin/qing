@@ -96,4 +96,16 @@ for(const mode of ['missing','inactive','no-controller']){
   }
   assert.equal(find(f.agent.node,'操作').getComponent(Layout).updates,2);cases++;
 }
+// “我的”界面里的游戏推广入口与代理入口同规则：非代理隐藏，代理才显示。
+for(const [level,role,expected] of [[0,'',false],[0,'普通玩家',false],[0,'老板',true],[3,'',true]]){
+  const f=fixture();account.level=level;account.role=role;f.main.set_role(null);
+  const promotion=find(f.main.node,'Main/我的/操作/推广二维码');
+  assert.equal(promotion.active,expected,'promotion entrance level='+level+' role='+role);
+  assert.equal(find(f.main.node,'Main/我的/操作/代理').active,expected,'agent entrance level='+level+' role='+role);
+  // 入口可见时仍能打开共用的推广页；非代理仅隐藏入口，页面本身不动。
+  if(expected){f.openMain();assert(f.page.activeInHierarchy);f.close();assert(!f.page.active);}
+  else assert(!f.page.active&&!promotion.activeInHierarchy);
+  cases++;
+}
+account.level=0;account.role='';
 console.log('PASS',cases,'shared promotion: exact page identity, both entrances, origin return, QR refresh, copy/capture, lifecycle, missing source and config reflow. External effects mocked.');

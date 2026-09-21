@@ -702,9 +702,18 @@ export default class panelMain extends UIPanelViewBase {
     private RefreshAgentMenuVisibility()
     {
         let operation = Tool.GetChild(this.node,"Main/我的/操作");
-        let agent = Tool.GetChild(operation,"代理");
+        if(operation == null)
+            return;
+
         let isAgent = this.IsCurrentUserAgent();
-        agent.active = isAgent;
+        let agent = Tool.GetChild(operation,"代理");
+        if(agent != null)
+            agent.active = isAgent;
+
+        // 游戏推广入口与代理入口同规则：非代理不显示，只有代理才显示。
+        let promotion = Tool.GetChild(operation,"推广二维码");
+        if(promotion != null)
+            promotion.active = isAgent;
 
         // 原生 Prefab Grid 按已激活入口自动补位，布局不再使用旧稿坐标。
     }
