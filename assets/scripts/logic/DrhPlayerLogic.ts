@@ -2460,7 +2460,7 @@ export default class DrhPlayerLogic extends cc.Component {
     // ===== 状态图标(PlayerInfo/animateOut)的位置动画 =====
     // Creator 默认开启 cc.macro.ENABLE_STACKABLE_ACTIONS，MoveTo 在飞行期间若被外部
     // 直接改坐标，引擎会把这段位移累加进动作起点，结束时就会比目标位置多跑一截。
-    // 点“延时”时服务器会补推当前玩家消息，非动画分支在弹跳途中把坐标写回 (0,58)，
+    // 点“延时”时服务器会补推当前玩家消息，非动画分支在弹跳途中把坐标写回 (0,84)，
     // “分牌中”图标因此被顶到上家的牌上。故所有入口统一：先停动作，再改坐标。
     private StopAnimateOutAction():void
     {
@@ -2479,14 +2479,15 @@ export default class DrhPlayerLogic extends cc.Component {
         this.transAnimateOut.position = vcPos;
     }
 
-    //从原地弹跳到 (0,58)；每次新建动作实例，避免共用同一个 action 重复 runAction
+    //提示保持原始尺寸，在头像正上方小幅上移，紧贴头像显示。
+    //每次新建动作实例，避免共用同一个 action 重复 runAction
     private PlayAnimateOutUp():void
     {
         if(this.transAnimateOut == null || !cc.isValid(this.transAnimateOut))
             return;
         this.StopAnimateOutAction();
         this.transAnimateOut.position = cc.Vec2.ZERO;
-        this.moveAction = cc.moveTo(0.3,cc.v2(0,58)).easing(cc.easeBounceOut());
+        this.moveAction = cc.moveTo(0.3,cc.v2(0,84)).easing(cc.easeBounceOut());
         this.moveActionTar = this.transAnimateOut.runAction(this.moveAction);
     }
 
@@ -2634,7 +2635,7 @@ export default class DrhPlayerLogic extends cc.Component {
         }
         else
         {
-            this.SetAnimateOutPos(cc.v2(0,58));
+            this.SetAnimateOutPos(cc.v2(0,84));
         }
     }
     public SetOneCardInfo(nPos:number)
@@ -2732,7 +2733,7 @@ export default class DrhPlayerLogic extends cc.Component {
         }
         else
         {
-            this.SetAnimateOutPos(cc.v2(0,58));
+            this.SetAnimateOutPos(cc.v2(0,84));
         }
     }
     public ShowKanPaiZhong(bShow:boolean = true,bAnimate:boolean = true)
@@ -2757,7 +2758,7 @@ export default class DrhPlayerLogic extends cc.Component {
         }
         else
         {
-            this.SetAnimateOutPos(cc.v2(0,58));
+            this.SetAnimateOutPos(cc.v2(0,84));
         }
 
 
@@ -2796,7 +2797,7 @@ export default class DrhPlayerLogic extends cc.Component {
         }
         else
         {
-            this.SetAnimateOutPos(cc.v2(0,58));
+            this.SetAnimateOutPos(cc.v2(0,84));
         }
     }
 
