@@ -238,7 +238,8 @@ export default class panelMain extends UIPanelViewBase {
         if(!cc.isValid(promotionPanel) || !this.node.activeInHierarchy)
             return false;
 
-        const qrUrl = ConfigManager.getInstance().downloadurl+"/zc?guuid="+GameDataManager.getAccount().guuid;
+        // 推广链接与二维码只指向哈希配置里的下载地址，不再拼接 /zc?guuid= 推广参数。
+        const qrUrl = ConfigManager.getInstance().downloadurl;
         const idLabel = Tool.GetChild(promotionPanel,"V7推广ID");
         if(idLabel && idLabel.getComponent(cc.Label))
             idLabel.getComponent(cc.Label).string = "推广ID：" + GameDataManager.getAccount().guuid;
@@ -849,8 +850,9 @@ export default class panelMain extends UIPanelViewBase {
         {
             this.OpenPromotionPanel();
         }
-        else if(button.node.name === "分享二维码" || button.node.name === "保存二维码")
+        else if(button.node.name === "保存二维码")
         {
+            // 「分享海报」与「保存到相册」原来都是整屏截图保存，功能重复，已只保留「保存到相册」。
             MobileManager.getInstance().CaptureScreen();
         }
         else if(button.node.name === "赠送")

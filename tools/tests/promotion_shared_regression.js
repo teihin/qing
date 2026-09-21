@@ -52,7 +52,8 @@ function fixture(){
 let cases=0;
 {
   const f=fixture();f.agent.node.active=false;f.openMain();assert(f.page.activeInHierarchy);assert(!f.old.active);
-  assert.equal(f.value('V7推广ID'),'推广ID：123456');assert.equal(f.value('V7推广链接'),'https://example.test/zc?guuid=123456');
+  assert.equal(f.value('V7推广ID'),'推广ID：123456');assert.equal(f.value('V7推广链接'),'https://example.test');
+  assert.ok(!f.value('V7推广链接').includes('guuid'),'promotion link must not carry guuid');
   f.close();assert(!f.page.active);assert(!f.agent.node.active);cases++;
 }
 {
@@ -60,11 +61,15 @@ let cases=0;
   for(let i=0;i<3;i++){
     account.guuid=String(456780+i);config.downloadurl='https://example'+i+'.test';f.openAgent();
     assert(f.page.activeInHierarchy);assert.equal(f.page,f.main.node.getChildByName('推广二维码'));assert(!f.agent.node.active);assert(!f.old.active);
-    assert.equal(f.value('V7推广ID'),'推广ID：'+account.guuid);assert.equal(f.value('V7推广链接'),config.downloadurl+'/zc?guuid='+account.guuid);
+    assert.equal(f.value('V7推广ID'),'推广ID：'+account.guuid);
+    assert.equal(f.value('V7推广链接'),config.downloadurl);
+    assert.ok(!f.value('V7推广链接').includes('guuid'),'link stays a plain download url across accounts');
     assert.equal(qrData.at(-1),f.value('V7推广链接'));assert.equal(f.g.rects,2);assert.equal(f.g.clears,i+1);
     f.click(f.main,'推广二维码/复制推广ID');assert.equal(copied.at(-1),account.guuid);
     f.click(f.main,'推广二维码/复制推广地址');assert.equal(copied.at(-1),f.value('V7推广链接'));
-    const before=captures;f.click(f.main,'推广二维码/分享二维码');f.click(f.main,'推广二维码/保存二维码');assert.equal(captures,before+2);
+    // 「分享海报」按钮已移除，截图保存只由「保存到相册」承担。
+    assert.equal(find(f.main.node,'推广二维码/分享二维码'),null,'share poster button must be removed');
+    const before=captures;f.click(f.main,'推广二维码/保存二维码');assert.equal(captures,before+1);
     f.close();assert(f.agent.node.activeInHierarchy);assert(!f.page.active);assert.equal(state.page,3);assert.equal(state.offset,157);cases++;
   }
   f.agent.node.active=false;f.openMain();f.close();assert(!f.agent.node.active);cases++;
