@@ -155,12 +155,14 @@ const output = ts.transpileModule(fs.readFileSync(codePath, 'utf8'), {
 });
 assert.equal((output.diagnostics || []).filter(d => d.category === ts.DiagnosticCategory.Error).length, 0, 'TypeScript syntax');
 let requests;
+let savedProfiles = [], notices = [];
 const Tool = {
   GetChild(n, p) { return p.split('/').reduce((cur, name) => cur.getChildByName(name), n); },
+  IsAllChinese(s) { return /^[\u4e00-\u9fff]+$/.test(s); },
   HTTP_GET() {}, // No network requests in this test host.
   Base64Decode(s) { return Buffer.from(s, 'base64').toString('utf8'); }
 };
-const Config = { getInstance: () => ({ GetOneHashKey: (key, context) => requests.push({ key, context }) }) };
+const Config = { getInstance: () => ({ GetOneHashKey: (key, context) => requests.push({ key, context }), SetOneHashKey: (key, content) => savedProfiles.push({key, content}) }) };
 let hallRequests = [];
 const account = { guuid: 'test', remark: '0,0,0,0,0,0,0',
   reqHallCommand: (body, context) => hallRequests.push({body, context}) };
@@ -169,6 +171,8 @@ vm.runInNewContext(output.outputText, {
   cc, module: moduleResult, exports: moduleResult.exports, console,
   require(n) {
     if (n.endsWith('/UIPanelViewBase')) return { default: class {} };
+    if (n.endsWith('/UIManager')) return {default: {getInstance: () => ({showPanel: (...args) => notices.push(args)})}};
+    if (n.endsWith('/GameDef')) return {ShowPanelMode: {Cover: 1}};
     if (n.endsWith('/Tool')) return { default: Tool };
     if (n.endsWith('/ConfigManager')) return { default: Config };
     if (n.endsWith('/GameDataManager')) return { default: { getAccount: () => account } };
@@ -455,6 +459,41 @@ function withdrawalFixture(triggerEvents, autoOptions = true) {
   const reopen = () => { root.active=true; panel.onEnable(); };
   return {panel,root,ensure,latest,reply,click,field,visible,closePanel,reopen,options,optionRequests};
 }
+// Submit the production handler with blank bank/card and initialized password fields.
+{
+  const f = withdrawalFixture(false);
+  f.reply(f.latest('银联'), '', true);
+  f.panel.onHallCommand(0x200, JSON.stringify({header:'校验_玩家_交易密码',result:{}}));
+  const input = (name, value) => { f.ensure('实名/信息/'+name+'/input').getComponent(EditBox).string=value; };
+  input('姓名','测试甲');
+  const submit = () => f.panel.onButtonClick({node:{name:'提交实名信息'}});
+  submit();
+  assert.equal(notices.at(-1)[2], '请输入交易密码');
+  assert.equal(savedProfiles.length, 0);
+  input('交易密码','test-only'); input('确认密码','mismatch'); submit();
+  assert.equal(notices.at(-1)[2], '两次输入密码不一致');
+  assert.equal(savedProfiles.length, 0);
+  input('确认密码','test-only'); submit();
+  assert.equal(savedProfiles.at(-1).content, '#测试甲####');
+  assert.equal(f.visible(), false);
+  assert.equal(JSON.parse(hallRequests.at(-1).body).header, '修改_玩家_交易密码');
+}
+// Name-only onboarding must stay complete when reopened, while bank defaults stay empty.
+for (const events of [false, true]) {
+  const f = withdrawalFixture(events);
+  f.reply(f.latest('银联'), '#测试甲####');
+  assert.equal(f.visible(), false);
+  f.closePanel(); f.reopen();
+  f.reply(f.latest('银联'), '#测试甲####');
+  assert.equal(f.visible(), false, 'name-only profile must not repeat onboarding');
+  f.click('选项/提现');
+  f.reply(f.latest('银联'), '#测试甲####');
+  assert.equal(f.field('容器/提现/提现选项/姓名/input'), '测试甲');
+  for (const field of ['银行', '卡号']) {
+    assert.equal(f.ensure('容器/提现/提现选项/'+field).active, true);
+    assert.equal(f.field('容器/提现/提现选项/'+field+'/input'), '');
+  }
+}
 const savedBank = '#测试甲#测试银行#测试支行##12345678';
 const savedAlipay = '#测试乙###alipay-test#87654321';
 let realnameCases = 0;
@@ -559,8 +598,8 @@ for (const events of [false,true]) {
     const f = withdrawalFixture(events);
     f.click('选项/提现');
     assert.equal(requests.filter(r=>r.key.endsWith('_提现预留_银联')).length,1,'opening and selecting bank share one pending request');
-    f.reply(f.latest('银联'),'#测试甲#测试银行###');
-    assert.equal(f.visible(),true,'incomplete server profile still needs completion');
+    f.reply(f.latest('银联'),'##测试银行###');
+    assert.equal(f.visible(),true,'profile without name still needs completion');
     f.panel.onHallCommand(0x400,JSON.stringify({header:'校验_玩家_交易密码',result:{}}));
     assert.equal(f.panel.bNeedInitJYPwd,false);
     assert.equal(f.ensure('实名/信息/交易密码').active,false,'existing password is not reset');

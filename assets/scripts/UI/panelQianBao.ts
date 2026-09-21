@@ -347,7 +347,8 @@ export default class panelQianBao extends UIPanelViewBase {
             for(const pair of [["姓名",1],["银行",2],["卡号",5]])
                 Tool.GetChild(this.node,"实名/信息/"+pair[0]+"/input").getComponent(cc.EditBox).string = value(Number(pair[1]));
             this.strUserName = value(1);
-            if(value(1) && value(2) && value(5))
+            // Real-name setup only requires a name; bank details are collected on withdrawal.
+            if(value(1))
             {
                 Tool.GetChild(this.node,"实名").active = false;
                 this.realnamePasswordCheckPending = false;
@@ -1035,19 +1036,6 @@ export default class panelQianBao extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请正确输入姓名！");
                 return;
             }
-            if(strBank == "")
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请选择银行");
-                return;
-            }
-            if(strCard.length<6)
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入正确的银行卡号");
-                return;
-            }
-
-
-
             //设置密码
             if(this.bNeedInitJYPwd)
             {
