@@ -133,12 +133,28 @@ def find_and_validate_archive(output_dir: Path, version: str) -> tuple[Path, int
         raise RuntimeError(f"版本 ZIP 已损坏: {archive_path}") from exc
 
 
+def format_duration(seconds: float) -> str:
+    if seconds < 60:
+        return f"{seconds:.1f} 秒"
+    minutes, remain = divmod(int(seconds), 60)
+    return f"{minutes} 分 {remain} 秒"
+
+
+def format_speed(byte_count: int, seconds: float) -> str:
+    if seconds <= 0:
+        return "0.00 MB/s"
+    return f"{byte_count / seconds / 1024 / 1024:.2f} MB/s"
+
+
 def build_sftp_batch(archive_path: Path, version: str, remote_dir: str) -> str:
     remote_root = PurePosixPath(remote_dir)
     remote_name = f"ver_{version.replace('.', '_')}.zip"
     final_path = remote_root / remote_name
     temporary_path = remote_root / f".{remote_name}.uploading"
     lines = [
+        # 批处理模式下 sftp 默认关闭进度显示，显式打开后会输出
+        # 百分比 / 已传大小 / 实时速率 / ETA。
+        "progress",
         f"ls {sftp_quote(str(remote_root))}",
         f"-rm {sftp_quote(str(temporary_path))}",
         f"put {sftp_quote(str(archive_path))} {sftp_quote(str(temporary_path))}",
@@ -290,12 +306,13 @@ def main() -> int:
         )
         batch_text = build_sftp_batch(archive_path, version, remote_dir)
 
+        archive_bytes = archive_path.stat().st_size
         print("\n准备上传最新热更新压缩包：")
         print(f"  版本: {version}")
         print(f"  本地目录: {version_dir}")
         print(f"  归档文件数: {file_count}")
         print(f"  原始总大小: {total_bytes / 1024 / 1024:.2f} MB")
-        print(f"  ZIP 大小: {archive_path.stat().st_size / 1024 / 1024:.2f} MB")
+        print(f"  ZIP 大小: {archive_bytes / 1024 / 1024:.2f} MB")
         print(f"  Manifest 地址: {package_url}")
         print(f"  SFTP 目标: {user}@{host}:{remote_dir}")
 
@@ -312,15 +329,22 @@ def main() -> int:
             str(port),
             f"{user}@{host}",
         ]
-        print("\n开始上传 ZIP；完成后服务器会自动解压到 /up...\n", flush=True)
+        if not sys.stderr.isatty():
+            print("提示：当前输出不是交互终端，实时进度不会被刷新；请在终端窗口内运行本脚本。")
+        print("\n开始上传 ZIP（下方为实时进度、速率与剩余时间）；完成后服务器会自动解压到 /up...\n", flush=True)
+        upload_started = time.monotonic()
         result = subprocess.run(command, check=False)
+        upload_elapsed = max(time.monotonic() - upload_started, 0.001)
         if result.returncode != 0:
             raise RuntimeError(f"SFTP 上传失败，退出码: {result.returncode}")
+        print(
+            f"\n[上传 1/1  100.00%] ZIP 传输完成：{archive_bytes / 1024 / 1024:.2f} MB"
+            f"，耗时 {format_duration(upload_elapsed)}，平均 {format_speed(archive_bytes, upload_elapsed)}"
+        )
     finally:
         if batch_path is not None:
             batch_path.unlink(missing_ok=True)
 
-    print("\n[上传 1/1  100.00%] ZIP 传输完成")
     verify_deployment(version, manifest)
     print(f"\n上传并部署成功：版本 {version} 已解压并替换到 {package_url}")
     return 0
