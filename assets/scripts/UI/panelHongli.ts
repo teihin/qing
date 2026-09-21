@@ -248,7 +248,7 @@ export default class panelHongli extends UIPanelViewBase {
 
     public set_big_percent(old = null)
     {
-        Tool.GetChild(this.node,"操作/我的盟主/我的比例").getComponent(cc.Label).string = GameDataManager.getAccount().big_percent+"%";
+        Tool.GetChild(this.node,"操作/我的盟主/我的比例").getComponent(cc.Label).string = GameDataManager.getAccount().big_percent + "%";
     }
 
     public set_hongli2(old = null)
