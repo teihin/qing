@@ -1236,7 +1236,7 @@ export default class panelMain extends UIPanelViewBase {
                 }
             }
         }
-        else if(button.node.name === "头像")
+        else if(button.node.name === "头像" || button.node.name === "编辑资料")
         {
             let editNode = this.node.getChildByName("修改个人信息2");
             editNode.active = true;
