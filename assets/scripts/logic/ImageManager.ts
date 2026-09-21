@@ -239,6 +239,17 @@ export default class ImageManager extends cc.Component {
         }
     }
 
+    /** 分页列表复用Sprite时，移除上一玩家的待回包引用，避免头像串行。 */
+    public BindPlayerListAvatar(userID:string, img:cc.Sprite)
+    {
+        this.mapID2ImageSave.forEach((sprites) => {
+            const index = sprites.indexOf(img);
+            if (index >= 0) sprites.splice(index, 1);
+        });
+        if (!this.GetImageByName(userID, "", img))
+            this.AddWaitFreshImage2Catch(userID, img);
+    }
+
     public OnAccountList(strMsg:string)
     {
         Debug.Log("avatar field:"+strMsg);

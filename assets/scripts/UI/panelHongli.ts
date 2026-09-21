@@ -4,7 +4,9 @@ import Tool from "../common/Tool";
 import Debug from "../common/Debug";
 import UIManager from "../common/UIManager";
 import ScrollViewEx from "../common/ScrollViewEx";
-import { ShowPanelMode } from "../common/GameDef";
+import { ShowPanelMode, RoomType } from "../common/GameDef";
+import ImageManager from "../logic/ImageManager";
+import GpsManager from "../logic/GpsManager";
 import ConfigManager from "../logic/ConfigManager";
 import panelMain from "./panelMain";
 
@@ -1038,6 +1040,28 @@ export default class panelHongli extends UIPanelViewBase {
         node.getChildByName("count").getComponent(cc.Label).string = nTotleHand.toString();
         node.getChildByName("time").getComponent(cc.Label).string = jItem["date"];
 
+        const avatar = Tool.GetChild(node, "头像/mask/img").getComponent(cc.Sprite);
+        ImageManager.getInstance().BindPlayerListAvatar(String(jItem["user_id"]), avatar);
+
+        const watch = node.getChildByName("观战");
+        const roomValue = jItem["room_id"];
+        const roomText = typeof roomValue === "string" || typeof roomValue === "number" ? String(roomValue).trim() : "";
+        const roomID = Number(roomText);
+        watch.targetOff(this);
+        watch.active = /^\d+$/.test(roomText) && Number.isSafeInteger(roomID) && roomID > 0;
+        if (watch.active)
+        {
+            watch.on("click", () => {
+                if (!GpsManager.getInstance().IsGpsOpen() && ConfigManager.getInstance().enalbe_gps == "True")
+                {
+                    UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "未打开GPS不能进入房间！");
+                    return;
+                }
+                UIManager.getInstance().showPanel("panelLoading", ShowPanelMode.Top);
+                GameDataManager.getAccount().reqEnterRoom(RoomType.Custom, roomID, "{{\"special_rule\": \"观战\"}}");
+            }, this);
+        }
+
         let strUserID:string = jItem["user_id"];
         let big_agentid:string = jItem["big_agentid"];
         let supper_agentid:string = jItem["supper_agentid"];
@@ -1141,6 +1165,8 @@ export default class panelHongli extends UIPanelViewBase {
         node.getChildByName("name").getComponent(cc.Label).string = jItem["player_wxname"];
         node.getChildByName("today").getComponent(cc.Label).string = jItem["upper_today_income"];
         node.getChildByName("all").getComponent(cc.Label).string = jItem["upper_total_income"];
+        ImageManager.getInstance().BindPlayerListAvatar(String(jItem["player_guuid"]),
+            Tool.GetChild(node, "头像/mask/img").getComponent(cc.Sprite));
     }
     public setYejiItem2(node:cc.Node,jItem:any) //奖池业绩对象
     {
@@ -1271,6 +1297,8 @@ export default class panelHongli extends UIPanelViewBase {
         node.getChildByName("id").getComponent(cc.Label).string = jItem["user_id"];
         node.getChildByName("name").getComponent(cc.Label).string = jItem["user_name"];
         node.getChildByName("玩家数").getComponent(cc.Label).string = jItem["all_lower_count"];
+        ImageManager.getInstance().BindPlayerListAvatar(String(jItem["user_id"]),
+            Tool.GetChild(node, "头像/mask/img").getComponent(cc.Sprite));
         
 
         if(jItem["big_agentid"] === jItem["user_id"])
@@ -1291,6 +1319,7 @@ export default class panelHongli extends UIPanelViewBase {
             node.getChildByName("type").active = false;
             node.getChildByName("授权盟主").active = true;
             node.getChildByName("设置盟主").active = false;
+            node.getChildByName("比例").getComponent(cc.Label).string = "";
             let btn = node.getChildByName("授权盟主").getComponent(cc.Button);
             btn.node.targetOff(this);
             btn.node.on("click",()=>{
