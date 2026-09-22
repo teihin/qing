@@ -16,6 +16,97 @@ const {ccclass, property} = cc._decorator;
 @ccclass
 export default class panelHongli extends UIPanelViewBase {
 
+    private jackpotSequence: number = 0;
+    private jackpotRequests: {[key: string]: string} = {};
+    private jackpotPage: number = 0;
+    private jackpotPages: number = 1;
+
+    private jackpotLabel(path: string, value: string) {
+        Tool.GetChild(this.node, path).getComponent(cc.Label).string = value;
+    }
+
+    private jackpotRatio(value: number, total: number): string {
+        return (total > 0 ? value * 100 / total : 0).toFixed(2) + "%";
+    }
+
+    private requestJackpot(kind: string, page: number = 0) {
+        if (GameDataManager.getAccount().client_prop !== "True") return;
+        const context = "jackpot-" + kind + "-" + Date.now() + "-" + (++this.jackpotSequence);
+        this.jackpotRequests[kind] = context;
+        const params: any = {header: kind === "info" ? "异步_查询_代理_奖池业绩_信息" : "异步_查询_代理_奖池业绩_列表", date: -1};
+        if (kind === "list") {
+            params.page = page; params.count = 10;
+            this.jackpotLabel("奖池业绩/状态", "正在加载…");
+            this.jackpotLabel("奖池业绩/汇总/数据", "我：—    下发：—    剩：—");
+            Tool.GetChild(this.node, "奖池业绩/列表/view/content").children.forEach(row => row.active = false);
+            this.setJackpotPaging(false);
+        }
+        GameDataManager.getAccount().reqHallCommand(JSON.stringify(params), "p@" + context);
+        this.scheduleOnce(() => {
+            if (this.jackpotRequests[kind] !== context) return;
+            delete this.jackpotRequests[kind];
+            if (kind === "list") this.jackpotLabel("奖池业绩/状态", "加载超时，请点击刷新重试");
+            else this.jackpotLabel("操作/业绩比例/比例", "暂不可用");
+        }, 15);
+    }
+
+    private setJackpotPaging(ready: boolean) {
+        Tool.GetChild(this.node, "奖池业绩/分页/业绩首页").getComponent(cc.Button).interactable = ready && this.jackpotPage > 0;
+        Tool.GetChild(this.node, "奖池业绩/分页/业绩尾页").getComponent(cc.Button).interactable = ready && this.jackpotPage + 1 < this.jackpotPages;
+        Tool.GetChild(this.node, "奖池业绩/分页/业绩上一页").getComponent(cc.Button).interactable = ready && this.jackpotPage > 0;
+        Tool.GetChild(this.node, "奖池业绩/分页/业绩下一页").getComponent(cc.Button).interactable = ready && this.jackpotPage + 1 < this.jackpotPages;
+    }
+
+    private handleJackpotResponse(code: number, raw: string): boolean {
+        let msg: any;
+        try { msg = JSON.parse(raw); } catch (_) { return false; }
+        const context = msg && msg.context;
+        if (typeof context !== "string" || context.indexOf("jackpot-") !== 0) return false;
+        const kind = context.indexOf("jackpot-info-") === 0 ? "info" : "list";
+        if (GameDataManager.getAccount().client_prop !== "True" || this.jackpotRequests[kind] !== context) return true;
+        delete this.jackpotRequests[kind];
+        const data = msg.result;
+        const info = data && data[kind === "info" ? "ListJackpotPerformanceInfo" : "ListJackpotPerformanceList"];
+        const keys = ["all_performance", "my_performance", "granted_performance", "proxy_performance"];
+        const valid = info && keys.every(key => typeof info[key] === "number" && isFinite(info[key]));
+        const validList = kind !== "list" || (Array.isArray(info && info.list) && info.list.length <= 10 && info.list.every(row => Array.isArray(row) && row.length >= 3 && typeof row[2] === "number" && isFinite(row[2])) && /^\d+$/.test(String(data && data.number)) && /^\d+$/.test(String(data && data.count)));
+        if (code !== 0x200 || !valid || !validList) {
+            if (kind === "list") this.jackpotLabel("奖池业绩/状态", "业绩数据暂不可用，请点击刷新重试");
+            else this.jackpotLabel("操作/业绩比例/比例", "暂不可用");
+            return true;
+        }
+        this.jackpotLabel("操作/业绩比例/比例", this.jackpotRatio(info.proxy_performance, info.all_performance));
+        if (kind === "info") return true;
+        this.jackpotPage = Number(data.number);
+        this.jackpotPages = Math.max(1, Math.ceil(Number(data.count) / 10));
+        this.jackpotLabel("奖池业绩/统计日", "统计日：" + String(info.date || "昨日"));
+        this.jackpotLabel("奖池业绩/分页/页码", (this.jackpotPage + 1) + " / " + this.jackpotPages);
+        this.jackpotLabel("奖池业绩/汇总/数据", "我：" + this.jackpotRatio(info.my_performance, info.all_performance) + "    下发：" + this.jackpotRatio(info.granted_performance, info.all_performance) + "    剩：" + this.jackpotRatio(info.proxy_performance, info.all_performance));
+        this.jackpotLabel("奖池业绩/状态", info.list.length ? "" : "暂无已开通业绩的下级代理");
+        const rows = Tool.GetChild(this.node, "奖池业绩/列表/view/content").children;
+        rows.forEach((row, index) => {
+            row.active = index < info.list.length;
+            if (!row.active) return;
+            const item = info.list[index];
+            row.getChildByName("昵称").getComponent(cc.Label).string = String(item[1] || "未设置昵称");
+            row.getChildByName("ID").getComponent(cc.Label).string = "ID：" + item[0];
+            row.getChildByName("比例").getComponent(cc.Label).string = this.jackpotRatio(item[2], info.all_performance);
+            ImageManager.getInstance().BindPlayerListAvatar(String(item[0]), Tool.GetChild(row, "头像/mask/img").getComponent(cc.Sprite));
+        });
+        Tool.GetChild(this.node, "奖池业绩/列表").getComponent(cc.ScrollView).scrollToTop();
+        this.setJackpotPaging(true);
+        return true;
+    }
+
+    onEnable() {
+        // Also refresh when a cached panel is reopened after a permission change.
+        this.set_client_prop();
+    }
+
+    onDisable() {
+        this.jackpotRequests = {};
+    }
+
     private PAGE_PER_COUNT:number = 15;
 
     private scrollMyPlayers:ScrollViewEx = null; //我的玩家
@@ -183,11 +274,11 @@ export default class panelHongli extends UIPanelViewBase {
     // update (dt) {}
 
     // Permission changes compact the existing Prefab buttons in reading order.
-    // Keep two fixed rows; the native Layout owns positions and spacing.
+    // Up to seven actions occupy three rows; native Layout owns positions and spacing.
     private refreshAgentActions()
     {
         const actions = Tool.GetChild(this.node, "操作");
-        const names = ["我的玩家", "我的业绩", "我的盟主", "提取记录", "推广", "总业绩"];
+        const names = ["我的玩家", "我的业绩", "我的盟主", "提取记录", "推广", "总业绩", "业绩比例"];
         const count = names.filter(name => actions.getChildByName(name).active).length;
         const columns = count <= 4 ? 2 : 3;
         actions.width = columns * 204 + (columns - 1) * 14;
@@ -267,6 +358,12 @@ export default class panelHongli extends UIPanelViewBase {
     }
     public set_client_prop(old = null)
     {
+        const granted = GameDataManager.getAccount().client_prop === "True";
+        Tool.GetChild(this.node, "操作/业绩比例").active = granted;
+        this.jackpotRequests = {};
+        this.jackpotLabel("操作/业绩比例/比例", "—");
+        if (granted) this.requestJackpot("info");
+        else Tool.GetChild(this.node, "奖池业绩").active = false;
         let strProp = GameDataManager.getAccount().client_prop
         let strLevel = GameDataManager.getAccount().level
         if(strProp == "True" || strLevel == "99")
@@ -283,6 +380,18 @@ export default class panelHongli extends UIPanelViewBase {
     public onButtonClick(button:cc.Button)
     {
         this.refreshAgentSummary();
+        if (["业绩比例", "业绩刷新", "业绩首页", "业绩尾页", "业绩上一页", "业绩下一页"].indexOf(button.node.name) >= 0) {
+            if (GameDataManager.getAccount().client_prop !== "True") return;
+            const name = button.node.name;
+            if (name === "业绩比例") {
+                Tool.GetChild(this.node, "奖池业绩").active = true;
+                this.jackpotPage = 0;
+            }
+            const page = name === "业绩首页" ? 0 : name === "业绩尾页" ? this.jackpotPages - 1 : name === "业绩上一页" ? this.jackpotPage - 1 : name === "业绩下一页" ? this.jackpotPage + 1 : this.jackpotPage;
+            if (page < 0 || page >= this.jackpotPages) return;
+            this.requestJackpot("list", page);
+            return;
+        }
         if(button.node.name === "关闭上层")
         {
             button.node.parent.active = false;
@@ -799,6 +908,7 @@ export default class panelHongli extends UIPanelViewBase {
 
     public onHallCommand(nCode:number, param:string)
     {
+        if (this.handleJackpotResponse(nCode, param)) return;
         if (param.indexOf("设置_玩家_代理") >= 0)
         {
             if (nCode == 0x200)
