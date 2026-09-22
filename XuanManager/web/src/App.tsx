@@ -6,6 +6,7 @@ import AuditPage from "./pages/AuditPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
+import JackpotPerformancePage from "./pages/JackpotPerformancePage";
 import AgentsPage from "./pages/AgentsPage";
 import PlayersPage from "./pages/PlayersPage";
 import TransactionsPage from "./pages/TransactionsPage";
@@ -104,6 +105,7 @@ export default function App() {
   const page = useMemo(() => {
     const props = { can, notify };
     if (route === "/game/players" && can("game.player.view")) return <PlayersPage can={can} canViewSensitive={Boolean(session?.user.isProtectedRoot && session.user.username === "admin999")} notify={notify} />;
+    if (route === "/game/jackpot" && can("game.jackpot.view")) return <JackpotPerformancePage can={can} notify={notify} />;
     if (route === "/game/agents" && can("game.agent.view")) return <AgentsPage notify={notify} />;
     if (route === "/game/transactions" && can("game.transaction.view")) return <TransactionsPage notify={notify} />;
     if ((route === "/configuration/platform-revenue" || route === "/game/platform-revenue") && session?.user.isSuper) return <PlatformRevenuePage notify={notify} />;

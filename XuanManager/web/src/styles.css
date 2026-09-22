@@ -1934,3 +1934,18 @@ td strong { color: #294149; }
   .revenue-filter-grid, .revenue-range-summary { grid-template-columns: 1fr; }
   .revenue-filter-grid > .button { grid-column: auto; width: 100%; }
 }
+
+/* Jackpot permission and settlement page */
+.jackpot-section { padding: 24px; }
+.jackpot-section h2 { margin: 0 0 12px; }
+.jackpot-section > p { color: var(--text-muted); line-height: 1.7; }
+.jackpot-filters { display: flex; align-items: end; gap: 14px; flex-wrap: wrap; margin: 20px 0; }
+.jackpot-filters > :first-child { flex: 1; min-width: 230px; }
+.jackpot-pager { display: flex; justify-content: center; align-items: center; gap: 16px; margin-top: 20px; }
+.jackpot-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin: 20px 0; }
+.jackpot-summary article { background: #f4f7fb; border-radius: 12px; padding: 20px; }
+.jackpot-summary strong { display: block; font-size: 26px; margin-top: 10px; }
+.jackpot-warning, .jackpot-confirm { background: #fff3df; color: #8b4b06 !important; border-radius: 10px; padding: 16px; }
+.jackpot-confirm { margin-top: 16px; }
+.jackpot-page table { min-width: 680px; }
+@media (max-width: 650px) { .jackpot-summary { grid-template-columns: 1fr; } .jackpot-section { padding: 16px; } }
