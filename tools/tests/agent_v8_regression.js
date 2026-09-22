@@ -3,17 +3,17 @@ const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('ass
 const ts=require(process.env.TYPESCRIPT_PATH||path.join(require('os').homedir(),'.nvm/versions/node/v22.19.0/lib/node_modules/nexe/node_modules/typescript/lib/typescript.js'));
 const root=path.resolve(__dirname,'../..');
 class Node{constructor(o){this.name=o._name;this.active=o._active;this.children=[];this.comps={};this.events={};}getChildByName(n){return this.children.find(c=>c.name===n)}getComponent(t){return this.comps[t.name||t]||null}on(e,fn){this.events[e]=fn}targetOff(){this.events={}}}
-class Sprite{};class Label{};class Button{};class EditBox{};class ToggleContainer{};class Layout{};
+class ScrollView{};class Sprite{};class Label{};class Button{};class EditBox{};class ToggleContainer{};class Layout{};
 const find=(n,p)=>p.split('/').reduce((n,k)=>n&&n.getChildByName(k),n);
 function prefab(file){const a=JSON.parse(fs.readFileSync(root+'/'+file));const ns=new Map();a.forEach((o,i)=>{if(o.__type__==='cc.Node')ns.set(i,new Node(o))});for(const [i,n]of ns){const o=a[i];n.children=o._children.map(r=>ns.get(r.__id__));for(const ch of n.children)ch.parent=n;for(const r of o._components){const c=a[r.__id__],key=c.__type__.replace('cc.','');if(['Label','Button','EditBox','ToggleContainer','Graphics','Sprite'].includes(key))n.comps[key]={node:n,string:c['_N$string']??c._string??''};}}return ns.get(a[0].data.__id__)}
 const commands=[],panels=[];let shares=0;
 const account={hongli:'888899',use_hongli:'1791299',all_hongli:'2680000',hongli2:'368099',use_hongli2:'922099',fenhong:'86',role:'盟主',level:'99',client_prop:'True',big_percent:20,guuid:'123456',reqEnterRoom:(...a)=>commands.push(['room',...a]),reqHallCommand:(...a)=>commands.push(['hall',...a]),reqAccountCommand:(...a)=>commands.push(['account',...a])};
-const cc={Sprite,Label,Button,EditBox,ToggleContainer,Layout,Component:class{},RawAsset:class{},Color:{BLACK:{}},isValid:x=>!!x,_decorator:{ccclass:c=>c,property:()=>()=>{}}};
+const cc={ScrollView,Sprite,Label,Button,EditBox,ToggleContainer,Layout,Component:class{},RawAsset:class{},Color:{BLACK:{}},isValid:x=>!!x,_decorator:{ccclass:c=>c,property:()=>()=>{}}};
 class QR{addData(){}make(){}getModuleCount(){return 2}isDark(r,c){return r===c}}
 let gpsOpen=true;const avatarBindings=[];
 const modules={ImageManager:{getInstance:()=>({BindPlayerListAvatar:(...a)=>avatarBindings.push(a)})},GpsManager:{getInstance:()=>({IsGpsOpen:()=>gpsOpen})},Tool:{GetChild:find},Debug:{Log(){},Error(){}},GameDataManager:{getAccount:()=>account},MobileManager:{getInstance:()=>({CaptureScreen:()=>shares++})},ConfigManager:{getInstance:()=>({downloadurl:'https://example.test',enalbe_gps:'True'})},UIManager:{getInstance:()=>({showPanel:(...a)=>panels.push(a)})},QRCode:QR};
 function load(file){const mod={exports:{}};const js=ts.transpileModule(fs.readFileSync(root+'/'+file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2017,experimentalDecorators:true}}).outputText;vm.runInNewContext(js,{cc,QRCode:QR,QRErrorCorrectLevel:{H:1},module:mod,exports:mod.exports,console,require(n){const k=n.split('/').pop();if(k==='GameDef')return {ShowPanelMode:{Cover:0,Top:1},RoomType:{Custom:7}};if(k==='QRErrorCorrectLevel')return {default:{H:1}};return {default:modules[k]||class{}};}});return mod.exports.default;}
-const C=load('assets/scripts/UI/panelHongli.ts'),c=Object.create(C.prototype);c.node=prefab('assets/resources/UI/panelHongli.prefab');let cases=0;
+const C=load('assets/scripts/UI/panelHongli.ts'),c=Object.create(C.prototype);c.node=prefab('assets/resources/UI/panelHongli.prefab');let cases=0;c.scheduleOnce=()=>{};c.jackpotSequence=0;c.jackpotRequests={};c.jackpotPage=0;c.jackpotPages=1;
 const node=p=>find(c.node,p),value=p=>node(p).getComponent(Label).string,click=p=>c.onButtonClick({node:node(p)});
 for(const method of ['set_hongli','set_all_hongli','set_use_hongli','set_hongli2','set_use_hongli2'])c[method]();
 assert.equal(value('提取记录/V8可提取红利'),'8888');assert.equal(value('提取记录/V8累计提取'),'17912');assert.equal(value('奖池提取记录/V8奖池余额'),'3680');assert.equal(value('提取红利面板/bk/V8可提取金额'),'可提取金额：8888');cases+=4;
@@ -62,3 +62,38 @@ assert.equal(find(leaderRow,'比例').getComponent(Label).string,'');
 assert.equal(find(leaderRow,'设置盟主').active,false);assert.equal(find(leaderRow,'授权盟主').active,true);
 assert.equal(avatarBindings.at(-1)[0],'987654');
 console.log('PASS performance server values, two avatar bindings, leader permission states and reused-row ratio reset');
+// Jackpot: exact server permission, request correlation, zero totals, pagination,
+// revocation while in flight and context-only error responses.
+let topScrolls=0;
+node('奖池业绩/列表').comps.ScrollView={scrollToTop:()=>topScrolls++};
+const reply=(kind,data,code=512,context=c.jackpotRequests[kind])=>c.onHallCommand(code,JSON.stringify({context,result:data}));
+const stats={all_performance:4000,my_performance:400,granted_performance:100,proxy_performance:300,date:'2026-09-21'};
+for(const prop of ['', 'False', true, 'true']){account.client_prop=prop;account.level='99';c.set_client_prop();assert.equal(node('操作/业绩比例').active,false);}
+account.client_prop='True';c.set_client_prop();assert.equal(node('操作/业绩比例').active,true);
+assert.equal(JSON.parse(commands.at(-1)[1]).date,-1);assert.match(commands.at(-1)[2],/^p@jackpot-info-/);
+reply('info',{ListJackpotPerformanceInfo:stats});assert.equal(value('操作/业绩比例/比例'),'7.50%');
+click('操作/业绩比例');const stale=c.jackpotRequests.list;click('奖池业绩/业绩刷新');
+reply('list',{ListJackpotPerformanceList:{...stats,list:[['id','昵称',100]]},number:'0',count:'21'},512,stale);assert.equal(value('奖池业绩/状态'),'正在加载…');
+reply('list',{ListJackpotPerformanceList:{...stats,list:[['id','昵称',100]]},number:'0',count:'21'});
+assert.equal(value('奖池业绩/分页/页码'),'1 / 3');assert.match(value('奖池业绩/汇总/数据'),/我：10.00%.*下发：2.50%.*剩：7.50%/);
+assert.equal(value('奖池业绩/列表/view/content/行0/比例'),'2.50%');assert.equal(topScrolls,1);
+assert.equal(avatarBindings.at(-1)[0],'id');
+assert.equal(avatarBindings.at(-1)[1],node('奖池业绩/列表/view/content/行0/头像/mask/img').getComponent(Sprite));
+click('奖池业绩/分页/业绩下一页');assert.equal(JSON.parse(commands.at(-1)[1]).page,1);
+reply('list',{ListJackpotPerformanceList:{...stats,all_performance:0,my_performance:0,granted_performance:0,proxy_performance:0,list:[]},number:'0',count:'0'});
+assert.equal(value('操作/业绩比例/比例'),'0.00%');assert.equal(value('奖池业绩/分页/页码'),'1 / 1');assert.match(value('奖池业绩/状态'),/暂无/);
+click('奖池业绩/业绩刷新');reply('list',undefined,769);assert.match(value('奖池业绩/状态'),/暂不可用/);
+click('奖池业绩/业绩刷新');const revoked=c.jackpotRequests.list;account.client_prop='';c.set_client_prop();
+reply('list',{ListJackpotPerformanceList:{...stats,list:[]},number:'0',count:'0'},512,revoked);assert.equal(node('奖池业绩').active,false);assert.equal(node('操作/业绩比例').active,false);
+console.log('PASS jackpot permissions, yesterday protocol, amounts, zero denominator, paging, stale responses, failure and revocation');
+const timeouts=[];c.scheduleOnce=fn=>timeouts.push(fn);account.client_prop='True';c.set_client_prop();
+click('操作/业绩比例');const oldTimeout=timeouts.at(-1);click('奖池业绩/业绩刷新');oldTimeout();assert.equal(value('奖池业绩/状态'),'正在加载…');timeouts.at(-1)();assert.match(value('奖池业绩/状态'),/加载超时/);
+click('奖池业绩/业绩刷新');reply('list',{ListJackpotPerformanceList:{...stats,list:[['id','bad','NaN']]},number:'0',count:'1'});assert.match(value('奖池业绩/状态'),/暂不可用/);
+console.log('PASS jackpot timeout, superseded timeout and malformed row handling');
+
+account.client_prop='True';c.jackpotPages=3;c.jackpotPage=1;c.setJackpotPaging(true);
+click('奖池业绩/分页/业绩尾页');assert.equal(JSON.parse(commands.at(-1)[1]).page,2);
+click('奖池业绩/分页/业绩首页');assert.equal(JSON.parse(commands.at(-1)[1]).page,0);
+c.jackpotPage=0;c.setJackpotPaging(true);assert.equal(node('奖池业绩/分页/业绩首页').getComponent(Button).interactable,false);
+c.jackpotPage=2;c.setJackpotPaging(true);assert.equal(node('奖池业绩/分页/业绩尾页').getComponent(Button).interactable,false);
+console.log('PASS jackpot first/last page requests and boundary states');
