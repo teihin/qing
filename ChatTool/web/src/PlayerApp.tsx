@@ -22,16 +22,21 @@ export default function PlayerApp() {
   const [agentTyping, setAgentTyping] = useState(false)
   const [previewImage, setPreviewImage] = useState('')
   const [showActions, setShowActions] = useState(false)
+  const [keyboardEditing, setKeyboardEditing] = useState(false)
   const [showRating, setShowRating] = useState(false)
   const booted = useRef(false)
   const parentReadySent = useRef(false)
-  const listEnd = useRef<HTMLDivElement>(null)
+  const messageList = useRef<HTMLElement>(null)
   const typingIdleTimer = useRef<number | undefined>(undefined)
   const typingHeartbeatTimer = useRef<number | undefined>(undefined)
   const typingActive = useRef(false)
   const agentTypingExpiry = useRef<number | undefined>(undefined)
+  const keyboardBlurTimer = useRef<number | undefined>(undefined)
+  const normalViewportHeight = useRef(0)
+  const normalViewportWidth = useRef(window.innerWidth)
   const conversationID = state?.conversation.id
 	const canSend = Boolean(state && state.conversation.status !== 'closed' && state.onlineAgents > 0)
+  const lastMessageID = messages.length ? messages[messages.length - 1].id : null
 
   useLayoutEffect(() => {
     document.documentElement.classList.add('chattool-player-document')
@@ -41,6 +46,42 @@ export default function PlayerApp() {
       document.documentElement.classList.remove('chattool-embedded-document')
     }
   }, [embeddedSkin])
+
+  useLayoutEffect(() => {
+    if (!embedded) return
+    const viewport = window.visualViewport
+    const updateHeight = () => {
+      const available = Math.min(window.innerHeight, viewport ? viewport.offsetTop + viewport.height : window.innerHeight)
+      if (!keyboardEditing) {
+        if (Math.abs(window.innerWidth - normalViewportWidth.current) > 40) {
+          normalViewportWidth.current = window.innerWidth
+          normalViewportHeight.current = available
+        } else {
+          normalViewportHeight.current = Math.max(normalViewportHeight.current, available)
+        }
+      }
+      const normal = normalViewportHeight.current || available
+      // Some fullscreen WebViews keep reporting the old viewport when the IME opens.
+      // Reserve the keyboard's approximate space only in that case.
+      const keyboardReported = normal - available > 120
+      const estimatedKeyboard = Math.min(500, Math.max(320, normal * 0.5))
+      const height = keyboardEditing
+        ? Math.min(available, Math.max(160, keyboardReported ? available - 32 : normal - estimatedKeyboard - 16))
+        : available
+      document.documentElement.style.setProperty('--chattool-viewport-height', `${height}px`)
+    }
+    updateHeight()
+    viewport?.addEventListener('resize', updateHeight)
+    viewport?.addEventListener('scroll', updateHeight)
+    window.addEventListener('resize', updateHeight)
+    return () => {
+      window.clearTimeout(keyboardBlurTimer.current)
+      viewport?.removeEventListener('resize', updateHeight)
+      viewport?.removeEventListener('scroll', updateHeight)
+      window.removeEventListener('resize', updateHeight)
+      document.documentElement.style.removeProperty('--chattool-viewport-height')
+    }
+  }, [embedded, keyboardEditing])
 
   const loadMessages = useCallback(async () => {
     const result = await api<{ items: Message[] }>('/api/player/messages')
@@ -187,12 +228,14 @@ export default function PlayerApp() {
   }, [stopPlayerTyping])
 
   useEffect(() => {
-    try {
-      listEnd.current?.scrollIntoView({ behavior: messages.length > 1 ? 'smooth' : 'auto' })
-    } catch {
-      // 老旧或受限的手机WebView不支持滚动选项时，不影响聊天页继续使用。
-    }
-  }, [messages, agentTyping])
+    // scrollIntoView also scrolls the outer WebView on some phones. The embedded
+    // page polls messages every two seconds, so that used to move the whole UI.
+    const list = messageList.current
+    if (!list) return
+    list.style.scrollBehavior = 'auto'
+    list.scrollTop = list.scrollHeight
+    list.style.scrollBehavior = ''
+  }, [messages.length, lastMessageID, agentTyping])
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
@@ -236,7 +279,7 @@ export default function PlayerApp() {
 
   if (!state && !error) return <LoadingScreen embedded={embeddedSkin} />
   if (!state) return (
-    <main className={`player-shell player-error-page ${embeddedSkin ? 'player-shell-embedded player-error-page-embedded' : ''}`}>
+    <main className={`player-shell player-error-page ${embedded ? 'player-shell-game' : ''} ${embeddedSkin ? 'player-shell-embedded player-error-page-embedded' : ''}`}>
       <div className="brand-mark">BY</div><h1>无法进入在线客服</h1><p>{error}</p><button type="button" onClick={() => location.reload()}>重新连接</button><small>为保障账号安全，请从游戏内的“客服”入口进入。</small>
     </main>
   )
@@ -245,7 +288,7 @@ export default function PlayerApp() {
 	const unavailable = conversation.status !== 'closed' && state.onlineAgents === 0
 	const hasPlayerMessage = messages.some((message) => message.senderType === 'player')
   return (
-    <main className={`player-shell ${embeddedSkin ? 'player-shell-embedded' : ''}`}>
+    <main className={`player-shell ${embedded ? 'player-shell-game' : ''} ${embeddedSkin ? 'player-shell-embedded' : ''} ${embedded && keyboardEditing ? 'player-shell-keyboard' : ''}`}>
       <header className="player-header">
 		<div className="player-brand"><span className="brand-mark brand-mark-small">BY</span><div><strong>在线客服</strong><small>{conversation.category} · 专属服务</small></div></div>
       </header>
@@ -256,11 +299,10 @@ export default function PlayerApp() {
 		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '暂时无法发送消息，请等待客服上线后再咨询' : conversation.status === 'active' ? (embedded ? '您可以发送文字、图片或视频' : '您可以发送文字、图片、视频或文件') : hasPlayerMessage ? '请稍候，正在为您接入在线客服' : '发送第一条文字、图片或视频后，将自动接入在线客服'}</p>
         </div>
       </section>
-      <section className="player-messages" aria-live="polite">
+      <section className="player-messages" aria-live="polite" ref={messageList}>
         <div className="conversation-date">今天</div>
         {messages.map((message) => <MessageBubble key={message.id} message={message} own={message.senderType === 'player'} onImage={setPreviewImage} />)}
         {agentTyping && <div className="typing-bubble"><i /><i /><i /></div>}
-        <div ref={listEnd} />
       </section>
       {error && <div className="toast-error" role="alert">{error}<button onClick={() => setError('')} aria-label="关闭提示">×</button></div>}
       {conversation.status === 'closed' && <button className="rating-entry" type="button" onClick={() => setShowRating(true)}>评价本次服务</button>}
@@ -274,7 +316,7 @@ export default function PlayerApp() {
 		</div>}
 		<div className="composer-row">
 		  <button className={`add-button ${showActions ? 'add-button-open' : ''}`} type="button" aria-label="添加图片或视频" onClick={() => setShowActions((value) => !value)} disabled={!canSend}>＋</button>
-		  <textarea value={text} onChange={(event) => onTextChange(event.target.value)} onBlur={stopPlayerTyping} rows={1} maxLength={2000} placeholder={conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : '请输入您要咨询的问题…'} disabled={!canSend} />
+		  <textarea value={text} onChange={(event) => onTextChange(event.target.value)} onFocus={() => { window.clearTimeout(keyboardBlurTimer.current); setShowActions(false); setKeyboardEditing(true) }} onBlur={() => { keyboardBlurTimer.current = window.setTimeout(() => setKeyboardEditing(false), 180); stopPlayerTyping() }} rows={1} maxLength={2000} placeholder={conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : '请输入您要咨询的问题…'} disabled={!canSend} />
 		  <button className="send-button" type="submit" disabled={!text.trim() || sending || !canSend}>{sending ? '发送中' : '发送'}</button>
 		</div>
 		<small className={`safe-tip ${unavailable ? 'offline-tip' : ''}`}>{unavailable ? '客服上线后将自动恢复发送功能' : '请勿发送密码、验证码、银行卡等敏感信息'}</small>

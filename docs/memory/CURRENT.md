@@ -4,7 +4,7 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。历史验证不代表当前结果。
 
-客服顶部换肤已查，运行待验：[交接](handoffs/2026-09-20-kefu-header-v8.md)。
+客服网页已部署，真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
 
 ## 2026-09-20 桌内牌局设置 V8
 
