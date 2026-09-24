@@ -364,16 +364,8 @@ export default class panelHongli extends UIPanelViewBase {
         this.jackpotLabel("操作/业绩比例/比例", "—");
         if (granted) this.requestJackpot("info");
         else Tool.GetChild(this.node, "奖池业绩").active = false;
-        let strProp = GameDataManager.getAccount().client_prop
-        let strLevel = GameDataManager.getAccount().level
-        if(strProp == "True" || strLevel == "99")
-        {
-            Tool.GetChild(this.node,"操作/总业绩").active = true;
-        }
-        else
-        {
-            Tool.GetChild(this.node,"操作/总业绩").active = false;
-        }
+        // 总业绩入口已停用，所有账号均隐藏。
+        Tool.GetChild(this.node, "操作/总业绩").active = false;
         this.refreshAgentActions();
     }
 
