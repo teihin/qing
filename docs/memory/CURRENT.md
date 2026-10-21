@@ -6,6 +6,13 @@
 
 客服网页已部署，真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
 
+## 2026-09-29 俱乐部入口与三界面
+
+- `codex/club-ui` 分支已将大厅底栏「钱包」改为「俱乐部」，新增俱乐部首页、创建弹窗、加入弹窗；首页复用大厅背景 SpriteFrame，俱乐部专用美术承担双入口主视觉与完整底栏。创建、申请加入和已有俱乐部列表已接大厅命令通道。点击俱乐部条目进入大厅查询该俱乐部房间，按账号记住最近选择；筛选/分页带俱乐部 ID，模拟检查通过，真实回包待验。
+- 已按反馈修复继承金色导致的全页偏黄，底栏改完整导航图，消除钱包透出及错位。三页离线渲染与引用检查通过；Creator 已重新打开 Prefab，新增管理节点已确认导入；实际点击/回包/真机未验。未提交、未推送。见[交接](handoffs/2026-09-29-club-ui.md)。
+
+- 我的页新增当前俱乐部信息、成员/申请列表、权限按钮、红点与确认弹窗；成员页已按代理成员页改为全屏，列表随屏高伸缩；顶部加实底，行内增加余额、删除和设管理员，赠予币种待确认；已按后续授权绑定现有成员/申请/退出/解散/审批命令和申请红点；异步审批补查成员确认。回包样例与真实服务器联调仍待验证。离线预览与模拟检查通过，详见同一交接。
+
 ## 2026-09-20 桌内牌局设置 V8
 
 - `panelGameView.prefab` 与 `drh8.fire` 的 `系统设置` 已按 `效果图V8-new/06-桌内界面/10-牌局设置.png` 组件化换肤：本轮新增 31 张 `assets/V7/settings_v8_*` 透明 PNG 与 `.meta`，主框、顶饰、金色标题、五桌面预览、三牌背预览、选中态及控制区均为独立 Sprite。
@@ -34,11 +41,8 @@
 
 ## 2026-09-19～20 XuanManager 时间口径修复 + 玩家列表拆列（正式已部署）
 
-- 玩家管理「最近登录」等页面时间多 8 小时、16:00 后跨到次日。根因：误判「MySQL 存的是 UTC」，而实测正式服务器系统与 MySQL 会话时区都是 `Asia/Shanghai`（`@@time_zone = SYSTEM`），`NOW()`/`CURRENT_TIMESTAMP`/`FROM_UNIXTIME()` 与全部 `DATETIME` 列**本来就是北京时间**，那层 `DATE_ADD(…, INTERVAL 8 HOUR)` 成了第二次 +8。
-- 已删除后端全部 22 处 +8 包装（玩家/封禁/防盗号/后台用户/审计/公告/发牌优化/交易筛选/平台收益），工作台今日审计日界改按北京时间，数据库连接 `Loc` 固定 `Asia/Shanghai`。前端无需改动（线上产物即本地 `web/dist`，`Asia/Shanghai` 口径正确）。
-- 验证：`go vet`/`go test` 全过；新二进制 `INTERVAL 8 HOUR` 计数 0；部署前用同源比对确认本地源码 = 线上二进制；重启后 `/api/health` 200，只读回读时间与北京时间一致。**未登录页面做视觉复核；改动未提交。**见[交接](handoffs/2026-09-19-xuanmanager-timezone-fix.md)。
-- 同批新增「玩家管理 → 更多条件 → 登录日期范围」（`loginFrom`/`loginTo`）：按北京时间日界用 `UNIX_TIMESTAMP` 换算后比 `kbe_accountinfos.lasttime`，未登录账号不落范围；后端单测 + 前端 lint/tsc/build 通过，只读 SQL 与 `FROM_UNIXTIME` 参照口径一致，后端与前端已一同部署正式 8891（回滚点 `backups/xuanmanager.20260919-2331-loginrange-rollback`、`web.previous-login-range-20260919`）。**未登录页面点击验收；改动未提交。**见[交接](handoffs/2026-09-19-xuanmanager-player-login-range.md)。
-- 09-20：玩家列表「注册 / 登录」拆为「注册时间（北京时间）」+「最近登录（北京时间）」两列（`.player-table` 1120→1220px，时间口径未变），lint/tsc/build 通过并部署正式 8891，线上回读新表头命中、旧表头 0 命中，提交/推送 `7865427`、`ba38c31`（回滚点 `web.previous-player-time-split-20260920`）。**未登录页面视觉复核**，见[交接](handoffs/2026-09-20-xuanmanager-player-time-split.md)。
+- 根因：正式服务器与 MySQL 的 `DATETIME` 本来就是北京时间，额外的 22 处 +8 导致列表时间偏移。后端已去除叠加时差并部署，`go vet`/`go test`、只读回读及健康检查通过；页面视觉未复核，源码未提交。见[时间口径交接](handoffs/2026-09-19-xuanmanager-timezone-fix.md)。
+- 登录日期范围和「注册时间 / 最近登录」拆列均已部署正式 8891，页面点击与视觉未复核；详情及回滚点见[日期筛选交接](handoffs/2026-09-19-xuanmanager-player-login-range.md)、[拆列交接](handoffs/2026-09-20-xuanmanager-player-time-split.md)。
 
 ## 2026-09-19 大厅「发现」两个入口行为调整
 

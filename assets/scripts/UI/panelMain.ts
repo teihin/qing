@@ -1,3 +1,5 @@
+import HallClubManagementApi from "./ClubManagementApi";
+import ClubManagementView from "./ClubManagementView";
 import UIPanelViewBase from "../common/UIPanelViewBase";
 import Debug from "../common/Debug";
 import Tool from "../common/Tool";
@@ -43,6 +45,8 @@ export default class panelMain extends UIPanelViewBase {
     private scrollRoom2:scrollview2 = null;
     private arrayRoomData:any[] = []; //房间滚动列表数据缓存
     private readonly ROOM_PAGE_COUNT:number = 200;
+    private selectedRoomClubId:string = "";
+    private roomClubAccountKey:string = "";
     private roomListLoading:boolean = false;
     private roomListHasMore:boolean = true;
     private roomListRequestPage:number = -1;
@@ -70,6 +74,17 @@ export default class panelMain extends UIPanelViewBase {
     private walletOpenRequest:number = 0;
     private updatingMainTabSelection:boolean = false;
     private promotionReturnPanel:cc.Node = null;
+    private clubManagementApi:HallClubManagementApi = null;
+    public clubManagement:ClubManagementView = null;
+    private clubInputId:string = "";
+    private clubCommandBusy:boolean = false;
+    private clubDetails:{[clubId:string]:any} = {};
+    private readonly clubCommandTimeoutHandler = ()=>{
+        if(!this.clubCommandBusy)
+            return;
+        this.clubCommandBusy = false;
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"俱乐部操作超时，请稍后重试！");
+    };
 
     private animateSet:dragonBones.ArmatureDisplay = null;
 
@@ -125,10 +140,7 @@ export default class panelMain extends UIPanelViewBase {
         
         
 
-        KBEngine.Event.register("ClubRoomInfo", this, "OnClubRoomInfo");
-        KBEngine.Event.register("AllClubRoomInfo", this, "OnClubRoomInfo");
-        KBEngine.Event.register("AllSelfRoomInfo", this, "OnClubRoomInfo");
-        KBEngine.Event.register("AllFubenRoomInfo", this, "OnClubRoomInfo");
+        KBEngine.Event.register("AllRoomInfo", this, "OnClubRoomInfo");
 
         KBEngine.Event.register("onEnterRoom", this, "onEnterRoom");
         KBEngine.Event.register("onGetReturnedRoom", this, "onGetReturnedRoom");
@@ -139,6 +151,9 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("ExchangeInfo", this, "OnGetExchangeList");
         KBEngine.Event.register("ListPlayerCashWater", this, "ListPlayerCashWater");
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
+        KBEngine.Event.register("set_club_join", this, "OnClubMembershipChanged");
+        KBEngine.Event.register("set_club_make", this, "OnClubMembershipChanged");
+        KBEngine.Event.register("set_club_manage", this, "OnClubMembershipChanged");
 
         KBEngine.Event.register("UserHashInfo",this, "OnUserHashInfo");
         KBEngine.Event.register("UserHash2Info",this, "UserHash2Info");
@@ -163,6 +178,20 @@ export default class panelMain extends UIPanelViewBase {
         },this);
         this.scrollRoom.node.on("scrolling",this.TryLoadMoreRooms,this);
 
+        this.clubManagement = new ClubManagementView(this.node,()=>{
+            const account = GameDataManager.getAccount();
+            const id = this.ResolveRoomClub();
+            const info = this.clubDetails[id];
+            const owns = String(account.club_make || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
+            const manages = String(account.club_manage || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
+            return {accountId:String(account.guuid || ""),ownerId:owns ? String(account.guuid) : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,
+                role:owns ? "owner" : manages ? "manager" : "member"};
+        },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text));
+        this.clubManagement.Refresh();
+        this.clubManagementApi = new HallClubManagementApi((id,count)=>this.clubManagement.SetPendingCount(id,count));
+        this.clubManagement.SetApi(this.clubManagementApi);
+        this.clubManagementApi.RefreshBadges();
+        this.schedule(()=>this.clubManagementApi.RefreshBadges(),30);
         this.switchTabSel("发现");
         this.getAllRooms();
 
@@ -217,6 +246,11 @@ export default class panelMain extends UIPanelViewBase {
         this.scrollCFNotify = Tool.GetChild(this.node,"惩罚列表/list").getComponent(ScrollViewEx);
         this.scrollCFNotify.callBackFresh = this.GetCFNotifyInfo.bind(this);
         RoomInviteManager.getInstance().onLobbyReady();
+    }
+
+    onDestroy(){
+        if(this.clubManagementApi) this.clubManagementApi.Dispose();
+        super.onDestroy();
     }
 
     onEnable(){
@@ -707,9 +741,9 @@ export default class panelMain extends UIPanelViewBase {
             return;
 
         let isAgent = this.IsCurrentUserAgent();
-        let agent = Tool.GetChild(operation,"代理");
-        if(agent != null)
-            agent.active = isAgent;
+        // 俱乐部模式不提供代理入口，包括旧 Prefab 中的同名节点。
+        for(const child of operation.children)
+            if(child.name === "代理") child.active = false;
 
         // 游戏推广入口与代理入口同规则：非代理不显示，只有代理才显示。
         let promotion = Tool.GetChild(operation,"推广二维码");
@@ -734,6 +768,21 @@ export default class panelMain extends UIPanelViewBase {
     // update (dt) {}
     onButtonClick(button:cc.Button)
     {
+        if(this.clubManagement && this.clubManagement.HandleButton(button))
+            return;
+        // Club rows also live under a content node; handle them before the room-row branch.
+        if(button.node.name.indexOf("俱乐部条目_") === 0)
+        {
+            const id = button.node.name.substr("俱乐部条目_".length);
+            if(this.GetMyClubIds().indexOf(id) < 0) return;
+            this.ResolveRoomClub();
+            this.selectedRoomClubId = id;
+            if(this.roomClubAccountKey) cc.sys.localStorage.setItem(this.roomClubAccountKey,id);
+            this.clubManagement.Refresh();
+            this.switchTabSel("发现");
+            this.getAllRooms(0,true);
+            return;
+        }
         Debug.Log("消息:"+button.node.name);
         if(button.node.parent.name === "content")
         {
@@ -1175,6 +1224,40 @@ export default class panelMain extends UIPanelViewBase {
             //比赛场暂未开放，点击只弹提示
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"暂无比赛，敬请期待！");
         }
+        else if(button.node.name === "创建俱乐部")
+        {
+            Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox).string = "";
+            this.node.getChildByName("创建俱乐部弹窗").active = true;
+        }
+        else if(button.node.name === "加入俱乐部")
+        {
+            this.clubInputId = "";
+            this.RefreshClubIdDisplay();
+            this.node.getChildByName("加入俱乐部弹窗").active = true;
+        }
+        else if(button.node.name === "关闭俱乐部弹窗")
+        {
+            button.node.parent.parent.active = false;
+        }
+        else if(button.node.parent.name === "俱乐部键盘")
+        {
+            if(button.node.name === "重输")
+                this.clubInputId = "";
+            else if(button.node.name === "删除")
+                this.clubInputId = this.clubInputId.slice(0,-1);
+            else if(/^\d$/.test(button.node.name) && this.clubInputId.length < 6)
+                this.clubInputId += button.node.name;
+            this.RefreshClubIdDisplay();
+        }
+        else if(button.node.name === "确认创建俱乐部")
+        {
+            this.CreateClub();
+        }
+        else if(button.node.name === "申请加入俱乐部")
+        {
+            this.JoinClub();
+        }
+
 
 
 
@@ -1662,6 +1745,11 @@ export default class panelMain extends UIPanelViewBase {
         {
             this.OpenWallet(false);
         }
+        else if(toggle.node.name === "俱乐部")
+        {
+            this.switchTabSel("俱乐部");
+            this.RefreshClubList();
+        }
         else if(toggle.node.name === "我的")
         {
 
@@ -1915,6 +2003,13 @@ export default class panelMain extends UIPanelViewBase {
 
     switchTabSel(strName:string)
     {
+        if(strName === "我的" && this.clubManagement)
+        {
+            this.clubManagement.Refresh();
+            const id = this.ResolveRoomClub();
+            if(id && !this.clubDetails[id])
+                GameDataManager.getAccount().reqHallCommand(JSON.stringify({header:"查询_俱乐部_信息",club_id:id}),"p@club:info:" + id);
+        }
         if(strName !== "钱包")
         {
             ++this.walletOpenRequest;
@@ -1957,7 +2052,38 @@ export default class panelMain extends UIPanelViewBase {
         this.node.getChildByName("Down").active = strName !== "钱包";
     }
 
-    private GetRoomListFilter():{roomType:string,haveFreeSit:number,key:string}
+    private ResolveRoomClub():string
+    {
+        const account = GameDataManager.getAccount();
+        const key = account && account.guuid ? "lastRoomClub:" + account.guuid : "";
+        const ids = this.GetMyClubIds();
+        if(key !== this.roomClubAccountKey)
+        {
+            this.roomClubAccountKey = key;
+            this.selectedRoomClubId = key ? cc.sys.localStorage.getItem(key) || "" : "";
+        }
+        if(ids.indexOf(this.selectedRoomClubId) < 0)
+            this.selectedRoomClubId = ids.length > 0 ? ids[0] : "";
+        if(key && this.selectedRoomClubId)
+            cc.sys.localStorage.setItem(key,this.selectedRoomClubId);
+        return this.selectedRoomClubId;
+    }
+
+    private ClearClubRooms()
+    {
+        this.arrayRoomData = [];
+        this.roomListAppliedFilterKey = "";
+        if(this.scrollRoom2)
+            this.scrollRoom2.Init([],true);
+        if(this.scrollRoom)
+        {
+            this.scrollRoom.nCurPage = 0;
+            this.scrollRoom.nCount = 0;
+            this.scrollRoom.nTotlePage = 0;
+        }
+    }
+
+    private GetRoomListFilter():{clubId:string,roomType:string,haveFreeSit:number,key:string}
     {
         let roomType = "";
         let haveFreeSit = 0;
@@ -1971,7 +2097,8 @@ export default class panelMain extends UIPanelViewBase {
             else if(roomType === "")
                 roomType = toggle.node.name;
         }
-        return {roomType:roomType,haveFreeSit:haveFreeSit,key:roomType+"|"+haveFreeSit.toString()};
+        const clubId = this.ResolveRoomClub();
+        return {clubId:clubId,roomType:roomType,haveFreeSit:haveFreeSit,key:clubId+"|"+roomType+"|"+haveFreeSit.toString()};
     }
 
     private TryLoadMoreRooms()
@@ -2008,7 +2135,15 @@ export default class panelMain extends UIPanelViewBase {
     getAllRooms(nPage:number = 0,_bFouce:boolean = false)
     {
         const filter = this.GetRoomListFilter();
+        if(filter.key !== this.roomListDesiredFilterKey)
+            this.ClearClubRooms();
         this.roomListDesiredFilterKey = filter.key;
+        if(!filter.clubId)
+        {
+            this.roomListPendingRefresh = false;
+            this.roomListHasMore = false;
+            return;
+        }
 
         if(this.roomListLoading)
         {
@@ -2045,7 +2180,8 @@ export default class panelMain extends UIPanelViewBase {
         this.scheduleOnce(this.roomListRequestTimeoutHandler,8);
 
         const requestData = {
-            header:"查询_所有_自创_房间",
+            header:"查询_俱乐部_房间_信息",
+            club_id:filter.clubId,
             is_zip_result:"1",
             page:nPage.toString(),
             count:this.ROOM_PAGE_COUNT.toString(),
@@ -2054,12 +2190,14 @@ export default class panelMain extends UIPanelViewBase {
             fillter_02:"",
             is_no_running:"0"
         };
-        GameDataManager.getAccount().reqHallCommand(JSON.stringify(requestData), "P@查询_所有_自创_房间");
+        GameDataManager.getAccount().reqHallCommand(JSON.stringify(requestData), "P@查询_俱乐部_房间_信息");
     }
 
     // 解析房间列表信息
     OnClubRoomInfo(strMsg:string)
     {
+        if(!this.roomListLoading)
+            return;
         let msg:any = null;
         try
         {
@@ -2083,19 +2221,8 @@ export default class panelMain extends UIPanelViewBase {
 
         const data:any[] = msg.result;
         const nCount = msg.hasOwnProperty("count") ? Math.max(0,Number(msg.count)||0) : 0;
-        const isTrackedRequest = this.roomListLoading;
-        let requestPage = this.roomListRequestPage;
-        let requestFilterKey = this.roomListRequestFilterKey;
-
-        // 保留服务端主动推送第一页房间列表的兼容能力；非请求状态下不接受追加页。
-        if(!isTrackedRequest)
-        {
-            const pushedPage = msg.hasOwnProperty("number") ? Math.max(0,Number(msg.number)||0) : 0;
-            if(pushedPage !== 0 || this.roomListPendingRefresh)
-                return;
-            requestPage = 0;
-            requestFilterKey = this.roomListAppliedFilterKey || this.roomListDesiredFilterKey || this.GetRoomListFilter().key;
-        }
+        const requestPage = this.roomListRequestPage;
+        const requestFilterKey = this.roomListRequestFilterKey;
 
         const nCurPage = msg.hasOwnProperty("number") ? Math.max(0,Number(msg.number)||0) : requestPage;
 
@@ -2105,8 +2232,7 @@ export default class panelMain extends UIPanelViewBase {
             return;
         }
 
-        if(isTrackedRequest)
-            this.FinishRoomListRequest();
+        this.FinishRoomListRequest();
 
         // 切换筛选期间返回的旧分类数据不再落到当前列表，随后只请求最新分类。
         if(requestFilterKey !== this.roomListDesiredFilterKey)
@@ -2614,8 +2740,175 @@ export default class panelMain extends UIPanelViewBase {
         }
     }
     
+    private GetMyClubIds():string[]
+    {
+        const account = GameDataManager.getAccount();
+        const result:string[] = [];
+        if(account == null)
+            return result;
+        for(const value of [account.club_make,account.club_join,account.club_manage])
+        {
+            for(const raw of String(value || "").split(","))
+            {
+                const id = raw.trim();
+                if(/^\d{6}$/.test(id) && result.indexOf(id) < 0)
+                    result.push(id);
+            }
+        }
+        return result;
+    }
+
+    public OnClubMembershipChanged()
+    {
+        if(this.clubManagement) this.clubManagement.Refresh();
+        if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
+        const page = Tool.GetChild(this.node,"Main/俱乐部");
+        if(page && page.active)
+            this.RefreshClubList();
+        if(this.scrollRoom && this.GetRoomListFilter().key !== this.roomListDesiredFilterKey)
+            this.getAllRooms(0,true);
+    }
+
+    private RefreshClubList(requestDetails:boolean = true)
+    {
+        const page = Tool.GetChild(this.node,"Main/俱乐部");
+        if(!page)
+            return;
+        const ids = this.GetMyClubIds();
+        const list = Tool.GetChild(page,"俱乐部列表");
+        const content = Tool.GetChild(list,"view/content");
+        const template = content.getChildByName("俱乐部条目模板");
+        for(const row of content.children.slice())
+        {
+            if(row !== template)
+            {
+                row.removeFromParent();
+                row.destroy();
+            }
+        }
+        content.height = Math.max(list.height,ids.length * 126);
+        Tool.GetChild(page,"空状态").active = ids.length === 0;
+        list.active = ids.length > 0;
+        if(ids.length === 0)
+            return;
+
+        ids.forEach((id,index)=>{
+            const row = cc.instantiate(template);
+            row.name = "俱乐部条目_" + id;
+            row.parent = content;
+            row.setPosition(0,-index * 126);
+            row.active = true;
+            row.on("click",this.onButtonClickVirtual,this);
+            const info = this.clubDetails[id];
+            const name = info && info.club_name ? String(info.club_name) : "俱乐部 " + id;
+            row.getChildByName("俱乐部名称").getComponent(cc.Label).string = name;
+            row.getChildByName("俱乐部ID").getComponent(cc.Label).string = "ID: " + id;
+            const account = GameDataManager.getAccount();
+            const ownerIds = String(account.club_make || "").split(",");
+            const managerIds = String(account.club_manage || "").split(",");
+            row.getChildByName("身份").getComponent(cc.Label).string = ownerIds.indexOf(id) >= 0 ? "盟主" :
+                managerIds.indexOf(id) >= 0 ? "管理员" : "成员";
+            if(requestDetails && !info)
+            {
+                const request = {header:"查询_俱乐部_信息",club_id:id};
+                GameDataManager.getAccount().reqHallCommand(JSON.stringify(request),"p@club:info:" + id);
+            }
+        });
+        list.getComponent(cc.ScrollView).scrollToTop(0);
+    }
+
+    private RefreshClubIdDisplay()
+    {
+        const label = Tool.GetChild(this.node,"加入俱乐部弹窗/面板/俱乐部ID输入框/俱乐部ID显示").getComponent(cc.Label);
+        label.string = this.clubInputId || "请输入俱乐部ID";
+    }
+
+    private SendClubCommand(request:any,context:string)
+    {
+        if(this.clubCommandBusy)
+            return;
+        this.clubCommandBusy = true;
+        this.unschedule(this.clubCommandTimeoutHandler);
+        this.scheduleOnce(this.clubCommandTimeoutHandler,10);
+        GameDataManager.getAccount().reqHallCommand(JSON.stringify(request),"p@club:" + context);
+    }
+
+    private CreateClub()
+    {
+        const edit = Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox);
+        const name = edit.string.trim();
+        if(!name)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入俱乐部名称！");
+            return;
+        }
+        this.SendClubCommand({header:"创建_俱乐部",club_name:name,club_mode:"1"},"create");
+    }
+
+    private JoinClub()
+    {
+        if(!/^\d{6}$/.test(this.clubInputId))
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入六位俱乐部ID！");
+            return;
+        }
+        this.SendClubCommand({header:"申请_加入_俱乐部",club_id:this.clubInputId},"join");
+    }
+
+    private HandleClubHallCommand(nCode:number,param:string):boolean
+    {
+        if(param.indexOf("club:") < 0)
+            return false;
+        let response:any = null;
+        try { response = JSON.parse(param); }
+        catch(error) { Debug.Error("解析俱乐部回包失败：" + error); return false; }
+        let context = response && response.context ? String(response.context) : "";
+        if(context.indexOf("p@") === 0 || context.indexOf("P@") === 0)
+            context = context.substr(2);
+        if(context.indexOf("club:") !== 0)
+            return false;
+        if(context.indexOf("club:info:") === 0)
+        {
+            const id = context.substr("club:info:".length);
+            if(nCode === 0x200 && response.result && response.result.club_id)
+            {
+                this.clubDetails[id] = response.result;
+                if(this.clubManagement) this.clubManagement.Refresh();
+                this.RefreshClubList(false);
+            }
+            return true;
+        }
+        if(context !== "club:create" && context !== "club:join")
+            return false;
+        this.unschedule(this.clubCommandTimeoutHandler);
+        this.clubCommandBusy = false;
+        const isDirectJoin = context === "club:join" && nCode === 0x500;
+        if(nCode !== 0x200 && !isDirectJoin)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                this.GetHallCommandError(param,context === "club:create" ? "创建俱乐部失败！" : "申请加入俱乐部失败！"));
+            return true;
+        }
+        if(context === "club:create")
+        {
+            this.node.getChildByName("创建俱乐部弹窗").active = false;
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"创建请求已受理，俱乐部创建后会显示在列表中。");
+        }
+        else
+        {
+            this.node.getChildByName("加入俱乐部弹窗").active = false;
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,isDirectJoin ?
+                "加入请求已提交，成员状态更新后会显示在列表中。" :
+                "加入申请已提交，请等待俱乐部管理员审批。");
+        }
+        this.RefreshClubList();
+        return true;
+    }
+
     public onHallCommand(nCode:number, param:string)
     {
+        if(this.HandleClubHallCommand(nCode,param))
+            return;
         const isAvatarChargeReply = param.indexOf("玩家_消费_命令_换头像") >= 0 ||
             (this.avatarChargeBusy && param.indexOf("玩家_消费_命令") >= 0 && param.indexOf("换头像") >= 0);
         if(isAvatarChargeReply)
