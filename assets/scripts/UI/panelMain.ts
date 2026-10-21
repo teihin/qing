@@ -79,6 +79,8 @@ export default class panelMain extends UIPanelViewBase {
     private clubInputId:string = "";
     private clubCommandBusy:boolean = false;
     private clubDetails:{[clubId:string]:any} = {};
+    // 登录进大厅的默认分页只决定一次，之后用户手动切换或俱乐部关系变化都不再自动跳转。
+    private lobbyEntryResolved:boolean = false;
     private readonly clubCommandTimeoutHandler = ()=>{
         if(!this.clubCommandBusy)
             return;
@@ -119,6 +121,9 @@ export default class panelMain extends UIPanelViewBase {
     };
     onLoad () {
         super.onLoad();
+        // 大厅入口分页：没有俱乐部的玩家等价于点底栏「俱乐部」，直接进俱乐部页；其余进「发现」。
+        if(!this.ResolveLobbyEntryTab())
+            this.switchTabSel("发现");
         this.HidePromotionPanelOnLobbyOpen();
         
         KBEngine.Event.register("set_gold", this, "set_gold");
@@ -182,9 +187,11 @@ export default class panelMain extends UIPanelViewBase {
             const account = GameDataManager.getAccount();
             const id = this.ResolveRoomClub();
             const info = this.clubDetails[id];
-            const owns = String(account.club_make || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
-            const manages = String(account.club_manage || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
-            return {accountId:String(account.guuid || ""),ownerId:owns ? String(account.guuid) : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,
+            // 未登录/重连期间 getAccount() 为空，这里不能抛错中断大厅初始化。
+            const guuid = account ? String(account.guuid || "") : "";
+            const owns = account && String(account.club_make || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
+            const manages = account && String(account.club_manage || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
+            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,
                 role:owns ? "owner" : manages ? "manager" : "member"};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text));
         this.clubManagement.Refresh();
@@ -192,7 +199,6 @@ export default class panelMain extends UIPanelViewBase {
         this.clubManagement.SetApi(this.clubManagementApi);
         this.clubManagementApi.RefreshBadges();
         this.schedule(()=>this.clubManagementApi.RefreshBadges(),30);
-        this.switchTabSel("发现");
         this.getAllRooms();
 
 
@@ -1696,6 +1702,8 @@ export default class panelMain extends UIPanelViewBase {
     {
         if(this.updatingMainTabSelection)
             return;
+        // 用户自己点过任意分页/开关后，不再按俱乐部关系自动改分页。
+        this.lobbyEntryResolved = true;
         if(toggle.node.name === "发现")
         {
             this.switchTabSel(toggle.node.name);
@@ -2758,8 +2766,31 @@ export default class panelMain extends UIPanelViewBase {
         return result;
     }
 
+    /** 登录进大厅默认分页：没有任何俱乐部时直接进俱乐部页（等价点击底栏「俱乐部」）。 */
+    private ResolveLobbyEntryTab():boolean
+    {
+        if(this.lobbyEntryResolved)
+            return true;
+        const account = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        // 账号实体已到但俱乐部属性还没下发时先不下结论，等 set_club_join/make/manage 推送。
+        if(account.club_make === undefined && account.club_join === undefined && account.club_manage === undefined)
+            return false;
+        this.lobbyEntryResolved = true;
+        // 只判断「有没有俱乐部关系」，不按 6 位 ID 格式过滤，避免位数不同的老数据被误判成无俱乐部。
+        const hasClub = [account.club_make,account.club_join,account.club_manage].some(value=>
+            String(value == null ? "" : value).split(",").some(id=>id.trim() !== ""));
+        this.switchTabSel(hasClub ? "发现" : "俱乐部");
+        if(!hasClub)
+            this.RefreshClubList();
+        return true;
+    }
+
     public OnClubMembershipChanged()
     {
+        if(!this.lobbyEntryResolved)
+            this.ResolveLobbyEntryTab();
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
         const page = Tool.GetChild(this.node,"Main/俱乐部");
