@@ -15,11 +15,15 @@ export default class HallClubManagementApi implements ClubManagementApi {
     private serial:number = 0;
     private prefix = "clubmg:" + Date.now() + ":";
     private disposed = false;
-    constructor(private badge:(club:string,count:number)=>void) {
+    constructor(private badge:(club:string,count:number)=>void,
+        private isAgent:(club:string)=>boolean = ()=>false,
+        private agentClubs:()=>string[] = ()=>[]) {
         KBEngine.Event.register("onHallCommand",this,"OnCommand");
         KBEngine.Event.register("NumberList",this,"OnMembers");
         // Legacy application route; decoder rejects unknown shapes instead of treating them as empty.
         KBEngine.Event.register("JoinerList",this,"OnApplications");
+        // 代理视角的待审申请（查询_俱乐部_代理_申请）。报文同样不带 context/club_id，只能走串行车道配对。
+        KBEngine.Event.register("ClubAgentReqInfo",this,"OnAgentApplications");
         KBEngine.Event.register("ClubReqInfo",this,"OnBadge");
     }
     public Dispose():void {
@@ -76,8 +80,12 @@ export default class HallClubManagementApi implements ClubManagementApi {
     private parse(raw:any):any { try{return typeof raw === "string" ? JSON.parse(raw) : raw;}catch(e){return null;} }
     private context(data:any):string {return String(data && data.context || "").replace(/^[pP]@/,"");}
     public list(club:string,kind:ClubListKind,page:number,count:number):Promise<ClubPeoplePage> {
-        return this.request(club,kind,kind === "members" ? "查询_俱乐部_成员" : "查询_俱乐部_加入申请",
-            kind === "members" ? {page,count,user_id:"ALL"} : {page,count,mode:0});
+        if(kind === "members")
+            return this.request(club,kind,"查询_俱乐部_成员",{page,count,user_id:"ALL"});
+        // 申请一律按邀请码查：代理查自己码带来的申请，创建者/管理员仍走老的创建者全量列表。
+        if(this.isAgent(club))
+            return this.request(club,kind,"查询_俱乐部_代理_申请",{page,count});
+        return this.request(club,kind,"查询_俱乐部_加入申请",{page,count,mode:0});
     }
     public async act(club:string,action:ClubAction,user:string):Promise<{message?:string}> {
         const account = this.account();
@@ -86,6 +94,11 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(action === "promote") return {message:outcome.accepted ? "设置管理员请求已受理，请刷新确认" : "已设为管理员"};
         if(action === "remove") return {message:"已删除俱乐部成员"};
         if(action === "approve") {
+            // 代理只能查自己码带来的申请，没有成员列表权限，改用「受理即回」+ 列表刷新兜底。
+            if(this.isAgent(club)) {
+                this.RefreshBadges();
+                return {message:outcome && outcome.accepted ? "已同意，请刷新确认成员" : "已同意加入俱乐部"};
+            }
             // 0x500 is acceptance. Confirm this exact player through the authoritative member query.
             for(let attempt=0;attempt<3;attempt++) {
                 if(attempt) await new Promise(resolve=>setTimeout(resolve,1000));
@@ -102,13 +115,24 @@ export default class HallClubManagementApi implements ClubManagementApi {
     }
     public RefreshBadges():void {
         const a=GameDataManager.getAccount();
-        if(!a || (!a.club_make && !a.club_manage) || this.disposed)return;
+        if(!a || this.disposed)return;
+        const managedIds=(String(a.club_make||"")+","+String(a.club_manage||"")).split(",").map(x=>x.trim());
+        const agentIds=this.agentClubs();
+        if(!managedIds.some(id=>/^\d{6}$/.test(id)) && agentIds.length===0)return;
         // Use per-club list counts. Aggregate queries could emit multiple untagged JoinerList pushes.
-        const ids=(String(a.club_make||"")+","+String(a.club_manage||"")).split(",").map(x=>x.trim()).filter((x,i,all)=>/^\d{6}$/.test(x)&&all.indexOf(x)===i);
+        const ids=managedIds.filter((x,i,all)=>/^\d{6}$/.test(x)&&all.indexOf(x)===i);
         for(const club of ids) {
             if(Object.keys(this.pending).some(k=>this.pending[k].club===club && ["badges","applications"].indexOf(this.pending[k].kind)>=0) ||
                 this.applicationQueue.some(job=>job.club===club))continue;
             this.request(club,"badges","查询_俱乐部_加入申请",{page:0,count:1,mode:0})
+                .then(result=>{if(!this.disposed)this.badge(club,result.total);}).catch(()=>{});
+        }
+        // 代理：服务端没有代理视角的红点推送，主动查一次自己的待审数量。
+        for(const club of agentIds) {
+            if(ids.indexOf(club)>=0)continue;
+            if(Object.keys(this.pending).some(k=>this.pending[k].club===club && ["badges","applications"].indexOf(this.pending[k].kind)>=0) ||
+                this.applicationQueue.some(job=>job.club===club))continue;
+            this.request(club,"badges","查询_俱乐部_代理_申请",{page:0,count:1})
                 .then(result=>{if(!this.disposed)this.badge(club,result.total);}).catch(()=>{});
         }
     }
@@ -127,6 +151,13 @@ export default class HallClubManagementApi implements ClubManagementApi {
     }
     public OnMembers(raw:string):void {this.receive(raw,"members","NumberList");}
     public OnApplications(raw:string):void {this.receive(raw,"applications","JoinerList");}
+    /** ClubAgentReqInfo: {number,count,result:[ClubAgentReq...]}，无 context/club_id，靠串行车道配对。 */
+    public OnAgentApplications(raw:string):void {
+        const data=this.parse(raw);
+        if(!data)return;
+        if(!Array.isArray(data.result) && Array.isArray(data.ClubAgentReqInfo))data.result=data.ClubAgentReqInfo;
+        this.receive(data,"applications","result");
+    }
     private receive(raw:string,kind:string,field:string):void {
         const data=this.parse(raw);if(!data)return;
         const body=data.result && !Array.isArray(data.result) ? this.parse(data.result) : data;

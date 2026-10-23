@@ -1,6 +1,6 @@
 import ImageManager from "../logic/ImageManager";
 
-export type ClubRole = "owner" | "manager" | "member";
+export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications";
 export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" | "promote";
 export interface ClubContext { accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; }
@@ -54,6 +54,10 @@ export default class ClubManagementView {
     private manager(c:ClubContext = this.context):boolean {
         return !!c && !!c.id && (c.role === "owner" || c.role === "manager");
     }
+    /** 代理（持有邀请码）只能看待审申请并同意/拒绝，不能管理成员、比例和解散。 */
+    private approver(c:ClubContext = this.context):boolean {
+        return this.manager(c) || !!c && !!c.id && c.role === "agent";
+    }
     private listRoot():cc.Node { return this.at(this.kind === "members" ? "俱乐部成员弹窗" : "俱乐部申请弹窗"); }
     private panel():cc.Node { return this.at("面板",this.listRoot()); }
     private button(name:string,enabled:boolean,parent:cc.Node):void {
@@ -79,15 +83,18 @@ export default class ClubManagementView {
         const card = this.at("Main/我的/当前俱乐部");
         this.text("名称",next.id ? next.name || "俱乐部 " + next.id : "暂无俱乐部",card);
         this.text("ID",next.id ? "ID: " + next.id : "从俱乐部选择后查看信息",card);
-        this.text("身份",!next.id ? "" : next.role === "owner" ? "创建者" : next.role === "manager" ? "管理员" : "成员",card);
-        this.at("操作/管理成员",card).active = this.manager();
+        this.text("身份",!next.id ? "" : next.role === "owner" ? "创建者" : next.role === "manager" ? "管理员" : next.role === "agent" ? "代理" : "成员",card);
+        // 代理也走同一个入口，但点进去直接落在「待审申请」，看不到成员列表。
+        this.at("操作/管理成员",card).active = this.approver();
         this.at("操作/管理解散",card).active = !!next.id && next.role === "owner";
         this.at("操作/管理退出",card).active = !!next.id && next.role !== "owner";
         this.at("操作/管理收益",card).active = !!next.id && next.role === "owner";
-        const dot = this.manager() && (this.counts[next.id] || 0) > 0;
+        const dot = this.approver() && (this.counts[next.id] || 0) > 0;
         this.at("操作/管理成员/红点",card).active = dot;
         this.at("Down/我的/红点").active = dot;
         this.at("俱乐部成员弹窗/面板/管理申请/红点").active = dot;
+        // 代理没有成员列表，「返回成员」在代理视角是死按钮，直接藏掉。
+        this.at("俱乐部申请弹窗/面板/管理返回成员").active = this.manager();
         for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗"])
             this.text(name + "/面板/俱乐部信息",(next.name || "俱乐部") + "  ID: " + next.id);
     }
@@ -103,7 +110,11 @@ export default class ClubManagementView {
             ++this.version;
             this.loading = false;
             this.pending = null;
-        } else if(name === "管理成员" || name === "管理返回成员") this.open("members");
+        } else if(name === "管理成员") {
+            // 代理没有成员管理权限，入口直接进自己的待审申请。
+            this.open(this.context && this.context.role === "agent" ? "applications" : "members");
+        }
+        else if(name === "管理返回成员") this.open("members");
         else if(name === "管理申请") this.open("applications");
         else if(name === "管理上一页") { if(!this.loading && this.page > 0) this.load(this.page-1); }
         else if(name === "管理下一页") { if(!this.loading && (this.page+1)*this.pageSize < this.total) this.load(this.page+1); }
@@ -120,7 +131,8 @@ export default class ClubManagementView {
     }
 
     private open(kind:ClubListKind):void {
-        if(!this.manager() || this.busy) return;
+        if(this.busy) return;
+        if(kind === "members" ? !this.manager() : !this.approver()) return;
         this.at("俱乐部成员弹窗").active = kind === "members";
         this.at("俱乐部申请弹窗").active = kind === "applications";
         this.kind = kind;
@@ -141,7 +153,8 @@ export default class ClubManagementView {
         this.button("管理刷新",!this.loading && !this.busy,this.panel());
     }
     private async load(page:number):Promise<void> {
-        if(!this.manager() || this.busy) return;
+        if(this.busy) return;
+        if(this.kind === "members" ? !this.manager() : !this.approver()) return;
         const version = ++this.version;
         const ctx = {...this.context};
         const kind = this.kind;
@@ -222,7 +235,9 @@ export default class ClubManagementView {
     }
     private confirm(action:ClubAction,userId:string,name:string):void {
         if(this.busy || !this.context.id) return;
-        if(action !== "leave" && !this.manager()) return;
+        // 同意/拒绝只需要「能看到申请」的权限（代理即可）；其余成员管理仍限创建者/管理员。
+        const needApprover = action === "approve" || action === "reject";
+        if(action !== "leave" && !(needApprover ? this.approver() : this.manager())) return;
         if((action === "dissolve" || action === "promote") && this.context.role !== "owner") return;
         if((action === "remove" || action === "promote") && (userId === this.context.accountId || userId === this.context.ownerId)) return;
         if(action === "leave" && this.context.role === "owner") {
