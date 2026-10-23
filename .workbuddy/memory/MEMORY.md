@@ -16,6 +16,11 @@
 - 改完 Cocos 脚本想快速自检：本机无 `tsc`，用 managed node 调
   `~/.workbuddy/binaries/node/workspace/node_modules/typescript` 的
   `ts.transpileModule(src,{reportDiagnostics:true})` 只查语法（0 诊断即通过），别指望完整类型检查。
+
+## 服务器 154.37.155.17
+- **该机没有 `ss`、没有 systemd**：`ss | grep 端口` 永远回 "NOT LISTENING"，会误判服务挂了；查端口用
+  `(echo >/dev/tcp/127.0.0.1/PORT)`。三服务全靠 crontab `@reboot` 拉起，**pid 文件跨重启残留 + pid 复用
+  会让旧 `kill -0` 判断误以为在运行而永久宕机**（客服站 9-27 宕到 10-21 即此因）。详见 `SERVER-NOTES.md`。
 - **Android Studio 构建 `build/jsb-link/.../proj.android-studio` 的 Gradle project cache 必须在持久目录**
   （现为 `~/Library/Caches/qing-android-gradle-project-cache`）：工程内 `.gradle` 是软链接，`gradlew` 里另有
   `--project-cache-dir`，**两处必须指向同一路径** —— AS 不读 gradlew，它直接用 `<projectDir>/.gradle`。
