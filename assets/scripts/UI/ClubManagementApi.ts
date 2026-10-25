@@ -297,6 +297,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 clubGold:displayNumber(field(row,["club_gold"])),
                 isAgent:optionalFlag(row,["is_agent"]),
                 agentPercent:displayNumber(field(row,["percent","agent_percent"])),
+                remark:optionalText(row,["remark","club_remark","member_remark"]),
                 status:optionalText(row,["status"]),
                 teamCount:optionalText(row,["team_count"]),
                 // club_gold is the current club balance; it is not a score delta.

@@ -200,7 +200,10 @@ export default class panelMain extends UIPanelViewBase {
             const manages = account && String(account.club_manage || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
             return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,
                 role:owns ? "owner" : manages ? "manager" : this.IsClubAgentIn(id) ? "agent" : "member"};
-        },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text));
+        },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),player=>{
+            if(player && player.id)
+                UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,String(player.id)+",");
+        });
         this.clubManagement.Refresh();
         this.clubManagementApi = new HallClubManagementApi((id,count)=>this.clubManagement.SetPendingCount(id,count),
             (id)=>this.IsClubAgentIn(id),()=>this.GetClubAgentIds());
@@ -1352,6 +1355,14 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "头像" || button.node.name === "编辑资料")
         {
+            // 俱乐部成员弹窗/玩家设置弹窗内的头像由 ClubManagementView 处理，不打开个人资料编辑
+            let ancestor:cc.Node = button.node;
+            while(ancestor != null)
+            {
+                if(ancestor.name === "俱乐部成员弹窗" || ancestor.name === "俱乐部玩家设置弹窗")
+                    return;
+                ancestor = ancestor.parent;
+            }
             let editNode = this.node.getChildByName("修改个人信息2");
             editNode.active = true;
             Tool.GetChild(editNode,"昵称").getComponent(cc.EditBox).string = GameDataManager.getAccount().name;

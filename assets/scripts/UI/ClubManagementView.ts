@@ -10,6 +10,7 @@ export interface ClubContext { accountId:string; id:string; name:string; role:Cl
 export interface ClubPlayer {
     id:string; name:string; role?:string; balance?:string;
     clubGold?:string; isAgent?:boolean; agentPercent?:string; status?:string;
+    remark?:string;
     /** NumberList statistics are populated by the updated server response. */
     teamCount?:string; points?:string; online?:boolean;
     todayWin?:string; yesterdayWin?:string; totalWin?:string;
@@ -40,6 +41,8 @@ export default class ClubManagementView {
     private selectedDownline:ClubPlayer[] = [];
     private settingsTab:"member"|"downline" = "member";
     private downlineLoading:boolean = false;
+    private inputMode:"ratio"|"remark"|null = null;
+    private remarks:{[key:string]:string} = {};
     private readonly pageSize:number = 20;
 
     constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,private gift:(player:ClubPlayer)=>void = null) {}
@@ -107,7 +110,8 @@ export default class ClubManagementView {
             this.selectedDownline = [];
             this.settingsTab = "member";
             this.downlineLoading = false;
-            for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗","俱乐部操作确认","俱乐部玩家设置弹窗"]) this.active(name,false);
+            this.inputMode = null;
+            for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗","俱乐部操作确认","俱乐部玩家设置弹窗","玩家设置输入弹窗"]) this.active(name,false);
             this.clearRows();
         }
         this.context = next;
@@ -136,38 +140,47 @@ export default class ClubManagementView {
         if(["管理关闭","管理成员","管理返回成员","管理申请","管理上一页","管理下一页",
             "管理第一页","管理最后一页","管理刷新","管理查询成员","管理重置成员搜索",
             "管理退出","管理解散","管理收益","管理取消","管理确认",
-            "玩家设置关闭","玩家设置复制ID","玩家设置调整分数","玩家设置踢出俱乐部",
+            "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置调整分数","玩家设置踢出俱乐部",
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
             "玩家设置备注","玩家设置禁止游戏","玩家设置禁止账号",
-            "成员设置","成员设置非激活","下级成员","下级成员激活"].indexOf(name) < 0) return false;
+            "成员设置","成员设置非激活","下级成员","下级成员激活",
+            "玩家设置输入关闭","玩家设置输入取消","玩家设置输入确认"].indexOf(name) < 0) return false;
         this.Refresh();
         if(name === "玩家设置关闭") {
             this.active("俱乐部玩家设置弹窗",false);
             this.selectedPlayer = null;
         } else if(name === "玩家设置复制ID") {
             if(this.selectedPlayer) this.message("玩家ID：" + this.selectedPlayer.id);
+        } else if(name === "玩家设置赠送金币") {
+            if(this.selectedPlayer && this.gift) this.gift(this.selectedPlayer);
         } else if(name === "玩家设置调整分数") {
+            // Keep the legacy node callback for older prefabs; the formal V8
+            // popup now routes the visible action through panelGivePad.
             this.submitPlayerValue("adjustScore","玩家设置分数输入","请输入目标积分");
         } else if(name === "玩家设置踢出俱乐部") {
             if(this.selectedPlayer) this.confirm("remove",this.selectedPlayer.id,this.selectedPlayer.name);
         } else if(name === "玩家设置调整比例") {
-            if(this.selectedPlayer) {
-                const action:ClubAction = this.selectedPlayer.isAgent ? "changeAgentRatio" : "setAgent";
-                this.submitPlayerValue(action,"玩家设置比例输入","请输入代理比例（0-100）");
-            }
+            if(this.selectedPlayer && this.selectedPlayer.isAgent) this.openPlayerInput("ratio");
         } else if(name === "玩家设置代理开关") {
             if(this.selectedPlayer && this.selectedPlayer.isAgent)
                 this.confirm("cancelAgent",this.selectedPlayer.id,this.selectedPlayer.name);
             else if(this.selectedPlayer)
-                this.submitPlayerValue("setAgent","玩家设置比例输入","请输入代理比例（0-100）");
+                this.confirm("setAgent",this.selectedPlayer.id,this.selectedPlayer.name,"0");
         } else if(name === "玩家设置取消代理") {
             if(this.selectedPlayer) this.confirm("cancelAgent",this.selectedPlayer.id,this.selectedPlayer.name);
-        } else if(name === "玩家设置备注" || name === "玩家设置禁止游戏" || name === "玩家设置禁止账号") {
+        } else if(name === "玩家设置备注") {
+            if(this.selectedPlayer) this.openPlayerInput("remark");
+        } else if(name === "玩家设置禁止游戏" || name === "玩家设置禁止账号") {
             this.message("服务器接口暂未提供该设置");
         } else if(name === "成员设置" || name === "成员设置非激活") {
             this.showPlayerSettingsTab("member");
         } else if(name === "下级成员" || name === "下级成员激活") {
             this.showPlayerSettingsTab("downline");
+        } else if(name === "玩家设置输入关闭" || name === "玩家设置输入取消") {
+            this.inputMode = null;
+            this.active("玩家设置输入弹窗",false);
+        } else if(name === "玩家设置输入确认") {
+            this.finishPlayerInput();
         } else if(name === "管理关闭") {
             if(this.busy) return true;
             const popup = button.node && button.node.parent && button.node.parent.parent;
@@ -381,8 +394,8 @@ export default class ClubManagementView {
         this.text("玩家身份",item.isAgent ? "代理" : item.role || "成员",panel);
         this.text("玩家状态",this.status(item),panel);
         this.text("玩家积分值",this.value(item.clubGold !== undefined ? item.clubGold : item.points),panel);
-        this.text("备注值","未设置",panel);
-        this.text("比例值",item.isAgent ? item.agentPercent !== undefined ? item.agentPercent + "%" : "—" : "未开通",panel);
+        this.text("备注值",item.remark || this.remarks[this.remarkKey()] || "未设置",panel);
+        this.text("比例值",item.isAgent ? item.agentPercent !== undefined ? item.agentPercent + "%" : "0%" : "未开通",panel);
         this.text("代理开关文字",item.isAgent ? "开" : "关",panel);
         this.active("玩家设置代理开关/开",!!item.isAgent,panel);
         this.active("玩家设置代理开关/关",!item.isAgent,panel);
@@ -391,13 +404,13 @@ export default class ClubManagementView {
         if(avatarSprite) ImageManager.getInstance().BindPlayerListAvatar(item.id,avatarSprite);
         const isSelf = item.id === this.context.accountId;
         const isOwner = item.id === this.context.ownerId || isSelf && this.context.role === "owner";
-        this.button("玩家设置调整分数",this.manager() && !isOwner,panel);
+        this.button("玩家设置赠送金币",this.manager() && !isOwner,panel);
         this.button("玩家设置踢出俱乐部",this.manager() && !isSelf && !isOwner,panel);
-        this.button("玩家设置调整比例",this.canManageAgent() && !isSelf && !isOwner,panel);
+        this.button("玩家设置调整比例",this.canManageAgent() && item.isAgent && !isSelf && !isOwner,panel);
         this.button("玩家设置代理开关",this.canManageAgent() && !isSelf && !isOwner,panel);
-        // The current server documents score and proxy operations only. These
-        // controls stay visible for the competitor layout but are read-only.
-        this.button("玩家设置备注",false,panel);
+        this.button("玩家设置备注",this.manager() && !isSelf && !isOwner,panel);
+        // These two controls remain visible as reserved layout rows but have no
+        // documented server command yet.
         this.button("玩家设置禁止游戏",false,panel);
         this.button("玩家设置禁止账号",false,panel);
         this.renderDownline(panel);
@@ -406,7 +419,7 @@ export default class ClubManagementView {
     }
     private settingsMemberNodes():string[] {
         return ["备注","备注底","备注值","玩家设置备注","比例","比例底","比例值",
-            "玩家设置比例输入","玩家设置调整比例","代理","代理底","代理开关文字",
+            "玩家设置调整比例","代理","代理底","代理开关文字",
             "玩家设置代理开关"];
     }
     private showPlayerSettingsTab(tab:"member"|"downline"):void {
@@ -420,6 +433,8 @@ export default class ClubManagementView {
         this.active("成员设置非激活",!member,panel);
         this.active("下级成员",member,panel);
         this.active("下级成员激活",!member,panel);
+        this.active("成员设置选中线",member,panel);
+        this.active("下级成员选中线",!member,panel);
     }
     private async loadDownline(panel:cc.Node):Promise<void> {
         if(!this.api || !this.api.downline || !this.context || !this.context.id) return;
@@ -468,6 +483,56 @@ export default class ClubManagementView {
             this.text("玩家ID","ID: " + item.id,row);
             this.text("比例",item.agentPercent !== undefined ? item.agentPercent + "%" : "—",row);
         });
+    }
+    private remarkKey():string {
+        return (this.context && this.context.id || "") + ":" + (this.selectedPlayer && this.selectedPlayer.id || "");
+    }
+    private openPlayerInput(mode:"ratio"|"remark"):void {
+        if(!this.selectedPlayer || !this.manager()) return;
+        const modal = this.at("玩家设置输入弹窗");
+        const panel = this.at("面板",modal);
+        const input = this.at("玩家设置输入框",panel);
+        const edit = input && input.getComponent(cc.EditBox);
+        if(!modal || !panel || !edit) return;
+        this.inputMode = mode;
+        const title = mode === "ratio" ? "调整比例" : "设置备注";
+        const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" : "请输入备注内容";
+        this.text("玩家设置输入标题",title,panel);
+        this.text("玩家设置输入提示",prompt,panel);
+        this.text("提示",prompt,input);
+        edit.string = mode === "ratio" ?
+            (this.selectedPlayer.agentPercent !== undefined ? String(this.selectedPlayer.agentPercent) : "0") :
+            (this.remarks[this.remarkKey()] || "");
+        this.active("玩家设置输入弹窗",true);
+    }
+    private finishPlayerInput():void {
+        if(!this.inputMode || !this.selectedPlayer) return;
+        const mode = this.inputMode;
+        const input = this.at("玩家设置输入框",this.at("面板",this.at("玩家设置输入弹窗")));
+        const edit = input && input.getComponent(cc.EditBox);
+        const value = edit && edit.string ? edit.string.trim() : "";
+        if(mode === "ratio") {
+            const number = Number(value);
+            if(!/^\d+$/.test(value) || !Number.isInteger(number) || number < 0 || number > 100) {
+                this.message("比例必须是 0-100 的整数");
+                return;
+            }
+            const player = this.selectedPlayer;
+            this.inputMode = null;
+            this.active("玩家设置输入弹窗",false);
+            this.pending = {club:{...this.context},action:"changeAgentRatio",userId:player.id,value:String(number)};
+            this.submit();
+            return;
+        }
+        if(value.length > 120) {
+            this.message("备注不能超过120个字符");
+            return;
+        }
+        this.remarks[this.remarkKey()] = value;
+        this.text("备注值",value || "未设置",this.at("面板",this.at("俱乐部玩家设置弹窗")));
+        this.inputMode = null;
+        this.active("玩家设置输入弹窗",false);
+        this.message("备注已更新");
     }
     private submitPlayerValue(action:ClubAction,inputName:string,emptyMessage:string):void {
         const agentAction = ["setAgent","changeAgentRatio","cancelAgent"].indexOf(action) >= 0;

@@ -38,18 +38,11 @@ export default class ScrollItem extends ScrollItemBase {
             this.node.opacity = 255
         }
 
-        // 当前大厅协议中的 room_name 采用“底皮-房间号”格式，例如
-        // “1-812193”。V7 卡片按确认稿拆成“房间 812193 / 底皮 1”，
-        // game_pi 则是局数（例如 1/3），不再把 remark 的分钟值塞进局数栏。
+        // 服务端房间名是「<底皮档位>-<房号>」（如 1-448003，旧数据可能是
+        // <俱乐部名>-<档位>-<房号>），卡片必须原样显示，否则和后台/客服对房号时对不上。
+        // 底皮列单独由 game_pi 渲染，不再从房间名里拆。
         let rawRoomName = room_name == null || room_name === "" ? room_id : String(room_name);
         let displayRoomID = rawRoomName.replace(/^房间\s*/, "");
-        let bottomSkin = "";
-        let roomNameParts = displayRoomID.match(/^(\d+)-(\d+)$/);
-        if(roomNameParts != null)
-        {
-            bottomSkin = roomNameParts[1];
-            displayRoomID = roomNameParts[2];
-        }
 
         // 确认稿卡片没有旧版“地九王”角标；玩法信息仍由房间数据和
         // 进入后的规则面板保留，这里只关闭旧皮肤的叠加美术。

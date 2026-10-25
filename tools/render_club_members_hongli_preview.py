@@ -236,41 +236,46 @@ def settings_preview() -> Image.Image:
     overlay = Image.new("RGBA", canvas.size, (0, 5, 15, 218))
     canvas.alpha_composite(overlay)
     draw = ImageDraw.Draw(canvas)
-    popup = (38, 210, 674, 930)
+    popup = (38, 265, 674, 820)
     gradient_box(canvas, popup, (15, 58, 90, 252), (5, 27, 49, 252), (71, 164, 201, 255), radius=26, width=2)
 
     # Match the shared panelMsgView chrome: a centered title plaque, dark blue
     # panel body, warm gold edge and blue/gold action buttons.
-    paste(canvas, art("original_dialog_title.png"), (158, 166, 434, 92),
+    paste(canvas, art("original_dialog_title.png"), (158, 221, 434, 92),
           sliced=True, asset_name="original_dialog_title.png")
-    text(draw, (375, 212), "玩家信息", 36, IVORY, anchor="mm", stroke=1)
+    title_word = art("player_info_v8_title.png").resize((201, 52), Image.Resampling.LANCZOS)
+    canvas.alpha_composite(title_word, (274, 241))
     close = art("popup_close_exact.png").resize((56, 56), Image.Resampling.LANCZOS)
-    canvas.alpha_composite(close, (638, 184))
+    canvas.alpha_composite(close, (638, 239))
 
-    # Player identity and the two high-priority actions.
-    circle_avatar(canvas, AVATARS / "头像14.png", (126, 365), 106)
-    text(draw, (204, 319), "哈巴狗", 28, IVORY, anchor="la", stroke=1)
-    text(draw, (204, 365), "ID: 302007", 22, IVORY, anchor="la")
+    # Player identity and the two high-priority actions sit in one restrained
+    # profile card, so the modal has a clear reading order.
+    gradient_box(canvas, (62, 350, 626, 152), (18, 67, 99, 238), (8, 39, 66, 238),
+                 (45, 119, 158, 220), radius=18, width=1)
+    circle_avatar(canvas, AVATARS / "头像14.png", (126, 425), 106)
+    text(draw, (204, 386), "哈巴狗", 28, IVORY, anchor="la", stroke=1)
+    text(draw, (204, 425), "ID: 302007", 22, IVORY, anchor="la")
     copy = art("player_info_v8_copy.png").resize((25, 27), Image.Resampling.LANCZOS)
-    canvas.alpha_composite(copy, (348, 351))
-    gradient_box(canvas, (82, 423, 250, 58), (6, 27, 52, 235), (16, 61, 93, 235),
+    canvas.alpha_composite(copy, (350, 412))
+    text(draw, (204, 459), "代理", 19, (255, 237, 190, 255), anchor="la")
+    text(draw, (204, 486), "在线", 18, (122, 229, 185, 255), anchor="la")
+    gradient_box(canvas, (82, 518, 250, 58), (6, 27, 52, 235), (16, 61, 93, 235),
                  (226, 189, 112, 230), radius=28, width=2)
-    text(draw, (108, 452), "积分", 20, MUTED, anchor="lm")
-    text(draw, (205, 452), "10", 29, NUMBER, anchor="mm", stroke=1)
-    dialog_button(canvas, (466, 314, 202, 66), "调整分数", size=21)
-    dialog_button(canvas, (466, 392, 202, 66), "踢出俱乐部", size=21, gold=True)
+    text(draw, (108, 547), "积分", 20, MUTED, anchor="lm")
+    text(draw, (205, 547), "10", 29, NUMBER, anchor="mm", stroke=1)
+    dialog_button(canvas, (466, 383, 170, 58), "赠送", size=22)
+    dialog_button(canvas, (466, 453, 170, 58), "踢出俱乐部", size=20, gold=True)
 
-    # Minimal text tabs keep the common popup palette without adding another
-    # framed panel on top of the clean body.
-    text(draw, (210, 549), "成员设置", 25, IVORY, anchor="mm", stroke=1)
-    draw.line((93, 581, 327, 581), fill=(224, 188, 112, 235), width=3)
-    text(draw, (505, 549), "下级成员", 25, (143, 177, 199, 255), anchor="mm")
-    draw.line((395, 581, 615, 581), fill=(58, 107, 139, 170), width=1)
+    # Tabs are labels with one active underline; button chrome belongs to
+    # actions and settings, not navigation.
+    text(draw, (221, 638), "成员设置", 24, IVORY, anchor="mm", stroke=1)
+    draw.line((92, 671, 350, 671), fill=(224, 188, 112, 235), width=3)
+    text(draw, (534, 638), "下级成员", 24, (143, 177, 199, 255), anchor="mm")
 
-    setting_row(canvas, (62, 616, 626, 82), "备注", "未设置", "备注")
-    setting_row(canvas, (62, 714, 626, 82), "比例", "100%", "调整")
+    setting_row(canvas, (62, 692, 626, 82), "备注", "未设置", "备注")
+    setting_row(canvas, (62, 790, 626, 82), "比例", "100%", "调整")
 
-    x, y, w, h = (62, 812, 626, 82)
+    x, y, w, h = (62, 888, 626, 82)
     gradient_box(canvas, (x, y, w, h), (18, 67, 99, 238), (8, 39, 66, 238),
                  (45, 119, 158, 220), radius=14, width=1)
     text(draw, (x + 30, y + h / 2), "开通代理", 22, IVORY, anchor="lm", stroke=1)

@@ -103,6 +103,13 @@ def set_button_art(index, text_size=18):
             style_label(ref["__id__"], size=text_size, color=(255, 238, 197), align=1)
 
 
+def disable_sprite(index):
+    for ref in A[index]["_components"]:
+        component = A[ref["__id__"]]
+        if component["__type__"] == "cc.Sprite":
+            component["_enabled"] = False
+
+
 def has_child(parent, name):
     return any(A[ref["__id__"]]["_name"] == name for ref in A[parent]["_children"])
 
@@ -130,6 +137,14 @@ def add_sprite_once(parent, name, art, x, y, width, height, sliced=True):
 def child_index(parent, name):
     return next((ref["__id__"] for ref in A[parent]["_children"]
                  if A[ref["__id__"]]["_name"] == name), None)
+
+
+def move_child_before(parent, child, before):
+    refs = A[parent]["_children"]
+    child_ref = next(ref for ref in refs if ref["__id__"] == child)
+    refs.remove(child_ref)
+    before_at = next(i for i, ref in enumerate(refs) if ref["__id__"] == before)
+    refs.insert(before_at, child_ref)
 
 
 def button_component(index):
@@ -407,16 +422,13 @@ if not button_component(avatar):
 
 # Keep pagination in the established bottom-safe area, using the V8 first/last
 # page icons from the competitor layout.
-for node_name, x, y, width, height in [
-    ("页码", 0, -563, 150, 44),
-    ("管理刷新", 0, -633, 180, 44),
-]:
-    index = locate(node_name)
-    set_geometry(index, x, y, width, height)
-    if node_name == "管理刷新":
-        set_button_art(index, 19)
-    else:
-        style_label(index, size=23, color=(255, 246, 222), align=1)
+page_index = locate("页码")
+set_geometry(page_index, 0, -563, 150, 44)
+style_label(page_index, size=23, color=(255, 246, 222), align=1)
+member_refresh = child_index(panel, "管理刷新")
+if member_refresh is not None:
+    set_geometry(member_refresh, 0, -633, 180, 44)
+    set_button_art(member_refresh, 19)
 
 add_icon_button_once(panel, "管理第一页", "agent_v8_page_first", -285, -563, 64, 64)
 add_icon_button_once(panel, "管理上一页", "agent_v8_page_prev", -200, -563, 64, 64)
@@ -425,7 +437,8 @@ add_icon_button_once(panel, "管理最后一页", "agent_v8_page_last", 285, -56
 for node_name, x in [("页码", 0), ("管理第一页", -285), ("管理上一页", -200),
                      ("管理下一页", 200), ("管理最后一页", 285)]:
     responsive_widget(locate(node_name), 20, bottom=72, horizontal_center=x)
-responsive_widget(locate("管理刷新"), 20, bottom=12, horizontal_center=0)
+if member_refresh is not None:
+    responsive_widget(member_refresh, 20, bottom=12, horizontal_center=0)
 
 
 def add_node_once(parent, name, x, y, width, height, active=True):
@@ -457,9 +470,8 @@ def add_settings_row(settings_panel, name, caption, y):
 
 
 # Player settings is a formal V8 modal, not a runtime-created layout. The
-# documented score/proxy operations are wired in ClubManagementView; the
-# competitor-only remark/ban rows remain visible but disabled until the server
-# exposes commands for them.
+# documented proxy operations are wired in ClubManagementView; remark editing
+# is a local input surface until a member-remark server command is documented.
 settings_root = add_node_once(1, "俱乐部玩家设置弹窗", 0, 0, 750, 1334, active=False)
 ensure_widget(settings_root)
 mask = add_sprite_once(settings_root, "遮罩", "nav_bar", 0, 0, 750, 1334, False)
@@ -468,50 +480,91 @@ A[mask]["_opacity"] = 205
 ensure_widget(mask)
 if not has_component(mask, "cc.BlockInputEvents"):
     comp(mask, "cc.BlockInputEvents")
-settings_panel = add_sprite_once(settings_root, "面板", "agent_v8_popup", 0, -32, 674, 930, True)
-title_art = add_sprite_once(settings_panel, "标题", "original_dialog_title", 0, -423, 434, 92, True)
-add_label_once(settings_panel, "玩家信息标题", "玩家信息", 0, -423, 360, 60, 36,
+settings_panel = add_sprite_once(settings_root, "面板", "agent_v8_popup", 0, 0, 674, 820, True)
+title_art = add_sprite_once(settings_panel, "标题", "original_dialog_title", 0, 365, 434, 92, True)
+title_word_art = add_sprite_once(settings_panel, "玩家信息标题美术字", "player_info_v8_title", 0, 365, 201, 52, False)
+add_label_once(settings_panel, "玩家信息标题", "玩家信息", 0, 365, 360, 60, 36,
                (239, 247, 255), 1)
-close_settings = add_icon_button_once(settings_panel, "玩家设置关闭", "popup_close_exact", 290, -423, 56, 56)
+title_label = child_index(settings_panel, "玩家信息标题")
+if title_label is not None:
+    A[title_label]["_active"] = False
+close_settings = add_icon_button_once(settings_panel, "玩家设置关闭", "popup_close_exact", 290, 365, 56, 56)
 
-avatar_frame = add_sprite_once(settings_panel, "头像框", "player_info_v8_avatar_frame", -249, -270, 132, 132, False)
-avatar_settings = add_sprite_once(settings_panel, "头像", "club_members_v8", -249, -270, 104, 104, False)
-add_label_once(settings_panel, "玩家姓名", "玩家昵称", -171, -309, 220, 40, 28,
+profile_card = add_sprite_once(settings_panel, "玩家资料卡", "player_info_v8_stats", 0, 210, 626, 152, True)
+avatar_frame = add_sprite_once(settings_panel, "头像框", "player_info_v8_avatar_frame", -250, 210, 132, 132, False)
+avatar_settings = add_sprite_once(settings_panel, "头像", "club_members_v8", -250, 210, 104, 104, False)
+move_child_before(settings_panel, profile_card, avatar_frame)
+add_label_once(settings_panel, "玩家姓名", "玩家昵称", -35, 249, 200, 40, 28,
                (239, 247, 255), 0)
-add_label_once(settings_panel, "玩家ID", "ID: 000000", -171, -270, 210, 34, 22,
+add_label_once(settings_panel, "玩家ID", "ID: 000000", -35, 210, 160, 34, 22,
                (202, 231, 243), 0)
-add_icon_button_once(settings_panel, "玩家设置复制ID", "player_info_v8_copy", -16, -270, 32, 34)
-add_label_once(settings_panel, "玩家身份", "成员", -171, -235, 190, 30, 19,
+add_icon_button_once(settings_panel, "玩家设置复制ID", "player_info_v8_copy", 72, 210, 32, 34)
+add_label_once(settings_panel, "玩家身份", "成员", -35, 175, 170, 30, 19,
                (255, 237, 190), 0)
-add_label_once(settings_panel, "玩家状态", "在线", -171, -205, 190, 28, 18,
+add_label_once(settings_panel, "玩家状态", "在线", -35, 145, 170, 28, 18,
                (122, 229, 185), 0)
-add_sprite_once(settings_panel, "积分底", "player_info_v8_stats", -168, -183, 250, 58, True)
-add_label_once(settings_panel, "玩家积分值", "—", -168, -183, 220, 36, 24,
+add_sprite_once(settings_panel, "积分底", "player_info_v8_stats", -95, 100, 230, 58, True)
+add_label_once(settings_panel, "积分标签", "积分", -185, 100, 64, 34, 20,
+               (202, 231, 243), 0)
+add_label_once(settings_panel, "玩家积分值", "—", -68, 100, 130, 36, 24,
                (255, 231, 112), 0)
-add_editbox_once(settings_panel, "玩家设置分数输入", "输入目标积分", 91, -350, 202, 42, 12)
-add_v8_button_once(settings_panel, "玩家设置调整分数", "调整分数", 91, -292, 202, 58,
-                   "original_dialog_button_blue", 19)
-add_v8_button_once(settings_panel, "玩家设置踢出俱乐部", "踢出俱乐部", 91, -225, 202, 58,
-                   "original_dialog_button_gold", 19)
+score_input = child_index(settings_panel, "玩家设置分数输入")
+if score_input is not None:
+    A[score_input]["_active"] = False
 
-member_tab = add_v8_button_once(settings_panel, "成员设置", "成员设置", -165, -86, 300, 78,
-                                "original_dialog_button_blue", 25)
-member_tab_inactive = add_v8_button_once(settings_panel, "成员设置非激活", "成员设置", -165, -86, 300, 78,
-                                         "player_info_v8_stats", 25)
-lower_tab = add_label_once(settings_panel, "下级成员", "下级成员", 130, -86, 230, 44, 25,
+# Gift amount/password are collected by the existing panelGivePad. Keeping
+# only the action here prevents a second input from colliding with the profile
+# block and makes the popup read as one focused player action surface.
+old_score_button = child_index(settings_panel, "玩家设置调整分数")
+if old_score_button is not None:
+    A[old_score_button]["_name"] = "玩家设置赠送金币"
+gift_button = add_v8_button_once(settings_panel, "玩家设置赠送金币", "赠送", 175, 245, 170, 58,
+                                 "original_dialog_button_blue", 22)
+gift_text = child_index(gift_button, "文字")
+if gift_text is not None:
+    style_label(gift_text, size=22, color=(239, 247, 255), align=1, text="赠送")
+kick_button = add_v8_button_once(settings_panel, "玩家设置踢出俱乐部", "踢出俱乐部", 175, 175, 170, 58,
+                                 "original_dialog_button_gold", 20)
+kick_text = child_index(kick_button, "文字")
+if kick_text is not None:
+    style_label(kick_text, size=20, color=(18, 48, 76), align=1, text="踢出俱乐部")
+
+member_tab = add_v8_button_once(settings_panel, "成员设置", "成员设置", -165, 28, 278, 64,
+                                "player_info_v8_button", 22)
+disable_sprite(member_tab)
+member_tab_text = child_index(member_tab, "文字")
+if member_tab_text is not None:
+    style_label(member_tab_text, size=24, color=(255, 239, 197), align=1, text="成员设置")
+member_tab_inactive = add_v8_button_once(settings_panel, "成员设置非激活", "成员设置", -165, 28, 278, 64,
+                                         "player_info_v8_stats", 22)
+disable_sprite(member_tab_inactive)
+member_inactive_text = child_index(member_tab_inactive, "文字")
+if member_inactive_text is not None:
+    style_label(member_inactive_text, size=24, color=(143, 177, 199), align=1, text="成员设置")
+downline_inactive = add_sprite_once(settings_panel, "下级成员底", "player_info_v8_stats", 130, 28, 278, 64, True)
+disable_sprite(downline_inactive)
+A[downline_inactive]["_active"] = False
+lower_tab = add_label_once(settings_panel, "下级成员", "下级成员", 130, 28, 278, 64, 22,
                            (143, 177, 199), 1)
 if not button_component(lower_tab):
     comp(lower_tab, "cc.Button", clickEvents=[])
     A[-1]["_N$target"] = None
-lower_tab_active = add_v8_button_once(settings_panel, "下级成员激活", "下级成员", 130, -86, 230, 78,
-                                      "original_dialog_button_blue", 25)
+lower_tab_active = add_v8_button_once(settings_panel, "下级成员激活", "下级成员", 130, 28, 278, 64,
+                                      "player_info_v8_button", 22)
+disable_sprite(lower_tab_active)
+lower_tab_active_text = child_index(lower_tab_active, "文字")
+if lower_tab_active_text is not None:
+    style_label(lower_tab_active_text, size=24, color=(255, 239, 197), align=1, text="下级成员")
+member_underline = add_sprite_once(settings_panel, "成员设置选中线", "agent_v8_rule_horizontal", -165, -14, 220, 3, False)
+downline_underline = add_sprite_once(settings_panel, "下级成员选中线", "agent_v8_rule_horizontal", 130, -14, 220, 3, False)
+A[downline_underline]["_active"] = False
 for tab_index in (member_tab_inactive, lower_tab_active):
     A[tab_index]["_active"] = False
 
 # The lower tab has a real, clean content surface. Its row template is hidden
 # in the prefab and cloned by ClubManagementView after ClubAgentInfo arrives.
 downline_list = add_sprite_once(settings_panel, "玩家设置下级列表", "player_info_v8_stats",
-                                0, 105, 626, 300, True)
+                                0, -160, 626, 300, True)
 A[downline_list]["_active"] = False
 add_label_once(downline_list, "下级成员空状态", "暂无下级成员", 0, 0, 460, 46, 24,
                (195, 225, 236), 1)
@@ -525,28 +578,29 @@ add_label_once(downline_template, "玩家ID", "ID: 000000", 25, 0, 170, 34, 18,
 add_label_once(downline_template, "比例", "0%", 190, 0, 90, 34, 20,
                (255, 231, 112), 1)
 
-add_settings_row(settings_panel, "备注", "备注", 22)
-add_label_once(settings_panel, "备注值", "未设置", -62, 22, 250, 38, 22,
+add_settings_row(settings_panel, "备注", "备注", -70)
+add_label_once(settings_panel, "备注值", "未设置", -62, -70, 250, 38, 22,
                (222, 240, 244), 0)
-add_v8_button_once(settings_panel, "玩家设置备注", "备注", 229, 22, 126, 54,
+add_v8_button_once(settings_panel, "玩家设置备注", "备注", 229, -70, 126, 54,
                    "original_dialog_button_blue", 18)
 
-add_settings_row(settings_panel, "比例", "比例", 120)
-add_label_once(settings_panel, "比例值", "未开通", -62, 120, 180, 38, 22,
+add_settings_row(settings_panel, "比例", "比例", -156)
+add_label_once(settings_panel, "比例值", "未开通", -62, -156, 180, 38, 22,
                (222, 240, 244), 0)
-add_editbox_once(settings_panel, "玩家设置比例输入", "0-100", 74, 120, 92, 42, 3)
-add_v8_button_once(settings_panel, "玩家设置调整比例", "调整", 229, 120, 126, 54,
+ratio_input = add_editbox_once(settings_panel, "玩家设置比例输入", "0-100", 74, -156, 92, 42, 3)
+A[ratio_input]["_active"] = False
+add_v8_button_once(settings_panel, "玩家设置调整比例", "调整", 229, -156, 126, 54,
                    "original_dialog_button_blue", 18)
 
-add_settings_row(settings_panel, "代理", "开通代理", 218)
-add_label_once(settings_panel, "代理开关文字", "关", 172, 218, 52, 30, 20,
+add_settings_row(settings_panel, "代理", "开通代理", -242)
+add_label_once(settings_panel, "代理开关文字", "关", 172, -242, 52, 30, 20,
                (222, 240, 244), 1)
-add_toggle_button_once(settings_panel, "玩家设置代理开关", 240, 218)
+add_toggle_button_once(settings_panel, "玩家设置代理开关", 240, -242)
 
-add_settings_row(settings_panel, "禁止游戏", "禁止游戏", 316)
-add_toggle_button_once(settings_panel, "玩家设置禁止游戏", 240, 316)
-add_settings_row(settings_panel, "禁止账号", "禁止账号", 414)
-add_toggle_button_once(settings_panel, "玩家设置禁止账号", 240, 414)
+add_settings_row(settings_panel, "禁止游戏", "禁止游戏", -316)
+add_toggle_button_once(settings_panel, "玩家设置禁止游戏", 240, -316)
+add_settings_row(settings_panel, "禁止账号", "禁止账号", -414)
+add_toggle_button_once(settings_panel, "玩家设置禁止账号", 240, -414)
 for toggle_name in ["玩家设置代理开关", "玩家设置禁止游戏", "玩家设置禁止账号"]:
     toggle = child_index(settings_panel, toggle_name)
     if toggle is not None:
@@ -557,14 +611,36 @@ for toggle_name in ["玩家设置代理开关", "玩家设置禁止游戏", "玩
         if off_node is not None:
             A[off_node]["_active"] = True
 
-# The competitor layout currently omits these unsupported operations. Keep the
-# old nodes serialized for callback compatibility, but remove both rows from
-# the visible formal design until the server exposes their commands.
+# Keep the unsupported ban rows serialized for callback compatibility, but
+# remove them from the visible formal design until the server exposes commands.
 for hidden_name in ["禁止游戏", "禁止游戏底", "玩家设置禁止游戏",
                     "禁止账号", "禁止账号底", "玩家设置禁止账号"]:
     hidden = child_index(settings_panel, hidden_name)
     if hidden is not None:
         A[hidden]["_active"] = False
+
+# Compact input modal for ratio and remark editing. It is a formal Prefab
+# surface so the runtime controller only changes copy, state and callbacks.
+input_root = add_node_once(1, "玩家设置输入弹窗", 0, 0, 750, 1334, active=False)
+ensure_widget(input_root)
+input_mask = add_sprite_once(input_root, "遮罩", "nav_bar", 0, 0, 750, 1334, False)
+A[input_mask]["_color"].update(r=0, g=7, b=16, a=255)
+A[input_mask]["_opacity"] = 220
+ensure_widget(input_mask)
+if not has_component(input_mask, "cc.BlockInputEvents"):
+    comp(input_mask, "cc.BlockInputEvents")
+input_panel = add_sprite_once(input_root, "面板", "agent_v8_popup", 0, 0, 560, 420, True)
+input_title = add_sprite_once(input_panel, "标题", "original_dialog_title", 0, 145, 360, 76, True)
+add_label_once(input_panel, "玩家设置输入标题", "设置", 0, 145, 300, 48, 30,
+               (239, 247, 255), 1)
+add_icon_button_once(input_panel, "玩家设置输入关闭", "popup_close_exact", 235, 145, 50, 50)
+add_label_once(input_panel, "玩家设置输入提示", "请输入内容", 0, 83, 440, 34, 19,
+               (202, 231, 243), 1)
+add_editbox_once(input_panel, "玩家设置输入框", "请输入内容", 0, 15, 420, 60, 120)
+add_v8_button_once(input_panel, "玩家设置输入取消", "取消", -105, -92, 180, 56,
+                   "original_dialog_button_blue", 20)
+add_v8_button_once(input_panel, "玩家设置输入确认", "确定", 105, -92, 180, 56,
+                   "original_dialog_button_gold", 20)
 
 PREFAB.write_text(json.dumps(A, ensure_ascii=False, indent=2) + "\n")
 print("V8 club member card refinement written")
