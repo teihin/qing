@@ -52,6 +52,30 @@ func TestNormalizeGameRegistrationSupportsDocumentAliases(t *testing.T) {
 	}
 }
 
+func TestNormalizeGameRegistrationAllowsMissingInvitationForClubMode(t *testing.T) {
+	got, err := normalizeGameRegistration(gameRegistrationRequest{
+		Nickname:    "玩家",
+		LoginName:   "9001011",
+		Password:    "111111",
+		AvatarIndex: "1",
+	})
+	if err != nil {
+		t.Fatalf("club registration without invitation should normalize: %v", err)
+	}
+	if got.InvitationCode != "" {
+		t.Fatalf("invitation code = %q, want empty", got.InvitationCode)
+	}
+}
+
+func TestRegistrationInvitationRequired(t *testing.T) {
+	if registrationInvitationRequired("club") {
+		t.Fatal("club mode must allow a missing invitation code")
+	}
+	if !registrationInvitationRequired("standard") {
+		t.Fatal("standard mode must require an invitation code")
+	}
+}
+
 func TestNormalizeGameRegistrationRejectsInvalidInput(t *testing.T) {
 	tests := []gameRegistrationRequest{
 		{InvitationCode: "12345", Nickname: "玩家", LoginName: "9001011", Password: "111111"},

@@ -4,6 +4,7 @@ import GpsManager from "./GpsManager";
 import ConfigManager from "./ConfigManager";
 import QueueMatchManager from "./QueueMatchManager";
 import WebSceneLoader from "../common/WebSceneLoader";
+import { resolveRoomClubId, normalizeRoomClubId, withRoomClubId } from "./RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -18,6 +19,7 @@ export interface RoomInviteData {
     minBuyIn:number;
     currentPlayers:number;
     maxPlayers:number;
+    clubId?:string;
     text:string;
     receivedAt:number;
     expiresAt:number;
@@ -322,7 +324,7 @@ export default class RoomInviteManager extends cc.Component {
         KBEngine.Event.fire("RoomInviteStateChanged");
     }
 
-    public sendInvite(roomType:string, roomID:any, bottom:string, minBuyIn:number, currentPlayers:number, maxPlayers:number):boolean
+    public sendInvite(roomType:string, roomID:any, bottom:string, minBuyIn:number, currentPlayers:number, maxPlayers:number, clubId:string = ""):boolean
     {
         if(!this.ensureAccountState())
             return false;
@@ -341,9 +343,10 @@ export default class RoomInviteManager extends cc.Component {
         let count = Math.max(0, Math.floor(Number(currentPlayers) || 0));
         let max = Math.max(count, Math.floor(Number(maxPlayers) || 0));
         let displayText = inviterName + "邀请你加入房间" + numericRoomID.toString();
+        const inviteClubId = normalizeRoomClubId(clubId) || resolveRoomClubId(account, "", true);
         let content = [
             "ROOM_INVITE",
-            "V2",
+            "V3",
             roomType || "Custom",
             numericRoomID.toString(),
             inviterID,
@@ -352,6 +355,7 @@ export default class RoomInviteManager extends cc.Component {
             minimumBuyIn.toString(),
             count.toString(),
             max.toString(),
+            inviteClubId,
             encodeURIComponent(displayText)
         ].join("|");
 
@@ -389,6 +393,27 @@ export default class RoomInviteManager extends cc.Component {
     {
         let parts = content.split("|");
         let now = Date.now();
+        if(parts.length >= 12 && parts[0] == "ROOM_INVITE" && parts[1] == "V3")
+        {
+            let roomID = Number(parts[3]);
+            let minBuyIn = Number(parts[7]);
+            if(!isFinite(roomID) || roomID <= 0 || !isFinite(minBuyIn) || minBuyIn <= 0)
+                return null;
+            return {
+                roomType: parts[2] || "Custom",
+                roomID: roomID,
+                inviterID: parts[4] || "",
+                inviterName: this.safeDecode(parts[5]) || "牌友",
+                bottom: this.safeDecode(parts[6]) || "--",
+                minBuyIn: minBuyIn,
+                currentPlayers: Math.max(0, Math.floor(Number(parts[8]) || 0)),
+                maxPlayers: Math.max(0, Math.floor(Number(parts[9]) || 0)),
+                clubId: normalizeRoomClubId(parts[10]),
+                text: this.safeDecode(parts.slice(11).join("|")),
+                receivedAt: now,
+                expiresAt: now + RoomInviteManager.RECEIVE_TTL_MS
+            };
+        }
         if(parts.length >= 11 && parts[0] == "ROOM_INVITE" && parts[1] == "V2")
         {
             let roomID = Number(parts[3]);
@@ -694,7 +719,9 @@ export default class RoomInviteManager extends cc.Component {
             return;
         }
         UIManager.getInstance().showPanel("panelLoading", ShowPanelMode.Top);
-        account.reqEnterRoom(roomType, Number(invite.roomID), "{{\"special_rule\": \"观战\"}}");
+        const clubId = resolveRoomClubId(account, invite.clubId);
+        account.reqEnterRoom(roomType, Number(invite.roomID),
+            withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
     }
 
     private beginRoomNavigation(invite:RoomInviteData, roomType:any)
@@ -764,7 +791,9 @@ export default class RoomInviteManager extends cc.Component {
             }
             this.navigationPhase = "entering";
             this.navigationDeadline = Date.now() + 15000;
-            account.reqEnterRoom(this.navigationInvite.roomType, Number(this.navigationInvite.roomID), "{{\"special_rule\": \"观战\"}}");
+            const clubId = resolveRoomClubId(account, this.navigationInvite.clubId);
+            account.reqEnterRoom(this.navigationInvite.roomType, Number(this.navigationInvite.roomID),
+                withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
         }, ()=>generation == this.navigationGeneration && this.navigationPhase == "transition");
         if(!started)
             this.failRoomNavigation("快速换房场景正在加载，请稍后重试");

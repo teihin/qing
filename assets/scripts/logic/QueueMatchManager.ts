@@ -1,6 +1,7 @@
 import UIManager from "../common/UIManager";
 import { ShowPanelMode } from "../common/GameDef";
 import WebSceneLoader from "../common/WebSceneLoader";
+import { resolveRoomClubId, normalizeRoomClubId, withRoomClubId } from "./RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -70,6 +71,7 @@ export default class QueueMatchManager extends cc.Component {
     private assignFailCount:number = 0;
     private queueId:string = "";
     private targetRoomID:number = 0;
+    private targetRoomClubID:string = "";
     private targetSite:number = -1;
     private leftSeconds:number = 0;
     private message:string = "";
@@ -751,6 +753,7 @@ export default class QueueMatchManager extends cc.Component {
         this.status = "assigning";
         this.queueId = queueId;
         this.targetRoomID = roomID;
+        this.targetRoomClubID = normalizeRoomClubId(payload.club_id || payload.clubId);
         this.targetSite = site;
         let hasLeftSeconds = payload.left_seconds != null;
         this.leftSeconds = this.safeNumber(payload.left_seconds, this.safeNumber(payload.timeout, 0));
@@ -762,6 +765,8 @@ export default class QueueMatchManager extends cc.Component {
         let account = this.getAccount();
         if(account == null)
             return;
+        if(!this.targetRoomClubID)
+            this.targetRoomClubID = resolveRoomClubId(account, "", true);
         let currentRoomID = Number(account.roomID);
         let generation = ++this.switchGeneration;
         this.armSwitchWatchdog(generation);
@@ -862,7 +867,9 @@ export default class QueueMatchManager extends cc.Component {
             this.failTargetRoom("游戏连接已断开");
             return;
         }
-        account.reqEnterRoom("Custom", this.targetRoomID, "{{\"special_rule\": \"观战\"}}");
+        const clubId = this.targetRoomClubID || resolveRoomClubId(account, "", true);
+        account.reqEnterRoom("Custom", this.targetRoomID,
+            withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
     }
 
     private onEnterRoom(nCode:number, nRoomID:number)

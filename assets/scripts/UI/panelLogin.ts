@@ -14,7 +14,6 @@ var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
 
 interface RegisterFormData {
-    invitationCode:string;
     nickname:string;
     loginName:string;
     password:string;
@@ -165,7 +164,6 @@ export default class panelLogin extends UIPanelViewBase {
         this._registerStatus = Tool.GetChild(this._registerDialog,"注册状态").getComponent(cc.Label);
         this._registerStatusBackground = Tool.GetChild(this._registerDialog,"V7注册动态状态底");
         this._registerStatusIcon = Tool.GetChild(this._registerDialog,"V7注册状态图标");
-        this._registerInputs["invitationCode"] = Tool.GetChild(this._registerDialog,"邀请码/输入").getComponent(cc.EditBox);
         this._registerInputs["nickname"] = Tool.GetChild(this._registerDialog,"昵称/输入").getComponent(cc.EditBox);
         this._registerInputs["loginName"] = Tool.GetChild(this._registerDialog,"账号/输入").getComponent(cc.EditBox);
         this._registerInputs["password"] = Tool.GetChild(this._registerDialog,"密码/输入").getComponent(cc.EditBox);
@@ -270,9 +268,7 @@ export default class panelLogin extends UIPanelViewBase {
     {
         let editBox = this._registerInputs[key];
         let filtered = editBox.string;
-        if(key === "invitationCode")
-            filtered = filtered.replace(/[^0-9]/g,"");
-        else if(key === "nickname")
+        if(key === "nickname")
             filtered = filtered.replace(/[^A-Za-z0-9\u3400-\u4DBF\u4E00-\u9FFF]/g,"");
         else if(key === "loginName")
             filtered = filtered.replace(/[^A-Za-z0-9]/g,"");
@@ -493,7 +489,6 @@ export default class panelLogin extends UIPanelViewBase {
 
         this.blurRegisterInputs();
         let data:RegisterFormData = {
-            invitationCode:this._registerInputs["invitationCode"].string.trim(),
             nickname:this._registerInputs["nickname"].string.trim(),
             loginName:this._registerInputs["loginName"].string.trim(),
             password:this._registerInputs["password"].string,
@@ -502,11 +497,6 @@ export default class panelLogin extends UIPanelViewBase {
             antiTheftEnabled:this._registerAntiTheftToggle.isChecked
         };
 
-        if(!/^\d{6}$/.test(data.invitationCode))
-        {
-            this.showRegisterError("邀请码必须是6位数字",this._registerInputs["invitationCode"]);
-            return;
-        }
         if(data.nickname.length < 1 || data.nickname.length > 32)
         {
             this.showRegisterError("昵称需为1–32个字符",this._registerInputs["nickname"]);
@@ -598,12 +588,11 @@ export default class panelLogin extends UIPanelViewBase {
     {
         this._registerStatus.string = message;
         this._registerStatus.node.color = isHighlight ? new cc.Color(249,226,181,255) : new cc.Color(236,202,149,255);
-        let useApprovedDefault = message === "请完整填写注册资料" && !isHighlight;
-        this._registerStatus.node.active = !useApprovedDefault;
+        this._registerStatus.node.active = true;
         if(this._registerStatusBackground != null)
-            this._registerStatusBackground.active = !useApprovedDefault;
+            this._registerStatusBackground.active = true;
         if(this._registerStatusIcon != null)
-            this._registerStatusIcon.active = !useApprovedDefault;
+            this._registerStatusIcon.active = true;
     }
 
     private requestRegister(data:RegisterFormData)
@@ -668,7 +657,6 @@ export default class panelLogin extends UIPanelViewBase {
         request.timeout = 12000;
         request.setRequestHeader("Content-Type","application/json");
         request.send(JSON.stringify({
-            invitationCode:data.invitationCode,
             nickname:data.nickname,
             loginName:data.loginName,
             password:data.password,

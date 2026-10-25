@@ -144,15 +144,23 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	upperChain, validInvitation, err := s.registrationInvitationUpperChain(r.Context(), registration.InvitationCode)
-	if err != nil {
-		s.logger.Error("validate game registration invitation", "error", err)
-		writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "暂时无法验证邀请码，请稍后再试")
+	if registrationInvitationRequired(s.cfg.GameMode) && registration.InvitationCode == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REGISTRATION", "邀请码必须是 6 位数字")
 		return
 	}
-	if !validInvitation {
-		writeError(w, http.StatusBadRequest, "INVALID_INVITATION_CODE", "邀请码无效，请核对后重试")
-		return
+	upperChain := registrationUpperChain{}
+	if registration.InvitationCode != "" {
+		var validInvitation bool
+		upperChain, validInvitation, err = s.registrationInvitationUpperChain(r.Context(), registration.InvitationCode)
+		if err != nil {
+			s.logger.Error("validate game registration invitation", "error", err)
+			writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "暂时无法验证邀请码，请稍后再试")
+			return
+		}
+		if !validInvitation {
+			writeError(w, http.StatusBadRequest, "INVALID_INVITATION_CODE", "邀请码无效，请核对后重试")
+			return
+		}
 	}
 
 	registrationConn, err := s.db.Conn(r.Context())
@@ -307,7 +315,7 @@ func normalizeGameRegistration(input gameRegistrationRequest) (normalizedGameReg
 	if registration.AvatarIndex == "" {
 		registration.AvatarIndex = "1"
 	}
-	if !isSixDigitCode(registration.InvitationCode) {
+	if registration.InvitationCode != "" && !isSixDigitCode(registration.InvitationCode) {
 		return normalizedGameRegistration{}, errors.New("邀请码必须是 6 位数字")
 	}
 	if !isRegistrationLoginName(registration.LoginName) {
@@ -348,6 +356,10 @@ func normalizeGameRegistration(input gameRegistrationRequest) (normalizedGameReg
 		registration.DevicePlatform = input.DevicePlatform
 	}
 	return registration, nil
+}
+
+func registrationInvitationRequired(gameMode string) bool {
+	return strings.EqualFold(strings.TrimSpace(gameMode), "standard")
 }
 
 func registrationSuccessMessage(antiTheftEnabled bool) string {

@@ -7,6 +7,7 @@
 - 项目为 Cocos Creator 2.4.13、8 座四川扑克“扯弦/丁二黄”，不是牌九。历史设计分辨率为 960×640、fitHeight=true；最新页面布局要再核对实际场景，不能据此覆盖 V7 竖屏配置。
 - 正常启动：`login.fire → StartGameManager → GameDataManager → panelUpdate → panelLogin → panelMain → drh8.fire`。`login - 001.fire` 是测试/备用场景。`settings/project.json` 和 `settings/builder.json` 的目标需在构建前重新确认。
 - 脚本入口：`assets/scripts/GameDataManager.ts`（会话、登录、心跳、重连和导航）；`common/UIManager.ts`（动态 UI）；`UI/panelMain.ts`（大厅）；`UI/panelGameView.ts`（牌桌）；`logic/DrhLogicMgr.ts`（全房状态）；`logic/DrhPlayerLogic.ts`（座位）；`logic/DrhNameManager.ts`（牌型）；`kbe_scripts/kbengine.js` 和 `Account.js`（协议）；`mobile/MobileManager.ts`（原生桥）。
+- 俱乐部房进房：所有 `reqEnterRoom` 入口都应通过 `assets/scripts/logic/RoomClubContext.ts` 写入 `roomSetting.club_id`。房间列表点击使用当前列表俱乐部；断线恢复优先读取当前房间 `roomSetting`；邀请和排队优先使用消息携带的俱乐部，缺失时才回退到账号已选俱乐部。`club_id` 是分账依据，不能只因服务端允许进房就省略。
 - **服务端权威**：客户端展示与发送操作，不能自行决定胜负、下注合法性、金币、VIP、支付或提现。修改字段、事件名、中文命令、动作编码前同步核对协议；本仓库没有完整游戏服务端。
 - `PlayerList` 是全量快照，`状态鸡` 是逐座位增量；房间外层状态约为 `init → ready → running → end`。特殊动作编码：跟 -1、敲 -3、休 -5、滚 -6、丢 -7，不擅自重编号。
 
@@ -35,7 +36,7 @@
 
 ## 其他易丢业务约束
 
-- 房间邀请（2026-08-14）：V2 协议带权威最低带入，接收和点击前都核验 `gold + gold2/100`。已坐、预坐、正在带入不弹；PlayerList 占座立即关弹窗。观战换房走现有过渡，排队先取消。180 秒冷却按账号/房间保存；“本次登录不再弹出”仅会话有效。详见原记忆第 69–71 行、`RoomInviteManager`。
+- 房间邀请（2026-08-14，2026-10-25 补充俱乐部上下文）：V3 协议在 V2 权威最低带入字段基础上携带来源 `club_id`，接收和点击前都核验 `gold + gold2/100`；接收端继续兼容 V2/V1/旧四段格式。已坐、预坐、正在带入不弹；PlayerList 占座立即关弹窗。观战换房走现有过渡，排队先取消。180 秒冷却按账号/房间保存；“本次登录不再弹出”仅会话有效。详见原记忆第 69–71 行、`RoomInviteManager`。
 - 金币赠送沿用 Account RPC `调用_方法_Exchange2`，金额为大于 0 的整数字符串，不乘除 100，不改为 HTTP。2026-09-04 V7 大厅入口已从页内直接读取交易密码并取消二次弹窗；第 322 行“先查名字再确认”的旧说明不能覆盖这一入口的新流程。服务端成功清空输入/刷新记录，失败保留输入。详见第 54、322–323 行及 V7 专题。
 - 头像异步（2026-07-23）：PlayerList 缺 photo 时新绑定座位仍刷新服务端；每个 Sprite 保留最新期望序号，缓存、成功与失败回调均检查序号，避免默认头像迟到覆盖。不要用服务端返回的默认值推断 Sprite 串用。详见第 442–444 行。
 - 苹果网页 GPS（2026-08-14）：真实坐标合法才提交；坐下检查不等待定位、不自动续做，无合法坐标就保留提示并结束本次操作。不能提交伪造坐标或靠历史缓存放行。Native 和非苹果网页分支保持各自行为。详见第 101–102 行。

@@ -31,6 +31,7 @@ type Config struct {
 	GameDBUser                 string
 	GameDBPassword             string
 	GameAdminURL               string
+	GameMode                   string
 	GameExchangeSign           string
 	NotificationCarouselWorker bool
 	BootstrapAdminUser         string
@@ -70,6 +71,7 @@ func Load() (Config, error) {
 		GameDBUser:                 strings.TrimSpace(os.Getenv("XUAN_GAME_DB_USER")),
 		GameDBPassword:             os.Getenv("XUAN_GAME_DB_PASSWORD"),
 		GameAdminURL:               env("XUAN_GAME_ADMIN_URL", "http://127.0.0.1:8890"),
+		GameMode:                   strings.ToLower(env("XUAN_GAME_MODE", "club")),
 		GameExchangeSign:           strings.TrimSpace(os.Getenv("XUAN_GAME_EXCHANGE_SIGN")),
 		NotificationCarouselWorker: carouselWorker,
 		BootstrapAdminUser:         strings.TrimSpace(os.Getenv("XUAN_BOOTSTRAP_ADMIN_USERNAME")),
@@ -98,6 +100,9 @@ func Load() (Config, error) {
 	if err := validateGameAdminURL(cfg.GameAdminURL); err != nil {
 		return Config{}, err
 	}
+	if err := validateGameMode(cfg.GameMode); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
@@ -111,6 +116,13 @@ func validateGameAdminURL(raw string) error {
 	}
 	if parsed.Port() != "8890" || (parsed.Path != "" && parsed.Path != "/") {
 		return fmt.Errorf("XUAN_GAME_ADMIN_URL 必须使用本机 8890 端口且不能包含路径")
+	}
+	return nil
+}
+
+func validateGameMode(mode string) error {
+	if mode != "club" && mode != "standard" {
+		return fmt.Errorf("XUAN_GAME_MODE 必须是 club 或 standard")
 	}
 	return nil
 }

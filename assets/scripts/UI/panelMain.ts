@@ -20,6 +20,7 @@ import QueueMatchManager from "../logic/QueueMatchManager";
 import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
+import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -78,8 +79,6 @@ export default class panelMain extends UIPanelViewBase {
     public clubManagement:ClubManagementView = null;
     private clubInputId:string = "";
     private clubCommandBusy:boolean = false;
-    // 带邀请码申请入会时服务端先回 0x500，最终结果随后再回调；等待期间只做超时兜底，不弹错误。
-    private clubJoinPending:boolean = false;
     private clubDetails:{[clubId:string]:any} = {};
     private clubAgentInfo:{[clubId:string]:any} = {};
     // 登录进大厅的默认分页只决定一次，之后用户手动切换或俱乐部关系变化都不再自动跳转。
@@ -87,11 +86,9 @@ export default class panelMain extends UIPanelViewBase {
     private readonly clubCommandTimeoutHandler = ()=>{
         if(!this.clubCommandBusy)
             return;
-        const bJoinPending = this.clubJoinPending;
-        this.clubJoinPending = false;
         this.clubCommandBusy = false;
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-            bJoinPending ? "已提交，请稍后查看俱乐部列表。" : "俱乐部操作超时，请稍后重试！");
+            "俱乐部操作超时，请稍后重试！");
     };
 
     private animateSet:dragonBones.ArmatureDisplay = null;
@@ -195,11 +192,13 @@ export default class panelMain extends UIPanelViewBase {
             const account = GameDataManager.getAccount();
             const id = this.ResolveRoomClub();
             const info = this.clubDetails[id];
+            const agent = this.clubAgentInfo[id];
+            const inviteCode = agent && agent.invite_code != null ? String(agent.invite_code).trim() : "";
             // 未登录/重连期间 getAccount() 为空，这里不能抛错中断大厅初始化。
             const guuid = account ? String(account.guuid || "") : "";
             const owns = account && String(account.club_make || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
             const manages = account && String(account.club_manage || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
-            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,
+            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,
                 role:owns ? "owner" : manages ? "manager" : this.IsClubAgentIn(id) ? "agent" : "member"};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text));
         this.clubManagement.Refresh();
@@ -828,8 +827,7 @@ export default class panelMain extends UIPanelViewBase {
             UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
             // 进房必须带「从哪个俱乐部的房间列表点的这间房」，服务端据此确定抽水归属的代理链；不带则不参与俱乐部分成。
             const enterClubId = this.ResolveRoomClub();
-            const strRoomSetting = enterClubId ?
-                "{{\"special_rule\": \"观战\", \"club_id\": \"" + enterClubId + "\"}}" : "{{\"special_rule\": \"观战\"}}";
+            const strRoomSetting = withRoomClubId("{{\"special_rule\": \"观战\"}}",enterClubId);
             GameDataManager.getAccount().reqEnterRoom(RoomType.Custom,Number(button.node.name),strRoomSetting);
 
             MobileManager.getInstance().OnTalkingEvent("加入房间","加入房间");
@@ -1316,7 +1314,10 @@ export default class panelMain extends UIPanelViewBase {
                     }
 
                     UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
-                    GameDataManager.getAccount().reqEnterRoom(RoomType.Custom,Number(this.txtInputRoomid.string),"{{\"special_rule\": \"观战\"}}");
+                    const account = GameDataManager.getAccount();
+                    const clubId = this.ResolveRoomClub();
+                    account.reqEnterRoom(RoomType.Custom,Number(this.txtInputRoomid.string),
+                        withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
         
                     MobileManager.getInstance().OnTalkingEvent("加入房间","加入房间");
                 }
@@ -2028,8 +2029,14 @@ export default class panelMain extends UIPanelViewBase {
         {
             this.clubManagement.Refresh();
             const id = this.ResolveRoomClub();
-            if(id && !this.clubDetails[id])
-                GameDataManager.getAccount().reqHallCommand(JSON.stringify({header:"查询_俱乐部_信息",club_id:id}),"p@club:info:" + id);
+            const account = GameDataManager.getAccount();
+            if(id && account)
+            {
+                if(!this.clubDetails[id])
+                    account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_信息",club_id:id}),"p@club:info:" + id);
+                if(!this.clubAgentInfo[id])
+                    account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_代理_信息",club_id:id}),"p@club:agent:" + id);
+            }
         }
         if(strName !== "钱包")
         {
@@ -2619,7 +2626,9 @@ export default class panelMain extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"未打开GPS不能进入房间！")
                 return;
             }
-            GameDataManager.getAccount().reqEnterRoom(RoomType.Custom,nRoomID,"");
+            const account = GameDataManager.getAccount();
+            const clubId = resolveRoomClubId(account, "", true);
+            account.reqEnterRoom(RoomType.Custom,nRoomID,withRoomClubId("",clubId));
         }
     }
     public createQR(ctx:cc.Graphics,url:string) 
@@ -2767,7 +2776,7 @@ export default class panelMain extends UIPanelViewBase {
         const result:string[] = [];
         if(account == null)
             return result;
-        for(const value of [account.club_make,account.club_join,account.club_manage])
+        for(const value of [account.club_make,account.club_join,account.club_join2,account.club_manage])
         {
             for(const raw of String(value || "").split(","))
             {
@@ -2802,7 +2811,7 @@ export default class panelMain extends UIPanelViewBase {
         return String(integerValue).replace(/\B(?=(\d{3})+(?!\d))/g,",");
     }
 
-    /** 是否是「靠邀请码带人」的代理：既不是创建者也不是管理员，但持有本俱乐部自己的邀请码。 */
+    /** 是否是代理：既不是创建者也不是管理员，且服务端 is_agent=1（代理必须由老板/上级设置）。 */
     private IsClubAgentIn(clubId:string):boolean
     {
         const account = GameDataManager.getAccount();
@@ -2811,8 +2820,7 @@ export default class panelMain extends UIPanelViewBase {
         const listOf = (value:any)=>String(value || "").split(",").map(id=>id.trim());
         if(listOf(account.club_make).indexOf(clubId) >= 0 || listOf(account.club_manage).indexOf(clubId) >= 0)
             return false;
-        const agent = this.clubAgentInfo[clubId];
-        return !!(agent && agent.invite_code);
+        return this.IsClubAgent(this.clubAgentInfo[clubId]);
     }
 
     private GetClubAgentIds():string[]
@@ -2821,14 +2829,21 @@ export default class panelMain extends UIPanelViewBase {
     }
 
     private IsClubAgent(info:any):boolean
-    {        if(!info)
+    {
+        if(!info)
             return false;
-        // The server's ClubAgentInfo uses invite_code for an active agent.
-        // Keep the explicit flags as fallbacks so an ordinary member who only
-        // receives an upstream code is still shown as a player.
-        return !!info.invite_code || Number(info.is_agent) === 1 ||
-            Number(info.is_proxy) === 1 || String(info.role || "").toLowerCase() === "agent" ||
-            String(info.role || "") === "代理";
+        // 创建者按「老板」显示，不算代理。
+        if(Number(info.is_creator) === 1)
+            return false;
+        // 服务端实际会返回 is_agent（文档未记录）：普通成员 is_agent=0，但**身上照样带一个邀请码**，
+        // 所以「有码」不能当判据，必须只认这个字段。
+        if(info.is_agent != null)
+            return Number(info.is_agent) === 1;
+        if(info.is_proxy != null)
+            return Number(info.is_proxy) === 1;
+        // 老口径（服务端不返回 is_agent 时）：文档 §2.1 普通成员 invite_code 为空串。
+        const code = info.invite_code == null ? "" : String(info.invite_code).trim();
+        return code !== "";
     }
 
     /** 俱乐部代理接口只返回当前玩家自己的邀请码，列表不得展示下级邀请码。 */
@@ -2849,10 +2864,15 @@ export default class panelMain extends UIPanelViewBase {
             data = data.result.length > 0 ? data.result[0] : null;
         if(!data || !data.club_id)
             return;
+        // 只接受「本人」的代理信息：服务端若把上级/创建者的记录当成本人的回包，
+        // 这条会把人误显示成代理（列表右下角）。
+        const selfGuuid = GameDataManager.getAccount() == null ? "" : String(GameDataManager.getAccount().guuid || "");
+        if(selfGuuid && data.user_id && String(data.user_id) !== selfGuuid)
+            return;
         const clubId = String(data.club_id);
         this.clubAgentInfo[clubId] = data;
         this.RefreshClubList(false);
-        // 代理身份是「有没有自己的码」，拿到码之后管理入口/红点才成立。
+        // 代理身份是「已经设过比例」，管理入口/红点跟着刷新。
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
     }
@@ -2916,7 +2936,8 @@ export default class panelMain extends UIPanelViewBase {
                 row.destroy();
             }
         }
-        const rowPitch = 218;
+        // 条目卡高 231；行距按「卡高 + 24」留出肉眼可见的间隔（原来的固定 218 会让相邻卡片叠住 13px）。
+        const rowPitch = Math.max(231,template.height) + 24;
         content.height = Math.max(list.height,ids.length * rowPitch);
         Tool.GetChild(page,"空状态").active = ids.length === 0;
         list.active = ids.length > 0;
@@ -2934,10 +2955,6 @@ export default class panelMain extends UIPanelViewBase {
             const name = info && info.club_name ? String(info.club_name) : "俱乐部 " + id;
             row.getChildByName("俱乐部名称").getComponent(cc.Label).string = name;
             const agent = this.clubAgentInfo[id];
-            const inviteCode = agent && agent.invite_code ? String(agent.invite_code) : "";
-            const inviteLabel = row.getChildByName("邀请码");
-            if(inviteLabel)
-                inviteLabel.getComponent(cc.Label).string = inviteCode;
             const goldLabel = row.getChildByName("金币");
             if(goldLabel)
                 goldLabel.getComponent(cc.Label).string = this.GetClubGold(id);
@@ -2945,6 +2962,26 @@ export default class panelMain extends UIPanelViewBase {
             const ownerIds = String(account.club_make || "").split(",");
             const isOwner = ownerIds.indexOf(id) >= 0 || !!(agent && Number(agent.is_creator) === 1);
             const isAgent = this.IsClubAgent(agent);
+            // 邀请码每人都展示：代理/老板显示自己的码，普通成员回包里带的就是他上级的码（服务端口径）。
+            // 注意这个码只影响「展示」，身份判定仍只看 is_agent，两者互不牵连。
+            const inviteCode = agent && agent.invite_code ? String(agent.invite_code).trim() : "";
+            const inviteLabel = row.getChildByName("邀请码");
+            if(inviteLabel)
+                inviteLabel.getComponent(cc.Label).string = inviteCode;
+            // The club emblem is only a placeholder in the card background. The live
+            // avatar belongs to the club creator and must be loaded by creator ID.
+            const ownerId = info && (info.club_owner || info.owner_guuid || info.owner_id) ?
+                String(info.club_owner || info.owner_guuid || info.owner_id) :
+                isOwner ? String(account.guuid || "") : "";
+            const avatarNode = row.getChildByName("头像") || row.getChildByName("徽记");
+            const avatar = avatarNode ? avatarNode.getComponent(cc.Sprite) : null;
+            if(avatar)
+            {
+                if(ownerId)
+                    ImageManager.getInstance().BindPlayerListAvatar(ownerId,avatar);
+                else
+                    ImageManager.getInstance().SetLocalAvatar(avatar,"1");
+            }
             const role = isOwner ? "老板" : isAgent ? "代理" : "";
             const playerBase = row.getComponent(cc.Sprite);
             if(playerBase)
@@ -2980,7 +3017,6 @@ export default class panelMain extends UIPanelViewBase {
         if(this.clubCommandBusy)
             return;
         this.clubCommandBusy = true;
-        this.clubJoinPending = false;
         this.unschedule(this.clubCommandTimeoutHandler);
         this.scheduleOnce(this.clubCommandTimeoutHandler,10);
         GameDataManager.getAccount().reqHallCommand(JSON.stringify(request),"p@club:" + context);
@@ -3042,15 +3078,7 @@ export default class panelMain extends UIPanelViewBase {
         }
         if(context !== "club:create" && context !== "club:join")
             return false;
-        // 带邀请码的入会服务端先回 0x500（本次不同步返回），最终结果随后经同一 context 回调：
-        // 这里保持 busy 且不弹提示，等最终 0x200/0x301；超时由 clubCommandTimeoutHandler 兜底。
-        if(context === "club:join" && nCode === 0x500)
-        {
-            this.clubJoinPending = true;
-            return true;
-        }
         this.unschedule(this.clubCommandTimeoutHandler);
-        this.clubJoinPending = false;
         this.clubCommandBusy = false;
         if(nCode !== 0x200)
         {

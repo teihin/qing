@@ -7,6 +7,7 @@ import Debug from "../common/Debug";
 import { ShowPanelMode, RoomType } from "../common/GameDef";
 import GpsManager from "../logic/GpsManager";
 import ConfigManager from "../logic/ConfigManager";
+import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 
 const {ccclass, property} = cc._decorator;
 
@@ -115,7 +116,9 @@ export default class panelCreateRoom extends UIPanelViewBase {
             }
 
             UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
-            GameDataManager.getAccount().reqEnterRoom(RoomType.Custom, 0, strMsg);
+            const account = GameDataManager.getAccount();
+            const clubId = resolveRoomClubId(account);
+            account.reqEnterRoom(RoomType.Custom, 0, withRoomClubId(strMsg,clubId));
         }
     }
     

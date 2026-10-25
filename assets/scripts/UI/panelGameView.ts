@@ -20,6 +20,7 @@ import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
 import { jackpotAmount, jackpotTier, jackpotTime } from "../common/JackpotDisplay";
+import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -1617,7 +1618,9 @@ export default class panelGameView extends UIPanelViewBase {
             if(nRoomID != 0) //需要进入房间
             {
                 GameDataManager.getAccount().bReSendFull = true;
-                GameDataManager.getAccount().reqEnterRoom(RoomType.Custom,nRoomID,"");
+                const account = GameDataManager.getAccount();
+                const clubId = resolveRoomClubId(account, "", true);
+                account.reqEnterRoom(RoomType.Custom,nRoomID,withRoomClubId("",clubId));
             }
             else
             {
@@ -3019,7 +3022,8 @@ export default class panelGameView extends UIPanelViewBase {
             return;
         }
         let manager = RoomInviteManager.getInstance();
-        let roomID = GameDataManager.getAccount().roomID;
+        const account = GameDataManager.getAccount();
+        let roomID = account.roomID;
         let remaining = manager.getRemainingSeconds(RoomType.Custom, roomID);
         if(remaining > 0)
         {
@@ -3029,7 +3033,8 @@ export default class panelGameView extends UIPanelViewBase {
 
         let playerCount = this.CountSeatedPlayers();
         let minBuyIn = this.GetRoomInviteMinBuyIn();
-        let sent = manager.sendInvite(RoomType.Custom, roomID, this.gameLogic.strRoomDipi, minBuyIn, playerCount, this.gameLogic.MAX_PLAYER);
+        const clubId = resolveRoomClubId(account, "", true);
+        let sent = manager.sendInvite(RoomType.Custom, roomID, this.gameLogic.strRoomDipi, minBuyIn, playerCount, this.gameLogic.MAX_PLAYER, clubId);
         this.RefreshRoomInviteEntry();
         if(sent)
             this.ShowMsg("邀请已发送，3分钟后可再次邀请");

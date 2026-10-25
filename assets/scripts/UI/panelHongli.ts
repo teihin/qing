@@ -9,6 +9,7 @@ import ImageManager from "../logic/ImageManager";
 import GpsManager from "../logic/GpsManager";
 import ConfigManager from "../logic/ConfigManager";
 import panelMain from "./panelMain";
+import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -425,14 +426,7 @@ export default class panelHongli extends UIPanelViewBase {
         }
         else if(button.node.name === "提取红利")
         {
-            let strHongli = GameDataManager.getAccount().hongli;
-            if(strHongli == "0")
-            {
-                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "当前没有红利！");
-                return;
-            }
-
-            this.node.getChildByName("提取红利面板").active = true;
+            UIManager.getInstance().showPanel("panelMyHongli", ShowPanelMode.Cover);
         }
         else if(button.node.name === "确认提取红利")
         {
@@ -1160,7 +1154,10 @@ export default class panelHongli extends UIPanelViewBase {
                     return;
                 }
                 UIManager.getInstance().showPanel("panelLoading", ShowPanelMode.Top);
-                GameDataManager.getAccount().reqEnterRoom(RoomType.Custom, roomID, "{{\"special_rule\": \"观战\"}}");
+                const account = GameDataManager.getAccount();
+                const clubId = resolveRoomClubId(account, jItem["club_id"] || jItem["clubId"]);
+                account.reqEnterRoom(RoomType.Custom, roomID,
+                    withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
             }, this);
         }
 

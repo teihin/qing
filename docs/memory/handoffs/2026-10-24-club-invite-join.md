@@ -53,3 +53,39 @@
 
 验证：三个脚本 `ts.transpileModule` 0 诊断；`tsc` 全量类型检查里这三个文件只剩历史遗留错误（`require`/`cc.RawAsset`/`QRCode`），本次改动无新增。仍未 Creator 导入、未构建、未真机、未联调。
 
+
+## 第三轮：角色判据以服务端 is_agent 为准（2026-10-24）
+
+抓包确认 `查询_俱乐部_代理_信息` 实际回包（文档未收录 `is_agent`、且普通成员 `invite_code` 并不为空）：
+
+```json
+{"number":0,"count":1,"result":{"club_id":"222697","user_id":"718968","user_name":"abc",
+ "is_creator":0,"is_agent":0,"invite_code":"435154","percent":0,
+ "upper_guuid":"237737","upper_name":"天外飞仙","downline_count":0,"downline":[]}}
+```
+
+- 角色判据改为：`is_creator=1`→老板；否则 **`is_agent=1` 才算代理**（字段存在时只认它，不再看 `invite_code`）。
+  没有 `is_agent` 字段时才退回「有码即代理」的老口径。`percent` 不参与判定（代理比例允许为 0）。
+- `OnClubAgentInfo` 保留「`user_id` 必须是本人」的校验；排查用日志已移除。
+- 影响：普通成员在俱乐部列表显示「玩家」、不展示邀请码、无审批入口与红点；代理/老板行为不变。
+- 文档需更新：§2.1 补 `is_agent`、修正「普通成员 invite_code 为空串」；另需确认成员码能否用于加入俱乐部。
+
+## 第四轮：审批最终回包口径修正（2026-10-25）
+
+依据更新后的 `服务器文档整理/俱乐部代理与邀请码-客户端接口文档.md`：`0x500` 是服务端内部异步标记，不会下发给客户端；`添加_俱乐部_玩家` 最终通过同一 `context` 回 `0x200`，失败回 `0x301`。
+
+- `ClubManagementApi.ts`：审批收到最终 `0x200` 后立即完成，不再追加 `查询_俱乐部_成员` 等待 `NumberList`，避免入会已成功但推送缺失时确认弹窗卡到超时；列表请求仍兼容 `0x500`。
+- `panelMain.ts`：移除邀请码入会对客户端 `0x500` 的旧分支和旧超时文案，按最终 `0x200/0x301` 处理。
+- 同时修复 `ClubManagementApi.ts` 中 `receive()` 参数遮蔽全局 `field()` 的问题，避免申请列表有数据时出现 `field is not a function`。
+- 验证：`tools/test_club_joiner_protocol.js`、三个相关脚本 TypeScript 转译、`git diff --check` 通过；Creator 导入、构建、真实账号复测仍待执行。
+
+## 第五轮：所有进房入口补充俱乐部上下文（2026-10-25）
+
+依据更新后的接口文档，`reqEnterRoom` 的 `roomSetting` 需要携带俱乐部房间的 `club_id`。新增 `assets/scripts/logic/RoomClubContext.ts`，统一处理账号俱乐部、已选俱乐部、当前 `roomSetting` 和入口显式 ID；它可以读取旧双大括号输入，但下发前统一输出单层合法 JSON。
+
+- `panelMain`：房间列表点击、手动输入房号、断线恢复均补 `club_id`；大厅俱乐部列表同时纳入 `club_join2`。
+- `panelCreateRoom`、`panelGameView`、`panelHongli`：创建房间、牌桌恢复、下级玩家观战均补 `club_id`。
+- `QueueMatchManager`：优先使用撮合消息中的 `club_id`，否则使用当前房间上下文；目标房请求带入该 ID。
+- `RoomInviteManager`：邀请消息升级为 `ROOM_INVITE|V3` 并携带来源俱乐部，接收端保留 V2/V1/旧四段格式解析；普通 V2 邀请仍用本地已选俱乐部回退进房。
+
+验证：全部进房调用点已扫描，相关七个 TypeScript 文件转译通过，`RoomClubContext` 的显式/已选/当前房间选择与单双大括号序列化回归通过，既有俱乐部协议回归和 `git diff --check` 通过。Creator 导入、构建、真实账号、邀请跨版本兼容和多俱乐部归属仍待验证。

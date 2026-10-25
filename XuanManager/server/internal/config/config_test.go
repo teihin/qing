@@ -20,3 +20,14 @@ func TestValidateGameAdminURL(t *testing.T) {
 		}
 	}
 }
+
+func TestValidateGameMode(t *testing.T) {
+	for _, value := range []string{"club", "standard"} {
+		if err := validateGameMode(value); err != nil {
+			t.Fatalf("expected valid game mode %q: %v", value, err)
+		}
+	}
+	if err := validateGameMode("other"); err == nil {
+		t.Fatal("expected invalid game mode")
+	}
+}
