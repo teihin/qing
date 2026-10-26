@@ -22,6 +22,7 @@ import RoomMaintenancePage from "./pages/RoomMaintenancePage";
 import PaymentConfigurationPage from "./pages/PaymentConfigurationPage";
 import ActivityConfigurationPage from "./pages/ActivityConfigurationPage";
 import StoneConsumePricePage from "./pages/StoneConsumePricePage";
+import PromotionDownloadPage from "./pages/PromotionDownloadPage";
 import PlayerOptimizationPage from "./pages/PlayerOptimizationPage";
 import RolesPage from "./pages/RolesPage";
 import UsersPage from "./pages/UsersPage";
@@ -122,6 +123,7 @@ export default function App() {
     if (route === "/configuration/payments" && can("configuration.payment.view")) return <PaymentConfigurationPage can={can} notify={notify} />;
     if (route === "/configuration/activities" && can("configuration.activity.view")) return <ActivityConfigurationPage can={can} notify={notify} />;
     if (route === "/configuration/stone-consume" && can("configuration.stone_consume.view")) return <StoneConsumePricePage can={can} notify={notify} />;
+    if (route === "/configuration/promotion-download" && can("configuration.promotion_download.view")) return <PromotionDownloadPage can={can} notify={notify} />;
     if (route === "/users" && can("user.view")) return <UsersPage {...props} />;
     if (route === "/roles" && can("role.view")) return <RolesPage {...props} />;
     if (route === "/modules" && can("module.view")) return <ModulesPage {...props} />;

@@ -136,6 +136,8 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/configuration/activities", s.authorized("configuration.activity.update", true, s.handleUpdateActivityConfiguration))
 	s.mux.Handle("GET /api/configuration/stone-consume", s.authorized("configuration.stone_consume.view", false, s.handleGetStoneConsumePrice))
 	s.mux.Handle("PUT /api/configuration/stone-consume", s.authorized("configuration.stone_consume.update", true, s.handleUpdateStoneConsumePrice))
+	s.mux.Handle("GET /api/configuration/promotion-download", s.authorized("configuration.promotion_download.view", false, s.handleGetPromotionDownloadURL))
+	s.mux.Handle("PUT /api/configuration/promotion-download", s.authorized("configuration.promotion_download.update", true, s.handleUpdatePromotionDownloadURL))
 	s.mux.Handle("GET /api/users", s.authorized("user.view", false, s.handleListUsers))
 	s.mux.Handle("GET /api/users/role-options", s.authorized("user.view", false, s.handleRoleOptions))
 	s.mux.Handle("POST /api/users", s.authorized("user.create", true, s.handleCreateUser))

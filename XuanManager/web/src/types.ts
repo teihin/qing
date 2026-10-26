@@ -823,3 +823,15 @@ export interface StoneConsumePriceState {
   unknownItems: string[];
   parseError: string;
 }
+
+/** 游戏内「游戏推广」页展示的下载地址（哈希配置 usr_hash_info.下载url）。 */
+export interface PromotionDownloadURLState {
+  downloadUrl: string;
+  configured: boolean;
+  storageKey: string;
+  clientContext: string;
+  updatedBy: string;
+  updatedAt: string | null;
+  duplicateRows: number;
+  rowCount: number;
+}

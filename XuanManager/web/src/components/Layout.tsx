@@ -25,6 +25,7 @@ const iconText: Record<string, string> = {
   "reward-pools": "池",
   payments: "支",
   activities: "活",
+  downloads: "下",
 };
 
 export default function Layout({ session, route, onNavigate, onChangePassword, onLogout, children }: {

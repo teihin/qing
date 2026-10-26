@@ -1,10 +1,17 @@
 # qing 当前状态
 
-更新时间：2026-10-26
+更新时间：2026-10-27
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。历史验证不代表当前结果。
 
 客服网页已部署，真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
+
+## 2026-10-27 游戏推广下载地址接入后台（已部署 00:12）
+
+- 截图里的「游戏推广 → 游戏下载地址」= 客户端 `ConfigManager.downloadurl`：登录进大厅时 `GetOneHashKey("下载url")` 从 `kbedm.usr_hash_info` 明文读取，推广面板显示成 `V7推广链接`。后台此前无维护入口，一直是客户端默认 `http://www.baidu.com`。
+- 后台新增「系统配置 → 游戏推广下载地址」（模块 39，权限 `configuration.promotion_download.view/.update`）：`GET/PUT /api/configuration/promotion-download`，写前快照、写后回读、失败按原 id 恢复、写审计，只接受完整 `http(s)://`。**未动 `WebHome/`、未动客户端**。
+- 已发布 8891（00:12）：bin sha `90033117…82675e`，回滚件 `backups/xuanmanager.20261027-0012-promodl-rollback`；迁移 029 已入库（模块 39、权限 3901/3902 授角色 1），health 200、`/proc/17288/exe` 与新包一致、本机与公网接口均 401、公网 index 引用 `index-BOlrWaQn.js` 且 200。旧 JS 保留，已开着的标签页不会白屏。
+- `usr_hash_info` 目前没有 `下载url` 行（0 条），页面显示内置默认值，需登录点一次保存才落库。**未验**：后台页面真实登录读写、玩家重新登录进大厅后推广页显示新值。见[交接](handoffs/2026-10-27-promotion-download-url.md)。
 
 ## 2026-10-26 消费全切钻石 + 价格后台可配（后台已上线，VIP 已下线）
 
@@ -47,21 +54,10 @@
 
 - 2026-10-21 入口按俱乐部关系定：无俱乐部直接进俱乐部页，有俱乐部进「发现」。见同一交接。
 
-## 2026-09-20 桌内牌局设置 V8
+## 2026-09-20 桌内面板 V8 换肤（牌局设置/邀请/赠金币）
 
-- `panelGameView.prefab` 与 `drh8.fire` 的 `系统设置` 已按 `效果图V8-new/06-桌内界面/10-牌局设置.png` 组件化换肤：新增 31 张 `assets/V7/settings_v8_*` 透明 PNG 与 `.meta`，主框、预览、选中态与控制区均为独立 Sprite。
-- Creator 已导入，短屏实测通过；隔离 `panelGameView` handler 的 15 个真实 Cocos 控件测试通过（五桌面、三牌背、三开关双态及关闭；storage/gameLogic 均为 mock）。未登录、未构建、未真机、未提交。见[交接](handoffs/2026-09-20-game-settings-v8.md)。
-
-## 2026-09-20 桌内提醒与功能弹窗 V8
-
-- 房间邀请按新确认蓝金稿实施，替代原通用样式；动态数据与交互保留，Prefab 与 9 张资源已核对 Creator 导入，真实回包与真机待验。见[交接](handoffs/2026-09-20-room-invite-approved.md)。
-- 带入积分内“金币余额不足…请先充值”子弹窗统一为温馨提示风格，保留动态金额与关闭；实际点击待验，见[交接](handoffs/2026-09-20-insufficient-dialog-style.md)。
-- **后续用户修正：恢复原版温馨提示风格。** `panelMsgView` 已退回本轮修改前版本；五个桌内提示与 VIP 购买确认复用原版整图，其余提示改用同款组件。该修正替代本批弹窗的新 V8 标题方案，系统设置另按已确认稿保留；见[最新交接](handoffs/2026-09-20-original-dialog-style.md)。
-- 系统设置、扣费/解散/GPS/举报提醒、排队、通用消息、邀请、VIP、表情等面板已写入正式 Prefab/Scene，仅新增两张共享九宫格约 13KB；`panelGameView/提示` 保留原半透明效果。已修复旧 Sprite 与新 Label 竞争导致文字消失；Creator 重导入、长短屏、构建与真机未验。见[交接](handoffs/2026-09-20-ingame-dialogs-v8.md)。
-
-## 2026-09-20 桌内赠送金币
-
-- `panelGivePad` 已按确认稿换肤，保留动态信息与交互。正式文件直读引擎长短屏/输入及10项回归通过；最终Creator导入待完成，未真实交易/构建/提交。见[交接](handoffs/2026-09-20-give-pad-approved.md)。
+- 牌局设置、房间邀请、赠送金币已按确认稿写入正式 Prefab，业务节点与协议保留；新增独立/九宫格资源约 13KB。Creator 导入与引擎长短屏离线渲染已查，真实回包、构建、真机未验。细节见[牌局设置](handoffs/2026-09-20-game-settings-v8.md)、[房间邀请](handoffs/2026-09-20-room-invite-approved.md)、[赠送金币](handoffs/2026-09-20-give-pad-approved.md)、[桌内弹窗](handoffs/2026-09-20-ingame-dialogs-v8.md)。
+- 后续用户修正：提示弹窗恢复原版温馨提示风格（`panelMsgView` 回退），系统设置另按确认稿保留。见[原版弹窗](handoffs/2026-09-20-original-dialog-style.md)。
 
 ## 2026-09-20 玩家信息弹窗 V8-new
 
@@ -82,13 +78,10 @@
 
 - 表情动画换成 hh-poker 素材（VP9 240×240 无 Alpha webm），抠底保留原画黑描边，主体 100px 居中，按 30fps 压成 10 组 373 帧 / 3.69 MB。映射 1～10 → cold…hot；`表情2/<n>.prefab`、`panelTalk.prefab` 图标保留原 uuid 自动换图，表情存活时长改读剪辑时长。脚本 `tools/convert_hh_emoji_anim.py`、`tools/make_emoji_preview.py`，预览 `temp/emoji-preview.html`。**未 Creator 导入、未构建、未真机。**见[交接](handoffs/2026-09-16-emoji-anim-replace.md)。
 
-## 2026-09-16 热更新"清单说有、磁盘没有"自愈
+## 2026-09-16 热更新自愈 + 大厅房间行改版
 
-- 真机实测：下载中断留下 `.tmp` 但清单已记 md5 ⇒ 引擎回落旧图且不再补下。`panelUpdate.ts` 启动自检已端到端实测（0 误判、≈90ms）；未重建、未出包。证据与修法见[交接](handoffs/2026-09-16-hotupdate-incomplete-file.md)。
-
-## 2026-09-16 大厅房间行：BY 卡面 + 独立图标
-
-- 大厅→发现→房间列表每行改为「筹码+底皮 / 时钟+时长 / 人数 / 剩余时间」，字段取压缩数组 `[5]/[6]/[3][4]/[2]`；`ScrollItem.ts`、`panelMain.prefab` 已改，卡面重绘为只含 `BY` 盾牌的 1426×260 底框（直接缩放不抠图，UUID 未变），筹码/时钟/人数图标独立成 `assets/V7/room_icon_*.png`。见[交接](handoffs/2026-09-16-lobby-room-row-by.md)；未 Creator 导入、未构建。
+- 真机实测：下载中断留下 `.tmp` 但清单已记 md5 ⇒ 引擎回落旧图且不再补下；`panelUpdate.ts` 启动自检已端到端实测（0 误判、≈90ms），未重建出包。见[交接](handoffs/2026-09-16-hotupdate-incomplete-file.md)。
+- 大厅房间行改为「筹码+底皮 / 时钟+时长 / 人数 / 剩余时间」，卡面重绘为只含 BY 盾牌的底框（不抠图，UUID 未变）。未 Creator 导入、未构建。见[交接](handoffs/2026-09-16-lobby-room-row-by.md)。
 
 ## 2026-09-15 资源打包体积与 V7 移出 resources
 
