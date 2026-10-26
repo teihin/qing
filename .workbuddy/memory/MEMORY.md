@@ -15,6 +15,7 @@
   绕过：`GIT_SSH_COMMAND="ssh -i ~/.ssh/id_ed25519_github_qing -o IdentitiesOnly=yes -p 443"`
   配 `push ssh://git@ssh.github.com:443/teihin/qing.git main`；`ssh.github.com` 不在
   `~/.ssh/config` 里，必须显式 `-i`。走显式 URL 后本地 `origin/main` 不会自更新，用 `git update-ref` 对齐。
+  **任何分支都这样**（2026-10-26 `codex/club-ui` 同样被 SIGTERM 掐断，换 443 一次成功）。
 - 改完 Cocos 脚本想快速自检：本机无 `tsc`，用 managed node 调
   `~/.workbuddy/binaries/node/workspace/node_modules/typescript` 的
   `ts.transpileModule(src,{reportDiagnostics:true})` 只查语法（0 诊断即通过），别指望完整类型检查。
