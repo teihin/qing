@@ -9,7 +9,7 @@
 ## 2026-10-27 「我的」页下半部分改为可滚动（短屏适配）
 
 - 矮屏上「我的」页底部被切：`Main/我的` 下新增 `滚动区（ScrollView）> view（Mask）> content`，「按钮区 操作」和「当前俱乐部」搬进去，只改 `_parent` 与 Widget 的 `_top`（668.62→0、1100.45→431.78），节点名/UUID/子节点不变，对象数 3856→3867。
-- 顶部三块本来就 TOP 对齐，「信息卡底→滚动区顶」恒 11px；1334 屏内容 631.78 < 视区 665.4 不滚、与改动前逐像素一致，1200/1080/900 滚 100/220/400。`panelMain.SyncMyPageScroll()` 切页时逐层 `Widget.updateAlignment()` 再把 content 补到 `max(656, view.height)`；两处路径改 `Main/我的/滚动区/view/content/...`。Creator 已载入并把 Widget 链对齐（prefab 被它重排索引落盘，语义不变）；00:42 已构建并上传 `5.0.31` 热更包（manifest 与远端一致），**真机未验**。见[交接](handoffs/2026-10-27-my-page-scroll.md)。
+- 顶部三块本来就 TOP 对齐，「信息卡底→滚动区顶」恒 11px；1334 屏内容 631.78 < 视区 665.4 不滚、与改动前逐像素一致，1200/1080/900 滚 100/220/400。`panelMain.SyncMyPageScroll()` 切页时逐层 `Widget.updateAlignment()` 再把 content 补到 `max(656, view.height)`；两处路径改 `Main/我的/滚动区/view/content/...`。Creator 已重排索引落盘（语义不变）；00:42 已构建并上传 `5.0.31` 热更包，**真机未验**。见[交接](handoffs/2026-10-27-my-page-scroll.md)。
 
 ## 2026-10-27 游戏推广下载地址接入后台（已部署 00:12）
 
