@@ -29,6 +29,19 @@ const {ccclass, property} = cc._decorator;
 @ccclass
 export default class panelGameView extends UIPanelViewBase {
 
+    /**
+     * 牌局菜单 5 行版底板。
+     * 菜单 2 列，按钮数会随「解散房间」（只有房主可见）在 8/9 之间变，
+     * 也就是 4 行或 5 行，底板图和容器高度都要跟着换。
+     * 4 行版就是 ConfigMain 上原本挂的那张（首次刷新时缓存）。
+     */
+    @property(cc.SpriteFrame)
+    configMainRows5Frame:cc.SpriteFrame = null;
+
+    private configMainRows4Frame:cc.SpriteFrame = null;
+    /** 菜单顶边在 panelGameView 坐标系里的 y，改高度时保持顶边不动。 */
+    private configMainTopY:number = null;
+
     private PAGE_PER_COUNT:number = 15;
     private gameLogic:DrhLogicMgr = null;
 
@@ -673,6 +686,47 @@ export default class panelGameView extends UIPanelViewBase {
 
     // update (dt) {}
 
+    /**
+     * 按当前实际显示的按钮数，把牌局菜单的底板图和高度切到 4 行或 5 行。
+     * 布局是 2 列的 GRID，`_resize` 是 NONE，容器高度不会自己变，必须手算。
+     */
+    private RefreshConfigMainSize():void
+    {
+        let menu = Tool.GetChild(this.node,"ConfigMain");
+        if(menu == null)
+            return;
+        let layout = menu.getComponent(cc.Layout);
+        let sprite = menu.getComponent(cc.Sprite);
+        if(layout == null || sprite == null)
+            return;
+
+        let columns = 2;
+        let count = 0;
+        for(let i = 0; i < menu.children.length; ++i)
+        {
+            if(menu.children[i].active)
+                ++count;
+        }
+        let rows = Math.max(1,Math.ceil(count / columns));
+
+        // 首次进来节点上就是 4 行版：顺手把底板图和顶边缓存下来。
+        if(this.configMainRows4Frame == null)
+            this.configMainRows4Frame = sprite.spriteFrame;
+        if(this.configMainTopY == null)
+            this.configMainTopY = menu.y + menu.height / 2;
+
+        let cellH = layout.cellSize.height;
+        let height = layout.paddingTop + rows * cellH + Math.max(0,rows - 1) * layout.spacingY + layout.paddingBottom;
+        menu.height = height;
+        menu.y = this.configMainTopY - height / 2;
+
+        let frame = (rows >= 5 && this.configMainRows5Frame != null) ? this.configMainRows5Frame : this.configMainRows4Frame;
+        if(frame != null && sprite.spriteFrame !== frame)
+            sprite.spriteFrame = frame;
+
+        layout.updateLayout();
+    }
+
     onButtonClick(button:cc.Button)
     {
         if(button.node.name != "ConfigBT")
@@ -695,6 +749,8 @@ export default class panelGameView extends UIPanelViewBase {
                 Tool.GetChild(this.node,"ConfigMain/解散房间").active = false;
             }
 
+            // 8 个按钮是 4 行、9 个（多一个解散）是 5 行，底板要跟着换。
+            this.RefreshConfigMainSize();
         }
         else if(button.node.name === "排队")
         {
@@ -723,6 +779,10 @@ export default class panelGameView extends UIPanelViewBase {
         {
             // 牌桌内打开客服保留透明背景，可以透出牌桌；其他入口按游戏外使用不透明底。
             UIManager.getInstance().showPanel("panelKefu",ShowPanelMode.Cover,"",["游戏内"]);
+        }
+        else if(button.node.name === "兑换钻石")
+        {
+            UIManager.getInstance().showPanel("panelExchangeStone",ShowPanelMode.Cover);
         }
         else if(button.node.name === "退出房间")
         {

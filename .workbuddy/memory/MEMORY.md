@@ -70,6 +70,14 @@
 - **`panelXxx` 面板一律是 `UIManager.showPanel` 用 `cc.loader.loadRes("UI/" + 名字)` + `cc.instantiate` 动态创建的**
   —— 要改面板外观/尺寸就改 `assets/resources/UI/panelXxx.prefab`（双击进 prefab 编辑模式）。
   改场景 `drh8.fire` 里的同名节点**对运行无效**（那只是编辑器里的残留实例，2026-09-19 提示节点踩过）。
+- **唯一例外：`panelGameView` 跑的是 `drh8.fire` 里那份序列化副本，不是 prefab！**
+  `Canvas/Normal` 下场景里只挂了 `panelGameView` 一个面板节点；`UIManager.showPanel` 先扫
+  `optRoot.children` 找同名的（UIManager.ts 163-178 行），找到就直接 `setPanelInfo` 返回，
+  **根本不会 `cc.instantiate(prefab)`**。所以改 `panelGameView.prefab` 对运行无效，
+  必须同步改 `assets/Scenes/drh8.fire` 里 id 6（panelGameView）那棵树。
+  两边的 `cc.PrefabInfo.fileId` 必须一致（`root`=6、`asset`=panelGameView prefab uuid），
+  否则编辑器会把新节点当成"额外节点"而不是 prefab 的一份子。
+  2026-10-26 加「兑换钻石」按钮就栽在这：prefab 改完 library 也导入了，编辑器/运行都还是 8 个按钮。
 - 改完 Prefab/贴图后 `library/` 需 Creator 重新导入；`assets/resources/project.manifest` 是构建产物，跑 `1生成热更新包.command` 重建，**不要手改**。
 - **Creator 开着时覆盖 PNG，`.meta` 会被自动改写**（`trimType:"auto"` 重算 trim，使 `_sizeMode=0` 元素放大约 5%）。
   根治：按原 trim 矩形给新图四边补 `alpha=2` 边界像素；收尾 `git checkout HEAD -- <每个 .meta>`。判断是否在跑：`pgrep -fl CocosCreator`。
