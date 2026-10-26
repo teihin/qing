@@ -40,6 +40,8 @@ var stoneConsumePriceCatalog = []stoneConsumePriceItem{
 	{Code: "看下一张牌", Name: "看下一张牌", Scene: "牌桌 · 看剩余牌", Default: 1, LegacyMoney: 10, LegacyUnit: "分"},
 	{Code: "切牌", Name: "切牌", Scene: "牌桌 · 切牌", Default: 1, LegacyMoney: 100, LegacyUnit: "分"},
 	{Code: "举报", Name: "举报玩家", Scene: "牌桌 · 举报", Default: 50, LegacyMoney: 5000, LegacyUnit: "分"},
+	// 创建俱乐部是新增收费点（原来免费），没有对应金币价，LegacyMoney 留 0。
+	{Code: "创建俱乐部", Name: "创建俱乐部", Scene: "大厅 · 俱乐部 · 创建俱乐部", Default: 10000, LegacyMoney: 0, LegacyUnit: ""},
 }
 
 // stoneConsumePriceRetired 是已停用的消费项：不再出现在后台页面，也不再写入配置。

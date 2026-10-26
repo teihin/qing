@@ -98,6 +98,20 @@ export default class panelMain extends UIPanelViewBase {
     private defaultClubTimer:any = null;
     /** 创建/申请加入后等推送的最长时间；超过就放弃自动切换，避免以后误切。 */
     private readonly DEFAULT_CLUB_WAIT_MS:number = 30 * 60 * 1000;
+    /**
+     * 创建俱乐部要扣的钻石数（后台「钻石消费价格」下发，默认 10000）。
+     * 只在「创建请求被受理 → 扣费」这段窗口里有值，回包后清 0。
+     */
+    private clubCreateCostPending:number = 0;
+    private clubChargeBusy:boolean = false;
+    private readonly clubChargeTimeoutHandler = ()=>{
+        if(!this.clubChargeBusy)
+            return;
+        this.clubChargeBusy = false;
+        this.clubCreateCostPending = 0;
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+            "钻石扣除处理超时，请稍后在「钻石流向」核对，若有异常请联系客服！");
+    };
     private readonly clubCommandTimeoutHandler = ()=>{
         if(!this.clubCommandBusy)
             return;
@@ -722,6 +736,10 @@ export default class panelMain extends UIPanelViewBase {
         const account = GameDataManager.getAccount();
         const value = account == null || account.stone == null ? 0 : account.stone;
         label.string = String(value);
+        // 创建俱乐部弹窗开着时，余额一变就把「花费/余额够不够」跟着刷，别让玩家按旧余额判断。
+        const createDialog = this.node.getChildByName("创建俱乐部弹窗");
+        if(createDialog != null && createDialog.active)
+            this.RefreshClubCreateCostHint();
     }
     set_name(name:string)
     {
@@ -1339,6 +1357,7 @@ export default class panelMain extends UIPanelViewBase {
         else if(button.node.name === "创建俱乐部")
         {
             Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox).string = "";
+            this.RefreshClubCreateCostHint();
             this.node.getChildByName("创建俱乐部弹窗").active = true;
         }
         else if(button.node.name === "加入俱乐部")
@@ -3207,6 +3226,36 @@ export default class panelMain extends UIPanelViewBase {
         GameDataManager.getAccount().reqHallCommand(JSON.stringify(request),"p@club:" + context);
     }
 
+    /**
+     * 刷新「创建俱乐部」弹窗里的费用提示（要花多少钻、余额够不够）。
+     * 价格走后台「钻石消费价格」页，未配置时用 ConfigManager 内置默认（10000 钻）。
+     */
+    private RefreshClubCreateCostHint()
+    {
+        const node = Tool.GetChild(this.node,"创建俱乐部弹窗/面板/费用提示");
+        const label = node == null ? null : node.getComponent(cc.Label);
+        if(label == null)
+            return;
+        const nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_CREATE_CLUB);
+        const account = GameDataManager.getAccount();
+        const nStone = account == null || account.stone == null ? 0 : Number(account.stone);
+        if(nCost <= 0)
+        {
+            label.string = "创建免费";
+            node.color = new cc.Color(255,238,197);
+        }
+        else if(nStone < nCost)
+        {
+            label.string = "创建需消耗" + nCost + "钻石，当前余额" + nStone + "，钻石不足";
+            node.color = new cc.Color(255,120,110);
+        }
+        else
+        {
+            label.string = "创建需消耗" + nCost + "钻石（当前余额" + nStone + "）";
+            node.color = new cc.Color(255,238,197);
+        }
+    }
+
     private CreateClub()
     {
         const edit = Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox);
@@ -3216,9 +3265,48 @@ export default class panelMain extends UIPanelViewBase {
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入俱乐部名称！");
             return;
         }
+        // 创建费＝后台「钻石消费价格」里的「创建俱乐部」（默认 10000 钻）。余额不够就地拦。
+        const nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_CREATE_CLUB);
+        if(nCost > 0)
+        {
+            const account = GameDataManager.getAccount();
+            const nStone = account == null || account.stone == null ? 0 : Number(account.stone);
+            if(nStone < nCost)
+            {
+                this.RefreshClubCreateCostHint();
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    "钻石不足" + nCost + "，无法创建俱乐部！");
+                return;
+            }
+        }
+        this.clubCreateCostPending = nCost;
+        // ⚠️ 扣费排在「创建被服务端受理」之后：名字重复 / 超过 10 家这类失败是同步返回 0x301 的，
+        //    先扣再创建会让玩家白扣一笔，所以顺序是「先创建、受理成功再扣」，见 ChargeClubCreateFee。
         // 创建成功后新俱乐部会通过 set_club_make 推送出现，届时自动设为默认俱乐部。
         this.MarkPendingDefaultClub();
         this.SendClubCommand({header:"创建_俱乐部",club_name:name,club_mode:"1"},"create");
+    }
+
+    /**
+     * 创建请求受理后再扣钻石。扣费本身由服务端执行（`玩家_消费_命令` + `money_type=stone`），
+     * 这里只负责发命令与提示。CreateClub 已经拦过一次余额，这里不再重复判断。
+     */
+    private ChargeClubCreateFee()
+    {
+        const nCost = this.clubCreateCostPending;
+        if(nCost <= 0)
+        {
+            this.clubCreateCostPending = 0;
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                "创建请求已受理，俱乐部创建后会显示在列表中。");
+            return;
+        }
+        // 弹窗在这一步已经关掉，玩家点不到「确认创建」，所以不需要再加防重复提交。
+        const strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_CREATE_CLUB);
+        this.clubChargeBusy = true;
+        this.unschedule(this.clubChargeTimeoutHandler);
+        this.scheduleOnce(this.clubChargeTimeoutHandler,8);
+        GameDataManager.getAccount().reqHallCommand(strParam,"P@玩家_消费_命令_创建俱乐部");
     }
 
     private JoinClub()
@@ -3273,6 +3361,8 @@ export default class panelMain extends UIPanelViewBase {
         {
             // 命令没被受理就不会有新俱乐部出现，撤掉待切换标记，避免以后误切默认俱乐部。
             this.CancelPendingDefaultClub();
+            // 名字重复 / 超过 10 家都在这里同步失败，没受理就不扣费。
+            this.clubCreateCostPending = 0;
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
                 this.GetHallCommandError(param,context === "club:create" ? "创建俱乐部失败！" : "申请加入俱乐部失败！"));
             return true;
@@ -3280,7 +3370,8 @@ export default class panelMain extends UIPanelViewBase {
         if(context === "club:create")
         {
             this.node.getChildByName("创建俱乐部弹窗").active = false;
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"创建请求已受理，俱乐部创建后会显示在列表中。");
+            // 受理成功才扣费，提示语由扣费回包给出（带真实扣费金额）。
+            this.ChargeClubCreateFee();
         }
         else
         {
@@ -3300,6 +3391,30 @@ export default class panelMain extends UIPanelViewBase {
         }
         if(this.HandleClubHallCommand(nCode,param))
             return;
+        const isClubCreateChargeReply = param.indexOf("玩家_消费_命令_创建俱乐部") >= 0 ||
+            (this.clubChargeBusy && param.indexOf("玩家_消费_命令") >= 0 && param.indexOf("创建俱乐部") >= 0);
+        if(isClubCreateChargeReply)
+        {
+            const nCharged = this.clubCreateCostPending;
+            this.clubCreateCostPending = 0;
+            this.unschedule(this.clubChargeTimeoutHandler);
+            this.clubChargeBusy = false;
+            if(nCode == 0x200)
+            {
+                if(nCharged <= 0)
+                    return;
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    "创建请求已受理，已扣除" + nCharged + "钻石，俱乐部创建后会显示在列表中。");
+            }
+            else
+            {
+                // 创建本身已被受理，这里只失败在扣费：不能装作成功，交给客服对账最稳。
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    "创建请求已受理，但钻石扣除失败：" + this.GetHallCommandError(param,"未知原因")
+                    + "。请联系客服处理！");
+            }
+            return;
+        }
         const isAvatarChargeReply = param.indexOf("玩家_消费_命令_换头像") >= 0 ||
             (this.avatarChargeBusy && param.indexOf("玩家_消费_命令") >= 0 && param.indexOf("换头像") >= 0);
         if(isAvatarChargeReply)

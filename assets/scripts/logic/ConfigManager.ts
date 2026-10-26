@@ -23,6 +23,8 @@ export default class ConfigManager extends cc.Component {
     // 注：`延时` 不进这张价格表——接口文档 v1.2 §3.7 规定加时价格由服务端固定档位决定
     //     （第 2 次 200 钻 / 第 3 次 400 钻 / 第 1 次免费），客户端只做提示和拦截。
     public static readonly CONSUME_REPORT:string = "举报";
+    /** 创建俱乐部收一次费，默认 10000 钻；成功受理后才扣，见 panelMain.CreateClub。 */
+    public static readonly CONSUME_CREATE_CLUB:string = "创建俱乐部";
     // 注：VIP 三档（购买VIP月卡/半年卡/年卡）已停用，2026-10-26 起没有 VIP 消费，
     //     后台配置页也不再维护这三项；客户端 VIP 面板只保留信息展示。
 
@@ -40,7 +42,8 @@ export default class ConfigManager extends cc.Component {
         "强制秀牌":5,
         "看下一张牌":1,
         "切牌":1,
-        "举报":50
+        "举报":50,
+        "创建俱乐部":10000
     };
 
     /** 后台下发的钻石单价，key 为消费项名。 */
