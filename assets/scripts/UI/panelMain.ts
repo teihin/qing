@@ -852,7 +852,7 @@ export default class panelMain extends UIPanelViewBase {
 
     private RefreshAgentMenuVisibility()
     {
-        let operation = Tool.GetChild(this.node,"Main/我的/操作");
+        let operation = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作");
         if(operation == null)
             return;
 
@@ -2208,6 +2208,46 @@ export default class panelMain extends UIPanelViewBase {
         // 钱包确认稿是独立全屏页，顶部已有返回按钮；打开钱包时隐藏
         // 大厅底栏，避免长屏下遮挡充值、提现与记录的底部操作区。
         this.node.getChildByName("Down").active = strName !== "钱包";
+        if(strName === "我的")
+            this.SyncMyPageScroll();
+    }
+
+    /**
+     * 「我的」页下半部分（按钮区 + 当前俱乐部卡片）装在 Prefab 的「滚动区」里，
+     * 内容比可视区高时就靠 ScrollView 滚，短屏也能看全。
+     * content 本身用顶部锚点对齐，这里只补高度：高屏时撑到 view 高度，
+     * 避免内容比可视区矮时被 ScrollView 顶到别的位置。
+     */
+    private SyncMyPageScroll():void
+    {
+        // 切页当帧 Widget 还没对齐，延后一帧再读真实可视高度。
+        this.scheduleOnce(()=>{
+            if(!cc.isValid(this.node))
+                return;
+            const mine = Tool.GetChild(this.node,"Main/我的");
+            const scroll = Tool.GetChild(this.node,"Main/我的/滚动区");
+            const view = Tool.GetChild(scroll,"view");
+            const content = Tool.GetChild(scroll,"view/content");
+            if(scroll == null || view == null || content == null)
+                return;
+            // 从页面到 view 逐层立即对齐，避免读到 Prefab 里的设计态尺寸。
+            for(const target of [mine,scroll,view])
+            {
+                const widget = target && target.getComponent(cc.Widget);
+                if(widget)
+                    widget.updateAlignment();
+            }
+            // 656 = 按钮区 419.76 + 间距 12 + 俱乐部卡片 200 + 底部留白 24（设计分辨率）。
+            const viewHeight = view.height;
+            if(viewHeight <= 0)
+                return;
+            const height = Math.max(656,viewHeight);
+            if(Math.abs(content.height - height) > 0.5)
+                content.height = height;
+            const scrollView = scroll.getComponent(cc.ScrollView);
+            if(scrollView)
+                scrollView.scrollToTop(0);
+        },0);
     }
 
     private ResolveRoomClub():string

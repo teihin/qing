@@ -161,7 +161,7 @@ export default class ClubManagementView {
             this.clearRows();
         }
         this.context = next;
-        const card = this.at("Main/我的/当前俱乐部");
+        const card = this.at("Main/我的/滚动区/view/content/当前俱乐部");
         this.text("名称",next.id ? next.name || "俱乐部 " + next.id : "暂无俱乐部",card);
         this.text("邀请码",next.id ? next.inviteCode || "" : "从俱乐部选择后查看信息",card);
         // 「我的」卡片只在老板/代理时显示身份牌；普通成员（及管理员，按"只有代理和老板"）不占右侧位置。

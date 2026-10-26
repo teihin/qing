@@ -6,6 +6,11 @@
 
 客服网页已部署，真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
 
+## 2026-10-27 「我的」页下半部分改为可滚动（短屏适配）
+
+- 矮屏上「我的」页底部被切：`Main/我的` 下新增 `滚动区（ScrollView）> view（Mask）> content`，「按钮区 操作」和「当前俱乐部」搬进去，只改 `_parent` 与 Widget 的 `_top`（668.62→0、1100.45→431.78），节点名/UUID/子节点不变，对象数 3856→3867。
+- 顶部三块本来就 TOP 对齐，「信息卡底→滚动区顶」恒 11px；1334 屏内容 631.78 < 视区 665.4 不滚、与改动前逐像素一致，1200/1080/900 滚 100/220/400。`panelMain.SyncMyPageScroll()` 切页时逐层 `Widget.updateAlignment()` 再把 content 补到 `max(656, view.height)`；两处路径改 `Main/我的/滚动区/view/content/...`。Creator 已载入并把 Widget 链对齐（prefab 被它重排索引落盘，语义不变）；00:42 已构建并上传 `5.0.31` 热更包（manifest 与远端一致），**真机未验**。见[交接](handoffs/2026-10-27-my-page-scroll.md)。
+
 ## 2026-10-27 游戏推广下载地址接入后台（已部署 00:12）
 
 - 截图里的「游戏推广 → 游戏下载地址」= 客户端 `ConfigManager.downloadurl`：登录进大厅时 `GetOneHashKey("下载url")` 从 `kbedm.usr_hash_info` 明文读取，推广面板显示成 `V7推广链接`。后台此前无维护入口，一直是客户端默认 `http://www.baidu.com`。
@@ -76,7 +81,7 @@
 
 ## 2026-09-16 表情动画替换（hh-poker EMOJI）
 
-- 表情动画换成 hh-poker 素材（VP9 240×240 无 Alpha webm），抠底保留原画黑描边，主体 100px 居中，按 30fps 压成 10 组 373 帧 / 3.69 MB。映射 1～10 → cold…hot；`表情2/<n>.prefab`、`panelTalk.prefab` 图标保留原 uuid 自动换图，表情存活时长改读剪辑时长。脚本 `tools/convert_hh_emoji_anim.py`、`tools/make_emoji_preview.py`，预览 `temp/emoji-preview.html`。**未 Creator 导入、未构建、未真机。**见[交接](handoffs/2026-09-16-emoji-anim-replace.md)。
+- 表情动画换成 hh-poker 素材（VP9 240×240 无 Alpha webm），按 30fps 压成 10 组 373 帧 / 3.69 MB；`表情2/<n>.prefab`、`panelTalk.prefab` 图标保留原 uuid 自动换图。**未 Creator 导入、未构建、未真机。**细节见[交接](handoffs/2026-09-16-emoji-anim-replace.md)。
 
 ## 2026-09-16 热更新自愈 + 大厅房间行改版
 
@@ -89,8 +94,7 @@
 
 ## 2026-09-08 效果图目录约定
 
-- 已确认页面以 `design-previews/效果图V8-new/` 现存稿为准（09-14 核对 49 张，桌内 7 张已删除）；旧 V7、原 V8 及其它历史稿不作为并列母版；设计删除或确认均不代表正式 Prefab 已迁移。见[定稿入口](../../design-previews/README.md)。
-- 09-08 已删除新版目录中的直接拷贝稿并重绘公告、钱包、登录、大厅及后续模块 29 张（中亮蓝青底、浅象牙金字、文字放大）；不得用旧图直拷或仅滤镜替代，也不得回退到旧 V8 深蓝黑色调。
+- 已确认页面以 `design-previews/效果图V8-new/` 现存稿为准；旧 V7、原 V8 及其它历史稿不作为并列母版；设计删除或确认均不代表正式 Prefab 已迁移。见[定稿入口](../../design-previews/README.md)。
 
 ## 本轮实时核对：记忆整理
 
@@ -103,11 +107,11 @@
 
 ## 2026-09-10 登录页重叠与背景衔接修复
 
-- 用户否决首轮实现后重做正式 Prefab（关根 Sprite，独立背景/盾牌/输入框/链接/按钮等比居中，业务节点与事件保留），布局未获最终验收；`63b9ef0` 已按用户要求撤回，未创建反向提交。上下延展背景改单张完整底图，网页显示与四档静态布局通过，未构建/真机/真实登录。见[修复交接](handoffs/2026-09-10-login-overlap-fix.md)。
+- 用户否决首轮实现后重做正式 Prefab（关根 Sprite，独立背景/盾牌/输入框/链接/按钮等比居中，业务节点与事件保留），布局未获最终验收；上下延展背景改单张完整底图，网页显示与四档静态布局通过，未构建/真机/真实登录。见[修复交接](handoffs/2026-09-10-login-overlap-fix.md)。
 
 ## 最近报告的 UI 状态
 
-共同边界：以下为历史模块记录，登录页以 2026-09-10 修复状态为准；历史阶段未执行 Creator 构建，其他版本的构建成功不能计入 V7。
+共同边界：以下为历史模块记录；历史阶段未执行 Creator 构建，其他版本的构建成功不计入 V7。
 
 - 逐页“最近报告 / 保留的未完成验证 / 来源行号”完整表格已移至[归档](archive/2026-09-15/ui-status-table.md)；当前进度以[全套进度](handoffs/2026-09-11-v8-all-pages.md)为准。
 - 高频未验证项：原生热更新下载与异常重试、启动/模板 Splash 停留态；登录动态输入与注册回包；大厅真实筛选与动态值；战绩/结算/回顾回包与回放；排行榜领奖；实名页提交与真实交易。
