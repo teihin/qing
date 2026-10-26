@@ -20,6 +20,7 @@ import QueueMatchManager from "../logic/QueueMatchManager";
 import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
+import panelExchangeStone from "./panelExchangeStone";
 import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
@@ -114,7 +115,8 @@ export default class panelMain extends UIPanelViewBase {
     private editAvatarBySlot:{[panelName:string]:{[slotName:string]:string}} = {};
     private pendingPaidAvatarIndex:string = "";
     private pendingPaidProfileName:string = "";
-    private readonly AVATAR_CHANGE_COST:number = 1000; // 服务端消费命令使用“分”，1000分=10元
+    private pendingPaidAvatarCost:number = 0; //本次实际发出的钻石数，回包提示用真实值
+    // 换头像扣多少钻石由后台「钻石消费价格」下发，见 ConfigManager.GetConsumeStone
     private avatarChargeBusy:boolean = false;
     private readonly avatarChargeTimeoutHandler = ()=>{
         if(!this.avatarChargeBusy)
@@ -144,6 +146,7 @@ export default class panelMain extends UIPanelViewBase {
         
         KBEngine.Event.register("set_gold", this, "set_gold");
         KBEngine.Event.register("set_gold2", this, "set_gold");
+        KBEngine.Event.register("set_stone", this, "set_stone");
         KBEngine.Event.register("set_name", this, "set_name");
         KBEngine.Event.register("set_guuid", this, "set_guuid");
         KBEngine.Event.register("set_level", this, "set_level");
@@ -351,6 +354,7 @@ export default class panelMain extends UIPanelViewBase {
         this.EnsureAccountAvatar();
 
         this.set_gold(0);
+        this.set_stone(0);
         this.set_name("");
         this.set_guuid("");
 
@@ -589,7 +593,10 @@ export default class panelMain extends UIPanelViewBase {
         this.pendingPaidAvatarIndex = ImageManager.getInstance().NormalizeAvatarIndex(avatarIndex);
         let prompt = Tool.GetChild(this.node,"确定修改个人信息/bk/msg");
         if(prompt != null)
-            prompt.getComponent(cc.Label).string = "更换头像将收取10元，是否确认？";
+        {
+            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_AVATAR);
+            prompt.getComponent(cc.Label).string = "更换头像将消耗" + nCost + "钻石，是否确认？";
+        }
         Tool.GetChild(this.node,"确定修改个人信息").active = true;
     }
 
@@ -635,19 +642,20 @@ export default class panelMain extends UIPanelViewBase {
         }
 
         let account = GameDataManager.getAccount();
-        let balance = Number(account.gold) + Number(account.gold2 || 0) / 100;
-        if(balance < this.AVATAR_CHANGE_COST / 100)
+        let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_AVATAR);
+        if(Number(account.stone) < nCost)
         {
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"余额不足10元，无法更换头像！");
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"钻石不足" + nCost + "，无法更换头像！");
             Tool.GetChild(this.node,"确定修改个人信息").active = false;
             return;
         }
 
         this.avatarChargeBusy = true;
+        this.pendingPaidAvatarCost = nCost;
         this.SetAvatarChargeConfirmInteractable(false);
         this.unschedule(this.avatarChargeTimeoutHandler);
         this.scheduleOnce(this.avatarChargeTimeoutHandler,8);
-        let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"换头像\",\"money\":" + this.AVATAR_CHANGE_COST + "}";
+        let strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_AVATAR);
         GameDataManager.getAccount().reqHallCommand(strParam,"P@玩家_消费_命令_换头像");
     }
 
@@ -657,6 +665,17 @@ export default class panelMain extends UIPanelViewBase {
         const summary = Tool.GetChild(this.node,"资金明细/V8资金概况/当前金币");
         if(summary != null)
             summary.getComponent(cc.Label).string = Tool.GetChild(this.node,"Main/我的/信息/gold").getComponent(cc.Label).string;
+    }
+    /** 钻石数＝account.stone，和金币框并排显示。 */
+    set_stone(num:number)
+    {
+        const node = Tool.GetChild(this.node,"Main/我的/信息/stone");
+        const label = node == null ? null : node.getComponent(cc.Label);
+        if(label == null)
+            return;
+        const account = GameDataManager.getAccount();
+        const value = account == null || account.stone == null ? 0 : account.stone;
+        label.string = String(value);
     }
     set_name(name:string)
     {
@@ -803,6 +822,12 @@ export default class panelMain extends UIPanelViewBase {
     {
         if(this.clubManagement && this.clubManagement.HandleButton(button))
             return;
+        // 「我的」底部的兑换入口：和牌局菜单里那个是同一个弹窗。
+        if(button.node.name === "兑换钻石")
+        {
+            UIManager.getInstance().showPanel("panelExchangeStone",ShowPanelMode.Cover,"hall");
+            return;
+        }
         // Club rows also live under a content node; handle them before the room-row branch.
         if(button.node.name.indexOf("俱乐部条目_") === 0)
         {
@@ -895,9 +920,10 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "查看数据")
         {
-            if((GameDataManager.getAccount().gold+GameDataManager.getAccount().gold2/100)<0.5)
+            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_LOOK_DATA);
+            if(Number(GameDataManager.getAccount().stone) < nCost)
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"余额不足！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"钻石不足，查看数据失败！");
                 return;
             }
 
@@ -928,7 +954,7 @@ export default class panelMain extends UIPanelViewBase {
             Tool.GetChild(this.node,"Main/我的/数据/入池率").getComponent(cc.Label).string =  nRuChi.toFixed(0).toString()+"%";
 
             //扣费
-            strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"看数据\",\"money\":50}";
+            strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_LOOK_DATA);
             GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
         }
         else if(button.node.name == "推广二维码")
@@ -2748,6 +2774,11 @@ export default class panelMain extends UIPanelViewBase {
     
     public onExChange(nCode:number)
     {
+        // 大厅里同时可能开着「兑换钻石」弹窗，它自己也监听 onExChange。
+        // 这里的文案是给「赠送/转账」用的，兑换这笔要让它先说，别抢着弹「交易成功」。
+        if(panelExchangeStone.ShouldIgnoreHallExchange())
+            return;
+
         let strMsg = "";
         if (nCode == 0x200) //成功
         {
@@ -2873,29 +2904,6 @@ export default class panelMain extends UIPanelViewBase {
             }
         }
         return result;
-    }
-
-    private GetClubGold(clubId:string):string
-    {
-        const account:any = GameDataManager.getAccount();
-        if(account == null)
-            return "0";
-        let value:any = account.club_gold;
-        if(typeof value === "string")
-        {
-            try { value = JSON.parse(value); }
-            catch(error) { value = {}; }
-        }
-        let gold:any = 0;
-        if(value != null && typeof value === "object" && value[clubId] != null)
-            gold = value[clubId];
-        else if(typeof value === "number")
-            gold = value;
-        const numberValue = Number(gold);
-        if(!isFinite(numberValue))
-            return "0";
-        const integerValue = Math.floor(numberValue);
-        return String(integerValue).replace(/\B(?=(\d{3})+(?!\d))/g,",");
     }
 
     /** 是否是代理：既不是创建者也不是管理员，且服务端 is_agent=1（代理必须由老板/上级设置）。 */
@@ -3083,9 +3091,6 @@ export default class panelMain extends UIPanelViewBase {
             const name = info && info.club_name ? String(info.club_name) : "俱乐部 " + id;
             row.getChildByName("俱乐部名称").getComponent(cc.Label).string = name;
             const agent = this.clubAgentInfo[id];
-            const goldLabel = row.getChildByName("金币");
-            if(goldLabel)
-                goldLabel.getComponent(cc.Label).string = this.GetClubGold(id);
             const account = GameDataManager.getAccount();
             const ownerIds = String(account.club_make || "").split(",");
             const isOwner = ownerIds.indexOf(id) >= 0 || !!(agent && Number(agent.is_creator) === 1);
@@ -3095,7 +3100,7 @@ export default class panelMain extends UIPanelViewBase {
             const inviteCode = agent && agent.invite_code ? String(agent.invite_code).trim() : "";
             const inviteLabel = row.getChildByName("邀请码");
             if(inviteLabel)
-                inviteLabel.getComponent(cc.Label).string = inviteCode;
+                inviteLabel.getComponent(cc.Label).string = inviteCode ? "邀请码 " + inviteCode : "";
             // The club emblem is only a placeholder in the card background. The live
             // avatar belongs to the club creator and must be loaded by creator ID.
             const ownerId = info && (info.club_owner || info.owner_guuid || info.owner_id) ?
@@ -3257,11 +3262,16 @@ export default class panelMain extends UIPanelViewBase {
                     this.pendingPaidProfileName = "";
                     this.pendingPaidAvatarIndex = "";
                     this.ApplyProfileChange(profileName,avatarIndex);
-                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"头像修改成功，已收取10元！");
+                    // 提示里报本次实际扣的钻石数（后台可配，别再写死"10元"）
+                    let nCharged = this.pendingPaidAvatarCost;
+                    this.pendingPaidAvatarCost = 0;
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                        nCharged > 0 ? ("头像修改成功，已扣除" + nCharged + "钻石！") : "头像修改成功！");
                 }
             }
             else
             {
+                this.pendingPaidAvatarCost = 0;
                 Tool.GetChild(this.node,"确定修改个人信息").active = false;
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
                     this.GetHallCommandError(param,"头像修改失败，未完成扣费，请稍后重试！"));

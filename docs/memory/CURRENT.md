@@ -6,6 +6,13 @@
 
 客服网页已部署，真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
 
+## 2026-10-26 消费全切钻石 + 价格后台可配（后台已上线，VIP 已下线）
+
+- 客户端 6 个 `玩家_消费_命令` 调用点改 `money_type=stone`，价格由后台「钻石消费价格」下发（哈希键同名，进大厅拉取）。见[交接](handoffs/2026-10-26-stone-consume-price.md)。
+- XuanManager 已部署 8891（21:00，回滚 `backups/xuanmanager.20261026-2100-*`）：迁移 028、接口 401。**配置尚未落库**，客户端**未发版**。
+- VIP 三档停用（后台去掉、客户端只提示「暂未开放」）；`延时` 不进后台配置——文档 v1.2 §3.7 定死档位（第1次免费/200钻15秒/400钻10秒/第4次拒绝）。
+- 待服务端重启：牌桌通道 `money_type=stone`、`延长时间_命令` 钻石档位（文档 v1.2）。服务端仍不按配置校验价格。
+
 ## 2026-10-26 玩家设置跨级只读
 
 - 成员列表第一层是操作者直属下级，可改；从「下级成员」再点开的人起只读，隐藏赠送/踢出/改比例/代理开关/备注，保留数值查看并显示「跨级查看，不能修改」。`settingsDepth` 拦截所有修改入口；关闭/切俱乐部/操作完成归零。Prefab 复用闲置文本节点，未新增节点/UUID。
@@ -99,13 +106,11 @@
 ## 2026-09-11 V8 全套实施
 
 - 09-11 起按 `效果图V8-new` 全页换肤并兼容长短手机，逐页状态见[全套进度](handoffs/2026-09-11-v8-all-pages.md)；大厅/公告菜单为连续背景+独立装饰，[充值](handoffs/2026-09-13-wallet-recharge-v8.md)、[钱包与金币流向](handoffs/2026-09-13-wallet-pages-and-money-v8.md)已写入正式 Prefab。注册弹窗见[交接](handoffs/2026-09-11-register-v8-exact.md)；56 图全套未完成。
-- 09-13～15 的[代理](handoffs/2026-09-13-agent-v8.md)、[推广](handoffs/2026-09-13-promotion-shared.md)、[密码](handoffs/2026-09-13-password-pages-v8.md)、[设置](handoffs/2026-09-13-settings-v8.md)、[钱包/实名](handoffs/2026-09-13-wallet-first-realname.md)、[提现](handoffs/2026-09-13-wallet-withdrawal-controls.md)、[我的档位](handoffs/2026-09-15-mine-stake-playcount.md)、[房卡底框](handoffs/2026-09-15-lobby-room-card-cutout.md)等均未构建发布。待确认稿：[回顾](handoffs/2026-09-14-ingame-review-design.md)、[实时战绩](handoffs/2026-09-14-realtime-record-design.md)、[带入积分](handoffs/2026-09-14-buyin-design.md)、[奖池](handoffs/2026-09-14-jackpot-popup-design.md)。
-- 历史提交观察（`16275a8`、`2f614ba`、`db5b60f`）均已失效，提交与推送一律以 Git 实时状态为准。
+- 09-13～15 的代理、推广、密码、设置、钱包/实名、提现、我的档位、房卡底框及三份待确认稿（回顾/实时战绩/带入积分）均**未构建发布**，逐项交接见 `handoffs/2026-09-1*`。历史提交（`16275a8`、`2f614ba`、`db5b60f`）均已失效，提交与推送一律以 Git 实时状态为准。
 
 ## 2026-09-10 登录页重叠与背景衔接修复
 
-- 用户否决首轮实现后重做正式 Prefab：关闭拉伸整稿的根 Sprite，独立背景、盾牌、输入框、链接与登录按钮同一等比居中坐标，原业务节点及事件保留；修复后布局尚未获得用户最终验收。本地提交 `63b9ef0` 已按用户要求 mixed reset 撤回（回到 `db5b60f`），未创建反向提交或丢弃文件。
-- 上下延展背景不连续问题改为单张完整无控件底图，窗框连续、底部只保留一条桌沿，控件按轮廓保留原像素。Creator 导入与正式 PNG 一致，iPhone 6/X 网页显示、输入/清除及注册弹窗开关已查，四档静态布局通过；未构建、未真机、未真实登录注册。见[修复交接](handoffs/2026-09-10-login-overlap-fix.md)。
+- 用户否决首轮实现后重做正式 Prefab（关根 Sprite，独立背景/盾牌/输入框/链接/按钮等比居中，业务节点与事件保留），布局未获最终验收；`63b9ef0` 已按用户要求撤回，未创建反向提交。上下延展背景改单张完整底图，网页显示与四档静态布局通过，未构建/真机/真实登录。见[修复交接](handoffs/2026-09-10-login-overlap-fix.md)。
 
 ## 最近报告的 UI 状态
 

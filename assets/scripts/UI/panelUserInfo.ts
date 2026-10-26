@@ -8,6 +8,7 @@ import GameDataManager from "../GameDataManager";
 import Debug from "../common/Debug";
 import WebLoadingManager from "../common/WebLoadingManager";
 import MobileManager from "../mobile/MobileManager";
+import ConfigManager from "../logic/ConfigManager";
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
 
@@ -59,7 +60,28 @@ export default class panelUserInfo extends UIPanelViewBase {
         Tool.GetChild(this.node,"数据/屏蔽语音").getComponent(cc.Toggle).isChecked = this.player.gameLogic.CheckNoAudio(this.player.info.strUserID)
         this.UpdateInfo();
 
+        this.RefreshPropPriceLabels();
         this.GetVipInfo()
+    }
+
+    /**
+     * 十个道具按钮下面的价签：Prefab 里写死的是「0.1」（原金币元价），
+     * 道具改成扣钻石后必须按后台配置刷新，否则显示的价格与实际扣费对不上。
+     * 面板每次打开都会新建，进大厅时价格已下发，所以这里刷一次就够。
+     */
+    private RefreshPropPriceLabels()
+    {
+        let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_PROP);
+        let box = Tool.GetChild(this.node,"数据/道具");
+        if(box == null)
+            return;
+        for(let one of box.children)
+        {
+            let priceNode = Tool.GetChild(one,"label copy");
+            let label = priceNode == null ? null : priceNode.getComponent(cc.Label);
+            if(label != null)
+                label.string = String(nCost);
+        }
     }
 
     // update (dt) {}
@@ -82,9 +104,10 @@ export default class panelUserInfo extends UIPanelViewBase {
         }
         else if(button.node.name === "看一下")
         {
-            if((GameDataManager.getAccount().gold+GameDataManager.getAccount().gold2/100)<0.2)
+            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_LOOK_DATA);
+            if(Number(GameDataManager.getAccount().stone) < nCost)
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"余额不足！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"钻石不足，查看数据失败！");
                 return;
             }
             let strParam:string = this.player.info.remark;
@@ -110,20 +133,19 @@ export default class panelUserInfo extends UIPanelViewBase {
             Tool.GetChild(this.node,"数据/统计/总胜率").getComponent(cc.Label).string =  nWinPer.toFixed(0).toString()+"%";
 
             //扣费
-            strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"看数据\",\"money\":20}";
+            strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_LOOK_DATA);
             GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
         }
         else if(button.node.parent.name === "道具")
         {
-            let strGold = GameDataManager.getAccount().gold;
-            let strGold2 = GameDataManager.getAccount().gold2;
-            if (Number(strGold + "." + strGold2) < 0.1)
-            {                
-                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "余额不足!");
+            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_PROP);
+            if(Number(GameDataManager.getAccount().stone) < nCost)
+            {
+                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "钻石不足，无法使用道具!");
                 return;
             }
 
-            let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"道具\",\"money\":10}";
+            let strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_PROP);
             GameDataManager.getAccount().reqGameCommand(strParam, "玩家_消费_命令");
             GameDataManager.getAccount().reqSay("@@道具@@" + button.node.name + "@" + this.player.info.strUserID, GameDataManager.getInstance().nSelfPlayerSit);
 

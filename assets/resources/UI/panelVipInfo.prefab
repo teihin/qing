@@ -5549,8 +5549,8 @@
       }
     ],
     "_useOriginalSize": false,
-    "_string": "月卡\n30金币",
-    "_N$string": "月卡\n30金币",
+    "_string": "月卡\n暂未开放",
+    "_N$string": "月卡\n暂未开放",
     "_fontSize": 22,
     "_lineHeight": 28,
     "_enableWrapText": true,
@@ -5645,8 +5645,8 @@
       }
     ],
     "_useOriginalSize": false,
-    "_string": "半年卡\n120金币",
-    "_N$string": "半年卡\n120金币",
+    "_string": "半年卡\n暂未开放",
+    "_N$string": "半年卡\n暂未开放",
     "_fontSize": 22,
     "_lineHeight": 28,
     "_enableWrapText": true,
@@ -5741,8 +5741,8 @@
       }
     ],
     "_useOriginalSize": false,
-    "_string": "年卡\n180金币",
-    "_N$string": "年卡\n180金币",
+    "_string": "年卡\n暂未开放",
+    "_N$string": "年卡\n暂未开放",
     "_fontSize": 22,
     "_lineHeight": 28,
     "_enableWrapText": true,

@@ -187,8 +187,12 @@ export default class ClubManagementView {
         this.active("俱乐部成员弹窗/面板/管理申请/红点",dot);
         // 代理也能从成员列表切到待审申请，「返回成员」对他必须是可用的。
         this.active("俱乐部申请弹窗/面板/管理返回成员",this.approver());
+        // 弹窗抬头只给「俱乐部名 + 邀请码」，与俱乐部列表卡片的码保持一致；
+        // 俱乐部 ID 是内部主键，成员不需要看，也不再展示。
+        const clubTitle = next.id ? (next.name || "俱乐部 " + next.id) : "";
+        const inviteText = next.id && next.inviteCode ? "（邀请码:" + next.inviteCode + "）" : "";
         for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗"])
-            this.text(name + "/面板/俱乐部信息",(next.name || "俱乐部") + "  ID: " + next.id);
+            this.text(name + "/面板/俱乐部信息",clubTitle + inviteText);
     }
 
     public HandleButton(button:cc.Button):boolean {

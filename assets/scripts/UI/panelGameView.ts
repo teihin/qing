@@ -115,6 +115,53 @@ export default class panelGameView extends UIPanelViewBase {
        // Debug.Error("进入enable")
     }
 
+    /**
+     * 本局加时的钻石档位（接口文档 v1.2 §3.7）：
+     * 第 1 次免费 +20 秒 / 第 2 次 200 钻 +15 秒 / 第 3 次 400 钻 +10 秒 / 第 4 次起拒绝。
+     * 服务端下发的是 `round_counttimes_money`：金币口径为 0/2/4/8…（分），
+     * 这里同时兼容它直接下发钻石价（0/200/400）的写法，避免两边口径切换时提示错。
+     */
+    private GetDelayTier():{cost:number,secs:number,free:boolean,denied:boolean}
+    {
+        let nRaw = Number(this.gameLogic.GetPlayerCtlByID(0).info.count_times);
+        if(nRaw === 0)
+            return {cost:0,secs:20,free:true,denied:false};
+        if(nRaw === 2 || nRaw === 200)
+            return {cost:200,secs:15,free:false,denied:false};
+        if(nRaw === 4 || nRaw === 400)
+            return {cost:400,secs:10,free:false,denied:false};
+        if(nRaw >= 8)
+            return {cost:0,secs:0,free:false,denied:true};
+        // 异常值（没拿到次数）：按第 2 档提示，最终以服务端判定为准
+        return {cost:200,secs:15,free:false,denied:false};
+    }
+
+    /** 延时统一走这里：`money_type=stone`，价格由服务端档位决定，不传 `money`。 */
+    private SendDelayCommand()
+    {
+        GameDataManager.getAccount().reqGameCommand("{\"header\":\"延长时间_命令\",\"money_type\":\"stone\"}", "延长时间_命令");
+    }
+
+    /**
+     * 牌桌三个消费按钮的价签（切牌 / 强制秀牌 / 看剩余牌）。
+     * 场景里原来写死的是金币元价：切牌 1、强秀 5、看剩余牌 0.1；
+     * 现在价格改成后台「钻石消费价格」下发的钻石数，进桌和配置更新时都要刷。
+     */
+    public RefreshConsumePriceLabels()
+    {
+        this.SetConsumePriceLabel("RoomFrame/切牌/label", ConfigManager.CONSUME_CUT_CARD);
+        this.SetConsumePriceLabel("cmd6/强制秀牌/label", ConfigManager.CONSUME_FORCE_SHOW);
+        this.SetConsumePriceLabel("cmd6/看剩余牌/label copy", ConfigManager.CONSUME_LOOK_NEXT);
+    }
+
+    private SetConsumePriceLabel(strPath:string, strType:string)
+    {
+        let node = Tool.GetChild(this.node, strPath);
+        let label = node == null ? null : node.getComponent(cc.Label);
+        if(label != null)
+            label.string = String(ConfigManager.getInstance().GetConsumeStone(strType));
+    }
+
     onLoad () {
         super.onLoad();
 
@@ -161,6 +208,9 @@ export default class panelGameView extends UIPanelViewBase {
         KBEngine.Event.register("QueuePreSitAccepted", this, "OnQueuePreSitAccepted");
         KBEngine.Event.register("QueuePreSitFailed", this, "OnQueuePreSitFailed");
         KBEngine.Event.register("RoomInviteStateChanged", this, "RefreshRoomInviteEntry");
+        // 后台改了钻石消费价格，牌桌价签跟着刷（面板常驻，只注册一次）
+        KBEngine.Event.register("ConsumeStonePriceUpdated", this, "RefreshConsumePriceLabels");
+        this.RefreshConsumePriceLabels();
 
         this.scrollGuanZhan = Tool.GetChild(this.node,"实时战绩/围观列表").getComponent(ScrollViewEx);
         this.scrollGuanZhan.callBackFresh = this.GetWatchList.bind(this);
@@ -1215,33 +1265,46 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "延时")
         {
-            if (Number(GameDataManager.getAccount().gold.toString()) < Number(this.gameLogic.GetPlayerCtlByID(0).info.count_times))
+            // 加时改走钻石（接口文档 v1.2 §3.7）：价格由服务端固定档位决定，客户端只负责提示与拦截。
+            //   本局第 1 次：免费 +20 秒
+            //   本局第 2 次：200 钻 +15 秒
+            //   本局第 3 次：400 钻 +10 秒
+            //   第 4 次及以后：服务端直接 0x301，客户端提前拦住
+            // 扣费在服务端 `延长时间_命令` 内完成，客户端不发 `玩家_消费_命令`，避免双扣。
+            let tier = this.GetDelayTier();
+            if(tier.denied)
             {
-                this.ShowMsg("金币不足无法延时！");
+                this.ShowMsg("本局加时次数已用完！");
                 return;
             }
-
-            if( this.gameLogic.GetPlayerCtlByID(0).info.count_times == "0")
+            if(!tier.free && Number(GameDataManager.getAccount().stone) < tier.cost)
             {
-                GameDataManager.getAccount().reqGameCommand("{\"header\":\"延长时间_命令\"}", "延长时间_命令");
+                this.ShowMsg("钻石不足" + tier.cost + "，无法延时！");
+                return;
+            }
+            if(tier.free)
+            {
+                this.SendDelayCommand();
                 return;
             }
 
             this.node.getChildByName("扣费提示").active = true;
-            Tool.GetChild(this.node,"扣费提示/msg").getComponent(cc.Label).string = "确认消耗"+ this.gameLogic.GetPlayerCtlByID(0).info.count_times + "金币延时20秒吗？";
+            Tool.GetChild(this.node,"扣费提示/msg").getComponent(cc.Label).string =
+                "确认消耗" + tier.cost + "钻石延时" + tier.secs + "秒吗？";
            
         }
         else if(button.node.name === "确认延时")
         {
             button.node.parent.active = false;
-            GameDataManager.getAccount().reqGameCommand("{\"header\":\"延长时间_命令\"}", "延长时间_命令");
+            this.SendDelayCommand();
        
         }
         else if(button.node.name == "强制秀牌")
         {
-            if (Number(GameDataManager.getAccount().gold) < 5)
+            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_FORCE_SHOW);
+            if (Number(GameDataManager.getAccount().stone) < nCost)
             {
-                this.ShowMsg("余额不足，强制看牌失败！");
+                this.ShowMsg("钻石不足" + nCost + "，强制看牌失败！");
                 return;
             }
             for(let one of this.gameLogic.arrayPlayer)
@@ -1251,24 +1314,23 @@ export default class panelGameView extends UIPanelViewBase {
 
             let strParam = "{\"header\":\"玩家_翻所有人牌_命令\"}";
             GameDataManager.getAccount().reqGameCommand(strParam, "玩家_翻所有人牌_命令");
-            strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"强制秀牌\",\"money\":500}";
+            strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_FORCE_SHOW);
             GameDataManager.getAccount().reqGameCommand(strParam, "玩家_消费_命令");
             button.interactable = false;
             button.node.opacity = 100;
         }
         else if(button.node.name == "看剩余牌")
         {
-            let strGold = GameDataManager.getAccount().gold;
-            let  strGold2 = GameDataManager.getAccount().gold2;
-            if (Number(strGold + "." + strGold2) < 0.1)
+            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_LOOK_NEXT);
+            if (Number(GameDataManager.getAccount().stone) < nCost)
             {
-                this.ShowMsg("余额不足，强制看牌失败！");
+                this.ShowMsg("钻石不足" + nCost + "，看牌失败！");
                 return;
             }
 
             if (this.gameLogic.GetPlayerCtlByID(0).LookNextCard())
             {
-                let strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"看下一张牌\",\"money\":10}";
+                let strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_LOOK_NEXT);
                 GameDataManager.getAccount().reqGameCommand(strParam, "玩家_消费_命令");
 
                 button.interactable = false;
@@ -1360,10 +1422,17 @@ export default class panelGameView extends UIPanelViewBase {
                 return;
             }
 
+            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_CUT_CARD);
+            if (Number(GameDataManager.getAccount().stone) < nCost)
+            {
+                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "钻石不足" + nCost + "，无法切牌!");
+                return;
+            }
+
             let strParam = "{\"header\":\"玩家_切牌_命令\"}";
             GameDataManager.getAccount().reqGameCommand(strParam, "玩家_切牌_命令");
 
-            strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"切牌\",\"money\":100}";
+            strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_CUT_CARD);
             GameDataManager.getAccount().reqGameCommand(strParam, "玩家_消费_命令");
 
             UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "已发起切牌！");
@@ -1438,16 +1507,18 @@ export default class panelGameView extends UIPanelViewBase {
         else if(button.node.name === "提交举报")
         {
             this.node.getChildByName("举报扣费提示").active = true;
-            Tool.GetChild(this.node,"举报扣费提示/msg").getComponent(cc.Label).string = "确认消耗50金币举报玩家吗？";
+            let nReportCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_REPORT);
+            Tool.GetChild(this.node,"举报扣费提示/msg").getComponent(cc.Label).string = "确认消耗" + nReportCost + "钻石举报玩家吗？";
            
         }
         else if(button.node.name === "确认举报")
         {
             this.node.getChildByName("举报扣费提示").active = false;
 
-            if (Number(GameDataManager.getAccount().gold) < 50)
+            let nReportCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_REPORT);
+            if (Number(GameDataManager.getAccount().stone) < nReportCost)
             {
-                this.ShowMsg("余额不足，不能举报失败！");
+                this.ShowMsg("钻石不足" + nReportCost + "，不能举报！");
                 return;
             }
 
@@ -1487,7 +1558,7 @@ export default class panelGameView extends UIPanelViewBase {
             let strParam = "{\"header\":\"举报_玩家_信息\",\"room_id\":\""+GameDataManager.getAccount().roomID+"\",\"player_list\":\""+strUsers+"\",\"grame_round\":\""+this.nCurPage+"\",\"report_info\":\""+Tool.Base64Encode(strMsg)+"\"}";
             GameDataManager.getAccount().reqHallCommand(strParam, "P@举报_玩家_信息");
 
-            strParam = "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"举报\",\"money\":5000}";
+            strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_REPORT);
             GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
         }
         else if(button.node.name.indexOf("tt")>=0)
@@ -3167,6 +3238,15 @@ export default class panelGameView extends UIPanelViewBase {
         this.roomReadyArtNode.runAction(cc.repeatForever(cc.sequence(breatheIn, breatheOut)));
     }
 
+    /**
+     * 俱乐部分支的产品决定：不向玩家提供排队功能，游戏内排队入口和结算战绩页
+     * 的排队按钮都以此为准保持隐藏。恢复排队入口只需让这里返回 true。
+     */
+    private IsQueueEntryEnabled():boolean
+    {
+        return false;
+    }
+
     private RefreshQueueEntryVisibility(isSelfSeated:boolean)
     {
         if(this.queueEntryNode == null || !cc.isValid(this.queueEntryNode))
@@ -3175,7 +3255,7 @@ export default class panelGameView extends UIPanelViewBase {
         // 复核；true仍可供坐下/预坐回包提前隐藏入口，保持原有安全行为。
         if(!isSelfSeated && this.IsSelfActuallySeated())
             isSelfSeated = true;
-        let shouldShow = this.IsQueueSupportedRoom() && !isSelfSeated;
+        let shouldShow = this.IsQueueEntryEnabled() && this.IsQueueSupportedRoom() && !isSelfSeated;
         this.queueEntryNode.active = shouldShow;
         if(shouldShow && this.queueEntrySkeleton != null && cc.isValid(this.queueEntrySkeleton))
         {
@@ -3256,6 +3336,9 @@ export default class panelGameView extends UIPanelViewBase {
      */
     public CanOpenQueuePanelFromRecordInfo():boolean
     {
+        // 俱乐部分支隐藏结算战绩页的排队按钮，入口资格一律返回不可用。
+        if(!this.IsQueueEntryEnabled())
+            return false;
         if(this.gameLogic == null || !cc.isValid(this.gameLogic.node) ||
             !this.IsQueueSupportedRoom())
             return false;

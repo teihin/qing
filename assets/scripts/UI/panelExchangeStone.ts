@@ -44,6 +44,21 @@ export default class panelExchangeStone extends UIPanelViewBase
     private clubId:string = "";
     private agentInfo:any = null;
 
+    /**
+     * 最近一次兑换的发出时刻。
+     * 在**大厅**里开这个弹窗时，`panelMain` 同样监听 `onExChange`（那是「赠送/转账」的回调），
+     * 会抢着弹「交易成功！」。发协议时打个时间戳，让它先闭嘴，结果由本弹窗自己报。
+     */
+    private static resultStamp:number = 0;
+    private static readonly RESULT_WINDOW:number = 15000;
+
+    /** 供 panelMain 判断这笔 onExChange 是不是兑换产生的。 */
+    public static ShouldIgnoreHallExchange():boolean
+    {
+        return panelExchangeStone.resultStamp > 0
+            && Date.now() - panelExchangeStone.resultStamp < panelExchangeStone.RESULT_WINDOW;
+    }
+
     onLoad ()
     {
         super.onLoad();
@@ -64,17 +79,27 @@ export default class panelExchangeStone extends UIPanelViewBase
         }
     }
 
+    onDestroy ()
+    {
+        // 弹窗关掉后没人给兑换结果兜底了，别继续挡 panelMain 的赠送结算提示。
+        panelExchangeStone.resultStamp = 0;
+        super.onDestroy();
+    }
+
     start ()
     {
         super.start();
 
-        if(GameDataManager.getAccount() == null)
+        let account:any = GameDataManager.getAccount();
+        if(account == null)
         {
             UIManager.getInstance().closePanelByName(this.node.name,ClosePanelMode.Normal);
             return;
         }
 
-        this.clubId = resolveRoomClubId(GameDataManager.getAccount(),"",true);
+        // 大厅里没有「当前房间」，角色按大厅选中的俱乐部判；牌局里仍以房间 club_id 优先。
+        // 「我的」入口传 strUserData="hall"。
+        this.clubId = resolveRoomClubId(account,"",this.strUserData !== "hall");
         this.BuildTiers();
         this.RefreshUser();
         this.RefreshRole();
@@ -419,6 +444,8 @@ export default class panelExchangeStone extends UIPanelViewBase
 
         this.busy = true;
         this.scheduleOnce(()=>{ this.busy = false; },8);
+        // 让 panelMain 的赠送回调先别抢这笔结果（它和大厅的「赠送」共用 onExChange）。
+        panelExchangeStone.resultStamp = Date.now();
         // money_value 传**金币数**（消耗量），钻石由服务端按汇率乘出来；
         // money_type 必须是英文逗号 + 字面量「非俱乐部」，服务端不做容错。
         account.reqExChange2(String(account.guuid),gold,"gold,非俱乐部");
@@ -426,6 +453,8 @@ export default class panelExchangeStone extends UIPanelViewBase
 
     public onExChange(nCode:number)
     {
+        // panelMain 先收到（它注册得早），这一步在它之后执行，收尾即可。
+        panelExchangeStone.resultStamp = 0;
         this.busy = false;
         if(!cc.isValid(this.node))
             return;

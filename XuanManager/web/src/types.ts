@@ -801,3 +801,25 @@ export interface RoomRecordRoundResponse {
   players: RoomRecordRoundPlayer[];
   actions: RoomRecordAction[];
 }
+
+export interface StoneConsumePriceItemState {
+  code: string;
+  name: string;
+  scene: string;
+  stone: number;
+  defaultStone: number;
+  legacyMoney: number;
+  legacyUnit: string;
+}
+
+export interface StoneConsumePriceState {
+  items: StoneConsumePriceItemState[];
+  storageKey: string;
+  configured: boolean;
+  clientFormat: string;
+  updatedBy: string;
+  updatedAt: string | null;
+  missingItems: string[];
+  unknownItems: string[];
+  parseError: string;
+}
