@@ -84,6 +84,8 @@ export default class panelMain extends UIPanelViewBase {
     private clubAgentInfo:{[clubId:string]:any} = {};
     /** 收到代理信息推送后补查一次的节流时间，防止回包再触发补查形成循环。 */
     private clubAgentRecheck:{[clubId:string]:number} = {};
+    /** 推广页缺邀请码时补查代理信息的时间戳，同样按俱乐部节流。 */
+    private clubInviteCodeAsked:{[clubId:string]:number} = {};
     // 登录进大厅的默认分页只决定一次，之后用户手动切换或俱乐部关系变化都不再自动跳转。
     private lobbyEntryResolved:boolean = false;
     /**
@@ -310,9 +312,7 @@ export default class panelMain extends UIPanelViewBase {
 
         // 推广链接与二维码只指向哈希配置里的下载地址，不再拼接 /zc?guuid= 推广参数。
         const qrUrl = ConfigManager.getInstance().downloadurl;
-        const idLabel = Tool.GetChild(promotionPanel,"V7推广ID");
-        if(idLabel && idLabel.getComponent(cc.Label))
-            idLabel.getComponent(cc.Label).string = "推广ID：" + GameDataManager.getAccount().guuid;
+        this.RefreshPromotionInviteCode();
         const linkLabel = Tool.GetChild(promotionPanel,"V7推广链接");
         if(linkLabel && linkLabel.getComponent(cc.Label))
             linkLabel.getComponent(cc.Label).string = qrUrl;
@@ -335,6 +335,52 @@ export default class panelMain extends UIPanelViewBase {
         this.promotionReturnPanel = null;
         if(cc.isValid(returnPanel) && returnPanel.parent === this.node.parent)
             returnPanel.active = true;
+    }
+
+    /** 推广页那一行显示的是「当前俱乐部邀请码」，没有俱乐部时整行（文字 + 复制按钮）都不显示。 */
+    private RefreshPromotionInviteCode():void
+    {
+        const promotionPanel = this.node.getChildByName("推广二维码");
+        if(!cc.isValid(promotionPanel))
+            return;
+        const clubId = this.ResolveRoomClub();
+        const code = this.GetCurrentClubInviteCode(clubId);
+        const rowVisible = !!clubId;
+        const idLabel = Tool.GetChild(promotionPanel,"V7推广ID");
+        if(idLabel)
+        {
+            idLabel.active = rowVisible;
+            const label = idLabel.getComponent(cc.Label);
+            if(label)
+                label.string = rowVisible ? "俱乐部邀请码：" + code : "";
+        }
+        const copyButton = Tool.GetChild(promotionPanel,"复制推广ID");
+        if(copyButton)
+            copyButton.active = rowVisible;
+        // 刚登录 / 刚入会时代理信息还没回包，有俱乐部却没码就先补查一次（10 秒内不重复发）。
+        if(rowVisible && !code)
+            this.RequestCurrentClubAgent(clubId);
+    }
+
+    /** 只取指定俱乐部的邀请码；缓存未到时返回空串。 */
+    private GetCurrentClubInviteCode(clubId:string):string
+    {
+        if(!clubId)
+            return "";
+        const agent = this.clubAgentInfo[clubId];
+        return agent && agent.invite_code != null ? String(agent.invite_code).trim() : "";
+    }
+
+    private RequestCurrentClubAgent(clubId:string):void
+    {
+        const account = GameDataManager.getAccount();
+        if(!account || !clubId)
+            return;
+        const now = Date.now();
+        if(now - (this.clubInviteCodeAsked[clubId] || 0) < 10000)
+            return;
+        this.clubInviteCodeAsked[clubId] = now;
+        account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_代理_信息",club_id:clubId}),"p@club:agent:" + clubId);
     }
 
     start () {
@@ -894,15 +940,14 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "复制推广ID")
         {
-            let strID = Tool.GetChild(this.node,"推广二维码/V7推广ID")
-                .getComponent(cc.Label).string.replace(/^推广ID[：:]\s*/,"").trim();
-            if(strID === "" || strID === "--")
+            let strCode = this.GetCurrentClubInviteCode(this.ResolveRoomClub());
+            if(strCode === "")
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"推广ID为空，暂时无法复制！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"俱乐部邀请码为空，暂时无法复制！");
                 return;
             }
-            let copied = MobileManager.getInstance().CopyToPhone(strID);
-            let message = copied ? "推广ID复制成功！" : "推广ID复制失败，请稍后重试！";
+            let copied = MobileManager.getInstance().CopyToPhone(strCode);
+            let message = copied ? "俱乐部邀请码复制成功！" : "俱乐部邀请码复制失败，请稍后重试！";
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
         }
         else if(button.node.name === "复制推广地址")
@@ -1116,6 +1161,11 @@ export default class panelMain extends UIPanelViewBase {
             this.node.getChildByName("资金明细").active = true;
             this.set_gold(0);
             this.GetLiuShuiInfo();
+        }
+        else if(button.node.name === "钻石流向")
+        {
+            // 钻石流向单独成 prefab（只保留金币流向页的下半部分），避免大厅继续变大。
+            UIManager.getInstance().showPanel("panelStoneWater",ShowPanelMode.Cover);
         }
         else if(button.node.name === "金币充值")
         {
@@ -2982,6 +3032,8 @@ export default class panelMain extends UIPanelViewBase {
         this.RefreshClubList(true);
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
+        // 推广页开着的场合（大厅「我的」里点进去），邀请码这行要跟着刷新。
+        this.RefreshPromotionInviteCode();
         if(!fromPush || Number(data.is_agent) === 1 || Number(data.is_creator) === 1)
             return;
         const now = Date.now();

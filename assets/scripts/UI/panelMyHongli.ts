@@ -29,11 +29,20 @@ const {ccclass} = cc._decorator;
  */
 @ccclass
 export default class panelMyHongli extends UIPanelViewBase {
-    private readonly PAGE_SIZE:number = 8;
+    private readonly PAGE_SIZE:number = 15;
+    /** 记录行行距：行高 61 + 间隔 14，与 Prefab 里模板行一致。 */
+    private readonly ROW_SPACING:number = 75;
     private page:number = 0;
     private totalPages:number = 1;
     private claimPending:boolean = false;
     private started:boolean = false;
+
+    /** 列表是 ScrollView（列表/视口/内容），行由模板 记录行 克隆。 */
+    private listRoot:cc.Node = null;
+    private listView:cc.Node = null;
+    private listContent:cc.Node = null;
+    private rowTemplate:cc.Node = null;
+    private rows:cc.Node[] = [];
 
     /** 俱乐部 ID；空串表示平台代理口径。 */
     private clubId:string = "";
@@ -46,6 +55,7 @@ export default class panelMyHongli extends UIPanelViewBase {
 
     onLoad() {
         super.onLoad();
+        this.initList();
         KBEngine.Event.register("set_hongli", this, "set_hongli");
         KBEngine.Event.register("set_all_hongli", this, "set_all_hongli");
         KBEngine.Event.register("set_use_hongli", this, "set_use_hongli");
@@ -324,9 +334,59 @@ export default class panelMyHongli extends UIPanelViewBase {
 
     // ---------------------------------------------------------------- 列表渲染
 
-    private rowNodes():cc.Node[] {
-        const list = Tool.GetChild(this.node, "列表");
-        return list ? list.children : [];
+    /** 抓取 ScrollView 结构；记录行 是模板，默认隐藏。 */
+    private initList() {
+        this.listRoot = Tool.GetChild(this.node, "列表");
+        this.listView = Tool.GetChild(this.node, "列表/视口");
+        this.listContent = Tool.GetChild(this.node, "列表/视口/内容");
+        this.rowTemplate = Tool.GetChild(this.node, "列表/视口/内容/记录行");
+        this.rows = [];
+        if(this.rowTemplate) this.rowTemplate.active = false;
+    }
+
+    /** 按需克隆行，行数不够就补，够用就复用。 */
+    private rowAt(index:number):cc.Node {
+        if(!this.listContent || !this.rowTemplate) return null;
+        while(this.rows.length <= index) {
+            const row = cc.instantiate(this.rowTemplate);
+            row.name = "记录行" + (this.rows.length + 1).toString();
+            row.parent = this.listContent;
+            row.active = false;
+            this.rows.push(row);
+        }
+        return this.rows[index];
+    }
+
+    /**
+     * 按行数撑开内容高度并回到顶部；父节点 视口 带 Widget，会跟随 列表 运行期尺寸，
+     * 所以每次渲染都重新取一次高度，长屏下也不会错位。
+     */
+    private layoutList(count:number) {
+        if(!this.listView || !this.listContent) return;
+        const viewHeight = this.listView.height;
+        const contentHeight = Math.max(viewHeight, count * this.ROW_SPACING);
+        this.listContent.setContentSize(this.listView.width, contentHeight);
+        // 内容锚点是 (0.5,1)，位置即内容顶边，对齐视口顶边才不会出现半截行。
+        this.listContent.setPosition(0, viewHeight / 2);
+        const scroll = this.listRoot ? this.listRoot.getComponent(cc.ScrollView) : null;
+        if(scroll) {
+            scroll.stopAutoScroll();
+            scroll.scrollToTop(0);
+        }
+    }
+
+    private renderRows(list:any[], fill:(node:cc.Node, row:any) => void, emptyText:string) {
+        const half = this.rowTemplate ? this.rowTemplate.height / 2 : 30.5;
+        this.rows.forEach(row => row.active = false);
+        list.forEach((item, index) => {
+            const row = this.rowAt(index);
+            if(!row) return;
+            row.active = true;
+            row.setPosition(0, -(index * this.ROW_SPACING + half));
+            fill(row, item);
+        });
+        this.layoutList(list.length);
+        this.setHint(list.length === 0 ? emptyText : "");
     }
 
     private refreshPaging() {
@@ -354,18 +414,13 @@ export default class panelMyHongli extends UIPanelViewBase {
             ? Math.max(1, Math.ceil(reportedCount / this.PAGE_SIZE))
             : Math.max(1, this.page + 1);
 
-        const nodes = this.rowNodes();
-        nodes.forEach((node, index) => {
-            const row = rows[index];
-            node.active = !!row;
-            if(!row) return;
+        this.renderRows(rows, (node, row) => {
             this.setNodeLabel(node, "玩家", String(row.winner_name || row.winner_guuid || "—"));
             const percent = Number(row.percent);
             this.setNodeLabel(node, "类型", isFinite(percent) ? ("分成 " + percent + "%") : "分成");
             this.setNodeLabel(node, "金额", this.fenText(row.amount_fen));
             this.setNodeLabel(node, "时间", String(row.time || row.date || "—"));
-        });
-        this.setHint(rows.length === 0 ? "暂无收益明细" : "");
+        }, "暂无收益明细");
         this.refreshPaging();
     }
 
@@ -374,19 +429,14 @@ export default class panelMyHongli extends UIPanelViewBase {
         const rows = all.slice(start, start + this.PAGE_SIZE);
         const account:any = GameDataManager.getAccount();
         const selfId = account ? String(account.guuid || "") : "";
-        const nodes = this.rowNodes();
-        nodes.forEach((node, index) => {
-            const row = rows[index];
-            node.active = !!row;
-            if(!row) return;
+        this.renderRows(rows, (node, row) => {
             this.setNodeLabel(node, "玩家", String(row.player_guuid || row.user_id || selfId || "—"));
             this.setNodeLabel(node, "类型", "红利提取");
             this.setNodeLabel(node, "金额", String(row.hongli_number === undefined || row.hongli_number === null ? "—" : row.hongli_number));
             this.setNodeLabel(node, "时间", String(row.date || row.time || "—"));
-        });
+        }, "暂无提取记录");
         // 服务端没有总条数，只能按"本页是否取满"推断还有没有下一页。
         this.totalPages = all.length >= (this.page + 1) * this.PAGE_SIZE ? this.page + 2 : Math.max(1, this.page + 1);
-        this.setHint(rows.length === 0 ? "暂无提取记录" : "");
         this.refreshPaging();
     }
 

@@ -73,3 +73,10 @@
 
 未验证：没有登录态跑真实回包；`查询_俱乐部_代理_收益` 与路由 `ClubAgentIncomeInfo` 是否已在服务端上线未确认（`/base/Hall.py` 注册表里查不到该命令，文档标注“服务端未实施”）。
 
+
+## 列表改为可滚动（2026-10-26 晚）
+
+- 原实现是 Prefab 里 8 行静态 `记录行1..8`，无 Mask 无 ScrollView；运行期 `列表` 的 Widget（父 `列表面板` 918 高，top 362/bottom 136）把高度压到 420，600px 的行量直接溢出底板。
+- 结构改为 `列表`(cc.ScrollView) → `视口`(cc.Mask `_type=0` + Widget 四边 0) → `内容`(anchor 0.5/1) → `记录行`（模板，active=false）；`记录行2..8` 已删除。Prefab 对象数 302 → 205。
+- `panelMyHongli.ts`：新增 `initList/rowAt/layoutList/renderRows`，行按需克隆复用，按 `行数 × 75` 撑内容高度后 `scrollToTop`；`PAGE_SIZE` 8 → 15。
+- 未验证：无登录态，运行时滚动、翻页与长屏适配未实测；Creator 内视觉未复核。

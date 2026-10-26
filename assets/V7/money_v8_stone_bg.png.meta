@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "bb306cf6-dc40-4138-9cd3-1355753dfb88",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 235,
+  "height": 588,
+  "platformSettings": {},
+  "subMetas": {
+    "money_v8_stone_bg": {
+      "ver": "1.0.6",
+      "uuid": "1c6d8631-527b-4046-ade7-103379b8b2c3",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "bb306cf6-dc40-4138-9cd3-1355753dfb88",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 235,
+      "height": 588,
+      "rawWidth": 235,
+      "rawHeight": 588,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}
