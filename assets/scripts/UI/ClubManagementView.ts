@@ -401,6 +401,24 @@ export default class ClubManagementView {
         }
         this.rowText(row,name === "积分" ? ["积分","余额"] : [name],name + "：" + this.value(value));
     }
+    /**
+     * 输赢配色：赢（正数）红、输（负数）绿，0 与空值/「—」保持 Prefab 原色。
+     * 行节点每次由模板 cc.instantiate 新建，不需要复位颜色，只在需要着色时改。
+     */
+    private winColor(value:any):cc.Color {
+        const text = value === undefined || value === null ? "" : String(value).replace(/[,，\s]/g,"");
+        if(text === "" || text === "—" || text === "-" || text === "+") return null;
+        const number = Number(text);
+        if(!isFinite(number) || number === 0) return null;
+        // 与钱包记录的收支配色保持一致：红 255,92,80 / 绿 151,211,57。
+        return number > 0 ? new cc.Color(255,92,80) : new cc.Color(151,211,57);
+    }
+    private winText(row:cc.Node,name:string,value:any):void {
+        this.metricText(row,name,value);
+        const color = this.winColor(value);
+        const node = color ? this.at(name + "值",row) : null;
+        if(node) node.color = color;
+    }
     /** 成员列表与下级成员列表共用同一套行内容，保证两处显示一致。 */
     private fillMemberRow(row:cc.Node,item:ClubPlayer):void {
         const context = this.context || {accountId:"",id:"",name:"",role:"member" as ClubRole};
@@ -423,9 +441,9 @@ export default class ClubManagementView {
             this.text("比例","比例",row);
             this.text("比例值",this.percentText(item),row);
         }
-        this.metricText(row,"今日输赢",item.todayWin);
-        this.metricText(row,"昨日输赢",item.yesterdayWin);
-        this.metricText(row,"总输赢",item.totalWin);
+        this.winText(row,"今日输赢",item.todayWin);
+        this.winText(row,"昨日输赢",item.yesterdayWin);
+        this.winText(row,"总输赢",item.totalWin);
         this.metricText(row,"今日贡献",item.todayContribution);
         this.metricText(row,"昨日贡献",item.yesterdayContribution);
         this.metricText(row,"总贡献",item.totalContribution);
