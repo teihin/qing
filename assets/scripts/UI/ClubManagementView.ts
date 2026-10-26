@@ -45,7 +45,31 @@ export default class ClubManagementView {
     private remarks:{[key:string]:string} = {};
     private readonly pageSize:number = 20;
 
-    constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,private gift:(player:ClubPlayer)=>void = null) {}
+    constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,private gift:(player:ClubPlayer)=>void = null) {
+        this.raisePopups();
+    }
+
+    /**
+     * Creator 2.4 的触摸候选按 scene graph 优先级排序，而兄弟层的 _localZOrder
+     * 都是 0 时比较结果恒为 0，派发退化成注册顺序——大厅里 onLoad 时就注册好的
+     * 按钮会比成员行（运行时创建）先拿到触摸。成员列表首行头像正好压在大厅
+     * 「我的」页自己头像和「排行榜」上，于是点头像被下层抢走、弹出「修改个人信息」。
+     * 给俱乐部这几个弹窗设递增 zIndex，让排序稳定把它们排在前面；它们本来就是
+     * 最上层的兄弟节点，绘制顺序不变。
+     */
+    private raisePopups():void {
+        const layers:{name:string;z:number}[] = [
+            {name:"俱乐部成员弹窗",z:100},
+            {name:"俱乐部申请弹窗",z:110},
+            {name:"俱乐部玩家设置弹窗",z:120},
+            {name:"玩家设置输入弹窗",z:125},
+            {name:"俱乐部操作确认",z:130}
+        ];
+        for(const layer of layers) {
+            const node = this.at(layer.name);
+            if(node && node.zIndex !== layer.z) node.zIndex = layer.z;
+        }
+    }
 
     public SetApi(api:ClubManagementApi):void {
         this.api = api;
@@ -118,9 +142,19 @@ export default class ClubManagementView {
         const card = this.at("Main/我的/当前俱乐部");
         this.text("名称",next.id ? next.name || "俱乐部 " + next.id : "暂无俱乐部",card);
         this.text("邀请码",next.id ? next.inviteCode || "" : "从俱乐部选择后查看信息",card);
-        this.text("身份",!next.id ? "" : next.role === "owner" ? "老板" : next.role === "manager" ? "管理员" : next.role === "agent" ? "代理" : "成员",card);
-        this.active("身份底",!!next.id,card);
-        // 代理也走同一个入口，但点进去直接落在「待审申请」，看不到成员列表。
+        // 纯成员（非老板/管理员/代理）不显示身份文字和底图，避免「成员」标签占位。
+        const showIdentity = !!next.id && next.role !== "member";
+        this.text("身份",!showIdentity ? "" : next.role === "owner" ? "老板" : next.role === "manager" ? "管理员" : "代理",card);
+        this.active("身份底",showIdentity,card);
+        // 左侧固定位显示俱乐部老板（盟主）的真实头像；没有俱乐部时整块隐藏。
+        this.active("俱乐部徽记",!!next.id,card);
+        const crest = next.id ? this.at("俱乐部徽记",card) : null;
+        const crestSprite = crest && crest.getComponent(cc.Sprite);
+        if(crestSprite) {
+            if(next.ownerId) ImageManager.getInstance().BindPlayerListAvatar(next.ownerId,crestSprite);
+            else ImageManager.getInstance().SetLocalAvatar(crestSprite,"1");
+        }
+        // 代理也走同一个入口，点进去就是成员列表（只读，管理操作仍限创建者/管理员）。
         this.active("操作/管理成员",this.approver(),card);
         this.active("操作/管理解散",!!next.id && next.role === "owner",card);
         this.active("操作/管理退出",!!next.id && next.role !== "owner",card);
@@ -129,8 +163,8 @@ export default class ClubManagementView {
         this.active("操作/管理成员/红点",dot,card);
         this.active("Down/我的/红点",dot);
         this.active("俱乐部成员弹窗/面板/管理申请/红点",dot);
-        // 代理没有成员列表，「返回成员」在代理视角是死按钮，直接藏掉。
-        this.active("俱乐部申请弹窗/面板/管理返回成员",this.manager());
+        // 代理也能从成员列表切到待审申请，「返回成员」对他必须是可用的。
+        this.active("俱乐部申请弹窗/面板/管理返回成员",this.approver());
         for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗"])
             this.text(name + "/面板/俱乐部信息",(next.name || "俱乐部") + "  ID: " + next.id);
     }
@@ -160,9 +194,9 @@ export default class ClubManagementView {
         } else if(name === "玩家设置踢出俱乐部") {
             if(this.selectedPlayer) this.confirm("remove",this.selectedPlayer.id,this.selectedPlayer.name);
         } else if(name === "玩家设置调整比例") {
-            if(this.selectedPlayer && this.selectedPlayer.isAgent) this.openPlayerInput("ratio");
+            if(this.selectedPlayer && this.isAgentPlayer(this.selectedPlayer)) this.openPlayerInput("ratio");
         } else if(name === "玩家设置代理开关") {
-            if(this.selectedPlayer && this.selectedPlayer.isAgent)
+            if(this.selectedPlayer && this.isAgentPlayer(this.selectedPlayer))
                 this.confirm("cancelAgent",this.selectedPlayer.id,this.selectedPlayer.name);
             else if(this.selectedPlayer)
                 this.confirm("setAgent",this.selectedPlayer.id,this.selectedPlayer.name,"0");
@@ -189,8 +223,9 @@ export default class ClubManagementView {
             this.loading = false;
             this.pending = null;
         } else if(name === "管理成员") {
-            // 代理没有成员管理权限，入口直接进自己的待审申请。
-            this.open(this.context && this.context.role === "agent" ? "applications" : "members");
+            // 「俱乐部成员」对所有能进管理页的角色都应打开成员列表；
+            // 代理的待审申请走列表内的「管理申请」入口进入。
+            this.open("members");
         }
         else if(name === "管理返回成员") this.open("members");
         else if(name === "管理申请") this.open("applications");
@@ -225,7 +260,9 @@ export default class ClubManagementView {
 
     private open(kind:ClubListKind):void {
         if(this.busy) return;
-        if(kind === "members" ? !this.manager() : !this.approver()) return;
+        // 成员列表与申请列表都只要求「能进管理」的身份（创建者/管理员/代理）。
+        // 代理点「俱乐部成员」同样先看成员列表，成员行对他的管理操作仍由 manager() 拦。
+        if(!this.approver()) return;
         this.active("俱乐部成员弹窗",kind === "members");
         this.active("俱乐部申请弹窗",kind === "applications");
         this.kind = kind;
@@ -251,7 +288,7 @@ export default class ClubManagementView {
     }
     private async load(page:number):Promise<void> {
         if(this.busy) return;
-        if(this.kind === "members" ? !this.manager() : !this.approver()) return;
+        if(!this.approver()) return;
         const version = ++this.version;
         const ctx = {...this.context};
         const kind = this.kind;
@@ -294,6 +331,19 @@ export default class ClubManagementView {
         return edit && edit.string ? edit.string.trim() : "";
     }
     private value(value:any):string { return value === undefined || value === null || String(value).trim() === "" ? "—" : String(value); }
+    /**
+     * 成员列表不一定下发 is_agent：字段存在就只认它（普通成员身上也会带上级给的比例字段，
+     * 不能单看 percent），字段缺失时才退回按比例判定——非代理的 percent 恒为 0。
+     */
+    private isAgentPlayer(item:ClubPlayer):boolean {
+        if(item.isAgent !== undefined) return item.isAgent;
+        const percent = Number(item.agentPercent);
+        return Number.isFinite(percent) && percent > 0;
+    }
+    private percentText(item:ClubPlayer):string {
+        const value = item.agentPercent === undefined || item.agentPercent === null ? "" : String(item.agentPercent).trim();
+        return (value === "" ? "0" : value) + "%";
+    }
     private status(item:ClubPlayer):string {
         if(item.status && ["online","在线","on","1","true"].indexOf(String(item.status).trim().toLowerCase()) < 0 &&
             ["offline","离线","off","0","false"].indexOf(String(item.status).trim().toLowerCase()) < 0)
@@ -341,9 +391,18 @@ export default class ClubManagementView {
             if(this.kind === "members") {
                 const isOwner = item.id === context.ownerId || item.id === context.accountId && context.role === "owner";
                 const isSelf = item.id === context.accountId;
-                this.rowText(row,["身份"],isOwner ? "创建者" : isSelf && context.role === "manager" ? "管理员" : item.isAgent ? "代理" : item.role || "成员");
+                const isAgent = this.isAgentPlayer(item);
+                this.rowText(row,["身份"],isOwner ? "创建者" : isSelf && context.role === "manager" ? "管理员" : isAgent ? "代理" : item.role || "成员");
                 this.metricText(row,"团队人数",item.teamCount);
                 this.metricText(row,"积分",item.clubGold !== undefined ? item.clubGold : item.points);
+                // 代理比例只有代理才显示；非代理把「比例」整列（标题+数值）一起藏掉。
+                // 模板里这两格的默认文字是「积分」，显示时必须显式改成「比例」。
+                this.active("比例",isAgent,row);
+                this.active("比例值",isAgent,row);
+                if(isAgent) {
+                    this.text("比例","比例",row);
+                    this.text("比例值",this.percentText(item),row);
+                }
                 this.metricText(row,"今日输赢",item.todayWin);
                 this.metricText(row,"昨日输赢",item.yesterdayWin);
                 this.metricText(row,"总输赢",item.totalWin);
@@ -359,11 +418,32 @@ export default class ClubManagementView {
                     if(oldAction) oldAction.active = false;
                 }
                 if(avatar) {
-                    avatar.targetOff(this);
-                    avatar.on("click",()=>{
+                    // 自己那一行没有玩家设置（设代理/调比例/踢出都针对别人），点了不弹窗。
+                    const isSelf = String(item.id || "").trim() === String(context.accountId || "").trim();
+                    // click 依赖 cc.Button 派发，TOUCH_END 是节点自身事件；两条都挂，
+                    // 任何一条先到都能打开玩家设置。滑动列表时按位移过滤，300ms 内只处理一次。
+                    let lastTap = 0,moved = false,downX = 0,downY = 0;
+                    const onDown = (event:cc.Event.EventTouch)=>{
+                        const point = event.getLocation();
+                        downX = point.x;downY = point.y;moved = false;
+                    };
+                    const onMove = (event:cc.Event.EventTouch)=>{
+                        const point = event.getLocation();
+                        if(Math.abs(point.x - downX) > 20 || Math.abs(point.y - downY) > 20) moved = true;
+                    };
+                    const openSettings = ()=>{
+                        if(isSelf || moved) return;
+                        const now = Date.now();
+                        if(now - lastTap < 300) return;
+                        lastTap = now;
                         if(!this.sameContext(context,this.getContext())) { this.Refresh();return; }
                         this.openPlayerSettings(item);
-                    },this);
+                    };
+                    avatar.targetOff(this);
+                    avatar.on(cc.Node.EventType.TOUCH_START,onDown,this);
+                    avatar.on(cc.Node.EventType.TOUCH_MOVE,onMove,this);
+                    avatar.on(cc.Node.EventType.TOUCH_END,openSettings,this);
+                    avatar.on("click",openSettings,this);
                 }
             }
             else {
@@ -380,7 +460,13 @@ export default class ClubManagementView {
         if(scrollView) scrollView.scrollToTop(0);
     }
     private openPlayerSettings(item:ClubPlayer):void {
-        if(!item || !this.manager()) return;
+        if(!item) return;
+        // 代理也能进成员列表（只读），但玩家设置里的操作仍限创建者/管理员；
+        // 给他一句提示，避免点头像像"点了没反应"。
+        if(!this.manager()) { if(this.approver()) this.message("仅创建者/管理员可管理成员");return; }
+        // 玩家设置面板全是针对别人的操作（踢出、设备注、开代理、调比例），
+        // 自己那一行不提供设置入口，点了不弹窗。
+        if(String(item.id || "").trim() === String(this.context.accountId || "").trim()) return;
         const modal = this.at("俱乐部玩家设置弹窗");
         const panel = this.at("面板",modal);
         if(!modal || !panel) { this.message("玩家设置面板暂未加载");return; }
@@ -391,14 +477,15 @@ export default class ClubManagementView {
         this.active("俱乐部玩家设置弹窗",true);
         this.text("玩家姓名",item.name || "玩家 "+item.id,panel);
         this.text("玩家ID","ID: "+item.id,panel);
-        this.text("玩家身份",item.isAgent ? "代理" : item.role || "成员",panel);
+        const isAgent = this.isAgentPlayer(item);
+        this.text("玩家身份",isAgent ? "代理" : item.role || "成员",panel);
         this.text("玩家状态",this.status(item),panel);
         this.text("玩家积分值",this.value(item.clubGold !== undefined ? item.clubGold : item.points),panel);
         this.text("备注值",item.remark || this.remarks[this.remarkKey()] || "未设置",panel);
-        this.text("比例值",item.isAgent ? item.agentPercent !== undefined ? item.agentPercent + "%" : "0%" : "未开通",panel);
-        this.text("代理开关文字",item.isAgent ? "开" : "关",panel);
-        this.active("玩家设置代理开关/开",!!item.isAgent,panel);
-        this.active("玩家设置代理开关/关",!item.isAgent,panel);
+        this.text("比例值",isAgent ? this.percentText(item) : "未开通",panel);
+        this.text("代理开关文字",isAgent ? "开" : "关",panel);
+        this.active("玩家设置代理开关/开",isAgent,panel);
+        this.active("玩家设置代理开关/关",!isAgent,panel);
         const avatar = this.at("头像",panel);
         const avatarSprite = avatar && avatar.getComponent(cc.Sprite);
         if(avatarSprite) ImageManager.getInstance().BindPlayerListAvatar(item.id,avatarSprite);
@@ -406,7 +493,7 @@ export default class ClubManagementView {
         const isOwner = item.id === this.context.ownerId || isSelf && this.context.role === "owner";
         this.button("玩家设置赠送金币",this.manager() && !isOwner,panel);
         this.button("玩家设置踢出俱乐部",this.manager() && !isSelf && !isOwner,panel);
-        this.button("玩家设置调整比例",this.canManageAgent() && item.isAgent && !isSelf && !isOwner,panel);
+        this.button("玩家设置调整比例",this.canManageAgent() && isAgent && !isSelf && !isOwner,panel);
         this.button("玩家设置代理开关",this.canManageAgent() && !isSelf && !isOwner,panel);
         this.button("玩家设置备注",this.manager() && !isSelf && !isOwner,panel);
         // These two controls remain visible as reserved layout rows but have no
@@ -569,7 +656,7 @@ export default class ClubManagementView {
             action === "remove" ? "确认将「"+(name || userId)+"」移出俱乐部？\n玩家 ID: "+userId :
             action === "promote" ? "确认将「"+(name || userId)+"」设为管理员？\n玩家 ID: "+userId :
             action === "adjustScore" ? "确认将「"+(name || userId)+"」积分调整为 "+value+"？" :
-            action === "setAgent" ? "确认给「"+(name || userId)+"」开通代理，比例 "+value+"%？" :
+            action === "setAgent" ? "确认给「"+(name || userId)+"」开通代理？" :
             action === "changeAgentRatio" ? "确认将「"+(name || userId)+"」代理比例调整为 "+value+"%？" :
             action === "cancelAgent" ? "确认取消「"+(name || userId)+"」的代理资格？" :
             (action === "approve" ? "同意" : "拒绝")+"「"+(name || userId)+"」加入俱乐部？\n玩家 ID: "+userId;

@@ -5,6 +5,8 @@
 > 更结构化的流程在技能 `art-text-swap` / `cocos-ui-element-reskin` / `art-asset-text-audit` / `cocos-touch-passthrough-fix`。
 
 ## 通用
+- **`main` 与 `codex/club-ui` 是两条产品线**（main=平台版，club-ui=俱乐部版）。俱乐部功能的改动
+  只提 club-ui，**绝不合并/推送到 main**；反过来平台改动也别往 club-ui 上带。
 - 图片处理用 `/Users/yy/.workbuddy/binaries/python/envs/default/bin/python`（numpy + Pillow 12）；系统 `/usr/bin/python3` 无 numpy。
 - Seedream 4.5 显式像素尺寸下限 **≥ 3,686,400 px**（不是文档写的 1280×720）。
 - **中间产物一律不留**：交付后立即删试错版/草稿/临时脚本/对比图，只留成品。过程要短，先出可用结果。
@@ -54,10 +56,14 @@
   事件由 `common/UIViewBase.onLoad` 用 `getComponentsInChildren(cc.Button)` 统一注册到各面板 `onButtonClick`。
   提示弹窗统一 `showPanel("panelMsgView",ShowPanelMode.Cover,"文本")`；客服界面 `panelKefu`（`start` 只认
   `客服`/`VIP充值`/`VIP充值2` 三种 `strUserData`，传别的值 `strUrl` 为空）。
-- **界面点击穿透 = 该节点没有触摸监听**：Creator 2.4 触摸候选按 **z-order** 派发（与注册先后无关，非 active 的排最后），
+- **界面点击穿透 = 该节点没有触摸监听**：Creator 2.4 触摸候选按 scene graph 优先级派发，
+  但 `_localZOrder` 全 0 的兄弟节点比较结果恒为 0 → **退化成注册顺序**（非 active 排最后），
   有监听的节点被 `swallowTouches` 吞掉，下层收不到；命中范围 = 监听节点自己的 `_contentSize`（与子节点无关），
   所以遮罩节点必须自己全屏。修法：在面板 `onLoad` 给该节点注册 `TOUCH_END`（既有写法见
   `panelGameView` 的「奖池面板」/「牌型提示」），不用等激活、不用动 prefab。详见技能 `cocos-touch-passthrough-fix`。
+- **动态列表按钮点不动 / 弹出下层大厅的面板**：运行时克隆的行按钮总是比 onLoad 时就注册的大厅按钮晚注册，
+  位置一重叠就被大厅按钮抢走（2026-10-25 俱乐部成员列表首行头像压在大厅「我的」头像上即此因）。
+  根治是给弹窗父节点设**递增 zIndex**（`ClubManagementView.raisePopups()`），让排序稳定压过大厅；光加遮罩无效。
 
 ## Cocos Prefab / 贴图（硬约束，别忘）
 - **`panelXxx` 面板一律是 `UIManager.showPanel` 用 `cc.loader.loadRes("UI/" + 名字)` + `cc.instantiate` 动态创建的**

@@ -81,12 +81,25 @@ export default class panelMain extends UIPanelViewBase {
     private clubCommandBusy:boolean = false;
     private clubDetails:{[clubId:string]:any} = {};
     private clubAgentInfo:{[clubId:string]:any} = {};
+    /** 收到代理信息推送后补查一次的节流时间，防止回包再触发补查形成循环。 */
+    private clubAgentRecheck:{[clubId:string]:number} = {};
     // 登录进大厅的默认分页只决定一次，之后用户手动切换或俱乐部关系变化都不再自动跳转。
     private lobbyEntryResolved:boolean = false;
+    /**
+     * 刚创建 / 刚申请加入俱乐部时记下当时的俱乐部 ID 列表。等服务端把新俱乐部写进
+     * club_make / club_join 并推送 set_club_* 后，把「多出来的那一家」设为默认俱乐部
+     * （「我的」当前俱乐部卡片、房间列表、进房 club_id 都取这个值），否则会停在上一次选中的家。
+     */
+    private pendingDefaultClub:boolean = false;
+    private defaultClubBaseIds:string[] = [];
+    private defaultClubTimer:any = null;
+    /** 创建/申请加入后等推送的最长时间；超过就放弃自动切换，避免以后误切。 */
+    private readonly DEFAULT_CLUB_WAIT_MS:number = 30 * 60 * 1000;
     private readonly clubCommandTimeoutHandler = ()=>{
         if(!this.clubCommandBusy)
             return;
         this.clubCommandBusy = false;
+        this.CancelPendingDefaultClub();
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
             "俱乐部操作超时，请稍后重试！");
     };
@@ -198,8 +211,10 @@ export default class panelMain extends UIPanelViewBase {
             const guuid = account ? String(account.guuid || "") : "";
             const owns = account && String(account.club_make || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
             const manages = account && String(account.club_manage || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
-            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,
-                role:owns ? "owner" : manages ? "manager" : this.IsClubAgentIn(id) ? "agent" : "member"};
+            // 这里直接用代理信息判角色：owns/manages 已经在前面判过了，
+            // 再走 IsClubAgentIn 会多一次 make/manage 排除，反而把代理判成成员。
+            const role = owns ? "owner" : manages ? "manager" : this.IsClubAgent(agent) ? "agent" : "member";
+            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),player=>{
             if(player && player.id)
                 UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,String(player.id)+",");
@@ -267,6 +282,7 @@ export default class panelMain extends UIPanelViewBase {
 
     onDestroy(){
         if(this.clubManagementApi) this.clubManagementApi.Dispose();
+        if(this.defaultClubTimer != null) { clearTimeout(this.defaultClubTimer);this.defaultClubTimer = null; }
         super.onDestroy();
     }
 
@@ -1355,7 +1371,15 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "头像" || button.node.name === "编辑资料")
         {
-            // 俱乐部成员弹窗/玩家设置弹窗内的头像由 ClubManagementView 处理，不打开个人资料编辑
+            // 俱乐部弹窗打开时，头像点击一律交给 ClubManagementView 处理。
+            // 不能只查祖先节点名：成员列表第一行头像与大厅「我的」页自己头像位置重叠，
+            // 点击可能落到大厅那张头像上，此时祖先里并没有俱乐部弹窗。
+            for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗","俱乐部玩家设置弹窗"])
+            {
+                const popup = this.node.getChildByName(name);
+                if(popup && popup.active)
+                    return;
+            }
             let ancestor:cc.Node = button.node;
             while(ancestor != null)
             {
@@ -2108,6 +2132,58 @@ export default class panelMain extends UIPanelViewBase {
         return this.selectedRoomClubId;
     }
 
+    /**
+     * 创建 / 申请加入俱乐部后开始等「新俱乐部」出现：记下当前俱乐部 ID 快照。
+     * 等 set_club_make / set_club_join 推送回来再由 ApplyPendingDefaultClub 切默认。
+     */
+    private MarkPendingDefaultClub():void
+    {
+        this.pendingDefaultClub = true;
+        this.defaultClubBaseIds = this.GetMyClubIds();
+        if(this.defaultClubTimer != null)
+        {
+            clearTimeout(this.defaultClubTimer);
+            this.defaultClubTimer = null;
+        }
+        this.defaultClubTimer = setTimeout(()=>{
+            this.defaultClubTimer = null;
+            this.pendingDefaultClub = false;
+            this.defaultClubBaseIds = [];
+        },this.DEFAULT_CLUB_WAIT_MS);
+    }
+
+    private CancelPendingDefaultClub():void
+    {
+        this.pendingDefaultClub = false;
+        this.defaultClubBaseIds = [];
+        if(this.defaultClubTimer != null)
+        {
+            clearTimeout(this.defaultClubTimer);
+            this.defaultClubTimer = null;
+        }
+    }
+
+    /**
+     * 俱乐部关系推送到达时调用：快照里没有、现在多出来的那家就是刚创建/刚入会的俱乐部，
+     * 直接设为默认俱乐部并落本地存储，让「我的」卡片、房间列表、进房 club_id 一起跟过去。
+     */
+    private ApplyPendingDefaultClub():boolean
+    {
+        if(!this.pendingDefaultClub)
+            return false;
+        const ids = this.GetMyClubIds();
+        const added = ids.filter(id=>this.defaultClubBaseIds.indexOf(id) < 0);
+        if(added.length === 0)
+            return false;
+        const clubId = added[added.length - 1];
+        this.CancelPendingDefaultClub();
+        const account = GameDataManager.getAccount();
+        this.selectedRoomClubId = clubId;
+        if(account && account.guuid)
+            cc.sys.localStorage.setItem("lastRoomClub:" + account.guuid,clubId);
+        return true;
+    }
+
     private ClearClubRooms()
     {
         this.arrayRoomData = [];
@@ -2858,7 +2934,7 @@ export default class panelMain extends UIPanelViewBase {
     }
 
     /** 俱乐部代理接口只返回当前玩家自己的邀请码，列表不得展示下级邀请码。 */
-    public OnClubAgentInfo(raw:any, secondaryRaw?:any)
+    public OnClubAgentInfo(raw:any, secondaryRaw?:any, fromPush:boolean = true)
     {
         // 兼容事件总线可能携带的 (code, payload) 形式；正式路由通常只传 payload。
         if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
@@ -2882,10 +2958,44 @@ export default class panelMain extends UIPanelViewBase {
             return;
         const clubId = String(data.club_id);
         this.clubAgentInfo[clubId] = data;
-        this.RefreshClubList(false);
-        // 代理身份是「已经设过比例」，管理入口/红点跟着刷新。
+        // 本地还没选中任何俱乐部时（刚入会/刚登录），直接选中推送的这家，
+        // 否则「我的」卡片会停在「暂无俱乐部」上，看着像没刷新。
+        if(!this.ResolveRoomClub() && this.GetMyClubIds().indexOf(clubId) >= 0)
+        {
+            this.selectedRoomClubId = clubId;
+            const current = GameDataManager.getAccount();
+            if(current && current.guuid)
+                cc.sys.localStorage.setItem("lastRoomClub:" + current.guuid,clubId);
+        }
+        // 上级把我设为代理后，服务端推来的这条快照可能还是设置前的（is_agent=0、
+        // percent=0、invite_code 为空）。此时必须先刷新一次保证俱乐部列表和
+        // 「我的」当前俱乐部卡片跟上推送，再补查一次拿真正生效后的状态。
+        // requestDetails=true 只在本地没有缓存时才发查询，不会重复拉已有数据。
+        this.RefreshClubList(true);
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
+        if(!fromPush || Number(data.is_agent) === 1 || Number(data.is_creator) === 1)
+            return;
+        const now = Date.now();
+        if(now - (this.clubAgentRecheck[clubId] || 0) < 10000)
+            return;
+        this.clubAgentRecheck[clubId] = now;
+        if(!GameDataManager.getAccount())
+            return;
+        // 服务端推送常带设置前的快照，补查两次给「生效后」的数据留出落库和推送的时间。
+        this.RecheckClubAgent(clubId,0.5);
+        this.RecheckClubAgent(clubId,2);
+    }
+
+    private RecheckClubAgent(clubId:string,delay:number):void
+    {
+        this.scheduleOnce(()=>{
+            const account = GameDataManager.getAccount();
+            if(!cc.isValid(this.node) || !account)
+                return;
+            account.reqHallCommand(
+                JSON.stringify({header:"查询_俱乐部_代理_信息",club_id:clubId}),"p@club:agent:" + clubId);
+        },delay);
     }
 
     /** 登录进大厅默认分页：没有任何俱乐部时直接进俱乐部页（等价点击底栏「俱乐部」）。 */
@@ -2912,8 +3022,11 @@ export default class panelMain extends UIPanelViewBase {
     public OnClubMembershipChanged()
     {
         this.clubAgentInfo = {};
+        this.clubAgentRecheck = {};
         if(!this.lobbyEntryResolved)
             this.ResolveLobbyEntryTab();
+        // 刚创建 / 刚入会的俱乐部在这里落成默认俱乐部，后面的卡片、列表、房间筛选都取新值。
+        this.ApplyPendingDefaultClub();
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
         const page = Tool.GetChild(this.node,"Main/俱乐部");
@@ -3042,6 +3155,8 @@ export default class panelMain extends UIPanelViewBase {
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入俱乐部名称！");
             return;
         }
+        // 创建成功后新俱乐部会通过 set_club_make 推送出现，届时自动设为默认俱乐部。
+        this.MarkPendingDefaultClub();
         this.SendClubCommand({header:"创建_俱乐部",club_name:name,club_mode:"1"},"create");
     }
 
@@ -3053,6 +3168,8 @@ export default class panelMain extends UIPanelViewBase {
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入6位邀请码！");
             return;
         }
+        // 审批通过后 set_club_join 推送出现新俱乐部，届时自动设为默认俱乐部。
+        this.MarkPendingDefaultClub();
         this.SendClubCommand({header:"申请_加入_俱乐部",invite_code:this.clubInputId},"join");
     }
 
@@ -3083,7 +3200,7 @@ export default class panelMain extends UIPanelViewBase {
         {
             const id = context.substr("club:agent:".length);
             if(nCode === 0x200 && response.result && response.result.club_id)
-                this.OnClubAgentInfo(response.result);
+                this.OnClubAgentInfo(response.result,undefined,false);
             // 代理信息的正式结果通过 ClubAgentInfo 推送，0x200 的同步结果通常为空。
             return true;
         }
@@ -3093,6 +3210,8 @@ export default class panelMain extends UIPanelViewBase {
         this.clubCommandBusy = false;
         if(nCode !== 0x200)
         {
+            // 命令没被受理就不会有新俱乐部出现，撤掉待切换标记，避免以后误切默认俱乐部。
+            this.CancelPendingDefaultClub();
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
                 this.GetHallCommandError(param,context === "club:create" ? "创建俱乐部失败！" : "申请加入俱乐部失败！"));
             return true;
@@ -3115,7 +3234,7 @@ export default class panelMain extends UIPanelViewBase {
     {
         if(param && param.indexOf("ClubAgentInfo") >= 0)
         {
-            this.OnClubAgentInfo(param);
+            this.OnClubAgentInfo(param,undefined,false);
             return;
         }
         if(this.HandleClubHallCommand(nCode,param))

@@ -320,12 +320,25 @@ export default class HallClubManagementApi implements ClubManagementApi {
     }
     public OnBadge(raw:string):void {
         const data=this.parse(raw);if(!data)return;
-        const rows=Array.isArray(data) ? data : Array.isArray(data.ClubReqInfo) ? data.ClubReqInfo : [data];
+        // 推送既可能是裸对象 {club_id,req_count,...}，也可能包在 ClubReqInfo / result 里。
+        const asRows=(value:any):any[]=>Array.isArray(value) ? value :
+            value && typeof value === "object" ? [value] : [];
+        let rows=Array.isArray(data) ? data : [];
+        if(rows.length === 0) rows=asRows(data.ClubReqInfo);
+        if(rows.length === 0 && data.result) rows=asRows(this.parse(data.result));
+        if(rows.length === 0) rows=[data];
         const a=GameDataManager.getAccount();if(!a)return;
-        const ids=(String(a.club_make||"")+","+String(a.club_manage||"")).split(",").map(x=>x.trim());
+        const listOf=(value:any)=>String(value == null ? "" : value).split(",").map(id=>id.trim()).filter(id=>id !== "");
+        const managed=listOf(a.club_make).concat(listOf(a.club_manage));
+        const joined=listOf(a.club_join).concat(listOf(a.club_join2));
         for(const row of rows) {
             const id=String(row.club_id || "");
-            if(ids.indexOf(id)>=0 && row.req_count != null)this.badge(id,Number(row.req_count));
+            if(!id)continue;
+            // 代理不在 club_make/club_manage 里，只认这两个列表会把服务端的
+            // ClubReqInfo 推送整条丢掉，表现就是「推送来了没红点，要等自己轮询才亮」。
+            // 所以成员关系（club_join/club_join2）和代理身份也一并算「自己的俱乐部」。
+            const mine=managed.indexOf(id) >= 0 || joined.indexOf(id) >= 0 || this.isAgent(id);
+            if(mine && row.req_count != null)this.badge(id,Number(row.req_count));
         }
     }
 }
