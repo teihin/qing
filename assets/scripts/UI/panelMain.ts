@@ -3048,7 +3048,11 @@ export default class panelMain extends UIPanelViewBase {
         const page = Tool.GetChild(this.node,"Main/俱乐部");
         if(!page)
             return;
-        const ids = this.GetMyClubIds();
+        const currentId = this.ResolveRoomClub();
+        const joinedIds = this.GetMyClubIds();
+        // 当前俱乐部固定排在第一位，其余保持原有关系顺序。
+        const ids = currentId && joinedIds.indexOf(currentId) >= 0 ?
+            [currentId].concat(joinedIds.filter(id=>id !== currentId)) : joinedIds;
         const list = Tool.GetChild(page,"俱乐部列表");
         const content = Tool.GetChild(list,"view/content");
         const template = content.getChildByName("俱乐部条目模板");

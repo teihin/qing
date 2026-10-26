@@ -73,6 +73,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
     // JoinerList has no context/club_id. Foreground lists and badge probes share one lane.
     private applicationActive:string = "";
     private applicationQueue:Array<{club:string;kind:string;header:string;extra:any;account:string;resolve:(v:any)=>void;reject:(e:Error)=>void}> = [];
+    private applicationHoldTimer:any = null;
     private serial:number = 0;
     private prefix = "clubmg:" + Date.now() + ":";
     private disposed = false;
@@ -85,13 +86,12 @@ export default class HallClubManagementApi implements ClubManagementApi {
         KBEngine.Event.register("JoinerList",this,"OnApplications");
         // 代理视角的待审申请（查询_俱乐部_代理_申请）。报文同样不带 context/club_id，只能走串行车道配对。
         KBEngine.Event.register("ClubAgentReqInfo",this,"OnAgentApplications");
-        // 代理信息返回的是单个对象，包含当前账号的一层直属下级。
-        KBEngine.Event.register("ClubAgentInfo",this,"OnAgentInfo");
         KBEngine.Event.register("ClubReqInfo",this,"OnBadge");
     }
     public Dispose():void {
         this.disposed = true;
         KBEngine.Event.deregisterAll(this);
+        this.clearApplicationHold();
         this.applicationQueue.splice(0).forEach(job=>job.reject(new Error("页面已关闭")));
         Object.keys(this.pending).forEach(key=>this.finish(key,new Error("页面已关闭")));
     }
@@ -99,8 +99,8 @@ export default class HallClubManagementApi implements ClubManagementApi {
     private request(club:string,kind:string,header:string,extra:any = {}):Promise<any> {
         if(this.disposed) return Promise.reject(new Error("页面已关闭"));
         if(kind === "applications" || kind === "badges") {
-            if(this.applicationActive && !this.pending[this.applicationActive])
-                return Promise.reject(new Error("上一入会查询尚未返回，请稍后重试或重新登录"));
+            // 超时墓碑只用于排空可能迟到的推送；新请求排队，由释放定时器继续发送，
+            // 不能直接报错，否则一次丢包就会让申请列表永久打不开。
             return new Promise((resolve,reject)=>{
                 this.applicationQueue.push({club,kind,header,extra,account:this.account(),resolve,reject});
                 this.pumpApplications();
@@ -109,16 +109,35 @@ export default class HallClubManagementApi implements ClubManagementApi {
         return this.sendRequest(club,kind,header,extra);
     }
     private pumpApplications():void {
-        if(this.disposed || this.applicationActive)return;
+        if(this.disposed)return;
+        if(this.applicationActive) {
+            if(!this.pending[this.applicationActive])this.scheduleApplicationRelease();
+            return;
+        }
         const job=this.applicationQueue.shift();if(!job)return;
         if(job.account !== this.account()) {job.reject(new Error("账号已切换"));this.pumpApplications();return;}
         this.sendRequest(job.club,job.kind,job.header,job.extra).then(job.resolve,job.reject);
+    }
+    /** 超时后服务端不一定还会补推，给迟到推送留一个短窗口后强制释放车道。 */
+    private scheduleApplicationRelease():void {
+        if(this.applicationHoldTimer != null)return;
+        this.applicationHoldTimer = setTimeout(()=>{
+            this.applicationHoldTimer = null;
+            if(this.disposed || !this.applicationActive || this.pending[this.applicationActive])return;
+            this.applicationActive = "";
+            this.pumpApplications();
+        },2000);
+    }
+    private clearApplicationHold():void {
+        if(this.applicationHoldTimer != null) {clearTimeout(this.applicationHoldTimer);this.applicationHoldTimer = null;}
     }
     private sendRequest(club:string,kind:string,header:string,extra:any):Promise<any> {
         const context = this.prefix + (++this.serial);
         if(kind === "applications" || kind === "badges") this.applicationActive=context;
         return new Promise((resolve,reject)=>{
-            const timer = setTimeout(()=>this.finish(context,new Error("请求超时，请刷新后确认结果"),null,true),12000);
+            // 后台红点轮询失败不该长时间占住用户正在看的申请列表。
+            const timeout = kind === "badges" ? 6000 : 12000;
+            const timer = setTimeout(()=>this.finish(context,new Error("请求超时，请刷新后确认结果"),null,true),timeout);
             this.pending[context]={account:this.account(),club,kind,page:Number(extra.page || 0),user:String(extra.user_id || ""),resolve,reject,timer};
             try {
                 GameDataManager.getAccount().reqHallCommand(JSON.stringify({...extra,header,club_id:club,context}),"p@"+context);
@@ -134,7 +153,9 @@ export default class HallClubManagementApi implements ClubManagementApi {
             if(timedOut) {
                 // Keep a tombstone until the untagged late push is drained. Never give it to a new club.
                 this.applicationQueue.splice(0).forEach(job=>job.reject(new Error("入会查询超时，请稍后重试")));
+                this.scheduleApplicationRelease();
             } else {
+                this.clearApplicationHold();
                 this.applicationActive="";
                 this.pumpApplications();
             }
@@ -142,18 +163,17 @@ export default class HallClubManagementApi implements ClubManagementApi {
     }
     private parse(raw:any):any { try{return typeof raw === "string" ? JSON.parse(raw) : raw;}catch(e){return null;} }
     private context(data:any):string {return String(data && data.context || "").replace(/^[pP]@/,"");}
-    public list(club:string,kind:ClubListKind,page:number,count:number,search:string = ""):Promise<ClubPeoplePage> {
+    public list(club:string,kind:ClubListKind,page:number,count:number,search:string = "",agentId:string = ""):Promise<ClubPeoplePage> {
         if(kind === "members") {
+            // 2026-10-26 起服务端只返回被查节点的直属成员；agent_id 用于下钻指定下级代理。
             const extra:any={page,count,user_id:"ALL"};
+            if(agentId && agentId.trim())extra.agent_id=agentId.trim();
             if(search && search.trim())extra.search_name_id=search.trim();
             return this.request(club,kind,"查询_俱乐部_成员",extra);
         }
         // 文档中的新命令同时支持代理、创建者和管理员；统一走该命令，
         // 避免代理信息异步返回前误判身份而回退到旧的全量申请命令。
         return this.request(club,kind,"查询_俱乐部_代理_申请",{page,count});
-    }
-    public downline(club:string):Promise<{items:any[]}> {
-        return this.request(club,"downline","查询_俱乐部_代理_信息",{});
     }
     public async act(club:string,action:ClubAction,user:string,value?:string):Promise<{message?:string}> {
         const commands={
@@ -187,17 +207,11 @@ export default class HallClubManagementApi implements ClubManagementApi {
         const managedIds=(String(a.club_make||"")+","+String(a.club_manage||"")).split(",").map(x=>x.trim());
         const agentIds=this.agentClubs();
         if(!managedIds.some(id=>/^\d{6}$/.test(id)) && agentIds.length===0)return;
-        // Use per-club list counts. Aggregate queries could emit multiple untagged JoinerList pushes.
-        const ids=managedIds.filter((x,i,all)=>/^\d{6}$/.test(x)&&all.indexOf(x)===i);
+        // Use per-club list counts; untagged ClubAgentReqInfo pushes cannot carry an aggregate.
+        // 查询_俱乐部_代理_申请 对创建者/管理员返回全部待审、对代理返回自己名下的申请，
+        // 一条命令覆盖两种身份，不再走老的 查询_俱乐部_加入申请（JoinerList）。
+        const ids=managedIds.concat(agentIds).filter((x,i,all)=>/^\d{6}$/.test(x)&&all.indexOf(x)===i);
         for(const club of ids) {
-            if(Object.keys(this.pending).some(k=>this.pending[k].club===club && ["badges","applications"].indexOf(this.pending[k].kind)>=0) ||
-                this.applicationQueue.some(job=>job.club===club))continue;
-            this.request(club,"badges","查询_俱乐部_加入申请",{page:0,count:1,mode:0})
-                .then(result=>{if(!this.disposed)this.badge(club,result.total);}).catch(()=>{});
-        }
-        // 代理：服务端没有代理视角的红点推送，主动查一次自己的待审数量。
-        for(const club of agentIds) {
-            if(ids.indexOf(club)>=0)continue;
             if(Object.keys(this.pending).some(k=>this.pending[k].club===club && ["badges","applications"].indexOf(this.pending[k].kind)>=0) ||
                 this.applicationQueue.some(job=>job.club===club))continue;
             this.request(club,"badges","查询_俱乐部_代理_申请",{page:0,count:1})
@@ -211,7 +225,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(error || (code !== 0x200 && code !== 0x500)) {
             this.finish(key,new Error(String(error || "俱乐部操作失败")));return;
         }
-        if(["members","applications","verify","badges","downline"].indexOf(p.kind)>=0)return;
+        if(["members","applications","verify","badges"].indexOf(p.kind)>=0)return;
         // 0x500 只对列表请求保留兼容；操作命令按当前协议只接受最终 0x200。
         if(code !== 0x200) {
             this.finish(key,new Error("请求已受理，操作结果尚未确认，请刷新后确认"));return;
@@ -225,43 +239,42 @@ export default class HallClubManagementApi implements ClubManagementApi {
         const data=this.parse(raw);
         if(!data)return;
         if(!Array.isArray(data.result) && Array.isArray(data.ClubAgentReqInfo))data.result=data.ClubAgentReqInfo;
+        // 服务端在 count=1 时可能把单条申请包成对象（与 ClubAgentInfo 一致），不能当成空列表丢掉。
+        if(data.result && !Array.isArray(data.result) && typeof data.result === "object") {
+            const inner=data.result;
+            if(Array.isArray(inner.result)) {
+                data.result=inner.result;
+                if(data.number == null)data.number=inner.number;
+                if(data.count == null)data.count=inner.count;
+            } else data.result=[inner];
+        }
         this.receive(data,"applications","result");
     }
-    /** ClubAgentInfo: {number,count,result:{club_id,...,downline:[]}}. */
-    public OnAgentInfo(raw:string):void {
-        const data=this.parse(raw);
-        if(!data)return;
-        const info=data.result && !Array.isArray(data.result) ? data.result : data;
-        if(!info || typeof info !== "object")return;
-        const club=String(info.club_id || data.club_id || "");
-        const candidates=Object.keys(this.pending).filter(k=>this.pending[k].kind === "downline" &&
-            (!club || this.pending[k].club === club));
-        if(candidates.length !== 1)return;
-        const key=candidates[0], p=this.pending[key];
-        if(p.account !== this.account()) { this.finish(key,new Error("账号已切换"));return; }
-        const rawRows=Array.isArray(info.downline) ? info.downline : [];
-        const items:any[]=[];
-        for(const row of rawRows) {
-            if(!row || typeof row !== "object")continue;
-            const id=String(row.user_id || row.guuid || "");
-            if(!id)continue;
-            items.push({id,name:String(row.user_name || row.name || row.nickname || "玩家 " + id),
-                role:optionalText(row,["role","club_role"]),isAgent:optionalFlag(row,["is_agent"]),
-                agentPercent:displayNumber(field(row,["percent","agent_percent"]))});
-        }
-        this.finish(key,null,{items});
-    }
-    private receive(raw:string,kind:string,route:string):void {
+    private receive(raw:any,kind:string,route:string):void {
         const data=this.parse(raw);if(!data)return;
         const body=data.result && !Array.isArray(data.result) ? this.parse(data.result) : data;
-        const rows=Array.isArray(data) ? data : data[route] || (body && body[route]) || data.result;
-        const first=Array.isArray(rows) && rows.length ? rows[0] : null;
+        // 服务端的列表推送可能裹在 result / 路由名 / JSON 字符串里，也可能单条时是对象。
+        // 先找数组；找不到再把单条记录包成数组，避免整条推送被当成空列表丢掉。
+        const pickRows=():any[]|null=>{
+            const candidates:any[]=[Array.isArray(data)?data:null,Array.isArray(body)?body:null,
+                data && data[route],body && body[route],data && data.result,body && body.result];
+            for(const value of candidates) if(Array.isArray(value))return value;
+            for(const value of candidates) if(value && typeof value === "object") {
+                if(Array.isArray(value.result))return value.result;
+                if(Array.isArray(value[route]))return value[route];
+                return [value];
+            }
+            return null;
+        };
+        const rows=pickRows();
+        const first=rows && rows.length ? rows[0] : null;
         let key=this.context(data) || this.context(body) || this.context(first);
         const club=String(data.club_id || (body && body.club_id) || (first && first.club_id) || "");
         const number=data.number != null ? data.number : body && body.number != null ? body.number : first && first.number;
         if(kind === "applications" && !key && !club && Array.isArray(rows)) {
             key=this.applicationActive;
             if(key && !this.pending[key]) {
+                this.clearApplicationHold();
                 this.applicationActive="";
                 this.pumpApplications();
                 return;

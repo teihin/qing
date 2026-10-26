@@ -17,11 +17,10 @@ export interface ClubPlayer {
     todayContribution?:string; yesterdayContribution?:string; totalContribution?:string;
 }
 export interface ClubPeoplePage { items:ClubPlayer[]; total:number; }
-export interface ClubAgentDownline { items:ClubPlayer[]; }
 /** Adapt server payloads here. Resolve act only after the business result, not an async acceptance code. */
 export interface ClubManagementApi {
-    list(clubId:string,kind:ClubListKind,page:number,count:number,search?:string):Promise<ClubPeoplePage>;
-    downline(clubId:string):Promise<ClubAgentDownline>;
+    /** 成员列表自 2026-10-26 起为代理直属口径；传 agentId 下钻到指定下级代理的直属成员。 */
+    list(clubId:string,kind:ClubListKind,page:number,count:number,search?:string,agentId?:string):Promise<ClubPeoplePage>;
     act(clubId:string,action:ClubAction,userId:string,value?:string):Promise<{message?:string}>;
 }
 
@@ -38,12 +37,20 @@ export default class ClubManagementView {
     private busy:boolean = false;
     private pending:{club:ClubContext; action:ClubAction; userId:string; value?:string} = null;
     private selectedPlayer:ClubPlayer = null;
+    /** 0 = 从成员列表打开（自己的直属下级，可管理）；>=1 = 由「下级成员」逐层点开，跨级只读。 */
+    private settingsDepth:number = 0;
     private selectedDownline:ClubPlayer[] = [];
     private settingsTab:"member"|"downline" = "member";
     private downlineLoading:boolean = false;
+    private downlineError:string = "";
+    private downlinePage:number = 0;
+    private downlineTotal:number = 0;
+    private downlineToken:number = 0;
     private inputMode:"ratio"|"remark"|null = null;
     private remarks:{[key:string]:string} = {};
     private readonly pageSize:number = 20;
+    /** 与 Prefab 中「玩家设置下级列表」一屏可放的行数一致。 */
+    private readonly downlinePageSize:number = 4;
 
     constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,private gift:(player:ClubPlayer)=>void = null) {
         this.raisePopups();
@@ -103,11 +110,21 @@ export default class ClubManagementView {
     private manager(c:ClubContext = this.context):boolean {
         return !!c && !!c.id && (c.role === "owner" || c.role === "manager");
     }
-    /** Proxy relation mutations on this full member view are creator-only; admins only manage members. */
-    private canManageAgent(c:ClubContext = this.context):boolean {
-        return !!c && !!c.id && c.role === "owner";
+    /** 只有从成员列表打开的第一层是「自己直属的下级」；继续下钻后只能查看。 */
+    private readOnlyPlayer():boolean { return this.settingsDepth > 0; }
+    private blockReadOnlyPlayer():boolean {
+        if(!this.readOnlyPlayer()) return false;
+        this.message("跨级查看，仅可查看不能修改");
+        return true;
     }
-    /** 代理（持有邀请码）只能看待审申请并同意/拒绝，不能管理成员、比例和解散。 */
+    /**
+     * 代理关系操作（设/调/取消代理）限创建者与目标成员的直属上级代理；
+     * 管理员按协议不能操作代理关系，普通成员操作由调用点的直属层级守卫拦截。
+     */
+    private canManageAgent(c:ClubContext = this.context):boolean {
+        return !!c && !!c.id && (c.role === "owner" || c.role === "agent");
+    }
+    /** 创建者/管理员/代理都能看待审申请；代理另可管理自己直属下级，改积分仍限创建者/管理员。 */
     private approver(c:ClubContext = this.context):boolean {
         return this.manager(c) || !!c && !!c.id && c.role === "agent";
     }
@@ -131,9 +148,14 @@ export default class ClubManagementView {
             this.busy = false;
             this.pending = null;
             this.selectedPlayer = null;
+            this.settingsDepth = 0;
             this.selectedDownline = [];
             this.settingsTab = "member";
             this.downlineLoading = false;
+            this.downlineError = "";
+            this.downlinePage = 0;
+            this.downlineTotal = 0;
+            ++this.downlineToken;
             this.inputMode = null;
             for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗","俱乐部操作确认","俱乐部玩家设置弹窗","玩家设置输入弹窗"]) this.active(name,false);
             this.clearRows();
@@ -142,9 +164,9 @@ export default class ClubManagementView {
         const card = this.at("Main/我的/当前俱乐部");
         this.text("名称",next.id ? next.name || "俱乐部 " + next.id : "暂无俱乐部",card);
         this.text("邀请码",next.id ? next.inviteCode || "" : "从俱乐部选择后查看信息",card);
-        // 纯成员（非老板/管理员/代理）不显示身份文字和底图，避免「成员」标签占位。
-        const showIdentity = !!next.id && next.role !== "member";
-        this.text("身份",!showIdentity ? "" : next.role === "owner" ? "老板" : next.role === "manager" ? "管理员" : "代理",card);
+        // 「我的」卡片只在老板/代理时显示身份牌；普通成员（及管理员，按"只有代理和老板"）不占右侧位置。
+        const showIdentity = !!next.id && (next.role === "owner" || next.role === "agent");
+        this.text("身份",!showIdentity ? "" : next.role === "owner" ? "老板" : "代理",card);
         this.active("身份底",showIdentity,card);
         // 左侧固定位显示俱乐部老板（盟主）的真实头像；没有俱乐部时整块隐藏。
         this.active("俱乐部徽记",!!next.id,card);
@@ -178,11 +200,16 @@ export default class ClubManagementView {
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
             "玩家设置备注","玩家设置禁止游戏","玩家设置禁止账号",
             "成员设置","成员设置非激活","下级成员","下级成员激活",
+            "下级第一页","下级上一页","下级下一页","下级最后一页",
             "玩家设置输入关闭","玩家设置输入取消","玩家设置输入确认"].indexOf(name) < 0) return false;
         this.Refresh();
+        if(["玩家设置赠送金币","玩家设置调整分数","玩家设置踢出俱乐部","玩家设置调整比例",
+            "玩家设置代理开关","玩家设置取消代理","玩家设置备注","玩家设置禁止游戏",
+            "玩家设置禁止账号"].indexOf(name) >= 0 && this.blockReadOnlyPlayer()) return true;
         if(name === "玩家设置关闭") {
             this.active("俱乐部玩家设置弹窗",false);
             this.selectedPlayer = null;
+            this.settingsDepth = 0;
         } else if(name === "玩家设置复制ID") {
             if(this.selectedPlayer) this.message("玩家ID：" + this.selectedPlayer.id);
         } else if(name === "玩家设置赠送金币") {
@@ -210,6 +237,16 @@ export default class ClubManagementView {
             this.showPlayerSettingsTab("member");
         } else if(name === "下级成员" || name === "下级成员激活") {
             this.showPlayerSettingsTab("downline");
+        } else if(name === "下级第一页") {
+            this.loadDownline(0);
+        } else if(name === "下级上一页") {
+            if(this.downlinePage > 0) this.loadDownline(this.downlinePage - 1);
+        } else if(name === "下级下一页") {
+            if((this.downlinePage + 1) * this.downlinePageSize < this.downlineTotal)
+                this.loadDownline(this.downlinePage + 1);
+        } else if(name === "下级最后一页") {
+            const last = Math.max(0,Math.ceil(this.downlineTotal / this.downlinePageSize) - 1);
+            if(this.downlinePage < last) this.loadDownline(last);
         } else if(name === "玩家设置输入关闭" || name === "玩家设置输入取消") {
             this.inputMode = null;
             this.active("玩家设置输入弹窗",false);
@@ -261,7 +298,7 @@ export default class ClubManagementView {
     private open(kind:ClubListKind):void {
         if(this.busy) return;
         // 成员列表与申请列表都只要求「能进管理」的身份（创建者/管理员/代理）。
-        // 代理点「俱乐部成员」同样先看成员列表，成员行对他的管理操作仍由 manager() 拦。
+        // 代理点「俱乐部成员」同样能看直属列表；行内可操作项由 openPlayerSettings 按角色和层级收紧。
         if(!this.approver()) return;
         this.active("俱乐部成员弹窗",kind === "members");
         this.active("俱乐部申请弹窗",kind === "applications");
@@ -299,7 +336,7 @@ export default class ClubManagementView {
         this.paging();
         this.active("空状态",true,this.panel());
         this.text("空状态",this.api ? "加载中…" : "列表暂未开放",this.panel());
-        this.text("统计",kind === "members" ? "成员列表" : "待审批申请",this.panel());
+        this.text("统计",kind === "members" ? "直属成员" : "待审批申请",this.panel());
         if(!this.api) return;
         try {
             const result = await this.api.list(ctx.id,kind,page,this.pageSize,kind === "members" ? this.memberSearch() : "");
@@ -313,8 +350,8 @@ export default class ClubManagementView {
             }
             if(kind === "applications") this.SetPendingCount(ctx.id,this.total);
             this.render(result.items);
-            this.text("统计",(kind === "members" ? "成员 " : "待审批 ")+this.total+" 人",this.panel());
-            this.text("空状态",kind === "members" ? "暂无成员" : "暂无入会申请",this.panel());
+            this.text("统计",(kind === "members" ? "直属 " : "待审批 ")+this.total+" 人",this.panel());
+            this.text("空状态",kind === "members" ? "暂无直属成员" : "暂无入会申请",this.panel());
             this.active("空状态",result.items.length === 0,this.panel());
         } catch(error) {
             if(this.valid(version,ctx)) this.text("空状态",error && error.message || "加载失败，请点击刷新重试",this.panel());
@@ -364,6 +401,69 @@ export default class ClubManagementView {
         }
         this.rowText(row,name === "积分" ? ["积分","余额"] : [name],name + "：" + this.value(value));
     }
+    /** 成员列表与下级成员列表共用同一套行内容，保证两处显示一致。 */
+    private fillMemberRow(row:cc.Node,item:ClubPlayer):void {
+        const context = this.context || {accountId:"",id:"",name:"",role:"member" as ClubRole};
+        this.text("姓名",item.name || "玩家 "+item.id,row);
+        this.text("玩家ID","ID: "+item.id,row);
+        const avatar = this.at("头像",row);
+        const avatarSprite = avatar && avatar.getComponent(cc.Sprite);
+        if(avatarSprite) ImageManager.getInstance().BindPlayerListAvatar(item.id,avatarSprite);
+        const isOwner = item.id === context.ownerId || item.id === context.accountId && context.role === "owner";
+        const isSelf = item.id === context.accountId;
+        const isAgent = this.isAgentPlayer(item);
+        this.rowText(row,["身份"],isOwner ? "创建者" : isSelf && context.role === "manager" ? "管理员" : isAgent ? "代理" : item.role || "成员");
+        this.metricText(row,"团队人数",item.teamCount);
+        this.metricText(row,"积分",item.clubGold !== undefined ? item.clubGold : item.points);
+        // 代理比例只有代理才显示；非代理把「比例」整列（标题+数值）一起藏掉。
+        // 模板里这两格的默认文字是「积分」，显示时必须显式改成「比例」。
+        this.active("比例",isAgent,row);
+        this.active("比例值",isAgent,row);
+        if(isAgent) {
+            this.text("比例","比例",row);
+            this.text("比例值",this.percentText(item),row);
+        }
+        this.metricText(row,"今日输赢",item.todayWin);
+        this.metricText(row,"昨日输赢",item.yesterdayWin);
+        this.metricText(row,"总输赢",item.totalWin);
+        this.metricText(row,"今日贡献",item.todayContribution);
+        this.metricText(row,"昨日贡献",item.yesterdayContribution);
+        this.metricText(row,"总贡献",item.totalContribution);
+        this.rowText(row,["状态"],this.status(item));
+        // Member cards are intentionally read-only. Keep old serialized
+        // nodes hidden for prefab compatibility; avatar is the only entry
+        // point for player settings.
+        for(const name of ["成员删除","成员赠予","设置","成员设管理员"]) {
+            const oldAction = this.at(name,row);
+            if(oldAction) oldAction.active = false;
+        }
+    }
+    /** click 依赖 cc.Button 派发，TOUCH_END 是节点自身事件；两条都挂，滑动时按位移过滤。 */
+    private bindPlayerSettings(target:cc.Node,item:ClubPlayer,context:ClubContext,depth:number):void {
+        if(!target) return;
+        let lastTap = 0,moved = false,downX = 0,downY = 0;
+        const onDown = (event:cc.Event.EventTouch)=>{
+            const point = event.getLocation();
+            downX = point.x;downY = point.y;moved = false;
+        };
+        const onMove = (event:cc.Event.EventTouch)=>{
+            const point = event.getLocation();
+            if(Math.abs(point.x - downX) > 20 || Math.abs(point.y - downY) > 20) moved = true;
+        };
+        const openSettings = ()=>{
+            if(moved) return;
+            const now = Date.now();
+            if(now - lastTap < 300) return;
+            lastTap = now;
+            if(!this.sameContext(context,this.getContext())) { this.Refresh();return; }
+            this.openPlayerSettings(item,depth);
+        };
+        target.targetOff(this);
+        target.on(cc.Node.EventType.TOUCH_START,onDown,this);
+        target.on(cc.Node.EventType.TOUCH_MOVE,onMove,this);
+        target.on(cc.Node.EventType.TOUCH_END,openSettings,this);
+        target.on("click",openSettings,this);
+    }
     private render(items:ClubPlayer[]):void {
         const content = this.at("列表/view/content",this.panel());
         if(!content) return;
@@ -383,68 +483,11 @@ export default class ClubManagementView {
             const row = cc.instantiate(template);
             row.name = "玩家_"+item.id; row.parent = content; row.active = true;
             row.setPosition(0,firstY-index*pitch);
-            this.text("姓名",item.name || "玩家 "+item.id,row);
-            this.text("玩家ID","ID: "+item.id,row);
-            const avatar = this.at("头像",row);
-            const avatarSprite = avatar && avatar.getComponent(cc.Sprite);
-            if(avatarSprite) ImageManager.getInstance().BindPlayerListAvatar(item.id,avatarSprite);
             if(this.kind === "members") {
-                const isOwner = item.id === context.ownerId || item.id === context.accountId && context.role === "owner";
-                const isSelf = item.id === context.accountId;
-                const isAgent = this.isAgentPlayer(item);
-                this.rowText(row,["身份"],isOwner ? "创建者" : isSelf && context.role === "manager" ? "管理员" : isAgent ? "代理" : item.role || "成员");
-                this.metricText(row,"团队人数",item.teamCount);
-                this.metricText(row,"积分",item.clubGold !== undefined ? item.clubGold : item.points);
-                // 代理比例只有代理才显示；非代理把「比例」整列（标题+数值）一起藏掉。
-                // 模板里这两格的默认文字是「积分」，显示时必须显式改成「比例」。
-                this.active("比例",isAgent,row);
-                this.active("比例值",isAgent,row);
-                if(isAgent) {
-                    this.text("比例","比例",row);
-                    this.text("比例值",this.percentText(item),row);
-                }
-                this.metricText(row,"今日输赢",item.todayWin);
-                this.metricText(row,"昨日输赢",item.yesterdayWin);
-                this.metricText(row,"总输赢",item.totalWin);
-                this.metricText(row,"今日贡献",item.todayContribution);
-                this.metricText(row,"昨日贡献",item.yesterdayContribution);
-                this.metricText(row,"总贡献",item.totalContribution);
-                this.rowText(row,["状态"],this.status(item));
-                // Member cards are intentionally read-only. Keep old serialized
-                // nodes hidden for prefab compatibility; avatar is the only entry
-                // point for player settings.
-                for(const name of ["成员删除","成员赠予","设置","成员设管理员"]) {
-                    const oldAction = this.at(name,row);
-                    if(oldAction) oldAction.active = false;
-                }
-                if(avatar) {
-                    // 自己那一行没有玩家设置（设代理/调比例/踢出都针对别人），点了不弹窗。
-                    const isSelf = String(item.id || "").trim() === String(context.accountId || "").trim();
-                    // click 依赖 cc.Button 派发，TOUCH_END 是节点自身事件；两条都挂，
-                    // 任何一条先到都能打开玩家设置。滑动列表时按位移过滤，300ms 内只处理一次。
-                    let lastTap = 0,moved = false,downX = 0,downY = 0;
-                    const onDown = (event:cc.Event.EventTouch)=>{
-                        const point = event.getLocation();
-                        downX = point.x;downY = point.y;moved = false;
-                    };
-                    const onMove = (event:cc.Event.EventTouch)=>{
-                        const point = event.getLocation();
-                        if(Math.abs(point.x - downX) > 20 || Math.abs(point.y - downY) > 20) moved = true;
-                    };
-                    const openSettings = ()=>{
-                        if(isSelf || moved) return;
-                        const now = Date.now();
-                        if(now - lastTap < 300) return;
-                        lastTap = now;
-                        if(!this.sameContext(context,this.getContext())) { this.Refresh();return; }
-                        this.openPlayerSettings(item);
-                    };
-                    avatar.targetOff(this);
-                    avatar.on(cc.Node.EventType.TOUCH_START,onDown,this);
-                    avatar.on(cc.Node.EventType.TOUCH_MOVE,onMove,this);
-                    avatar.on(cc.Node.EventType.TOUCH_END,openSettings,this);
-                    avatar.on("click",openSettings,this);
-                }
+                this.fillMemberRow(row,item);
+                // 自己那一行没有玩家设置（设代理/调比例/踢出都针对别人），点了不弹窗。
+                const isSelf = String(item.id || "").trim() === String(context.accountId || "").trim();
+                if(!isSelf) this.bindPlayerSettings(this.at("头像",row),item,context,0);
             }
             else {
                 for(const pair of [["管理同意","approve"],["管理拒绝","reject"]])
@@ -459,11 +502,11 @@ export default class ClubManagementView {
         const scrollView = scroll && scroll.getComponent(cc.ScrollView);
         if(scrollView) scrollView.scrollToTop(0);
     }
-    private openPlayerSettings(item:ClubPlayer):void {
+    private openPlayerSettings(item:ClubPlayer,depth:number = 0):void {
         if(!item) return;
-        // 代理也能进成员列表（只读），但玩家设置里的操作仍限创建者/管理员；
-        // 给他一句提示，避免点头像像"点了没反应"。
-        if(!this.manager()) { if(this.approver()) this.message("仅创建者/管理员可管理成员");return; }
+        // 创建者、管理员、代理都能打开；代理只管理自己直属的下级，
+        // 具体到踢人/改积分等按钮再按角色和层级收紧。
+        if(!this.approver()) { this.message("仅创建者/管理员/代理可管理成员");return; }
         // 玩家设置面板全是针对别人的操作（踢出、设备注、开代理、调比例），
         // 自己那一行不提供设置入口，点了不弹窗。
         if(String(item.id || "").trim() === String(this.context.accountId || "").trim()) return;
@@ -471,15 +514,30 @@ export default class ClubManagementView {
         const panel = this.at("面板",modal);
         if(!modal || !panel) { this.message("玩家设置面板暂未加载");return; }
         this.selectedPlayer = item;
+        this.settingsDepth = Math.max(0,Math.floor(depth) || 0);
+        const readOnly = this.readOnlyPlayer();
         this.selectedDownline = [];
         this.settingsTab = "member";
         this.downlineLoading = false;
+        this.downlineError = "";
+        this.downlinePage = 0;
+        this.downlineTotal = 0;
+        // 切换玩家后旧请求一律作废；下级列表只在点开「下级成员」页签时才查。
+        ++this.downlineToken;
         this.active("俱乐部玩家设置弹窗",true);
+        this.active("玩家设置只读提示",readOnly,panel);
         this.text("玩家姓名",item.name || "玩家 "+item.id,panel);
         this.text("玩家ID","ID: "+item.id,panel);
         const isAgent = this.isAgentPlayer(item);
-        this.text("玩家身份",isAgent ? "代理" : item.role || "成员",panel);
-        this.text("玩家状态",this.status(item),panel);
+        const roleText = isAgent ? "代理" : this.roleText(item);
+        this.text("玩家身份",roleText,panel);
+        this.layoutRole(roleText,panel);
+        const statusText = this.status(item);
+        const online = statusText === "在线";
+        this.text("玩家状态",statusText,panel);
+        this.active("玩家状态/状态点",online,panel);
+        const statusNode = this.at("玩家状态",panel);
+        if(statusNode) statusNode.color = online ? new cc.Color(155,255,109) : new cc.Color(201,216,228);
         this.text("玩家积分值",this.value(item.clubGold !== undefined ? item.clubGold : item.points),panel);
         this.text("备注值",item.remark || this.remarks[this.remarkKey()] || "未设置",panel);
         this.text("比例值",isAgent ? this.percentText(item) : "未开通",panel);
@@ -491,23 +549,50 @@ export default class ClubManagementView {
         if(avatarSprite) ImageManager.getInstance().BindPlayerListAvatar(item.id,avatarSprite);
         const isSelf = item.id === this.context.accountId;
         const isOwner = item.id === this.context.ownerId || isSelf && this.context.role === "owner";
-        this.button("玩家设置赠送金币",this.manager() && !isOwner,panel);
-        this.button("玩家设置踢出俱乐部",this.manager() && !isSelf && !isOwner,panel);
-        this.button("玩家设置调整比例",this.canManageAgent() && isAgent && !isSelf && !isOwner,panel);
-        this.button("玩家设置代理开关",this.canManageAgent() && !isSelf && !isOwner,panel);
-        this.button("玩家设置备注",this.manager() && !isSelf && !isOwner,panel);
+        // 跨级只读：连按钮一起收起，避免看起来还能点；行内数值仍保留可查看。
+        // 踢人：老板/管理员/代理都能踢，代理只对直属下级（depth 0）生效，跨级已被 readOnly 挡掉。
+        const canKick = !readOnly && (this.manager() || this.canManageAgent());
+        const canAgent = !readOnly && this.canManageAgent();
+        // 赠送走个人转赠面板，代理也可对直属下级使用。
+        this.active("玩家设置赠送金币",!readOnly,panel);
+        this.active("玩家设置踢出俱乐部",canKick,panel);
+        this.active("玩家设置调整比例",canAgent && isAgent,panel);
+        this.active("玩家设置代理开关",canAgent,panel);
+        // 「设置备注」暂时停用，按钮与整行由 showPlayerSettingsTab 统一隐藏。
+        this.button("玩家设置赠送金币",!readOnly && !isOwner,panel);
+        this.button("玩家设置踢出俱乐部",canKick && !isSelf && !isOwner,panel);
+        this.button("玩家设置调整比例",canAgent && isAgent && !isSelf && !isOwner,panel);
+        this.button("玩家设置代理开关",canAgent && !isSelf && !isOwner,panel);
         // These two controls remain visible as reserved layout rows but have no
         // documented server command yet.
         this.button("玩家设置禁止游戏",false,panel);
         this.button("玩家设置禁止账号",false,panel);
         this.renderDownline(panel);
         this.showPlayerSettingsTab("member");
-        if(this.api && this.api.downline) this.loadDownline(panel);
     }
     private settingsMemberNodes():string[] {
-        return ["备注","备注底","备注值","玩家设置备注","比例","比例底","比例值",
-            "玩家设置调整比例","代理","代理底","代理开关文字",
-            "玩家设置代理开关"];
+        return ["比例","比例底","比例值","玩家设置调整比例","代理","代理底",
+            "代理开关文字","玩家设置代理开关"];
+    }
+    private roleText(item:ClubPlayer):string {
+        const role = String(item.role || "").trim();
+        if(role === "owner" || role === "老板" || role === "创建者") return "老板";
+        if(role === "manager" || role === "管理员") return "管理员";
+        if(role === "agent" || role === "代理") return "代理";
+        return "成员";
+    }
+    /** 身份牌是九宫格，按字数定宽；左边界固定，状态跟着右移，避免叠字。 */
+    private layoutRole(text:string,panel:cc.Node):void {
+        const width = text.length >= 4 ? 104 : text.length === 3 ? 80 : 60;
+        for(const name of ["身份底","玩家身份"]) {
+            const node = this.at(name,panel);
+            if(!node) continue;
+            node.active = true;
+            node.setContentSize(width,28);
+            node.setPosition(-150 + width / 2,419);
+        }
+        const status = this.at("玩家状态",panel);
+        if(status) status.setPosition(-9 + Math.max(0,width - 60),419);
     }
     private showPlayerSettingsTab(tab:"member"|"downline"):void {
         const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
@@ -515,6 +600,15 @@ export default class ClubManagementView {
         this.settingsTab = tab;
         const member = tab === "member";
         this.settingsMemberNodes().forEach(name=>this.active(name,member,panel));
+        // 「设置备注」暂时停用：整行保持隐藏，恢复时把四个节点加回 settingsMemberNodes。
+        for(const name of ["备注","备注底","备注值","玩家设置备注"])
+            this.active(name,false,panel);
+        // 页签切换会重新激活比例/代理行按钮，只读态必须在之后统一收起。
+        if(this.readOnlyPlayer()) {
+            for(const name of ["玩家设置赠送金币","玩家设置踢出俱乐部","玩家设置调整比例",
+                "玩家设置代理开关","玩家设置备注"])
+                this.active(name,false,panel);
+        }
         this.active("玩家设置下级列表",!member,panel);
         this.active("成员设置",member,panel);
         this.active("成员设置非激活",!member,panel);
@@ -522,28 +616,70 @@ export default class ClubManagementView {
         this.active("下级成员激活",!member,panel);
         this.active("成员设置选中线",member,panel);
         this.active("下级成员选中线",!member,panel);
+        this.active("成员设置选中菱形",member,panel);
+        this.active("下级成员选中菱形",!member,panel);
+        // 分页条只属于下级成员列表，成员设置页签里整组隐藏。
+        for(const name of ["下级第一页","下级上一页","下级页码","下级下一页","下级最后一页"])
+            this.active(name,!member,panel);
+        // 下级成员只在点击页签时查询，避免每次打开玩家设置都多发一次列表请求。
+        if(!member) this.loadDownline(this.downlinePage);
     }
-    private async loadDownline(panel:cc.Node):Promise<void> {
-        if(!this.api || !this.api.downline || !this.context || !this.context.id) return;
-        const context = {...this.context};
-        const version = this.version;
-        this.downlineLoading = true;
-        this.text("下级成员空状态","加载中…",this.at("玩家设置下级列表",panel));
-        try {
-            const result = await this.api.downline(context.id);
-            if(!this.valid(version,context) || this.selectedPlayer === null) return;
-            this.selectedDownline = result && Array.isArray(result.items) ? result.items : [];
-            this.downlineLoading = false;
+    private async loadDownline(page:number):Promise<void> {
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel || this.downlineLoading) return;
+        const player = this.selectedPlayer;
+        const context = this.context ? {...this.context} : null;
+        if(!this.api || !context || !context.id || !player) return;
+        // 普通成员没有下级；只有代理才能按 agent_id 下钻其直属成员。
+        if(!this.isAgentPlayer(player)) {
+            this.selectedDownline = [];
+            this.downlinePage = 0;
+            this.downlineTotal = 0;
             this.renderDownline(panel);
-        } catch(error) {
-            if(this.valid(version,context)) {
-                this.selectedDownline = [];
-                this.text("下级成员空状态",error && error.message || "下级成员加载失败",this.at("玩家设置下级列表",panel));
-                this.active("下级成员空状态",true,this.at("玩家设置下级列表",panel));
-            }
-        } finally {
-            if(this.valid(version,context)) this.downlineLoading = false;
+            return;
         }
+        const playerId = player.id;
+        const token = ++this.downlineToken;
+        const version = this.version;
+        this.downlinePage = page;
+        this.downlineLoading = true;
+        this.downlineError = "";
+        // 翻页时先清空旧页，避免请求失败后仍显示上一页的行却已换页码。
+        this.selectedDownline = [];
+        this.renderDownline(panel);
+        try {
+            const result = await this.api.list(context.id,"members",page,this.downlinePageSize,"",playerId);
+            if(token !== this.downlineToken || !this.valid(version,context) ||
+                !this.selectedPlayer || this.selectedPlayer.id !== playerId) return;
+            const rows = result && Array.isArray(result.items) ? result.items : [];
+            // 直属口径回包首行是被查代理本人；「下级成员」页签只列其直属成员。
+            this.selectedDownline = rows.filter(item => String(item.id || "") !== String(playerId));
+            this.downlineTotal = Math.max(0,Number(result && result.total) || 0);
+            this.downlineError = "";
+        } catch(error) {
+            if(token === this.downlineToken && this.valid(version,context) &&
+                this.selectedPlayer && this.selectedPlayer.id === playerId)
+                this.downlineError = error && error.message || "下级成员加载失败";
+        } finally {
+            if(token === this.downlineToken && this.valid(version,context) &&
+                this.selectedPlayer && this.selectedPlayer.id === playerId) {
+                this.downlineLoading = false;
+                this.renderDownline(panel);
+            }
+        }
+    }
+    private downlinePages():number {
+        return Math.max(1,Math.ceil(this.downlineTotal / this.downlinePageSize));
+    }
+    private downlinePaging(panel:cc.Node):void {
+        this.text("下级页码",(this.downlinePage+1)+" / "+this.downlinePages(),panel);
+        const busy = this.downlineLoading || this.busy;
+        const hasPrev = this.downlinePage > 0;
+        const hasNext = (this.downlinePage+1) * this.downlinePageSize < this.downlineTotal;
+        this.button("下级第一页",!busy && hasPrev,panel);
+        this.button("下级上一页",!busy && hasPrev,panel);
+        this.button("下级下一页",!busy && hasNext,panel);
+        this.button("下级最后一页",!busy && hasNext,panel);
     }
     private renderDownline(panel:cc.Node):void {
         const list = this.at("玩家设置下级列表",panel);
@@ -558,24 +694,33 @@ export default class ClubManagementView {
         if(empty) {
             empty.active = rows.length === 0;
             const label = empty.getComponent(cc.Label);
-            if(label) label.string = this.downlineLoading ? "加载中…" : "暂无下级成员";
+            if(label) label.string = this.downlineLoading ? "加载中…" : this.downlineError || "暂无直属成员";
         }
-        rows.slice(0,4).forEach((item,index)=>{
+        const pitch = list.height / this.downlinePageSize;
+        const context = this.context ? {...this.context} : null;
+        // 本列表属于当前弹窗玩家：点开的下一层必然再跨一级，只能查看。
+        const depth = this.settingsDepth;
+        rows.slice(0,this.downlinePageSize).forEach((item,index)=>{
             const row = cc.instantiate(template);
             row.name = "下级玩家_" + item.id;
             row.parent = list;
             row.active = true;
-            row.setPosition(0,105-index*68);
-            this.text("姓名",item.name || "玩家 " + item.id,row);
-            this.text("玩家ID","ID: " + item.id,row);
-            this.text("比例",item.agentPercent !== undefined ? item.agentPercent + "%" : "—",row);
+            row.setPosition(0,list.height / 2 - pitch / 2 - index * pitch);
+            this.fillMemberRow(row,item);
+            // 与成员列表一致：头像本身带 Button，事件必须绑在头像上才能收到；
+            // 点开后同一个弹窗换成该成员资料，可以继续往下看，但不再允许修改。
+            const isSelf = String(item.id || "").trim() === String((context && context.accountId) || "").trim();
+            if(context && !isSelf) this.bindPlayerSettings(this.at("头像",row),item,context,depth + 1);
         });
+        this.downlinePaging(panel);
     }
     private remarkKey():string {
         return (this.context && this.context.id || "") + ":" + (this.selectedPlayer && this.selectedPlayer.id || "");
     }
     private openPlayerInput(mode:"ratio"|"remark"):void {
-        if(!this.selectedPlayer || !this.manager()) return;
+        // 比例属于代理关系操作（创建者/直属上级代理）；备注是本地数据，代理也可写。
+        if(!this.selectedPlayer || (mode === "ratio" ? !this.canManageAgent() : !this.approver())) return;
+        if(this.blockReadOnlyPlayer()) return;
         const modal = this.at("玩家设置输入弹窗");
         const panel = this.at("面板",modal);
         const input = this.at("玩家设置输入框",panel);
@@ -594,6 +739,7 @@ export default class ClubManagementView {
     }
     private finishPlayerInput():void {
         if(!this.inputMode || !this.selectedPlayer) return;
+        if(this.blockReadOnlyPlayer()) return;
         const mode = this.inputMode;
         const input = this.at("玩家设置输入框",this.at("面板",this.at("玩家设置输入弹窗")));
         const edit = input && input.getComponent(cc.EditBox);
@@ -624,6 +770,7 @@ export default class ClubManagementView {
     private submitPlayerValue(action:ClubAction,inputName:string,emptyMessage:string):void {
         const agentAction = ["setAgent","changeAgentRatio","cancelAgent"].indexOf(action) >= 0;
         if(!this.selectedPlayer || (agentAction ? !this.canManageAgent() : !this.manager())) return;
+        if(this.blockReadOnlyPlayer()) return;
         const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
         const input = this.at(inputName,panel);
         const edit = input && input.getComponent(cc.EditBox);
@@ -639,10 +786,15 @@ export default class ClubManagementView {
     }
     private confirm(action:ClubAction,userId:string,name:string,value?:string):void {
         if(this.busy || !this.context.id) return;
-        // 同意/拒绝只需要「能看到申请」的权限（代理即可）；其余成员管理仍限创建者/管理员。
+        if(["remove","adjustScore","setAgent","changeAgentRatio","cancelAgent"].indexOf(action) >= 0 &&
+            this.blockReadOnlyPlayer()) return;
+        // 同意/拒绝只需要「能看到申请」的权限（代理即可）；代理关系操作限创建者/直属上级代理；
+        // 踢人放开给创建者/管理员/代理（代理仅直属，跨级由 blockReadOnlyPlayer 拦截）；改积分仍限创建者/管理员。
         const needApprover = action === "approve" || action === "reject";
         const agentAction = ["setAgent","changeAgentRatio","cancelAgent"].indexOf(action) >= 0;
-        if(action !== "leave" && !(needApprover ? this.approver() : agentAction ? this.canManageAgent() : this.manager())) return;
+        const canKick = this.manager() || this.canManageAgent();
+        if(action !== "leave" && !(needApprover ? this.approver() :
+            agentAction ? this.canManageAgent() : action === "remove" ? canKick : this.manager())) return;
         if((action === "dissolve" || action === "promote") && this.context.role !== "owner") return;
         if((action === "remove" || action === "promote") && (userId === this.context.accountId || userId === this.context.ownerId)) return;
         if(["adjustScore","setAgent","changeAgentRatio","cancelAgent"].indexOf(action) >= 0 &&
@@ -679,6 +831,7 @@ export default class ClubManagementView {
             if(["remove","adjustScore","setAgent","changeAgentRatio","cancelAgent"].indexOf(pending.action) >= 0) {
                 this.active("俱乐部玩家设置弹窗",false);
                 this.selectedPlayer = null;
+                this.settingsDepth = 0;
             }
             this.pending = null;
             this.busy = false;
