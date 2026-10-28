@@ -221,7 +221,15 @@ export default class DrhLogicMgr extends cc.Component {
 
     private InvalidateRoomCountdown():void {
         this.roomCountdown.invalidate();
-        if (this.roomClockLabel) this.roomClockLabel.node.active = false;
+        if (this.roomClockLabel == null || !cc.isValid(this.roomClockLabel))
+            return;
+        const clockNode = this.roomClockLabel.node;
+        if (clockNode == null || !cc.isValid(clockNode))
+        {
+            this.roomClockLabel = null;
+            return;
+        }
+        clockNode.active = false;
     }
 
     public OnRoomClockDisconnected():void {
