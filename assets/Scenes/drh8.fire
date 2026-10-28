@@ -105452,7 +105452,7 @@
       "__id__": 2948
     },
     "_children": [],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 2950
@@ -109488,7 +109488,7 @@
       "__id__": 3031
     },
     "_children": [],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 3057
@@ -109714,7 +109714,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -130,
+        -5.755,
         -112,
         0,
         0,
@@ -109905,7 +109905,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -130,
+        -5.755,
         -112,
         0,
         0,
@@ -109945,8 +109945,8 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "取消",
-    "_N$string": "取消",
+    "_string": "关闭",
+    "_N$string": "关闭",
     "_fontSize": 30,
     "_lineHeight": 34,
     "_enableWrapText": false,
@@ -109984,7 +109984,7 @@
       "__id__": 3031
     },
     "_children": [],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 3068
