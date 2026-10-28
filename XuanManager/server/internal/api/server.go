@@ -159,17 +159,31 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/permissions/{id}", s.authorized("permission.update", true, s.handleUpdatePermission))
 
 	s.mux.Handle("GET /api/audit", s.authorized("audit.view", false, s.handleAuditList))
+
+	s.registerAutomationRoutes()
+
 	s.mux.HandleFunc("/", s.handleStatic)
 }
 
 func (s *Server) authorized(permission string, mutate bool, next handlerFunc) http.Handler {
+	return s.authorizedAny([]string{permission}, mutate, next)
+}
+
+func (s *Server) authorizedAny(permissions []string, mutate bool, next handlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p, err := s.authenticate(r)
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "登录已失效，请重新登录")
 			return
 		}
-		if permission != "" && !p.Can(permission) {
+		allowed := len(permissions) == 0
+		for _, permission := range permissions {
+			if permission == "" || p.Can(permission) {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
 			writeError(w, http.StatusForbidden, "FORBIDDEN", "当前角色没有此操作权限")
 			return
 		}

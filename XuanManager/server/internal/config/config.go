@@ -33,6 +33,7 @@ type Config struct {
 	GameAdminURL               string
 	GameMode                   string
 	GameExchangeSign           string
+	CredentialKey              string
 	NotificationCarouselWorker bool
 	BootstrapAdminUser         string
 	BootstrapAdminPass         string
@@ -73,6 +74,7 @@ func Load() (Config, error) {
 		GameAdminURL:               env("XUAN_GAME_ADMIN_URL", "http://127.0.0.1:8890"),
 		GameMode:                   strings.ToLower(env("XUAN_GAME_MODE", "club")),
 		GameExchangeSign:           strings.TrimSpace(os.Getenv("XUAN_GAME_EXCHANGE_SIGN")),
+		CredentialKey:              strings.TrimSpace(os.Getenv("XUAN_CREDENTIAL_KEY")),
 		NotificationCarouselWorker: carouselWorker,
 		BootstrapAdminUser:         strings.TrimSpace(os.Getenv("XUAN_BOOTSTRAP_ADMIN_USERNAME")),
 		BootstrapAdminPass:         os.Getenv("XUAN_BOOTSTRAP_ADMIN_PASSWORD"),
@@ -102,6 +104,11 @@ func Load() (Config, error) {
 	}
 	if err := validateGameMode(cfg.GameMode); err != nil {
 		return Config{}, err
+	}
+	// 机器人登录密码的落库密钥：优先 XUAN_CREDENTIAL_KEY，没配就退到数据库口令。
+	// 退到数据库口令是为了让已有部署不额外加环境变量也能用；更换任一来源都会让旧密文解不开。
+	if cfg.CredentialKey == "" {
+		cfg.CredentialKey = cfg.DBPassword
 	}
 	return cfg, nil
 }

@@ -22,21 +22,23 @@ export function Modal({ title, eyebrow, children, onClose, wide = false }: { tit
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+export function Field({ label, hint, children, as = "label" }: { label: string; hint?: string; children: ReactNode; as?: "label" | "div" }) {
+  // 一组按钮当控件时不能用 <label> 包，否则点击提示文字会误触第一个按钮，读屏也会并成一整块。
+  const Wrapper = as;
   return (
-    <label className="field">
+    <Wrapper className="field">
       <span className="field__label">{label}</span>
       {children}
       {hint && <span className="field__hint">{hint}</span>}
-    </label>
+    </Wrapper>
   );
 }
 
-export function FormActions({ onCancel, busy, submitText = "保存" }: { onCancel: () => void; busy?: boolean; submitText?: string }) {
+export function FormActions({ onCancel, busy, submitText = "保存", disabled }: { onCancel: () => void; busy?: boolean; submitText?: string; disabled?: boolean }) {
   return (
     <div className="form-actions">
       <Button type="button" variant="secondary" onClick={onCancel}>取消</Button>
-      <Button type="submit" disabled={busy}>{busy ? "正在保存…" : submitText}</Button>
+      <Button type="submit" disabled={busy || disabled}>{busy ? "正在保存…" : submitText}</Button>
     </div>
   );
 }

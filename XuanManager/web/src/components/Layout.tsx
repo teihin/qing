@@ -26,6 +26,20 @@ const iconText: Record<string, string> = {
   payments: "支",
   activities: "活",
   downloads: "下",
+  automation: "机",
+  "automation-deploy": "投",
+  "automation-overview": "览",
+  "automation-clubs": "俱",
+  "automation-rooms": "房",
+  "automation-robots": "机",
+  "automation-groups": "组",
+  "automation-tasks": "任",
+  "automation-strategies": "略",
+  "automation-sessions": "局",
+  "automation-workers": "节",
+  "automation-credentials": "凭",
+  "automation-alerts": "警",
+  "automation-audit": "审",
 };
 
 export default function Layout({ session, route, onNavigate, onChangePassword, onLogout, children }: {

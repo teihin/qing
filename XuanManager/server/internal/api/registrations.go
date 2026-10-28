@@ -727,18 +727,22 @@ func (s *Server) retryRegistrationLowerCounts(upperIDs []string) {
 	}
 }
 
-func gameNicknameExists(ctx context.Context, conn *sql.Conn, nickname string) (bool, error) {
+type gameAccountQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func gameNicknameExists(ctx context.Context, q gameAccountQuerier, nickname string) (bool, error) {
 	var exists bool
-	err := conn.QueryRowContext(ctx, `SELECT
+	err := q.QueryRowContext(ctx, `SELECT
 EXISTS(SELECT 1 FROM kbedm.third_marketing_info WHERE LOWER(TRIM(player_wxname)) = LOWER(?)) OR
 EXISTS(SELECT 1 FROM kbedm.tbl_Account WHERE LOWER(TRIM(sm_name)) = LOWER(?))`,
 		nickname, nickname).Scan(&exists)
 	return exists, err
 }
 
-func gameLoginNameExists(ctx context.Context, conn *sql.Conn, loginName string) (bool, error) {
+func gameLoginNameExists(ctx context.Context, q gameAccountQuerier, loginName string) (bool, error) {
 	var exists bool
-	err := conn.QueryRowContext(ctx, `SELECT
+	err := q.QueryRowContext(ctx, `SELECT
 EXISTS(SELECT 1 FROM kbedm.third_marketing_info WHERE LOWER(TRIM(player_wxid)) = LOWER(?)) OR
 EXISTS(SELECT 1 FROM kbedm.tbl_Account WHERE LOWER(TRIM(sm_wxID)) = LOWER(?)) OR
 EXISTS(SELECT 1 FROM kbedm.kbe_accountinfos WHERE LOWER(TRIM(accountName)) = LOWER(?))`,
