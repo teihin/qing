@@ -1985,20 +1985,23 @@ export default class panelGameView extends UIPanelViewBase {
         let strContext = json["context"];
         if(strWord!=null && strWord != "")
         {
-            if(strWord.indexOf("不补芒")>=0)
+            if(strWord.indexOf("不补芒")>=0 || strWord.indexOf("已结算")>=0)
             {
                 if(strContext == "回坐")
                 {
                     GameDataManager.getAccount().reqRoomCommand("{\"header\":\"回座_事件\"}", "回座_事件");
                 }
-                else if(strContext == "补分")
-                {
-                    this.node.getChildByName("带入窗口").active = true;
-                }
-                else if(strContext == "弹窗")
+                // else if(strContext == "补分")
+                // {
+                //     this.node.getChildByName("带入窗口").active = true;
+                // }
+                else if(strContext == "弹窗" || strContext == "补分")
                 {
                     let button = Tool.GetChild(this.node,"ConfigMain/补充钵钵").getComponent(cc.Button);
                     this.onButtonClick(button);
+                    if(strWord.indexOf("已结算")>=0){
+                        this.showMsg(strWord)
+                    }
                 }
                 else
                     this.onSitButton(strContext);
