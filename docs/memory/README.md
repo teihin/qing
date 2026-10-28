@@ -1,6 +1,6 @@
 # qing 记忆索引
 
-更新：2026-09-10。
+更新：2026-10-28。
 
 从 [项目入口](../../AGENTS.md) 和 [当前状态](CURRENT.md) 开始。以下是按任务读取的专题；只读相关小节，缺少证据时再查归档。当前状态描述已观察的状态，不赋予新任务目标或外部操作权限。
 
@@ -14,7 +14,12 @@
 | 已有 V7 实现、资源、长屏、钱包、公告、后续模块 | [V7 实施记录](topics/v7-ui.md) | Prefab、UUID、四档高度、历史实现；旧图不再作为设计依据 |
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |
+| 自动化后台（机器人=账号、投放、分组、Worker 路线、老客户端参考） | [自动化后台](topics/automation-console.md)、[落地交接](handoffs/2026-10-27-automation-console.md)、[限底皮+日志](handoffs/2026-10-28-automation-room-pi.md) | 机器人即账号、投放管理、邀请码、默认带入倍数、只进底皮、robot.room_pi |
+| Worker 节点通道（注册/租约、命令、事件、在线状态、参考 agent） | [Worker 通道](topics/automation-worker-channel.md)、[在线状态交接](handoffs/2026-10-28-worker-realtime-online.md) | `/agent/v1`、X-Agent-Token、租约 20 秒、offline 上报、命令状态机、xuanagent、janitor |
+| 真实游戏客户端（KBEngine 无头登录、俱乐部/进房协议、密码落库、agent-client 落地、xuanagent 启动与重编） | [真实客户端探查](topics/automation-real-client.md)、[落地交接](handoffs/2026-10-28-automation-real-client.md) | nip.io、kbengine.js、预坐/坐下、login_password、0x306、xuanagent.json、交叉编译 |
+| 自动化策略（净分区间控制、出牌移植、GPS/IP、终端日志、当前牌局与观战） | [策略与身份](topics/automation-strategy.md)、[策略交接](handoffs/2026-10-28-automation-strategy-gps.md)、[牌桌交接](handoffs/2026-10-28-automation-table-snapshot.md) | 净分死区、netPending、today_net_date、争赢/争输、TerminalLog、gps、TableState、take_pai、全桌手牌、观战名单 |
 | 客服、分配、在线状态、语音链路 | [客服与语音](topics/chattool-voice.md) | agent、ChatTool、AudioServer、WebRTC |
+| 剩余问题汇总（未提交/未发布/未执行迁移/待真机验证、发布顺序） | [剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md) | 035 036 037、bin/xuanagent 重编、heartbeatSeconds、真机未验、边界未做 |
 | 原生构建、热更新、资源审计、包体体积、磁盘和开发环境 | [构建与环境](topics/build-release-environment.md)、[资源打包交接](handoffs/2026-09-15-asset-bundle-audit.md) | runtime-src、build、Manifest、动态资源、resources 全量打包、SSD |
 | 本次整理交接 | [记忆迁移记录](handoffs/2026-09-05-memory-migration.md) | 保存范围、检查、待验证 |
 | 旧文全文和原章节 | [完整历史索引](archive/2026-09-05/README.md) | 原行号、历史日期、原记录命令 |

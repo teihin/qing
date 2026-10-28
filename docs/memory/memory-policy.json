@@ -10,6 +10,14 @@
     "docs/memory/topics/client-game-network.md",
     "docs/memory/topics/v7-ui.md",
     "docs/memory/topics/xuanmanager.md",
+    "docs/memory/topics/automation-console.md",
+    "docs/memory/topics/automation-worker-channel.md",
+    "docs/memory/topics/automation-real-client.md",
+    "docs/memory/topics/automation-strategy.md",
+    "docs/memory/handoffs/2026-10-28-automation-strategy-gps.md",
+    "docs/memory/handoffs/2026-10-28-automation-table-snapshot.md",
+    "docs/memory/handoffs/2026-10-28-worker-realtime-online.md",
+    "docs/memory/handoffs/2026-10-28-open-issues-backlog.md",
     "docs/memory/handoffs/2026-09-05-memory-migration.md",
     "docs/memory/archive/2026-09-05/README.md",
     "design-previews/README.md",
@@ -84,6 +92,10 @@
       "warn_bytes": 12288,
       "error_bytes": 32768
     },
+    "docs/memory/topics/automation-console.md": {
+      "warn_bytes": 16384,
+      "error_bytes": 32768
+    },
     "docs/memory/handoffs/2026-09-05-memory-migration.md": {
       "warn_bytes": 12288,
       "error_bytes": 32768
@@ -107,6 +119,30 @@
     "docs/memory/archive/2026-09-10/README.md": {
       "warn_bytes": 8192,
       "error_bytes": 16384
+    },
+    "docs/memory/topics/automation-real-client.md": {
+      "warn_bytes": 16384,
+      "error_bytes": 32768
+    },
+    "docs/memory/topics/automation-strategy.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/handoffs/2026-10-28-automation-strategy-gps.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/handoffs/2026-10-28-automation-table-snapshot.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/handoffs/2026-10-28-worker-realtime-online.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/handoffs/2026-10-28-open-issues-backlog.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
     }
   },
   "archives": [

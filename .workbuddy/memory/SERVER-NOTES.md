@@ -43,3 +43,20 @@
 
 - `pkill -9 -f ".../chattool"` 会匹配到 **ssh 自己那条 `bash -c` 命令行**，把自己杀掉，SSH 断开 exit 255。
   改用 `ps -C chattool -o pid=` 精确取进程名，或先读 pid 文件再用变量 kill。
+
+## XuanManager（运营后台）
+
+- 部署 `/www/html/.xuanmanager/`：`bin/xuanmanager`、`run.sh`（`source runtime.env`）、`supervise.sh`、`start.sh`（幂等）、
+  cron 每分钟 watchdog。**前端静态目录是 `XUAN_STATIC_DIR=/www/html/.xuanmanager/web`** ——
+  `/www/html/mgr` 是已废弃的旧站（Oct 13 那份），`/www/html/xuanmanager` 不存在；
+  Caddy 只有 `handle_path /xuanmanager/* → 127.0.0.1:8891` 一条反代，静态文件由 Go 按请求读盘，换目录不用重启。
+- 前端发布：本地 `vite build` → tar 上传 → `web → web.prev`、`web.new → web` 两跳切换（别直接覆盖，回滚方便）。
+- 判「是否新二进制」：`sha256sum /proc/<pid>/exe` 或看新路由返回 401 还是 404。
+  `stat -c %i /proc/<pid>/exe` 得到的 inode 会和磁盘文件不一致（内核语义），别拿它当判据。
+- **多行 ssh 脚本会被服务端直接掐断**（`Connection closed by ... port 2233`，脚本一行都没跑，像是「什么都没发生」）。
+  同一批操作拆成几条单行 ssh 就正常；遇到空结果先怀疑连接被掐。
+- 接入令牌（`mgr_automation_setting.agent_enroll_token`）现在是**可选**的，不配就是开放注册；
+  关掉：`DELETE /api/automation/agent-token`（或直接删这行 setting）。
+- **cron watchdog 每分钟 `start.sh`**：kill 后 2 秒内它就能把**旧二进制**拉起来，`./start.sh` 会报
+  "already running" 让人误判。稳妥做法是一条命令里做完 `kill → mv → ./start.sh → sha256sum /proc/<pid>/exe`，
+  发现 sha 不对就再 kill 一次重启。
