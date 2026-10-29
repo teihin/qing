@@ -85,16 +85,43 @@ func (s *Server) registerAutomationRoutes() {
 	s.mux.Handle("GET /api/automation/audit", s.authorized("automation.audit.view", false, s.handleAutomationAudit))
 }
 
+// automationStrategyConfig 是机器人的「动作与智力」：怎么跑、怎么出牌。
+// 进哪些房间、输赢目标归投放时配置，不放在策略里；0 / 空串表示不覆盖机器人自身配置。
+// 字段全部有消费方：跑法进客户端环境变量，打牌阈值进 agent-client/strategy.js。
 type automationStrategyConfig struct {
-	FollowCap       int      `json:"followCap"`
-	RaiseRule       string   `json:"raiseRule"`
-	CheEnabled      bool     `json:"cheEnabled"`
-	MaxLossPerRound int      `json:"maxLossPerRound"`
-	MaxDrawdown     int      `json:"maxDrawdown"`
-	LossStreakPause int      `json:"lossStreakPause"`
-	MaxRoundsPerDay int      `json:"maxRoundsPerDay"`
-	RestSeconds     int      `json:"restSeconds"`
-	Tiers           []string `json:"tiers"`
+	// 跑法节奏
+	BuyinMultiple    int `json:"buyinMultiple"`
+	StayBuyinTimes   int `json:"stayBuyinTimes"`
+	RoomAvoidMs      int `json:"roomAvoidMs"`
+	SitTimeoutMs     int `json:"sitTimeoutMs"`
+	ReinstateDelayMs int `json:"reinstateDelayMs"`
+	RoomRetryMs      int `json:"roomRetryMs"`
+
+	// 出牌节奏：替代客户端里写死的 1200–2500ms 与 6 秒
+	ActionDelayMinMs int `json:"actionDelayMinMs"`
+	ActionDelayMaxMs int `json:"actionDelayMaxMs"`
+	DecideTimeoutMs  int `json:"decideTimeoutMs"`
+
+	// 三档底皮的安全线（1P / 2P / 5P）
+	Tiers map[string]automationStrategyTier `json:"tiers"`
+
+	// 牌力判断
+	BigPairFen     int `json:"bigPairFen"`
+	WeakLowFen     int `json:"weakLowFen"`
+	ProtectPairFen int `json:"protectPairFen"`
+	ProtectBothFen int `json:"protectBothFen"`
+
+	// 输赢控制
+	WinStreakPause int     `json:"winStreakPause"`
+	DeadbandRatio  float64 `json:"deadbandRatio"`
+	AddMoreChance  float64 `json:"addMoreChance"`
+}
+
+// automationStrategyTier 是对应档位的三条安全线，语义与 strategy.js 完全一致。
+type automationStrategyTier struct {
+	MinG        int `json:"minG"`
+	SafeGen     int `json:"safeGen"`
+	NoAddGenMin int `json:"noAddGenMin"`
 }
 
 type automationStrategyItem struct {
@@ -109,12 +136,14 @@ type automationStrategyItem struct {
 	UpdatedBy       string          `json:"updatedBy"`
 	UpdatedAt       time.Time       `json:"updatedAt"`
 	GroupCount      int             `json:"groupCount"`
+	RobotCount      int             `json:"robotCount"`
 }
 
 func (s *Server) handleListAutomationStrategies(w http.ResponseWriter, r *http.Request, p principal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, name, code, version, play_style, status,
 COALESCE(config_json, '{}'), previous_version, updated_by, updated_at,
-(SELECT COUNT(*) FROM mgr_automation_group g WHERE g.strategy_id = s.id)
+(SELECT COUNT(*) FROM mgr_automation_group g WHERE g.strategy_id = s.id),
+(SELECT COUNT(*) FROM mgr_automation_robot r WHERE r.strategy_id = s.id)
 FROM mgr_automation_strategy s
 ORDER BY id`)
 	if err != nil {
@@ -128,7 +157,7 @@ ORDER BY id`)
 		var item automationStrategyItem
 		var config string
 		if err := rows.Scan(&item.ID, &item.Name, &item.Code, &item.Version, &item.PlayStyle, &item.Status,
-			&config, &item.PreviousVersion, &item.UpdatedBy, &item.UpdatedAt, &item.GroupCount); err != nil {
+			&config, &item.PreviousVersion, &item.UpdatedBy, &item.UpdatedAt, &item.GroupCount, &item.RobotCount); err != nil {
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取策略数据失败")
 			return
 		}
@@ -148,32 +177,92 @@ type automationStrategyRequest struct {
 	Config    automationStrategyConfig `json:"config"`
 }
 
+func validStrategyPairClick(value int) bool {
+	switch value {
+	case 0, 1, 2, 3, 4, 5, 6, 7, 8, 11, 12, 13, 14, 15, 16, 17, 18, 98, 99:
+		return true
+	}
+	return false
+}
+
+func validStrategyDate(value string) bool {
+	if value == "" {
+		return true
+	}
+	_, err := time.Parse("2006-01-02", value)
+	return err == nil
+}
+
 func validateAutomationStrategyConfig(config *automationStrategyConfig) string {
-	if config.FollowCap < 1 || config.FollowCap > 20 {
-		return "跟注上限必须在 1 到 20 之间"
+	// 跑法节奏：0 表示不覆盖机器人自身配置。
+	if config.BuyinMultiple != 0 && (config.BuyinMultiple < 1 || config.BuyinMultiple > 10) {
+		return "带入倍数必须在 1 到 10 之间（0 表示不设）"
 	}
-	if strings.TrimSpace(config.RaiseRule) == "" || len([]rune(config.RaiseRule)) > 60 {
-		return "加注规则不能为空且不能超过 60 个字符"
+	if config.RoomRetryMs != 0 && (config.RoomRetryMs < 1000 || config.RoomRetryMs > 600000) {
+		return "找房间隔必须在 1,000 到 600,000 毫秒之间"
 	}
-	if config.MaxLossPerRound < 0 || config.MaxLossPerRound > 1000000 {
-		return "单局上限必须在 0 到 1,000,000 之间"
+	if config.SitTimeoutMs != 0 && (config.SitTimeoutMs < 1000 || config.SitTimeoutMs > 120000) {
+		return "坐下超时必须在 1,000 到 120,000 毫秒之间"
 	}
-	if config.MaxDrawdown < 0 || config.MaxDrawdown > 10000000 {
-		return "最大回撤必须在 0 到 10,000,000 之间"
+	if config.ReinstateDelayMs != 0 && (config.ReinstateDelayMs < 1000 || config.ReinstateDelayMs > 600000) {
+		return "再次带入节流必须在 1,000 到 600,000 毫秒之间"
 	}
-	if config.LossStreakPause < 1 || config.LossStreakPause > 20 {
-		return "连败暂停必须在 1 到 20 之间"
+	if config.RoomAvoidMs != 0 && (config.RoomAvoidMs < 60000 || config.RoomAvoidMs > 86400000) {
+		return "房间避让时长必须在 60,000 到 86,400,000 毫秒之间"
 	}
-	if config.MaxRoundsPerDay < 1 || config.MaxRoundsPerDay > 5000 {
-		return "日局数上限必须在 1 到 5,000 之间"
+	if config.StayBuyinTimes < 0 || config.StayBuyinTimes > 20 {
+		return "原房连输次数必须在 0 到 20 之间"
 	}
-	if config.RestSeconds < 0 || config.RestSeconds > 3600 {
-		return "休息间隔必须在 0 到 3,600 秒之间"
+	// 出牌节奏
+	if config.ActionDelayMinMs != 0 && (config.ActionDelayMinMs < 500 || config.ActionDelayMinMs > 10000) {
+		return "出牌最短间隔必须在 500 到 10,000 毫秒之间"
 	}
-	for _, tier := range config.Tiers {
-		if len(tier) != 1 || tier[0] < '1' || tier[0] > '9' {
-			return "适用档位只能是 1 到 9"
+	if config.ActionDelayMaxMs != 0 && (config.ActionDelayMaxMs < 500 || config.ActionDelayMaxMs > 10000) {
+		return "出牌最长间隔必须在 500 到 10,000 毫秒之间"
+	}
+	if config.ActionDelayMinMs != 0 && config.ActionDelayMaxMs != 0 && config.ActionDelayMinMs > config.ActionDelayMaxMs {
+		return "出牌最短间隔不能大于最长间隔"
+	}
+	if config.DecideTimeoutMs != 0 && (config.DecideTimeoutMs < 2000 || config.DecideTimeoutMs > 30000) {
+		return "决策超时必须在 2,000 到 30,000 毫秒之间"
+	}
+	// 三档安全线：只允许 1 / 2 / 5 三个档位
+	for key, tier := range config.Tiers {
+		if key != "1" && key != "2" && key != "5" {
+			return "安全线档位只能是 1、2、5"
 		}
+		if tier.MinG < 0 || tier.MinG > 10000 {
+			return "底皮 " + key + " 的最低跟注线必须在 0 到 10,000 之间"
+		}
+		if tier.SafeGen < 0 || tier.SafeGen > 10000 {
+			return "底皮 " + key + " 的安全线必须在 0 到 10,000 之间"
+		}
+		if tier.NoAddGenMin < 0 || tier.NoAddGenMin > 100 {
+			return "底皮 " + key + " 的便宜跟注线必须在 0 到 100 之间"
+		}
+	}
+	// 牌力阈值
+	if config.BigPairFen != 0 && (config.BigPairFen < 1 || config.BigPairFen > 21) {
+		return "大牌线必须在 1 到 21 之间"
+	}
+	if config.WeakLowFen != 0 && (config.WeakLowFen < 1 || config.WeakLowFen > 21) {
+		return "小门改扯线必须在 1 到 21 之间"
+	}
+	if config.ProtectPairFen != 0 && (config.ProtectPairFen < 1 || config.ProtectPairFen > 21) {
+		return "单门保护线必须在 1 到 21 之间"
+	}
+	if config.ProtectBothFen != 0 && (config.ProtectBothFen < 1 || config.ProtectBothFen > 21) {
+		return "双门保护线必须在 1 到 21 之间"
+	}
+	// 输赢控制
+	if config.WinStreakPause < 0 || config.WinStreakPause > 20 {
+		return "连赢降级局数必须在 0 到 20 之间"
+	}
+	if config.DeadbandRatio < 0 || config.DeadbandRatio > 1 {
+		return "目标死区比例必须在 0 到 1 之间"
+	}
+	if config.AddMoreChance < 0 || config.AddMoreChance > 1 {
+		return "超目标加注概率必须在 0 到 1 之间"
 	}
 	return ""
 }
@@ -181,19 +270,16 @@ func validateAutomationStrategyConfig(config *automationStrategyConfig) string {
 func (s *Server) validateAutomationStrategy(w http.ResponseWriter, input *automationStrategyRequest, creating bool) bool {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Code = strings.TrimSpace(input.Code)
-	input.PlayStyle = strings.TrimSpace(input.PlayStyle)
-	input.Config.RaiseRule = strings.TrimSpace(input.Config.RaiseRule)
+	// 出牌风格和策略编码都不再让运营填：风格固定均衡，编码按名称+时间自动生成。
+	input.PlayStyle = "balanced"
 	if input.Name == "" || len([]rune(input.Name)) > 64 {
 		writeError(w, http.StatusBadRequest, "INVALID_NAME", "策略名称不能为空且不能超过 64 个字符")
 		return false
 	}
-	if creating && !codePattern.MatchString(input.Code) {
-		writeError(w, http.StatusBadRequest, "INVALID_CODE", "策略编码必须为 3 到 64 位小写字母、数字、下划线或点")
-		return false
-	}
-	if input.PlayStyle != "conservative" && input.PlayStyle != "balanced" && input.PlayStyle != "aggressive" {
-		writeError(w, http.StatusBadRequest, "INVALID_STYLE", "出牌风格必须是保守、均衡或激进")
-		return false
+	if creating {
+		// 编码只做内部唯一键：时间到秒 + 毫秒三位，避免中文名转拼音踩坑。
+		now := time.Now()
+		input.Code = fmt.Sprintf("s%s%03d", now.Format("20060102150405"), now.Nanosecond()/1000000)
 	}
 	if message := validateAutomationStrategyConfig(&input.Config); message != "" {
 		writeError(w, http.StatusBadRequest, "INVALID_CONFIG", message)

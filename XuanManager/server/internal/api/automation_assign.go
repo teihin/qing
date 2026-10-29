@@ -79,6 +79,7 @@ FROM mgr_automation_worker w WHERE w.id = ?`, workerID).Scan(&status, &maxRobots
 FROM mgr_automation_robot r
 LEFT JOIN mgr_automation_club c ON c.club_id = r.club_id
 WHERE r.worker_id IS NULL AND r.enabled = 1 AND r.join_status = 'joined'
+  AND COALESCE(r.schedule_state, '') <> 'released'
 ORDER BY r.id LIMIT ?`, free)
 	if err != nil {
 		if logger != nil {
@@ -109,7 +110,7 @@ ORDER BY r.id LIMIT ?`, free)
 	assigned := 0
 	for _, item := range list {
 		result, err := db.ExecContext(ctx, `UPDATE mgr_automation_robot
-SET worker_id = ?, status = 'idle', desired_status = 'running', last_error = '', last_heartbeat = NOW()
+SET worker_id = ?, status = 'idle', desired_status = 'running', schedule_state = '', last_error = '', last_heartbeat = NOW()
 WHERE id = ? AND worker_id IS NULL`, workerID, item.id)
 		if err != nil {
 			if logger != nil {
@@ -175,7 +176,8 @@ ORDER BY (w.max_robots - w.robot_count) DESC, w.id`)
 func countWaitingRobots(ctx context.Context, db *sql.DB) int {
 	var count int
 	if err := db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mgr_automation_robot
-WHERE worker_id IS NULL AND enabled = 1 AND join_status = 'joined'`).Scan(&count); err != nil {
+WHERE worker_id IS NULL AND enabled = 1 AND join_status = 'joined'
+  AND COALESCE(schedule_state, '') <> 'released'`).Scan(&count); err != nil {
 		return 0
 	}
 	return count

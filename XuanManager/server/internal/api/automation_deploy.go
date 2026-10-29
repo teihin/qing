@@ -74,6 +74,9 @@ type deployRobotItem struct {
 	PeriodNet    int64      `json:"periodNet"`
 	Buyin        int        `json:"buyin"`
 	RoomPi       string     `json:"roomPi"`
+	// 周计划：非空表示这台机器人按周时段跑，界面上直接展示人话。
+	ProfitSchedule string `json:"profitSchedule"`
+	ScheduleState  string `json:"scheduleState"`
 	WorkerID     *int64     `json:"workerId"`
 	WorkerName   string     `json:"workerName"`
 	DispatchNote string     `json:"dispatchNote"` // 当前卡在哪个环节，直接给界面显示
@@ -113,14 +116,15 @@ type deployLookup struct {
 }
 
 type deployRequest struct {
-	InviteCode   string  `json:"inviteCode"`
-	RobotIDs     []int64 `json:"robotIds"`
-	GroupIDs     []int64 `json:"groupIds"`
-	StrategyID   int64   `json:"strategyId"`
-	ProfitMode   string  `json:"profitMode"`
-	ProfitTarget int64   `json:"profitTarget"`
-	PeriodStart  string  `json:"periodStart"`
-	PeriodEnd    string  `json:"periodEnd"`
+	InviteCode     string               `json:"inviteCode"`
+	RobotIDs       []int64              `json:"robotIds"`
+	GroupIDs       []int64              `json:"groupIds"`
+	StrategyID     int64                `json:"strategyId"`
+	ProfitMode     string               `json:"profitMode"`
+	ProfitTarget   int64                `json:"profitTarget"`
+	PeriodStart    string               `json:"periodStart"`
+	PeriodEnd      string               `json:"periodEnd"`
+	ProfitSchedule []profitScheduleItem `json:"profitSchedule"`
 	// RoomPi 是这批机器人只进的底皮档位（逗号分隔），空串表示不限。
 	RoomPi string `json:"roomPi"`
 }
@@ -145,6 +149,8 @@ func deployDispatchNote(item deployRobotItem) string {
 		return "未投放"
 	case !item.Enabled:
 		return "已停用，不参与调度"
+	case item.JoinStatus == "joined" && item.WorkerID == nil && item.ScheduleState == "released":
+		return "不在周计划时段，已让出 Worker"
 	case item.WorkerID == nil:
 		return "等待分配 Worker"
 	default:
@@ -191,6 +197,7 @@ ORDER BY (w.max_robots - w.robot_count) DESC, w.id`)
 	}
 	pending, err := s.db.QueryContext(ctx, `SELECT id, account, terminal_no FROM mgr_automation_robot
 WHERE club_id = ? AND worker_id IS NULL AND enabled = 1 AND join_status = 'joined'
+  AND COALESCE(schedule_state, '') <> 'released'
 ORDER BY id`, clubID)
 	if err != nil {
 		return 0, 0, err
@@ -223,7 +230,7 @@ ORDER BY id`, clubID)
 		}
 		slot := slots[slotIndex]
 		result, err := s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
-SET worker_id = ?, status = 'idle', desired_status = 'running', last_error = '', last_heartbeat = NOW()
+SET worker_id = ?, status = 'idle', desired_status = 'running', schedule_state = '', last_error = '', last_heartbeat = NOW()
 WHERE id = ? AND worker_id IS NULL`, slot.id, robot.id)
 		if err != nil {
 			return assigned, len(waiting) - assigned, err
@@ -327,7 +334,8 @@ COALESCE(SUM(r.today_rounds), 0),
 COALESCE(SUM(r.today_net), 0),
 MIN(r.joined_at),
 COALESCE(SUM(r.worker_id IS NOT NULL), 0),
-COALESCE(SUM(r.join_status = 'joined' AND r.worker_id IS NULL AND r.enabled = 1), 0),
+COALESCE(SUM(r.join_status = 'joined' AND r.worker_id IS NULL AND r.enabled = 1
+  AND COALESCE(r.schedule_state, '') <> 'released'), 0),
 (SELECT COUNT(*) FROM mgr_automation_worker w WHERE `+automationWorkerOnlineSQL+`)
 FROM mgr_automation_club c
 JOIN mgr_automation_robot r ON r.club_id = c.club_id
@@ -385,7 +393,8 @@ func (s *Server) handleGetDeployClub(w http.ResponseWriter, r *http.Request, p p
 (SELECT COALESCE(SUM(r.today_net), 0) FROM mgr_automation_robot r WHERE r.club_id = c.club_id),
 (SELECT MIN(r.joined_at) FROM mgr_automation_robot r WHERE r.club_id = c.club_id),
 (SELECT COUNT(*) FROM mgr_automation_robot r WHERE r.club_id = c.club_id AND r.worker_id IS NOT NULL),
-(SELECT COUNT(*) FROM mgr_automation_robot r WHERE r.club_id = c.club_id AND r.join_status = 'joined' AND r.worker_id IS NULL AND r.enabled = 1),
+(SELECT COUNT(*) FROM mgr_automation_robot r WHERE r.club_id = c.club_id AND r.join_status = 'joined' AND r.worker_id IS NULL AND r.enabled = 1
+  AND COALESCE(r.schedule_state, '') <> 'released'),
 (SELECT COUNT(*) FROM mgr_automation_worker w WHERE `+automationWorkerOnlineSQL+`)
 FROM mgr_automation_club c WHERE c.club_id = ?`, clubID).
 		Scan(&club.ClubID, &club.Name, &club.InviteCode, &club.Status, &club.RobotQuota, &club.MaxPerRoom,
@@ -454,6 +463,7 @@ COALESCE(g.name, ''), COALESCE(rs.name, gs.name, ''),
 COALESCE(NULLIF(r.intelligence, 0), g.default_intelligence, 0),
 r.room_id, r.seat_no, r.status, r.enabled, r.join_status, r.invite_code, r.joined_at, r.last_error,
 r.today_rounds, r.today_net, r.period_net, r.buyin, r.room_pi,
+r.profit_schedule, r.schedule_state,
 r.worker_id, COALESCE(w.node_code, '')
 FROM mgr_automation_robot r
 LEFT JOIN mgr_automation_group g ON g.id = r.group_id
@@ -477,6 +487,7 @@ ORDER BY r.id`, clubID)
 			&item.GroupName, &item.StrategyName, &item.Intelligence,
 			&roomID, &item.SeatNo, &item.Status, &item.Enabled, &item.JoinStatus, &item.InviteCode, &joinedAt, &item.LastError,
 			&item.TodayRounds, &item.TodayNet, &item.PeriodNet, &item.Buyin, &item.RoomPi,
+			&item.ProfitSchedule, &item.ScheduleState,
 			&workerID, &item.WorkerName); err != nil {
 			return err
 		}
@@ -674,7 +685,7 @@ func (s *Server) handleDeployByInvite(w http.ResponseWriter, r *http.Request, p 
 		return
 	}
 	outcome, apiErr := s.performAutomationDeploy(r, clubID, input.RobotIDs, input.GroupIDs, input.StrategyID,
-		input.ProfitMode, input.ProfitTarget, input.PeriodStart, input.PeriodEnd, input.RoomPi)
+		input.ProfitMode, input.ProfitTarget, input.PeriodStart, input.PeriodEnd, input.ProfitSchedule, input.RoomPi)
 	if apiErr != nil {
 		writeError(w, apiErr.Status, apiErr.Code, apiErr.Message)
 		return

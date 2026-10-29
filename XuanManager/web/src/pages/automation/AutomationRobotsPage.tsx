@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../../api";
 import { Button, EmptyState, Field, FormActions, LoadingBlock, Modal, PageHeader } from "../../components/ui";
+import { GroupManagerModal } from "./AutomationGroupModals";
 import { RobotAddModal, RobotDeleteModal, RobotEditModal, RobotQuickToggle } from "./AutomationRobotModals";
 import { RobotLogList } from "./AutomationRobotLogs";
 import { RobotTablePanel } from "./AutomationRobotTable";
@@ -99,7 +100,7 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
   const [keyword, setKeyword] = useState("");
   const [query, setQuery] = useState("");
   const [clubId, setClubId] = useState("");
-  const groups = useAutomationGroups();
+  const { groups, reload: reloadGroups } = useAutomationGroups();
   const [groupId, setGroupId] = useState("");
   const [status, setStatus] = useState("");
   const [assigned, setAssigned] = useState("");
@@ -115,6 +116,7 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [batchAction, setBatchAction] = useState<BatchActionOption | null>(null);
   const [batchResult, setBatchResult] = useState<BatchResponse | null>(null);
+  const [managingGroups, setManagingGroups] = useState(false);
 
   const canCreate = can("automation.robot.create");
   const canUpdate = can("automation.robot.update");
@@ -141,6 +143,12 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
   }, [query, clubId, groupId, status, enabled, assigned, notify]);
 
   useEffect(() => { void load(page, pageSize); }, [load, page, pageSize]);
+
+  // 分组被删掉后，筛选条件还指着它会让列表一直空；分组列表还在时清掉这个筛选。
+  useEffect(() => {
+    if (!groupId || groups.length === 0) return;
+    if (!groups.some((group) => String(group.id) === groupId)) setGroupId("");
+  }, [groups, groupId]);
 
   const pageItems = useMemo(() => data?.items ?? [], [data]);
   const stats = useMemo(() => ({
@@ -208,6 +216,7 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
       description="机器人就是游戏账号：在这里批量创建、改智力、分组、停用和删除；投放和撤回请到投放管理操作。"
       actions={<div className="automation-header-actions">
         {canCreate && <Button onClick={() => setAdding(true)}>批量创建机器人</Button>}
+        {can("automation.group.view") && <Button variant="secondary" onClick={() => setManagingGroups(true)}>分组管理</Button>}
         <Button variant="secondary" disabled={loading} onClick={() => void load(page, pageSize)}>{loading ? "正在刷新…" : "刷新"}</Button>
       </div>}
     />
@@ -281,8 +290,17 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
     {batchAction && <BatchConfirmModal action={batchAction} impact={impact} onClose={() => setBatchAction(null)} onSubmit={runBatch} />}
     {batchResult && <BatchResultModal result={batchResult} onClose={() => setBatchResult(null)} />}
     {detailId !== null && <RobotDetailModal robotId={detailId} initialTab={detailTab} canOperate={canOperate} notify={notify} onClose={() => setDetailId(null)} onChanged={() => load(page, pageSize, true)} />}
-    {adding && <RobotAddModal groups={groups} onClose={() => setAdding(false)} onSaved={(message) => { setAdding(false); notify(message); void load(page, pageSize, true); }} />}
-    {editing && <RobotEditModal robot={editing} groups={groups} onClose={() => setEditing(null)} onSaved={(message) => { setEditing(null); notify(message); void load(page, pageSize, true); }} />}
+    {adding && <RobotAddModal groups={groups} canCreateGroup={can("automation.group.create")} onGroupCreated={reloadGroups} onClose={() => setAdding(false)} onSaved={(message) => { setAdding(false); notify(message); void load(page, pageSize, true); }} />}
+    {managingGroups && <GroupManagerModal
+      groups={groups}
+      canCreate={can("automation.group.create")}
+      canUpdate={can("automation.group.update")}
+      canDelete={can("automation.group.delete")}
+      notify={notify}
+      onClose={() => setManagingGroups(false)}
+      onChanged={() => { reloadGroups(); void load(page, pageSize, true); }}
+    />}
+    {editing && <RobotEditModal robot={editing} groups={groups} canCreateGroup={can("automation.group.create")} onGroupCreated={reloadGroups} onClose={() => setEditing(null)} onSaved={(message) => { setEditing(null); notify(message); void load(page, pageSize, true); }} />}
     {deleting && <RobotDeleteModal robot={deleting} onClose={() => setDeleting(null)} onDeleted={(message) => { setDeleting(null); notify(message); void load(page, pageSize, true); }} />}
   </div>;
 }

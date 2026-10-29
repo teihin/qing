@@ -51,9 +51,50 @@ export default function Layout({ session, route, onNavigate, onChangePassword, o
   children: ReactNode;
 }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // 一级模块可以折叠：状态存 localStorage，刷新后保持；切到某个页面时自动展开它所在的组。
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem("xuan.nav.collapsed.v2");
+      const parsed = raw ? JSON.parse(raw) : null;
+      return parsed && typeof parsed === "object" ? (parsed as Record<string, boolean>) : {};
+    } catch {
+      return {};
+    }
+  });
   const navigationRef = useRef<HTMLElement>(null);
   const roots = session.modules.filter((item) => item.parentId === null);
   const childrenOf = (id: number) => session.modules.filter((item) => item.parentId === id);
+
+  const toggleGroup = (id: number) => {
+    const key = String(id);
+    setCollapsedGroups((current) => {
+      // 没记录过的一律按折叠算；点一下取反：折叠 → 展开(false)，展开 → 折叠(true)。
+      const collapsedNow = current[key] !== false;
+      const next = { ...current, [key]: !collapsedNow };
+      try {
+        localStorage.setItem("xuan.nav.collapsed.v2", JSON.stringify(next));
+      } catch {
+        // 隐私模式下写不进去，不影响本次会话的折叠。
+      }
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    const parentId = session.modules.find((item) => item.route === route)?.parentId;
+    if (parentId == null) return;
+    const key = String(parentId);
+    setCollapsedGroups((current) => {
+      if (!current[key]) return current;
+      const next = { ...current, [key]: false };
+      try {
+        localStorage.setItem("xuan.nav.collapsed.v2", JSON.stringify(next));
+      } catch {
+        // 同上。
+      }
+      return next;
+    });
+  }, [route, session.modules]);
 
   useEffect(() => {
     setMobileMenuOpen(false);
@@ -117,9 +158,19 @@ export default function Layout({ session, route, onNavigate, onChangePassword, o
           {roots.map((root) => {
             const children = childrenOf(root.id);
             if (children.length === 0) return renderLink(root);
+            const collapsed = collapsedGroups[String(root.id)] !== false;
             return (
-              <section className="nav-group" key={root.id}>
-                <p><span>{iconText[root.icon] ?? "◇"}</span>{root.name}</p>
+              <section className={`nav-group${collapsed ? " is-collapsed" : ""}`} key={root.id}>
+                <button
+                  type="button"
+                  className="nav-group__toggle"
+                  aria-expanded={!collapsed}
+                  onClick={() => toggleGroup(root.id)}
+                >
+                  <span className="nav-group__icon">{iconText[root.icon] ?? "◇"}</span>
+                  <span className="nav-group__name">{root.name}</span>
+                  <i className="nav-group__arrow" aria-hidden="true" />
+                </button>
                 {children.map(renderLink)}
               </section>
             );

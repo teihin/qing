@@ -47,6 +47,9 @@ type automationRobotItem struct {
 	PeriodStart       *time.Time `json:"periodStart"`
 	PeriodEnd         *time.Time `json:"periodEnd"`
 	PeriodNet         int64      `json:"periodNet"`
+	ProfitSchedule    string     `json:"profitSchedule"`
+	ScheduleState     string     `json:"scheduleState"`
+	WindowNet         int64      `json:"windowNet"`
 	Enabled           bool       `json:"enabled"`
 	InviteCode        string     `json:"inviteCode"`
 	JoinStatus        string     `json:"joinStatus"`
@@ -74,7 +77,8 @@ r.worker_id, COALESCE(w.node_code, ''), r.egress_ip, r.status, r.desired_status,
 r.room_id, r.seat_no, r.buyin, r.buyin_multiple, r.room_pi,
 r.gps, r.public_ip, r.ip_seen_at,
 r.intelligence, COALESCE(g.default_intelligence, 0), r.profit_mode, r.profit_target,
-r.period_start, r.period_end, r.period_net, r.enabled, r.invite_code, r.join_status, r.joined_at,
+r.period_start, r.period_end, r.period_net, r.profit_schedule, r.schedule_state, r.window_net,
+r.enabled, r.invite_code, r.join_status, r.joined_at,
 COALESCE(g.profit_mode, ''), COALESCE(g.profit_target, 0), g.period_start, g.period_end,
 r.balance, r.today_rounds, r.today_net,
 r.last_heartbeat, r.last_error, r.risk_flag, r.is_demo, r.updated_at,
@@ -97,7 +101,8 @@ func scanAutomationRobot(row rowScanner) (automationRobotItem, error) {
 		&roomID, &item.SeatNo, &item.Buyin, &item.BuyinMultiple, &item.RoomPi,
 		&item.Gps, &item.PublicIP, &ipSeenAt,
 		&item.Intelligence, &item.GroupIntelligence, &item.ProfitMode, &item.ProfitTarget,
-		&periodStart, &periodEnd, &item.PeriodNet, &enabled, &item.InviteCode, &item.JoinStatus, &joinedAt,
+		&periodStart, &periodEnd, &item.PeriodNet, &item.ProfitSchedule, &item.ScheduleState, &item.WindowNet,
+		&enabled, &item.InviteCode, &item.JoinStatus, &joinedAt,
 		&item.GroupProfitMode, &item.GroupProfitTarget, &groupPeriodStart, &groupPeriodEnd,
 		&item.Balance, &item.TodayRounds, &item.TodayNet,
 		&heartbeat, &item.LastError, &riskFlag, &isDemo, &item.UpdatedAt,
@@ -580,11 +585,11 @@ func (s *Server) handleBulkCreateAutomationRobots(w http.ResponseWriter, r *http
 		robotStatus = "stopped"
 	}
 
-	// 密码只以密文形式留一份给 Worker 登录用；游戏库照旧只写 MD5。
+	// 密码只存 AES-256-GCM 密文，心跳下发时由后端解出明文；游戏库照旧只写 MD5。
 	sealedPassword, err := security.SealCredential(s.credentialKey(), input.Password)
 	if err != nil {
-		s.logger.Error("seal robot password", "error", err)
-		writeError(w, http.StatusInternalServerError, "CREDENTIAL_ERROR", "保存登录密码失败，请检查服务端密钥配置")
+		s.logger.Error("seal robot login password", "error", err)
+		writeError(w, http.StatusInternalServerError, "SEAL_ERROR", "加密登录密码失败")
 		return
 	}
 
@@ -699,11 +704,12 @@ type automationRobotUpdateRequest struct {
 	BuyinMultiple int    `json:"buyinMultiple"`
 	RoomPi        string `json:"roomPi"`
 	Intelligence  int    `json:"intelligence"`
-	ProfitMode    string `json:"profitMode"`
-	ProfitTarget  int64  `json:"profitTarget"`
-	PeriodStart   string `json:"periodStart"`
-	PeriodEnd     string `json:"periodEnd"`
-	Enabled       *bool  `json:"enabled"`
+	ProfitMode     string               `json:"profitMode"`
+	ProfitTarget   int64                `json:"profitTarget"`
+	PeriodStart    string               `json:"periodStart"`
+	PeriodEnd      string               `json:"periodEnd"`
+	ProfitSchedule []profitScheduleItem `json:"profitSchedule"`
+	Enabled        *bool                `json:"enabled"`
 	// LoginPassword 留空表示不改；填写时同时更新游戏库的登录密码与 Worker 用的密文。
 	LoginPassword string `json:"loginPassword"`
 }
@@ -727,8 +733,9 @@ func (s *Server) handleUpdateAutomationRobot(w http.ResponseWriter, r *http.Requ
 	var currentClub, currentStatus string
 	var currentRoom sql.NullInt64
 	var currentEnabled bool
-	if err := s.db.QueryRowContext(r.Context(), "SELECT club_id, status, room_id, enabled FROM mgr_automation_robot WHERE id = ?", id).
-		Scan(&currentClub, &currentStatus, &currentRoom, &currentEnabled); err != nil {
+	var currentProfitMode, currentProfitSchedule string
+	if err := s.db.QueryRowContext(r.Context(), "SELECT club_id, status, room_id, enabled, COALESCE(profit_mode, ''), COALESCE(profit_schedule, '') FROM mgr_automation_robot WHERE id = ?", id).
+		Scan(&currentClub, &currentStatus, &currentRoom, &currentEnabled, &currentProfitMode, &currentProfitSchedule); err != nil {
 		writeError(w, http.StatusNotFound, "ROBOT_NOT_FOUND", "没有找到这个机器人终端")
 		return
 	}
@@ -757,10 +764,33 @@ func (s *Server) handleUpdateAutomationRobot(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "INVALID_INTELLIGENCE", "机器人智力必须在 0 到 100 之间，0 表示跟随分组默认值")
 		return
 	}
-	periodStart, periodEnd, profitMessage := validateAutomationProfit(input.ProfitMode, input.ProfitTarget, input.PeriodStart, input.PeriodEnd, true)
+	// 周计划沿用每日目标的数值校验；周期日期按 daily 处理，不会误读 period 字段。
+	validationMode := input.ProfitMode
+	if validationMode == "schedule" {
+		validationMode = "daily"
+	}
+	periodStart, periodEnd, profitMessage := validateAutomationProfit(validationMode, input.ProfitTarget, input.PeriodStart, input.PeriodEnd, true)
 	if profitMessage != "" {
 		writeError(w, http.StatusBadRequest, "INVALID_PROFIT_TARGET", profitMessage)
 		return
+	}
+	scheduleJSON := ""
+	if input.ProfitMode == "schedule" {
+		scheduleJSON, profitMessage = normalizeProfitSchedule(input.ProfitSchedule)
+		if profitMessage != "" {
+			writeError(w, http.StatusBadRequest, "INVALID_PROFIT_SCHEDULE", profitMessage)
+			return
+		}
+	}
+	// 周计划没变就保留当前时段的净分进度；改了计划或换成别的模式才清零重来。
+	resetSchedule := scheduleJSON == "" || currentProfitMode != "schedule" || currentProfitSchedule != scheduleJSON
+	scheduleWindow, scheduleState := "", ""
+	if scheduleJSON != "" {
+		scheduleWindow, scheduleState = scheduleDeployState(scheduleJSON, time.Now())
+	}
+	resetFlag := 0
+	if resetSchedule {
+		resetFlag = 1
 	}
 	enabled := currentEnabled
 	if input.Enabled != nil {
@@ -792,8 +822,8 @@ func (s *Server) handleUpdateAutomationRobot(w http.ResponseWriter, r *http.Requ
 		}
 		sealed, err := security.SealCredential(s.credentialKey(), input.LoginPassword)
 		if err != nil {
-			s.logger.Error("seal robot password", "error", err, "robotId", id)
-			writeError(w, http.StatusInternalServerError, "CREDENTIAL_ERROR", "保存登录密码失败，请检查服务端密钥配置")
+			s.logger.Error("seal robot login password", "error", err)
+			writeError(w, http.StatusInternalServerError, "SEAL_ERROR", "加密登录密码失败")
 			return
 		}
 		sealedPassword = sealed
@@ -821,13 +851,17 @@ func (s *Server) handleUpdateAutomationRobot(w http.ResponseWriter, r *http.Requ
 	if _, err := tx.ExecContext(r.Context(), `UPDATE mgr_automation_robot
 SET nickname = ?, group_id = NULLIF(?, 0), strategy_id = NULLIF(?, 0),
 worker_id = NULLIF(?, 0), egress_ip = ?, buyin_multiple = ?, room_pi = ?,
-intelligence = ?, profit_mode = ?, profit_target = ?, period_start = ?, period_end = ?,
+intelligence = ?, profit_mode = ?, profit_target = ?, period_start = ?, period_end = ?, profit_schedule = ?,
+schedule_window = CASE WHEN ? = 1 THEN ? ELSE schedule_window END,
+window_net = CASE WHEN ? = 1 THEN 0 ELSE window_net END,
+schedule_state = CASE WHEN ? = 1 THEN ? ELSE schedule_state END,
 enabled = ?, status = ?, desired_status = CASE WHEN ? = 0 THEN 'stopped' ELSE desired_status END,
 login_password = CASE WHEN ? = '' THEN login_password ELSE ? END,
 password_updated_at = CASE WHEN ? = '' THEN password_updated_at ELSE NOW() END,
 last_heartbeat = NOW()
 WHERE id = ?`, input.Nickname, input.GroupID, input.StrategyID, input.WorkerID, input.EgressIP, input.BuyinMultiple, roomPi,
-		input.Intelligence, input.ProfitMode, input.ProfitTarget, nullableTime(periodStart), nullableTime(periodEnd),
+		input.Intelligence, input.ProfitMode, input.ProfitTarget, nullableTime(periodStart), nullableTime(periodEnd), scheduleJSON,
+		resetFlag, scheduleWindow, resetFlag, resetFlag, scheduleState,
 		enabled, nextStatus, enabled, sealedPassword, sealedPassword, sealedPassword, id); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_ERROR", "保存机器人终端失败")
 		return
@@ -977,11 +1011,11 @@ func (s *Server) performAutomationRobotAction(r *http.Request, id int64, action 
 }
 
 func (s *Server) performAutomationRobotActionDirect(r *http.Request, id int64, action string) (string, error) {
-	var status, joinStatus string
+	var status, joinStatus, scheduleState string
 	var roomID sql.NullInt64
 	var enabled bool
-	if err := s.db.QueryRowContext(r.Context(), "SELECT status, room_id, enabled, join_status FROM mgr_automation_robot WHERE id = ?", id).
-		Scan(&status, &roomID, &enabled, &joinStatus); err != nil {
+	if err := s.db.QueryRowContext(r.Context(), "SELECT status, room_id, enabled, join_status, COALESCE(schedule_state, '') FROM mgr_automation_robot WHERE id = ?", id).
+		Scan(&status, &roomID, &enabled, &joinStatus, &scheduleState); err != nil {
 		return "", err
 	}
 	switch action {
@@ -994,7 +1028,8 @@ func (s *Server) performAutomationRobotActionDirect(r *http.Request, id int64, a
 		}
 		if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_robot
 SET club_id = '', invite_code = '', join_status = 'unassigned', joined_at = NULL, worker_id = NULL,
-status = 'idle', desired_status = 'stopped', last_heartbeat = NOW() WHERE id = ?`, id); err != nil {
+status = 'idle', desired_status = 'stopped', schedule_window = '', window_net = 0, schedule_state = '',
+last_heartbeat = NOW() WHERE id = ?`, id); err != nil {
 			return "", err
 		}
 		if err := s.refreshAutomationWorkerLoad(r.Context()); err != nil {
@@ -1040,6 +1075,9 @@ SET enabled = 0, status = 'stopped', desired_status = 'stopped', last_heartbeat 
 	}
 	switch action {
 	case "start":
+		if scheduleState == "released" {
+			return "当前不在周计划时段，到点会自动分配 Worker 上机", nil
+		}
 		nextStatus := "idle"
 		if roomID.Valid {
 			nextStatus = "seated"
@@ -1466,29 +1504,82 @@ profit_target = ?, period_start = ?, period_end = ?, status = ?, notes = ? WHERE
 	writeData(w, http.StatusOK, map[string]any{"message": "自动化组已保存"})
 }
 
+// handleDeleteAutomationGroup 删除自动化组。组里有机器人时必须带 moveToGroupId（0 = 不分组），
+// 先在同一事务里把机器人搬走再删组；不搬就直接拒绝，避免机器人挂在不存在的组上。
 func (s *Server) handleDeleteAutomationGroup(w http.ResponseWriter, r *http.Request, p principal) {
 	id, ok := parsePositivePathID(w, r, "id", "组 ID 不正确")
 	if !ok {
 		return
 	}
+	moveTo := int64(0)
+	moveProvided := false
+	if raw := strings.TrimSpace(r.URL.Query().Get("moveToGroupId")); raw != "" {
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || value < 0 {
+			writeError(w, http.StatusBadRequest, "INVALID_MOVE_TARGET", "接收机器人的分组不正确")
+			return
+		}
+		moveTo, moveProvided = value, true
+		if moveTo == id {
+			writeError(w, http.StatusBadRequest, "INVALID_MOVE_TARGET", "不能把机器人转移到正在删除的分组")
+			return
+		}
+		if moveTo > 0 {
+			var exists int
+			if err := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_automation_group WHERE id = ?", moveTo).Scan(&exists); err != nil || exists == 0 {
+				writeError(w, http.StatusBadRequest, "MOVE_TARGET_NOT_FOUND", "接收机器人的分组不存在，请刷新后重试")
+				return
+			}
+		}
+	}
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "TX_ERROR", "开始事务失败")
+		return
+	}
+	defer tx.Rollback()
 	var exists int
-	if err := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_automation_group WHERE id = ?", id).Scan(&exists); err != nil || exists == 0 {
+	if err := tx.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_automation_group WHERE id = ?", id).Scan(&exists); err != nil || exists == 0 {
 		writeError(w, http.StatusNotFound, "GROUP_NOT_FOUND", "没有找到这个自动化组")
 		return
 	}
 	var robotCount int
-	if err := s.db.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_automation_robot WHERE group_id = ?", id).Scan(&robotCount); err != nil {
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取组内终端失败")
+	if err := tx.QueryRowContext(r.Context(), "SELECT COUNT(*) FROM mgr_automation_robot WHERE group_id = ?", id).Scan(&robotCount); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取组内机器人失败")
 		return
 	}
+	if robotCount > 0 && !moveProvided {
+		writeError(w, http.StatusConflict, "GROUP_NOT_EMPTY", fmt.Sprintf("该组还有 %d 台机器人，删除时请选择把它们移到其他分组或不分组", robotCount))
+		return
+	}
+	var moved int64
 	if robotCount > 0 {
-		writeError(w, http.StatusConflict, "GROUP_NOT_EMPTY", fmt.Sprintf("该组还有 %d 台终端，请先移出后再删除", robotCount))
-		return
+		target := sql.NullInt64{}
+		if moveTo > 0 {
+			target = sql.NullInt64{Int64: moveTo, Valid: true}
+		}
+		result, err := tx.ExecContext(r.Context(), "UPDATE mgr_automation_robot SET group_id = ? WHERE group_id = ?", target, id)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DELETE_ERROR", "转移组内机器人失败")
+			return
+		}
+		moved, _ = result.RowsAffected()
 	}
-	if _, err := s.db.ExecContext(r.Context(), "DELETE FROM mgr_automation_group WHERE id = ?", id); err != nil {
+	if _, err := tx.ExecContext(r.Context(), "DELETE FROM mgr_automation_group WHERE id = ?", id); err != nil {
 		writeError(w, http.StatusInternalServerError, "DELETE_ERROR", "删除自动化组失败")
 		return
 	}
-	s.audit(r.Context(), &p, "automation.group.delete", "automation_group", strconv.FormatInt(id, 10), nil, nil, nil, 0, "自动化组已删除", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"message": "自动化组已删除"})
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "TX_ERROR", "提交事务失败")
+		return
+	}
+	message := "自动化组已删除"
+	switch {
+	case moved > 0 && moveTo > 0:
+		message = fmt.Sprintf("已把 %d 台机器人移到其他分组，自动化组已删除", moved)
+	case moved > 0:
+		message = fmt.Sprintf("已把 %d 台机器人改为不分组，自动化组已删除", moved)
+	}
+	s.audit(r.Context(), &p, "automation.group.delete", "automation_group", strconv.FormatInt(id, 10), nil, nil, nil, 0, message, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"message": message})
 }

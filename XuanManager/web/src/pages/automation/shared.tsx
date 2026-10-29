@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { api } from "../../api";
 import { formatDate, Field } from "../../components/ui";
 
@@ -83,6 +83,12 @@ export interface AutomationRobotItem {
   clubId: string;
   clubName: string;
   groupId: number | null;
+  /** 周计划时段（JSON 字符串），非空表示这台机器人按周时段跑。 */
+  profitSchedule: string;
+  /** released 表示当前在时段外，已经把 Worker 位置让出来了。 */
+  scheduleState: string;
+  /** 本时段累计净分，换时段清零。 */
+  windowNet: number;
   groupName: string;
   strategyId: number | null;
   strategyName: string;
@@ -126,16 +132,36 @@ export interface AutomationRobotItem {
   updatedAt: string;
 }
 
+export interface AutomationStrategyTier {
+  minG: number;
+  safeGen: number;
+  noAddGenMin: number;
+}
+
+/** 策略 = 机器人的「动作与智力」：怎么跑、怎么出牌。进房与输赢目标归投放，不在这里。 */
 export interface AutomationStrategyConfig {
-  followCap: number;
-  raiseRule: string;
-  cheEnabled: boolean;
-  maxLossPerRound: number;
-  maxDrawdown: number;
-  lossStreakPause: number;
-  maxRoundsPerDay: number;
-  restSeconds: number;
-  tiers: string[];
+  // 跑法节奏
+  buyinMultiple: number;
+  stayBuyinTimes: number;
+  roomAvoidMs: number;
+  sitTimeoutMs: number;
+  reinstateDelayMs: number;
+  roomRetryMs: number;
+  // 出牌节奏
+  actionDelayMinMs: number;
+  actionDelayMaxMs: number;
+  decideTimeoutMs: number;
+  // 三档安全线（键为 "1" / "2" / "5"）
+  tiers: Record<string, AutomationStrategyTier>;
+  // 牌力
+  bigPairFen: number;
+  weakLowFen: number;
+  protectPairFen: number;
+  protectBothFen: number;
+  // 输赢控制
+  winStreakPause: number;
+  deadbandRatio: number;
+  addMoreChance: number;
 }
 
 export interface AutomationStrategyItem {
@@ -150,6 +176,7 @@ export interface AutomationStrategyItem {
   updatedBy: string;
   updatedAt: string;
   groupCount: number;
+  robotCount?: number;
 }
 
 export interface AutomationTaskItem {
@@ -586,6 +613,7 @@ export function endReasonLabel(value: string): string {
 const profitModeLabels: Record<string, string> = {
   daily: "每日总输赢",
   period: "周期总输赢",
+  schedule: "按周时段",
   none: "不限制",
 };
 
@@ -713,14 +741,13 @@ export function useClubOptions() {
 
 export function useAutomationGroups() {
   const [groups, setGroups] = useState<AutomationGroupItem[]>([]);
-  useEffect(() => {
-    let cancelled = false;
-    api<{ items: AutomationGroupItem[] }>("/api/automation/groups")
-      .then((response) => { if (!cancelled) setGroups(response.items ?? []); })
-      .catch(() => { if (!cancelled) setGroups([]); });
-    return () => { cancelled = true; };
+  const reload = useCallback(() => {
+    void api<{ items: AutomationGroupItem[] }>("/api/automation/groups")
+      .then((response) => setGroups(response.items ?? []))
+      .catch(() => setGroups([]));
   }, []);
-  return groups;
+  useEffect(() => { reload(); }, [reload]);
+  return { groups, reload };
 }
 
 /** 投放时挑策略用：已发布的排前面，草稿也列出来但会标注状态。 */
@@ -743,13 +770,123 @@ export function useAutomationStrategies() {
   return strategies;
 }
 
-/** 投放/编辑共用的输赢目标输入：周期 + 目标金额（+ 周期日期）。 */
-export function ProfitTargetFields({ mode, target, periodStart, periodEnd, onChange, allowInherit = true }: {
+/** 周计划的一段：weekday 1=周一…7=周日；结束时间不晚于开始时间表示跨到次日。 */
+export interface ProfitScheduleEntry {
+  weekday: number;
+  start: string;
+  end: string;
+}
+
+export const WEEKDAY_NAMES = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+
+/** 服务端最多接受 28 段，编辑时提前卡住，免得填完才被拒。 */
+const MAX_PROFIT_WINDOWS = 28;
+
+export function weekdayName(weekday: number): string {
+  return WEEKDAY_NAMES[weekday - 1] ?? `周${weekday}`;
+}
+
+function clockValid(value: string): boolean {
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  return match !== null && Number(match[1]) < 24 && Number(match[2]) < 60;
+}
+
+/** 解析服务端存的 [{weekday,start,end}]；坏了就当没设过，让用户重新勾。 */
+export function parseProfitSchedule(raw?: string | null): ProfitScheduleEntry[] {
+  if (!raw) return [];
+  try {
+    const data: unknown = JSON.parse(raw);
+    if (!Array.isArray(data)) return [];
+    return data.flatMap((item) => {
+      const entry = item as Partial<ProfitScheduleEntry>;
+      const weekday = Number(entry.weekday);
+      const start = String(entry.start ?? "").slice(0, 5);
+      const end = String(entry.end ?? "").slice(0, 5);
+      if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7 || !clockValid(start) || !clockValid(end)) return [];
+      return [{ weekday, start, end }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+export function profitScheduleText(schedule: ProfitScheduleEntry[]): string {
+  if (schedule.length === 0) return "未设置时段";
+  return [...schedule]
+    .sort((left, right) => left.weekday - right.weekday || left.start.localeCompare(right.start))
+    .map((entry) => `${weekdayName(entry.weekday)} ${entry.start}–${entry.end < entry.start ? "次日" : ""}${entry.end}`)
+    .join("；");
+}
+
+/** 服务端同样的规则先过一遍，返回错误文案；空串表示通过。 */
+export function profitScheduleError(schedule: ProfitScheduleEntry[]): string {
+  if (schedule.length === 0) return "按周时段跑至少要勾选一个时段";
+  if (schedule.length > MAX_PROFIT_WINDOWS) return `周时段最多 ${MAX_PROFIT_WINDOWS} 段，请合并一下`;
+  for (const entry of schedule) {
+    if (!clockValid(entry.start) || !clockValid(entry.end)) return `${weekdayName(entry.weekday)}有一个时段的时间没填完`;
+    if (entry.start === entry.end) return `${weekdayName(entry.weekday)}有一个时段的开始和结束时间相同`;
+  }
+  return "";
+}
+
+/** 周一至周日的时段编辑器：勾选哪天就填哪天的时段，一天可以有多段。 */
+export function ProfitScheduleFields({ value, onChange, disabled }: {
+  value: ProfitScheduleEntry[];
+  onChange: (next: ProfitScheduleEntry[]) => void;
+  disabled?: boolean;
+}) {
+  const setDay = (weekday: number, entries: ProfitScheduleEntry[]) => {
+    const rest = value.filter((item) => item.weekday !== weekday);
+    onChange([...rest, ...entries].sort((left, right) => left.weekday - right.weekday || left.start.localeCompare(right.start)));
+  };
+  const updateEntry = (weekday: number, index: number, patch: Partial<ProfitScheduleEntry>) => {
+    setDay(weekday, value.filter((item) => item.weekday === weekday).map((entry, position) => position === index ? { ...entry, ...patch } : entry));
+  };
+  const removeEntry = (weekday: number, index: number) => {
+    setDay(weekday, value.filter((item) => item.weekday === weekday).filter((_, position) => position !== index));
+  };
+  const addEntry = (weekday: number) => {
+    const entries = value.filter((item) => item.weekday === weekday);
+    const last = entries[entries.length - 1];
+    setDay(weekday, [...entries, { weekday, start: last?.start ?? "12:00", end: last?.end ?? "18:00" }]);
+  };
+  return <div className={`profit-schedule${disabled ? " is-disabled" : ""}`}>
+    {WEEKDAY_NAMES.map((name, index) => {
+      const weekday = index + 1;
+      const entries = value.filter((item) => item.weekday === weekday);
+      return <div className={`profit-schedule__day${entries.length > 0 ? " is-on" : ""}`} key={weekday}>
+        <label className="profit-schedule__toggle">
+          <input type="checkbox" checked={entries.length > 0} disabled={disabled}
+            onChange={(event) => setDay(weekday, event.target.checked ? [{ weekday, start: "12:00", end: "18:00" }] : [])} />
+          <span>{name}</span>
+        </label>
+        {entries.length === 0
+          ? <small className="profit-schedule__empty">不跑</small>
+          : <div className="profit-schedule__rows">
+            {entries.map((entry, position) => <div className="profit-schedule__row" key={position}>
+              <input type="time" value={entry.start} disabled={disabled} aria-label={`${name}第 ${position + 1} 段开始时间`}
+                onChange={(event) => updateEntry(weekday, position, { start: event.target.value })} />
+              <span className="profit-schedule__sep">至</span>
+              <input type="time" value={entry.end} disabled={disabled} aria-label={`${name}第 ${position + 1} 段结束时间`}
+                onChange={(event) => updateEntry(weekday, position, { end: event.target.value })} />
+              {entry.end !== "" && entry.start !== "" && entry.end < entry.start && <em className="profit-schedule__cross">次日</em>}
+              <button type="button" className="profit-schedule__remove" disabled={disabled} onClick={() => removeEntry(weekday, position)}>删除</button>
+            </div>)}
+            <button type="button" className="profit-schedule__add" disabled={disabled || value.length >= MAX_PROFIT_WINDOWS} onClick={() => addEntry(weekday)}>+ 加一段</button>
+          </div>}
+      </div>;
+    })}
+  </div>;
+}
+
+/** 投放/编辑共用的输赢目标输入：周期 + 目标金额（+ 周期日期 / 周计划时段）。 */
+export function ProfitTargetFields({ mode, target, periodStart, periodEnd, schedule, onChange, allowInherit = true }: {
   mode: string;
   target: string;
   periodStart: string;
   periodEnd: string;
-  onChange: (patch: { mode?: string; target?: string; periodStart?: string; periodEnd?: string }) => void;
+  schedule: ProfitScheduleEntry[];
+  onChange: (patch: { mode?: string; target?: string; periodStart?: string; periodEnd?: string; schedule?: ProfitScheduleEntry[] }) => void;
   allowInherit?: boolean;
 }) {
   return <>
@@ -758,16 +895,22 @@ export function ProfitTargetFields({ mode, target, periodStart, periodEnd, onCha
         {allowInherit && <option value="">沿用原有设置</option>}
         <option value="daily">每日总输赢</option>
         <option value="period">周期总输赢</option>
+        <option value="schedule">按周时段（周一到周日）</option>
         <option value="none">不限制</option>
       </select>
     </Field>
-    <Field label="输赢目标金额" hint="正数表示目标盈利，负数表示允许亏损">
+    <Field label="输赢目标金额" hint={mode === "schedule" ? "每个时段单独累计：时段开始清零，到点或达标就收手" : "正数表示目标盈利，负数表示允许亏损"}>
       <input type="number" disabled={mode === "" || mode === "none"} value={target} onChange={(event) => onChange({ target: event.target.value })} />
     </Field>
     {mode === "period" && <>
       <Field label="周期开始"><input type="date" value={periodStart} onChange={(event) => onChange({ periodStart: event.target.value })} /></Field>
       <Field label="周期结束"><input type="date" value={periodEnd} onChange={(event) => onChange({ periodEnd: event.target.value })} /></Field>
     </>}
+    {mode === "schedule" && <div className="automation-form-note--wide">
+      <Field as="div" label="每周跑哪些时段" hint="勾选周几再填当天时段，一天可以多段；结束时间早于开始时间表示跨到次日（算在开始那天）。不在时段内会打完手里这一局再让出 Worker。">
+        <ProfitScheduleFields value={schedule} onChange={(next) => onChange({ schedule: next })} />
+      </Field>
+    </div>}
   </>;
 }
 

@@ -60,12 +60,65 @@ for (const line of NAME_CONFIG) {
   }
 }
 
-// 各底皮的安全线（老客户端：1P/2P/5P 三档）。
-const THRESHOLDS = {
-  1: { minG: 8, safeGen: 50, noAddGenMin: 3 },
-  2: { minG: 15, safeGen: 100, noAddGenMin: 5 },
-  5: { minG: 22, safeGen: 150, noAddGenMin: 10 },
+// 策略默认值：后台「策略中心」没配的项一律走这里。所有可调数值都以这里为准，
+// 业务代码里不再出现魔法数字。
+const DEFAULT_TUNING = {
+  // 三档底皮的安全线（老客户端口径：1P / 2P / 5P）
+  tiers: {
+    1: { minG: 8, safeGen: 50, noAddGenMin: 3 },
+    2: { minG: 15, safeGen: 100, noAddGenMin: 5 },
+    5: { minG: 22, safeGen: 150, noAddGenMin: 10 },
+  },
+  // 牌力判断
+  bigPairFen: 9,       // 牌型分 ≥ 该值算「够大」
+  weakLowFen: 7,       // 小门 ≤ 该值改扯大大
+  protectPairFen: 10,  // 最后一圈：任一门 ≥ 该值不硬丢
+  protectBothFen: 8,   // 最后一圈：两门都 ≥ 该值不硬丢
+  // 输赢控制
+  deadbandRatio: 0.2,  // 目标死区 = |目标| × 该比例（不小于最低带入）
+  winStreakPause: 3,   // 连赢该局数后本局不主动争赢
+  addMoreChance: 0.34, // 已超目标时主动加注的概率
+  // 出牌节奏
+  actionDelayMinMs: 1200,
+  actionDelayMaxMs: 2500,
+  decideTimeoutMs: 6000,
 };
+
+function mergeTuning(input) {
+  const base = DEFAULT_TUNING;
+  const source = input || {};
+  const tiers = source.tiers || {};
+  const pick = (value, fallback) => (typeof value === 'number' && Number.isFinite(value) ? value : fallback);
+  const tier = (key) => ({
+    minG: pick(tiers[key] && tiers[key].minG, base.tiers[key].minG),
+    safeGen: pick(tiers[key] && tiers[key].safeGen, base.tiers[key].safeGen),
+    noAddGenMin: pick(tiers[key] && tiers[key].noAddGenMin, base.tiers[key].noAddGenMin),
+  });
+  return {
+    tiers: { 1: tier(1), 2: tier(2), 5: tier(5) },
+    bigPairFen: pick(source.bigPairFen, base.bigPairFen),
+    weakLowFen: pick(source.weakLowFen, base.weakLowFen),
+    protectPairFen: pick(source.protectPairFen, base.protectPairFen),
+    protectBothFen: pick(source.protectBothFen, base.protectBothFen),
+    deadbandRatio: pick(source.deadbandRatio, base.deadbandRatio),
+    winStreakPause: pick(source.winStreakPause, base.winStreakPause),
+    addMoreChance: pick(source.addMoreChance, base.addMoreChance),
+    actionDelayMinMs: pick(source.actionDelayMinMs, base.actionDelayMinMs),
+    actionDelayMaxMs: pick(source.actionDelayMaxMs, base.actionDelayMaxMs),
+    decideTimeoutMs: pick(source.decideTimeoutMs, base.decideTimeoutMs),
+  };
+}
+
+// opts 里可能带 tuning（后台策略），没有就用默认值。
+function tuningOf(opts) {
+  const tunable = opts && opts.tuning;
+  return tunable && tunable.tiers ? tunable : mergeTuning(tunable);
+}
+
+function thresholdsOf(roomType, opts) {
+  const tuning = tuningOf(opts);
+  return tuning.tiers[Number(roomType) || 1] || tuning.tiers[1];
+}
 
 function cardKey(card) {
   if (!Array.isArray(card) || card.length < 2) return '';
@@ -133,10 +186,10 @@ function bestSplit(cards, opts) {
   return { maxmax, maxmin };
 }
 
-// 前两张手牌是否「够大」：牌型 ≥9 分，或者单牌里有 8/9/Q/2。
+// 前两张手牌是否「够大」：牌型 ≥ 策略里的大牌线，或者单牌里有 8/9/Q/2。
 function handIsBig(cards, opts) {
   if (!Array.isArray(cards) || cards.length < 2) return false;
-  if (pairFen(cards[0], cards[1], opts) >= 9) return true;
+  if (pairFen(cards[0], cards[1], opts) >= tuningOf(opts).bigPairFen) return true;
   const big = [8, 9, 12, 2];
   return big.includes(cards[0][1]) || big.includes(cards[1][1]);
 }
@@ -151,7 +204,7 @@ function chooseSplit(cards, opts, table) {
   if (maxmax.fen === 21) {
     useMax = true;
     reason = '大大含丁皇不拆';
-  } else if (maxmin.fen <= 7) {
+  } else if (maxmin.fen <= tuningOf(opts).weakLowFen) {
     useMax = true;
     reason = '小大最小 ' + maxmin.fen + ' 点，改扯大大（' + maxmax.name + '）';
   } else {
@@ -224,7 +277,10 @@ function profitIntent(input) {
   if (mode === 'period' && today && start && end && (today < start || today > end)) {
     return { intent: 'neutral', reason: '今天不在周期 ' + start + '~' + end + ' 内', gap: 0, deadband: 0 };
   }
-  const deadband = Math.max(Math.round(Math.abs(target) * 0.2), minBuyin);
+  const deadband = Math.max(
+    Math.round(Math.abs(target) * tuningOf(input.opts).deadbandRatio),
+    minBuyin,
+  );
   const gap = target - net;
   if (gap > deadband) {
     return { intent: 'win', reason: '距目标还差 ' + gap + '，本局争取赢', gap, deadband };
@@ -246,7 +302,7 @@ function planRound(input) {
     if (hand.length >= 2 && !handIsBig(hand, opts)) {
       intent = 'neutral';
       reason = '要赢但前两张手牌不够大，改为常规打';
-    } else if (Number(input.winStreak || 0) >= 3) {
+    } else if (Number(input.winStreak || 0) >= tuningOf(opts).winStreakPause) {
       intent = 'neutral';
       reason = '已经连赢 ' + input.winStreak + ' 局，缓一局避免连赢太多';
     }
@@ -272,7 +328,7 @@ function decide(ctx) {
   const handCount = Number(ctx.handCount || hand.length || 0);
   const intent = String(ctx.intent || 'neutral');
   const opts = ctx.opts || {};
-  const thresholds = THRESHOLDS[Number(ctx.roomType) || 1] || THRESHOLDS[1];
+  const thresholds = thresholdsOf(ctx.roomType, opts);
   const genScore = Number(ctx.genScore || 0);
   const beicount = Number(ctx.beicount || 0);
   const money = Number(ctx.money || 0);
@@ -350,24 +406,25 @@ function decide(ctx) {
   return act('pass', null, '常规：没有可用动作');
 }
 
-// 手里是否至少有一门够大（前两张或四张拆开后的任一组 ≥9 分）。
+// 手里是否至少有一门够大（前两张或四张拆开后的任一组 ≥ 大牌线）。
 function handsBigEnough(hand, ctx, opts) {
   if (handIsBig(hand, opts)) return true;
   if (Array.isArray(hand) && hand.length >= 4) {
     const split = bestSplit(hand, opts);
-    if (split && Math.max(split.maxmax.fen, split.maxmin.fen) >= 9) return true;
+    if (split && Math.max(split.maxmax.fen, split.maxmin.fen) >= tuningOf(opts).bigPairFen) return true;
   }
   return false;
 }
 
-// 最后一圈的大牌保护（老客户端「封号保护」）：任一牌型 ≥10 分，或两门都 ≥8 分。
+// 最后一圈的大牌保护（老客户端「封号保护」）：任一门到保护线，或两门都到双门线。
 function protectBigHand(hand, opts) {
   if (!Array.isArray(hand) || hand.length < 4) return false;
   const split = bestSplit(hand, opts);
   if (!split) return false;
+  const tuning = tuningOf(opts);
   const fens = [split.maxmax.fen, split.maxmin.fen];
-  if (fens.some((fen) => fen >= 10)) return true;
-  return fens.every((fen) => fen >= 8);
+  if (fens.some((fen) => fen >= tuning.protectPairFen)) return true;
+  return fens.every((fen) => fen >= tuning.protectBothFen);
 }
 
 // 判断这一局要不要主动加注（对应老客户端的 checkManAddMore）。
@@ -381,15 +438,19 @@ function shouldAddMore(input) {
     return handIsBig(hand, opts);
   }
   if (intent === 'lose') {
-    // 水位已经超过目标：偶尔主动加注加快回落，不要每局都加。
-    if (target > 0 && net > target && Math.random() < 0.34) return true;
-    if (target < 0 && net < target && Math.random() < 0.34) return true;
+    // 水位已经超过目标：按策略里的概率偶尔主动加注加快回落，不要每局都加。
+    const chance = tuningOf(opts).addMoreChance;
+    if (target > 0 && net > target && Math.random() < chance) return true;
+    if (target < 0 && net < target && Math.random() < chance) return true;
   }
   return false;
 }
 
 module.exports = {
   NAME_CONFIG,
+  DEFAULT_TUNING,
+  mergeTuning,
+  thresholdsOf,
   pairName,
   pairFen,
   singleFen,
@@ -403,5 +464,4 @@ module.exports = {
   decide,
   shouldAddMore,
   protectBigHand,
-  thresholds: THRESHOLDS,
 };

@@ -9,39 +9,118 @@ import {
   ProfitTargetFields,
   RoomPiPicker,
   Tabs,
+  formatSigned,
+  parseProfitSchedule,
+  profitScheduleError,
+  profitScheduleText,
   roomPiText,
+  useAutomationStrategies,
   type AutomationGroupItem,
   type AutomationRobotItem,
+  type ProfitScheduleEntry,
 } from "./shared";
 
 interface RobotAddModalProps {
   groups: AutomationGroupItem[];
+  canCreateGroup: boolean;
+  onGroupCreated: () => void;
   onClose: () => void;
   onSaved: (message: string) => void;
 }
 
-export function RobotAddModal({ groups, onClose, onSaved }: RobotAddModalProps) {
+// GroupPicker：分组下拉 + 就地新建分组。新建成功后自动选中，机器人创建/保存时一并带上 groupId。
+function GroupPicker({ value, onChange, groups, canCreate, onGroupCreated, hint }: {
+  value: string;
+  onChange: (groupId: string) => void;
+  groups: AutomationGroupItem[];
+  canCreate: boolean;
+  onGroupCreated: () => void;
+  hint: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [strategyId, setStrategyId] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const strategies = useAutomationStrategies();
+
+  const create = async () => {
+    const groupName = name.trim();
+    if (!groupName) { setError("请填写组名称"); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await api<{ id: number; message: string }>("/api/automation/groups", {
+        method: "POST",
+        ...jsonBody({
+          name: groupName,
+          strategyId: Number(strategyId) || 0,
+          // 在座目标/终端上限不参与调度，组里只需要名称和策略。
+          targetSeated: 0,
+          maxRobots: 0,
+          tierPref: "",
+          durationPref: "",
+          buyinRatio: 0,
+          // 组不设输赢目标；none 表示无目标，之后可在自动化组页调整其他参数。
+          profitMode: "none",
+          profitTarget: 0,
+          status: "enabled",
+          notes: "",
+        }),
+      });
+      onChange(String(result.id));
+      setOpen(false); setName(""); setStrategyId(""); setError("");
+      onGroupCreated();
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : "创建自动化组失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return <div className="group-picker">
+    <div className="group-picker__row">
+      <Field label="机器人分组" hint={hint}>
+        <select value={value} onChange={(event) => onChange(event.target.value)}>
+          <option value="">不分组</option>
+          {groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}
+        </select>
+      </Field>
+      {canCreate && <Button type="button" variant="secondary" onClick={() => { setOpen(!open); setError(""); }}>{open ? "收起新建" : "＋ 新建分组"}</Button>}
+    </div>
+    {open && <div className="automation-form-note" onKeyDown={(event) => {
+      // 内联表单在机器人表单里，回车不能冒泡去提交整个机器人表单。
+      if (event.key === "Enter" && event.target instanceof HTMLInputElement) { event.preventDefault(); void create(); }
+    }}>
+      <div className="form-grid form-grid--two">
+        <Field label="组名称" hint="最多 64 个字符"><input value={name} maxLength={64} onChange={(event) => setName(event.target.value)} placeholder="例如 早班补位组" /></Field>
+        <Field label="绑定策略" hint="组内机器人默认用这套策略，投放时可以换"><select value={strategyId} onChange={(event) => setStrategyId(event.target.value)}><option value="">不绑定</option>{strategies.map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.name}{strategy.status === "enabled" ? "" : strategy.status === "gray" ? "（灰度）" : "（草稿）"}</option>)}</select></Field>
+      </div>
+      {error && <ErrorBanner message={error} />}
+      <div className="form-actions">
+        <Button type="button" variant="secondary" onClick={() => { setOpen(false); setError(""); }}>取消</Button>
+        <Button type="button" disabled={busy} onClick={() => void create()}>{busy ? "创建中…" : "创建并选中"}</Button>
+      </div>
+    </div>}
+  </div>;
+}
+
+export function RobotAddModal({ groups, canCreateGroup, onGroupCreated, onClose, onSaved }: RobotAddModalProps) {
   const [prefix, setPrefix] = useState("");
   const [count, setCount] = useState("5");
   const [startNo, setStartNo] = useState("1");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [groupId, setGroupId] = useState("");
-  const [intelligence, setIntelligence] = useState("50");
-  const [buyinMultiple, setBuyinMultiple] = useState("1");
-  const [enabled, setEnabled] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
   const countValue = Math.max(1, Math.min(50, Number(count) || 1));
   const startValue = Math.max(1, Math.min(999, Number(startNo) || 1));
-  const multipleValue = Math.round(Number(buyinMultiple) || 1);
   const firstAccount = prefix ? `${prefix}${String(startValue).padStart(3, "0")}` : "";
   const lastAccount = prefix ? `${prefix}${String(Math.min(999, startValue + countValue - 1)).padStart(3, "0")}` : "";
 
   const submit = async () => {
     if (!/^[A-Za-z0-9]{3,13}$/.test(prefix)) { setError("账号前缀必须为 3 到 13 位英文字母或数字"); return; }
-    if (multipleValue < 1 || multipleValue > 10) { setError("默认带入倍数必须在 1 到 10 之间"); return; }
     if (password.length < 6 || password.length > 32) { setError("登录密码必须为 6 到 32 个字符"); return; }
     if (password !== passwordConfirm) { setError("两次输入的登录密码不一致"); return; }
     setBusy(true); setError("");
@@ -51,9 +130,10 @@ export function RobotAddModal({ groups, onClose, onSaved }: RobotAddModalProps) 
         ...jsonBody({
           prefix, count: countValue, startNo: startValue, password,
           groupId: Number(groupId) || 0,
-          intelligence: Number(intelligence) || 0,
-          buyinMultiple: multipleValue,
-          enabled,
+          // 智力、带入倍数、启用状态都不在创建时设置：创建即可被调度，具体跑法由策略决定。
+          intelligence: 0,
+          buyinMultiple: 1,
+          enabled: true,
         }),
       });
       onSaved(result.message);
@@ -68,19 +148,14 @@ export function RobotAddModal({ groups, onClose, onSaved }: RobotAddModalProps) 
     <form className="form-grid form-grid--two" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <ErrorBanner message={error} />
       <div className="automation-form-note automation-form-note--wide">
-        会在游戏服真实创建 <strong>{countValue}</strong> 个游戏账号：登录名为「账号前缀 + 三位序号」，昵称和头像随机生成。密码只交给游戏服保存，后台不记录明文，创建后无法再查看。
+        会在游戏服真实创建 <strong>{countValue}</strong> 个游戏账号：登录名为「账号前缀 + 三位序号」，昵称和头像随机生成。密码以<strong>密文</strong>保存在后台（游戏服只存 MD5），Worker 拉起客户端时由后台解密后下发。
       </div>
       <Field label="账号前缀" hint="3–13 位英文字母或数字，生成后的登录名为 6–16 位"><input value={prefix} onChange={(event) => setPrefix(event.target.value.trim())} placeholder="例如 star" /></Field>
       <Field label="批量数量" hint="1–50 个"><input type="number" min={1} max={50} value={count} onChange={(event) => setCount(event.target.value)} /></Field>
       <Field label="起始序号" hint="账号会生成 前缀 + 三位序号"><input type="number" min={1} max={999} value={startNo} onChange={(event) => setStartNo(event.target.value)} /></Field>
-      <Field label="登录密码" hint="6–32 个字符，创建后不可回显"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
+      <Field label="登录密码" hint="6–32 个字符，密文保存在后台"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
       <Field label="确认密码"><input type="password" autoComplete="new-password" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} /></Field>
-      <Field label="机器人分组" hint="创建后会加入这个分组，也可以稍后修改"><select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">不分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>
-      <Field label="机器人智力（0–100）" hint="0 表示跟随分组默认智力，创建后可单独修改"><input type="number" min={0} max={100} value={intelligence} onChange={(event) => setIntelligence(event.target.value)} /></Field>
-      <Field label="默认带入倍数" hint="按房间最低带入计算，1 倍就是房间最低带入"><input type="number" min={1} max={10} step={1} value={buyinMultiple} onChange={(event) => setBuyinMultiple(event.target.value)} /></Field>
-      <Field label="添加后状态">
-        <label className="confirm-check"><input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} /><span>启用机器人，投放后可参与调度</span></label>
-      </Field>
+      <GroupPicker value={groupId} onChange={setGroupId} groups={groups} canCreate={canCreateGroup} onGroupCreated={onGroupCreated} hint="创建后会加入这个分组，也可以稍后修改" />
       <div className="automation-form-note automation-form-note--wide">
         {firstAccount ? <>将创建 <strong>{firstAccount}</strong>{countValue > 1 ? <> 到 <strong>{lastAccount}</strong></> : null} 共 {countValue} 个账号，创建后到 <strong>投放管理</strong> 选择投放。</> : "填写账号前缀后会显示将创建的登录名。"}
       </div>
@@ -92,24 +167,24 @@ export function RobotAddModal({ groups, onClose, onSaved }: RobotAddModalProps) 
 interface RobotEditModalProps {
   robot: AutomationRobotItem;
   groups: AutomationGroupItem[];
+  canCreateGroup: boolean;
+  onGroupCreated: () => void;
   onClose: () => void;
   onSaved: (message: string) => void;
 }
 
-export function RobotEditModal({ robot, groups, onClose, onSaved }: RobotEditModalProps) {
+export function RobotEditModal({ robot, groups, canCreateGroup, onGroupCreated, onClose, onSaved }: RobotEditModalProps) {
   const [groupId, setGroupId] = useState(robot.groupId ? String(robot.groupId) : "");
-  const [intelligence, setIntelligence] = useState(String(robot.intelligence));
-  const [buyinMultiple, setBuyinMultiple] = useState(String(robot.buyinMultiple));
+  const [strategyId, setStrategyId] = useState(robot.strategyId ? String(robot.strategyId) : "");
   const [roomPi, setRoomPi] = useState(robot.roomPi ?? "");
   const [egressIp, setEgressIp] = useState(robot.egressIp);
   const [loginPassword, setLoginPassword] = useState("");
   const [enabled, setEnabled] = useState(robot.enabled);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const strategies = useAutomationStrategies();
 
   const submit = async () => {
-    const multiple = Math.round(Number(buyinMultiple) || 0);
-    if (multiple < 1 || multiple > 10) { setError("默认带入倍数必须在 1 到 10 之间"); return; }
     setBusy(true); setError("");
     try {
       // 输赢目标不在这里改，原样回传；只有「周期」缺日期时才退回继承，免得后端校验不过。
@@ -121,12 +196,13 @@ export function RobotEditModal({ robot, groups, onClose, onSaved }: RobotEditMod
         ...jsonBody({
           nickname: robot.nickname,
           groupId: Number(groupId) || 0,
-          strategyId: robot.strategyId ?? 0,
+          strategyId: Number(strategyId) || 0,
           workerId: robot.workerId ?? 0,
           egressIp,
-          buyinMultiple: multiple,
+          // 智力和带入倍数不在界面上改，原样回传避免被清零（真正跑法由绑定的策略决定）。
+          buyinMultiple: robot.buyinMultiple,
           roomPi,
-          intelligence: Number(intelligence),
+          intelligence: robot.intelligence,
           profitMode: keepProfitMode,
           profitTarget: robot.profitTarget,
           periodStart,
@@ -152,15 +228,19 @@ export function RobotEditModal({ robot, groups, onClose, onSaved }: RobotEditMod
       <Field label="当前投放" hint="投放和撤回请到投放管理操作">
         <input value={robot.clubId ? `${robot.clubName || robot.clubId}（${robot.inviteCode || "无邀请码"}）` : "未投放"} disabled />
       </Field>
-      <Field label="机器人分组"><select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">不分组</option>{groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>
-      <Field label="智力（0–100）" hint="0 表示跟随分组默认智力"><input type="number" min={0} max={100} value={intelligence} onChange={(event) => setIntelligence(event.target.value)} /></Field>
-      <Field label="默认带入倍数" hint="按房间最低带入计算，1 倍就是房间最低带入"><input type="number" min={1} max={10} step={1} value={buyinMultiple} onChange={(event) => setBuyinMultiple(event.target.value)} /></Field>
+      <GroupPicker value={groupId} onChange={setGroupId} groups={groups} canCreate={canCreateGroup} onGroupCreated={onGroupCreated} hint="保存后按新分组调度，可随时改回不分组" />
+      <Field label="绑定策略" hint="策略里的运行参数会覆盖机器人自身配置；不绑定就用自己的设置">
+        <select value={strategyId} onChange={(event) => setStrategyId(event.target.value)}>
+          <option value="">不绑定策略</option>
+          {strategies.map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.name}{strategy.status === "enabled" ? "" : strategy.status === "gray" ? "（灰度）" : "（草稿）"}</option>)}
+        </select>
+      </Field>
       <div className="automation-form-note--wide">
         <Field as="div" label="只进的底皮档位" hint="不选表示什么底皮的房间都进；修改后需要重新拉起终端才生效">
           <RoomPiPicker value={roomPi} onChange={setRoomPi} />
         </Field>
       </div>
-      <Field label="登录密码" hint={robot.passwordSet ? "已保存密文；留空表示不修改，填写会同时重置游戏登录密码" : "这台账号还没有保存登录密码，填写后 Worker 才能登录"}>
+      <Field label="登录密码" hint={robot.passwordSet ? "已保存；留空表示不修改，填写会同时重置游戏登录密码" : "这台账号还没有保存登录密码，填写后 Worker 才能登录"}>
         <input type="password" autoComplete="new-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} placeholder={robot.passwordSet ? "留空不修改" : "6–32 位"} />
       </Field>
       <Field label="出口 IP" hint="留空表示由 Worker 自动分配"><input value={egressIp} onChange={(event) => setEgressIp(event.target.value)} /></Field>
@@ -251,6 +331,7 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
   const [profitTarget, setProfitTarget] = useState("");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
+  const [profitSchedule, setProfitSchedule] = useState<ProfitScheduleEntry[]>([]);
   const [roomPi, setRoomPi] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -264,6 +345,7 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
       setProfitTarget(String(next.profitTarget ?? 0));
       setPeriodStart(next.periodStart ? next.periodStart.slice(0, 10) : "");
       setPeriodEnd(next.periodEnd ? next.periodEnd.slice(0, 10) : "");
+      setProfitSchedule(parseProfitSchedule(next.profitSchedule));
       setRoomPi(next.roomPi ?? "");
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "读取投放配置失败");
@@ -277,6 +359,10 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
   const submit = async () => {
     if (!robot) return;
     if (profitMode === "period" && (!periodStart || !periodEnd)) { setError("按周期设置输赢目标时必须选择开始和结束日期"); return; }
+    if (profitMode === "schedule") {
+      const scheduleMessage = profitScheduleError(profitSchedule);
+      if (scheduleMessage) { setError(scheduleMessage); return; }
+    }
     setBusy(true); setError("");
     try {
       const result = await api<{ message: string }>(`/api/automation/robots/${robot.id}`, {
@@ -294,6 +380,7 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
           profitTarget: profitMode === "none" ? 0 : Math.round(Number(profitTarget) || 0),
           periodStart: profitMode === "period" ? periodStart : "",
           periodEnd: profitMode === "period" ? periodEnd : "",
+          profitSchedule: profitMode === "schedule" ? profitSchedule : [],
           enabled: robot.enabled,
           // 留空表示不改登录密码。
           loginPassword: "",
@@ -318,17 +405,23 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
         <Field label="当前俱乐部" hint={robot.roomId !== null ? `正在房间 ${robot.roomId}${robot.seatNo > 0 ? ` · ${robot.seatNo} 号座` : ""}` : undefined}>
           <input value={robot.clubId ? `${robot.clubName || robot.clubId}（${robot.inviteCode || "无邀请码"}）` : "未投放"} disabled />
         </Field>
-        <ProfitTargetFields mode={profitMode} target={profitTarget} periodStart={periodStart} periodEnd={periodEnd} onChange={(patch) => {
+        <ProfitTargetFields mode={profitMode} target={profitTarget} periodStart={periodStart} periodEnd={periodEnd} schedule={profitSchedule} onChange={(patch) => {
           if (patch.mode !== undefined) setProfitMode(patch.mode);
           if (patch.target !== undefined) setProfitTarget(patch.target);
           if (patch.periodStart !== undefined) setPeriodStart(patch.periodStart);
           if (patch.periodEnd !== undefined) setPeriodEnd(patch.periodEnd);
+          if (patch.schedule !== undefined) setProfitSchedule(patch.schedule);
         }} />
         <div className="automation-form-note--wide">
           <Field as="div" label="只进的底皮档位" hint={`现在是 ${roomPiText(roomPi)}；改完要从节点详情重新拉起这台终端才生效`}>
             <RoomPiPicker value={roomPi} onChange={setRoomPi} disabled={!canManage} />
           </Field>
         </div>
+        {profitMode === "schedule" && <div className="automation-form-note automation-form-note--wide">
+          本时段已累计 <strong>{formatSigned(robot.windowNet)}</strong>；换时段会清零重算。
+          {robot.scheduleState === "released" ? " 当前不在时段内，已让出 Worker，到点自动上机。" : ""}
+          {robot.profitSchedule ? ` 现在保存的是：${profitScheduleText(parseProfitSchedule(robot.profitSchedule))}。` : ""}
+        </div>}
         <div className="automation-form-note automation-form-note--wide">
           输赢目标不选周期表示沿用机器人或分组上已有的设置；底皮一个都不选表示什么档位的房间都进。
         </div>

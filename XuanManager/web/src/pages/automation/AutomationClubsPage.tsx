@@ -95,7 +95,7 @@ export default function AutomationClubsPage({ can, notify }: AutomationPageProps
       {!data && loading ? <LoadingBlock label="正在读取俱乐部接入配置" /> : !data || data.items.length === 0 ? <EmptyState title="没有匹配的俱乐部" description="调整搜索条件，或先在数据库中完成俱乐部接入。" /> : <>
         <div className="table-wrap">
           <table className="automation-table">
-            <thead><tr><th>俱乐部</th><th>模式 / 联盟</th><th>房间与座位</th><th>终端配额</th><th>占座比例</th><th>目标在座</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
+            <thead><tr><th>俱乐部</th><th>模式 / 联盟</th><th>房间与座位</th><th>终端配额</th><th>占座比例</th><th>状态</th><th>最近更新</th><th>操作</th></tr></thead>
             <tbody>
               {data.items.map((club) => <tr key={club.clubId}>
                 <td><strong>{club.name}</strong><small className="cell-subtitle">{club.clubId} · {club.memberCount} 名成员</small></td>
@@ -103,7 +103,6 @@ export default function AutomationClubsPage({ can, notify }: AutomationPageProps
                 <td>{club.roomCount} 个房间<small className="cell-subtitle"><SeatBar seated={club.seated} maxSeats={club.capacity} /></small></td>
                 <td><strong>{club.onlineCount} / {club.robotQuota}</strong><small className="cell-subtitle">在线 / 配额，共 {club.robotCount} 台</small></td>
                 <td>{club.seatRatio}%<small className="cell-subtitle">机器人最多占座比例</small></td>
-                <td>{club.targetSeated}<small className="cell-subtitle">来自启用中的自动化组</small></td>
                 <td><AutomationBadge value={club.status} /></td>
                 <td>{timeText(club.updatedAt)}</td>
                 <td><div className="row-actions">
@@ -204,7 +203,6 @@ function ClubDetailModal({ clubId, canRefresh, notify, onClose, onRefresh }: { c
         <div><span>房间</span><strong>{data.club.roomCount}</strong></div>
         <div><span>在座 / 容量</span><strong>{data.club.seated} / {data.club.capacity}</strong></div>
         <div><span>在线终端</span><strong>{data.club.onlineCount} / {data.club.robotQuota}</strong></div>
-        <div><span>目标在座</span><strong>{data.club.targetSeated}</strong></div>
         <div><span>占座比例</span><strong>{data.club.seatRatio}%</strong></div>
       </div>
       {data.club.notes && <div className="automation-note-line">{data.club.notes}</div>}
@@ -220,13 +218,12 @@ function ClubDetailModal({ clubId, canRefresh, notify, onClose, onRefresh }: { c
       </div>}
 
       <h3 className="automation-section-title">自动化组 <span>{data.groups.length}</span></h3>
-      {data.groups.length === 0 ? <EmptyState title="还没有自动化组" description="在自动化组页面创建组后，机器人才能按目标在座自动补位。" /> : <div className="table-wrap">
+      {data.groups.length === 0 ? <EmptyState title="还没有自动化组" description="在自动化组页面创建组并绑定策略后，组内机器人投放时会默认使用该策略。" /> : <div className="table-wrap">
         <table className="automation-table">
-          <thead><tr><th>组名</th><th>策略</th><th>目标 / 上限</th><th>当前终端</th><th>在座</th><th>状态</th></tr></thead>
+          <thead><tr><th>组名</th><th>策略</th><th>当前终端</th><th>在座</th><th>状态</th></tr></thead>
           <tbody>{data.groups.map((group) => <tr key={group.id}>
             <td><strong>{group.name}</strong><small className="cell-subtitle">{group.notes || "—"}</small></td>
             <td>{group.strategyName || "未绑定"}</td>
-            <td>{group.targetSeated} / {group.maxRobots}</td>
             <td>{group.robotCount}</td>
             <td>{group.seatedCount}</td>
             <td><AutomationBadge value={group.status} /></td>

@@ -744,14 +744,15 @@ func (s *Server) handleUpdateAutomationScope(w http.ResponseWriter, r *http.Requ
 }
 
 type automationDeployRequest struct {
-	RobotIDs     []int64 `json:"robotIds"`
-	GroupIDs     []int64 `json:"groupIds"`
-	StrategyID   int64   `json:"strategyId"`
-	ProfitMode   string  `json:"profitMode"`
-	ProfitTarget int64   `json:"profitTarget"`
-	PeriodStart  string  `json:"periodStart"`
-	PeriodEnd    string  `json:"periodEnd"`
-	RoomPi       string  `json:"roomPi"`
+	RobotIDs     []int64              `json:"robotIds"`
+	GroupIDs     []int64              `json:"groupIds"`
+	StrategyID   int64                `json:"strategyId"`
+	ProfitMode   string               `json:"profitMode"`
+	ProfitTarget int64                `json:"profitTarget"`
+	PeriodStart  string               `json:"periodStart"`
+	PeriodEnd    string               `json:"periodEnd"`
+	ProfitSchedule []profitScheduleItem `json:"profitSchedule"`
+	RoomPi       string               `json:"roomPi"`
 }
 
 type deployAPIError struct {
@@ -782,7 +783,7 @@ func (s *Server) handleDeployAutomationRobots(w http.ResponseWriter, r *http.Req
 		return
 	}
 	outcome, apiErr := s.performAutomationDeploy(r, clubID, input.RobotIDs, input.GroupIDs, input.StrategyID,
-		input.ProfitMode, input.ProfitTarget, input.PeriodStart, input.PeriodEnd, input.RoomPi)
+		input.ProfitMode, input.ProfitTarget, input.PeriodStart, input.PeriodEnd, input.ProfitSchedule, input.RoomPi)
 	if apiErr != nil {
 		writeError(w, apiErr.Status, apiErr.Code, apiErr.Message)
 		return
@@ -800,7 +801,26 @@ func (s *Server) handleDeployAutomationRobots(w http.ResponseWriter, r *http.Req
 // 策略与输赢目标属于「投放配置」：strategyID > 0 时给这批机器人绑策略；
 // profitMode 非空时同时写入输赢目标（每日 / 一段时间），为空表示沿用机器人原有设置。
 // roomPi 是这批机器人只进的底皮档位，空串表示不限。
-func (s *Server) performAutomationDeploy(r *http.Request, clubID string, robotIDs, groupIDs []int64, strategyID int64, profitMode string, profitTarget int64, periodStart, periodEnd string, roomPi string) (deployOutcome, *deployAPIError) {
+func (s *Server) performAutomationDeploy(r *http.Request, clubID string, robotIDs, groupIDs []int64, strategyID int64, profitMode string, profitTarget int64, periodStart, periodEnd string, profitSchedule []profitScheduleItem, roomPi string) (deployOutcome, *deployAPIError) {
+	// 投放必须指定一套策略和输赢目标：这两项决定机器人怎么跑、跑到什么程度停，不能"沿用"。
+	if strategyID <= 0 {
+		return deployOutcome{}, &deployAPIError{http.StatusBadRequest, "STRATEGY_REQUIRED", "投放必须选择一个策略"}
+	}
+	var strategyStatus string
+	if err := s.db.QueryRowContext(r.Context(), "SELECT status FROM mgr_automation_strategy WHERE id = ?", strategyID).
+		Scan(&strategyStatus); err != nil {
+		return deployOutcome{}, &deployAPIError{http.StatusBadRequest, "STRATEGY_NOT_FOUND", "选择的策略不存在，请刷新后重试"}
+	}
+	if strategyStatus == "disabled" {
+		return deployOutcome{}, &deployAPIError{http.StatusBadRequest, "STRATEGY_DISABLED", "选择的策略已停用，不能用于投放"}
+	}
+	profitMode = strings.TrimSpace(profitMode)
+	if profitMode == "" {
+		return deployOutcome{}, &deployAPIError{http.StatusBadRequest, "PROFIT_MODE_REQUIRED", "投放必须选择输赢目标"}
+	}
+	if profitMode != "daily" && profitMode != "period" && profitMode != "none" && profitMode != "schedule" {
+		return deployOutcome{}, &deployAPIError{http.StatusBadRequest, "INVALID_PROFIT_MODE", "输赢目标模式不正确"}
+	}
 	var inviteCode, clubStatus string
 	var quota int
 	if err := s.db.QueryRowContext(r.Context(), "SELECT invite_code, robot_quota, status FROM mgr_automation_club WHERE club_id = ?", clubID).
@@ -888,9 +908,21 @@ FROM mgr_automation_robot WHERE id IN (`+placeholders(len(ids))+`)`, args...)
 			return deployOutcome{}, &deployAPIError{http.StatusInternalServerError, "QUERY_ERROR", "读取策略失败"}
 		}
 	}
-	periodStartTime, periodEndTime, profitMessage := validateAutomationProfit(profitMode, profitTarget, periodStart, periodEnd, true)
+	// 周计划沿用每日目标的数值校验：金额范围一致，只是累计口径换成时段。
+	validationMode := profitMode
+	if validationMode == "schedule" {
+		validationMode = "daily"
+	}
+	periodStartTime, periodEndTime, profitMessage := validateAutomationProfit(validationMode, profitTarget, periodStart, periodEnd, false)
 	if profitMessage != "" {
 		return deployOutcome{}, &deployAPIError{http.StatusBadRequest, "INVALID_PROFIT_TARGET", profitMessage}
+	}
+	scheduleJSON, scheduleMessage := "", ""
+	if profitMode == "schedule" {
+		scheduleJSON, scheduleMessage = normalizeProfitSchedule(profitSchedule)
+		if scheduleMessage != "" {
+			return deployOutcome{}, &deployAPIError{http.StatusBadRequest, "INVALID_PROFIT_SCHEDULE", scheduleMessage}
+		}
 	}
 	if profitMode == "none" {
 		profitTarget = 0
@@ -914,8 +946,12 @@ FROM mgr_automation_robot WHERE id IN (`+placeholders(len(ids))+`)`, args...)
 		updateArgs = append(updateArgs, strategyID)
 	}
 	if profitMode != "" {
-		setClauses = append(setClauses, "profit_mode = ?", "profit_target = ?", "period_start = ?", "period_end = ?")
-		updateArgs = append(updateArgs, profitMode, profitTarget, nullableTime(periodStartTime), nullableTime(periodEndTime))
+		// 周计划要顺带重置时段净分，并按当前时间决定投放后是直接上机还是先挂牌等时段。
+		scheduleWindow, scheduleState := scheduleDeployState(scheduleJSON, time.Now())
+		setClauses = append(setClauses, "profit_mode = ?", "profit_target = ?", "period_start = ?", "period_end = ?",
+			"profit_schedule = ?", "schedule_window = ?", "window_net = 0", "schedule_state = ?")
+		updateArgs = append(updateArgs, profitMode, profitTarget, nullableTime(periodStartTime), nullableTime(periodEndTime),
+			scheduleJSON, scheduleWindow, scheduleState)
 	}
 	updateArgs = append(updateArgs, args...)
 	result, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_robot SET `+strings.Join(setClauses, ", ")+`

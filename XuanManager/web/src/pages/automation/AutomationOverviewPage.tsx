@@ -62,7 +62,7 @@ export default function AutomationOverviewPage({ notify }: AutomationPageProps) 
     {!data && loading ? <section className="panel"><LoadingBlock label="正在汇总自动化运行状态" /></section> : data && <>
       <section className="metric-grid">
         <MetricCard tone="cyan" icon="机" label="在线终端 / 总量" value={`${metrics?.onlineRobots ?? 0} / ${metrics?.totalRobots ?? 0}`} note={`游戏中 ${metrics?.playingRobots ?? 0} · 在座 ${metrics?.seatedRobots ?? 0}`} />
-        <MetricCard tone="blue" icon="座" label="机器人在座 / 目标" value={`${metrics?.seatedRobots ?? 0} / ${metrics?.targetSeated ?? 0}`} note={`全场在座 ${metrics?.seatedTotal ?? 0} · 房间总容量 ${metrics?.capacity ?? 0} 座`} />
+        <MetricCard tone="blue" icon="座" label="机器人在座 / 在线" value={`${metrics?.seatedRobots ?? 0} / ${metrics?.onlineRobots ?? 0}`} note={`全场在座 ${metrics?.seatedTotal ?? 0} · 房间总容量 ${metrics?.capacity ?? 0} 座`} />
         <MetricCard tone="green" icon="局" label="今日完成局数" value={formatMoney(metrics?.todayRounds ?? 0)} note={`今日净分 ${formatSigned(metrics?.todayNet ?? 0)}`} />
         <MetricCard tone={(metrics?.faultedRobots ?? 0) > 0 ? "gold" : "slate"} icon="健" label="终端健康度" value={`${(metrics?.healthRate ?? 0).toFixed(1)}%`} note={`故障 ${metrics?.faultedRobots ?? 0} 台 · 告警 P0 ${metrics?.p0Alerts ?? 0} 条`} />
       </section>

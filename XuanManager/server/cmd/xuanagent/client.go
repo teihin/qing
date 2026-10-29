@@ -156,29 +156,31 @@ type heartbeatRequest struct {
 }
 
 type assignment struct {
-	RobotID       int64  `json:"robotId"`
-	TerminalNo    string `json:"terminalNo"`
-	Account       string `json:"account"`
-	Password      string `json:"password"`
-	Nickname      string `json:"nickname"`
-	ClubID        string `json:"clubId"`
-	InviteCode    string `json:"inviteCode"`
-	GroupName     string `json:"groupName"`
-	StrategyName  string `json:"strategyName"`
-	BuyinMultiple int    `json:"buyinMultiple"`
-	RoomPi        string `json:"roomPi"`
-	Intelligence  int    `json:"intelligence"`
-	DesiredStatus string `json:"desiredStatus"`
-	Status        string `json:"status"`
-	JoinStatus    string `json:"joinStatus"`
-	Enabled       bool   `json:"enabled"`
-	Gps           string `json:"gps"`
-	ProfitMode    string `json:"profitMode"`
-	ProfitTarget  int64  `json:"profitTarget"`
-	PeriodStart   string `json:"periodStart"`
-	PeriodEnd     string `json:"periodEnd"`
-	TodayNet      int64  `json:"todayNet"`
-	PeriodNet     int64  `json:"periodNet"`
+	RobotID      int64  `json:"robotId"`
+	TerminalNo   string `json:"terminalNo"`
+	Account      string `json:"account"`
+	Password     string `json:"password"`
+	Nickname     string `json:"nickname"`
+	ClubID       string `json:"clubId"`
+	InviteCode   string `json:"inviteCode"`
+	GroupName    string `json:"groupName"`
+	StrategyName string `json:"strategyName"`
+	// 绑定策略的运行参数原文，由 ensureTerminal 解析成终端运行参数。
+	StrategyConfig json.RawMessage `json:"strategyConfig"`
+	BuyinMultiple  int             `json:"buyinMultiple"`
+	RoomPi         string          `json:"roomPi"`
+	Intelligence   int             `json:"intelligence"`
+	DesiredStatus  string          `json:"desiredStatus"`
+	Status         string          `json:"status"`
+	JoinStatus     string          `json:"joinStatus"`
+	Enabled        bool            `json:"enabled"`
+	Gps            string          `json:"gps"`
+	ProfitMode     string          `json:"profitMode"`
+	ProfitTarget   int64           `json:"profitTarget"`
+	PeriodStart    string          `json:"periodStart"`
+	PeriodEnd      string          `json:"periodEnd"`
+	TodayNet       int64           `json:"todayNet"`
+	PeriodNet      int64           `json:"periodNet"`
 }
 
 type heartbeatResponse struct {

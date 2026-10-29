@@ -10,7 +10,10 @@ import {
   RoomPiPicker,
   Tabs,
   formatSigned,
+  parseProfitSchedule,
   profitModeLabel,
+  profitScheduleError,
+  profitScheduleText,
   profitTargetText,
   roomPiText,
   statusLabel,
@@ -19,6 +22,7 @@ import {
   useAutomationStrategies,
   type AutomationPageProps,
   type AutomationRobotItem,
+  type ProfitScheduleEntry,
 } from "./shared";
 
 interface DeployClubItem {
@@ -78,6 +82,8 @@ interface DeployRobotItem {
   periodNet: number;
   buyin: number;
   roomPi: string;
+  profitSchedule: string;
+  scheduleState: string;
   workerId: number | null;
   workerName: string;
   dispatchNote: string;
@@ -371,7 +377,7 @@ function DeployClubDetail({ clubId, can, notify, onBack }: {
             <thead><tr><th>机器人</th><th>组 / 策略</th><th>智力</th><th>房间 / 座位</th><th>状态</th><th>加入</th><th>Worker</th><th>今日</th><th>周期净分</th><th>操作</th></tr></thead>
             <tbody>{data.robots.map((robot) => <tr key={robot.id}>
               <td><div className="robot-name-cell"><span className="robot-avatar-chip">{robot.avatar}</span><div><button type="button" className="link-button" onClick={() => setConfiguring(robot)}>{robot.nickname || robot.account}</button><small className="cell-subtitle">{robot.account} · {robot.terminalNo}</small></div></div></td>
-              <td>{robot.groupName || "未分组"}<small className="cell-subtitle">{robot.strategyName || "未绑定策略"}</small></td>
+              <td>{robot.groupName || "未分组"}<small className="cell-subtitle">{robot.strategyName || "未绑定策略"}</small>{robot.profitSchedule && <small className="automation-schedule-cell" title={profitScheduleText(parseProfitSchedule(robot.profitSchedule))}>按周 {profitScheduleText(parseProfitSchedule(robot.profitSchedule))}</small>}</td>
               <td>{robot.intelligence}</td>
               <td>{robot.roomId ?? "—"}<small className="cell-subtitle">{robot.seatNo > 0 ? `${robot.seatNo} 号座` : "未入座"}</small><small className="cell-subtitle">{roomPiText(robot.roomPi)}</small></td>
               <td><AutomationBadge value={robot.status} /> <AutomationBadge value={robot.enabled ? "enabled" : "disabled"} /></td>
@@ -429,32 +435,56 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [strategyId, setStrategyId] = useState("");
-  const [profitMode, setProfitMode] = useState("");
+  const [profitMode, setProfitMode] = useState("daily");
   const [profitTarget, setProfitTarget] = useState("");
   const [periodStart, setPeriodStart] = useState("");
   const [periodEnd, setPeriodEnd] = useState("");
+  const [profitSchedule, setProfitSchedule] = useState<ProfitScheduleEntry[]>([]);
   const [roomPi, setRoomPi] = useState("");
   const [configTouched, setConfigTouched] = useState(false);
-  const groups = useAutomationGroups();
+  const { groups } = useAutomationGroups();
   const strategies = useAutomationStrategies();
 
-  // 按分组投放时，分组上已经配好策略和输赢目标，直接带出来当默认值；用户手动改过就不再覆盖。
-  const pickedGroup = groupIds.length === 1 ? groups.find((group) => group.id === groupIds[0]) : undefined;
+  // 策略与输赢目标都是必选项：没手动选就默认用第一个策略 / 每日目标。
+  useEffect(() => {
+    if (configTouched || strategyId || strategies.length === 0) return;
+    setStrategyId(String(strategies[0].id));
+  }, [strategies, strategyId, configTouched]);
+
+  // 选中内容只落在一个分组上时（按组选，或按机器人选且都来自同组），用组上的策略和输赢目标当默认值；
+  // 用户手动改过之后就不再覆盖。
+  const pickedGroup = useMemo(() => {
+    const ids = new Set<number>();
+    if (tab === "groups") {
+      for (const id of groupIds) ids.add(id);
+    } else {
+      for (const item of pool ?? []) {
+        if (item.groupId && robotIds.includes(item.id)) ids.add(item.groupId);
+      }
+    }
+    return ids.size === 1 ? groups.find((group) => group.id === [...ids][0]) : undefined;
+  }, [tab, groupIds, pool, robotIds, groups]);
+
   useEffect(() => {
     if (configTouched || !pickedGroup) return;
-    setStrategyId(pickedGroup.strategyId ? String(pickedGroup.strategyId) : "");
-    setProfitMode(pickedGroup.profitMode ?? "");
+    setStrategyId(pickedGroup.strategyId ? String(pickedGroup.strategyId) : (strategies[0] ? String(strategies[0].id) : ""));
+  }, [pickedGroup, configTouched, strategies]);
+
+  useEffect(() => {
+    if (configTouched || tab !== "groups" || !pickedGroup) return;
+    setProfitMode(pickedGroup.profitMode || "daily");
     setProfitTarget(String(pickedGroup.profitTarget ?? 0));
     setPeriodStart(pickedGroup.periodStart ? pickedGroup.periodStart.slice(0, 10) : "");
     setPeriodEnd(pickedGroup.periodEnd ? pickedGroup.periodEnd.slice(0, 10) : "");
-  }, [pickedGroup, configTouched]);
+  }, [pickedGroup, configTouched, tab]);
 
-  const patchConfig = (patch: { mode?: string; target?: string; periodStart?: string; periodEnd?: string }) => {
+  const patchConfig = (patch: { mode?: string; target?: string; periodStart?: string; periodEnd?: string; schedule?: ProfitScheduleEntry[] }) => {
     setConfigTouched(true);
     if (patch.mode !== undefined) setProfitMode(patch.mode);
     if (patch.target !== undefined) setProfitTarget(patch.target);
     if (patch.periodStart !== undefined) setPeriodStart(patch.periodStart);
     if (patch.periodEnd !== undefined) setPeriodEnd(patch.periodEnd);
+    if (patch.schedule !== undefined) setProfitSchedule(patch.schedule);
   };
 
   useEffect(() => {
@@ -518,8 +548,14 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
   const submit = async () => {
     if (!targetClubId) { setError("请先输入有效的 6 位邀请码"); return; }
     if (selectedCount === 0) { setError("请选择要投放的机器人或分组"); return; }
+    if (!strategyId) { setError("请先选择一个策略，还没有策略就去「策略中心」创建"); return; }
+    if (!profitMode) { setError("请选择输赢目标"); return; }
     const target = Math.round(Number(profitTarget) || 0);
     if (profitMode === "period" && (!periodStart || !periodEnd)) { setError("按周期设置输赢目标时必须选择开始和结束日期"); return; }
+    if (profitMode === "schedule") {
+      const scheduleMessage = profitScheduleError(profitSchedule);
+      if (scheduleMessage) { setError(scheduleMessage); return; }
+    }
     setBusy(true); setError("");
     try {
       const result = await api<{ message: string; clubId: string }>("/api/automation/deploy", {
@@ -532,6 +568,7 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
           profitTarget: profitMode === "none" ? 0 : target,
           periodStart: profitMode === "period" ? periodStart : "",
           periodEnd: profitMode === "period" ? periodEnd : "",
+          profitSchedule: profitMode === "schedule" ? profitSchedule : [],
           roomPi,
         }),
       });
@@ -616,19 +653,19 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
 
         <h3 className="automation-section-title automation-form-note--wide">投放策略、输赢目标与底皮</h3>
         <div className="automation-form-note automation-form-note--wide">
-          策略、输赢目标和只进底皮都是投放时定的：这里选的会覆盖这批机器人原有的配置；留空表示沿用机器人或分组上已有的设置，底皮留空表示不限。
+          策略和输赢目标是投放必填项：这里选的会覆盖这批机器人原有的配置；底皮留空表示不限档位。
         </div>
         <div className="automation-form-note--wide">
-          <Field label="机器人策略" hint={strategies.length === 0 ? "还没有配置策略，可先到「策略中心」创建并发布" : "只影响本次投放的机器人；留空表示沿用原有策略"}>
+          <Field label="机器人策略" hint={strategies.length === 0 ? "还没有策略，请先到「策略中心」创建并发布" : "必选；只选中一个分组时会默认带出组策略，可以换成别的"}>
             <select value={strategyId} onChange={(event) => { setConfigTouched(true); setStrategyId(event.target.value); }} disabled={strategies.length === 0}>
-              <option value="">沿用原有策略</option>
+              {strategies.length === 0 && <option value="">还没有策略，请先到策略中心创建</option>}
               {strategies.map((strategy) => <option key={strategy.id} value={strategy.id}>
                 {strategy.name}{strategy.status === "enabled" ? "" : `（${statusLabel(strategy.status)}）`}
               </option>)}
             </select>
           </Field>
         </div>
-        <ProfitTargetFields mode={profitMode} target={profitTarget} periodStart={periodStart} periodEnd={periodEnd} onChange={patchConfig} />
+        <ProfitTargetFields mode={profitMode} target={profitTarget} periodStart={periodStart} periodEnd={periodEnd} schedule={profitSchedule} onChange={patchConfig} allowInherit={false} />
         <div className="automation-form-note--wide">
           <Field as="div" label="只进的底皮档位" hint="选中的机器人只进这些档位的房间；一个都不选表示什么底皮的房间都进">
             <RoomPiPicker value={roomPi} onChange={(next) => { setConfigTouched(true); setRoomPi(next); }} />
@@ -637,16 +674,18 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
         <div className="automation-form-note automation-form-note--wide">
           {strategyId
             ? <>本次投放会给机器人绑定策略 <strong>{strategies.find((item) => String(item.id) === strategyId)?.name ?? strategyId}</strong>。</>
-            : <>未选策略：机器人继续沿用自己或所属分组上配置的策略。</>}
+            : <>还没有选择策略，请先去「策略中心」创建并发布。</>}
           {profitMode === ""
             ? " 输赢目标沿用原有设置。"
             : profitMode === "none"
               ? " 本次投放不限制输赢目标。"
-              : ` ${profitModeLabel(profitMode)}目标 ${profitTarget || 0}${profitMode === "period" && periodStart && periodEnd ? `（${periodStart} ~ ${periodEnd}）` : ""}。`}
+              : profitMode === "schedule"
+                ? ` 每个时段${profitTarget || 0}的目标，跑 ${profitSchedule.length} 段：${profitScheduleText(profitSchedule)}。`
+                : ` ${profitModeLabel(profitMode)}目标 ${profitTarget || 0}${profitMode === "period" && periodStart && periodEnd ? `（${periodStart} ~ ${periodEnd}）` : ""}。`}
           {roomPi ? ` 这批机器人只进 ${roomPiText(roomPi)} 的房间。` : " 不限底皮。"}
         </div>
 
-        <div className="automation-form-actions-wide"><FormActions onCancel={onClose} busy={busy} submitText={`投放 ${selectedCount} 台`} disabled={overQuota || selectedCount === 0} /></div>
+        <div className="automation-form-actions-wide"><FormActions onCancel={onClose} busy={busy} submitText={`投放 ${selectedCount} 台`} disabled={overQuota || selectedCount === 0 || strategies.length === 0} /></div>
       </>}
     </form>
   </Modal>;

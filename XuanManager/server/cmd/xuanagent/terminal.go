@@ -67,6 +67,9 @@ type terminal struct {
 	todayNet     int64
 	periodNet    int64
 
+	// 绑定策略原文（整份 JSON）：启动时注入 XUAN_STRATEGY，运行中走 config 热更新。
+	strategy string
+
 	mu      sync.Mutex
 	state   terminalState
 	started bool
@@ -218,6 +221,7 @@ func (a *agent) runRealTerminal(t *terminal) {
 	buyin, robotID, roomPi := t.buyinMultiple, t.robotID, t.roomPi
 	gps, profitMode, profitTarget := t.gps, t.profitMode, t.profitTarget
 	periodStart, periodEnd, todayNet, periodNet := t.periodStart, t.periodEnd, t.todayNet, t.periodNet
+	strategy := t.strategy
 	paused := t.state == termPaused
 	t.mu.Unlock()
 	if strings.TrimSpace(account) == "" || strings.TrimSpace(password) == "" {
@@ -240,6 +244,10 @@ func (a *agent) runRealTerminal(t *terminal) {
 	}
 	if roomPi != "" {
 		env = append(env, "XUAN_ROOM_PI="+roomPi)
+	}
+	// 绑定策略：整份 JSON 交给客户端解析（跑法参数 + 打牌阈值）。
+	if strategy != "" {
+		env = append(env, "XUAN_STRATEGY="+strategy)
 	}
 	if gps != "" {
 		env = append(env, "XUAN_GPS="+gps)
@@ -377,6 +385,13 @@ func (a *agent) forwardRealEvent(t *terminal, msg realMessage) {
 	if msg.EventType == "RoomLeft" || msg.EventType == "RoomClosed" {
 		t.mu.Lock()
 		t.roomID, t.seatNo = 0, 0
+		t.mu.Unlock()
+	}
+
+	// 结算下桌但仍留在房间里：只清座位号，房间号保留，重新带入还会用同一个 room_id。
+	if msg.EventType == "PlayerUnseated" {
+		t.mu.Lock()
+		t.seatNo = 0
 		t.mu.Unlock()
 	}
 }
@@ -528,8 +543,11 @@ func (a *agent) ensureTerminal(item assignment) {
 	t.inviteCode = item.InviteCode
 	t.joinStatus = item.JoinStatus
 	t.intelligence = item.Intelligence
+	// 绑定策略：原文直接下发，具体字段由客户端解析；内容变了才推一次热更新。
+	nextStrategy := strings.TrimSpace(string(item.StrategyConfig))
 	// 身份与输赢目标跟着心跳走：客户端在跑时用控制行热更新，不重启进程（重启会离桌）。
-	configChanged := false
+	configChanged := nextStrategy != t.strategy
+	t.strategy = nextStrategy
 	if item.Gps != "" && item.Gps != t.gps {
 		t.gps = item.Gps
 		configChanged = true
@@ -559,6 +577,10 @@ func (a *agent) ensureTerminal(item assignment) {
 		"periodEnd":    t.periodEnd,
 		"todayNet":     t.todayNet,
 		"periodNet":    t.periodNet,
+	}
+	// 策略整份下发，客户端按需覆盖跑法参数与打牌阈值。
+	if t.strategy != "" {
+		config["strategy"] = json.RawMessage(t.strategy)
 	}
 	if item.DesiredStatus != t.desired {
 		t.desired = item.DesiredStatus
@@ -597,7 +619,8 @@ func (a *agent) ensureTerminal(item assignment) {
 		case termPaused:
 			t.writeControl("pause")
 		case termDraining:
-			t.writeControl("stop")
+			// drain 让客户端打完手里这一局再退出，别在半局里掀桌。
+			t.writeControl("drain")
 		default:
 			t.writeControl("resume")
 		}
@@ -684,7 +707,7 @@ func (a *agent) drainTerminal(terminalNo string, robotID int64) *terminal {
 		return nil
 	}
 	t.setState(termDraining)
-	t.writeControl("stop")
+	t.writeControl("drain")
 	return t
 }
 

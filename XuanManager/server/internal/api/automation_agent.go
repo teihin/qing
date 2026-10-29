@@ -55,7 +55,9 @@ var agentEventTypes = map[string]bool{
 	"RoomCreated": true, "RoomJoined": true, "PlayerSeated": true, "GameReady": true,
 	"GameStarted": true, "TurnStarted": true, "ActionSubmitted": true, "ActionAccepted": true,
 	"ActionRejected": true, "GameSettled": true, "RoomLeft": true, "RoomClosed": true,
-	"TaskCompleted": true, "TaskFailed": true,
+	// 结算下桌但人还在房间里：俱乐部模式的一轮结束，接下来会原地重新带入。
+	"PlayerUnseated": true,
+	"TaskCompleted":  true, "TaskFailed": true,
 	// 客户端调试日志：策略决策、GPS 上报等，便于在「运行日志」里直接看到。
 	"TerminalLog": true,
 	// 当前牌桌快照：机器人所在房间的座位与全桌手牌。
@@ -412,22 +414,24 @@ WHERE worker_id = ? AND status NOT IN ('offline', 'stopped')`, reason, agent.Wor
 // agentAssignment 是节点「应该跑哪些终端」的权威清单：agent 用它拉起/收敛本地进程。
 // 密码只在这条带租约的节点通道下发，后台列表与日志都不回显。
 type agentAssignment struct {
-	RobotID       int64  `json:"robotId"`
-	TerminalNo    string `json:"terminalNo"`
-	Account       string `json:"account"`
-	Password      string `json:"password"`
-	Nickname      string `json:"nickname"`
-	ClubID        string `json:"clubId"`
-	InviteCode    string `json:"inviteCode"`
-	GroupName     string `json:"groupName"`
-	StrategyName  string `json:"strategyName"`
-	BuyinMultiple int    `json:"buyinMultiple"`
-	RoomPi        string `json:"roomPi"`
-	Intelligence  int    `json:"intelligence"`
-	DesiredStatus string `json:"desiredStatus"`
-	Status        string `json:"status"`
-	JoinStatus    string `json:"joinStatus"`
-	Enabled       bool   `json:"enabled"`
+	RobotID      int64  `json:"robotId"`
+	TerminalNo   string `json:"terminalNo"`
+	Account      string `json:"account"`
+	Password     string `json:"password"`
+	Nickname     string `json:"nickname"`
+	ClubID       string `json:"clubId"`
+	InviteCode   string `json:"inviteCode"`
+	GroupName    string `json:"groupName"`
+	StrategyName string `json:"strategyName"`
+	// 绑定策略的运行参数原文（JSON）：节点据此注入客户端的 XUAN_* 环境变量与热更新。
+	StrategyConfig json.RawMessage `json:"strategyConfig,omitempty"`
+	BuyinMultiple  int             `json:"buyinMultiple"`
+	RoomPi         string          `json:"roomPi"`
+	Intelligence   int             `json:"intelligence"`
+	DesiredStatus  string          `json:"desiredStatus"`
+	Status         string          `json:"status"`
+	JoinStatus     string          `json:"joinStatus"`
+	Enabled        bool            `json:"enabled"`
 	// 真机身份：GPS 由客户端登录后上报；输赢目标与当前净分决定这一局该赢还是该输。
 	Gps          string     `json:"gps"`
 	ProfitMode   string     `json:"profitMode"`
@@ -438,6 +442,24 @@ type agentAssignment struct {
 	PeriodNet    int64      `json:"periodNet"`
 }
 
+// applyStrategyConfig 把机器人绑定的策略合并进指派：策略里非 0 / 非空的值覆盖机器人自身配置，
+// 0 / 空表示沿用机器人（或分组）的设置。原文一并下发，节点用它注入客户端环境变量。
+func applyStrategyConfig(item *agentAssignment, raw string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" || !json.Valid([]byte(raw)) {
+		return
+	}
+	var cfg automationStrategyConfig
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return
+	}
+	if cfg.BuyinMultiple > 0 {
+		item.BuyinMultiple = cfg.BuyinMultiple
+	}
+	// 其余字段（打牌阈值、跑法节奏）节点不需要理解，原样下发给客户端解析。
+	item.StrategyConfig = json.RawMessage(raw)
+}
+
 func (s *Server) queryAgentAssignments(ctx context.Context, workerID int64) ([]agentAssignment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.terminal_no, r.account, r.login_password, r.nickname,
 r.club_id, r.invite_code, COALESCE(g.name, ''), COALESCE(st.name, ''),
@@ -445,7 +467,10 @@ r.buyin_multiple, r.room_pi, r.gps, r.intelligence, r.desired_status, r.status, 
 COALESCE(NULLIF(r.profit_mode, ''), COALESCE(g.profit_mode, '')),
 COALESCE(NULLIF(r.profit_target, 0), COALESCE(g.profit_target, 0)),
 COALESCE(r.period_start, g.period_start), COALESCE(r.period_end, g.period_end),
-r.today_net, r.period_net
+-- 周计划按「本时段净分」控输赢；其它模式还是今日净分。
+CASE WHEN r.profit_mode = 'schedule' THEN r.window_net ELSE r.today_net END,
+r.period_net,
+CASE WHEN st.status IN ('gray', 'enabled') THEN COALESCE(st.config_json, '') ELSE '' END
 FROM mgr_automation_robot r
 LEFT JOIN mgr_automation_group g ON g.id = r.group_id
 LEFT JOIN mgr_automation_strategy st ON st.id = r.strategy_id
@@ -461,13 +486,16 @@ WHERE r.worker_id = ? ORDER BY r.id LIMIT 200`, workerID)
 		var item agentAssignment
 		var enabledRaw int
 		var sealedPassword string
+		var strategyConfigRaw string
 		var periodStart, periodEnd sql.NullTime
 		if err := rows.Scan(&item.RobotID, &item.TerminalNo, &item.Account, &sealedPassword, &item.Nickname,
 			&item.ClubID, &item.InviteCode, &item.GroupName, &item.StrategyName,
 			&item.BuyinMultiple, &item.RoomPi, &item.Gps, &item.Intelligence, &item.DesiredStatus, &item.Status, &item.JoinStatus, &enabledRaw,
-			&item.ProfitMode, &item.ProfitTarget, &periodStart, &periodEnd, &item.TodayNet, &item.PeriodNet); err != nil {
+			&item.ProfitMode, &item.ProfitTarget, &periodStart, &periodEnd, &item.TodayNet, &item.PeriodNet,
+			&strategyConfigRaw); err != nil {
 			return nil, err
 		}
+		applyStrategyConfig(&item, strategyConfigRaw)
 		item.Enabled = enabledRaw == 1
 		if periodStart.Valid {
 			value := periodStart.Time
@@ -483,12 +511,16 @@ WHERE r.worker_id = ? ORDER BY r.id LIMIT 200`, workerID)
 			backfillGPS[item.RobotID] = item.Gps
 		}
 		if sealedPassword != "" {
-			plain, err := security.OpenCredential(key, sealedPassword)
-			if err != nil {
-				// 解不开通常意味着密钥换过：不阻断其它机器人，让这台登录失败并暴露在日志里。
-				s.logger.Warn("robot password decrypt failed", "robotId", item.RobotID, "error", err)
+			// 新数据是明文，直接下发；老数据还是 "v1:" 开头的密文，顺手解一下，解不开就当明文用。
+			if strings.HasPrefix(sealedPassword, "v1:") {
+				plain, err := security.OpenCredential(key, sealedPassword)
+				if err != nil {
+					s.logger.Warn("robot password decrypt failed", "robotId", item.RobotID, "error", err)
+				} else {
+					item.Password = plain
+				}
 			} else {
-				item.Password = plain
+				item.Password = sealedPassword
 			}
 		}
 		items = append(items, item)
@@ -879,8 +911,12 @@ SET status = 'seated', room_id = ?, seat_no = ?, last_heartbeat = NOW() WHERE id
 		}
 		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
 SET today_rounds = today_rounds + 1, today_net = today_net + ?, period_net = period_net + ?,
-    balance = balance + ?, last_heartbeat = NOW()
-WHERE id = ?`, delta, delta, delta, robotID)
+    window_net = window_net + ?, balance = balance + ?, last_heartbeat = NOW()
+WHERE id = ?`, delta, delta, delta, delta, robotID)
+	case "PlayerUnseated":
+		// 房间没结束，只是这一轮结算下桌：保留 room_id（人还在房里），座位号清掉等重新带入。
+		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
+SET status = 'idle', seat_no = 0, last_heartbeat = NOW() WHERE id = ?`, robotID)
 	case "RoomLeft", "RoomClosed":
 		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
 SET status = 'idle', room_id = NULL, seat_no = 0, last_heartbeat = NOW() WHERE id = ?`, robotID)
@@ -1081,6 +1117,8 @@ SET status = 'EXPIRED', finished_at = NOW()
 WHERE status = 'DELIVERED' AND attempts >= 3 AND delivered_at < DATE_SUB(NOW(), INTERVAL 120 SECOND)`); err != nil {
 		logger.Error("worker janitor expire stuck commands", "error", err)
 	}
+	// 先按周计划收敛（该排空的排空、该让出的让出、该恢复的解除挂牌），再统一分配。
+	SweepAutomationSchedules(ctx, db, logger)
 	// 兜底分配：新投放的机器人、刚空出来的容量，都在这里自动落位。
 	if assigned := assignWaitingRobots(ctx, db, logger); assigned > 0 {
 		logger.Info("worker janitor assigned waiting robots", "assigned", assigned)
