@@ -25,7 +25,10 @@
     "docs/memory/handoffs/2026-09-10-login-overlap-fix.md",
     "docs/memory/archive/2026-09-10/README.md",
     "docs/memory/handoffs/2026-09-11-register-v8-exact.md",
-    "docs/memory/handoffs/2026-09-11-v8-all-pages.md"
+    "docs/memory/handoffs/2026-09-11-v8-all-pages.md",
+    "docs/memory/handoffs/2026-10-29-worker-club-mode.md",
+    "docs/memory/handoffs/2026-10-29-automation-strategy-runtime.md",
+    "docs/memory/handoffs/2026-10-29-automation-robots-and-console.md"
   ],
   "required_headings": {
     "AGENTS.md": [

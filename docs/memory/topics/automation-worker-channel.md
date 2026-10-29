@@ -178,3 +178,18 @@ DELIVERED 无回执重投、离线 10 分钟收回账号的真实链路、页面
 本轮的 `/agent/v1/offline` 真机调用、强杀后 20 秒判离线的真实延迟、20 秒租约在真实抖动下是否反复重注册同样未实测，
 逐条剩余问题见[交接](../handoffs/2026-10-28-worker-realtime-online.md)。
 
+## 10. 俱乐部模式：硬前置 + 一轮一房 + 超目标留房连输（2026-10-29，后端已部署 / 未连真服）
+
+用户确认的规则：**进房必须自己在该俱乐部内**；**房间没有「结束」概念**；**每轮结算后离房换桌**，刚离开的房
+10 分钟内不再进（`XUAN_ROOM_AVOID_MS`），没别的房就等，过期才允许回原房；**例外：结算时已超目标就留在原房
+继续带入来输，最多连续 2 次**（`XUAN_STAY_BUYIN_TIMES`），用完才离房。阀值口径：低于目标允许赢，超过目标本轮该输。
+
+信号与实现：`PromptInfo`/`PromptInfo2` 里 word 含「已结算」是权威的整轮结束信号（游戏内 `onPromptInfo2`
+靠它去补分），`结算_结束(is_exit=True)` 3 秒后兜底，两者 5 秒内只处理一次 → `afterSettle()`：判
+`strategy.profitIntent` 为 `lose` 且留房次数未满 → `tryBuyin()` 发 `坐下_事件`（不带 site，照官方「确认带入」）；
+否则 `leaveAfterSettle()` 记避让 + 离房 + 1.5 秒后重查房；`pickRoom` 跳过避让中的房。只有留座到期被收座才
+`resetSeat()` + `tryTakeSeat()` 重新占座；`0x311` 与 `enterRoom` 都拦回入会流程。新增 `PlayerUnseated`
+（丢座，保留 room_id），后端已随当日部署上线；`agent-client/` 在 worker 节点本地（xuanagent 同目录），
+远程节点需另同步。
+
+改动清单、已核对「不改」的项、四项冒烟与待验证项见[交接](../handoffs/2026-10-29-worker-club-mode.md)。
