@@ -862,13 +862,7 @@ export default class panelGameView extends UIPanelViewBase {
 
             if (this.gameLogic.round_count == "0" || this.gameLogic.round_count == ""  || this.gameLogic.GetPlayerCtlByID(0).info.strUserID != strUserID || this.gameLogic.strGameState == "end" || (strSet.indexOf("带分") >= 0 && this.gameLogic.GetPlayerCtlByID(0).info.emState != PlayerState.running && this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID))
             {                
-                this.gameLogic.PrepareLeaveRoom();
-                GameDataManager.getAccount().roomID = "";
-                GameDataManager.getAccount().reqStopGame();
-                GameDataManager.getAccount().reqLeaveRoom();
-
-                UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);    
-                MobileManager.getInstance().OnTalkingEvent("退出房间","退出房间");            
+                this.ConfirmLeaveWhileWinning(()=>this.DoExitRoom());
             }
             else
             {
@@ -997,8 +991,12 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "站起围观")
         {
-            GameDataManager.getAccount().reqRoomCommand("{\"header\":\"起立_事件\"}", "起立_事件");
-            button.node.parent.active = false;
+            let configMain = button.node.parent;
+            this.ConfirmLeaveWhileWinning(()=>{
+                GameDataManager.getAccount().reqRoomCommand("{\"header\":\"起立_事件\"}", "起立_事件");
+                if(cc.isValid(configMain))
+                    configMain.active = false;
+            });
         }
         else if(button.node.name === "牌型展示")
         {
@@ -3574,6 +3572,58 @@ export default class panelGameView extends UIPanelViewBase {
         }
         if(!shouldShow && (this.gameLogic == null || this.gameLogic.strGameState != "end"))
             this.CloseQueuePanel();
+    }
+
+    private DoExitRoom():void
+    {
+        this.gameLogic.PrepareLeaveRoom();
+        GameDataManager.getAccount().roomID = "";
+        GameDataManager.getAccount().reqStopGame();
+        GameDataManager.getAccount().reqLeaveRoom();
+
+        UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
+        MobileManager.getInstance().OnTalkingEvent("退出房间","退出房间");
+    }
+
+    /**
+     * 本人赢分时站起或退出房间会先确认：离开会扣除 30% 赢分。
+     * 输分或没有盈亏数据时保持原来的直接执行。
+     */
+    private ConfirmLeaveWhileWinning(action:()=>void):void
+    {
+        if(!this.IsSelfWinning())
+        {
+            action();
+            return;
+        }
+        // panelMsgView 传入函数即切双按钮版，确定回调 true、取消回调 false。
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+            "赢分离开或站起会扣除\n30%赢分，是否继续？",
+            [(confirmed:boolean)=>{
+                if(confirmed)
+                    action();
+            }]);
+    }
+
+    /** PlayerList 的 total_score 是服务端算好的当前盈亏（money + boji - 带入）。 */
+    private IsSelfWinning():boolean
+    {
+        if(this.gameLogic == null)
+            return false;
+        let selfPlayer = this.gameLogic.GetPlayerCtlByID(0);
+        if(selfPlayer == null || selfPlayer.info == null)
+            return false;
+        let account = GameDataManager.getAccount();
+        if(account == null || selfPlayer.info.strUserID != account.guuid)
+            return false;
+
+        let strTotal = selfPlayer.info.total_score;
+        let nTotal = Number(strTotal);
+        if(strTotal !== undefined && strTotal !== null && strTotal !== "" && isFinite(nTotal))
+            return nTotal > 0;
+
+        let nBegin = Number(selfPlayer.info.begin_score);
+        return isFinite(nBegin) && selfPlayer.info.nGoldNum - nBegin > 0;
     }
 
     private IsSelfActuallySeated():boolean
