@@ -1506,6 +1506,9 @@ export default class DrhPlayerLogic extends cc.Component {
             if(this.playerPos === PlayerPos.self)
             {
                 Tool.GetChild(this.node,"PlayerInfo/回坐").active = false;
+                // 留座时间走完座位就被服务端收回，通知面板把带入窗口关掉，没座位了点了也没用。
+                if(this.info.strUserID == GameDataManager.getAccount().guuid)
+                    KBEngine.Event.fire("SelfSeatTimeout");
             }
             //停止任务
             this.unschedule(this.showLiuZuoCount);

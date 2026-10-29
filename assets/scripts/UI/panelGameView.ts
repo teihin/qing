@@ -74,6 +74,23 @@ export default class panelGameView extends UIPanelViewBase {
     private jackpotRecordVersion = 0;
     private realtimeRecordVersion = 0;
 
+    // 实时战绩：前半段是在座未结算玩家（接口一），后半段是已结算记录（接口二，分页无限滚动）
+    private realtimeSeatedList:any[] = null;
+    private realtimeSeatedReady:boolean = false;
+    private realtimeSettledList:any[] = null;
+    private realtimeSettledTotal:number = 0;
+    private realtimeSettledPage:number = 0;
+    private realtimeSettledLoading:boolean = false;
+    private realtimeSettledDone:boolean = false;
+    private realtimeRowsReady:boolean = false;
+    private realtimeRowPrefab:cc.Prefab = null;
+    private realtimeTailRow:cc.Node = null;
+    private realtimeScroll:cc.ScrollView = null;
+    private realtimeScrollBound:boolean = false;
+    private realtimeCountdowns = new Map<string,{label:cc.Label,endAt:number}>();
+    private realtimeRequestRoomID:number = 0;
+    private readonly realtimePageSize:number = 20;
+
     // 新玩家坐下分两步处理：先预坐锁座，收到PlayerList确认后再选择带入。
     private preSitState:string = "idle"; // idle / waiting / selecting / submitting
     private preSitSite:number = -1;
@@ -189,6 +206,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         KBEngine.Event.register("GamePlayerListInfo", this, "onGamePlayerListInfo");
         KBEngine.Event.register("GameWatcherListInfo", this, "onGameWatcherListInfo");
+        KBEngine.Event.register("SettledPlayerListInfo", this, "onSettledPlayerListInfo");
 
         KBEngine.Event.register("RoundScore", this, "OnRoundScore");
         KBEngine.Event.register("OtherInfo", this, "OnOtherInfo");
@@ -208,12 +226,14 @@ export default class panelGameView extends UIPanelViewBase {
         KBEngine.Event.register("QueuePreSitAccepted", this, "OnQueuePreSitAccepted");
         KBEngine.Event.register("QueuePreSitFailed", this, "OnQueuePreSitFailed");
         KBEngine.Event.register("RoomInviteStateChanged", this, "RefreshRoomInviteEntry");
+        KBEngine.Event.register("SelfSeatTimeout", this, "OnSelfSeatTimeout");
         // 后台改了钻石消费价格，牌桌价签跟着刷（面板常驻，只注册一次）
         KBEngine.Event.register("ConsumeStonePriceUpdated", this, "RefreshConsumePriceLabels");
         this.RefreshConsumePriceLabels();
 
         this.scrollGuanZhan = Tool.GetChild(this.node,"实时战绩/围观列表").getComponent(ScrollViewEx);
         this.scrollGuanZhan.callBackFresh = this.GetWatchList.bind(this);
+        this.BindRealtimeScroll();
 
         this.scrollHuiGu = Tool.GetChild(this.node,"牌局回顾/回顾列表").getComponent(ScrollViewEx);
         this.scrollHuiGu.callBackFresh = this.ShowHistoryInfo.bind(this);
@@ -428,6 +448,7 @@ export default class panelGameView extends UIPanelViewBase {
     public CloseAllShow()
     {
         this.CancelPreSitReservation();
+        this.unschedule(this.TickRealtimeCountdown);
         Tool.GetChild(this.node,"ConfigMain").active = false;
         Tool.GetChild(this.node,"实时战绩").active = false;
         Tool.GetChild(this.node,"牌局回顾").active = false;
@@ -2191,15 +2212,40 @@ export default class panelGameView extends UIPanelViewBase {
     }
     public GetReadRecordInfo()
     {
-        this.realtimeRecordVersion++;
+        const version = ++this.realtimeRecordVersion;
+        const account = GameDataManager.getAccount();
+        this.realtimeRequestRoomID = account.roomID;
+        this.realtimeSeatedList = null;
+        this.realtimeSeatedReady = false;
+        this.realtimeSettledList = null;
+        this.realtimeSettledTotal = 0;
+        this.realtimeSettledPage = 0;
+        this.realtimeSettledLoading = false;
+        this.realtimeSettledDone = false;
+        this.realtimeRowsReady = false;
+        this.realtimeTailRow = null;
+        this.realtimeCountdowns.clear();
+
         Tool.GetChild(this.node,"实时战绩/战绩列表/view/content").removeAllChildren();
         Tool.GetChild(this.node,"实时战绩/战绩列表").getComponent(cc.ScrollView).scrollToTop();
         const state = Tool.GetChild(this.node,"实时战绩/V8列表状态");
         state.active = true;
         state.getComponent(cc.Label).string = "正在加载…";
-        let strParam = "{\"header\":\"获取_游戏内玩家_信息_命令\"}";
-        GameDataManager.getAccount().reqAccountCommand(strParam, "P@获取_游戏内玩家_信息_命令");
-        
+
+        account.reqAccountCommand("{\"header\":\"获取_游戏内玩家_信息_命令\"}", "P@获取_游戏内玩家_信息_命令");
+        // 已结算记录走分页接口，第一页和未结算列表并行拉取，谁先到都不会卡住渲染。
+        account.reqAccountCommand(JSON.stringify({header:"获取_房间_已结算_玩家_命令", page:0, count:this.realtimePageSize}),
+            "P@获取_房间_已结算_玩家_命令");
+        this.scheduleOnce(()=>{
+            if (version !== this.realtimeRecordVersion) return;
+            if (this.realtimeSettledList !== null) return;
+            // 该房间没有已结算数据（fixed 模式 / 老服务端不认这条命令）时不能让列表一直转圈。
+            this.realtimeSettledList = [];
+            this.realtimeSettledDone = true;
+            this.TryRenderRealtimeList(version);
+        }, 1.5);
+
+        this.StartRealtimeCountdownTick();
     }
 
     public GetWatchList()
@@ -2230,25 +2276,25 @@ export default class panelGameView extends UIPanelViewBase {
         return parts.join(".");
     }
 
-    public onGamePlayerListInfo(strParam:string)
+    /** 秒 → 倒计时文本，统一「分:秒」两位数，如 00:23 / 02:00。 */
+    private FormatRealtimeCountdown(seconds:number):string
     {
-        const panel = Tool.GetChild(this.node,"实时战绩");
-        if (!panel.active) return;
-        let data:any;
-        try { data = JSON.parse(strParam); }
-        catch (error) { Debug.Error("查询实时战绩消息 json格式异常！"); return; }
-        if (!data || !Array.isArray(data.GamePlayerListInfo)) return;
+        const value = Math.max(0, Math.floor(seconds));
+        const minute = Math.floor(value / 60);
+        const second = value % 60;
+        return (minute < 10 ? "0" : "") + minute + ":" + (second < 10 ? "0" : "") + second;
+    }
 
-        const version = ++this.realtimeRecordVersion;
-        const transParent = Tool.GetChild(this.node,"实时战绩/战绩列表/view/content");
-        transParent.removeAllChildren();
+    /** 响应只认发起请求时的那个房间，切房/换号后迟到的回包直接丢弃。 */
+    private IsRealtimeListCurrent():boolean
+    {
         const account = GameDataManager.getAccount();
-        const strUserID = String(account.guuid);
-        const roomID = account.roomID;
-        const jList = data.GamePlayerListInfo;
-        const state = Tool.GetChild(this.node,"实时战绩/V8列表状态");
-        state.active = jList.length === 0;
-        state.getComponent(cc.Label).string = "暂无战绩";
+        return account !== undefined && account !== null && account.roomID === this.realtimeRequestRoomID;
+    }
+
+    private RefreshRealtimeSummary(data:any)
+    {
+        const jList = data.GamePlayerListInfo || [];
         let totalIn = 0;
         let totalScore = 0;
         for (const one of jList)
@@ -2260,10 +2306,66 @@ export default class panelGameView extends UIPanelViewBase {
         Tool.GetChild(this.node,"实时战绩/总带入").getComponent(cc.Label).string = this.FormatRealtimeValue(String(totalIn));
         Tool.GetChild(this.node,"实时战绩/总得分").getComponent(cc.Label).string = this.FormatRealtimeValue(String(totalScore));
         Tool.GetChild(this.node,"实时战绩/奖池").getComponent(cc.Label).string = this.FormatRealtimeValue(String(data.reward_pool));
-        if (!jList.length) return;
+    }
 
-        // Load the shared row once, then append in server order. A previous load
-        // cannot repaint a newer response, a reopened drawer or another account.
+    public onGamePlayerListInfo(strParam:string)
+    {
+        const panel = Tool.GetChild(this.node,"实时战绩");
+        if (!panel.active) return;
+        if (!this.IsRealtimeListCurrent()) return;
+        let data:any;
+        try { data = JSON.parse(strParam); }
+        catch (error) { Debug.Error("查询实时战绩消息 json格式异常！"); return; }
+        if (!data || !Array.isArray(data.GamePlayerListInfo)) return;
+
+        this.realtimeSeatedList = data.GamePlayerListInfo;
+        this.realtimeSeatedReady = true;
+        this.RefreshRealtimeSummary(data);
+        this.TryRenderRealtimeList(this.realtimeRecordVersion);
+    }
+
+    public onSettledPlayerListInfo(strParam:string)
+    {
+        const panel = Tool.GetChild(this.node,"实时战绩");
+        if (!panel.active) return;
+        if (!this.IsRealtimeListCurrent()) return;
+        let data:any;
+        try { data = JSON.parse(strParam); }
+        catch (error) { Debug.Error("查询已结算记录消息 json格式异常！"); return; }
+        if (!data || !Array.isArray(data.result)) return;
+
+        const page = Number(data.number);
+        const rows = data.result;
+        this.realtimeSettledTotal = Number(data.count);
+        this.realtimeSettledLoading = false;
+        // 返回空页或已经取满总数，都说明没有下一页了。
+        this.realtimeSettledDone = rows.length < this.realtimePageSize ||
+            !isFinite(this.realtimeSettledTotal) ||
+            (page + 1) * this.realtimePageSize >= this.realtimeSettledTotal;
+
+        if (page === 0 || this.realtimeSettledList === null)
+        {
+            this.realtimeSettledPage = 0;
+            this.realtimeSettledList = rows.slice();
+            this.TryRenderRealtimeList(this.realtimeRecordVersion);
+            return;
+        }
+
+        this.realtimeSettledPage = page;
+        for (const one of rows) this.realtimeSettledList.push(one);
+        if (this.realtimeRowsReady) this.AppendRealtimeSettledRows(rows, this.realtimeSettledList.length - rows.length);
+        this.UpdateRealtimeTail();
+    }
+
+    /** 在座列表和已结算第一页都到齐才渲染，避免两边谁先到就把列表画两遍。 */
+    private TryRenderRealtimeList(version:number)
+    {
+        if (!this.realtimeSeatedReady || this.realtimeSettledList === null) return;
+        const panel = Tool.GetChild(this.node,"实时战绩");
+        if (!panel.active) return;
+        const transParent = Tool.GetChild(this.node,"实时战绩/战绩列表/view/content");
+        const account = GameDataManager.getAccount();
+        const roomID = account.roomID;
         WebLoadingManager.loadBlockingRes("Prefabs/带入记录","正在加载带入记录",(err,obj)=>{
             if (!cc.isValid(this.node) || !cc.isValid(transParent) || !panel.active ||
                 version !== this.realtimeRecordVersion ||
@@ -2271,32 +2373,206 @@ export default class panelGameView extends UIPanelViewBase {
             if (err)
             {
                 cc.error(err.message || err);
+                const state = Tool.GetChild(this.node,"实时战绩/V8列表状态");
                 state.active = true;
                 state.getComponent(cc.Label).string = "加载失败，请重新打开";
                 return;
             }
-            jList.forEach((one:any,index:number)=>{
-                const node:cc.Node = cc.instantiate(obj);
-                node.parent = transParent;
-                const id = String(one.id);
-                const isSelf = id === strUserID;
-                const seated = this.gameLogic.arrayPlayer.some(player=>id === player.info.strUserID);
-                const score = Number(one.total_score);
-                node.getChildByName("name").getComponent(cc.Label).string = String(one.name);
-                node.getChildByName("in").getComponent(cc.Label).string = this.FormatRealtimeValue(this.CheckSmallPlay(String(one.init_money)));
-                node.getChildByName("score").getComponent(cc.Label).string = (score > 0 ? "+" : "") + this.FormatRealtimeValue(this.CheckSmallPlay(String(one.total_score)));
-                node.getChildByName("V8隔行").active = index % 2 === 1;
-                node.getChildByName("V8本人底").active = isSelf && seated;
-                node.getChildByName("V8本人").active = isSelf;
-                node.getChildByName("V8离桌").active = !seated;
-                // Only data-dependent sign/presence state changes at runtime.
-                node.getChildByName("score").color = score > 0 ? cc.color(255,112,117) : score < 0 ? cc.color(189,216,76) : cc.color(250,240,214);
-                if (!seated)
-                    for (const text of node.getComponentsInChildren(cc.Label)) text.node.color = cc.color(133,158,179);
+            this.realtimeRowPrefab = obj;
+            transParent.removeAllChildren();
+            this.realtimeCountdowns.clear();
+            this.realtimeTailRow = null;
+
+            const seated = this.realtimeSeatedList || [];
+            const settled = this.realtimeSettledList || [];
+            seated.forEach((one:any,index:number)=>{
+                this.FillRealtimeSeatedRow(this.MakeRealtimeRow(transParent), one, index, String(account.guuid));
             });
+            if (settled.length > 0)
+            {
+                this.MakeRealtimeHintRow(transParent, "—— 以下为已结算记录 ——", cc.color(250,240,214), 24);
+                settled.forEach((one:any,index:number)=>{
+                    this.FillRealtimeSettledRow(this.MakeRealtimeRow(transParent), one, index);
+                });
+                this.realtimeTailRow = this.MakeRealtimeHintRow(transParent, "", cc.color(133,158,179));
+            }
+            this.realtimeRowsReady = true;
+            this.UpdateRealtimeTail();
+
+            const state = Tool.GetChild(this.node,"实时战绩/V8列表状态");
+            state.active = seated.length === 0 && settled.length === 0 && this.realtimeSettledDone;
+            state.getComponent(cc.Label).string = "暂无战绩";
+
             transParent.getComponent(cc.Layout).updateLayout();
+            Tool.GetChild(this.node,"实时战绩/战绩列表").getComponent(cc.ScrollView).scrollToTop();
+            this.TickRealtimeCountdown();
+            // 首屏不足一屏时直接补下一页。
+            this.scheduleOnce(()=>this.OnRealtimeScroll(), 0);
         });
     }
+
+    private MakeRealtimeRow(parent:cc.Node):cc.Node
+    {
+        const node:cc.Node = cc.instantiate(this.realtimeRowPrefab);
+        node.parent = parent;
+        return node;
+    }
+
+    /** 分隔行/加载提示行：只留昵称列的文字并居中，其余列隐藏。 */
+    private MakeRealtimeHintRow(parent:cc.Node, text:string, color:cc.Color, fontSize:number = 22):cc.Node
+    {
+        const node = this.MakeRealtimeRow(parent);
+        node.height = 56;
+        for (const name of ["in", "score", "countdown", "V8分隔"])
+        {
+            const child = node.getChildByName(name);
+            if (child !== null) child.active = false;
+        }
+        node.getChildByName("V8隔行").active = false;
+        node.getChildByName("V8本人底").active = false;
+        node.getChildByName("V8本人").active = false;
+        node.getChildByName("V8离桌").active = false;
+        const labelNode = node.getChildByName("name");
+        labelNode.x = 0;
+        labelNode.width = 520;
+        const label = labelNode.getComponent(cc.Label);
+        label.horizontalAlign = cc.Label.HorizontalAlign.CENTER;
+        label.fontSize = fontSize;
+        label.string = text;
+        labelNode.color = color;
+        return node;
+    }
+
+    private FillRealtimeSeatedRow(node:cc.Node, one:any, index:number, strUserID:string)
+    {
+        const id = String(one.id);
+        const isSelf = id === strUserID;
+        const seated = this.gameLogic.arrayPlayer.some(player=>id === player.info.strUserID);
+        const score = Number(one.total_score);
+        node.getChildByName("name").getComponent(cc.Label).string = String(one.name);
+        node.getChildByName("in").getComponent(cc.Label).string = this.FormatRealtimeValue(this.CheckSmallPlay(String(one.init_money)));
+        node.getChildByName("score").getComponent(cc.Label).string = (score > 0 ? "+" : "") + this.FormatRealtimeValue(this.CheckSmallPlay(String(one.total_score)));
+        const countdown = node.getChildByName("countdown");
+        const remain = Number(one.play_countdown);
+        countdown.getComponent(cc.Label).string = this.FormatRealtimeCountdown(remain);
+        // 服务端只在状态变化时下发，客户端本地逐秒递减，收到新消息时以新值为准。
+        this.realtimeCountdowns.set(id, {label:countdown.getComponent(cc.Label), endAt: Date.now() / 1000 + Math.max(0, remain)});
+        node.getChildByName("V8隔行").active = index % 2 === 1;
+        node.getChildByName("V8本人底").active = isSelf && seated;
+        // 只用整行底色高亮自己，「我」字图标不再显示。
+        node.getChildByName("V8本人").active = false;
+        node.getChildByName("V8离桌").active = !seated;
+        // Only data-dependent sign/presence state changes at runtime.
+        node.getChildByName("score").color = score > 0 ? cc.color(255,112,117) : score < 0 ? cc.color(189,216,76) : cc.color(250,240,214);
+        if (!seated)
+            for (const text of node.getComponentsInChildren(cc.Label)) text.node.color = cc.color(133,158,179);
+    }
+
+    private FillRealtimeSettledRow(node:cc.Node, one:any, index:number):cc.Node
+    {
+        const score = Number(one.score);
+        node.getChildByName("name").getComponent(cc.Label).string = String(one.name);
+        // init_money 是结算那一刻的快照，口径与在座行一致（0.1/0.3 房照样 ÷10）。
+        const initMoney = one.init_money === undefined || one.init_money === null ? null : Number(one.init_money);
+        node.getChildByName("in").getComponent(cc.Label).string =
+            initMoney === null ? "—" : this.FormatRealtimeValue(this.CheckSmallPlay(String(initMoney)));
+        node.getChildByName("score").getComponent(cc.Label).string = (score > 0 ? "+" : "") + this.FormatRealtimeValue(this.CheckSmallPlay(String(score)));
+        // 已结算记录没有剩余倒计时，这一列直接留横杠。
+        node.getChildByName("countdown").getComponent(cc.Label).string = "—";
+        node.getChildByName("V8隔行").active = index % 2 === 1;
+        node.getChildByName("V8本人底").active = false;
+        node.getChildByName("V8本人").active = false;
+        node.getChildByName("V8离桌").active = false;
+        // 昵称/带入/倒计时灰化表示已结算，输赢仍保留红绿，方便一眼看出这轮赢亏。
+        node.getChildByName("name").color = cc.color(133,158,179);
+        node.getChildByName("in").color = cc.color(133,158,179);
+        node.getChildByName("countdown").color = cc.color(133,158,179);
+        node.getChildByName("score").color = score > 0 ? cc.color(255,112,117) : score < 0 ? cc.color(189,216,76) : cc.color(250,240,214);
+        return node;
+    }
+
+    private AppendRealtimeSettledRows(rows:any[], startIndex:number)
+    {
+        const transParent = Tool.GetChild(this.node,"实时战绩/战绩列表/view/content");
+        if (!cc.isValid(transParent) || this.realtimeRowPrefab === null) return;
+        const tail = this.realtimeTailRow;
+        rows.forEach((one:any,index:number)=>{
+            const node = this.FillRealtimeSettledRow(this.MakeRealtimeRow(transParent), one, startIndex + index);
+            if (cc.isValid(tail)) node.setSiblingIndex(tail.getSiblingIndex());
+        });
+        transParent.getComponent(cc.Layout).updateLayout();
+        this.scheduleOnce(()=>this.OnRealtimeScroll(), 0);
+    }
+
+    private UpdateRealtimeTail()
+    {
+        if (!cc.isValid(this.realtimeTailRow)) return;
+        const label = this.realtimeTailRow.getChildByName("name").getComponent(cc.Label);
+        if (this.realtimeSettledList === null) return;
+        if (this.realtimeSettledLoading) label.string = "正在加载…";
+        else if (this.realtimeSettledDone) label.string = this.realtimeSettledList.length > 0 ? "没有更多记录" : "";
+        else label.string = "上滑加载更多";
+    }
+
+    private BindRealtimeScroll()
+    {
+        if (this.realtimeScrollBound) return;
+        const scrollNode = Tool.GetChild(this.node,"实时战绩/战绩列表");
+        if (scrollNode === null) return;
+        this.realtimeScroll = scrollNode.getComponent(cc.ScrollView);
+        if (this.realtimeScroll === null) return;
+        scrollNode.on("scrolling", this.OnRealtimeScroll, this);
+        this.realtimeScrollBound = true;
+    }
+
+    private OnRealtimeScroll()
+    {
+        if (this.realtimeScroll === null || this.realtimeSettledList === null) return;
+        if (this.realtimeSettledLoading || this.realtimeSettledDone) return;
+        if (!Tool.GetChild(this.node,"实时战绩").activeInHierarchy) return;
+        // 离底部还有一段就预加载下一页，滑到底不会出现空档。
+        const remaining = this.realtimeScroll.getMaxScrollOffset().y - this.realtimeScroll.getScrollOffset().y;
+        if (remaining > Math.max(360, this.realtimeScroll.content.parent.height * 0.75)) return;
+        this.RequestRealtimeSettledPage();
+    }
+
+    private RequestRealtimeSettledPage()
+    {
+        if (this.realtimeSettledLoading || this.realtimeSettledDone || this.realtimeSettledList === null) return;
+        this.realtimeSettledLoading = true;
+        this.UpdateRealtimeTail();
+        const next = this.realtimeSettledPage + 1;
+        GameDataManager.getAccount().reqAccountCommand(
+            JSON.stringify({header:"获取_房间_已结算_玩家_命令", page:next, count:this.realtimePageSize}),
+            "P@获取_房间_已结算_玩家_命令");
+        // 服务端没回包时解锁，下一次滑动还能再试。
+        this.scheduleOnce(()=>{
+            if (!this.realtimeSettledLoading || this.realtimeSettledPage === next) return;
+            this.realtimeSettledLoading = false;
+            this.UpdateRealtimeTail();
+        }, 3);
+    }
+
+    private StartRealtimeCountdownTick()
+    {
+        this.unschedule(this.TickRealtimeCountdown);
+        this.schedule(this.TickRealtimeCountdown, 1, cc.macro.REPEAT_FOREVER, 0.1);
+    }
+
+    private TickRealtimeCountdown()
+    {
+        if (!Tool.GetChild(this.node,"实时战绩").active)
+        {
+            this.unschedule(this.TickRealtimeCountdown);
+            return;
+        }
+        const now = Date.now() / 1000;
+        this.realtimeCountdowns.forEach((item)=>{
+            if (!cc.isValid(item.label) || !cc.isValid(item.label.node)) return;
+            item.label.string = this.FormatRealtimeCountdown(Math.ceil(item.endAt - now));
+        });
+    }
+
     public onGameWatcherListInfo(strParam:string)
     {
         this.scrollGuanZhan.UpdateList(strParam,"GameWatcherListInfo","观战对象",this.PAGE_PER_COUNT,this.setGuanZhanItem.bind(this));
@@ -2931,6 +3207,9 @@ export default class panelGameView extends UIPanelViewBase {
         this.RefreshQueueEntryVisibility(isSelfSeated);
         this.RefreshRoomInviteEntry();
         RoomInviteManager.getInstance().onRoomAudienceStateChanged();
+        // 留座到期、主动站起或被服务端清座后自己已经不在座位上，带入窗口留着也提交不了。
+        if(!isSelfSeated)
+            this.CloseBuyinWindowWithoutSeat();
         if(this.preSitState == "idle")
             return;
 
@@ -2961,6 +3240,25 @@ export default class panelGameView extends UIPanelViewBase {
             this.ClearPreSitState(true);
             this.ShowMsg("占座已超时，请重新选择座位！");
         }
+    }
+
+    /**
+     * 自己已经不在座位上时关掉带入窗口。
+     * 预坐/选座流程里的窗口是「坐上座位后才弹」的，所以这里只处理失去座位这一种情况。
+     */
+    private CloseBuyinWindowWithoutSeat()
+    {
+        if(!cc.isValid(this.node))
+            return;
+        const buyin = Tool.GetChild(this.node,"带入窗口");
+        if(buyin != null && buyin.active)
+            buyin.active = false;
+    }
+
+    /** 留座倒计时走完（DrhPlayerLogic.showLiuZuoCount），座位即将被服务端收回。 */
+    private OnSelfSeatTimeout()
+    {
+        this.CloseBuyinWindowWithoutSeat();
     }
 
     private CancelPreSitReservation(includeSubmitting:boolean = false)

@@ -1,21 +1,27 @@
 # qing 当前状态
 
-更新时间：2026-10-28 14:45
+更新时间：2026-10-29 01:20
 
-规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。客服网页已部署、真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
 
-客服网页已部署，真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
+## 2026-10-29 牌桌小修：留座到期收窗 / 俱乐部房藏剩余时间（未提交）
+
+- 留座倒计时归零（`showLiuZuoCount` 且是本人）fire `SelfSeatTimeout`，面板收到即关「带入窗口」，并在每次 `PlayerList` 后按 `isSelfSeated` 兜底收窗。
+- 桌面 `RoomFrame/info/游戏时间`（"剩余时间 00:00"）在 `roomSetting` 带 `club_id` 的俱乐部房整行隐藏，不参与倒计时刷新；判断按 roomSetting 原文缓存，切房自动切回。详见[交接](handoffs/2026-10-29-seat-timeout-close-buyin.md)、[交接](handoffs/2026-10-29-club-room-hide-clock.md)。**均未构建、未真机。**
+
+## 2026-10-29 实时战绩：倒计时列 + 已结算记录无限滚动（未提交）
+
+- 牌桌「记录」列表：在座行加第 4 列 `countdown`（`play_countdown`，本地逐秒递减，统一 `00:00` 分:秒）；其后追加 `获取_房间_已结算_玩家_命令`（每页 20，带带入 `init_money` 与输赢 `score`）记录，滑到距底 ≤ max(360, 视口×0.75) 自动翻页。
+- 行模板 `带入记录.prefab` 改 4 列；表头重排 + 新增 `V8表头countdown`（新出同风格美术字 `assets/V7/realtime_v8_countdown.png`），`drh8.fire` 与 `panelGameView.prefab` fileId 一致。
+- 验证：TS 语法 0 诊断、JSON/引用完整、坐标手算无重叠；**未构建、未真机、服务端路由与 `play_countdown` 未实测**。见[交接](handoffs/2026-10-29-realtime-settled-list.md)。
 
 ## 2026-10-28 自动化：机器人当前牌局（未提交，后端已发、前端未发）
 
-- 点开机器人默认「牌局」页签（投放弹窗同）：房号/房名/底皮、在座/上限、观战名单、四座手牌与分数；5 秒轮询 `GET /robots/{id}/table`。
-- `PlayerList` 给在座与房间状态，`获取_游戏内旁观_信息_命令`→`GameWatcherListInfo` 给观战者（失败降级），`查询_房间_游戏_信息` 给全桌手牌；无事件 20 秒补发，内容不变不落库；进/离房清空，不影响出牌策略。
-- 验证：构建与 lint 全过、mock 冒烟通过；**未真实开局、观战未验、未发布、worker 未启动**。见[专题](topics/automation-strategy.md)、[交接](handoffs/2026-10-28-automation-table-snapshot.md)。
+- 机器人「牌局」页签 5 秒轮询 `GET /robots/{id}/table`（在座/观战/四座手牌，无事件 20 秒补发、内容不变不落库）；**未真实开局、观战未验、未发布**。见[专题](topics/automation-strategy.md)、[交接](handoffs/2026-10-28-automation-table-snapshot.md)。
 
 ## 2026-10-28 自动化：Worker 在线状态实时化（未提交，后端已发、前端未发）
 
-- 节点退出即离线：agent 停止前调 `POST /agent/v1/offline`（置离线、清租约、名下机器人标离线）；强杀靠**租约 20 秒 + 巡检 5 秒**兜底，列表按租约现算在线，前端 5 秒轮询。
-- 心跳默认改 5 秒；重新注册把掉线标的 `offline` 终端放回 `idle`。**14:41 后端已发（5 秒心跳/20 秒租约/`/agent/v1/offline`），本机 `bin/xuanagent` 已重编、心跳改 5 秒**。见[交接](handoffs/2026-10-28-worker-realtime-online.md)。
+- 节点退出即离线：agent 停止前调 `POST /agent/v1/offline`，强杀靠**租约 20 秒 + 巡检 5 秒**兜底；心跳 5 秒，重新注册把 `offline` 终端放回 `idle`。后端已发，本机 `bin/xuanagent` 已重编。见[交接](handoffs/2026-10-28-worker-realtime-online.md)。
 
 ## 2026-10-28 自动化：净分区间控制 + GPS/IP + 策略移植（未提交，035–037 已执行、后端已发）
 
@@ -52,15 +58,9 @@
 
 - 「系统配置 → 游戏推广下载地址」读写 `kbedm.usr_hash_info.下载url`，只接受完整 http(s)，写前快照/写后回读/写审计。见[交接](handoffs/2026-10-27-promotion-download-url.md)。
 
-## 2026-10-26 消费全切钻石 + 价格后台可配（后台已上线，VIP 已下线）
+## 2026-10-26 消费全切钻石 / 俱乐部跨级与弹窗（后台已上线，客户端未发）
 
-- 客户端 6 处 `玩家_消费_命令` 改 `money_type=stone`，价格由后台「钻石消费价格」下发；**配置尚未落库、客户端未发版**；VIP 三档停用，延时档位定死。
-- 待服务端重启：牌桌通道与 `延长时间_命令` 钻石档位；服务端仍不按配置校验价格。见[交接](handoffs/2026-10-26-stone-consume-price.md)。
-
-## 2026-10-26 俱乐部：跨级只读、弹窗重设计、直属口径、分页
-
-- 成员列表只返回直属下级，更深一层起只读；踢人已重编译，服务端未放开权限。见[只读](handoffs/2026-10-26-club-downline-readonly.md)、[踢人](handoffs/2026-10-26-club-agent-kick.md)、[代理](handoffs/2026-10-26-club-agent-direct-manage.md)。
-- `panelMain.prefab` 按深蓝金稿换肤（节点/事件/`.meta` 保留）；弹窗 710×1240；构建/真机/回包未验。见[换肤](handoffs/2026-10-26-club-player-settings-reskin.md)、[按钮](handoffs/2026-10-26-club-input-dialog-buttons.md)、[分页](handoffs/2026-10-26-club-downline-paging.md)、[直属](handoffs/2026-10-26-club-member-direct-scope.md)。
+- 钻石消费价格后台可配（配置未落库）；俱乐部成员只读、踢人未放权、`panelMain` 换肤，构建/真机未验。全文见[归档](archive/2026-10-29/current-2026-10.md)。
 
 ## 2026-09 客户端 UI 与后台时间口径（阶段归档）
 

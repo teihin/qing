@@ -83,8 +83,12 @@ export default class DrhLogicMgr extends cc.Component {
 
     private roomCountdown = new RoomCountdown();
     private roomClockLabel:cc.Label = null;
+    private roomClockNode:cc.Node = null;
     private roomClockSuspended = false;
     private roomClockConnected = true;
+    /** roomSetting 原文缓存，变了才重新判定是不是俱乐部房间。 */
+    private roomClockSettingRaw:string = null;
+    private roomClockIsClubRoom:boolean = false;
 
     public game_end_time = 1800; //房间剩余时间
 
@@ -120,8 +124,9 @@ export default class DrhLogicMgr extends cc.Component {
 
         this.self = this;
 
-        const clockNode = Tool.GetChild(this.node, "RoomFrame/info/游戏时间");
-        this.roomClockLabel = clockNode ? clockNode.getComponent(cc.Label) : null;
+        // 俱乐部房间不显示桌面「剩余时间」这一行，具体在 RefreshRoomCountdown 里按 roomSetting 判定。
+        this.roomClockNode = Tool.GetChild(this.node, "RoomFrame/info/游戏时间");
+        this.roomClockLabel = this.roomClockNode ? this.roomClockNode.getComponent(cc.Label) : null;
         KBEngine.Event.register("onDisconnected", this, "OnRoomClockDisconnected");
         KBEngine.Event.register("onReloginBaseappSuccessfully", this, "OnRoomClockReconnected");
         this.schedule(this.RefreshRoomCountdown, 0.2);
@@ -246,7 +251,35 @@ export default class DrhLogicMgr extends cc.Component {
             account.reqPlayerList();
     }
 
+    /**
+     * 当前是否俱乐部房间（roomSetting 里带非空 club_id）。
+     * 切房时 roomSetting 会换，这里按原文比对，变了才重新解析。
+     */
+    private IsRoomClockClubRoom():boolean {
+        const account = GameDataManager.getAccount();
+        const raw = account == null || account.roomSetting == null ? "" : String(account.roomSetting);
+        if (raw !== this.roomClockSettingRaw) {
+            this.roomClockSettingRaw = raw;
+            this.roomClockIsClubRoom = false;
+            try {
+                const setting = JSON.parse(raw);
+                const clubId = setting != null && setting.club_id != null ? String(setting.club_id).trim() : "";
+                this.roomClockIsClubRoom = clubId !== "" && clubId !== "0";
+            }
+            catch (error) {}
+        }
+        return this.roomClockIsClubRoom;
+    }
+
     private RefreshRoomCountdown():void {
+        if (this.roomClockNode == null || !cc.isValid(this.roomClockNode))
+            return;
+        // 俱乐部房间整行隐藏，也不刷新文本。
+        if (this.IsRoomClockClubRoom()) {
+            if (this.roomClockNode.active)
+                this.roomClockNode.active = false;
+            return;
+        }
         const seconds = this.GetRoomRemainingSeconds();
         if (this.roomClockLabel) {
             this.roomClockLabel.node.active = seconds !== null;
