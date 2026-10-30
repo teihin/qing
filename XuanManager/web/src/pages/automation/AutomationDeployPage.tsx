@@ -535,10 +535,12 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
   const groupPool = useMemo(() => {
     const counts = new Map<number, number>();
     for (const item of poolItems) {
-      if (item.groupId) counts.set(item.groupId, (counts.get(item.groupId) ?? 0) + 1);
+      // 未激活的账号投不进去，分组可投放数量只算已经登录过的。
+      if (item.groupId && item.activatedAt) counts.set(item.groupId, (counts.get(item.groupId) ?? 0) + 1);
     }
     return counts;
   }, [poolItems]);
+  const activatedFiltered = useMemo(() => filtered.filter((item) => Boolean(item.activatedAt)), [filtered]);
 
   const remaining = lookup && lookup.robotQuota > 0 ? Math.max(0, lookup.robotQuota - lookup.robotCount) : null;
   const selectedCount = tab === "robots" ? robotIds.length : groupIds.reduce((total, id) => total + (groupPool.get(id) ?? 0), 0);
@@ -610,20 +612,21 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
           </div>
           {pool === null ? <LoadingBlock label="正在读取可投放机器人" /> : filtered.length === 0 ? <EmptyState title="没有可投放的机器人" description="机器人池里没有启用且未投放的账号，请先到机器人管理里创建。" /> : <>
             <div className="automation-form-note automation-form-note--wide">
-              <label className="confirm-check"><input type="checkbox" checked={filtered.length > 0 && filtered.every((item) => robotIds.includes(item.id))} onChange={() => {
-                const all = filtered.every((item) => robotIds.includes(item.id));
-                setRobotIds(all ? robotIds.filter((id) => !filtered.some((item) => item.id === id)) : [...new Set([...robotIds, ...filtered.map((item) => item.id)])]);
-              }} /><span>全选当前筛选的 {filtered.length} 台</span></label>
+              <label className="confirm-check"><input type="checkbox" checked={activatedFiltered.length > 0 && activatedFiltered.every((item) => robotIds.includes(item.id))} onChange={() => {
+                const all = activatedFiltered.every((item) => robotIds.includes(item.id));
+                setRobotIds(all ? robotIds.filter((id) => !activatedFiltered.some((item) => item.id === id)) : [...new Set([...robotIds, ...activatedFiltered.map((item) => item.id)])]);
+              }} /><span>全选当前筛选的 {activatedFiltered.length} 台已激活账号</span></label>
+              {filtered.length > activatedFiltered.length && <small className="automation-inline-meta">另有 {filtered.length - activatedFiltered.length} 台未激活，等空闲 Worker 自动登录一次后才能投放。</small>}
             </div>
             <div className="table-wrap automation-picker-list">
               <table className="automation-table">
                 <thead><tr><th>选择</th><th>账号</th><th>分组</th><th>智力</th><th>状态</th></tr></thead>
-                <tbody>{filtered.map((robot) => <tr key={robot.id}>
-                  <td><input type="checkbox" checked={robotIds.includes(robot.id)} onChange={() => setRobotIds((current) => current.includes(robot.id) ? current.filter((id) => id !== robot.id) : [...current, robot.id])} aria-label={`选择 ${robot.account}`} /></td>
+                <tbody>{filtered.map((robot) => <tr key={robot.id} className={robot.activatedAt ? undefined : "automation-row-inactive"}>
+                  <td><input type="checkbox" disabled={!robot.activatedAt} checked={robotIds.includes(robot.id)} onChange={() => setRobotIds((current) => current.includes(robot.id) ? current.filter((id) => id !== robot.id) : [...current, robot.id])} aria-label={`选择 ${robot.account}`} /></td>
                   <td><strong>{robot.nickname || robot.account}</strong><small className="cell-subtitle">{robot.account} · {robot.terminalNo}</small></td>
                   <td>{robot.groupName || <span className="muted">未分组</span>}</td>
                   <td>{robot.intelligence > 0 ? robot.intelligence : "跟随分组"}</td>
-                  <td><AutomationBadge value={robot.status} /></td>
+                  <td><AutomationBadge value={robot.status} />{!robot.activatedAt && <small className="cell-subtitle automation-warn-text">未激活 · {robot.activationError || "等 Worker 登录一次"}</small>}</td>
                 </tr>)}</tbody>
               </table>
             </div>

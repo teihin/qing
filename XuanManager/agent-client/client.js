@@ -29,6 +29,8 @@ const cfg = {
   clubId: String(env('XUAN_CLUB_ID', '')).trim(),
   inviteCode: String(env('XUAN_INVITE_CODE', '')).trim(),
   joinStatus: env('XUAN_JOIN_STATUS', 'unassigned'),
+  // 只登录激活：后台给还没登录过的账号分的临时终端，登录成功就退出，不进房。
+  loginOnly: env('XUAN_LOGIN_ONLY', '0') === '1',
   buyinMultiple: Math.max(1, Math.min(10, Number(env('XUAN_BUYIN_MULTIPLE', '1')) || 1)),
   startPaused: env('XUAN_START_PAUSED', '0') === '1',
   host: env('XUAN_GAME_HOST', '154-37-155-17.nip.io'),
@@ -1688,6 +1690,13 @@ function onEvent(name, args) {
         nickname: state.nickname,
         gold: state.gold,
       });
+      if (cfg.loginOnly) {
+        // 玩家行由游戏服在首次登录时写入，多留几秒等它落库再退出。
+        clearTimers();
+        log('info', '只登录激活：登录成功，准备退出');
+        later(3000, () => shutdown('login-only'));
+        return;
+      }
       // 真机登录后会设置一次 gps 属性，后台据此判断账号位置。
       clearTimers();
       later(1500, () => reportGps(player() || account, true));

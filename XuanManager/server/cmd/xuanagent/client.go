@@ -174,13 +174,15 @@ type assignment struct {
 	Status         string          `json:"status"`
 	JoinStatus     string          `json:"joinStatus"`
 	Enabled        bool            `json:"enabled"`
-	Gps            string          `json:"gps"`
-	ProfitMode     string          `json:"profitMode"`
-	ProfitTarget   int64           `json:"profitTarget"`
-	PeriodStart    string          `json:"periodStart"`
-	PeriodEnd      string          `json:"periodEnd"`
-	TodayNet       int64           `json:"todayNet"`
-	PeriodNet      int64           `json:"periodNet"`
+	// 账号还没首次登录：这次终端只做登录激活，登录成功后客户端自己退出。
+	LoginOnly    bool   `json:"loginOnly"`
+	Gps          string `json:"gps"`
+	ProfitMode   string `json:"profitMode"`
+	ProfitTarget int64  `json:"profitTarget"`
+	PeriodStart  string `json:"periodStart"`
+	PeriodEnd    string `json:"periodEnd"`
+	TodayNet     int64  `json:"todayNet"`
+	PeriodNet    int64  `json:"periodNet"`
 }
 
 type heartbeatResponse struct {

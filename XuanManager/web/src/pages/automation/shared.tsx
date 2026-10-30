@@ -118,6 +118,9 @@ export interface AutomationRobotItem {
   inviteCode: string;
   joinStatus: string;
   joinedAt: string | null;
+  /** 首次真实登录（账号激活）时间；为空表示还没登录过，不能投放。 */
+  activatedAt: string | null;
+  activationError: string;
   groupProfitMode: string;
   groupProfitTarget: number;
   groupPeriodStart: string | null;

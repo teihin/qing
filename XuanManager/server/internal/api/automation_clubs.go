@@ -844,7 +844,7 @@ func (s *Server) performAutomationDeploy(r *http.Request, clubID string, robotID
 		if groupID <= 0 {
 			continue
 		}
-		rows, err := s.db.QueryContext(r.Context(), "SELECT id FROM mgr_automation_robot WHERE group_id = ? AND club_id = '' AND enabled = 1", groupID)
+		rows, err := s.db.QueryContext(r.Context(), "SELECT id FROM mgr_automation_robot WHERE group_id = ? AND club_id = '' AND enabled = 1 AND activated_at IS NOT NULL", groupID)
 		if err != nil {
 			return deployOutcome{}, &deployAPIError{http.StatusInternalServerError, "QUERY_ERROR", "读取分组机器人失败"}
 		}
@@ -870,19 +870,21 @@ func (s *Server) performAutomationDeploy(r *http.Request, clubID string, robotID
 	for _, id := range ids {
 		args = append(args, id)
 	}
-	rows, err := s.db.QueryContext(r.Context(), `SELECT id, terminal_no, club_id, room_id, enabled
+	rows, err := s.db.QueryContext(r.Context(), `SELECT id, terminal_no, club_id, room_id, enabled, activated_at
 FROM mgr_automation_robot WHERE id IN (`+placeholders(len(ids))+`)`, args...)
 	if err != nil {
 		return deployOutcome{}, &deployAPIError{http.StatusInternalServerError, "QUERY_ERROR", "读取机器人失败"}
 	}
 	defer rows.Close()
 	found := map[int64]bool{}
+	notActivated := []string{}
 	for rows.Next() {
 		var id int64
 		var terminalNo, robotClub string
 		var roomID sql.NullInt64
 		var enabled bool
-		if err := rows.Scan(&id, &terminalNo, &robotClub, &roomID, &enabled); err != nil {
+		var activatedAt sql.NullTime
+		if err := rows.Scan(&id, &terminalNo, &robotClub, &roomID, &enabled, &activatedAt); err != nil {
 			return deployOutcome{}, &deployAPIError{http.StatusInternalServerError, "QUERY_ERROR", "读取机器人失败"}
 		}
 		found[id] = true
@@ -895,6 +897,20 @@ FROM mgr_automation_robot WHERE id IN (`+placeholders(len(ids))+`)`, args...)
 		if roomID.Valid {
 			return deployOutcome{}, &deployAPIError{http.StatusConflict, "ROBOT_IN_ROOM", fmt.Sprintf("机器人 %s 正在房间中，不能投放", terminalNo)}
 		}
+		if !activatedAt.Valid {
+			notActivated = append(notActivated, terminalNo)
+		}
+	}
+	if len(notActivated) > 0 {
+		// 没登录过的账号在游戏库里还没有玩家行，投放入会必定回「玩家不存在」。
+		shown := notActivated
+		suffix := ""
+		if len(shown) > 5 {
+			shown = shown[:5]
+			suffix = fmt.Sprintf(" 等 %d 台", len(notActivated))
+		}
+		return deployOutcome{}, &deployAPIError{http.StatusConflict, "ROBOT_NOT_ACTIVATED",
+			fmt.Sprintf("账号还没完成首次登录激活（%s%s），等空闲 Worker 自动激活后再投放", strings.Join(shown, "、"), suffix)}
 	}
 	if len(found) != len(ids) {
 		return deployOutcome{}, &deployAPIError{http.StatusNotFound, "ROBOT_NOT_FOUND", "部分机器人不存在，请刷新后重试"}

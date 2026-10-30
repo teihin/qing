@@ -54,6 +54,8 @@ type automationRobotItem struct {
 	InviteCode        string     `json:"inviteCode"`
 	JoinStatus        string     `json:"joinStatus"`
 	JoinedAt          *time.Time `json:"joinedAt"`
+	ActivatedAt       *time.Time `json:"activatedAt"`
+	ActivationError   string     `json:"activationError"`
 	GroupProfitMode   string     `json:"groupProfitMode"`
 	GroupProfitTarget int64      `json:"groupProfitTarget"`
 	GroupPeriodStart  *time.Time `json:"groupPeriodStart"`
@@ -78,7 +80,7 @@ r.room_id, r.seat_no, r.buyin, r.buyin_multiple, r.room_pi,
 r.gps, r.public_ip, r.ip_seen_at,
 r.intelligence, COALESCE(g.default_intelligence, 0), r.profit_mode, r.profit_target,
 r.period_start, r.period_end, r.period_net, r.profit_schedule, r.schedule_state, r.window_net,
-r.enabled, r.invite_code, r.join_status, r.joined_at,
+r.enabled, r.invite_code, r.join_status, r.joined_at, r.activated_at, r.activation_error,
 COALESCE(g.profit_mode, ''), COALESCE(g.profit_target, 0), g.period_start, g.period_end,
 r.balance, r.today_rounds, r.today_net,
 r.last_heartbeat, r.last_error, r.risk_flag, r.is_demo, r.updated_at,
@@ -92,7 +94,7 @@ LEFT JOIN mgr_automation_worker w ON w.id = r.worker_id`
 func scanAutomationRobot(row rowScanner) (automationRobotItem, error) {
 	var item automationRobotItem
 	var groupID, strategyID, workerID, roomID sql.NullInt64
-	var heartbeat, joinedAt, periodStart, periodEnd, groupPeriodStart, groupPeriodEnd sql.NullTime
+	var heartbeat, joinedAt, activatedAt, periodStart, periodEnd, groupPeriodStart, groupPeriodEnd sql.NullTime
 	var riskFlag, isDemo, enabled, passwordSet int
 	var passwordUpdatedAt, ipSeenAt sql.NullTime
 	err := row.Scan(&item.ID, &item.TerminalNo, &item.Account, &item.Nickname, &item.Avatar, &item.ClubID, &item.ClubName,
@@ -102,7 +104,7 @@ func scanAutomationRobot(row rowScanner) (automationRobotItem, error) {
 		&item.Gps, &item.PublicIP, &ipSeenAt,
 		&item.Intelligence, &item.GroupIntelligence, &item.ProfitMode, &item.ProfitTarget,
 		&periodStart, &periodEnd, &item.PeriodNet, &item.ProfitSchedule, &item.ScheduleState, &item.WindowNet,
-		&enabled, &item.InviteCode, &item.JoinStatus, &joinedAt,
+		&enabled, &item.InviteCode, &item.JoinStatus, &joinedAt, &activatedAt, &item.ActivationError,
 		&item.GroupProfitMode, &item.GroupProfitTarget, &groupPeriodStart, &groupPeriodEnd,
 		&item.Balance, &item.TodayRounds, &item.TodayNet,
 		&heartbeat, &item.LastError, &riskFlag, &isDemo, &item.UpdatedAt,
@@ -121,6 +123,10 @@ func scanAutomationRobot(row rowScanner) (automationRobotItem, error) {
 	if joinedAt.Valid {
 		value := joinedAt.Time
 		item.JoinedAt = &value
+	}
+	if activatedAt.Valid {
+		value := activatedAt.Time
+		item.ActivatedAt = &value
 	}
 	if groupPeriodStart.Valid {
 		value := groupPeriodStart.Time
@@ -979,7 +985,7 @@ var (
 
 func validRobotAction(action string) bool {
 	switch action {
-	case "start", "pause", "drain", "stop", "restart", "enable", "disable", "release":
+	case "start", "pause", "drain", "stop", "restart", "enable", "disable", "release", "activate":
 		return true
 	}
 	return false
@@ -993,7 +999,7 @@ func (s *Server) performAutomationRobotAction(r *http.Request, id int64, action 
 	if err != nil {
 		return message, err
 	}
-	if workerID > 0 {
+	if workerID > 0 && action != "activate" {
 		s.enqueueRobotActionCommand(r.Context(), workerID, id, action)
 		// 撤回投放会把账号从节点上摘下来，日志里要留一条「退出账号」。
 		if action == "release" {
@@ -1013,12 +1019,23 @@ func (s *Server) performAutomationRobotAction(r *http.Request, id int64, action 
 func (s *Server) performAutomationRobotActionDirect(r *http.Request, id int64, action string) (string, error) {
 	var status, joinStatus, scheduleState string
 	var roomID sql.NullInt64
+	var activatedAt sql.NullTime
 	var enabled bool
-	if err := s.db.QueryRowContext(r.Context(), "SELECT status, room_id, enabled, join_status, COALESCE(schedule_state, '') FROM mgr_automation_robot WHERE id = ?", id).
-		Scan(&status, &roomID, &enabled, &joinStatus, &scheduleState); err != nil {
+	if err := s.db.QueryRowContext(r.Context(), "SELECT status, room_id, enabled, join_status, COALESCE(schedule_state, ''), activated_at FROM mgr_automation_robot WHERE id = ?", id).
+		Scan(&status, &roomID, &enabled, &joinStatus, &scheduleState, &activatedAt); err != nil {
 		return "", err
 	}
 	switch action {
+	case "activate":
+		if activatedAt.Valid {
+			return "账号已经激活过，不需要再登录", nil
+		}
+		if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_robot
+SET activation_attempts = 0, activation_attempted_at = NULL, activation_error = '', last_error = ''
+WHERE id = ? AND activated_at IS NULL`, id); err != nil {
+			return "", err
+		}
+		return "已重新排队激活，节点空闲时会自动登录一次", nil
 	case "release":
 		if joinStatus == "" || joinStatus == "unassigned" {
 			return "机器人当前未投放", nil

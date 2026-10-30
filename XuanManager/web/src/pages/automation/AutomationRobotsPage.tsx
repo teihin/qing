@@ -110,6 +110,7 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
   const [detailId, setDetailId] = useState<number | null>(null);
   const [detailTab, setDetailTab] = useState("overview");
   const [togglingId, setTogglingId] = useState<number | null>(null);
+  const [activatingId, setActivatingId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<AutomationRobotItem | null>(null);
   const [deleting, setDeleting] = useState<AutomationRobotItem | null>(null);
@@ -176,6 +177,22 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
       notify(reason instanceof ApiError ? reason.message : "操作机器人失败", "error");
     } finally {
       setTogglingId(null);
+    }
+  };
+
+  const activateRobot = async (robot: AutomationRobotItem) => {
+    setActivatingId(robot.id); setError("");
+    try {
+      const result = await api<{ message: string }>(`/api/automation/robots/${robot.id}/action`, {
+        method: "POST",
+        ...jsonBody({ action: "activate" }),
+      });
+      notify(result.message);
+      await load(page, pageSize, true);
+    } catch (reason) {
+      notify(reason instanceof ApiError ? reason.message : "排队激活失败", "error");
+    } finally {
+      setActivatingId(null);
     }
   };
 
@@ -264,18 +281,19 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
               <th>机器人</th><th>俱乐部 / 分组</th><th>智力</th><th>加入状态</th><th>状态 / 启用</th><th>房间 / 今日</th><th>心跳</th><th>操作</th>
             </tr></thead>
             <tbody>
-              {pageItems.map((robot) => <tr key={robot.id} className={robot.riskFlag ? "is-risk" : ""}>
+              {pageItems.map((robot) => <tr key={robot.id} className={[robot.riskFlag ? "is-risk" : "", robot.activatedAt ? "" : "automation-row-inactive"].filter(Boolean).join(" ")}>
                 {canOperate && <td className="automation-select-cell"><input type="checkbox" checked={selectedIds.includes(robot.id)} onChange={() => toggleSelect(robot.id)} aria-label={`选择 ${robot.account}`} /></td>}
                 <td><div className="robot-name-cell"><span className="robot-avatar-chip">{robot.avatar}</span><div><button type="button" className="link-button" onClick={() => openDetail(robot)}>{robot.nickname || robot.account}</button><small className="cell-subtitle">{robot.account} · {robot.terminalNo}</small></div></div></td>
                 <td>{robot.clubName || robot.clubId}<small className="cell-subtitle">{robot.groupName || "未分组"}</small></td>
                 <td>{effectiveIntelligence(robot)}<small className="cell-subtitle">{robot.intelligence > 0 ? "单独设置" : "跟随分组"}</small></td>
                 <td><AutomationBadge value={robot.joinStatus} /><small className="cell-subtitle">邀请码 {robot.inviteCode || "—"}</small></td>
-                <td><AutomationBadge value={robot.status} /> <AutomationBadge value={robot.enabled ? "enabled" : "disabled"} />{robot.riskFlag && <small className="automation-risk-text">风控标记</small>}</td>
+                <td><AutomationBadge value={robot.status} /> <AutomationBadge value={robot.enabled ? "enabled" : "disabled"} />{!robot.activatedAt && <AutomationBadge value="pending" label="未激活" />}{robot.riskFlag && <small className="automation-risk-text">风控标记</small>}{!robot.activatedAt && <small className="cell-subtitle automation-warn-text">{robot.activationError || "账号还没登录过，等空闲 Worker 自动激活"}</small>}</td>
                 <td>{robot.roomId ?? "—"}<small className="cell-subtitle">{robot.seatNo > 0 ? `${robot.seatNo} 号座` : "未入座"} · {robot.todayRounds} 局 / {formatSigned(robot.todayNet)}</small></td>
                 <td>{timeText(robot.lastHeartbeat)}{robot.lastError && <small className="cell-subtitle automation-warn-text">{robot.lastError}</small>}</td>
                 <td><div className="row-actions">
                   <button type="button" onClick={() => openDetail(robot)}>{runningStatuses.includes(robot.status) ? "牌局" : "详情"}</button>
                   {canUpdate && <button type="button" onClick={() => setEditing(robot)}>编辑</button>}
+                  {canOperate && robot.enabled && !robot.activatedAt && <button type="button" disabled={activatingId === robot.id} onClick={() => void activateRobot(robot)}>{activatingId === robot.id ? "排队中…" : "激活"}</button>}
                   {canOperate && <RobotQuickToggle robot={robot} busy={togglingId === robot.id} onToggle={() => void toggleRobot(robot)} />}
                   {canDelete && <button type="button" className="is-danger" onClick={() => setDeleting(robot)}>删除</button>}
                 </div></td>
@@ -361,6 +379,7 @@ function RobotDetailModal({ robotId, initialTab, canOperate, notify, onClose, on
 
       {canOperate && <div className="automation-detail-actions">
         <Button variant={robot.enabled ? "secondary" : "primary"} disabled={Boolean(busy) || (!robot.enabled && robot.joinStatus !== "joined") || (robot.enabled && robot.roomId !== null)} onClick={() => void act(robot.enabled ? "disable" : "enable")}>{robot.enabled ? "停用" : "启用"}</Button>
+        {robot.enabled && !robot.activatedAt && <Button variant="secondary" disabled={Boolean(busy)} onClick={() => void act("activate")}>{busy === "activate" ? "排队中…" : "激活账号"}</Button>}
         {availableActions(robot).map((action) => <Button key={action} variant={action === "stop" ? "danger" : action === "drain" ? "secondary" : "primary"} disabled={Boolean(busy)} onClick={() => void act(action)}>{busy === action ? "执行中…" : actionLabels[action]}</Button>)}
       </div>}
 
@@ -383,6 +402,7 @@ function RobotDetailModal({ robotId, initialTab, canOperate, notify, onClose, on
           <div><dt>分组</dt><dd>{robot.groupName || "未分组"}</dd></div>
           <div><dt>加入状态</dt><dd>{statusLabel(robot.joinStatus)} · {robot.inviteCode || "—"}</dd></div>
           <div><dt>加入时间</dt><dd>{timeText(robot.joinedAt)}</dd></div>
+          <div><dt>账号激活</dt><dd className={robot.activatedAt ? "" : "automation-warn-text"}>{robot.activatedAt ? timeText(robot.activatedAt) : robot.activationError || "未激活，等空闲 Worker 自动登录一次"}</dd></div>
           <div><dt>智力</dt><dd>{effectiveIntelligence(robot)}（{robot.intelligence > 0 ? "单独设置" : "跟随分组"}）</dd></div>
           <div><dt>周期净分</dt><dd className={robot.periodNet < 0 ? "automation-warn-text" : ""}>{formatSigned(robot.periodNet)}</dd></div>
           <div><dt>默认带入</dt><dd>{robot.buyinMultiple} 倍房间最低带入</dd></div>

@@ -1,6 +1,6 @@
 # 自动化后台（XuanManager「自动化」分组）专题
 
-更新时间：2026-10-27。本文只记录**当前口径、代码位置、验证状态与待办**；细节过程见
+更新时间：2026-10-30。本文只记录**当前口径、代码位置、验证状态与待办**；细节过程见
 [自动化后台交接](../handoffs/2026-10-27-automation-console.md)。
 
 ## 1. 当前业务口径（用户最终确认，优先级最高）
@@ -10,9 +10,9 @@
    密码只写 MD5，后台不回显、不进日志与审计。
    **建号只写营销表（占号）**：玩家行 `kbedm.tbl_Account` 由游戏服在**首次登录**时创建，并把
    `player_guuid` 回填到营销表。所以「玩家管理」（读 `tbl_Account`）要等机器人**登录过一次**才看得到它。
-   由此有个顺序依赖：**投放时 `添加_俱乐部_玩家` 对没登录过的账号会回「玩家不存在」**，
-   正确顺序是「建号 → 机器人登录一次 → 再投放」。2026-10-27 用户明确选择保持这个链路，
-   不做后台预插 `tbl_Account`（加过一版预建代码，已按此决定回滚）。
+   由此有个顺序依赖：**投放时 `添加_俱乐部_玩家` 对没登录过的账号会回「玩家不存在」**。2026-10-30 起不再靠人工登录：
+   有空闲 Worker 时后台自动排一次只登录的激活会话，玩家行落库后才允许投放（见第 9 节）。
+   仍不做后台预插 `tbl_Account`（2026-10-27 的决定不变）。
 2. **投放与账号分离**。投放管理只做「把池里的机器人放进某个俱乐部」，可以单个/多选，也可以按分组批量；
    投放时不输入账号。撤回（`release`）后账号回池，配置和历史保留。
 3. **俱乐部维度配置**：投放数量（`robot_quota`）、每房最多机器人（`max_per_room`）、
@@ -93,12 +93,9 @@
 ## 3.1 邀请码是怎么"找"俱乐部的（2026-10-27 已改为游戏库真实码）
 
 **口径：投放时输的是「游戏里显示的俱乐部邀请码」，不是俱乐部 ID。** `lookup` 与 `POST /deploy`
-都走 `resolveDeployClub`：6 位码 → `gameClubByInviteCode` 查 `club_invite_code_info`（码状态
-`init/used/disabled`）+ `club_guuid_info`（`club_status`）→ 查不到回退后台
-`mgr_automation_club.invite_code` → 命中后 `ensureAutomationClub` upsert 俱乐部并读配额算 `remaining`。
-一个俱乐部可有多条码（每代理一条），`mgr_automation_club.invite_code` 记最近一次投放用的码，
-机器人各自 `invite_code` 保留自己那条。完整 SQL 与实测映射见
-[自动化后台交接](../handoffs/2026-10-27-automation-console.md)。
+都走 `resolveDeployClub`：6 位码先查 `club_invite_code_info` + `club_guuid_info`，查不到回退
+`mgr_automation_club.invite_code`，命中后 `ensureAutomationClub` upsert 并算 `remaining`。
+一个俱乐部可有多条码（每代理一条），完整 SQL 见[自动化后台交接](../handoffs/2026-10-27-automation-console.md)。
 
 ## 4. 参考项目：老自动化客户端（只读参考）
 
@@ -107,16 +104,14 @@
 
 ## 5. 当前状态（细节见 CURRENT 与交接）
 
-- 代码已完成：13 个页面与接口、真实开户、俱乐部维度投放（邀请码定位 + 自动入会 + 失败重试）、分组全局化、
-  机器人批量操作（影响面预检、>10 台转审批）、自动分配 Worker + 等待可视化、只进底皮（`room_pi` + `XUAN_ROOM_PI`）、
-  三处入口的单台运行日志、策略管理与运行期下发。
-- 验证口径：静态检查（`go build/vet/gofmt`、`tsc/eslint/vite build`）与 mock 预览（9911 + 7458，**非真实后端**）已过；
-  **真实登录后的页面、真实入会链路（`pending→joined/failed`）、真机进房、策略端到端均未验**。
-- 发布口径：**030–038 已执行，039 未执行**；2026-10-29 前后端多轮已部署，**工作树未提交**。
-  回滚点为服务器 `web.previous-*` / `bin/xuanmanager.previous-*` 与 `backups/*.sql.gz`；剩余问题见[清单](../handoffs/2026-10-28-open-issues-backlog.md)。
-- 数据：演示数据（`is_demo=1`）2026-10-27 清空，2026-10-29 又清了一次自动化测试数据；页面为空属正常，
-  造数据走「机器人管理 → 批量创建」再「投放管理 → 输邀请码」，新建都是 `is_demo=0`。
-- 待确认（未清理）：游戏库 `kbedm.third_marketing_info` 里 9 个手工测试账号（id 30–38）——后台无删号接口，需授权再动。
+- 已实现：页面/接口、真实开户、俱乐部维度投放（邀请码定位 + 自动入会 + 失败重试）、分组全局化、批量操作、
+  Worker 自动分配、只进底皮、三处单台运行日志、策略管理与运行期下发。
+- 验证：静态检查与 mock 预览（9911 + 7458，**非真实后端**）已过；**真实登录页面、真实入会链路
+  （`pending→joined/failed`）、真机进房、策略端到端未验**。
+- 发布：**030–039 已执行，040 未执行**；2026-10-29 前后端已部署，**工作树未提交**。回滚点为 `web.previous-*` /
+  `bin/xuanmanager.previous-*` 与 `backups/*.sql.gz`；剩余问题见[清单](../handoffs/2026-10-28-open-issues-backlog.md)。
+- 数据：演示数据已清空，页面为空属正常；造数据走「机器人管理 → 批量创建」再「投放管理 → 输邀请码」，新建 `is_demo=0`。
+- 待确认（未清理）：游戏库 `kbedm.third_marketing_info` 里 9 个手工测试账号（id 30–38），后台无删号接口，需授权再动。
 
 ## 6. 待办
 
@@ -130,36 +125,40 @@
 时序、在线判定、命令状态机、事件收敛、janitor、`xuanagent` 启动参数与已验证/未验证，全部以
 [Worker 通道专题](automation-worker-channel.md) 为准（本页不复制）。
 
-## 8. 周计划（按周时段，2026-10-29 未验证）
+## 8. 周计划（按周时段，2026-10-29 已上线）
 
-- **口径（用户确认）**：周一到周日分别勾选，**每天可多段**；**允许跨零点**（22:00–02:00 算在开始那天）；
-  **每个时段单独累计净分**；**时段外让出机器人、不占 Worker，但手里最后一局要打完**。
-- 落库：`profit_mode='schedule'` + `profit_schedule`（`[{"weekday":1,"start":"12:00","end":"18:00"}]`，
-  weekday 1=周一…7=周日，最多 28 段）；`schedule_window` 是当前时段键，`window_net` 是本时段净分，
-  `schedule_state='released'` 表示已让出 Worker。
-- 引擎：`automation_schedule.go`。`SweepAutomationSchedules` 每 5 秒跟着 janitor **先于分配**跑：
-  时段内换键清零 `window_net` 并解除挂牌；时段外先置 `desired_status='draining'`，离房后
-  `worker_id=NULL` + `released`；三处分配/等待统计均排除 `released`。所有时间按 `automationPeriodLocation`（东八区）。
-- 下发：指派 SQL 对 `schedule` 模式把 `window_net` 当 `todayNet` 发给客户端；`GameSettled` 同时累加
-  `window_net`。节点 `terminal.go` 把 `draining` 映射为 stdin `drain`；`client.js` 收到后打完当前局再
-  `shutdown`（没在局里立即退出）。
-- 界面：投放「输赢目标周期」新增「按周时段（周一到周日）」，周一~周日勾选 + 每段 `time` 输入，
-  跨零点标「次日」；机器人配置弹窗同样可改并显示本时段净分/让出状态；投放列表机器人行显示时段摘要。
-- 验证：`go vet`/`go build`、`tsc -b`/eslint/`vite build` 通过；跨零点与星期归属用临时 Go 测试验证后删除。
-  **后端（迁移 039 已执行）与前端已上线；页面交互、Worker 排空链路未实测**。见[交接](../handoffs/2026-10-29-profit-weekly-schedule.md)。
+- 口径：周一~周日分别勾选、每天可多段（≤28）；允许跨零点（22:00–02:00 算开始那天）；每个时段单独累计净分；
+  时段外让出机器人，但手里最后一局要打完。
+- 落库：`profit_mode='schedule'` + `profit_schedule`（`[{"weekday":1,"start":"12:00","end":"18:00"}]`，1=周一）；
+  `schedule_window` 当前时段键、`window_net` 本时段净分、`schedule_state='released'` 表示已让出。
+- 引擎：`automation_schedule.go` 每 5 秒先于分配跑；时段外先 `draining`，离房后 `worker_id=NULL` + `released`；
+  三处分配/等待统计排除 `released`；时间按东八区。
+- 下发：指派对 `schedule` 把 `window_net` 当 `todayNet`，`GameSettled` 同时累加 `window_net`；
+  节点把 `draining` 映射为 stdin `drain`，客户端打完当前局再 `shutdown`。
+- 界面：投放与机器人配置的「输赢目标周期」新增按周时段（跨零点标「次日」），列表显示时段摘要。
+- 验证：静态检查通过；**页面交互、Worker 排空链路未实测**。见[交接](../handoffs/2026-10-29-profit-weekly-schedule.md)。
 
 ## 策略与机器人收尾（2026-10-29，已部署 v6）
 
-**策略**只描述怎么跑、怎么打；**投放**负责选机器人、绑策略、底皮、输赢目标（投放必选策略与输赢）。
-优先级：已发布（`gray`/`enabled`）> 机器人列 > 分组默认，**草稿不下发**；链路：策略 JSON → 心跳
-`assignments.strategyConfig` → `XUAN_STRATEGY` / stdin `config.strategy` → `applyStrategyOverrides` + `mergeTuning`。
+- **策略**只描述怎么跑、怎么打；**投放**负责选机器人、绑策略、底皮、输赢目标。优先级：已发布（`gray`/`enabled`）
+  > 机器人列 > 分组默认，草稿不下发；链路 策略 JSON → 心跳 `assignments.strategyConfig` → `XUAN_STRATEGY` / stdin。
+- **机器人**：创建弹窗删掉智力/倍数/参与调度；分组可内联新建；密码 AES-256-GCM 密文（`v1:`）落库、心跳解密下发，
+  游戏库仍只存 MD5；`XUAN_CREDENTIAL_KEY` 丢失即不可解，换钥用 `bin/xuanresea`。见[密码交接](../handoffs/2026-10-29-robot-password-sealed.md)。
+- **控制台**：侧边栏可折叠（`localStorage["xuan.nav.collapsed.v2"]`）。部署表与 git 状态见
+  [策略交接](../handoffs/2026-10-29-automation-strategy-runtime.md)、[收尾交接](../handoffs/2026-10-29-automation-robots-and-console.md)
+  （分支 `codex/club-ui`，**全部未提交**）。
 
-**机器人**：创建弹窗删掉「智力」「默认带入倍数」「添加后参与调度」；分组下拉旁可**内联新建自动化组**
-（建完自动选中）；登录密码存 **AES-256-GCM 密文**（`v1:` 前缀），心跳时后端解密下发，游戏库仍只存 MD5。
-密钥 `XUAN_CREDENTIAL_KEY`（缺省回落 DB 密码 = 没加密）；丢失即全部不可解，换钥用 `bin/xuanresea` 重封。详见[密码密文交接](../handoffs/2026-10-29-robot-password-sealed.md)。
+## 9. 账号首次登录激活（2026-10-30，已部署）
 
-**控制台**：侧边栏一级菜单可折叠（状态存 `localStorage["xuan.nav.collapsed.v2"]`，默认折叠）。
-细节、部署表与 git 状态见[策略交接](../handoffs/2026-10-29-automation-strategy-runtime.md)与
-[收尾交接](../handoffs/2026-10-29-automation-robots-and-console.md)。
-- 部署与 git 状态（分支 `codex/club-ui`，**全部未提交**）见
-  [收尾交接](../handoffs/2026-10-29-automation-robots-and-console.md)。
+- 迁移 `040_automation_account_activation.sql`：`activated_at`（NULL = 未激活）、`activation_error`、
+  `activation_attempts`、`activation_attempted_at`；实现集中在 `automation_activation.go`。
+- 巡检每 5 秒先按 `kbedm.kbe_accountinfos.accountName = account` 补标（人工真机登录也算），
+  再把 `worker_id IS NULL AND enabled=1 AND activated_at IS NULL` 的账号排给有空位的在线 Worker；
+  60 秒冷却、最多 10 次，排在正常分配之后，只填空余容量。
+- 会话只做登录：指派带 `loginOnly` → 节点注入 `XUAN_LOGIN_ONLY=1` → 客户端 `LoginSucceeded` 后 3 秒退出。
+  后端 6 次 × 2 秒回查游戏库，确认建号才写 `activated_at`、收回节点，并对已绑俱乐部的机器人自动重试入会。
+- 失败走 `failAutomationActivation`：记原因、让出节点、次数 +1；机器人管理的「激活」动作只重置计数。
+- 投放门禁：未激活行不可勾选；`POST /deploy` 逐个校验，回 `409 ROBOT_NOT_ACTIVATED`（列出最多 5 台终端号）；
+  分组展开只取已激活账号。列表/详情返回 `activatedAt` / `activationError`。
+- 部署：静态检查通过；后端 `0c602dbd…`（PID 15511）、前端 `index-BgH2Ot-G.js`，迁移 040 已执行。
+  **真实激活未演练**（唯一 Worker 离线，待启动）。见[交接](../handoffs/2026-10-30-account-activation.md)。

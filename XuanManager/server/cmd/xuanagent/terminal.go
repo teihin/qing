@@ -57,6 +57,8 @@ type terminal struct {
 	buyinMultiple int
 	roomPi        string
 	intelligence  int
+	// 只登录激活：拉起客户端后等它登录成功就退出，不进俱乐部房间。
+	loginOnly bool
 
 	// 真机身份与输赢目标：随心跳刷新，变化时经 stdin 推给运行中的客户端。
 	gps          string
@@ -99,6 +101,13 @@ func (t *terminal) getState() terminalState {
 
 func (t *terminal) describe() string {
 	return fmt.Sprintf("%s(robot=%d)", t.no, t.robotID)
+}
+
+// loginOnlyMode 读取当前终端的激活模式；后台心跳里 loginOnly 会随指派刷新。
+func (t *terminal) loginOnlyMode() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.loginOnly
 }
 
 // writeControl 向真实客户端进程发控制命令；模拟终端没有 stdin，直接忽略。
@@ -177,6 +186,13 @@ func (a *agent) runTerminal(t *terminal) {
 					return
 				}
 				loggedIn = true
+				if t.loginOnlyMode() {
+					// 只做激活的终端：登录成功就算完成，不再进房。
+					a.logout(t, "login-only")
+					a.emit(t, "TerminalStopped", map[string]any{"reason": "login-only"})
+					t.setState(termStopped)
+					return
+				}
 				continue
 			}
 			if !joined {
@@ -222,6 +238,7 @@ func (a *agent) runRealTerminal(t *terminal) {
 	gps, profitMode, profitTarget := t.gps, t.profitMode, t.profitTarget
 	periodStart, periodEnd, todayNet, periodNet := t.periodStart, t.periodEnd, t.todayNet, t.periodNet
 	strategy := t.strategy
+	loginOnly := t.loginOnly
 	paused := t.state == termPaused
 	t.mu.Unlock()
 	if strings.TrimSpace(account) == "" || strings.TrimSpace(password) == "" {
@@ -264,6 +281,9 @@ func (a *agent) runRealTerminal(t *terminal) {
 	)
 	if paused {
 		env = append(env, "XUAN_START_PAUSED=1")
+	}
+	if loginOnly {
+		env = append(env, "XUAN_LOGIN_ONLY=1")
 	}
 	if a.cfg.gameHost != "" {
 		env = append(env, "XUAN_GAME_HOST="+a.cfg.gameHost)
@@ -543,6 +563,7 @@ func (a *agent) ensureTerminal(item assignment) {
 	t.inviteCode = item.InviteCode
 	t.joinStatus = item.JoinStatus
 	t.intelligence = item.Intelligence
+	t.loginOnly = item.LoginOnly
 	// 绑定策略：原文直接下发，具体字段由客户端解析；内容变了才推一次热更新。
 	nextStrategy := strings.TrimSpace(string(item.StrategyConfig))
 	// 身份与输赢目标跟着心跳走：客户端在跑时用控制行热更新，不重启进程（重启会离桌）。

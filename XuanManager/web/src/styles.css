@@ -2024,6 +2024,9 @@ td strong { color: #294149; }
 .automation-checkbox-cell input { width: 16px; height: 16px; accent-color: #128e84; }
 .automation-table tr.is-risk { background: #fffafa; }
 .automation-table tr.is-risk:hover { background: #fff5f6; }
+.automation-table tr.automation-row-inactive td { color: #8b9a9a; background: #fbfaf6; }
+.automation-table tr.automation-row-inactive td:last-child { background: #fbfaf6; }
+.automation-table tr.automation-row-inactive:hover td, .automation-table tr.automation-row-inactive:hover td:last-child { background: #f6f3ea; }
 
 .automation-batch-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 11px 18px; border-bottom: 1px solid #d5ece7; color: #3c625e; background: #eff9f7; font-size: 13px; }
 .automation-batch-bar strong { color: #0b7068; }

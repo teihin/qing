@@ -349,6 +349,10 @@ WHERE worker_id = ? AND status = 'PENDING'`, agent.WorkerID).Scan(&pending)
 				s.logger.Info("worker auto assigned robots on heartbeat", "workerId", agent.WorkerID, "assigned", assigned)
 			}
 		}
+		// 还有空位就补一次激活：新账号要在投放前完成首次登录。
+		if assigned := assignActivationRobotsToWorker(r.Context(), s.db, s.logger, agent.WorkerID); assigned > 0 {
+			s.logger.Info("worker auto assigned activation robots on heartbeat", "workerId", agent.WorkerID, "assigned", assigned)
+		}
 	}
 	s.resetRobotNetPeriods(r.Context())
 	assignments, err := s.queryAgentAssignments(r.Context(), agent.WorkerID)
@@ -432,6 +436,8 @@ type agentAssignment struct {
 	Status         string          `json:"status"`
 	JoinStatus     string          `json:"joinStatus"`
 	Enabled        bool            `json:"enabled"`
+	// 账号还没首次登录：这个终端只做登录激活，登录成功后客户端自己退出。
+	LoginOnly bool `json:"loginOnly"`
 	// 真机身份：GPS 由客户端登录后上报；输赢目标与当前净分决定这一局该赢还是该输。
 	Gps          string     `json:"gps"`
 	ProfitMode   string     `json:"profitMode"`
@@ -470,6 +476,7 @@ COALESCE(r.period_start, g.period_start), COALESCE(r.period_end, g.period_end),
 -- 周计划按「本时段净分」控输赢；其它模式还是今日净分。
 CASE WHEN r.profit_mode = 'schedule' THEN r.window_net ELSE r.today_net END,
 r.period_net,
+r.activated_at IS NULL,
 CASE WHEN st.status IN ('gray', 'enabled') THEN COALESCE(st.config_json, '') ELSE '' END
 FROM mgr_automation_robot r
 LEFT JOIN mgr_automation_group g ON g.id = r.group_id
@@ -487,15 +494,17 @@ WHERE r.worker_id = ? ORDER BY r.id LIMIT 200`, workerID)
 		var enabledRaw int
 		var sealedPassword string
 		var strategyConfigRaw string
+		var loginOnlyRaw int
 		var periodStart, periodEnd sql.NullTime
 		if err := rows.Scan(&item.RobotID, &item.TerminalNo, &item.Account, &sealedPassword, &item.Nickname,
 			&item.ClubID, &item.InviteCode, &item.GroupName, &item.StrategyName,
 			&item.BuyinMultiple, &item.RoomPi, &item.Gps, &item.Intelligence, &item.DesiredStatus, &item.Status, &item.JoinStatus, &enabledRaw,
 			&item.ProfitMode, &item.ProfitTarget, &periodStart, &periodEnd, &item.TodayNet, &item.PeriodNet,
-			&strategyConfigRaw); err != nil {
+			&loginOnlyRaw, &strategyConfigRaw); err != nil {
 			return nil, err
 		}
 		applyStrategyConfig(&item, strategyConfigRaw)
+		item.LoginOnly = loginOnlyRaw == 1
 		item.Enabled = enabledRaw == 1
 		if periodStart.Valid {
 			value := periodStart.Time
@@ -883,9 +892,21 @@ SET status = 'entering', last_error = '', last_heartbeat = NOW() WHERE id = ?`, 
 				}
 			}
 		}
+		if s.automationRobotNeedsActivation(ctx, robotID) {
+			// 只登录的激活会话失败：记原因、让出节点，冷却后由巡检自动重试。
+			s.failAutomationActivation(ctx, robotID, message)
+			return
+		}
 		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
 SET status = 'faulted', last_error = ?, last_heartbeat = NOW() WHERE id = ?`, clipText(message, 255), robotID)
 	case "LoginSucceeded":
+		if s.automationRobotNeedsActivation(ctx, robotID) {
+			// 激活会话：先别让节点按 desired_status 重新拉起，等回查游戏库确认建号。
+			_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
+SET status = 'idle', desired_status = 'stopped', last_error = '', last_heartbeat = NOW() WHERE id = ?`, robotID)
+			go s.verifyAutomationActivation(robotID)
+			return
+		}
 		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
 SET status = 'idle', last_error = '', last_heartbeat = NOW() WHERE id = ?`, robotID)
 	case "Waiting":
@@ -1123,6 +1144,8 @@ WHERE status = 'DELIVERED' AND attempts >= 3 AND delivered_at < DATE_SUB(NOW(), 
 	if assigned := assignWaitingRobots(ctx, db, logger); assigned > 0 {
 		logger.Info("worker janitor assigned waiting robots", "assigned", assigned)
 	}
+	// 剩下的容量给「还没登录过」的账号做激活登录；排在正常分配之后，不抢正在跑的机器人。
+	sweepAutomationActivations(ctx, db, logger)
 }
 
 // robotActionCommands 把后台的终端动作映射成节点命令（固定枚举，不给「任意命令」的口子）。
