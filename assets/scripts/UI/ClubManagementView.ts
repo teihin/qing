@@ -6,10 +6,10 @@ export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications";
 export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" | "promote" |
     "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent";
-export interface ClubContext { accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; }
+export interface ClubContext { accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; isLeader?:boolean; }
 export interface ClubPlayer {
     id:string; name:string; role?:string; balance?:string;
-    clubGold?:string; isAgent?:boolean; agentPercent?:string; status?:string;
+    clubGold?:string; isAgent?:boolean; isLeader?:boolean; agentPercent?:string; status?:string;
     remark?:string;
     /** NumberList statistics are populated by the updated server response. */
     teamCount?:string; points?:string; online?:boolean;
@@ -52,7 +52,8 @@ export default class ClubManagementView {
     /** 与 Prefab 中「玩家设置下级列表」一屏可放的行数一致。 */
     private readonly downlinePageSize:number = 4;
 
-    constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,private gift:(player:ClubPlayer)=>void = null) {
+    constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,
+        private gift:(player:ClubPlayer)=>void = null,private notify:()=>void = null) {
         this.raisePopups();
     }
 
@@ -87,8 +88,11 @@ export default class ClubManagementView {
 
     /** Server push integration point; never clear badges merely because the list was opened. */
     public SetPendingCount(clubId:string,count:number):void {
-        this.Refresh();
-        this.counts[clubId] = Math.max(0,Math.floor(Number(count) || 0));
+        const next = Math.max(0,Math.floor(Number(count) || 0));
+        const previous = this.counts[clubId] || 0;
+        this.counts[clubId] = next;
+        // 待审数增加（新申请来了，红点亮起）时提示一声；数量不变或减少不打扰。
+        if(next > previous && this.notify) this.notify();
         this.Refresh();
     }
 
@@ -166,7 +170,7 @@ export default class ClubManagementView {
         this.text("邀请码",next.id ? next.inviteCode || "" : "从俱乐部选择后查看信息",card);
         // 「我的」卡片只在老板/代理时显示身份牌；普通成员（及管理员，按"只有代理和老板"）不占右侧位置。
         const showIdentity = !!next.id && (next.role === "owner" || next.role === "agent");
-        this.text("身份",!showIdentity ? "" : next.role === "owner" ? "老板" : "代理",card);
+        this.text("身份",!showIdentity ? "" : next.role === "owner" ? "老板" : next.isLeader ? "盟主" : "代理",card);
         this.active("身份底",showIdentity,card);
         // 左侧固定位显示俱乐部老板（盟主）的真实头像；没有俱乐部时整块隐藏。
         this.active("俱乐部徽记",!!next.id,card);
@@ -179,7 +183,8 @@ export default class ClubManagementView {
         // 代理也走同一个入口，点进去就是成员列表（只读，管理操作仍限创建者/管理员）。
         this.active("操作/管理成员",this.approver(),card);
         this.active("操作/管理解散",!!next.id && next.role === "owner",card);
-        this.active("操作/管理退出",!!next.id && next.role !== "owner",card);
+        // 目前不允许成员退出俱乐部，按钮保留但不显示。
+        this.active("操作/管理退出",false,card);
         this.active("操作/管理收益",!!next.id && next.role === "owner",card);
         const dot = this.approver() && (this.counts[next.id] || 0) > 0;
         this.active("操作/管理成员/红点",dot,card);
@@ -434,7 +439,7 @@ export default class ClubManagementView {
         const isOwner = item.id === context.ownerId || item.id === context.accountId && context.role === "owner";
         const isSelf = item.id === context.accountId;
         const isAgent = this.isAgentPlayer(item);
-        this.rowText(row,["身份"],isOwner ? "创建者" : isSelf && context.role === "manager" ? "管理员" : isAgent ? "代理" : item.role || "成员");
+        this.rowText(row,["身份"],isOwner ? "创建者" : isSelf && context.role === "manager" ? "管理员" : isAgent ? (item.isLeader ? "盟主" : "代理") : item.role || "成员");
         this.metricText(row,"团队人数",item.teamCount);
         this.metricText(row,"积分",item.clubGold !== undefined ? item.clubGold : item.points);
         // 代理比例只有代理才显示；非代理把「比例」整列（标题+数值）一起藏掉。
@@ -512,6 +517,11 @@ export default class ClubManagementView {
                 if(!isSelf) this.bindPlayerSettings(this.at("头像",row),item,context,0);
             }
             else {
+                this.text("姓名",item.name || "玩家 "+item.id,row);
+                this.text("玩家ID","ID: "+item.id,row);
+                const avatar = this.at("头像",row);
+                const avatarSprite = avatar && avatar.getComponent(cc.Sprite);
+                if(avatarSprite) ImageManager.getInstance().BindPlayerListAvatar(item.id,avatarSprite);
                 for(const pair of [["管理同意","approve"],["管理拒绝","reject"]])
                     if(this.at(pair[0],row)) this.at(pair[0],row).on("click",()=>{
                         if(!this.sameContext(context,this.getContext())) { this.Refresh();return; }
@@ -551,7 +561,7 @@ export default class ClubManagementView {
         this.text("玩家姓名",item.name || "玩家 "+item.id,panel);
         this.text("玩家ID","ID: "+item.id,panel);
         const isAgent = this.isAgentPlayer(item);
-        const roleText = isAgent ? "代理" : this.roleText(item);
+        const roleText = isAgent ? (item.isLeader ? "盟主" : "代理") : this.roleText(item);
         this.text("玩家身份",roleText,panel);
         this.layoutRole(roleText,panel);
         const statusText = this.status(item);
@@ -572,17 +582,16 @@ export default class ClubManagementView {
         const isSelf = item.id === this.context.accountId;
         const isOwner = item.id === this.context.ownerId || isSelf && this.context.role === "owner";
         // 跨级只读：连按钮一起收起，避免看起来还能点；行内数值仍保留可查看。
-        // 踢人：老板/管理员/代理都能踢，代理只对直属下级（depth 0）生效，跨级已被 readOnly 挡掉。
-        const canKick = !readOnly && (this.manager() || this.canManageAgent());
         const canAgent = !readOnly && this.canManageAgent();
         // 赠送走个人转赠面板，代理也可对直属下级使用。
         this.active("玩家设置赠送金币",!readOnly,panel);
-        this.active("玩家设置踢出俱乐部",canKick,panel);
+        // 目前不允许踢出俱乐部，按钮保留但不显示。
+        this.active("玩家设置踢出俱乐部",false,panel);
         this.active("玩家设置调整比例",canAgent && isAgent,panel);
         this.active("玩家设置代理开关",canAgent,panel);
         // 「设置备注」暂时停用，按钮与整行由 showPlayerSettingsTab 统一隐藏。
         this.button("玩家设置赠送金币",!readOnly && !isOwner,panel);
-        this.button("玩家设置踢出俱乐部",canKick && !isSelf && !isOwner,panel);
+        this.button("玩家设置踢出俱乐部",false,panel);
         this.button("玩家设置调整比例",canAgent && isAgent && !isSelf && !isOwner,panel);
         this.button("玩家设置代理开关",canAgent && !isSelf && !isOwner,panel);
         // These two controls remain visible as reserved layout rows but have no

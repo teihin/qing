@@ -1,5 +1,7 @@
 # 2026-10-26 代理也可踢出直属成员
 
+> 2026-10-30 起暂时收敛：踢出按钮与「我的」退出俱乐部按钮均常隐，见 [新交接](2026-10-30-club-exit-kick-hidden.md)。
+
 ## 范围
 
 - 目录：`/Volumes/SSD/qing`；分支：`codex/club-ui`；Creator 2.4.13（运行中，`--path /Volumes/SSD/qing`）。

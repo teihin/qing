@@ -309,6 +309,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 role,
                 clubGold:displayNumber(field(row,["club_gold"])),
                 isAgent:optionalFlag(row,["is_agent"]),
+                isLeader:optionalFlag(row,["is_leader"]),
                 agentPercent:displayNumber(field(row,["percent","agent_percent"])),
                 remark:optionalText(row,["remark","club_remark","member_remark"]),
                 status:optionalText(row,["status"]),

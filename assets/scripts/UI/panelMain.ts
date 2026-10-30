@@ -233,11 +233,13 @@ export default class panelMain extends UIPanelViewBase {
             // 这里直接用代理信息判角色：owns/manages 已经在前面判过了，
             // 再走 IsClubAgentIn 会多一次 make/manage 排除，反而把代理判成成员。
             const role = owns ? "owner" : manages ? "manager" : this.IsClubAgent(agent) ? "agent" : "member";
-            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role};
+            // 盟主=创建者的直属代理（is_leader=1），仍是代理的一种，只影响标签。
+            const isLeader = role === "agent" && !!agent && Number(agent.is_leader) === 1;
+            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role,isLeader};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),player=>{
             if(player && player.id)
                 UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,String(player.id)+",");
-        });
+        },()=>this.PlayAudio("eff/申请提示"));
         this.clubManagement.Refresh();
         this.clubManagementApi = new HallClubManagementApi((id,count)=>this.clubManagement.SetPendingCount(id,count),
             (id)=>this.IsClubAgentIn(id),()=>this.GetClubAgentIds());
@@ -3226,7 +3228,7 @@ export default class panelMain extends UIPanelViewBase {
                 else
                     ImageManager.getInstance().SetLocalAvatar(avatar,"1");
             }
-            const role = isOwner ? "老板" : isAgent ? "代理" : "";
+            const role = isOwner ? "老板" : isAgent ? (Number(agent.is_leader) === 1 ? "盟主" : "代理") : "";
             const playerBase = row.getComponent(cc.Sprite);
             if(playerBase)
                 playerBase.enabled = role === "";
