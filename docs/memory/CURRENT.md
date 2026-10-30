@@ -4,6 +4,11 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-10-30 牌局回顾加「翻牌」按钮（未构建、未真机）
+
+- 回顾窗口底部新增「翻牌」：翻开本局所有已发的牌（未发牌不显示），默认 500 钻、后台可改、按钮标价；价格来自 `ConfigManager.CONSUME_FLIP` + `stone_consume_price.go`，prefab/scene 同批；已付费或本来就全开的局显示「已翻开」、不扣费。`扣费提示` 底图自带按钮文字，`V8文字` 必须保持关闭。见[交接](handoffs/2026-10-30-review-flip-cards.md)。
+- 结算界面的 `panelRecordInfo/牌局回顾` 加了同款「翻牌」（`操作` 行右侧）：已购/扫描/翻牌改用 `panelGameView` 的 `static`；结算走 `reqHallCommand` 扣费。显示条件只留「列表显示 + 有房间号」，**别再加场景名/`PanelGameView` 判断**（实机一直不出现），大厅战绩也显示；`[翻牌]` 日志待删。
+
 ## 2026-10-30 俱乐部玩家备注（未构建、未真机）
 
 - 接入 `设置_俱乐部_成员_备注`（创建者/直属上级、30 字、中英文）；列表与信息显示 `名字(备注)`，备注行恢复、输入框对齐已修；转译/桩测试通过，Creator/真实回包/真机未验。见[交接](handoffs/2026-10-30-club-member-remark.md)。
@@ -55,18 +60,9 @@
 - 留座归零 fire `SelfSeatTimeout` 关「带入窗口」，`PlayerList` 后兜底收窗；俱乐部房隐藏 `RoomFrame/info/游戏时间`。见[交接](handoffs/2026-10-29-seat-timeout-close-buyin.md)、[交接](handoffs/2026-10-29-club-room-hide-clock.md)。
 - 「记录」在座行加第 4 列 `countdown`，`获取_房间_已结算_玩家_命令`（每页 20）滑到底翻页；`带入记录.prefab` 改 4 列 + `V8表头countdown`。见[交接](handoffs/2026-10-29-realtime-settled-list.md)。
 
-## 2026-10-27～28 自动化（阶段归档）
+## 2026-10-27 及更早（阶段归档）
 
-- 原文见[归档](archive/2026-10-29/current-2026-10.md)；专题：[控制台](topics/automation-console.md)、[Worker 通道](topics/automation-worker-channel.md)。
-
-## 2026-10-27 客户端 / 后台小项
-
-- 「我的」页下半部分可滚动（`5.0.31`，真机未验）；推广下载地址接入系统配置（快照/回读/审计）。见[滚动](handoffs/2026-10-27-my-page-scroll.md)、[下载地址](handoffs/2026-10-27-promotion-download-url.md)。
-
-## 2026-10-26 及更早（阶段归档）
-
-- 消费全切钻石、俱乐部跨级与弹窗见[归档](archive/2026-10-29/current-2026-10.md)；2026-09 客户端 UI 与后台时间口径见[归档](archive/2026-10-28/current-2026-09.md)。
-- 历史 UI：构建成功不计入 V7；经过见[快照](archive/2026-09-11/v7-implementation-before-full-reskin.md)；逐页见[归档](archive/2026-09-15/ui-status-table.md)，进度以[全套进度](handoffs/2026-09-11-v8-all-pages.md)为准。高频未验证：热更/Splash、登录注册回包、战绩结算回放、排行榜领奖。
+- 自动化控制台、我的页滚动、推广下载地址、消费全切钻石与历史 UI 状态见[归档](archive/2026-10-30/current-early-items.md)。
 
 ## 本轮实时核对：记忆整理
 
@@ -74,7 +70,7 @@
 
 ## 最近报告的 UI 状态
 
-见上节[全套进度](handoffs/2026-09-11-v8-all-pages.md)与[逐页归档](archive/2026-09-15/ui-status-table.md)。
+见[全套进度](handoffs/2026-09-11-v8-all-pages.md)与[逐页归档](archive/2026-09-15/ui-status-table.md)。
 
 ## 待核实项与工作边界
 

@@ -14,6 +14,7 @@ import { resolve } from "path";
 import WebLoadingManager from "../common/WebLoadingManager";
 import PanelGameView from "./panelGameView";
 import QueueMatchManager from "../logic/QueueMatchManager";
+import ConfigManager from "../logic/ConfigManager";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -53,6 +54,8 @@ export default class panelRecordInfo extends UIPanelViewBase {
 
     private nCurPage = 1;
     private queueButton:cc.Node = null;
+    private flipButton:cc.Node = null;
+    private bFlipMissingLogged:boolean = false;
 
     onLoad () {
         super.onLoad();
@@ -60,6 +63,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
         this.scrollRecordList = Tool.GetChild(this.node,"战绩列表").getComponent(ScrollViewEx);
         this.scrollRecordPlays = Tool.GetChild(this.node,"牌局回顾/回顾列表").getComponent(ScrollViewEx);
         this.queueButton = Tool.GetChild(this.node,"排行/排队");
+        this.flipButton = Tool.GetChild(this.node,"牌局回顾/翻牌");
         this.RefreshQueueButtonVisibility();
         KBEngine.Event.register("ClubRoomPlayedScore", this, "OnClubRoomPlayedScore");
         KBEngine.Event.register("RoundScore", this, "OnRoundScore");
@@ -74,7 +78,14 @@ export default class panelRecordInfo extends UIPanelViewBase {
         if(cc.director.getScene().name == "drh8")
             QueueMatchManager.getInstance().rememberEnteredRoom(this.strRoomID);
 
+        this.RefreshFlipButton();
         this.GetCreateRecord();
+    }
+
+    onEnable()
+    {
+        super.onEnable();
+        this.RefreshFlipButton();
     }
 
     // update (dt) {}
@@ -112,6 +123,10 @@ export default class panelRecordInfo extends UIPanelViewBase {
             Tool.GetChild(this.node,"牌局回顾/title/地九王").active = this.strPlayMode === "地方"?true:false;
             Tool.GetChild(this.node,"牌局回顾/操作/牌局回顾").getComponent(cc.Toggle).isChecked = true;
             this.ShowHistoryInfo(1);
+        }
+        else if(button.node.name === "翻牌")
+        {
+            this.ShowFlipReviewConfirm();
         }
         else if(button.node.name === "排队")
         {
@@ -160,6 +175,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
     }
 
     private RefreshQueueButtonVisibility()
+
     {
         if(this.queueButton == null || !cc.isValid(this.queueButton))
             return;
@@ -207,6 +223,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
                 Tool.GetChild(this.node,"牌局回顾/文字牌谱").active = true;  
                 this.ShowHistoryPaiPuInfo(this.nCurPage);
             }
+            this.RefreshFlipButton();
         }
     }
 
@@ -470,6 +487,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
             action();
         }
 
+        this.RefreshFlipButton();
     }
 
     private FormatSummaryTime(raw:any):string
@@ -508,6 +526,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
             this.ShowHistoryPaiPuInfo(nRound);
             return;
         }
+        this.RefreshFlipButton();
 
         if (nRound > 0)
         {
@@ -519,12 +538,104 @@ export default class panelRecordInfo extends UIPanelViewBase {
     }
     public ShowHistoryPaiPuInfo(nRound:number)
     {
+        this.RefreshFlipButton();
         if (nRound > 0)
         {
             this.nCurPage = nRound;
             Tool.GetChild(this.node,"牌局回顾/分页/页码").getComponent(cc.Label).string = nRound.toString()+"/"+this.strRound;
             let strParam = "{\"header\":\"查询_房间_玩家_牌谱_信息\",\"room_id\":\"" + this.strRoomID + "\",\"round_id\":\"" + nRound.toString() + "\"}";
             GameDataManager.getAccount().reqAccountCommand(strParam, "@查询_房间_玩家_牌谱_信息");
+        }
+    }
+
+    /**
+     * 翻牌按钮：只在牌局回顾页签出现（文字牌谱没有牌面）。
+     * 房间号来自面板参数，结算回顾和大厅历史回顾都有；扣费分别走牌桌/大厅通道。
+     */
+    private RefreshFlipButton()
+    {
+        if (this.flipButton == null || !cc.isValid(this.flipButton))
+        {
+            if (!this.bFlipMissingLogged)
+            {
+                this.bFlipMissingLogged = true;
+                cc.log("[翻牌] 找不到按钮节点，面板=" + this.node.name);
+            }
+            return;
+        }
+        let listActive = Tool.GetChild(this.node,"牌局回顾/回顾列表").active;
+        let visible = listActive && this.strRoomID != "";
+        this.flipButton.active = visible;
+        if (!visible)
+        {
+            cc.log("[翻牌] 隐藏：列表显示=" + listActive + " 房间号=\"" + this.strRoomID + "\"");
+            return;
+        }
+        let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_FLIP);
+        let rows = this.GetReviewRows();
+        // 这一局的牌本来就全开着（比如根本没人盖牌）就不用再点翻牌了。
+        let bAllOpen = rows.length > 0 && !PanelGameView.HasFaceDownCards(rows);
+        let opened = bAllOpen || PanelGameView.IsReviewRoundFlipped(this.strRoomID, this.nCurPage);
+        let label = Tool.GetChild(this.flipButton,"价格");
+        if (label != null)
+            label.getComponent(cc.Label).string = opened ? "已翻开" : (nCost > 0 ? nCost + "钻" : "免费");
+        let button = this.flipButton.getComponent(cc.Button);
+        if (button != null)
+            button.interactable = !opened;
+        this.flipButton.opacity = opened ? 160 : 255;
+    }
+
+    private GetReviewRows():cc.Node[]
+    {
+        let content = Tool.GetChild(this.node,"牌局回顾/回顾列表/view/content");
+        return content == null ? [] : content.children;
+    }
+
+    private ShowFlipReviewConfirm()
+    {
+        if (!PanelGameView.HasFaceDownCards(this.GetReviewRows()))
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"本局没有未翻开的牌！");
+            return;
+        }
+        let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_FLIP);
+        if (nCost > 0 && Number(GameDataManager.getAccount().stone) < nCost)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"钻石不足" + nCost + "，翻牌失败！");
+            return;
+        }
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+            nCost > 0 ? "确认消耗" + nCost + "钻石翻开本局所有牌吗？" : "确认翻开本局所有牌吗？",
+            [(confirmed:boolean)=>{
+                if (confirmed)
+                    this.ConsumeAndFlipReviewCards();
+            }]);
+    }
+
+    private ConsumeAndFlipReviewCards()
+    {
+        if (this.nCurPage <= 0)
+            return;
+        // 牌桌内的回顾可能已经为这一局付过费，两个界面共用一份记录，不重复扣。
+        if (PanelGameView.IsReviewRoundFlipped(this.strRoomID, this.nCurPage))
+        {
+            PanelGameView.RevealFaceDownCards(this.GetReviewRows());
+            return;
+        }
+        let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_FLIP);
+        if (nCost > 0 && Number(GameDataManager.getAccount().stone) < nCost)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"钻石不足" + nCost + "，翻牌失败！");
+            return;
+        }
+        PanelGameView.MarkReviewRoundFlipped(this.strRoomID, this.nCurPage);
+        PanelGameView.RevealFaceDownCards(this.GetReviewRows());
+        this.RefreshFlipButton();
+        if (nCost > 0)
+        {
+            // 结算时牌桌实体可能已经结束，走大厅通道扣费（与房间内举报一致）。
+            let strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_FLIP);
+            GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
         }
     }
 
@@ -561,6 +672,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
                         let node = cc.instantiate(obj);
                         node.parent = this.scrollRecordPlays.content;
                         this.setItemInfo(node,jItem);
+                        this.RefreshFlipButton();
                     });
                 }
                 else
@@ -580,8 +692,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
             }
         }
 
-
-
+        this.RefreshFlipButton();
     }
     
     public setItemInfo(objNew:cc.Node,jOne:any)
@@ -820,6 +931,12 @@ export default class panelRecordInfo extends UIPanelViewBase {
                {
                    handCard[1].ShowFace(0);
                }
+           }
+
+           // 这一局已经付过翻牌费用的话，重新渲染后也要保持全开
+           if(PanelGameView.IsReviewRoundFlipped(this.strRoomID, this.nCurPage))
+           {
+               PanelGameView.RevealFaceDownCards([objNew]);
            }
 
 

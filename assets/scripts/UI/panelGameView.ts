@@ -169,6 +169,7 @@ export default class panelGameView extends UIPanelViewBase {
         this.SetConsumePriceLabel("RoomFrame/切牌/label", ConfigManager.CONSUME_CUT_CARD);
         this.SetConsumePriceLabel("cmd6/强制秀牌/label", ConfigManager.CONSUME_FORCE_SHOW);
         this.SetConsumePriceLabel("cmd6/看剩余牌/label copy", ConfigManager.CONSUME_LOOK_NEXT);
+        this.RefreshReviewFlipButton();
     }
 
     private SetConsumePriceLabel(strPath:string, strType:string)
@@ -1307,9 +1308,7 @@ export default class panelGameView extends UIPanelViewBase {
                 return;
             }
 
-            this.node.getChildByName("扣费提示").active = true;
-            Tool.GetChild(this.node,"扣费提示/msg").getComponent(cc.Label).string =
-                "确认消耗" + tier.cost + "钻石延时" + tier.secs + "秒吗？";
+            this.ShowCostConfirm("确认消耗" + tier.cost + "钻石延时" + tier.secs + "秒吗？", "确认延时");
            
         }
         else if(button.node.name === "确认延时")
@@ -1317,6 +1316,15 @@ export default class panelGameView extends UIPanelViewBase {
             button.node.parent.active = false;
             this.SendDelayCommand();
        
+        }
+        else if(button.node.name === "翻牌")
+        {
+            this.ShowFlipReviewConfirm();
+        }
+        else if(button.node.name === "确认翻牌")
+        {
+            button.node.parent.active = false;
+            this.ConsumeAndFlipReviewCards();
         }
         else if(button.node.name == "强制秀牌")
         {
@@ -2608,6 +2616,10 @@ export default class panelGameView extends UIPanelViewBase {
         root.getChildByName("图例2").active = !showText && !report;
         root.getChildByName("V8局数").getComponent(cc.Label).string = total > 0 ? "第" + this.nCurPage + "局" : "暂无已完成牌局";
         root.getChildByName("V8空记录").active = total <= 0;
+        const flipEntry = root.getChildByName("翻牌");
+        if (flipEntry != null)
+            flipEntry.active = total > 0 && !showText;
+        this.RefreshReviewFlipButton();
         if (total <= 0)
         {
             this.nCurPage = 0;
@@ -2617,6 +2629,158 @@ export default class panelGameView extends UIPanelViewBase {
             for (const round of ["1", "2", "3"])
                 Tool.GetChild(root,"文字牌谱/view/content/" + round + "/list").removeAllChildren();
         }
+    }
+
+    /**
+     * 已付费翻开的局（key = 房间号#局号）。牌桌里的牌局回顾和结算里的牌局回顾共用一份，
+     * 同一局不会重复扣费；重新渲染该局时直接保持全开。
+     */
+    private static reviewFlipRounds:{[key:string]:boolean} = {};
+
+    public static IsReviewRoundFlipped(strRoomID:string, nRound:number):boolean
+    {
+        return panelGameView.reviewFlipRounds[(strRoomID == null ? "" : strRoomID) + "#" + nRound] === true;
+    }
+
+    public static MarkReviewRoundFlipped(strRoomID:string, nRound:number):void
+    {
+        panelGameView.reviewFlipRounds[(strRoomID == null ? "" : strRoomID) + "#" + nRound] = true;
+    }
+
+    /** 牌局回顾列表里还有没有背面朝上的已发牌（没发的牌节点是关的，不算）。rows 传列表行节点。 */
+    public static HasFaceDownCards(rows:cc.Node[]):boolean
+    {
+        for (let row of rows)
+        {
+            if (row == null || !cc.isValid(row) || !row.active)
+                continue;
+            const hand = row.getChildByName("手牌");
+            if (hand == null)
+                continue;
+            for (let card of hand.getComponentsInChildren(PKCardInfoScript))
+            {
+                if (!card.node.active || (card.nType == 0 && card.nNum == 0))
+                    continue;
+                const bk1 = card.node.getChildByName("BK1");
+                if (bk1 != null && bk1.opacity > 0)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /** 把列表里已发的牌翻成正面；没发的牌（节点未激活）保持不显示。 */
+    public static RevealFaceDownCards(rows:cc.Node[]):void
+    {
+        for (let row of rows)
+        {
+            if (row == null || !cc.isValid(row) || !row.active)
+                continue;
+            const hand = row.getChildByName("手牌");
+            if (hand == null)
+                continue;
+            for (let card of hand.getComponentsInChildren(PKCardInfoScript))
+            {
+                if (!card.node.active || (card.nType == 0 && card.nNum == 0))
+                    continue;
+                card.ShowFace(0);
+            }
+        }
+    }
+
+    /** 翻牌按钮的价签与可用状态：后台改了钻石价要跟着变，已翻开的局显示成已翻开。 */
+    private RefreshReviewFlipButton()
+    {
+        const root = Tool.GetChild(this.node,"牌局回顾");
+        if (root == null)
+            return;
+        const button = root.getChildByName("翻牌");
+        if (button == null)
+            return;
+        const label = Tool.GetChild(button,"价格");
+        const nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_FLIP);
+        const content = Tool.GetChild(this.node,"牌局回顾/回顾列表/view/content");
+        // 这一局的牌本来就全开着（比如根本没人盖牌）就不用再点翻牌了。
+        const bAllOpen = content != null && content.children.length > 0
+            && !panelGameView.HasFaceDownCards(content.children);
+        const opened = bAllOpen || panelGameView.IsReviewRoundFlipped(GameDataManager.getAccount().roomID, this.nCurPage);
+        if (label != null)
+            label.getComponent(cc.Label).string = opened ? "已翻开" : (nCost > 0 ? nCost + "钻" : "免费");
+        const comp = button.getComponent(cc.Button);
+        if (comp != null)
+            comp.interactable = !opened;
+        button.opacity = opened ? 160 : 255;
+    }
+
+    private HasFaceDownReviewCards():boolean
+    {
+        const content = Tool.GetChild(this.node,"牌局回顾/回顾列表/view/content");
+        return content != null && panelGameView.HasFaceDownCards(content.children);
+    }
+
+    /** 把当前这一局所有已发的牌翻成正面；没发的牌（节点未激活）不显示。 */
+    private RevealReviewCards()
+    {
+        const content = Tool.GetChild(this.node,"牌局回顾/回顾列表/view/content");
+        if (content != null)
+            panelGameView.RevealFaceDownCards(content.children);
+    }
+
+    private ShowFlipReviewConfirm()
+    {
+        if (!this.HasFaceDownReviewCards())
+        {
+            this.ShowMsg("本局没有未翻开的牌！");
+            return;
+        }
+        const nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_FLIP);
+        if (nCost > 0 && Number(GameDataManager.getAccount().stone) < nCost)
+        {
+            this.ShowMsg("钻石不足" + nCost + "，翻牌失败！");
+            return;
+        }
+        this.ShowCostConfirm(nCost > 0
+            ? "确认消耗" + nCost + "钻石翻开本局所有牌吗？"
+            : "确认翻开本局所有牌吗？", "确认翻牌");
+    }
+
+    private ConsumeAndFlipReviewCards()
+    {
+        const strRoomID = GameDataManager.getAccount().roomID;
+        if (panelGameView.IsReviewRoundFlipped(strRoomID, this.nCurPage))
+        {
+            this.RevealReviewCards();
+            return;
+        }
+        const nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_FLIP);
+        if (nCost > 0 && Number(GameDataManager.getAccount().stone) < nCost)
+        {
+            this.ShowMsg("钻石不足" + nCost + "，翻牌失败！");
+            return;
+        }
+        panelGameView.MarkReviewRoundFlipped(strRoomID, this.nCurPage);
+        this.RevealReviewCards();
+        this.RefreshReviewFlipButton();
+        if (nCost > 0)
+        {
+            const strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_FLIP);
+            GameDataManager.getAccount().reqGameCommand(strParam, "玩家_消费_命令");
+            this.ShowMsg("已消耗" + nCost + "钻石，本局牌已全部翻开");
+        }
+    }
+
+    /** 共用扣费提示弹窗：切到对应的确认按钮，避免「延时」和「翻牌」互相串。 */
+    private ShowCostConfirm(strMsg:string, strConfirmButton:string)
+    {
+        const dialog = this.node.getChildByName("扣费提示");
+        const delay = dialog.getChildByName("确认延时");
+        const flip = dialog.getChildByName("确认翻牌");
+        if (delay != null)
+            delay.active = strConfirmButton === "确认延时";
+        if (flip != null)
+            flip.active = strConfirmButton === "确认翻牌";
+        Tool.GetChild(dialog,"msg").getComponent(cc.Label).string = strMsg;
+        dialog.active = true;
     }
 
     public ShowHistoryInfo(nRound:number)
@@ -2684,6 +2848,7 @@ export default class panelGameView extends UIPanelViewBase {
                         let node = cc.instantiate(obj);
                         node.parent = this.scrollHuiGu.content;
                         this.setItemInfo(node,jItem);
+                        this.RefreshReviewFlipButton();
                     });
                 }
                 else
@@ -2982,6 +3147,16 @@ export default class panelGameView extends UIPanelViewBase {
            if (!ImageManager.getInstance().GetImageByName(strID, "", img))
            {
                ImageManager.getInstance().AddWaitFreshImage2Catch(strID, img);
+           }
+
+           // 这一局已经付过翻牌费用的话，重新渲染后也要保持全开
+           if(panelGameView.IsReviewRoundFlipped(GameDataManager.getAccount().roomID, this.nCurPage))
+           {
+               for(let one of handCard)
+               {
+                   if(one.node.active && !(one.nType == 0 && one.nNum == 0))
+                       one.ShowFace(0);
+               }
            }
     }
 
