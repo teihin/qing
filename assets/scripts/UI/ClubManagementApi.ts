@@ -180,11 +180,14 @@ export default class HallClubManagementApi implements ClubManagementApi {
             leave:"申请_退出_俱乐部",dissolve:"删除_俱乐部",approve:"添加_俱乐部_玩家",
             reject:"删除_俱乐部_加入申请",remove:"删除_俱乐部_玩家",promote:"添加_俱乐部_管理员",
             adjustScore:"修改_俱乐部_成员_积分",setAgent:"设置_俱乐部_代理",
-            changeAgentRatio:"修改_俱乐部_代理_比例",cancelAgent:"取消_俱乐部_代理"
+            changeAgentRatio:"修改_俱乐部_代理_比例",cancelAgent:"取消_俱乐部_代理",
+            setNote:"设置_俱乐部_成员_备注"
         };
         const extra:any = user ? {user_id:user} : {};
         if(action === "adjustScore") extra.user_modify_gold = Number(value);
         if(action === "setAgent" || action === "changeAgentRatio") extra.percent = Number(value);
+        // 备注空串 = 清空；服务端上限 30 字、超出直接报错。
+        if(action === "setNote") extra.note = value === undefined || value === null ? "" : String(value);
         const outcome = await this.request(club,action,commands[action],extra);
         if(action === "promote") return {message:outcome.accepted ? "设置管理员请求已受理，请刷新确认" : "已设为管理员"};
         if(action === "remove") return {message:"已删除俱乐部成员"};
@@ -192,6 +195,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(action === "setAgent") return {message:"已开通代理，请刷新确认比例"};
         if(action === "changeAgentRatio") return {message:"代理比例已调整"};
         if(action === "cancelAgent") return {message:"已取消代理"};
+        if(action === "setNote") return {message:extra.note ? "备注已更新" : "备注已清空"};
         if(action === "approve") {
             // 审批的最终 0x200 已表示入会完成。成员列表是独立推送，不能用它阻塞
             // 审批弹窗；否则 NumberList 缺失时会把已成功的操作误报成超时。
@@ -311,7 +315,8 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 isAgent:optionalFlag(row,["is_agent"]),
                 isLeader:optionalFlag(row,["is_leader"]),
                 agentPercent:displayNumber(field(row,["percent","agent_percent"])),
-                remark:optionalText(row,["remark","club_remark","member_remark"]),
+                // note 为 2026-10-30 新增的成员备注，服务端恒下发（无值为空串）。
+                note:optionalText(row,["note"]),
                 status:optionalText(row,["status"]),
                 teamCount:optionalText(row,["team_count"]),
                 // club_gold is the current club balance; it is not a score delta.

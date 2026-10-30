@@ -2,7 +2,11 @@
 
 更新时间：2026-10-30
 
-规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。客服网页已部署、真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
+规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-10-30 俱乐部玩家备注（未构建、未真机）
+
+- 接入 `设置_俱乐部_成员_备注`（创建者/直属上级、30 字、中英文）；列表与信息显示 `名字(备注)`，备注行恢复、输入框对齐已修；转译/桩测试通过，Creator/真实回包/真机未验。见[交接](handoffs/2026-10-30-club-member-remark.md)。
 
 ## 2026-10-30 大厅底栏改「客服 俱乐部 BY 推广 我的」（未构建、未真机）
 
@@ -53,18 +57,16 @@
 
 ## 2026-10-27～28 自动化（阶段归档）
 
-- 机器人即账号、Worker 通道与在线状态、真实客户端接入、投放限底皮、净分区间控制 + GPS/IP、机器人牌局页签，
-  原文见[归档](archive/2026-10-29/current-2026-10.md)；专题见[控制台](topics/automation-console.md)、
-  [Worker 通道](topics/automation-worker-channel.md)。
+- 原文见[归档](archive/2026-10-29/current-2026-10.md)；专题：[控制台](topics/automation-console.md)、[Worker 通道](topics/automation-worker-channel.md)。
 
 ## 2026-10-27 客户端 / 后台小项
 
-- 「我的」页下半部分改可滚动（`Main/我的` 新增 `滚动区 > view > content`，已传 `5.0.31`、**真机未验**）；推广下载地址接入系统配置（写前快照/写后回读/写审计）。见[滚动](handoffs/2026-10-27-my-page-scroll.md)、[下载地址](handoffs/2026-10-27-promotion-download-url.md)。
+- 「我的」页下半部分可滚动（`5.0.31`，真机未验）；推广下载地址接入系统配置（快照/回读/审计）。见[滚动](handoffs/2026-10-27-my-page-scroll.md)、[下载地址](handoffs/2026-10-27-promotion-download-url.md)。
 
 ## 2026-10-26 及更早（阶段归档）
 
 - 消费全切钻石、俱乐部跨级与弹窗见[归档](archive/2026-10-29/current-2026-10.md)；2026-09 客户端 UI 与后台时间口径见[归档](archive/2026-10-28/current-2026-09.md)。
-- 历史 UI 记录：构建成功不计入 V7；V7 经过见[阶段快照](archive/2026-09-11/v7-implementation-before-full-reskin.md)，逐页表格见[归档](archive/2026-09-15/ui-status-table.md)，进度以[全套进度](handoffs/2026-09-11-v8-all-pages.md)为准。高频未验证：热更与 Splash、登录/注册回包、战绩/结算/回放、排行榜领奖。
+- 历史 UI：构建成功不计入 V7；经过见[快照](archive/2026-09-11/v7-implementation-before-full-reskin.md)；逐页见[归档](archive/2026-09-15/ui-status-table.md)，进度以[全套进度](handoffs/2026-09-11-v8-all-pages.md)为准。高频未验证：热更/Splash、登录注册回包、战绩结算回放、排行榜领奖。
 
 ## 本轮实时核对：记忆整理
 

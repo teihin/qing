@@ -5,12 +5,13 @@ import UIManager from "../common/UIManager";
 export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications";
 export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" | "promote" |
-    "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent";
+    "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent" | "setNote";
 export interface ClubContext { accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; isLeader?:boolean; }
 export interface ClubPlayer {
     id:string; name:string; role?:string; balance?:string;
     clubGold?:string; isAgent?:boolean; isLeader?:boolean; agentPercent?:string; status?:string;
-    remark?:string;
+    /** 服务端 NumberList 的 note：俱乐部内该成员的备注，恒存在、无值为空串。 */
+    note?:string;
     /** NumberList statistics are populated by the updated server response. */
     teamCount?:string; points?:string; online?:boolean;
     todayWin?:string; yesterdayWin?:string; totalWin?:string;
@@ -47,7 +48,8 @@ export default class ClubManagementView {
     private downlineTotal:number = 0;
     private downlineToken:number = 0;
     private inputMode:"ratio"|"remark"|null = null;
-    private remarks:{[key:string]:string} = {};
+    /** 文档 4.11：note 上限 30 字（按字符计），服务端超长直接报错、不截断。 */
+    private static readonly NOTE_MAX:number = 30;
     private readonly pageSize:number = 20;
     /** 与 Prefab 中「玩家设置下级列表」一屏可放的行数一致。 */
     private readonly downlinePageSize:number = 4;
@@ -411,6 +413,23 @@ export default class ClubManagementView {
         const value = item.agentPercent === undefined || item.agentPercent === null ? "" : String(item.agentPercent).trim();
         return (value === "" ? "0" : value) + "%";
     }
+    /** 有备注时统一显示「名字(备注)」，成员列表、下级列表与玩家信息抬头共用。 */
+    private displayName(item:ClubPlayer):string {
+        const name = item && item.name || (item ? "玩家 " + item.id : "");
+        const note = item && item.note != null ? String(item.note).trim() : "";
+        return note ? name + "(" + note + ")" : name;
+    }
+    /**
+     * 备注权限与代理比例一致：创建者或该成员当前直属上级代理可写，服务端会兜底校验。
+     * 自己与创建者不能写备注，跨级下钻只读。
+     */
+    private canRemarkPlayer():boolean {
+        const player = this.selectedPlayer;
+        const context = this.context;
+        if(!player || !context || this.readOnlyPlayer() || !this.canManageAgent()) return false;
+        return String(player.id) !== String(context.accountId || "") &&
+            String(player.id) !== String(context.ownerId || "");
+    }
     private status(item:ClubPlayer):string {
         if(item.status && ["online","在线","on","1","true"].indexOf(String(item.status).trim().toLowerCase()) < 0 &&
             ["offline","离线","off","0","false"].indexOf(String(item.status).trim().toLowerCase()) < 0)
@@ -452,7 +471,7 @@ export default class ClubManagementView {
     /** 成员列表与下级成员列表共用同一套行内容，保证两处显示一致。 */
     private fillMemberRow(row:cc.Node,item:ClubPlayer):void {
         const context = this.context || {accountId:"",id:"",name:"",role:"member" as ClubRole};
-        this.text("姓名",item.name || "玩家 "+item.id,row);
+        this.text("姓名",this.displayName(item),row);
         this.text("玩家ID","ID: "+item.id,row);
         const avatar = this.at("头像",row);
         const avatarSprite = avatar && avatar.getComponent(cc.Sprite);
@@ -579,7 +598,7 @@ export default class ClubManagementView {
         ++this.downlineToken;
         this.active("俱乐部玩家设置弹窗",true);
         this.active("玩家设置只读提示",readOnly,panel);
-        this.text("玩家姓名",item.name || "玩家 "+item.id,panel);
+        this.text("玩家姓名",this.displayName(item),panel);
         this.text("玩家ID","ID: "+item.id,panel);
         const isAgent = this.isAgentPlayer(item);
         const roleText = isAgent ? (item.isLeader ? "盟主" : "代理") : this.roleText(item);
@@ -592,7 +611,7 @@ export default class ClubManagementView {
         const statusNode = this.at("玩家状态",panel);
         if(statusNode) statusNode.color = online ? new cc.Color(155,255,109) : new cc.Color(201,216,228);
         this.text("玩家积分值",this.value(item.clubGold !== undefined ? item.clubGold : item.points),panel);
-        this.text("备注值",item.remark || this.remarks[this.remarkKey()] || "未设置",panel);
+        this.text("备注值",item.note || "未设置",panel);
         this.text("比例值",isAgent ? this.percentText(item) : "未开通",panel);
         this.text("代理开关文字",isAgent ? "开" : "关",panel);
         this.active("玩家设置代理开关/开",isAgent,panel);
@@ -610,11 +629,12 @@ export default class ClubManagementView {
         this.active("玩家设置踢出俱乐部",false,panel);
         this.active("玩家设置调整比例",canAgent && isAgent,panel);
         this.active("玩家设置代理开关",canAgent,panel);
-        // 「设置备注」暂时停用，按钮与整行由 showPlayerSettingsTab 统一隐藏。
         this.button("玩家设置赠送金币",!readOnly && !isOwner,panel);
         this.button("玩家设置踢出俱乐部",false,panel);
         this.button("玩家设置调整比例",canAgent && isAgent && !isSelf && !isOwner,panel);
         this.button("玩家设置代理开关",canAgent && !isSelf && !isOwner,panel);
+        // 备注行对所有人可见；「设置备注」按钮由 showPlayerSettingsTab 按权限决定。
+        this.button("玩家设置备注",this.canRemarkPlayer(),panel);
         // These two controls remain visible as reserved layout rows but have no
         // documented server command yet.
         this.button("玩家设置禁止游戏",false,panel);
@@ -623,7 +643,7 @@ export default class ClubManagementView {
         this.showPlayerSettingsTab("member");
     }
     private settingsMemberNodes():string[] {
-        return ["比例","比例底","比例值","玩家设置调整比例","代理","代理底",
+        return ["备注","备注底","备注值","比例","比例底","比例值","玩家设置调整比例","代理","代理底",
             "代理开关文字","玩家设置代理开关"];
     }
     private roleText(item:ClubPlayer):string {
@@ -652,9 +672,9 @@ export default class ClubManagementView {
         this.settingsTab = tab;
         const member = tab === "member";
         this.settingsMemberNodes().forEach(name=>this.active(name,member,panel));
-        // 「设置备注」暂时停用：整行保持隐藏，恢复时把四个节点加回 settingsMemberNodes。
-        for(const name of ["备注","备注底","备注值","玩家设置备注"])
-            this.active(name,false,panel);
+        // 备注行随成员页签显示；只有创建者/直属上级代理能看到编辑按钮。
+        this.active("玩家设置备注",member && this.canRemarkPlayer(),panel);
+        this.button("玩家设置备注",member && this.canRemarkPlayer(),panel);
         // 页签切换会重新激活比例/代理行按钮，只读态必须在之后统一收起。
         if(this.readOnlyPlayer()) {
             for(const name of ["玩家设置赠送金币","玩家设置踢出俱乐部","玩家设置调整比例",
@@ -766,12 +786,9 @@ export default class ClubManagementView {
         });
         this.downlinePaging(panel);
     }
-    private remarkKey():string {
-        return (this.context && this.context.id || "") + ":" + (this.selectedPlayer && this.selectedPlayer.id || "");
-    }
     private openPlayerInput(mode:"ratio"|"remark"):void {
-        // 比例属于代理关系操作（创建者/直属上级代理）；备注是本地数据，代理也可写。
-        if(!this.selectedPlayer || (mode === "ratio" ? !this.canManageAgent() : !this.approver())) return;
+        // 比例与备注权限一致：创建者或该成员的直属上级代理。
+        if(!this.selectedPlayer || (mode === "ratio" ? !this.canManageAgent() : !this.canRemarkPlayer())) return;
         if(this.blockReadOnlyPlayer()) return;
         const modal = this.at("玩家设置输入弹窗");
         const panel = this.at("面板",modal);
@@ -779,14 +796,21 @@ export default class ClubManagementView {
         const edit = input && input.getComponent(cc.EditBox);
         if(!modal || !panel || !edit) return;
         this.inputMode = mode;
+        // 输入框与「调整比例」共用：比例要数字键盘，备注得能录中文/英文；
+        // Prefab 里存的是 NUMERIC，不按用途切回来备注就只能打数字。
+        edit.inputMode = mode === "ratio" ? cc.EditBox.InputMode.NUMERIC : cc.EditBox.InputMode.SINGLE_LINE;
         const title = mode === "ratio" ? "调整比例" : "设置备注";
-        const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" : "请输入备注内容";
+        const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" :
+            "请输入备注（最多 " + ClubManagementView.NOTE_MAX + " 字，留空可清空）";
         this.text("玩家设置输入标题",title,panel);
         this.text("玩家设置输入提示",prompt,panel);
-        this.text("提示",prompt,input);
+        // EditBox 会把框内标签强制成单行 CLAMP，长句会被截断；完整说明留在上方提示，框内只放短占位。
+        this.text("提示",mode === "ratio" ? prompt : "请输入备注",input);
+        // 备注上限按文档 §4.11，超长服务端直接报错；这里先在输入层拦住，提示文案同源。
+        edit.maxLength = mode === "remark" ? ClubManagementView.NOTE_MAX : 120;
         edit.string = mode === "ratio" ?
             (this.selectedPlayer.agentPercent !== undefined ? String(this.selectedPlayer.agentPercent) : "0") :
-            (this.remarks[this.remarkKey()] || "");
+            (this.selectedPlayer.note || "");
         this.active("玩家设置输入弹窗",true);
     }
     private finishPlayerInput():void {
@@ -809,15 +833,43 @@ export default class ClubManagementView {
             this.submit();
             return;
         }
-        if(value.length > 120) {
-            this.message("备注不能超过120个字符");
+        if(Array.from(value).length > ClubManagementView.NOTE_MAX) {
+            this.message("备注最多 " + ClubManagementView.NOTE_MAX + " 个字");
             return;
         }
-        this.remarks[this.remarkKey()] = value;
-        this.text("备注值",value || "未设置",this.at("面板",this.at("俱乐部玩家设置弹窗")));
         this.inputMode = null;
         this.active("玩家设置输入弹窗",false);
-        this.message("备注已更新");
+        this.submitRemark(value);
+    }
+    /** 备注是「(俱乐部, 成员)」上的单一属性，写成功后直接用本地值刷新列表与详情卡。 */
+    private async submitRemark(note:string):Promise<void> {
+        if(!this.selectedPlayer || !this.context.id) return;
+        if(this.busy) { this.message("操作进行中，请稍后再试");return; }
+        if(!this.api) { this.message("该功能暂未开放");return; }
+        if(!this.canRemarkPlayer()) { this.message("只能给自己的直属下级写备注");return; }
+        const player = this.selectedPlayer;
+        const club = {...this.context};
+        if(!this.sameContext(club,this.getContext())) { this.Refresh();return; }
+        this.busy = true;
+        let saved = false;
+        try {
+            const result = await this.api.act(club.id,"setNote",player.id,note);
+            if(!this.valid(this.version,club)) return;
+            saved = true;
+            player.note = note;
+            for(const item of this.selectedDownline)
+                if(String(item.id) === String(player.id)) item.note = note;
+            const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+            this.text("备注值",note || "未设置",panel);
+            this.text("玩家姓名",this.displayName(player),panel);
+            this.renderDownline(panel);
+            this.message(result && result.message || (note ? "备注已更新" : "备注已清空"));
+        } catch(error) {
+            if(this.valid(this.version,club)) this.message(error && error.message || "备注保存失败，请稍后重试");
+        } finally {
+            if(cc.isValid(this.root)) this.busy = false;
+        }
+        if(saved) await this.load(this.page);
     }
     private submitPlayerValue(action:ClubAction,inputName:string,emptyMessage:string):void {
         const agentAction = ["setAgent","changeAgentRatio","cancelAgent"].indexOf(action) >= 0;

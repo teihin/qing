@@ -28,7 +28,8 @@
     "docs/memory/handoffs/2026-09-11-v8-all-pages.md",
     "docs/memory/handoffs/2026-10-29-worker-club-mode.md",
     "docs/memory/handoffs/2026-10-29-automation-strategy-runtime.md",
-    "docs/memory/handoffs/2026-10-29-automation-robots-and-console.md"
+    "docs/memory/handoffs/2026-10-29-automation-robots-and-console.md",
+    "docs/memory/handoffs/2026-10-30-club-member-remark.md"
   ],
   "required_headings": {
     "AGENTS.md": [
@@ -144,6 +145,10 @@
       "error_bytes": 32768
     },
     "docs/memory/handoffs/2026-10-28-open-issues-backlog.md": {
+      "warn_bytes": 12288,
+      "error_bytes": 32768
+    },
+    "docs/memory/handoffs/2026-10-30-club-member-remark.md": {
       "warn_bytes": 12288,
       "error_bytes": 32768
     }
