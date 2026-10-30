@@ -2216,9 +2216,8 @@ export default class panelMain extends UIPanelViewBase {
 
     /**
      * 「我的」页下半部分（按钮区 + 当前俱乐部卡片）装在 Prefab 的「滚动区」里，
-     * 内容比可视区高时就靠 ScrollView 滚，短屏也能看全。
-     * content 本身用顶部锚点对齐，这里只补高度：高屏时撑到 view 高度，
-     * 避免内容比可视区矮时被 ScrollView 顶到别的位置。
+     * 内容高度由「当前俱乐部」卡片是否显示决定（ClubManagementView.syncProfileScroll），
+     * 这里负责切页时对齐 Widget 并回到顶部，短屏也能看全。
      */
     private SyncMyPageScroll():void
     {
@@ -2229,8 +2228,7 @@ export default class panelMain extends UIPanelViewBase {
             const mine = Tool.GetChild(this.node,"Main/我的");
             const scroll = Tool.GetChild(this.node,"Main/我的/滚动区");
             const view = Tool.GetChild(scroll,"view");
-            const content = Tool.GetChild(scroll,"view/content");
-            if(scroll == null || view == null || content == null)
+            if(scroll == null || view == null)
                 return;
             // 从页面到 view 逐层立即对齐，避免读到 Prefab 里的设计态尺寸。
             for(const target of [mine,scroll,view])
@@ -2239,13 +2237,11 @@ export default class panelMain extends UIPanelViewBase {
                 if(widget)
                     widget.updateAlignment();
             }
-            // 656 = 按钮区 419.76 + 间距 12 + 俱乐部卡片 200 + 底部留白 24（设计分辨率）。
-            const viewHeight = view.height;
-            if(viewHeight <= 0)
+            if(view.height <= 0)
                 return;
-            const height = Math.max(656,viewHeight);
-            if(Math.abs(content.height - height) > 0.5)
-                content.height = height;
+            // 内容高度按「有没有当前俱乐部卡片」取 656 / 456，统一由俱乐部视图计算。
+            if(this.clubManagement)
+                this.clubManagement.syncProfileScroll();
             const scrollView = scroll.getComponent(cc.ScrollView);
             if(scrollView)
                 scrollView.scrollToTop(0);

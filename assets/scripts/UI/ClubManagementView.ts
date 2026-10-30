@@ -165,6 +165,8 @@ export default class ClubManagementView {
             this.clearRows();
         }
         this.context = next;
+        // 未加入俱乐部时整张卡片不显示，也不占滚动区高度。
+        this.active("Main/我的/滚动区/view/content/当前俱乐部",!!next.id);
         const card = this.at("Main/我的/滚动区/view/content/当前俱乐部");
         this.text("名称",next.id ? next.name || "俱乐部 " + next.id : "暂无俱乐部",card);
         this.text("邀请码",next.id ? next.inviteCode || "" : "从俱乐部选择后查看信息",card);
@@ -198,6 +200,25 @@ export default class ClubManagementView {
         const inviteText = next.id && next.inviteCode ? "（邀请码:" + next.inviteCode + "）" : "";
         for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗"])
             this.text(name + "/面板/俱乐部信息",clubTitle + inviteText);
+        this.syncProfileScroll(!!next.id);
+    }
+    /**
+     * 「我的」滚动区内容高度：有卡片时 656（按钮区 419.76 + 间距 12 + 卡片 200 + 底部留白 24），
+     * 无卡片时去掉卡片与间距只剩 456；内容不高于可视区时撑满 view，避免可滚动的空白。
+     */
+    public syncProfileScroll(hasClub?:boolean):void {
+        if(hasClub === undefined) {
+            const current = this.getContext();
+            hasClub = !!current && !!current.id;
+        }
+        const content = this.at("Main/我的/滚动区/view/content");
+        const view = this.at("Main/我的/滚动区/view");
+        if(!content) return;
+        const viewHeight = view ? view.height : 0;
+        const height = Math.max(hasClub ? 656 : 456,viewHeight);
+        if(Math.abs(content.height - height) > 0.5) content.height = height;
+        // content 顶部锚点，贴住 view 顶边；否则缩高后内容会整体下移。
+        if(view) content.setPosition(0,viewHeight / 2);
     }
 
     public HandleButton(button:cc.Button):boolean {
