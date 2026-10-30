@@ -313,9 +313,17 @@ export default class panelMain extends UIPanelViewBase {
         GameDataManager.getInstance().dtLastSuccess = new Date().getTime();
     }
 
+    /** 底部「推广」进入前所在的分页，关闭推广页后回到这里。 */
+    private promotionTabReturn:string = "";
+    /** 推广页是否顺带收起了底栏，关闭时按需恢复。 */
+    private promotionHidDown:boolean = false;
+    /** 当前 Main 分页名；推广页关闭后据此恢复底栏选中态。 */
+    private currentMainTab:string = "发现";
+
     /** 大厅初次打开或重新启用时，推广分享页必须保持关闭。 */
     private HidePromotionPanelOnLobbyOpen()
     {
+        this.promotionTabReturn = "";
         this.ClosePromotionPanel();
     }
 
@@ -339,6 +347,13 @@ export default class panelMain extends UIPanelViewBase {
         promotionPanel.active = true;
         if(this.promotionReturnPanel)
             this.promotionReturnPanel.active = false;
+        // 推广页背景不吞触摸，底栏留着会被点穿；它本来也被整页盖住，直接收起。
+        const down = this.node.getChildByName("Down");
+        if(down && down.active)
+        {
+            this.promotionHidDown = true;
+            down.active = false;
+        }
         return true;
     }
 
@@ -351,6 +366,11 @@ export default class panelMain extends UIPanelViewBase {
         this.promotionReturnPanel = null;
         if(cc.isValid(returnPanel) && returnPanel.parent === this.node.parent)
             returnPanel.active = true;
+        if(this.promotionHidDown)
+        {
+            this.promotionHidDown = false;
+            this.node.getChildByName("Down").active = true;
+        }
     }
 
     /** 推广页那一行显示的是「当前俱乐部邀请码」，没有俱乐部时整行（文字 + 复制按钮）都不显示。 */
@@ -858,15 +878,9 @@ export default class panelMain extends UIPanelViewBase {
         if(operation == null)
             return;
 
-        let isAgent = this.IsCurrentUserAgent();
         // 俱乐部模式不提供代理入口，包括旧 Prefab 中的同名节点。
         for(const child of operation.children)
             if(child.name === "代理") child.active = false;
-
-        // 游戏推广入口与代理入口同规则：非代理不显示，只有代理才显示。
-        let promotion = Tool.GetChild(operation,"推广二维码");
-        if(promotion != null)
-            promotion.active = isAgent;
 
         // 原生 Prefab Grid 按已激活入口自动补位，布局不再使用旧稿坐标。
     }
@@ -1024,6 +1038,8 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name == "推广二维码")
         {
+            // 「我的」里的入口不算底栏选中，关闭后保持「我的」即可。
+            this.promotionTabReturn = "";
             this.OpenPromotionPanel();
         }
         else if(button.node.name === "保存二维码")
@@ -1081,7 +1097,14 @@ export default class panelMain extends UIPanelViewBase {
         else if(button.node.name === "关闭上上层")
         {
             if(button.node.parent.parent === this.node.getChildByName("推广二维码"))
+            {
+                const tab = this.promotionTabReturn;
+                this.promotionTabReturn = "";
                 this.ClosePromotionPanel();
+                // 从底栏「推广」进来的，关掉后把底栏选中态恢复到进入前的分页。
+                if(tab)
+                    this.switchTabSel(tab);
+            }
             else
                 button.node.parent.parent.active = false;
         }
@@ -1855,9 +1878,12 @@ export default class panelMain extends UIPanelViewBase {
             this.switchTabSel(toggle.node.name);
             this.getAllRooms();
         }
-        else if(toggle.node.name === "公告")
+        else if(toggle.node.name === "推广")
         {
-            this.switchTabSel(toggle.node.name);
+            // 推广是独立全屏分享页，不占用 Main 分页；关闭后回到进入前的分页。
+            this.promotionTabReturn = this.currentMainTab;
+            if(!this.OpenPromotionPanel())
+                this.switchTabSel(this.promotionTabReturn || "发现");
         }
         else if(toggle.node.name === "兑换")
         {
@@ -2177,16 +2203,20 @@ export default class panelMain extends UIPanelViewBase {
             this.walletReturnToCashWater = false;
         }
         let arrayTemp = this.node.getChildByName("Main").children;
+        let switchedToPage = false;
         arrayTemp.forEach((item,idx,array)=>{
             if(item.name == strName)
             {
                 item.active = true;
+                switchedToPage = true;
             }
             else
             {
                 item.active = false;
             }
         });
+        if(switchedToPage)
+            this.currentMainTab = strName;
 
         //复位Toggle
         let arrayToggle = this.node.getChildByName("Down").getComponentsInChildren(cc.Toggle);
@@ -2239,7 +2269,7 @@ export default class panelMain extends UIPanelViewBase {
             }
             if(view.height <= 0)
                 return;
-            // 内容高度按「有没有当前俱乐部卡片」取 656 / 456，统一由俱乐部视图计算。
+            // 内容高度按「有没有当前俱乐部卡片」取 550 / 350，统一由俱乐部视图计算。
             if(this.clubManagement)
                 this.clubManagement.syncProfileScroll();
             const scrollView = scroll.getComponent(cc.ScrollView);

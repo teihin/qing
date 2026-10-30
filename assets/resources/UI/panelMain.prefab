@@ -23288,7 +23288,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 700.8797653958944,
-      "height": 419.76
+      "height": 314.05
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -23300,7 +23300,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -209.88,
+        -157.025,
         0,
         0,
         0,
@@ -26877,7 +26877,7 @@
         "__id__": 710
       }
     ],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 713
@@ -27378,7 +27378,7 @@
     "_left": 0,
     "_right": 0,
     "_top": 0,
-    "_bottom": 146.6275659824047,
+    "_bottom": 235.95,
     "_verticalCenter": 0,
     "_horizontalCenter": 0,
     "_isAbsLeft": true,
@@ -27388,7 +27388,7 @@
     "_isAbsHorizontalCenter": true,
     "_isAbsVerticalCenter": true,
     "_originalWidth": 700.8797653958944,
-    "_originalHeight": 419.76,
+    "_originalHeight": 314.05,
     "_id": ""
   },
   {
@@ -27505,7 +27505,7 @@
       "ctor": "Float64Array",
       "array": [
         0,
-        -531.78,
+        -426.05,
         0,
         0,
         0,
@@ -29835,7 +29835,7 @@
     "_alignFlags": 17,
     "_left": 0,
     "_right": 0,
-    "_top": 431.78,
+    "_top": 326.05,
     "_bottom": 0,
     "_verticalCenter": 0,
     "_horizontalCenter": 0,
@@ -34530,7 +34530,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -156.615302869288,
+        -297.68862911795964,
         -1.5940488841657812,
         0,
         0,
@@ -34672,7 +34672,7 @@
   },
   {
     "__type__": "cc.Node",
-    "_name": "公告",
+    "_name": "推广",
     "_objFlags": 0,
     "_parent": {
       "__id__": 907
@@ -34716,7 +34716,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        -297.68862911795964,
+        156.615302869288,
         -1.5940488841657812,
         0,
         0,
@@ -35588,7 +35588,7 @@
       "__type__": "TypedArray",
       "ctor": "Float64Array",
       "array": [
-        156.615302869288,
+        -156.615302869288,
         -1.5940488841657812,
         0,
         0,

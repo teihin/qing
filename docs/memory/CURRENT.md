@@ -4,6 +4,12 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。客服网页已部署、真机待验：[交接](handoffs/2026-09-24-chat-keyboard-visibility.md)。
 
+## 2026-10-30 大厅底栏改「客服 俱乐部 BY 推广 我的」（未构建、未真机）
+
+- `Down` 改为 客服/俱乐部/BY/推广/我的（原「公告」toggle 改名推广，客服仍是 Button）；`Main/公告` 分页保留但底栏不再进入。
+- `club_nav_bar_v8.png` 重绘并清掉公告区，`.meta`/UUID 未动、体积未增；推广复用全屏 `推广二维码` 页，打开收起底栏、关闭回原页。
+- 「我的」里的游戏推广行隐藏（按钮区 3 行、内容高 550，正好不滚）。见[交接](handoffs/2026-10-30-nav-tabs.md)。
+
 ## 2026-10-30 机器人账号首次登录激活（已部署，未提交）
 
 - 问题：新建机器人只写营销表，游戏库 `kbe_accountinfos` 玩家行由首次登录生成；没登录过的账号入会回「玩家不存在」，
@@ -13,20 +19,18 @@
   登录成功后回查游戏库确认建号才落 `activated_at`、收回节点并自动补入会。失败记原因、让出节点，60 秒冷却、最多 10 次。
 - 投放：未激活行不可勾选，直接提交回 `409 ROBOT_NOT_ACTIVATED`；分组投放只取已激活账号。机器人管理显示未激活与原因，
   并加「激活」动作（重置冷却）。
-- 已部署：后端 `0c602dbd…`（PID 15511，健康 200）、前端 `index-BgH2Ot-G.js` / `index-BvCWh9Hq.css`；
-  回滚 `backups/xuanmanager.20261030-0108-rollback`、`web.previous-activation-20261030`。
+- 已部署：后端 `0c602dbd…`、前端 `index-BgH2Ot-G.js` / `index-BvCWh9Hq.css`；回滚 `backups/xuanmanager.20261030-0108-rollback`、`web.previous-activation-20261030`。
 - **真实激活未演练**：唯一 Worker `mac-mini-2-local` 自 10-28 离线；本机 `bin/xuanagent` 已重建（含 `XUAN_LOGIN_ONLY`），待启动。
   见[交接](handoffs/2026-10-30-account-activation.md)。
 
 ## 2026-10-29 投放输赢目标支持「按周时段」（已部署，未提交）
 
-- 输赢目标新增 `profit_mode='schedule'`：周一到周日勾选，每天可多段（≤28），结束早于开始=跨零点算开始那天。时段内按 `window_net` 控输赢（结算累加、换时段清零）；时段外先下发 `drain` 打完手里一局，离房后让出 Worker（`schedule_state='released'` 分配时跳过），到点复位。
-- 迁移 039 加 `profit_schedule/schedule_window/window_net/schedule_state`；后端 `automation_schedule.go` 接巡检、投放、编辑、指派；节点 `terminal.go` 支持 drain，客户端排空前打完最后一局。前端加时段编辑器接入投放/配置。
-- 验证：`go vet`/`go build`、`tsc -b`/eslint/`vite build` 通过；跨零点/星期归属用临时 Go 测试验证后删除。后端（039 已执行）与前端已上线；**交互未实测，Worker 未重启**。见[交接](handoffs/2026-10-29-profit-weekly-schedule.md)。
+- 输赢目标新增 `profit_mode='schedule'`：周一到周日可多段（≤28，结束早于开始算跨零点），时段内按 `window_net` 控输赢，时段外先 `drain` 打完手里一局再让出 Worker（`schedule_state='released'`）。
+- 迁移 039（`profit_schedule/schedule_window/window_net/schedule_state`）已执行，后端与前端已上线，`go vet/build`、`tsc -b`、eslint、`vite build` 通过；**交互未实测，Worker 未重启**。见[交接](handoffs/2026-10-29-profit-weekly-schedule.md)。
 
 ## 2026-10-29 控制台小步调整（已部署，未提交）
 
-- 侧边栏一级/二级配色区分；「自动化组」模块 45 隐藏，分组增删改并入**机器人管理 → 分组管理**（建组只填名称+策略；删组可搬走组内机器人，`DELETE /api/automation/groups/{id}?moveToGroupId=N`）；创建/编辑机器人弹窗可内联新建分组并自动选中。
+- 侧边栏一级/二级配色区分；「自动化组」模块 45 隐藏，分组增删改并入**机器人管理 → 分组管理**（建组只填名称+策略；删组可搬走组内机器人）；创建/编辑机器人弹窗可内联新建分组并自动选中。
 - 回滚点 `web.previous-navlevels-20261029`、`web.previous-groupmanager-20261029`。**交互待实测**。见[侧边栏](handoffs/2026-10-29-sidebar-level-contrast.md)、[分组管理](handoffs/2026-10-29-group-manager-in-robots.md)、[删组搬迁](handoffs/2026-10-29-group-delete-move.md)、[组策略](handoffs/2026-10-29-group-strategy-only.md)、[内联建组](handoffs/2026-10-29-robot-inline-group-create.md)。
 
 ## 2026-10-29 机器人密码改回密文 + 独立密钥（已部署，未提交）
@@ -45,7 +49,7 @@
 ## 2026-10-29 牌桌小修与实时战绩（未构建、未真机）
 
 - 留座归零 fire `SelfSeatTimeout` 关「带入窗口」，`PlayerList` 后兜底收窗；俱乐部房隐藏 `RoomFrame/info/游戏时间`。见[交接](handoffs/2026-10-29-seat-timeout-close-buyin.md)、[交接](handoffs/2026-10-29-club-room-hide-clock.md)。
-- 「记录」在座行加第 4 列 `countdown`，追加 `获取_房间_已结算_玩家_命令`（每页 20）滑到底自动翻页；`带入记录.prefab` 改 4 列 + `V8表头countdown`。见[交接](handoffs/2026-10-29-realtime-settled-list.md)。
+- 「记录」在座行加第 4 列 `countdown`，`获取_房间_已结算_玩家_命令`（每页 20）滑到底翻页；`带入记录.prefab` 改 4 列 + `V8表头countdown`。见[交接](handoffs/2026-10-29-realtime-settled-list.md)。
 
 ## 2026-10-27～28 自动化（阶段归档）
 
@@ -55,8 +59,7 @@
 
 ## 2026-10-27 客户端 / 后台小项
 
-- 「我的」页下半部分改可滚动（`Main/我的` 新增 `滚动区 > view > content`）；已传 `5.0.31`，**真机未验**。见[交接](handoffs/2026-10-27-my-page-scroll.md)。
-- 游戏推广下载地址接入「系统配置」，读写 `kbedm.usr_hash_info.下载url`，写前快照/写后回读/写审计。见[交接](handoffs/2026-10-27-promotion-download-url.md)。
+- 「我的」页下半部分改可滚动（`Main/我的` 新增 `滚动区 > view > content`，已传 `5.0.31`、**真机未验**）；推广下载地址接入系统配置（写前快照/写后回读/写审计）。见[滚动](handoffs/2026-10-27-my-page-scroll.md)、[下载地址](handoffs/2026-10-27-promotion-download-url.md)。
 
 ## 2026-10-26 及更早（阶段归档）
 
@@ -65,7 +68,7 @@
 
 ## 本轮实时核对：记忆整理
 
-目录 `/Volumes/SSD/qing`，Creator 2.4.13，`build` 与 `runtime-src.zip` 保留。见[整理交接](handoffs/2026-09-05-memory-migration.md)。
+目录 `/Volumes/SSD/qing`，Creator 2.4.13。见[整理交接](handoffs/2026-09-05-memory-migration.md)。
 
 ## 最近报告的 UI 状态
 

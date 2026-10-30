@@ -203,8 +203,8 @@ export default class ClubManagementView {
         this.syncProfileScroll(!!next.id);
     }
     /**
-     * 「我的」滚动区内容高度：有卡片时 656（按钮区 419.76 + 间距 12 + 卡片 200 + 底部留白 24），
-     * 无卡片时去掉卡片与间距只剩 456；内容不高于可视区时撑满 view，避免可滚动的空白。
+     * 「我的」滚动区内容高度：有卡片时 550（按钮区 314.05 + 间距 12 + 卡片 200 + 底部留白 24），
+     * 正好等于可视区高度；无卡片时只剩按钮区 350，内容不高于可视区时撑满 view，避免可滚动的空白。
      */
     public syncProfileScroll(hasClub?:boolean):void {
         if(hasClub === undefined) {
@@ -215,7 +215,7 @@ export default class ClubManagementView {
         const view = this.at("Main/我的/滚动区/view");
         if(!content) return;
         const viewHeight = view ? view.height : 0;
-        const height = Math.max(hasClub ? 656 : 456,viewHeight);
+        const height = Math.max(hasClub ? 550 : 350,viewHeight);
         if(Math.abs(content.height - height) > 0.5) content.height = height;
         // content 顶部锚点，贴住 view 顶边；否则缩高后内容会整体下移。
         if(view) content.setPosition(0,viewHeight / 2);
