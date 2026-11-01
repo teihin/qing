@@ -835,3 +835,78 @@ export interface PromotionDownloadURLState {
   duplicateRows: number;
   rowCount: number;
 }
+
+/** 俱乐部管理：列表项。群主由 sm_club_make 反查，代理数来自 club_invite_code_info。 */
+export interface ClubListItem {
+  clubId: string;
+  name: string;
+  status: string;
+  mode: string;
+  ownerId: string;
+  ownerName: string;
+  memberCount: number;
+  agentCount: number;
+  tax: string;
+  payMode: string;
+  union: string;
+  /** 群主在当前俱乐部的可用额度（分）。null = 无代理行或未授信，不能显示成 0。 */
+  ownerQuotaFen: number | null;
+}
+
+export interface ClubListResponse {
+  items: ClubListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+/**
+ * 俱乐部成员节点。clubGold 为 null 表示「无该俱乐部积分数据」（服务端 -99 哨兵），
+ * 与真实的 0 不同，界面必须区分，不能显示成 0。
+ */
+export interface ClubMemberNode {
+  playerId: string;
+  name: string;
+  role: "owner" | "agent" | "manager" | "member";
+  isAgent: boolean;
+  isLeader: boolean;
+  upperId: string;
+  upperName: string;
+  clubGold: number | null;
+  /** club_agent_info.quota（分）。null 表示尚未被授信，不是 0。 */
+  quotaFen: number | null;
+  inviteCode: string;
+  note: string;
+  level: number;
+}
+
+export interface ClubMemberTree extends ClubMemberNode {
+  children: ClubMemberTree[];
+}
+
+export interface ClubDetailResponse {
+  club: ClubListItem;
+  members: ClubMemberNode[];
+  roots: ClubMemberTree[];
+  /** 上级缺失、指向自己或成环的成员：单独展示，不能混进树里伪造关系。 */
+  orphan: ClubMemberNode[];
+  warnings: string[];
+}
+
+export interface ClubQuotaState {
+  playerId: string;
+  clubId: string;
+  quotaFen: number;
+  quotaYuan: number;
+  isAgent: number;
+  isGranted: number;
+  /** false 表示游戏服没有返回额度；此时额度「未知」，不是 0。 */
+  queried: boolean;
+}
+
+export interface ClubQuotaAdjustmentResponse {
+  quota: ClubQuotaState;
+  deltaFen: number;
+  verified: boolean;
+  message: string;
+}

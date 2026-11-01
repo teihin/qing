@@ -1,8 +1,8 @@
 import GameDataManager from "../GameDataManager";
-import {ClubManagementApi,ClubListKind,ClubAction,ClubPeoplePage} from "./ClubManagementView";
+import {ClubManagementApi,ClubListKind,ClubAction,ClubPeoplePage,ClubQuota} from "./ClubManagementView";
 const KBEngine = require("kbengine");
 interface Pending {
-    account:string; club:string; kind:string; page:number; user:string;
+    account:string; club:string; kind:string; header:string; page:number; user:string;
     resolve:(value:any)=>void; reject:(error:Error)=>void; timer:any;
 }
 
@@ -87,6 +87,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         // 代理视角的待审申请（查询_俱乐部_代理_申请）。报文同样不带 context/club_id，只能走串行车道配对。
         KBEngine.Event.register("ClubAgentReqInfo",this,"OnAgentApplications");
         KBEngine.Event.register("ClubReqInfo",this,"OnBadge");
+        KBEngine.Event.register("GetClubQuota",this,"OnQuota");
     }
     public Dispose():void {
         this.disposed = true;
@@ -138,7 +139,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
             // 后台红点轮询失败不该长时间占住用户正在看的申请列表。
             const timeout = kind === "badges" ? 6000 : 12000;
             const timer = setTimeout(()=>this.finish(context,new Error("请求超时，请刷新后确认结果"),null,true),timeout);
-            this.pending[context]={account:this.account(),club,kind,page:Number(extra.page || 0),user:String(extra.user_id || ""),resolve,reject,timer};
+            this.pending[context]={account:this.account(),club,kind,header,page:Number(extra.page || 0),user:String(extra.user_id || ""),resolve,reject,timer};
             try {
                 GameDataManager.getAccount().reqHallCommand(JSON.stringify({...extra,header,club_id:club,context}),"p@"+context);
             } catch(error) { this.finish(context,new Error("请求发送失败")); }
@@ -181,11 +182,15 @@ export default class HallClubManagementApi implements ClubManagementApi {
             reject:"删除_俱乐部_加入申请",remove:"删除_俱乐部_玩家",promote:"添加_俱乐部_管理员",
             adjustScore:"修改_俱乐部_成员_积分",setAgent:"设置_俱乐部_代理",
             changeAgentRatio:"修改_俱乐部_代理_比例",cancelAgent:"取消_俱乐部_代理",
-            setNote:"设置_俱乐部_成员_备注"
+            setNote:"设置_俱乐部_成员_备注",grantQuota:"授信_俱乐部_额度",
+            increaseQuota:"授信_俱乐部_额度",decreaseQuota:"授信_俱乐部_额度"
         };
         const extra:any = user ? {user_id:user} : {};
         if(action === "adjustScore") extra.user_modify_gold = Number(value);
         if(action === "setAgent" || action === "changeAgentRatio") extra.percent = Number(value);
+        if(action === "grantQuota") extra.quota_fen = Number(value);
+        if(action === "increaseQuota") extra.quota_fen = Math.abs(Number(value));
+        if(action === "decreaseQuota") extra.quota_fen = -Math.abs(Number(value));
         // 备注空串 = 清空；服务端上限 30 字、超出直接报错。
         if(action === "setNote") extra.note = value === undefined || value === null ? "" : String(value);
         const outcome = await this.request(club,action,commands[action],extra);
@@ -195,6 +200,9 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(action === "setAgent") return {message:"已开通代理，请刷新确认比例"};
         if(action === "changeAgentRatio") return {message:"代理比例已调整"};
         if(action === "cancelAgent") return {message:"已取消代理"};
+        if(action === "grantQuota") return {message:"额度已设置"};
+        if(action === "increaseQuota") return {message:"额度已增加"};
+        if(action === "decreaseQuota") return {message:"额度已减少"};
         if(action === "setNote") return {message:extra.note ? "备注已更新" : "备注已清空"};
         if(action === "approve") {
             // 审批的最终 0x200 已表示入会完成。成员列表是独立推送，不能用它阻塞
@@ -204,6 +212,9 @@ export default class HallClubManagementApi implements ClubManagementApi {
         }
         this.RefreshBadges();
         return {message:action === "leave" ? "退出申请已提交，请等待审核" : action === "dissolve" ? "俱乐部已解散" : "已拒绝入会申请"};
+    }
+    public getQuota(club:string,user:string):Promise<ClubQuota> {
+        return this.request(club,"quota","查询_俱乐部_额度",{user_id:user});
     }
     public RefreshBadges():void {
         const a=GameDataManager.getAccount();
@@ -224,17 +235,58 @@ export default class HallClubManagementApi implements ClubManagementApi {
     }
     public OnCommand(code:number,raw:string):void {
         const data=this.parse(raw);if(!data)return;
-        const key=this.context(data),p=this.pending[key];if(!p)return;
+        let key=this.context(data),p=this.pending[key];
+        // 授信/额度调整成功回包可能不带 context；当前页面串行提交，
+        // 因此只在唯一的额度变更请求上兜底，避免把无标签的旧回包交给其他操作。
+        if(!p && !key) {
+            const candidates=Object.keys(this.pending).filter(k=>
+                ["grantQuota","increaseQuota","decreaseQuota"].indexOf(this.pending[k].kind) >= 0);
+            if(candidates.length === 1) { key=candidates[0];p=this.pending[key]; }
+        }
+        if(!p)return;
         const error=data.error || (data.result && data.result.error);
         if(error || (code !== 0x200 && code !== 0x500)) {
             this.finish(key,new Error(String(error || "俱乐部操作失败")));return;
         }
         if(["members","applications","verify","badges"].indexOf(p.kind)>=0)return;
+        // 查询_俱乐部_额度 的 0x200 只是同步受理，真实数据随后由 GetClubQuota 推送。
+        if(p.kind === "quota")return;
         // 0x500 只对列表请求保留兼容；操作命令按当前协议只接受最终 0x200。
         if(code !== 0x200) {
             this.finish(key,new Error("请求已受理，操作结果尚未确认，请刷新后确认"));return;
         }
         this.finish(key,null,{accepted:false});
+    }
+    /** 查询_俱乐部_额度 的异步结果；数据通常为 {GetClubQuota:{...},context}。 */
+    public OnQuota(raw:string):void {
+        const data=this.parse(raw);if(!data)return;
+        let body:any=data;
+        const result=this.parse(data && data.result);
+        if(result && typeof result === "object")body=result;
+        const nested=this.parse(body && body.GetClubQuota);
+        if(nested && typeof nested === "object")body=nested;
+        const quota:any = body && body.GetClubQuota && typeof body.GetClubQuota === "object" ? body.GetClubQuota : body;
+        let key=this.context(data) || this.context(body) || this.context(quota);
+        let p=key ? this.pending[key] : null;
+        if(!p) {
+            const user=String(quota && (quota.user_id || quota.guuid) || "");
+            const clubId=String(data.club_id || body.club_id || "");
+            const candidates=Object.keys(this.pending).filter(k=>{
+                const item=this.pending[k];
+                return item.kind === "quota" && (!clubId || item.club === clubId) && (!user || item.user === user);
+            });
+            if(candidates.length === 1) { key=candidates[0];p=this.pending[key]; }
+        }
+        if(!p || p.kind !== "quota")return;
+        const error=(data && data.error) || (body && body.error) || (quota && quota.error);
+        if(error) { this.finish(key,new Error(String(error)));return; }
+        const userId=String(quota && (quota.user_id || quota.guuid) || p.user || "");
+        const quotaFen=Number(quota && quota.quota_fen);
+        if(!Number.isFinite(quotaFen)) {
+            this.finish(key,new Error("额度回包格式不匹配，请确认服务器回包"));return;
+        }
+        this.finish(key,null,{userId,quotaFen,isAgent:optionalFlag(quota,["is_agent"]) === true,
+            isGranted:optionalFlag(quota,["is_granted"]) === true});
     }
     public OnMembers(raw:string):void {this.receive(raw,"members","NumberList");}
     public OnApplications(raw:string):void {this.receive(raw,"applications","JoinerList");}

@@ -2363,3 +2363,88 @@ td strong { color: #294149; }
 .automation-worker-card header > div { display: grid; gap: 3px; min-width: 0; }
 .automation-worker-card header strong { display: block; color: #1d3b44; font-family: Georgia, "Songti SC", serif; font-size: 17px; }
 .automation-worker-line { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 10px; margin-top: 8px; color: #587077; font-size: 12px; }
+
+/* 俱乐部管理：列表 + 成员代理树 + 额度调整 */
+.club-table { min-width: 1000px; }
+/* 俱乐部查询：维度切换 + 组合条件 */
+.club-filter-panel { border-bottom: 1px solid #e8eeee; background: #fbfdfd; }
+.club-filter-primary { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 15px 18px; }
+.club-filter-mode { display: grid; gap: 6px; color: #61787e; font-size: 12px; font-weight: 700; }
+.club-filter-mode select { height: 40px; padding: 0 10px; border: 1px solid #d5e3e4; border-radius: 9px; outline: 0; color: #345159; background: #fff; font-size: 14px; }
+.club-filter-primary .search-box { flex: 1 1 260px; max-width: 420px; }
+.club-filter-primary .filter-reset { align-self: center; color: #7a8f94; background: none; border: 0; font-size: 13px; text-decoration: underline; cursor: pointer; }
+.club-filter-advanced { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 0 18px 17px; }
+.club-filter-advanced .filter-actions { display: flex; align-items: flex-end; gap: 8px; }
+.club-range { display: flex; align-items: center; gap: 7px; }
+.club-range span { color: #90a3a7; }
+.club-range input { min-width: 0; flex: 1; }
+@media (max-width: 1000px) {
+  .club-filter-advanced { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 640px) {
+  .club-filter-advanced { grid-template-columns: 1fr; }
+  .club-filter-primary .search-box { max-width: none; }
+}
+.club-warning { color: #b0603d; font-size: 12px; font-weight: 700; }
+
+.club-detail { display: grid; gap: 16px; }
+.club-detail__summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.club-detail__summary > div { padding: 12px 14px; border: 1px solid #e3ecec; border-radius: 11px; background: #fafdfd; }
+.club-detail__summary span { display: block; color: #7c9298; font-size: 12px; }
+.club-detail__summary strong { display: block; margin-top: 4px; overflow: hidden; color: #21414a; font-family: Georgia, "Songti SC", serif; font-size: 19px; text-overflow: ellipsis; white-space: nowrap; }
+
+.club-detail__warnings { padding: 13px 15px; border: 1px solid #f0dcc0; border-radius: 11px; color: #8a6224; background: #fdf8ef; font-size: 12px; }
+.club-detail__warnings strong { display: block; margin-bottom: 6px; font-size: 13px; }
+.club-detail__warnings ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; line-height: 1.5; }
+
+.club-tree { max-height: 52vh; overflow: auto; padding: 6px 4px 6px 0; }
+.club-tree__node { position: relative; }
+.club-tree__children { margin-left: 20px; padding-left: 12px; border-left: 1px dashed #dfeaea; }
+.club-tree__row { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: 9px; }
+.club-tree__row:hover { background: #f7fbfb; }
+.club-tree__row--owner { background: #f5fbfa; }
+.club-tree__toggle { width: 22px; height: 22px; flex: 0 0 22px; border: 1px solid #d7e6e5; border-radius: 6px; color: #3d7b76; background: #fff; font-size: 13px; font-weight: 800; line-height: 1; }
+.club-tree__toggle.is-leaf { color: #b9c8c8; border-color: transparent; background: transparent; }
+.club-tree__name { min-width: 150px; color: #234149; font-size: 13px; font-weight: 700; }
+.club-tree__name small { display: block; margin-top: 2px; color: #86999d; font-size: 11px; font-weight: 500; }
+.club-tree__gold { margin-left: auto; color: #7a6a3d; font-size: 12px; font-weight: 700; }
+.club-tree__meta { color: #8b9ea2; font-size: 11px; }
+.club-leader { margin-left: 6px; padding: 1px 6px; border-radius: 999px; color: #8a6a22; background: #fcf3e1; font-size: 10px; font-weight: 800; }
+
+.club-role { flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; }
+.club-role--owner { color: #8a5a1f; background: #fbf1de; }
+.club-role--agent { color: #1f6f83; background: #e8f5f8; }
+.club-role--manager { color: #5a6187; background: #eef0f9; }
+.club-role--member { color: #5f7478; background: #eef3f3; }
+
+.club-orphan { padding: 13px 15px; border: 1px solid #ecdcdc; border-radius: 11px; background: #fdf7f7; }
+.club-orphan h4 { color: #8f4b4b; font-size: 13px; }
+.club-orphan p { margin-top: 4px; color: #93696a; font-size: 12px; line-height: 1.5; }
+.club-orphan ul { margin: 9px 0 0; padding: 0; display: grid; gap: 6px; list-style: none; }
+.club-orphan li { display: flex; align-items: baseline; gap: 8px; color: #4f6367; font-size: 12px; }
+.club-orphan small { color: #93a3a6; font-size: 11px; }
+
+.quota-intro { margin-bottom: 14px; padding: 12px 14px; border: 1px solid #e1ecec; border-radius: 10px; background: #f8fcfc; color: #527078; font-size: 12px; line-height: 1.6; }
+.quota-intro ul { margin: 8px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.quota-intro strong { color: #2c5359; }
+
+.quota-result { padding: 15px; border-radius: 11px; font-size: 13px; }
+.quota-result.is-ok { border: 1px solid #c8e6d9; color: #256b4f; background: #f0faf4; }
+.quota-result.is-unverified { border: 1px solid #f0dcc0; color: #8a6224; background: #fdf8ef; }
+.quota-result > strong { display: block; font-size: 14px; }
+.quota-result > p { margin-top: 6px; line-height: 1.6; }
+.quota-result dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.quota-result dt { color: #7f9397; font-size: 11px; }
+.quota-result dd { margin-top: 2px; font-family: Georgia, "Songti SC", serif; font-size: 17px; }
+
+@media (max-width: 900px) {
+  .club-detail__summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .club-search input { width: 160px; }
+}
+
+/* 额度表单里的勾选框不能继承 .form-grid input 的输入框尺寸（会被撑成 44px 高）。 */
+.form-grid .confirm-check input { width: 17px; height: 17px; min-height: 0; padding: 0; border: 0; background: none; box-shadow: none; accent-color: #128e84; }
+.form-grid .confirm-check input:focus { box-shadow: none; }
+.club-tree__quota { color: #2f6f86; font-size: 12px; font-weight: 700; }
+.club-quota-value { color: #1f6f83; font-variant-numeric: tabular-nums; }
+.club-quota-missing { color: #9aa8ab; font-size: 12px; }

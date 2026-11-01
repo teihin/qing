@@ -6,7 +6,8 @@ import DirectChatManager from "../logic/DirectChatManager";
 export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications";
 export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" | "promote" |
-    "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent" | "setNote";
+    "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent" | "setNote" |
+    "grantQuota" | "increaseQuota" | "decreaseQuota";
 export interface ClubContext { accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; isLeader?:boolean; }
 export interface ClubPlayer {
     id:string; name:string; role?:string; balance?:string;
@@ -17,13 +18,17 @@ export interface ClubPlayer {
     teamCount?:string; points?:string; online?:boolean;
     todayWin?:string; yesterdayWin?:string; totalWin?:string;
     todayContribution?:string; yesterdayContribution?:string; totalContribution?:string;
+    /** 额度查询结果；quotaFen 保留服务端分单位，只有已授信代理才在成员行展示。 */
+    quotaFen?:number; quotaIsAgent?:boolean; quotaGranted?:boolean;
 }
 export interface ClubPeoplePage { items:ClubPlayer[]; total:number; }
+export interface ClubQuota { userId:string; quotaFen:number; isAgent:boolean; isGranted:boolean; }
 /** Adapt server payloads here. Resolve act only after the business result, not an async acceptance code. */
 export interface ClubManagementApi {
     /** 成员列表自 2026-10-26 起为代理直属口径；传 agentId 下钻到指定下级代理的直属成员。 */
     list(clubId:string,kind:ClubListKind,page:number,count:number,search?:string,agentId?:string):Promise<ClubPeoplePage>;
     act(clubId:string,action:ClubAction,userId:string,value?:string):Promise<{message?:string}>;
+    getQuota(clubId:string,userId:string):Promise<ClubQuota>;
 }
 
 /** UI-only controller. All art/layout lives in panelMain.prefab. No adapter means no network writes. */
@@ -48,7 +53,7 @@ export default class ClubManagementView {
     private downlinePage:number = 0;
     private downlineTotal:number = 0;
     private downlineToken:number = 0;
-    private inputMode:"ratio"|"remark"|null = null;
+    private inputMode:"ratio"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"|null = null;
     /** 文档 4.11：note 上限 30 字（按字符计），服务端超长直接报错、不截断。 */
     private static readonly NOTE_MAX:number = 30;
     private readonly pageSize:number = 20;
@@ -231,13 +236,13 @@ export default class ClubManagementView {
             "管理退出","管理解散","管理收益","管理取消","管理确认",
             "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置调整分数","玩家设置踢出俱乐部",
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
-            "玩家设置备注","玩家设置禁止游戏","玩家设置禁止账号",
+            "玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏","玩家设置禁止账号",
             "成员设置","成员设置非激活","下级成员","下级成员激活",
             "下级第一页","下级上一页","下级下一页","下级最后一页",
             "玩家设置输入关闭","玩家设置输入取消","玩家设置输入确认"].indexOf(name) < 0) return false;
         this.Refresh();
         if(["玩家设置赠送金币","玩家设置调整分数","玩家设置踢出俱乐部","玩家设置调整比例",
-            "玩家设置代理开关","玩家设置取消代理","玩家设置备注","玩家设置禁止游戏",
+            "玩家设置代理开关","玩家设置取消代理","玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏",
             "玩家设置禁止账号"].indexOf(name) >= 0 && this.blockReadOnlyPlayer()) return true;
         if(name === "玩家设置关闭") {
             this.active("俱乐部玩家设置弹窗",false);
@@ -264,6 +269,12 @@ export default class ClubManagementView {
             if(this.selectedPlayer) this.confirm("cancelAgent",this.selectedPlayer.id,this.selectedPlayer.name);
         } else if(name === "玩家设置备注") {
             if(this.selectedPlayer) this.openPlayerInput("remark");
+        } else if(name === "玩家设置开通额度") {
+            if(this.selectedPlayer) this.openPlayerInput("quota");
+        } else if(name === "玩家设置增加额度") {
+            if(this.selectedPlayer) this.openPlayerInput("quotaIncrease");
+        } else if(name === "玩家设置减少额度") {
+            if(this.selectedPlayer) this.openPlayerInput("quotaDecrease");
         } else if(name === "玩家设置禁止游戏" || name === "玩家设置禁止账号") {
             this.message("服务器接口暂未提供该设置");
         } else if(name === "成员设置" || name === "成员设置非激活") {
@@ -414,6 +425,86 @@ export default class ClubManagementView {
         const value = item.agentPercent === undefined || item.agentPercent === null ? "" : String(item.agentPercent).trim();
         return (value === "" ? "0" : value) + "%";
     }
+    private quotaText(item:ClubPlayer):string {
+        const fen = Number(item && item.quotaFen);
+        if(!Number.isFinite(fen)) return "未开通";
+        const yuan = fen / 100;
+        return Number.isInteger(yuan) ? String(yuan) : yuan.toFixed(2).replace(/\.?0+$/,"");
+    }
+    /** 当前弹窗操作者可给直属代理授信；服务端仍会再次校验直属关系和自己的额度。 */
+    private canGrantQuota():boolean {
+        const player = this.selectedPlayer;
+        if(!player || this.readOnlyPlayer() || !this.canManageAgent()) return false;
+        if(!this.isAgentPlayer(player)) return false;
+        return String(player.id || "") !== String(this.context && this.context.accountId || "") &&
+            String(player.id || "") !== String(this.context && this.context.ownerId || "");
+    }
+    private fillMemberQuota(row:cc.Node,item:ClubPlayer):void {
+        const show = !!item && this.isAgentPlayer(item) && item.quotaGranted === true;
+        this.active("额度",show,row);
+        this.active("额度值",show,row);
+        if(show) {
+            this.text("额度","额度",row);
+            this.text("额度值",this.quotaText(item),row);
+        }
+    }
+    private applyQuota(item:ClubPlayer,quota:ClubQuota):void {
+        item.quotaFen = quota.quotaFen;
+        item.quotaIsAgent = quota.isAgent;
+        item.quotaGranted = quota.isAgent && quota.isGranted;
+    }
+    private refreshPlayerQuotaUi():void {
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel || !this.selectedPlayer) return;
+        if(this.settingsTab !== "member") {
+            this.active("开通额度底",false,panel);
+            this.active("开通额度",false,panel);
+            this.active("额度底",false,panel);
+            this.active("额度",false,panel);
+            this.active("额度值",false,panel);
+            this.active("玩家设置开通额度",false,panel);
+            this.active("玩家设置增加额度",false,panel);
+            this.active("玩家设置减少额度",false,panel);
+            return;
+        }
+        const player = this.selectedPlayer;
+        const isAgent = this.isAgentPlayer(player);
+        const quotaCapable = isAgent && player.quotaIsAgent !== false;
+        const canGrant = quotaCapable && this.canGrantQuota();
+        const granted = quotaCapable && player.quotaGranted === true;
+        // 开通行始终保留；已授信时只展示「已开通」状态，额度修改统一走下面的调整行。
+        const openRow = quotaCapable;
+        const currentRow = granted;
+        this.active("开通额度底",openRow,panel);
+        this.active("开通额度",openRow,panel);
+        const openAction = this.at("玩家设置开通额度",panel);
+        this.active("玩家设置开通额度",openRow && !this.readOnlyPlayer(),panel);
+        this.button("玩家设置开通额度",openRow && canGrant && !granted,panel);
+        if(openAction) this.text("文字",granted ? "已开通" : "开通",openAction);
+        this.active("额度底",currentRow,panel);
+        this.active("额度",currentRow,panel);
+        this.active("额度值",currentRow,panel);
+        if(currentRow) this.text("额度值",this.quotaText(player),panel);
+        this.active("玩家设置增加额度",currentRow && canGrant,panel);
+        this.active("玩家设置减少额度",currentRow && canGrant,panel);
+        this.button("玩家设置增加额度",currentRow && canGrant,panel);
+        this.button("玩家设置减少额度",currentRow && canGrant,panel);
+    }
+    private requestQuotaForPlayer(item:ClubPlayer,context:ClubContext,version:number,row:cc.Node = null,token:number = 0):void {
+        if(!this.api || !item || !this.isAgentPlayer(item) || !context || !context.id) return;
+        const playerId = String(item.id || "");
+        this.api.getQuota(context.id,playerId).then(quota=>{
+            if(!this.valid(version,context) || (token && token !== this.downlineToken)) return;
+            this.applyQuota(item,quota);
+            if(row && cc.isValid(row)) this.fillMemberQuota(row,item);
+            if(this.selectedPlayer && String(this.selectedPlayer.id) === playerId) this.refreshPlayerQuotaUi();
+        }).catch(()=>{
+            if(!this.valid(version,context) || (token && token !== this.downlineToken)) return;
+            item.quotaGranted = false;
+            if(row && cc.isValid(row)) this.fillMemberQuota(row,item);
+            if(this.selectedPlayer && String(this.selectedPlayer.id) === playerId) this.refreshPlayerQuotaUi();
+        });
+    }
     /** 有备注时统一显示「名字(备注)」，成员列表、下级列表与玩家信息抬头共用。 */
     private displayName(item:ClubPlayer):string {
         const name = item && item.name || (item ? "玩家 " + item.id : "");
@@ -491,6 +582,7 @@ export default class ClubManagementView {
             this.text("比例","比例",row);
             this.text("比例值",this.percentText(item),row);
         }
+        this.fillMemberQuota(row,item);
         this.winText(row,"今日输赢",item.todayWin);
         this.winText(row,"昨日输赢",item.yesterdayWin);
         this.winText(row,"总输赢",item.totalWin);
@@ -587,6 +679,7 @@ export default class ClubManagementView {
             row.setPosition(0,firstY-index*pitch);
             if(this.kind === "members") {
                 this.fillMemberRow(row,item);
+                this.requestQuotaForPlayer(item,context,this.version,row);
                 // 自己那一行没有玩家设置（设代理/调比例/踢出都针对别人），点了不弹窗。
                 const isSelf = String(item.id || "").trim() === String(context.accountId || "").trim();
                 if(!isSelf) this.bindPlayerSettings(this.at("头像",row),item,context,0);
@@ -676,9 +769,12 @@ export default class ClubManagementView {
         this.button("玩家设置禁止账号",false,panel);
         this.renderDownline(panel);
         this.showPlayerSettingsTab("member");
+        this.refreshPlayerQuotaUi();
+        this.requestQuotaForPlayer(item,{...this.context},this.version);
     }
     private settingsMemberNodes():string[] {
-        return ["备注","备注底","备注值","比例","比例底","比例值","玩家设置调整比例","代理","代理底",
+        return ["备注","备注底","备注值","比例","比例底","比例值","开通额度底","开通额度",
+            "玩家设置开通额度","额度底","额度","额度值","玩家设置增加额度","玩家设置减少额度","玩家设置调整比例","代理","代理底",
             "代理开关文字","玩家设置代理开关"];
     }
     private roleText(item:ClubPlayer):string {
@@ -713,9 +809,10 @@ export default class ClubManagementView {
         // 页签切换会重新激活比例/代理行按钮，只读态必须在之后统一收起。
         if(this.readOnlyPlayer()) {
             for(const name of ["玩家设置赠送金币","玩家设置踢出俱乐部","玩家设置调整比例",
-                "玩家设置代理开关","玩家设置备注"])
+                "玩家设置代理开关","玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度"])
                 this.active(name,false,panel);
         }
+        this.refreshPlayerQuotaUi();
         this.active("玩家设置下级列表",!member,panel);
         this.active("成员设置",member,panel);
         this.active("成员设置非激活",!member,panel);
@@ -814,6 +911,7 @@ export default class ClubManagementView {
             row.active = true;
             row.setPosition(0,list.height / 2 - pitch / 2 - index * pitch);
             this.fillMemberRow(row,item);
+            this.requestQuotaForPlayer(item,context,this.version,row,this.downlineToken);
             // 与成员列表一致：头像本身带 Button，事件必须绑在头像上才能收到；
             // 点开后同一个弹窗换成该成员资料，可以继续往下看，但不再允许修改。
             const isSelf = String(item.id || "").trim() === String((context && context.accountId) || "").trim();
@@ -821,9 +919,11 @@ export default class ClubManagementView {
         });
         this.downlinePaging(panel);
     }
-    private openPlayerInput(mode:"ratio"|"remark"):void {
+    private openPlayerInput(mode:"ratio"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"):void {
         // 比例与备注权限一致：创建者或该成员的直属上级代理。
-        if(!this.selectedPlayer || (mode === "ratio" ? !this.canManageAgent() : !this.canRemarkPlayer())) return;
+        const quotaMode = ["quota","quotaIncrease","quotaDecrease"].indexOf(mode) >= 0;
+        const allowed = mode === "ratio" ? this.canManageAgent() : quotaMode ? this.canGrantQuota() : this.canRemarkPlayer();
+        if(!this.selectedPlayer || !allowed) return;
         if(this.blockReadOnlyPlayer()) return;
         const modal = this.at("玩家设置输入弹窗");
         const panel = this.at("面板",modal);
@@ -833,18 +933,22 @@ export default class ClubManagementView {
         this.inputMode = mode;
         // 输入框与「调整比例」共用：比例要数字键盘，备注得能录中文/英文；
         // Prefab 里存的是 NUMERIC，不按用途切回来备注就只能打数字。
-        edit.inputMode = mode === "ratio" ? cc.EditBox.InputMode.NUMERIC : cc.EditBox.InputMode.SINGLE_LINE;
-        const title = mode === "ratio" ? "调整比例" : "设置备注";
-        const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" :
+        edit.inputMode = mode === "remark" ? cc.EditBox.InputMode.SINGLE_LINE :
+            quotaMode ? cc.EditBox.InputMode.DECIMAL : cc.EditBox.InputMode.NUMERIC;
+        const title = mode === "ratio" ? "调整比例" : mode === "quota" ? "开通额度" :
+            mode === "quotaIncrease" ? "增加额度" : mode === "quotaDecrease" ? "减少额度" : "设置备注";
+        const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" : quotaMode ?
+            (mode === "quotaDecrease" ? "请输入减少额度（元），支持两位小数" : "请输入增加额度（元），支持两位小数") :
             "请输入备注（最多 " + ClubManagementView.NOTE_MAX + " 字，留空可清空）";
         this.text("玩家设置输入标题",title,panel);
         this.text("玩家设置输入提示",prompt,panel);
         // EditBox 会把框内标签强制成单行 CLAMP，长句会被截断；完整说明留在上方提示，框内只放短占位。
-        this.text("提示",mode === "ratio" ? prompt : "请输入备注",input);
+        this.text("提示",mode === "ratio" ? prompt : quotaMode ? "请输入额度" : "请输入备注",input);
         // 备注上限按文档 §4.11，超长服务端直接报错；这里先在输入层拦住，提示文案同源。
-        edit.maxLength = mode === "remark" ? ClubManagementView.NOTE_MAX : 120;
+        edit.maxLength = mode === "remark" ? ClubManagementView.NOTE_MAX : quotaMode ? 18 : 120;
         edit.string = mode === "ratio" ?
             (this.selectedPlayer.agentPercent !== undefined ? String(this.selectedPlayer.agentPercent) : "0") :
+            quotaMode ? "0" :
             (this.selectedPlayer.note || "");
         this.active("玩家设置输入弹窗",true);
     }
@@ -865,6 +969,22 @@ export default class ClubManagementView {
             this.inputMode = null;
             this.active("玩家设置输入弹窗",false);
             this.pending = {club:{...this.context},action:"changeAgentRatio",userId:player.id,value:String(number)};
+            this.submit();
+            return;
+        }
+        if(mode === "quota" || mode === "quotaIncrease" || mode === "quotaDecrease") {
+            const yuan = Number(value);
+            if(!/^\d+(?:\.\d{1,2})?$/.test(value) || !Number.isFinite(yuan) ||
+                yuan < 0 || mode === "quotaDecrease" && yuan <= 0 || yuan > 90071992547409.91) {
+                this.message(mode === "quotaDecrease" ? "减少额度必须大于 0，最多两位小数" : "额度必须是大于等于 0 的数字，最多两位小数");
+                return;
+            }
+            const player = this.selectedPlayer;
+            this.inputMode = null;
+            this.active("玩家设置输入弹窗",false);
+            const fen = Math.round(yuan * 100);
+            const action:ClubAction = mode === "quota" ? "grantQuota" : mode === "quotaIncrease" ? "increaseQuota" : "decreaseQuota";
+            this.pending = {club:{...this.context},action,userId:player.id,value:String(action === "decreaseQuota" ? -fen : fen)};
             this.submit();
             return;
         }
@@ -975,8 +1095,14 @@ export default class ClubManagementView {
             this.pending = null;
             this.busy = false;
             this.message(result && result.message || (pending.action === "leave" ? "退出申请已提交" : "操作成功"));
-            if(["approve","reject","remove","promote","adjustScore","setAgent","changeAgentRatio","cancelAgent"].indexOf(pending.action) >= 0)
+            if(["approve","reject","remove","promote","adjustScore","setAgent","changeAgentRatio","cancelAgent",
+                "grantQuota","increaseQuota","decreaseQuota"].indexOf(pending.action) >= 0)
                 await this.load(this.page);
+            if(["grantQuota","increaseQuota","decreaseQuota"].indexOf(pending.action) >= 0 && this.selectedPlayer) {
+                // GC_OK 不携带额度值；列表刷新后再按目标成员查询一次，
+                // 让详情页和列表都以服务端最终额度为准。
+                this.requestQuotaForPlayer(this.selectedPlayer,{...pending.club},this.version);
+            }
         } catch(error) {
             if(this.valid(version,pending.club)) this.message(error && error.message || "操作失败，请稍后重试");
         } finally {

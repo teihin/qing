@@ -4,27 +4,33 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
-## 2026-10-31 俱乐部 1 对 1 私聊（服务端已部署；客户端空会话请求已修复）
+## 2026-11-01 俱乐部成员额度展示与授信（未构建、未真机）
 
-- 服务端新增 `/api/direct/*` 与 `chat_direct_*`（迁移 `006`，客服表未动、清理独立）；直聊关系已改为通过 `CHAT_GAME_DB_*` 只读连接直接查询游戏库，不再读取俱乐部同步副本，也不再提供目录同步运行路径。迁移遗留的快照表未参与运行时查询。
-- 客户端 `DirectChatManager` + 消息页作为 `Main` 第 5 个分页，成员列表行尾加「对话」。本次 404 根因是 Cocos `onLoad` 早于 `UIManager.setPanelInfo`，聊天页在 `onLoad` 读取不到 `strUserData`，导致请求拼成 `/conversations//messages`；已将参数解析移到 `start`，并在创建会话、文字发送、语音发送和统一请求层增加空会话 ID保护。
-- 聊天详情消息区已改为效果图结构：对方左侧绿色九宫格圆角气泡 + 头像，自己右侧金色九宫格圆角气泡 + 头像；文字支持多行自动换行并由背景完整包住，语音气泡显示播放标识和时长。
-- 消息渲染已修正：所有单行文字统一 72px 气泡高度，只有真实多行文字才按行数增加高度，避免数字/英文宽度估算造成同为一行却高低不一致。
-- 聊天 EditBox 已从数字模式改为 `InputMode.ANY`，允许中英文、数字、空格和符号输入；脚本启动时同步兜底设置，避免旧 library 缓存继续限制为数字。
-- 服务端新增直聊 CORS 白名单与 `OPTIONS` 预检处理，只作用于 `/api/direct/*`；默认允许 Cocos 调试来源 `http://localhost:7456`、`http://127.0.0.1:7456`。Go 全量测试通过，Linux amd64 二进制已部署到正式 ChatTool，旧二进制备份为 `bin/chattool.previous-cors-20261031-1354`。公网预检返回 `204` 和 `Access-Control-Allow-Origin`，实际未授权请求返回带 CORS 头的 `401 DIRECT_AUTH_REQUIRED`。
-- 最新游戏库直读版本已部署，二进制 SHA-256 为 `0472c2663c1c2f916f04939ec5a5657a3b813bd92b00d981d5a8f961e5946c49`；远端健康检查返回 `status=ok`。Edge 调试中已观察到创建会话成功、聊天历史请求 `200`；此前的双斜杠 404 是旧客户端代码产生的历史请求。
-- 客户端尚未做正式构建、真机和双账号双俱乐部完整联调；图片发送服务端修复已部署，Android/iOS 原生选图桥已接入项目级原生工程，网页版继续走浏览器选图；三端真机图片发送和录音仍未验证。见[交接](handoffs/2026-10-31-direct-chat.md)。
-- 2026-11-01 图片附件创建 500 的根因是生产库历史图片记录把 `external_media_id` 留成空字符串，唯一索引 `(provider, external_media_id)` 与新图片附件冲突；`SQLStore.CreateAttachment` 现把空值作为 SQL `NULL` 写入，已部署并用真实接口完成创建→上传→确认回放，三步均返回 200，测试附件已清理。
-- 消息列表摘要现对长文字做单行截断并追加省略号；聊天详情动态 content 停用固定稿 Widget 的高度覆盖，按当前 ScrollView view 尺寸重新定位和拉宽，并延迟到底部滚动，解决超过一屏后无法上下滑动、最新消息被输入区遮住的问题。仅改脚本，保留用户手动 Prefab 修改。
-- 新消息滚动已进一步改为按新增内容高度直接补滚：仅在距离底部 12px 内跟随，使用 `getMaxScrollOffset` 计算新增高度并关闭小段缓动；重绘时保留 `content.y`，不再把内容先重置到初始位置，避免 ScrollView 先回弹再上移。主动发送在距离底部 180px 内也直接定位到新底部，用户查看旧消息时不再整屏跳动。图片大图预览增加独立黑色半透明运行时蒙版，未改用户手动调整的 Prefab。
-- 自己的聊天头像改为优先读取游戏账号的 `photo` 字段，服务端会话头像和旧 `avatar/avatarIndex` 字段只作为回退；对方头像仍使用俱乐部成员数据。
-- 2026-11-01 长连接改造：上述直聊轮询已替换为独立 WebSocket（先 `POST /api/direct/ws-ticket`，再 `GET /api/direct/ws?ticket=...`）。服务端消息落库成功后才向接收方在线连接推送 `message.new`，发送方收到 `message.sent`；事件只带会话/消息游标，客户端再用自己的 `after` 请求读取完整消息和媒体签名。文本/语音消息优先走 WebSocket，断线、超时或回包丢失用同一个 `clientMessageId` 回退 HTTP，服务端幂等保证不重复。服务端增加有限发送队列、读写超时、Ping/Pong、指数退避重连和账号/前后台生命周期处理；HTTP 历史、附件、已读、删除和媒体接口保持不变。新增 `github.com/gorilla/websocket`，Caddy 反代继续直通 `/chattool/*`。
-- 长连接本地验证：`go test ./...`、`go vet ./...` 通过，新增实时 Hub 定向投递测试；`GameDef.ts`、`DirectChatManager.ts`、`panelMain.ts`、`panelMessage.ts`、`panelMessageChat.ts` 使用 TypeScript 5.9.3 转译无诊断。尚未做 Creator 实际运行、双账号真连接、正式 Web/Android/iOS 构建、真机和生产反代升级；当前生产服务仍需先部署新 Go 二进制并确认 WSS 连接、发送、接收、断线补偿后再切换流量。
-- 2026-11-01 长连接后端已部署：Linux amd64 二进制 SHA-256 `e225076f8cea21ddeda24c935e27e96781d87a3cce5145416283f2a003561b21` 已原子替换至远端 `/www/html/.chattool/bin/chattool` 并由 `supervise.sh` 重启；旧版本保留为 `chattool.previous-long-connection-20261101-0857`。本机和公网 `/chattool/api/health` 均返回 200；HTTPS `POST /chattool/api/direct/ws-ticket` 无令牌返回 `401 DIRECT_AUTH_REQUIRED` 且 CORS 正常；WSS 无效票据同样返回 401，反代路由已生效。未部署 Cocos 客户端包/热更，双账号真实长连接、发送、断线补偿和媒体消息仍待用户测试。
-- 2026-11-01 双客户端问题修复：`DirectChatManager` 增加全局会话页缓存，已读回写同时清理俱乐部缓存和全局缓存，并以 `/unread` 做服务端校正；`panelMessage` 监听实时会话摘要和已读事件，收到消息后立即刷新摘要、排序和红点。`panelMessageChat` 监听 WebSocket 恢复事件，重连后按最后消息 ID 执行 `after` 补偿；失败消息重试统一复用长连接优先、HTTP 回退和同一 `clientMessageId`。连接 error 会主动 close 进入统一重连流程。客户端 TypeScript 转译与 Go 全量测试通过；Creator、双账号、断网恢复和正式包仍待实际验收。
-- 2026-11-01 已读游标并发修复：服务端 `SetLastRead` 改为数据库条件更新，只允许 `(created_at,id)` 游标向前，避免旧请求晚返回导致红点恢复；fake store 与服务层回归测试同步覆盖。Linux amd64 二进制 SHA-256 `caf1f3d408b6a71f746056904e8b09756e085def38c5fa4089c3c48eae04407d` 已部署并原子替换，旧版本备份为 `chattool.previous-read-order-20261101-0915`；公网健康检查仍返回 200。客户端尚未发布正式包/热更。
-- 2026-11-01 直聊提示音与数量显示：大厅 `panelMain` 监听直聊 `realtimeMessage`，复用新俱乐部申请的 `Audio/eff/申请提示.wav`，仍受 `AudioEff` 总音效开关控制；消息入口总红点和会话行未读数超过 99 统一显示 `99+`。客户端 TypeScript 转译通过，双账号声音与 99+ 实测待验。
-- 2026-11-01 固定上级代理入口与备注权限：服务端按每个所属俱乐部的 `club_agent_info.upper_guuid` 生成直属上级固定会话，明确不读取平台模式的 `tbl_Account.sm_agentID`；所有有直属上级的成员（含代理/盟主）都可见，已有真实会话也标记 `isDefaultTarget=true`，并在全局列表排序中优先保证固定入口可见。固定会话服务端禁止删除，详情接口返回 `canDelete=false`，客户端按该字段隐藏删除按钮。`club_agent_info.note` 只对目标成员的俱乐部上级链返回；消息列表显示为“昵称（备注） [俱乐部名称]”，无权限时省略备注但保留方括号俱乐部名称；群主/盟主在方括号俱乐部名称后显示角色。备注回归测试、Go 全量测试、vet、TypeScript 转译通过；Linux amd64 二进制 SHA-256 `d20e5c642309f2946e7b65908a02ef419915573710c713b50444cebed30c8b99` 已部署，旧版本备份 `chattool.previous-club-superior-note-20261101-1030`，线上健康检查通过；Creator 预览已刷新，真实账号仍待验证；玩家信息下级行已补齐「对话」按钮，实测待验；API、部署和 runtime 配置文档已同步。
+- 成员列表对代理异步查询 `查询_俱乐部_额度`，仅在 `is_agent=1 && is_granted=1` 时在「比例」右侧显示 `quota_fen / 100`；玩家设置对直属代理显示「额度」和「开通额度/调整额度」。
+- 「授信_俱乐部_额度」是额度转移接口：开通和已授信后的增加/减少都调用它，分别传正/负 `quota_fen`。成功后仍以 `GetClubQuota` 异步回包重新查询，额度 0 仍视为已授信。
+- 已改 `ClubManagementApi.ts`、`ClubManagementView.ts` 和 `panelMain.prefab`；TypeScript 转译、协议桩回归、Prefab JSON/节点引用检查通过。Creator 导入、实际服务器回包、构建和真机交互仍待验证。详见[交接](handoffs/2026-11-01-club-member-quota.md)。
+
+## 2026-11-01 后台俱乐部管理模块（已部署）
+
+- XuanManager 新增「俱乐部管理」（`/game/clubs`，迁移 `041`）：列出全部俱乐部 → 成员代理树 → 给群主调额度。已部署正式环境，二进制 `78f3e416…`。
+- 群主按 `sm_club_make`/`sm_club_make2` 用 `FIND_IN_SET` 反查（`club_guuid_info` 无 owner 列）。树按 `club_agent_info.upper_guuid` 嵌套，上级缺失/指错/成环进 `orphan` 并提示，不硬挂；`club_gold` 兼容数字与 `{"俱乐部ID":积分}`，`-99` 显示「暂无数据」。
+- **额度以 `club_agent_info.quota`（分）为准**：游戏服 `查询_俱乐部_额度` 只推异步 `GetClubQuota`，收不到同步回包，原实现会永远 `verified=false`；已改为读库，`NULL`=未授信而非 0。
+- 写操作只限俱乐部群主，输入元/换算分，扣减不得为负，回读校验失败标 `verified=false`，全程串行并写审计。
+- 真实数据验证通过：4 个俱乐部群主全部正确；`567671` 三层代理树 9 人、0 orphan；群主额度 900000 分、a2 100000 分；+1 元→900100 后已扣回还原 900000。非群主/超额/无 CSRF/未登录均按预期拦截。
+- 公网 index/js/css 三个资源哈希与本地构建逐字节一致；回滚点为 `bin/xuanmanager.previous-club-management-20261101`（`0c602dbd…`）+ 同名 `web.previous-…`。
+- 列表新增「群主额度」列（`ownerQuotaFen`，分→元），读 `club_agent_info.quota`，元组 `IN` 批量查不逐行；无记录/`NULL` 显示「未授信」而非 0。
+- 查询支持**俱乐部维度**（ID/名称/群主/状态/模式/抽成/成员数）与**玩家维度**（玩家 ID/名字反查其所在俱乐部，用 EXISTS，不重复出行），已部署。
+- **性能**：线上列表原 3.8s，根因是 `COALESCE(club_status,'')` 让索引失效（扫 89 万行 + filesort），改成直接比较后 3.7s→24ms；另给 Caddy 加 `encode gzip`，JS 741KB→200KB。现列表接口 7–13ms、页面查询 57ms。
+- 未验证：Creator、客户端（`assets/` 全程未改）。见[交接](handoffs/2026-11-01-admin-club-management.md)。
+
+## 2026-10-31 俱乐部 1 对 1 私聊（服务端已部署）
+
+- 服务端 `/api/direct/*` + `chat_direct_*`（迁移 `006`），直聊关系改为 `CHAT_GAME_DB_*` 只读直查游戏库，不再用俱乐部同步副本。
+- 客户端 `DirectChatManager` + 消息页（`Main` 第 5 分页）；已修 Cocos `onLoad` 早于 `setPanelInfo` 导致的空会话 ID 404。
+- 轮询已改为独立 WebSocket（`ws-ticket` + `ws`，`message.new`/`message.sent` 只带游标），文本/语音优先 WS、断线用同一 `clientMessageId` 回退 HTTP；已读游标改为数据库条件更新，只允许向前。
+- 固定上级代理入口按 `club_agent_info.upper_guuid` 生成、`canDelete=false`；`note` 只对上级链可见，列表显示“昵称（备注） [俱乐部名称]”。
+- 服务端多轮部署（CORS 预检、图片附件空 `external_media_id`、长连接、已读并发、固定入口+备注）均已完成并通过 Go 全量测试；各版本 SHA-256、备份名与逐项验证见[交接](handoffs/2026-10-31-direct-chat.md)。
+- 客户端尚未正式构建/热更，双账号、断网恢复、真机图片与录音仍待实测。
 
 ## 2026-10-30 牌局回顾加「翻牌」按钮（未构建、未真机）
 

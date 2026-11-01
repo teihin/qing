@@ -19,6 +19,7 @@ const iconText: Record<string, string> = {
   "anti-theft": "盾",
   "room-maintenance": "房",
   "player-optimization": "优",
+  clubs: "俱",
   configuration: "配",
   announcement: "公",
   notifications: "通",

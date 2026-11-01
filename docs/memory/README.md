@@ -14,6 +14,7 @@
 | 已有 V7 实现、资源、长屏、钱包、公告、后续模块 | [V7 实施记录](topics/v7-ui.md) | Prefab、UUID、四档高度、历史实现；旧图不再作为设计依据 |
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |
+| 后台俱乐部管理（俱乐部列表、成员代理树、群主额度） | [俱乐部管理交接](handoffs/2026-11-01-admin-club-management.md) | game.clubs、club_agent_info、quota_fen、增加_俱乐部_额度、-99、orphan |
 | 自动化后台（机器人=账号、投放、分组、Worker 路线、老客户端参考） | [自动化后台](topics/automation-console.md)、[落地交接](handoffs/2026-10-27-automation-console.md)、[限底皮+日志](handoffs/2026-10-28-automation-room-pi.md) | 机器人即账号、投放管理、邀请码、默认带入倍数、只进底皮、robot.room_pi |
 | Worker 节点通道（注册/租约、命令、事件、在线状态、参考 agent） | [Worker 通道](topics/automation-worker-channel.md)、[在线状态交接](handoffs/2026-10-28-worker-realtime-online.md) | `/agent/v1`、X-Agent-Token、租约 20 秒、offline 上报、命令状态机、xuanagent、janitor |
 | 真实游戏客户端（KBEngine 无头登录、俱乐部/进房协议、密码落库、agent-client 落地、xuanagent 启动与重编） | [真实客户端探查](topics/automation-real-client.md)、[落地交接](handoffs/2026-10-28-automation-real-client.md) | nip.io、kbengine.js、预坐/坐下、login_password、0x306、xuanagent.json、交叉编译 |

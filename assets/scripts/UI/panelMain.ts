@@ -83,6 +83,10 @@ export default class panelMain extends UIPanelViewBase {
     private clubCommandBusy:boolean = false;
     private clubDetails:{[clubId:string]:any} = {};
     private clubAgentInfo:{[clubId:string]:any} = {};
+    /** 当前玩家在各俱乐部的额度查询结果；额度只在有权限时渲染。 */
+    private clubQuotaInfo:{[clubId:string]:any} = {};
+    /** 额度查询节流，避免每次列表重绘都重复发请求。 */
+    private clubQuotaAsked:{[clubId:string]:number} = {};
     /** 收到代理信息推送后补查一次的节流时间，防止回包再触发补查形成循环。 */
     private clubAgentRecheck:{[clubId:string]:number} = {};
     /** 推广页缺邀请码时补查代理信息的时间戳，同样按俱乐部节流。 */
@@ -197,6 +201,7 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_club_manage", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_gold", this, "OnClubGoldChanged");
         KBEngine.Event.register("ClubAgentInfo", this, "OnClubAgentInfo");
+        KBEngine.Event.register("GetClubQuota", this, "OnClubQuota");
 
         KBEngine.Event.register("UserHashInfo",this, "OnUserHashInfo");
         KBEngine.Event.register("UserHash2Info",this, "UserHash2Info");
@@ -241,6 +246,7 @@ export default class panelMain extends UIPanelViewBase {
             if(player && player.id)
                 UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,String(player.id)+",");
         },()=>this.PlayAudio("eff/申请提示"));
+        this.RefreshDiscoveryClubFunds(true);
         this.clubManagement.Refresh();
         this.clubManagementApi = new HallClubManagementApi((id,count)=>this.clubManagement.SetPendingCount(id,count),
             (id)=>this.IsClubAgentIn(id),()=>this.GetClubAgentIds());
@@ -2308,6 +2314,8 @@ export default class panelMain extends UIPanelViewBase {
         });
         if(switchedToPage)
             this.currentMainTab = strName;
+        if(strName === "发现")
+            this.RefreshDiscoveryClubFunds(true);
 
         //复位Toggle
         let arrayToggle = this.node.getChildByName("Down").getComponentsInChildren(cc.Toggle);
@@ -3208,6 +3216,7 @@ export default class panelMain extends UIPanelViewBase {
         // 「我的」当前俱乐部卡片跟上推送，再补查一次拿真正生效后的状态。
         // requestDetails=true 只在本地没有缓存时才发查询，不会重复拉已有数据。
         this.RefreshClubList(true);
+        this.RefreshDiscoveryClubFunds(true);
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
         // 推广页开着的场合（大厅「我的」里点进去），邀请码这行要跟着刷新。
@@ -3261,10 +3270,13 @@ export default class panelMain extends UIPanelViewBase {
     {
         this.clubAgentInfo = {};
         this.clubAgentRecheck = {};
+        this.clubQuotaInfo = {};
+        this.clubQuotaAsked = {};
         if(!this.lobbyEntryResolved)
             this.ResolveLobbyEntryTab();
         // 刚创建 / 刚入会的俱乐部在这里落成默认俱乐部，后面的卡片、列表、房间筛选都取新值。
         this.ApplyPendingDefaultClub();
+        this.RefreshDiscoveryClubFunds(true);
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
         const page = Tool.GetChild(this.node,"Main/俱乐部");
@@ -3276,9 +3288,156 @@ export default class panelMain extends UIPanelViewBase {
 
     public OnClubGoldChanged()
     {
+        this.RefreshDiscoveryClubFunds(false);
         const page = Tool.GetChild(this.node,"Main/俱乐部");
         if(page && page.active)
             this.RefreshClubList(false);
+    }
+
+    /** 刷新发现页 Title 下当前俱乐部的积分和额度。额度未确认有权限前保持隐藏。 */
+    private RefreshDiscoveryClubFunds(requestQuota:boolean = true):void
+    {
+        const title = Tool.GetChild(this.node,"Main/发现/Title");
+        if(!title)
+            return;
+
+        const account:any = GameDataManager.getAccount();
+        const clubId = this.ResolveRoomClub();
+        const goldRoot = title.getChildByName("金币框");
+        const goldNode = goldRoot && goldRoot.getChildByName("gold") ?
+            goldRoot.getChildByName("gold") : title.getChildByName("gold");
+        const goldLabel = goldNode ? goldNode.getComponent(cc.Label) : null;
+        if(goldLabel)
+            goldLabel.string = clubId ? this.GetClubGold(clubId) : "";
+
+        const quotaNode = title.getChildByName("额度");
+        const agent = clubId ? this.clubAgentInfo[clubId] : null;
+        const showQuota = !!clubId && this.CanShowClubQuota(clubId,account,agent);
+        if(quotaNode)
+        {
+            quotaNode.active = showQuota;
+            const quotaLabel = quotaNode.getComponent(cc.Label);
+            if(quotaLabel)
+                quotaLabel.string = showQuota ? "额度：" + this.FormatClubQuota(clubId) : "";
+        }
+
+        if(clubId && requestQuota)
+            this.RequestClubQuota(clubId,true);
+    }
+
+    /**
+     * Account.club_gold 是 JSON 字符串，键为俱乐部 ID，值为当前玩家在该俱乐部的积分。
+     * 兼容引擎已经把属性解析成对象的情况，不能把平台 Account.gold 当作俱乐部积分。
+     */
+    private GetClubGold(clubId:string):string
+    {
+        const account:any = GameDataManager.getAccount();
+        if(!account || !clubId)
+            return "";
+        let value:any = account.club_gold;
+        if(typeof value === "string")
+        {
+            try { value = JSON.parse(value); }
+            catch(error) { return ""; }
+        }
+        if(!value || typeof value !== "object")
+            return "";
+        const raw = value[clubId];
+        if(raw === undefined || raw === null || String(raw).trim() === "")
+            return "";
+        const number = Number(raw);
+        // 服务端约定 -99 表示该俱乐部没有积分数据，不能把它当实际余额显示。
+        if(!Number.isFinite(number) || number === -99)
+            return "";
+        return number.toString();
+    }
+
+    private IsClubOwner(clubId:string,account:any,agent:any):boolean
+    {
+        const owners = String(account && account.club_make || "").split(",").map(id=>id.trim());
+        return owners.indexOf(clubId) >= 0 || !!(agent && Number(agent.is_creator) === 1);
+    }
+
+    /** 额度显示必须同时满足服务端返回额度数据和权限；未知状态一律不显示。 */
+    private CanShowClubQuota(clubId:string,account:any,agent:any):boolean
+    {
+        const quota = this.clubQuotaInfo[clubId];
+        if(!quota || quota.quota_fen === undefined || quota.quota_fen === null)
+            return false;
+        if(String(quota.quota_fen).trim() === "" || !Number.isFinite(Number(quota.quota_fen)))
+            return false;
+        if(this.IsClubOwner(clubId,account,agent))
+            return true;
+        // 代理关系发生变化后，不能继续沿用旧的已授信快照。
+        if(agent && !this.IsClubAgent(agent))
+            return false;
+        return Number(quota.is_agent) === 1 && Number(quota.is_granted) === 1;
+    }
+
+    private FormatClubQuota(clubId:string):string
+    {
+        const quota = this.clubQuotaInfo[clubId];
+        if(!quota)
+            return "";
+        const fen = Number(quota.quota_fen);
+        if(!Number.isFinite(fen))
+            return "";
+        const yuan = fen / 100;
+        return Number.isInteger(yuan) ? String(yuan) : yuan.toFixed(2).replace(/\.?0+$/,"");
+    }
+
+    /** 额度接口是异步 GetClubQuota 推送；没有权限的账号也可以查询，但只显示有权限的结果。 */
+    private RequestClubQuota(clubId:string,requestDetails:boolean):void
+    {
+        if(!requestDetails || !clubId)
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(!account || !account.guuid)
+            return;
+        const now = Date.now();
+        if(now - (this.clubQuotaAsked[clubId] || 0) < 5000)
+            return;
+        this.clubQuotaAsked[clubId] = now;
+        account.reqHallCommand(JSON.stringify({
+            header:"查询_俱乐部_额度",
+            club_id:clubId,
+            user_id:"",
+            context:"club:quota:" + clubId
+        }),"p@club:quota:" + clubId);
+    }
+
+    /** GetClubQuota 的异步回包不保证外层是否包了一层同名对象或 result。 */
+    public OnClubQuota(raw:any,secondaryRaw?:any):void
+    {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
+            raw = secondaryRaw;
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        if(!data || typeof data !== "object")
+            return;
+        let body:any = data.GetClubQuota;
+        if(!body && data.result && typeof data.result === "object")
+            body = data.result.GetClubQuota || data.result;
+        if(!body)
+            body = data;
+        if(typeof body === "string")
+        {
+            try { body = JSON.parse(body); }
+            catch(error) { return; }
+        }
+        const quota:any = body && body.GetClubQuota ? body.GetClubQuota : body;
+        const context = String(data.context || (body && body.context) || (quota && quota.context) || "");
+        const contextMatch = context.match(/(?:^|:)quota:([0-9]+)$/);
+        const clubId = String(quota.club_id || data.club_id || (contextMatch ? contextMatch[1] : ""));
+        if(!clubId)
+            return;
+        this.clubQuotaInfo[clubId] = quota;
+        this.RefreshDiscoveryClubFunds(false);
+        this.RefreshClubList(false);
     }
 
     private RefreshClubList(requestDetails:boolean = true)
@@ -3319,12 +3478,29 @@ export default class panelMain extends UIPanelViewBase {
             row.on("click",this.onButtonClickVirtual,this);
             const info = this.clubDetails[id];
             const name = info && info.club_name ? String(info.club_name) : "俱乐部 " + id;
-            row.getChildByName("俱乐部名称").getComponent(cc.Label).string = name;
             const agent = this.clubAgentInfo[id];
             const account = GameDataManager.getAccount();
             const ownerIds = String(account.club_make || "").split(",");
             const isOwner = ownerIds.indexOf(id) >= 0 || !!(agent && Number(agent.is_creator) === 1);
             const isAgent = this.IsClubAgent(agent);
+            const nameLabel = row.getChildByName("俱乐部名称");
+            if(nameLabel)
+                nameLabel.getComponent(cc.Label).string = name;
+            const goldLabel = row.getChildByName("俱乐部金币");
+            if(goldLabel)
+            {
+                goldLabel.active = true;
+                goldLabel.getComponent(cc.Label).string = this.GetClubGold(id);
+            }
+            this.RequestClubQuota(id,requestDetails);
+            const quotaLabel = row.getChildByName("额度");
+            const showQuota = this.CanShowClubQuota(id,account,agent);
+            if(quotaLabel)
+            {
+                quotaLabel.active = showQuota;
+                if(showQuota)
+                    quotaLabel.getComponent(cc.Label).string = "额度：" + this.FormatClubQuota(id);
+            }
             // 邀请码每人都展示：代理/老板显示自己的码，普通成员回包里带的就是他上级的码（服务端口径）。
             // 注意这个码只影响「展示」，身份判定仍只看 is_agent，两者互不牵连。
             const inviteCode = agent && agent.invite_code ? String(agent.invite_code).trim() : "";
@@ -3510,6 +3686,18 @@ export default class panelMain extends UIPanelViewBase {
             if(nCode === 0x200 && response.result && response.result.club_id)
                 this.OnClubAgentInfo(response.result,undefined,false);
             // 代理信息的正式结果通过 ClubAgentInfo 推送，0x200 的同步结果通常为空。
+            return true;
+        }
+        if(context.indexOf("club:quota:") === 0)
+        {
+            // 额度数据走异步 GetClubQuota；同步失败时清掉旧快照，避免权限撤销后继续显示旧额度。
+            if(nCode !== 0x200)
+            {
+                const id = context.substr("club:quota:".length);
+                delete this.clubQuotaInfo[id];
+                this.RefreshDiscoveryClubFunds(false);
+                this.RefreshClubList(false);
+            }
             return true;
         }
         if(context !== "club:create" && context !== "club:join")

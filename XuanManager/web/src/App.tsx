@@ -8,6 +8,7 @@ import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
 import JackpotPerformancePage from "./pages/JackpotPerformancePage";
 import AgentsPage from "./pages/AgentsPage";
+import ClubsPage from "./pages/ClubsPage";
 import PlayersPage from "./pages/PlayersPage";
 import TransactionsPage from "./pages/TransactionsPage";
 import PlatformRevenuePage from "./pages/PlatformRevenuePage";
@@ -122,6 +123,7 @@ export default function App() {
     if (route === "/game/players" && can("game.player.view")) return <PlayersPage can={can} canViewSensitive={Boolean(session?.user.isProtectedRoot && session.user.username === "admin999")} notify={notify} />;
     if (route === "/game/jackpot" && can("game.jackpot.view")) return <JackpotPerformancePage can={can} notify={notify} />;
     if (route === "/game/agents" && can("game.agent.view")) return <AgentsPage notify={notify} />;
+    if (route === "/game/clubs" && can("game.club.view")) return <ClubsPage can={can} notify={notify} />;
     if (route === "/game/transactions" && can("game.transaction.view")) return <TransactionsPage notify={notify} />;
     if ((route === "/configuration/platform-revenue" || route === "/game/platform-revenue") && session?.user.isSuper) return <PlatformRevenuePage notify={notify} />;
     if (route === "/game/transaction-blacklist" && can("game.transaction_blacklist.view")) return <TransactionBlacklistPage can={can} notify={notify} />;
