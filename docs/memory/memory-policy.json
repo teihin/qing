@@ -29,7 +29,8 @@
     "docs/memory/handoffs/2026-10-29-worker-club-mode.md",
     "docs/memory/handoffs/2026-10-29-automation-strategy-runtime.md",
     "docs/memory/handoffs/2026-10-29-automation-robots-and-console.md",
-    "docs/memory/handoffs/2026-10-30-club-member-remark.md"
+    "docs/memory/handoffs/2026-10-30-club-member-remark.md",
+    "docs/memory/handoffs/2026-10-31-direct-chat.md"
   ],
   "required_headings": {
     "AGENTS.md": [
@@ -52,6 +53,13 @@
       "更新约定"
     ],
     "docs/memory/handoffs/2026-09-05-memory-migration.md": [
+      "目标与范围",
+      "基线",
+      "改动与来源",
+      "验证",
+      "下一步"
+    ],
+    "docs/memory/handoffs/2026-10-31-direct-chat.md": [
       "目标与范围",
       "基线",
       "改动与来源",

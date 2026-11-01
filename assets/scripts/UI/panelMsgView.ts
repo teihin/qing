@@ -3,6 +3,7 @@ import UIManager from "../common/UIManager";
 import GameDataManager from "../GameDataManager";
 import Tool from "../common/Tool";
 import RoomInviteManager from "../logic/RoomInviteManager";
+import { ClosePanelMode } from "../common/GameDef";
 
 const {ccclass, property} = cc._decorator;
 
@@ -92,7 +93,11 @@ export default class panelMsgView extends UIPanelViewBase {
         {
             let callback = this.arrayEx != null && typeof this.arrayEx[0] === "function" ? this.arrayEx[0] : null;
             let confirmed = button.node.name == "确定";
-            UIManager.getInstance().closePanelByName(this.node.name);
+            // ShowPanelMode.Top 的提示框挂在 Canvas/Top，默认 Normal 只查 Canvas/Normal，
+            // 因此原来点击确定时节点没有被销毁，表现为按钮无响应并持续挡住聊天界面。
+            let manager = UIManager.getInstance();
+            let mode = this.node.parent === manager.top ? ClosePanelMode.Top : ClosePanelMode.Normal;
+            manager.closePanelByName(this.node.name,mode);
             if(callback != null)
                 callback(confirmed);
         }

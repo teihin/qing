@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"chattool/internal/config"
+	"chattool/internal/directchat"
 	"chattool/internal/security"
 )
 
@@ -67,6 +68,7 @@ type mediaAccessTicket struct {
 
 type Server struct {
 	db             *sql.DB
+	gameDB         *sql.DB
 	cfg            config.Config
 	mux            *http.ServeMux
 	logger         *slog.Logger
@@ -76,14 +78,24 @@ type Server struct {
 	assignmentMu   sync.Mutex
 	mediaTicketMu  sync.Mutex
 	mediaTickets   map[string]mediaAccessTicket
+	// 俱乐部 1 对 1 私聊：独立路由、独立数据表，与客服共用进程和配置。
+	direct      *directchat.Service
+	directStore *directchat.SQLStore
+	directMedia *directchat.MediaStorage
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, agentPrincipal)
 type playerHandlerFunc func(http.ResponseWriter, *http.Request, playerPrincipal)
 
 func New(db *sql.DB, cfg config.Config, logger *slog.Logger) *Server {
+	return NewWithGameDB(db, db, cfg, logger)
+}
+
+// NewWithGameDB 使用 webcm 保存聊天数据，使用 kbedm 只读查询俱乐部目录。
+func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) *Server {
 	s := &Server{
 		db:             db,
+		gameDB:         gameDB,
 		cfg:            cfg,
 		mux:            http.NewServeMux(),
 		logger:         logger,
@@ -93,11 +105,128 @@ func New(db *sql.DB, cfg config.Config, logger *slog.Logger) *Server {
 		mediaTickets:   make(map[string]mediaAccessTicket),
 	}
 	s.routes()
+	s.routesDirect()
 	return s
 }
 
+// routesDirect 挂载 /api/direct/* 直聊接口。
+//
+// 客服接口（/api/player/*、/api/agent/*）完全不受影响；直聊不进入客服队列，
+// 客服工作台也查不到直聊会话。
+func (s *Server) routesDirect() {
+	store := directchat.NewSQLStore(s.db)
+	directory := directchat.NewGameDirectory(s.gameDB)
+	media := directchat.NewMediaStorage(s.cfg.UploadDir, []byte(s.cfg.PlayerLinkKey+"|direct-media"), s.cfg.DirectMediaBaseURL)
+	voice := directchat.NewAudioVoiceProvider(s.cfg.DirectAudioBaseURL, s.cfg.DirectMinVoiceMS, s.cfg.DirectMaxVoiceMS)
+	cursorKey := []byte(s.cfg.PlayerLinkKey + "|direct-cursor")
+
+	var verifier directchat.TicketVerifier = directchat.NewTicketVerifier([]byte(s.cfg.DirectTicketKey), 10*time.Minute)
+	if s.cfg.DirectTicketKey == "" {
+		// 未配置票据密钥时直聊一律返回 DIRECT_AUTH_REQUIRED，不能退化为信任客户端 guuid。
+		verifier = directchat.NewTicketVerifier(nil, time.Minute)
+	}
+	service := directchat.NewService(store, directory, verifier, media, voice, s.messageLimiter, directchat.Options{
+		SessionTTL:     s.cfg.DirectSessionTTL,
+		Retention:      s.cfg.DirectRetention,
+		CursorKey:      cursorKey,
+		MediaTicketTTL: s.cfg.DirectMediaTicketTTL,
+		MinVoiceMS:     s.cfg.DirectMinVoiceMS,
+		MaxVoiceMS:     s.cfg.DirectMaxVoiceMS,
+		AllowDevLogin:  s.cfg.DirectAllowDevLogin,
+		// 游戏客户端一期用与客服入口同格式的轻量加密资料换票：
+		// 服务端解密 + ts 时效校验，客户端不提交 meGuuid 明文。
+		LinkKey: s.cfg.PlayerLinkKey,
+		LinkTTL: s.cfg.PlayerLinkTTL,
+	}, s.logger)
+	directchat.NewHandler(service, s.logger, s.cfg.DirectCORSOrigins).Register(s.mux)
+	s.direct = service
+	s.directStore = store
+	s.directMedia = media
+}
+
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.recoverPanic(s.securityHeaders(s.mux)).ServeHTTP(w, r)
+	s.recoverPanic(s.securityHeaders(s.directCORS(s.mux))).ServeHTTP(w, r)
+}
+
+// directCORS 只为俱乐部直聊接口处理浏览器跨域请求。
+// 客服接口和其他 API 不增加跨域能力；原生客户端没有 Origin 时保持原有行为。
+func (s *Server) directCORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isDirectAPIPath(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		origin := strings.TrimSpace(r.Header.Get("Origin"))
+		if origin == "" || !s.directCORSOriginAllowed(origin) {
+			if r.Method == http.MethodOptions && origin != "" {
+				writeError(w, http.StatusForbidden, "CORS_ORIGIN_DENIED", "网页来源未被允许")
+				return
+			}
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Set("Access-Control-Allow-Origin", origin)
+		w.Header().Add("Vary", "Origin")
+		if r.Method != http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Add("Vary", "Access-Control-Request-Method")
+		w.Header().Add("Vary", "Access-Control-Request-Headers")
+		requestedMethod := strings.ToUpper(strings.TrimSpace(r.Header.Get("Access-Control-Request-Method")))
+		if requestedMethod != "" && !directCORSMethodAllowed(requestedMethod) {
+			writeError(w, http.StatusMethodNotAllowed, "CORS_METHOD_DENIED", "网页请求方法未被允许")
+			return
+		}
+		if !directCORSHeadersAllowed(r.Header.Get("Access-Control-Request-Headers")) {
+			writeError(w, http.StatusForbidden, "CORS_HEADER_DENIED", "网页请求头未被允许")
+			return
+		}
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Direct-Token, X-Game-Ticket, Authorization, Accept")
+		w.Header().Set("Access-Control-Max-Age", "600")
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+func isDirectAPIPath(path string) bool {
+	return path == "/api/direct" || strings.HasPrefix(path, "/api/direct/")
+}
+
+func (s *Server) directCORSOriginAllowed(origin string) bool {
+	for _, allowed := range s.cfg.DirectCORSOrigins {
+		if origin == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func directCORSMethodAllowed(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions:
+		return true
+	default:
+		return false
+	}
+}
+
+func directCORSHeadersAllowed(value string) bool {
+	for _, item := range strings.Split(value, ",") {
+		header := strings.ToLower(strings.TrimSpace(item))
+		if header == "" {
+			continue
+		}
+		switch header {
+		case "content-type", "x-direct-token", "x-game-ticket", "authorization", "accept":
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) StartMaintenance(ctx context.Context) {

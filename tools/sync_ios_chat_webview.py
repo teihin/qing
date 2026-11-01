@@ -52,14 +52,19 @@ def deduplicate_bridge_lines(text: str) -> str:
 def main() -> int:
     header = SOURCE_DIR / "QingChatWebViewBridge.h"
     implementation = SOURCE_DIR / "QingChatWebViewBridge.mm"
+    direct_header = SOURCE_DIR / "DirectChatImageBridge.h"
+    direct_implementation = SOURCE_DIR / "DirectChatImageBridge.mm"
     pbxproj = find_project_file()
-    required = [header, implementation, INFO_PLIST, pbxproj]
+    required = [header, implementation, direct_header, direct_implementation,
+                INFO_PLIST, pbxproj]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise RuntimeError("missing required files: " + ", ".join(missing))
 
     shutil.copy2(header, IOS_ROOT / header.name)
     shutil.copy2(implementation, IOS_ROOT / implementation.name)
+    shutil.copy2(direct_header, IOS_ROOT / direct_header.name)
+    shutil.copy2(direct_implementation, IOS_ROOT / direct_implementation.name)
 
     with INFO_PLIST.open("rb") as stream:
         info = plistlib.load(stream)
@@ -82,6 +87,19 @@ def main() -> int:
     )
     project = replace_once(
         project,
+        "\t\t71C0B00171C0B00171C0B001 /* QingChatWebViewBridge.mm in Sources */ = "
+        "{isa = PBXBuildFile; fileRef = 71C0B00371C0B00371C0B003 "
+        "/* QingChatWebViewBridge.mm */; settings = {COMPILER_FLAGS = \"-fobjc-arc\"; }; };\n",
+        "\t\t71C0B00171C0B00171C0B001 /* QingChatWebViewBridge.mm in Sources */ = "
+        "{isa = PBXBuildFile; fileRef = 71C0B00371C0B00371C0B003 "
+        "/* QingChatWebViewBridge.mm */; settings = {COMPILER_FLAGS = \"-fobjc-arc\"; }; };\n"
+        "\t\t73D0A00173D0A00173D0A001 /* DirectChatImageBridge.mm in Sources */ = "
+        "{isa = PBXBuildFile; fileRef = 73D0A00373D0A00373D0A003 "
+        "/* DirectChatImageBridge.mm */; settings = {COMPILER_FLAGS = \"-fobjc-arc\"; }; };\n",
+        "direct image build file",
+    )
+    project = replace_once(
+        project,
         "\t\t509D4AAC17EBB2AB00697056 /* AppController.mm */ = "
         "{isa = PBXFileReference; fileEncoding = 4; "
         "lastKnownFileType = sourcecode.cpp.objcpp; name = AppController.mm; "
@@ -100,6 +118,22 @@ def main() -> int:
     )
     project = replace_once(
         project,
+        "\t\t71C0B00371C0B00371C0B003 /* QingChatWebViewBridge.mm */ = "
+        "{isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; "
+        "name = QingChatWebViewBridge.mm; path = ios/QingChatWebViewBridge.mm; sourceTree = \"<group>\"; };\n",
+        "\t\t71C0B00371C0B00371C0B003 /* QingChatWebViewBridge.mm */ = "
+        "{isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; "
+        "name = QingChatWebViewBridge.mm; path = ios/QingChatWebViewBridge.mm; sourceTree = \"<group>\"; };\n"
+        "\t\t73D0A00273D0A00273D0A002 /* DirectChatImageBridge.h */ = "
+        "{isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; "
+        "name = DirectChatImageBridge.h; path = ios/DirectChatImageBridge.h; sourceTree = \"<group>\"; };\n"
+        "\t\t73D0A00373D0A00373D0A003 /* DirectChatImageBridge.mm */ = "
+        "{isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; "
+        "name = DirectChatImageBridge.mm; path = ios/DirectChatImageBridge.mm; sourceTree = \"<group>\"; };\n",
+        "direct image file references",
+    )
+    project = replace_once(
+        project,
         "\t\t\t\t509D4AAC17EBB2AB00697056 /* AppController.mm */,\n",
         "\t\t\t\t509D4AAC17EBB2AB00697056 /* AppController.mm */,\n"
         "\t\t\t\t71C0B00271C0B00271C0B002 /* QingChatWebViewBridge.h */,\n"
@@ -108,15 +142,31 @@ def main() -> int:
     )
     project = replace_once(
         project,
+        "\t\t\t\t71C0B00371C0B00371C0B003 /* QingChatWebViewBridge.mm */,\n",
+        "\t\t\t\t71C0B00371C0B00371C0B003 /* QingChatWebViewBridge.mm */,\n"
+        "\t\t\t\t73D0A00273D0A00273D0A002 /* DirectChatImageBridge.h */,\n"
+        "\t\t\t\t73D0A00373D0A00373D0A003 /* DirectChatImageBridge.mm */,\n",
+        "direct image project group",
+    )
+    project = replace_once(
+        project,
         "\t\t\t\t509D4ABC17EBB2AB00697056 /* AppController.mm in Sources */,\n",
         "\t\t\t\t509D4ABC17EBB2AB00697056 /* AppController.mm in Sources */,\n"
         "\t\t\t\t71C0B00171C0B00171C0B001 /* QingChatWebViewBridge.mm in Sources */,\n",
         "chat WebView source phase",
     )
+    project = replace_once(
+        project,
+        "\t\t\t\t71C0B00171C0B00171C0B001 /* QingChatWebViewBridge.mm in Sources */,\n",
+        "\t\t\t\t71C0B00171C0B00171C0B001 /* QingChatWebViewBridge.mm in Sources */,\n"
+        "\t\t\t\t73D0A00173D0A00173D0A001 /* DirectChatImageBridge.mm in Sources */,\n",
+        "direct image source phase",
+    )
     pbxproj.write_text(deduplicate_bridge_lines(project), encoding="utf-8")
 
     print("iOS in-game chat WebView bridge synchronized")
     print(IOS_ROOT / implementation.name)
+    print(IOS_ROOT / direct_implementation.name)
     return 0
 
 

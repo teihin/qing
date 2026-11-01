@@ -24,6 +24,8 @@ func TestLoadHTTPIPSubPath(t *testing.T) {
 	t.Setenv("CHAT_COOKIE_SECURE", "false")
 	t.Setenv("CHAT_DB_USER", "chattool_test")
 	t.Setenv("CHAT_DB_PASSWORD", "not-a-real-password")
+	t.Setenv("CHAT_GAME_DB_USER", "game_test")
+	t.Setenv("CHAT_GAME_DB_PASSWORD", "not-a-real-game-password")
 	t.Setenv("CHAT_PLAYER_LINK_KEY", strings.Repeat("a", 32))
 
 	cfg, err := Load()

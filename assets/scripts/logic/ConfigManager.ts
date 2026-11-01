@@ -1,6 +1,7 @@
 import GameDataManager from "../GameDataManager";
 import Debug from "../common/Debug";
 import Tool from "../common/Tool";
+import { WEB_CUSTOMER_SERVICE_URL } from "../common/GameDef";
 var KBEngine = require("kbengine");
 //配置管理
 
@@ -58,7 +59,7 @@ export default class ConfigManager extends cc.Component {
     public user_promission:string = "";
     public downloadurl:string = "http://www.baidu.com";
     public resetPwdUrl:string = "http://www.163.com";
-    public kefuUrl:string = "http://154.37.155.17/chattool/player?d={info}";
+    public kefuUrl:string = WEB_CUSTOMER_SERVICE_URL;
     public registrationUrl:string = "http://154.37.155.17/xuanmanager/api/game/registrations";
     public changeLoginPasswordUrl:string = "http://154.37.155.17/xuanmanager/api/game/change-login-password";
 

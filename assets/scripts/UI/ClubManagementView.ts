@@ -1,6 +1,7 @@
 import ImageManager from "../logic/ImageManager";
 import {ShowPanelMode} from "../common/GameDef";
 import UIManager from "../common/UIManager";
+import DirectChatManager from "../logic/DirectChatManager";
 
 export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications";
@@ -504,6 +505,40 @@ export default class ClubManagementView {
             const oldAction = this.at(name,row);
             if(oldAction) oldAction.active = false;
         }
+        // 行尾「对话」：群主/盟主/代理可以找同俱乐部成员开聊，自己那行不显示。
+        this.bindDirectChat(row,item,context);
+    }
+
+    /**
+     * 俱乐部成员列表的「对话」入口。
+     *
+     * 权限与服务端一致：群主（owner）、盟主（leader）、代理（agent）可以发起；
+     * 管理员与普通成员不显示按钮，服务端仍会再校验一次俱乐部关系。
+     */
+    private bindDirectChat(row:cc.Node,item:ClubPlayer,context:ClubContext):void {
+        const btn = this.at("对话",row);
+        if(!btn) return;
+        const selfId = String(context.accountId || "").trim();
+        const peerId = String(item.id || "").trim();
+        const canChat = context.role === "owner" || context.role === "agent" || context.isLeader === true;
+        const show = canChat && peerId !== "" && peerId !== selfId;
+        btn.active = show;
+        if(!show) return;
+        btn.targetOff(this);
+        btn.on("click",()=>{ this.openDirectChat(context.id,peerId,item); },this);
+    }
+
+    /** 先创建/恢复会话（服务端幂等），拿到 conversationId 再进聊天详情。 */
+    private openDirectChat(clubId:string,peerId:string,item:ClubPlayer):void {
+        if(!clubId || !peerId) return;
+        const manager = DirectChatManager.GetInstance();
+        manager.OpenConversation(clubId,peerId).then(conversation=>{
+            UIManager.getInstance().showPanel("panelMessageChat",ShowPanelMode.Cover,
+                JSON.stringify({clubId:clubId,conversationId:conversation.conversationId,peer:conversation.peer}));
+        }).catch((error:any)=>{
+            const text = error != null && error.message ? String(error.message) : "打开聊天失败，请稍后重试";
+            this.message(text);
+        });
     }
     /** click 依赖 cc.Button 派发，TOUCH_END 是节点自身事件；两条都挂，滑动时按位移过滤。 */
     private bindPlayerSettings(target:cc.Node,item:ClubPlayer,context:ClubContext,depth:number):void {

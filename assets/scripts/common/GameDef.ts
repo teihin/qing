@@ -50,13 +50,26 @@ export const WEB_PUBLIC_WSS_ORIGIN:string = "wss://" + WEB_PUBLIC_HOST;
 export const WEB_KB_WSS_PROXY_BASE_URL:string = WEB_PUBLIC_WSS_ORIGIN + "/ws/";
 export const WEB_KB_WSS_ALLOWED_PORTS:number[] = [20013, 20015, 20016, 20017, 20018, 20019];
 
-// 自研语音和客服：Native继续使用原IP配置，浏览器固定使用sslip HTTPS/WSS域名。
+// 自研语音和客服：浏览器统一使用已确认的 nip.io HTTPS/WSS 域名。
 export const AUDIO_SERVER_HTTP_BASE:string = "http://154.37.155.17/audio";
 export const AUDIO_SERVER_WS_URL:string = "ws://154.37.155.17/audio/v1/stream";
 export const AUDIO_SERVER_PROXY_PATH:string = "/audio";
 export const WEB_AUDIO_SERVER_HTTP_BASE:string = WEB_PUBLIC_HTTPS_ORIGIN + AUDIO_SERVER_PROXY_PATH;
 export const WEB_AUDIO_SERVER_WS_URL:string = WEB_PUBLIC_WSS_ORIGIN + AUDIO_SERVER_PROXY_PATH + "/v1/stream";
 export const WEB_CUSTOMER_SERVICE_URL:string = WEB_PUBLIC_HTTPS_ORIGIN + "/chattool/player?d={info}";
+
+// 俱乐部 1 对 1 私聊（direct chat）。与客服 /chattool/player 共用同一个 ChatTool 进程，
+// 但走独立的 /api/direct/* 路由和独立令牌；客服入口和接口不受影响。
+export const DIRECT_CHAT_API_PATH:string = "/chattool/api/direct";
+export const DIRECT_CHAT_HTTP_BASE:string = "http://154.37.155.17" + DIRECT_CHAT_API_PATH;
+export const WEB_DIRECT_CHAT_HTTP_BASE:string = WEB_PUBLIC_HTTPS_ORIGIN + DIRECT_CHAT_API_PATH;
+// 直聊使用独立 WebSocket 长连接；历史、媒体、已读和断线补偿仍走 HTTP。
+export const DIRECT_CHAT_WS_URL:string = "ws://154.37.155.17" + DIRECT_CHAT_API_PATH + "/ws";
+export const WEB_DIRECT_CHAT_WS_URL:string = WEB_PUBLIC_WSS_ORIGIN + DIRECT_CHAT_API_PATH + "/ws";
+export const DIRECT_CHAT_WS_CONNECT_TIMEOUT_MS:number = 10000;
+export const DIRECT_CHAT_WS_REQUEST_TIMEOUT_MS:number = 12000;
+export const DIRECT_CHAT_WS_RECONNECT_BASE_MS:number = 1000;
+export const DIRECT_CHAT_WS_RECONNECT_MAX_MS:number = 30000;
 
 
 export const SERVER_IP_TEST:string = "192.168.2.96";

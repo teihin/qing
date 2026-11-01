@@ -10,8 +10,8 @@ const {ccclass} = cc._decorator;
 @ccclass
 export default class panelKefu extends UIPanelViewBase {
 
-    private strVIP:string = "http://154.37.155.17/chattool/player?d={info}";
-    private strVIP2:string = "http://154.37.155.17/chattool/player?d={info}";
+    private strVIP:string = WEB_CUSTOMER_SERVICE_URL;
+    private strVIP2:string = WEB_CUSTOMER_SERVICE_URL;
 
     private loading:cc.ProgressBar = null;
     private web:cc.WebView = null;
@@ -52,8 +52,7 @@ export default class panelKefu extends UIPanelViewBase {
             channel = "vip_recharge";
         }
 
-        // 网页固定走HTTPS域名，避免线上哈希配置或旧默认值中的明文IP造成混合内容。
-        // Android/iOS仍保留原有动态配置和HTTP地址。
+        // 浏览器固定走 nip.io HTTPS 域名，避免线上哈希配置或旧默认值中的明文IP造成混合内容。
         if(cc.sys.isBrowser)
         {
             strUrl = WEB_CUSTOMER_SERVICE_URL;

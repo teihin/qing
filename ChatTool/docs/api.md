@@ -31,6 +31,19 @@
 - `GET /api/agent/quick-replies`。
 - 主管：`GET/POST /api/agent/team`、`PUT /api/agent/team/{id}`；创建/更新客服包含 `channelCode`。
 
+## 俱乐部直聊接口
+
+直聊使用独立的 `/api/direct/*` 路由、`chat_direct_*` 数据表和游戏库只读连接，与客服会话、客服 SSE 和客服权限相互隔离。
+
+- `POST /api/direct/session`：使用游戏端生成的一次性 `dc1` 票据建立直聊会话；`POST /api/direct/session/dev` 仅在本地联调开关开启时允许用 `guuid` 换会话。
+- `GET /api/direct/me`、`GET /api/direct/clubs`、`GET /api/direct/unread`：读取当前玩家资料、所属俱乐部和未读汇总。
+- `GET /api/direct/clubs/{clubId}/members`：读取俱乐部成员；`GET/POST /api/direct/clubs/{clubId}/conversations`：读取或创建俱乐部内一对一会话。
+- `GET /api/direct/conversations`：读取所有所属俱乐部的会话；消息使用 `GET/POST /api/direct/conversations/{conversationId}/messages`，支持 `before`、`after` 游标。
+- `POST /api/direct/conversations/{conversationId}/attachments`、`.../{attachmentId}/upload`、`.../{attachmentId}/complete`：图片、语音附件创建、上传和确认；`POST .../{conversationId}/read` 已读，`DELETE .../{conversationId}` 隐藏可删除会话。
+- `POST /api/direct/ws-ticket`：为当前直聊会话签发一次性 WebSocket 票据；`GET /api/direct/ws?ticket=...`：建立长连接。消息落库成功后推送 `message.new`，发送方收到 `message.sent`；事件只携带游标，客户端按 `after` 补拉完整消息。
+- WebSocket 不可用、超时或回包丢失时，客户端使用同一 `clientMessageId` 回退 HTTP，服务端按该 ID 幂等，避免重复消息。断线重连使用指数退避，恢复后按游标补偿。
+- 会话中的 `peer.role` 使用 `owner`、`leader`、`agent`、`member`；客户端可将前两者显示为“群主”“盟主”。`peer.note` 只在当前玩家位于目标成员的俱乐部上级链时返回。
+
 ## 媒体
 
 - `GET /api/media/{id}`：玩家只可访问当前标签页会话媒体，或持有当前媒体的短期游戏内票据；普通客服只可访问自己且同通道的会话；主管只可访问主管所属通道现存会话媒体。视频支持 HTTP Range。

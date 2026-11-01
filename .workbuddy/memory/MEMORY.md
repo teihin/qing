@@ -78,6 +78,7 @@
   两边的 `cc.PrefabInfo.fileId` 必须一致（`root`=6、`asset`=panelGameView prefab uuid），
   否则编辑器会把新节点当成"额外节点"而不是 prefab 的一份子。
   2026-10-26 加「兑换钻石」按钮就栽在这：prefab 改完 library 也导入了，编辑器/运行都还是 8 个按钮。
+- **手写/生成 Prefab 引用脚本组件用「5 头压缩 uuid」23 字符**（如 `d41a8PtsLlNyrBYfqkaV+As`），算法=hex[:5]+每 3 个 hex（自 index 5）→2 个 base64；资源 `.meta` 里的 uuid 是 36 字符标准形式，别混。`Tool.GetChild` 按名字取**第一个**同名子节点，同层级重名按钮必须改名。
 - 改完 Prefab/贴图后 `library/` 需 Creator 重新导入；`assets/resources/project.manifest` 是构建产物，跑 `1生成热更新包.command` 重建，**不要手改**。
 - **Creator 开着时覆盖 PNG，`.meta` 会被自动改写**（`trimType:"auto"` 重算 trim，使 `_sizeMode=0` 元素放大约 5%）。
   根治：按原 trim 矩形给新图四边补 `alpha=2` 边界像素；收尾 `git checkout HEAD -- <每个 .meta>`。判断是否在跑：`pgrep -fl CocosCreator`。
@@ -98,6 +99,7 @@
 - 「文字看不清但内容不能变」→ **先问主人想要什么效果**，别自选路线（"保字形提亮"已被否决）。
 - 验收四步：尺寸/`.meta`/体积 → alpha 覆盖率 → 分块梯度能量 → OCR 复扫旧名。**小图必须按真机 px 1:1 看**。
 - 同一素材被否 ≥3 次就**停下问方向**，不要自己一路迭代。
+- **美术出图只用内置 imagegen 技能，禁止再用 Seedream/seedream-image（2026-10-31 用户明确要求）**。imagegen 生图会消耗独立额度（每张约 5–10 credits），调用前先告知用户。经验：imagegen 生成中文美术字（如「消息」）笔画会被拆碎、不可用，中文标题字仍要让美术出图或用 Label+描边占位。
 - 改界面上文字前先分清**贴图文字**还是 **DOM/引擎文字**（网页版 loading 是 `WebLoadingManager.ts` 注入的 HTML，不是图）。
 
 ## 音效素材（网上找；**禁止用 numpy 从零合成波形**，已被主人否决）

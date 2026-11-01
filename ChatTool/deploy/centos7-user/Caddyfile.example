@@ -11,7 +11,7 @@ http://154.37.155.17 {
         }
 
         reverse_proxy 127.0.0.1:8893 {
-            # SSE 必须立即刷新，不能由代理缓冲。
+            # SSE 和 WebSocket 都需要直通上游；flush_interval -1 也保留给客服事件流。
             flush_interval -1
         }
     }

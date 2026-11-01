@@ -56,7 +56,24 @@ func main() {
 	}
 	cancel()
 
-	app := api.New(db, cfg, logger)
+	gameDB, err := sql.Open("mysql", cfg.GameMySQLDSN())
+	if err != nil {
+		logger.Error("无法初始化游戏数据库", "error", err)
+		os.Exit(1)
+	}
+	defer gameDB.Close()
+	gameDB.SetMaxOpenConns(8)
+	gameDB.SetMaxIdleConns(2)
+	gameDB.SetConnMaxLifetime(5 * time.Minute)
+	gameCtx, gameCancel := context.WithTimeout(context.Background(), 20*time.Second)
+	if err := gameDB.PingContext(gameCtx); err != nil {
+		gameCancel()
+		logger.Error("游戏数据库连接失败", "error", err)
+		os.Exit(1)
+	}
+	gameCancel()
+
+	app := api.NewWithGameDB(db, gameDB, cfg, logger)
 	maintenanceCtx, stopMaintenance := context.WithCancel(context.Background())
 	app.StartMaintenance(maintenanceCtx)
 	server := &http.Server{

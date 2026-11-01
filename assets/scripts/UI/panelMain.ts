@@ -22,6 +22,7 @@ import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
 import panelExchangeStone from "./panelExchangeStone";
 import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
+import DirectChatManager from "../logic/DirectChatManager";
 
 var KBEngine = require("kbengine");
 
@@ -301,13 +302,59 @@ export default class panelMain extends UIPanelViewBase {
         RoomInviteManager.getInstance().onLobbyReady();
     }
 
+
+    /** 大厅「客服（私聊）」入口的总未读红点。所有俱乐部未读在此汇总（设计文档 11）。 */
+    private directChatUnreadHandler:(total:number)=>void = null;
+    /** 直聊新消息沿用新俱乐部申请提示音。 */
+    private directChatRealtimeMessageHandler:(event:any)=>void = null;
+
+    private SetupDirectChatEntry():void
+    {
+        if(this.directChatUnreadHandler != null)
+            return;
+        let manager = DirectChatManager.GetInstance();
+        this.directChatUnreadHandler = (total:number)=>{ this.RefreshDirectChatBadge(total); };
+        manager.On("unread",this.directChatUnreadHandler);
+        this.directChatRealtimeMessageHandler = ()=>{ this.PlayAudio("eff/申请提示"); };
+        manager.On("realtimeMessage",this.directChatRealtimeMessageHandler);
+        // 消息入口属于大厅常驻状态：只要已登录，就保持一条直聊长连接。
+        // 新消息事件到达后由 DirectChatManager 更新红点和消息列表。
+        manager.StartRealtime();
+        this.RefreshDirectChatBadge(manager.UnreadTotal());
+        // 打开大厅补一次俱乐部与未读摘要；失败不影响大厅其他功能。
+        manager.LoadClubs().then(()=>{
+            return manager.LoadUnread();
+        }).then((unread)=>{
+            this.RefreshDirectChatBadge(unread.total);
+        }).catch(()=>{});
+    }
+
+    private RefreshDirectChatBadge(total:number):void
+    {
+        let badge = Tool.GetChild(this.node,"Down/客服/红点");
+        if(badge == null)
+            return;
+        badge.active = total > 0;
+        let labelNode = Tool.GetChild(badge,"数量");
+        if(labelNode == null)
+            return;
+        let label = labelNode.getComponent(cc.Label);
+        if(label != null)
+            label.string = total > 99 ? "99+" : total.toString();
+    }
+
     onDestroy(){
+        if(this.directChatUnreadHandler != null)
+            DirectChatManager.GetInstance().Off("unread", this.directChatUnreadHandler);
+        if(this.directChatRealtimeMessageHandler != null)
+            DirectChatManager.GetInstance().Off("realtimeMessage", this.directChatRealtimeMessageHandler);
         if(this.clubManagementApi) this.clubManagementApi.Dispose();
         if(this.defaultClubTimer != null) { clearTimeout(this.defaultClubTimer);this.defaultClubTimer = null; }
         super.onDestroy();
     }
 
     onEnable(){
+        this.SetupDirectChatEntry();
         this.HidePromotionPanelOnLobbyOpen();
         GameDataManager.getInstance().dtLastSend = new Date().getTime();
         GameDataManager.getInstance().dtLastSuccess = new Date().getTime();
@@ -1335,7 +1382,9 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "客服")
         {
-           UIManager.getInstance().showPanel("panelKefu",ShowPanelMode.Cover);    
+            // 2026-10-31 用户确认：底栏「客服」就是俱乐部私聊。
+            // 消息页和大厅其他分页一样插在 Main 下，首次点击才加载，之后切走再切回直接复用。
+            this.OpenDirectChatPage();
         }
         else if(button.node.name === "排行榜")
         {
@@ -2179,6 +2228,48 @@ export default class panelMain extends UIPanelViewBase {
         }
         else
             this.getAllRooms();
+    }
+
+
+    /** 消息页（俱乐部私聊）作为 Main 的一个分页，首次点击客服时实例化并缓存。 */
+    private directChatPage:cc.Node = null;
+    private directChatLoading:boolean = false;
+
+    private OpenDirectChatPage():void
+    {
+        let main = this.node.getChildByName("Main");
+        if(main == null)
+            return;
+        let page = main.getChildByName("消息");
+        if(page == null && this.directChatPage != null && cc.isValid(this.directChatPage))
+            page = this.directChatPage;
+        if(page != null)
+        {
+            this.switchTabSel("消息");
+            return;
+        }
+        if(this.directChatLoading)
+            return;
+        this.directChatLoading = true;
+        cc.loader.loadRes("UI/panelMessage",(err:any,prefab:any)=>{
+            this.directChatLoading = false;
+            if(err != null || prefab == null || !cc.isValid(this.node))
+            {
+                cc.error(err && err.message ? err.message : err);
+                return;
+            }
+            if(this.node.getChildByName("Main").getChildByName("消息") != null)
+            {
+                this.switchTabSel("消息");
+                return;
+            }
+            let node = cc.instantiate(prefab);
+            node.name = "消息";
+            node.parent = this.node.getChildByName("Main");
+            node.active = true;
+            this.directChatPage = node;
+            this.switchTabSel("消息");
+        });
     }
 
     switchTabSel(strName:string)

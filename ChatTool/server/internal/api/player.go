@@ -801,6 +801,7 @@ func (s *Server) runMaintenance(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	var lastContentPurge time.Time
+	var lastDirectCleanup time.Time
 	for {
 		select {
 		case <-ctx.Done():
@@ -818,6 +819,14 @@ func (s *Server) runMaintenance(ctx context.Context) {
 						s.publishConversationCleared(ctx, conversationID)
 					}
 				}
+			}
+			// 直聊清理与客服清理完全分开：客服 48 小时强清的条件不能套到直聊上。
+			if s.directStore != nil && (lastDirectCleanup.IsZero() || time.Since(lastDirectCleanup) >= 30*time.Minute) {
+				lastDirectCleanup = time.Now()
+				if err := s.directStore.CleanupOnce(ctx, s.directMedia, s.cfg.DirectRetention); err != nil {
+					s.logger.Error("direct chat cleanup failed", "error", err)
+				}
+				_ = s.directStore.CleanupSessions(ctx)
 			}
 			cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
 			rows, err := s.db.QueryContext(ctx, `SELECT id FROM chat_agent WHERE presence <> 'offline' AND (last_seen_at IS NULL OR last_seen_at < ?)`, cutoff)

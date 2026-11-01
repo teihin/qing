@@ -29,6 +29,9 @@ export default class MobileManager extends cc.Component {
     private voiceRoomGeneration:number = 0;
     private nativeVoiceGenerations:any = {};
     private lastVoiceErrorAt:number = 0;
+    // 直聊语音复用同一套录音/上传链路，但结果交给私聊消息而不是房间广播（不调用 reqSay）。
+    private voiceResultHandler:((voiceId:string)=>void) = null;
+    private voiceFailureHandler:((message:string)=>void) = null;
     private unlockBrowserAudio = ()=>{
         if(this.webVoiceClient != null)
             this.webVoiceClient.unlockPlayback();
@@ -154,6 +157,35 @@ export default class MobileManager extends cc.Component {
 
 
     //-------------------------------------------语音相关------------------------------------------------
+
+    /**
+     * 直聊语音：录音上传成功后把 voiceId 交给回调，由直聊自己发消息。
+     * 传 null 恢复房间语音默认行为（reqSay 广播），两者不会被同时触发。
+     */
+    public SetVoiceRecordResultHandler(success:(voiceId:string)=>void,failure:(message:string)=>void = null)
+    {
+        this.voiceResultHandler = success;
+        this.voiceFailureHandler = failure;
+    }
+
+    private DeliverVoiceResult(voiceID:string):boolean
+    {
+        if(this.voiceResultHandler == null)
+            return false;
+        let handler = this.voiceResultHandler;
+        // 异步回调，避免在原生/网络回调栈里同步创建消息。
+        setTimeout(()=>{ handler(voiceID); },0);
+        return true;
+    }
+
+    private DeliverVoiceFailure(message:string):void
+    {
+        if(this.voiceFailureHandler == null)
+            return;
+        let handler = this.voiceFailureHandler;
+        setTimeout(()=>{ handler(message); },0);
+    }
+
     //语音初始化
     public InitGvoice()
     {
@@ -509,12 +541,16 @@ export default class MobileManager extends cc.Component {
             // 上传期间已离开牌桌时不再把旧房间语音广播到新房间。
             if(roomGeneration !== this.voiceRoomGeneration)
                 return;
+            // 私聊语音：只交给直聊消息，绝不调用 reqSay 广播到牌桌。
+            if(this.DeliverVoiceResult(voiceID))
+                return;
             let account = this.GetAccount();
             if(account == null || typeof account.reqSay !== "function")
                 throw new Error("游戏连接已断开");
             account.reqSay("@@语音@@" + voiceID);
         }).catch((error:any)=>{
             let text = this.GetVoiceErrorText(error);
+            this.DeliverVoiceFailure(text);
             if(text.indexOf("录音时间太短") >= 0)
                 return;
             this.ShowVoiceError(error);
@@ -581,6 +617,9 @@ export default class MobileManager extends cc.Component {
         delete this.nativeVoiceGenerations[key];
         if(response.value === "" || generation !== this.voiceRoomGeneration)
             return;
+        // 私聊语音：录音上传成功只发给直聊，不进入房间语音广播。
+        if(this.DeliverVoiceResult(response.value))
+            return;
         let account = this.GetAccount();
         if(account == null || typeof account.reqSay !== "function")
         {
@@ -608,8 +647,10 @@ export default class MobileManager extends cc.Component {
         if(response.value.indexOf("录音时间太短") >= 0 ||
             response.value.indexOf("录音已取消") >= 0)
         {
+            this.DeliverVoiceFailure(response.value);
             return;
         }
+        this.DeliverVoiceFailure(response.value);
         this.ShowVoiceError(new Error(response.value));
     }
 
