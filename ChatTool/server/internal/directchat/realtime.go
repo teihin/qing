@@ -158,12 +158,15 @@ func (c *realtimeClient) writePump() {
 }
 
 func (h *Handler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	if !h.originAllowed(r.Header.Get("Origin")) {
+	ticket := strings.TrimSpace(r.URL.Query().Get("ticket"))
+	// 原生 Cocos WebSocket 可能携带 file://、localhost 等非网页 Origin。
+	// 一次性 ticket 已由已鉴权的 HTTP 会话签发，并且只消费一次；此路径不再
+	// 依赖网页 Origin 白名单。未带 ticket 的兼容旧客户端仍执行来源校验。
+	if !h.originAllowedForTicket(r.Header.Get("Origin"), ticket) {
 		http.Error(w, "websocket origin denied", http.StatusForbidden)
 		return
 	}
 	var session Session
-	ticket := strings.TrimSpace(r.URL.Query().Get("ticket"))
 	if ticket != "" {
 		var ok bool
 		session, ok = h.consumeWSTicket(ticket)
@@ -212,6 +215,13 @@ func (h *Handler) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	client.enqueue(RealtimeEvent{Type: "ready", Data: map[string]any{"guuid": session.Guuid}})
 	go client.writePump()
 	h.readRealtime(client)
+}
+
+func (h *Handler) originAllowedForTicket(origin, ticket string) bool {
+	if strings.TrimSpace(ticket) != "" {
+		return true
+	}
+	return h.originAllowed(origin)
 }
 
 func (h *Handler) consumeWSTicket(ticket string) (Session, bool) {

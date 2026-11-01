@@ -6,7 +6,8 @@ import GameDataManager from "../GameDataManager";
 import { ShowPanelMode } from "../common/GameDef";
 import ImageManager from "../logic/ImageManager";
 import DirectChatManager, {
-    DirectChatError, DirectAttachment, DirectMessage, DirectMessagePage, DirectPeer, DirectPickedImage
+    DirectChatError, DirectAttachment, DirectMessage, DirectMessagePage, DirectPeer, DirectPickedImage,
+    DirectImageSource
 } from "../logic/DirectChatManager";
 import DirectChatTime from "../common/DirectChatTime";
 
@@ -1187,9 +1188,13 @@ export default class panelMessageChat extends UIPanelViewBase {
         {
             this.SendText();
         }
-        else if(name === "图片" || name === "发送图片" || name === "拍照上传")
+        else if(name === "拍照上传")
         {
-            this.SendImage();
+            this.SendImage("camera");
+        }
+        else if(name === "图片" || name === "发送图片")
+        {
+            this.SendImage("library");
         }
         else if(name === "删除")
         {
@@ -1467,7 +1472,7 @@ export default class panelMessageChat extends UIPanelViewBase {
         });
     }
 
-    private SendImage():void
+    private SendImage(source:DirectImageSource = "library"):void
     {
         if(!this.canSend)
         {
@@ -1478,10 +1483,11 @@ export default class panelMessageChat extends UIPanelViewBase {
             return;
         if(!this.manager.ImagePickSupported())
         {
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Top,"当前版本不支持选择图片，请更新客户端");
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Top,
+                source === "camera" ? "当前版本不支持拍照，请更新客户端" : "当前版本不支持选择图片，请更新客户端");
             return;
         }
-        this.manager.PickImage().then((image:DirectPickedImage)=>{
+        this.manager.PickImage(source).then((image:DirectPickedImage)=>{
             if(this.disposed)
                 return;
             this.uploading = true;

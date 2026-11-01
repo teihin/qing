@@ -38,7 +38,7 @@
 - “我的”页直赠在有当前俱乐部时调用 **`赠送_俱乐部_积分`**（`club_id / user_id / user_add_gold / user_pwd`，扣自己账户的积分、不动额度，双方须在同一授信代理下）；成员设置赠送、俱乐部房间内玩家头像赠送仍用 `添加_俱乐部_成员_积分`（代理按额度发筹码口径，是否同改待定）；无当前俱乐部或普通房仍保留大厅通用 `调用_方法_Exchange2`。
 - 服务端更新后，三条俱乐部赠送路径均先校验交易密码并发送 `user_pwd`；成员设置/头像入口成功后通知大厅刷新记录。
 - 2026-11-01 服务端失败回包会把上下文变为 `添加_俱乐部_成员_积分_club:gold:...`；`panelMain` 已截取其中真正的 `club:` 上下文，因此 `0x301` 会显示 `result.error`（如“请先设置交易密码”）。俱乐部赠送成功/关闭/再次打开会清空密码和输入内容，并忽略关闭后旧弹窗回包；遇到未设置交易密码时，确认提示会直接打开初始化交易密码界面，成员设置赠送还会先关闭赠送弹窗。
-- “赠送”页有当前俱乐部时改查 `查询_俱乐部_成员_积分_添加_记录`；真实回包同步返回空 `result`，随后由 `AddMemberGoldList` 推送 `guuid / name / gold / date` 列表，客户端已兼容该事件及多层包装，普通大厅仍查 `ExchangeInfo`。
+- “赠送”页有当前俱乐部时查 **`查询_俱乐部_积分流水`**（`club_id` + `user_id` 留空=查自己 + **`only_add:1`** 只看「添加积分/积分赠送」+ `count/page`），同步回包只有空壳，列表由 **`ClubGoldWater`** 推送；该推送与「资金明细」页共用，客户端按最近一次请求的 context（`club:gold:add-record:` / `club:gold:water:`）分派到赠送列表或资金明细列表。流水没有对方 ID，记录行按 `opter_name` 显示操作人、`type` 缩成两字（添加/赠送/收到）；旧的 `AddMemberGoldList` 解析保留兼容。普通大厅仍查 `ExchangeInfo`。
 - 已改 `panelMain.ts`、`panelGivePad.ts`、`panelUserInfo.ts`；TypeScript 转译、赠送/密码/金币流水回归、请求字段静态断言、既有俱乐部协议桩回归和脚本/Prefab `git diff --check` 通过。Creator/真实服务器回包/构建/真机仍待验证。
 - 兑换钻石弹窗 `panelExchangeStone.ts` 在有当前俱乐部时读取 `Account.club_gold`，发送 `reqExChange2(..., "gold,<club_id>")`，余额校验/提示改为俱乐部金币，并监听 `set_club_gold`；无俱乐部时关闭入口/弹窗，顶部金币显示 0，不再回退到平台金币。
 - 无俱乐部时大厅“赠送/兑换钻石”入口、牌桌设置里的“兑换钻石”和牌桌玩家资料里的“赠送”均隐藏；无俱乐部金币余额统一显示 0。
@@ -64,6 +64,8 @@
 - 固定上级代理入口按 `club_agent_info.upper_guuid` 生成、`canDelete=false`；`note` 只对上级链可见，列表显示“昵称（备注） [俱乐部名称]”。
 - 服务端多轮部署（CORS 预检、图片附件空 `external_media_id`、长连接、已读并发、固定入口+备注）均已完成并通过 Go 全量测试；各版本 SHA-256、备份名与逐项验证见[交接](handoffs/2026-10-31-direct-chat.md)。
 - 客户端尚未正式构建/热更，双账号、断网恢复、真机图片与录音仍待实测。
+- 2026-11-02 通过安卓 `192.168.3.100:9527` V8 Inspector 复现：`ws-ticket` HTTP 返回 200，但原生直聊 WebSocket 在 `OPEN` 前 `onerror → CLOSED`；同一临时票据由电脑连接公网 `ws://154.37.155.17/chattool/api/direct/ws` 可 `OPEN`。根因为服务端先用网页 Origin 白名单拒绝 Cocos 原生来源；修复为已带一次性 ticket 时跳过网页 Origin 校验，已部署到 `/www/html/.chattool`，公网健康 200，`Origin: file://` 无效 ticket 已进入 401 ticket 鉴权；真实双账号安卓回归仍待执行，见[安卓长连接交接](handoffs/2026-11-02-android-direct-chat-ws-origin.md)。
+- 2026-11-02 直聊图片：安卓/iOS 原生桥已补齐「相册选图 + 拍照」，回调增加 `error` 字段（`denied`/`unsupported`），TS 侧 `PickImage(source)` 与消息页「拍照上传」「发送图片」分别走相机与相册。Java 已过 `:qing:compileDebugJavaWithJavac`、iOS 过 `clang -fsyntax-only`、TS 过语法制检；**未出包、未真机验证**，见[图片与拍照交接](handoffs/2026-11-02-direct-chat-image-camera.md)。
 
 ## 2026-10-29～10-30（阶段归档）
 

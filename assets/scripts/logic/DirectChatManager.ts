@@ -126,6 +126,9 @@ export interface DirectUnread
     byClub:{[clubId:string]:number};
 }
 
+/** 图片来源：相册/文件选择，或调用相机现拍。 */
+export type DirectImageSource = "library" | "camera";
+
 /** 客户端图片选择结果。 */
 export interface DirectPickedImage
 {
@@ -1882,10 +1885,11 @@ export default class DirectChatManager
     }
 
     /**
-     * 选择图片。浏览器走 <input type=file>；原生走 DirectChatImageBridge，
-     * 由它把选中图片写到缓存目录后回调 `DirectChatImagePicked`（见 native 桥说明）。
+     * 选择图片。浏览器走 <input type=file>（camera 时追加 capture）；原生走
+     * DirectChatImageBridge 的 Pick/TakePhoto，由它把结果写到缓存目录后回调
+     * `DirectChatImagePicked`（见 native 桥说明）。
      */
-    public PickImage():Promise<DirectPickedImage>
+    public PickImage(source:DirectImageSource = "library"):Promise<DirectPickedImage>
     {
         if(!this.ImagePickSupported())
             return Promise.reject(new DirectChatError("当前平台不支持选择图片","MEDIA_INVALID"));
@@ -1893,10 +1897,21 @@ export default class DirectChatManager
             this.imagePicker = resolve;
             this.imagePickReject = reject;
             if(cc.sys.isBrowser)
-                this.PickImageInBrowser();
+                this.PickImageInBrowser(source);
             else
-                this.PickImageNative();
+                this.PickImageNative(source);
         });
+    }
+
+    /** 原生桥的失败原因转成可读提示；code 沿用桥返回的 denied/unsupported。 */
+    private PickImageError(code:string,source:DirectImageSource):DirectChatError
+    {
+        let camera = source === "camera";
+        if(code === "denied")
+            return new DirectChatError(camera ? "未获得相机权限，请在系统设置中允许后重试" : "未获得相册权限，请在系统设置中允许后重试","MEDIA_PERMISSION");
+        if(code === "unsupported")
+            return new DirectChatError(camera ? "当前设备无法拍照，请改用相册选择" : "当前版本不支持选择图片，请更新客户端","MEDIA_INVALID");
+        return new DirectChatError(camera ? "已取消拍照" : "未选择图片","MEDIA_INVALID");
     }
 
     private FinishPickImage(result:DirectPickedImage,error:Error):void
@@ -1915,11 +1930,14 @@ export default class DirectChatManager
             resolve(result);
     }
 
-    private PickImageInBrowser():void
+    private PickImageInBrowser(source:DirectImageSource):void
     {
         let input:any = document.createElement("input");
         input.type = "file";
         input.accept = "image/jpeg,image/png,image/webp";
+        // 移动浏览器靠 capture 直接调相机；桌面浏览器忽略该属性，退化成文件选择。
+        if(source === "camera")
+            input.capture = "environment";
         input.style.display = "none";
         let finished = false;
         let cleanup = ()=>{
@@ -1984,9 +2002,17 @@ export default class DirectChatManager
         input.click();
     }
 
-    private PickImageNative():void
+    private PickImageNative(source:DirectImageSource):void
     {
-        let requestId = Date.now().toString(36);
+        let camera = source === "camera";
+        let requestId = Date.now().toString(36) + (camera ? "c" : "p");
+        // 老包里没有原生桥时 jsb.reflection 不抛异常、回调也永远不来，
+        // 这里兜一个超时，免得按钮点下去完全没反应。
+        let watchdog = setTimeout(()=>{
+            this.FinishPickImage(null,new DirectChatError(
+                camera ? "当前版本不支持拍照，请更新客户端" : "当前版本不支持选择图片，请更新客户端",
+                "MEDIA_INVALID"));
+        },30000);
         (window as any).DirectChatImagePicked = (payload:any)=>{
             let data:any = payload;
             if(typeof payload === "string")
@@ -1996,11 +2022,14 @@ export default class DirectChatManager
             }
             if(data == null)
             {
+                clearTimeout(watchdog);
                 this.FinishPickImage(null,new DirectChatError("图片读取失败","MEDIA_INVALID"));
                 return;
             }
             if(data.requestId !== undefined && String(data.requestId) !== requestId)
                 return;
+            clearTimeout(watchdog);
+            let errorCode = String(data.error || "");
             let path = String(data.path || "");
             let mime = String(data.mime || "image/jpeg").toLowerCase();
             if(mime === "image/jpg")
@@ -2010,7 +2039,7 @@ export default class DirectChatManager
             let size = Number(data.size || 0);
             if(path === "")
             {
-                this.FinishPickImage(null,new DirectChatError("未选择图片","MEDIA_INVALID"));
+                this.FinishPickImage(null,this.PickImageError(errorCode,source));
                 return;
             }
             let bytes:any = null;
@@ -2045,17 +2074,19 @@ export default class DirectChatManager
         {
             if(cc.sys.os === cc.sys.OS_ANDROID)
             {
-                jsb.reflection.callStaticMethod("org/cocos2dx/javascript/DirectChatImageBridge","Pick",
-                    "(Ljava/lang/String;)V",requestId);
+                jsb.reflection.callStaticMethod("org/cocos2dx/javascript/DirectChatImageBridge",
+                    camera ? "TakePhoto" : "Pick","(Ljava/lang/String;)V",requestId);
             }
             else
             {
-                jsb.reflection.callStaticMethod("DirectChatImageBridge","Pick:",requestId);
+                jsb.reflection.callStaticMethod("DirectChatImageBridge",
+                    camera ? "TakePhoto:" : "Pick:",requestId);
             }
         }
         catch(error)
         {
-            this.FinishPickImage(null,new DirectChatError("当前版本不支持选择图片，请更新客户端","MEDIA_INVALID"));
+            clearTimeout(watchdog);
+            this.FinishPickImage(null,this.PickImageError("unsupported",source));
         }
     }
 }

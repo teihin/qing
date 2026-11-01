@@ -3216,9 +3216,16 @@ export default class panelMain extends UIPanelViewBase {
             this.clubGiftRecordClubId = clubId;
             this.clubGiftRecordPage = nPage;
             const context = "club:gold:add-record:" + clubId + ":" + nPage;
+            // 赠送记录改查玩家积分流水（§11.1）：only_add=1 只返回「添加积分」和「积分赠送」，
+            // 正好是这一页要看的上下分与赠送；user_id 留空 = 查自己。
+            // 同步回包只有空壳，列表由 ClubGoldWater 异步推送。
+            this.clubGoldWaterClubId = clubId;
+            this.clubGoldWaterRequestContext = context;
             const strParam = JSON.stringify({
-                header:"查询_俱乐部_成员_积分_添加_记录",
+                header:"查询_俱乐部_积分流水",
                 club_id:clubId,
+                user_id:"",
+                only_add:1,
                 count:this.PAGE_PER_COUNT,
                 page:nPage,
                 context
@@ -3327,14 +3334,17 @@ export default class panelMain extends UIPanelViewBase {
         return fallback;
     }
 
-    /** 俱乐部加分流水均属于「赠送」页，目标成员是这一行的展示对象。 */
+    /** 「我的 → 赠送」的历史记录行。数据源有两套：积分流水（ClubGoldWater，无对方 ID）和旧的添加记录（AddMemberGoldList）。 */
     public setClubGiftRecordItemInfo(node:cc.Node,objOne:any)
     {
         node.active = true;
+        // 旧记录用 guuid/name 指向被操作的人；积分流水只有操作人 opter_name，没有对方 ID。
         const targetId = String(this.ReadClubGiftRecordValue(objOne,
             ["target_guuid","target_user_id","to_user_id","member_guuid","member_id","user_id","guuid","user_guuid"],""));
         const targetName = String(this.ReadClubGiftRecordValue(objOne,
             ["target_name","target_user_name","to_user_name","member_name","user_name","name"],""));
+        const opterName = String(this.ReadClubGiftRecordValue(objOne,
+            ["opter_name","operator_name","op_name","oper_name"],"")).trim();
         const amount = this.ReadClubGiftRecordValue(objOne,
             ["user_add_gold","add_gold","add_gold_num","change_gold","amount","money_value","money","gold","club_gold","score"],"");
         let strDate = String(this.ReadClubGiftRecordValue(objOne,
@@ -3351,15 +3361,29 @@ export default class panelMain extends UIPanelViewBase {
         {
             strDate = strDate.replace(/^\d{4}[-\/]/,"").replace(/:[0-9]{2}(\.[0-9]+)?$/,"");
         }
-        // 这条列表同时包含「添加」和「赠送」两类记录，type 列按服务端返回的值原样显示
-        // （写死「赠送」会把下分记录也说成赠送）；金额保留原符号，负数是减少。
-        // 只有服务端没给 type 时才按正负兜底。
+        // type 列只有两个字宽：积分流水的「添加积分 / 积分赠送 / 积分受赠」要缩成短标签，
+        // 旧添加记录原样给的是「添加 / 赠送」。都没有时按金额正负兜底。
         const rawType = String(this.ReadClubGiftRecordValue(objOne,["type","record_type"],""));
         const amountNumber = Number(amount);
         const isMinus = isFinite(amountNumber) && amountNumber < 0;
-        const typeText = rawType !== "" ? rawType : (isMinus ? "扣除" : "赠送");
+        let typeText = rawType;
+        if(typeText === "添加积分")
+            typeText = "添加";
+        else if(typeText === "积分赠送")
+            typeText = "赠送";
+        else if(typeText === "积分受赠")
+            typeText = "收到";
+        else if(typeText === "修改积分")
+            typeText = "修改";
+        if(typeText === "")
+            typeText = isMinus ? "扣除" : "赠送";
         node.getChildByName("type").getComponent(cc.Label).string = typeText;
-        node.getChildByName("id").getComponent(cc.Label).string = targetName + "\r\nID:" + targetId;
+
+        const hasTarget = targetId !== "" || targetName !== "";
+        node.getChildByName("id").getComponent(cc.Label).string = hasTarget
+            ? targetName + "\r\nID:" + targetId
+            : (opterName !== "" ? opterName : "—");
+        // 金额保留原符号：负数是扣减（下分/送出），不要写成「赠送 -111」那种含糊说法。
         node.getChildByName("count").getComponent(cc.Label).string = String(amount);
         node.getChildByName("time").getComponent(cc.Label).string = strDate;
 
@@ -3367,8 +3391,14 @@ export default class panelMain extends UIPanelViewBase {
         const avatarMask = avatarRoot ? avatarRoot.getChildByName("mask") : null;
         const avatarNode = avatarMask ? avatarMask.getChildByName("img") : null;
         const avatar = avatarNode ? avatarNode.getComponent(cc.Sprite) : null;
-        if(avatar && targetId && !ImageManager.getInstance().GetImageByName(targetId,"",avatar))
-            ImageManager.getInstance().AddWaitFreshImage2Catch(targetId,avatar);
+        if(avatar)
+        {
+            // 流水没有对方 ID，不能按名字取头像；清空，避免复用行残留上一条的头像。
+            if(!hasTarget)
+                avatar.spriteFrame = null;
+            else if(!ImageManager.getInstance().GetImageByName(targetId,"",avatar))
+                ImageManager.getInstance().AddWaitFreshImage2Catch(targetId,avatar);
+        }
     }
     public setExchangeItemInfo(node:cc.Node,objOne:any)
     {
@@ -4042,10 +4072,13 @@ export default class panelMain extends UIPanelViewBase {
         }
         if(context.indexOf("club:gold:add-record:") === 0)
         {
-            // 查询接口的同步回包通常只有空壳，真正列表由 AddMemberGoldList 推送；
-            // 若服务端把列表直接放进同步 result，也在这里立即兼容显示。
+            // 赠送记录现在查「查询_俱乐部_积分流水」：列表由 ClubGoldWater 异步推送，
+            // 同步回包通常只有空壳；若服务端把列表塞进同步 result，也在这里立刻显示。
             if(nCode === 0x200 && response.result)
-                this.OnClubGiftRecordList(JSON.stringify(response.result));
+                this.OnClubGoldWaterList(JSON.stringify(response.result));
+            else if(nCode !== 0x200)
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    this.GetHallCommandError(param,"赠送记录查询失败，请稍后重试！"));
             return true;
         }
         if(context !== "club:create" && context !== "club:join")
@@ -4274,13 +4307,25 @@ export default class panelMain extends UIPanelViewBase {
     /** 俱乐部积分流水推送：{"ClubGoldWater":[...]}。推送样例不带 club_id，按最近一次请求配对。 */
     public OnClubGoldWaterList(strMsg:any)
     {
-        if(this.scrollLiushui == null || this.clubGoldWaterClubId === "")
+        if(this.clubGoldWaterClubId === "")
             return;
         if(this.ResolveRoomClub() !== this.clubGoldWaterClubId)
             return;
 
         const payload = this.NormalizeClubGoldWaterList(strMsg);
         if(payload == null)
+            return;
+        // 「我的 → 赠送」记录和「资金明细」页现在都查这一条流水接口，
+        // 按最近一次请求的 context 决定渲染到哪个列表。
+        if(this.clubGoldWaterRequestContext.indexOf("club:gold:add-record:") === 0)
+        {
+            if(this.scrollExchangeInfo == null)
+                return;
+            this.scrollExchangeInfo.UpdateList(payload,"ClubGoldWater","赠送记录对象",
+                this.PAGE_PER_COUNT,this.setClubGiftRecordItemInfo.bind(this));
+            return;
+        }
+        if(this.scrollLiushui == null)
             return;
         this.scrollLiushui.UpdateList(payload,"ClubGoldWater","资金明细对象",
             this.PAGE_PER_COUNT,this.setClubGoldWaterItemInfo.bind(this));

@@ -32,3 +32,17 @@ func TestRealtimeHubPublishesOnlyToTargetAccount(t *testing.T) {
 	case <-time.After(20 * time.Millisecond):
 	}
 }
+
+func TestWebSocketTicketAllowsNativeOrigin(t *testing.T) {
+	h := &Handler{allowedOrigins: []string{"http://localhost:7456"}}
+
+	if !h.originAllowedForTicket("file://", "one-time-ticket") {
+		t.Fatal("one-time ticket should allow a native origin")
+	}
+	if h.originAllowedForTicket("http://native.invalid", "") {
+		t.Fatal("legacy token-less connection should reject an unknown origin")
+	}
+	if !h.originAllowedForTicket("http://localhost:7456", "") {
+		t.Fatal("configured web origin should remain allowed")
+	}
+}
