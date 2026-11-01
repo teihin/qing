@@ -799,6 +799,20 @@ export default class panelGameView extends UIPanelViewBase {
         layout.updateLayout();
     }
 
+    /**
+     * 兑换入口只在有当前俱乐部时显示：非俱乐部场景不再走平台金币兑换的旧链路。
+     */
+    private RefreshClubExchangeVisibility():boolean
+    {
+        const account = GameDataManager.getAccount();
+        const clubId = resolveRoomClubId(account,"",true);
+        const node = Tool.GetChild(this.node,"ConfigMain/兑换钻石");
+        const visible = clubId !== "";
+        if(node != null)
+            node.active = visible;
+        return visible;
+    }
+
     onButtonClick(button:cc.Button)
     {
         if(button.node.name != "ConfigBT")
@@ -809,6 +823,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         if(button.node.name === "ConfigBT")
         {
+            this.RefreshClubExchangeVisibility();
             Tool.GetChild(this.node,"ConfigMain").active = true;
 
             //如果自己是创建房间的人，则显示解散
@@ -854,6 +869,8 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "兑换钻石")
         {
+            if(!this.RefreshClubExchangeVisibility())
+                return;
             UIManager.getInstance().showPanel("panelExchangeStone",ShowPanelMode.Cover);
         }
         else if(button.node.name === "退出房间")

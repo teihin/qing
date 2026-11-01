@@ -81,6 +81,11 @@ export default class panelMain extends UIPanelViewBase {
     public clubManagement:ClubManagementView = null;
     private clubInputId:string = "";
     private clubCommandBusy:boolean = false;
+    /** 「我的 → 赠送」当前是否有一笔俱乐部积分请求等待回包。 */
+    private clubGoldGiftPending:boolean = false;
+    /** 最近一次俱乐部赠送记录查询，异步推送没有统一带回 club_id 时用它配对。 */
+    private clubGiftRecordClubId:string = "";
+    private clubGiftRecordPage:number = 0;
     private clubDetails:{[clubId:string]:any} = {};
     private clubAgentInfo:{[clubId:string]:any} = {};
     /** 当前玩家在各俱乐部的额度查询结果；额度只在有权限时渲染。 */
@@ -91,6 +96,17 @@ export default class panelMain extends UIPanelViewBase {
     private clubAgentRecheck:{[clubId:string]:number} = {};
     /** 推广页缺邀请码时补查代理信息的时间戳，同样按俱乐部节流。 */
     private clubInviteCodeAsked:{[clubId:string]:number} = {};
+
+    private ClearGiftInputs():void
+    {
+        const paths = ["赠送/操作/用户id","赠送/操作/金额","赠送/操作/V7交易密码"];
+        for(const path of paths)
+        {
+            const node = Tool.GetChild(this.node,path);
+            if(node && node.getComponent(cc.EditBox))
+                node.getComponent(cc.EditBox).string = "";
+        }
+    }
     // 登录进大厅的默认分页只决定一次，之后用户手动切换或俱乐部关系变化都不再自动跳转。
     private lobbyEntryResolved:boolean = false;
     /**
@@ -194,8 +210,14 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("onExChange2", this, "onExChange");
 
         KBEngine.Event.register("ExchangeInfo", this, "OnGetExchangeList");
+        // 兼容服务端按英文路由或按命令名回推俱乐部赠送流水。
+        KBEngine.Event.register("ClubGoldAddRecord", this, "OnClubGiftRecordList");
+        KBEngine.Event.register("AddMemberGoldList", this, "OnClubGiftRecordList");
+        KBEngine.Event.register("查询_俱乐部_成员_积分_添加_记录", this, "OnClubGiftRecordList");
         KBEngine.Event.register("ListPlayerCashWater", this, "ListPlayerCashWater");
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
+        KBEngine.Event.register("ClubGoldGiftChanged", this, "OnClubGoldGiftChanged");
+        KBEngine.Event.register("OpenInitTransactionPassword", this, "OpenInitTransactionPassword");
         KBEngine.Event.register("set_club_join", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_make", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_manage", this, "OnClubMembershipChanged");
@@ -244,7 +266,13 @@ export default class panelMain extends UIPanelViewBase {
             return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role,isLeader};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),player=>{
             if(player && player.id)
-                UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,String(player.id)+",");
+            {
+                // 成员设置里的赠送必须绑定当前俱乐部，避免误走大厅通用金币转账。
+                // panelGivePad 仍兼容旧的「玩家资料 → 赠送」入口。
+                UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,JSON.stringify({
+                    userId:String(player.id),clubId:this.ResolveRoomClub()
+                }));
+            }
         },()=>this.PlayAudio("eff/申请提示"));
         this.RefreshDiscoveryClubFunds(true);
         this.clubManagement.Refresh();
@@ -362,6 +390,7 @@ export default class panelMain extends UIPanelViewBase {
     onEnable(){
         this.SetupDirectChatEntry();
         this.HidePromotionPanelOnLobbyOpen();
+        this.RefreshClubFinanceMenuVisibility();
         GameDataManager.getInstance().dtLastSend = new Date().getTime();
         GameDataManager.getInstance().dtLastSuccess = new Date().getTime();
     }
@@ -766,6 +795,40 @@ export default class panelMain extends UIPanelViewBase {
         return fallback;
     }
 
+    public OpenInitTransactionPassword():void
+    {
+        this.bNeedInitJYPwd = true;
+        const modifyPanel = this.node.getChildByName("修改交易密码");
+        if(modifyPanel != null)
+            modifyPanel.active = false;
+        const initPanel = this.node.getChildByName("初始化交易密码");
+        if(initPanel != null)
+            initPanel.active = true;
+        this.ClearTransactionPasswordInputs();
+    }
+
+    private ShowTransactionPasswordRequired():void
+    {
+        const password = Tool.GetChild(this.node,"赠送/操作/V7交易密码");
+        if(password != null && password.getComponent(cc.EditBox) != null)
+            password.getComponent(cc.EditBox).string = "";
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+            "请先设置交易密码",[(confirmed:boolean)=>{
+                if(confirmed)
+                    this.OpenInitTransactionPassword();
+            }]);
+    }
+
+    private ShowClubGoldGiftError(message:string):void
+    {
+        if(message.indexOf("请先设置交易密码") >= 0)
+        {
+            this.ShowTransactionPasswordRequired();
+            return;
+        }
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+    }
+
     private ConfirmPaidAvatarChange()
     {
         if(this.avatarChargeBusy)
@@ -796,10 +859,34 @@ export default class panelMain extends UIPanelViewBase {
 
     set_gold(num:number)
     {
-        Tool.GetChild(this.node,"Main/我的/信息/gold").getComponent(cc.Label).string = GameDataManager.getAccount().gold.toString()+(GameDataManager.getAccount().gold2==0?"":("."+GameDataManager.getAccount().gold2.toString().padStart(2,"0")));
+        const text = this.ResolveDisplayGoldText();
+        Tool.GetChild(this.node,"Main/我的/信息/gold").getComponent(cc.Label).string = text;
         const summary = Tool.GetChild(this.node,"资金明细/V8资金概况/当前金币");
         if(summary != null)
-            summary.getComponent(cc.Label).string = Tool.GetChild(this.node,"Main/我的/信息/gold").getComponent(cc.Label).string;
+            summary.getComponent(cc.Label).string = text;
+    }
+
+    /**
+     * 「我的」和「资金明细」顶部显示的金币。
+     *
+     * 俱乐部模式下 Account.gold 不再是玩家资产（接口文档 §10），这两个位置要显示
+     * 当前俱乐部的积分；没有俱乐部时显示 0。不能用 Account.gold
+     * 冒充俱乐部积分，也不要在俱乐部模式里显示平台金币。
+     */
+    private ResolveDisplayGoldText():string
+    {
+        const account:any = GameDataManager.getAccount();
+        const clubId = account == null ? "" : this.ResolveRoomClub();
+        if(clubId !== "")
+        {
+            const clubGold = this.GetClubGold(clubId);
+            // 服务端没下发该俱乐部积分（含 -99 哨兵）时按 0 显示余额，
+            // 但不能退回平台金币——那是另一个币种。
+            return clubGold === "" ? "0" : clubGold;
+        }
+        if(account == null)
+            return "0";
+        return "0";
     }
     /** 钻石数＝account.stone，和金币框并排显示。 */
     set_stone(num:number)
@@ -936,6 +1023,26 @@ export default class panelMain extends UIPanelViewBase {
             if(child.name === "代理") child.active = false;
 
         // 原生 Prefab Grid 按已激活入口自动补位，布局不再使用旧稿坐标。
+        this.RefreshClubFinanceMenuVisibility();
+    }
+
+    private RefreshClubFinanceMenuVisibility():void
+    {
+        const hasClub = this.ResolveRoomClub() !== "";
+        const paths = [
+            "Main/我的/滚动区/view/content/操作/赠送",
+            "Main/我的/滚动区/view/content/操作/兑换钻石"
+        ];
+        for(const path of paths)
+        {
+            const node = Tool.GetChild(this.node,path);
+            if(node != null)
+                node.active = hasClub;
+        }
+        const operation = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作");
+        const layout = operation == null ? null : operation.getComponent(cc.Layout);
+        if(layout != null)
+            layout.updateLayout();
     }
     public set_photo(old)
     {
@@ -958,6 +1065,11 @@ export default class panelMain extends UIPanelViewBase {
         // 「我的」底部的兑换入口：和牌局菜单里那个是同一个弹窗。
         if(button.node.name === "兑换钻石")
         {
+            if(this.ResolveRoomClub() === "")
+            {
+                this.RefreshClubFinanceMenuVisibility();
+                return;
+            }
             UIManager.getInstance().showPanel("panelExchangeStone",ShowPanelMode.Cover,"hall");
             return;
         }
@@ -970,6 +1082,8 @@ export default class panelMain extends UIPanelViewBase {
             this.selectedRoomClubId = id;
             if(this.roomClubAccountKey) cc.sys.localStorage.setItem(this.roomClubAccountKey,id);
             this.clubManagement.Refresh();
+            // 切换俱乐部后顶部金币要跟着换成新俱乐部的积分，不能留着上一家的数字。
+            this.set_gold(0);
             this.switchTabSel("发现");
             this.getAllRooms(0,true);
             return;
@@ -1102,14 +1216,19 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "赠送")
         {
+            if(this.ResolveRoomClub() === "")
+            {
+                this.RefreshClubFinanceMenuVisibility();
+                return;
+            }
             this.node.getChildByName("赠送").active = true;
+            this.ClearGiftInputs();
             this.GetAllExchangeInfo(0);
         }
         else if(button.node.name === "提交赠送")
         {
             let strID = Tool.GetChild(button.node.parent,"用户id").getComponent(cc.EditBox).string;
             let strNum = Tool.GetChild(button.node.parent,"金额").getComponent(cc.EditBox).string;
-            let strPass = Tool.GetChild(button.node.parent,"V7交易密码").getComponent(cc.EditBox).string;
             if(strID.length != 6)
             {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入正确的用户ID！");
@@ -1125,14 +1244,37 @@ export default class panelMain extends UIPanelViewBase {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"赠送金额只能输入大于0的整数！");
                 return;
             }
+
+            const clubId = this.ResolveRoomClub();
+            if(clubId !== "")
+            {
+                const strPass = Tool.GetChild(button.node.parent,"V7交易密码").getComponent(cc.EditBox).string;
+                if(strPass == "")
+                {
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入密码!");
+                    return;
+                }
+                if(this.clubGoldGiftPending)
+                    return;
+                this.clubGoldGiftPending = true;
+                const context = "club:gold:give-main:" + clubId + ":" + strID;
+                const clubParam = JSON.stringify({
+                    header:"添加_俱乐部_成员_积分",club_id:clubId,user_id:strID,
+                    user_add_gold:Number(strNum),user_pwd:strPass,context
+                });
+                GameDataManager.getAccount().reqHallCommand(
+                    clubParam,"P@添加_俱乐部_成员_积分_" + context);
+                return;
+            }
+
+            let strPass = Tool.GetChild(button.node.parent,"V7交易密码").getComponent(cc.EditBox).string;
             if(strPass == "")
             {
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入密码!");
                 return;
             }
 
-            // V7赠送页已经包含交易密码输入框，直接沿用原确认弹窗的
-            // Exchange2协议提交，避免再次弹窗并重复输入密码。
+            // 没有当前俱乐部时保留大厅通用金币转账。
             let strParam = JSON.stringify({
                 header:"调用_方法_Exchange2",
                 target_guuid:strID,
@@ -3020,9 +3162,7 @@ export default class panelMain extends UIPanelViewBase {
         {
             strMsg = "交易成功！";
             this.GetAllExchangeInfo();
-            Tool.GetChild(this.node,"赠送/操作/用户id").getComponent(cc.EditBox).string = "";
-            Tool.GetChild(this.node,"赠送/操作/金额").getComponent(cc.EditBox).string = "";
-            Tool.GetChild(this.node,"赠送/操作/V7交易密码").getComponent(cc.EditBox).string = "";
+            this.ClearGiftInputs();
         }
         else if (nCode == 0x302)
         {
@@ -3063,11 +3203,158 @@ export default class panelMain extends UIPanelViewBase {
     }
     public GetAllExchangeInfo(nPage:number = 0)
     {
+        const clubId = this.ResolveRoomClub();
+        if(clubId !== "")
+        {
+            this.clubGiftRecordClubId = clubId;
+            this.clubGiftRecordPage = nPage;
+            const context = "club:gold:add-record:" + clubId + ":" + nPage;
+            const strParam = JSON.stringify({
+                header:"查询_俱乐部_成员_积分_添加_记录",
+                club_id:clubId,
+                count:this.PAGE_PER_COUNT,
+                page:nPage,
+                context
+            });
+            GameDataManager.getAccount().reqHallCommand(strParam,"P@" + context);
+            return;
+        }
+
+        this.clubGiftRecordClubId = "";
         GameDataManager.getAccount().reqGetExchangeInfo(nPage);
     }
     public OnGetExchangeList(strMsg:string)
     {
         this.scrollExchangeInfo.UpdateList(strMsg,"ExchangeInfo","赠送记录对象",this.PAGE_PER_COUNT,this.setExchangeItemInfo.bind(this));
+    }
+    /** 俱乐部金币赠送成功后，成员设置/头像入口也要刷新「我的 → 赠送」记录。 */
+    public OnClubGoldGiftChanged(clubId:string)
+    {
+        if(String(clubId || "") !== this.ResolveRoomClub())
+            return;
+        this.GetAllExchangeInfo(0);
+    }
+
+    /** 兼容列表直返、result 包装和同名对象包装。 */
+    private NormalizeClubGiftRecordList(strMsg:string):string
+    {
+        if(strMsg == null || strMsg === "")
+            return null;
+        let data:any = null;
+        try { data = JSON.parse(strMsg); }
+        catch(error) { return null; }
+        if(data == null)
+            return null;
+
+        const listKeys:string[] = [
+            "ClubGoldAddRecord", "ClubGoldAddRecordList", "ListClubGoldAddRecord", "AddMemberGoldList",
+            "ClubGoldAddInfo", "ClubGoldAddList", "records", "list", "result"
+        ];
+        const find = (value:any,depth:number):any => {
+            if(value == null || depth > 4)
+                return null;
+            if(Array.isArray(value))
+                return {rows:value,owner:null};
+            if(typeof value !== "object")
+                return null;
+            for(const key of listKeys)
+            {
+                const child = value[key];
+                if(Array.isArray(child))
+                    return {rows:child,owner:value};
+            }
+            for(const key of ["ClubGoldAddRecord","ClubGoldAddRecordList","ListClubGoldAddRecord","AddMemberGoldList","result","data","payload"])
+            {
+                const child = value[key];
+                if(child && typeof child === "object")
+                {
+                    const found = find(child,depth + 1);
+                    if(found)
+                        return found;
+                }
+            }
+            return null;
+        };
+
+        const found = find(data,0);
+        if(!found || !Array.isArray(found.rows))
+            return null;
+        const owner:any = found.owner || data;
+        const result:any = {ClubGoldAddRecord:found.rows};
+        for(const key of ["number","count","pageIndex","pageNum","rowsTotal","context","club_id"])
+        {
+            if(data[key] != null) result[key] = data[key];
+            else if(owner[key] != null) result[key] = owner[key];
+        }
+        return JSON.stringify(result);
+    }
+
+    public OnClubGiftRecordList(strMsg:string)
+    {
+        if(this.scrollExchangeInfo == null || this.clubGiftRecordClubId === "")
+            return;
+        const normalized = this.NormalizeClubGiftRecordList(strMsg);
+        if(normalized == null)
+            return;
+        try
+        {
+            const payload:any = JSON.parse(normalized);
+            const payloadClubId = payload && payload.club_id != null ? String(payload.club_id) : "";
+            if(payloadClubId !== "" && payloadClubId !== this.clubGiftRecordClubId)
+                return;
+        }
+        catch(error) { return; }
+        this.scrollExchangeInfo.UpdateList(normalized,"ClubGoldAddRecord","赠送记录对象",
+            this.PAGE_PER_COUNT,this.setClubGiftRecordItemInfo.bind(this));
+    }
+
+    private ReadClubGiftRecordValue(item:any,keys:string[],fallback:any = ""):any
+    {
+        if(item == null)
+            return fallback;
+        for(const key of keys)
+        {
+            if(item[key] != null && String(item[key]) !== "")
+                return item[key];
+        }
+        return fallback;
+    }
+
+    /** 俱乐部加分流水均属于「赠送」页，目标成员是这一行的展示对象。 */
+    public setClubGiftRecordItemInfo(node:cc.Node,objOne:any)
+    {
+        node.active = true;
+        const targetId = String(this.ReadClubGiftRecordValue(objOne,
+            ["target_guuid","target_user_id","to_user_id","member_guuid","member_id","user_id","guuid","user_guuid"],""));
+        const targetName = String(this.ReadClubGiftRecordValue(objOne,
+            ["target_name","target_user_name","to_user_name","member_name","user_name","name"],""));
+        const amount = this.ReadClubGiftRecordValue(objOne,
+            ["user_add_gold","add_gold","add_gold_num","change_gold","amount","money_value","money","gold","club_gold","score"],"");
+        let strDate = String(this.ReadClubGiftRecordValue(objOne,
+            ["date","time","create_time","created_at","op_time"],"")).replace("T"," ").replace(/\r?\n/g," ");
+        const dateMatch = strDate.match(/^\d{4}[-\/]([0-9]{1,2})[-\/]([0-9]{1,2})\s+([0-9]{1,2}):([0-9]{2})/);
+        if(dateMatch)
+        {
+            const month = dateMatch[1].length === 1 ? "0" + dateMatch[1] : dateMatch[1];
+            const day = dateMatch[2].length === 1 ? "0" + dateMatch[2] : dateMatch[2];
+            const hour = dateMatch[3].length === 1 ? "0" + dateMatch[3] : dateMatch[3];
+            strDate = month + "/" + day + " " + hour + ":" + dateMatch[4];
+        }
+        else
+        {
+            strDate = strDate.replace(/^\d{4}[-\/]/,"").replace(/:[0-9]{2}(\.[0-9]+)?$/,"");
+        }
+        node.getChildByName("type").getComponent(cc.Label).string = "赠送";
+        node.getChildByName("id").getComponent(cc.Label).string = targetName + "\r\nID:" + targetId;
+        node.getChildByName("count").getComponent(cc.Label).string = String(amount);
+        node.getChildByName("time").getComponent(cc.Label).string = strDate;
+
+        const avatarRoot = node.getChildByName("头像");
+        const avatarMask = avatarRoot ? avatarRoot.getChildByName("mask") : null;
+        const avatarNode = avatarMask ? avatarMask.getChildByName("img") : null;
+        const avatar = avatarNode ? avatarNode.getComponent(cc.Sprite) : null;
+        if(avatar && targetId && !ImageManager.getInstance().GetImageByName(targetId,"",avatar))
+            ImageManager.getInstance().AddWaitFreshImage2Catch(targetId,avatar);
     }
     public setExchangeItemInfo(node:cc.Node,objOne:any)
     {
@@ -3276,6 +3563,7 @@ export default class panelMain extends UIPanelViewBase {
             this.ResolveLobbyEntryTab();
         // 刚创建 / 刚入会的俱乐部在这里落成默认俱乐部，后面的卡片、列表、房间筛选都取新值。
         this.ApplyPendingDefaultClub();
+        this.RefreshClubFinanceMenuVisibility();
         this.RefreshDiscoveryClubFunds(true);
         if(this.clubManagement) this.clubManagement.Refresh();
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
@@ -3288,6 +3576,8 @@ export default class panelMain extends UIPanelViewBase {
 
     public OnClubGoldChanged()
     {
+        // 俱乐部积分变化要同步「我的」和资金明细顶部，否则玩家看到的是旧余额。
+        this.set_gold(0);
         this.RefreshDiscoveryClubFunds(false);
         const page = Tool.GetChild(this.node,"Main/俱乐部");
         if(page && page.active)
@@ -3308,7 +3598,7 @@ export default class panelMain extends UIPanelViewBase {
             goldRoot.getChildByName("gold") : title.getChildByName("gold");
         const goldLabel = goldNode ? goldNode.getComponent(cc.Label) : null;
         if(goldLabel)
-            goldLabel.string = clubId ? this.GetClubGold(clubId) : "";
+            goldLabel.string = clubId ? this.GetClubGold(clubId) : "0";
 
         const quotaNode = title.getChildByName("额度");
         const agent = clubId ? this.clubAgentInfo[clubId] : null;
@@ -3667,6 +3957,12 @@ export default class panelMain extends UIPanelViewBase {
         let context = response && response.context ? String(response.context) : "";
         if(context.indexOf("p@") === 0 || context.indexOf("P@") === 0)
             context = context.substr(2);
+        // Hall 服务端会把回调标签拼到客户端 context 前面，例如：
+        // 添加_俱乐部_成员_积分_club:gold:give-main:567671:718968。
+        // 截出真正的 club context，确保 0x200/0x301 都能进入对应提示分支。
+        const clubContextIndex = context.indexOf("club:");
+        if(clubContextIndex > 0)
+            context = context.substr(clubContextIndex);
         if(context.indexOf("club:") !== 0)
             return false;
         if(context.indexOf("club:info:") === 0)
@@ -3698,6 +3994,33 @@ export default class panelMain extends UIPanelViewBase {
                 this.RefreshDiscoveryClubFunds(false);
                 this.RefreshClubList(false);
             }
+            return true;
+        }
+        if(context.indexOf("club:gold:give-main:") === 0)
+        {
+            if(!this.clubGoldGiftPending)
+                return true;
+            this.clubGoldGiftPending = false;
+            if(nCode === 0x200 || nCode === 0x500)
+            {
+                this.ClearGiftInputs();
+                this.RefreshDiscoveryClubFunds(false);
+                if(this.clubManagement) this.clubManagement.Refresh();
+                this.GetAllExchangeInfo(0);
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"俱乐部金币赠送成功！");
+            }
+            else
+            {
+                this.ShowClubGoldGiftError(this.GetHallCommandError(param,"俱乐部金币赠送失败，请稍后重试！"));
+            }
+            return true;
+        }
+        if(context.indexOf("club:gold:add-record:") === 0)
+        {
+            // 查询接口的同步回包通常只有空壳，真正列表由 AddMemberGoldList 推送；
+            // 若服务端把列表直接放进同步 result，也在这里立即兼容显示。
+            if(nCode === 0x200 && response.result)
+                this.OnClubGiftRecordList(JSON.stringify(response.result));
             return true;
         }
         if(context !== "club:create" && context !== "club:join")
@@ -3798,6 +4121,8 @@ export default class panelMain extends UIPanelViewBase {
                 if(param.indexOf("修改_玩家_交易密码")>=0)
                 {
                     this.ClearTransactionPasswordInputs();
+                    if(this.bNeedInitJYPwd)
+                        Tool.GetChild(this.node,"初始化交易密码").active = false;
                     this.bNeedInitJYPwd = false;
                 }
                 UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "修改密码成功！");                

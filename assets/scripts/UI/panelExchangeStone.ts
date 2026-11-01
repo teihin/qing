@@ -11,10 +11,11 @@ var KBEngine = require("kbengine");
 const {ccclass} = cc._decorator;
 
 /**
- * 牌桌内「兑换钻石」弹窗（金币 → 钻石）。
+ * 「兑换钻石」弹窗（金币 / 俱乐部金币 → 钻石）。
  *
- * 协议走**方式 B**：`Account.reqExChange2(我的guuid, 金币数, "gold,非俱乐部")`，无密码，
- * 结果只认 `onExChange(0x200/0x301/0x302)`。见《俱乐部金币与钻石-客户端接口文档》§2.3。
+ * 协议走**方式 B**：`Account.reqExChange2(我的guuid, 金币数, money_type)`，无密码，
+ * 普通场景使用 `gold,非俱乐部`，俱乐部场景使用 `gold,<club_id>`；结果只认
+ * `onExChange(0x200/0x301/0x302)`。
  *
  * 角色只按本项目口径显示三种：**老板 / 代理 / 玩家**（没有「合伙人」）。
  * 判定优先用 `查询_俱乐部_代理_信息` 的 `is_creator` / `is_agent`，
@@ -68,6 +69,7 @@ export default class panelExchangeStone extends UIPanelViewBase
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         // 兑换成功后服务端主动同步属性，余额跟着刷新。
         KBEngine.Event.register("set_gold", this, "RefreshUser");
+        KBEngine.Event.register("set_club_gold", this, "RefreshUser");
         KBEngine.Event.register("set_stone", this, "RefreshUser");
 
         let mask = this.node.getChildByName("msk");
@@ -100,6 +102,11 @@ export default class panelExchangeStone extends UIPanelViewBase
         // 大厅里没有「当前房间」，角色按大厅选中的俱乐部判；牌局里仍以房间 club_id 优先。
         // 「我的」入口传 strUserData="hall"。
         this.clubId = resolveRoomClubId(account,"",this.strUserData !== "hall");
+        if(this.clubId === "")
+        {
+            UIManager.getInstance().closePanelByName(this.node.name,ClosePanelMode.Normal);
+            return;
+        }
         this.BuildTiers();
         this.RefreshUser();
         this.RefreshRole();
@@ -211,7 +218,8 @@ export default class panelExchangeStone extends UIPanelViewBase
         if(label == null)
             return;
         let stone = panelExchangeStone.TIER_STONE[this.selectIndex];
-        label.string = "兑换 " + stone + " 钻石需消耗 " + (stone / panelExchangeStone.GOLD_TO_STONE) + " 金币";
+        label.string = "兑换 " + stone + " 钻石需消耗 " +
+            (stone / panelExchangeStone.GOLD_TO_STONE) + " " + this.GetGoldLabel();
     }
 
     //--------------------------------------------------------------------------
@@ -235,8 +243,37 @@ export default class panelExchangeStone extends UIPanelViewBase
             ImageManager.getInstance().SetLocalAvatar(avatar,account.photo,guuid);
         }
 
-        this.SetBalance("金币行",account.gold);
+        this.SetBalance("金币行",this.GetCurrentGold(account));
         this.SetBalance("钻石行",account.stone);
+    }
+
+    private GetCurrentGold(account:any):number
+    {
+        if(account == null)
+            return 0;
+        if(this.clubId === "")
+            return 0;
+
+        let value:any = account.club_gold;
+        if(typeof value === "string")
+        {
+            try { value = JSON.parse(value); }
+            catch(error) { return 0; }
+        }
+        if(!value || typeof value !== "object")
+            return 0;
+        const number = Number(value[this.clubId]);
+        return isFinite(number) && number >= 0 && number !== -99 ? number : 0;
+    }
+
+    private GetGoldLabel():string
+    {
+        return this.clubId === "" ? "金币" : "俱乐部金币";
+    }
+
+    private GetMoneyType():string
+    {
+        return this.clubId === "" ? "gold,非俱乐部" : "gold," + this.clubId;
     }
 
     private SetBalance(rowName:string,value:any):void
@@ -401,16 +438,17 @@ export default class panelExchangeStone extends UIPanelViewBase
 
         let stone = panelExchangeStone.TIER_STONE[this.selectIndex];
         let gold = Math.max(1,Math.round(stone / panelExchangeStone.GOLD_TO_STONE));
-        let owned = Number(account.gold);
+        let owned = this.GetCurrentGold(account);
         if(isFinite(owned) && owned < gold)
         {
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"金币不足，请先充值或联系客服！");
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                this.GetGoldLabel() + "不足，请先充值或联系客服！");
             return;
         }
 
         // 传一个函数当 arrayEx[0]，panelMsgView 自动切成「确定 + 取消」双按钮版。
         // 文案控制在两行内：弹窗文本区只有 450×132（30 号字，每行约 15 字）。
-        let message = "确认兑换 " + stone + " 钻石？\n将立即扣除 " + gold + " 金币";
+        let message = "确认兑换 " + stone + " 钻石？\n将立即扣除 " + gold + " " + this.GetGoldLabel();
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message,[(confirmed:boolean)=>{
             if(confirmed)
                 this.DoSendExchange(stone,gold);
@@ -431,13 +469,14 @@ export default class panelExchangeStone extends UIPanelViewBase
         }
 
         // 确认弹窗挂着这段时间金币可能变了（比如刚打完一局），再校一次。
-        let owned = Number(account.gold);
+        let owned = this.GetCurrentGold(account);
         if(isFinite(owned) && owned < gold)
         {
             // 此刻 panelMsgView 刚被 destroy（还挂在父节点上没移除），
             // 同一帧再 showPanel 会命中「已存在」分支而复用旧界面，文本不刷新。挪到下一帧弹。
             this.scheduleOnce(()=>{
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"金币不足，请先充值或联系客服！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    this.GetGoldLabel() + "不足，请先充值或联系客服！");
             },0);
             return;
         }
@@ -448,7 +487,7 @@ export default class panelExchangeStone extends UIPanelViewBase
         panelExchangeStone.resultStamp = Date.now();
         // money_value 传**金币数**（消耗量），钻石由服务端按汇率乘出来；
         // money_type 必须是英文逗号 + 字面量「非俱乐部」，服务端不做容错。
-        account.reqExChange2(String(account.guuid),gold,"gold,非俱乐部");
+        account.reqExChange2(String(account.guuid),gold,this.GetMoneyType());
     }
 
     public onExChange(nCode:number)
@@ -466,7 +505,8 @@ export default class panelExchangeStone extends UIPanelViewBase
         }
         else if(nCode === 0x302)
         {
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"金币不足，兑换失败！");
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                this.GetGoldLabel() + "不足，兑换失败！");
         }
         else if(nCode === 0x307 || nCode === 0x308)
         {

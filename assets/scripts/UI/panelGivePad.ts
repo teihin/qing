@@ -16,7 +16,20 @@ export default class panelGivePad extends UIPanelViewBase {
 
     private strID:string = "";
     private strNum:string = "";
+    /** 成员设置入口传入时使用俱乐部积分；旧入口为空，继续走大厅通用金币转账。 */
+    private clubId:string = "";
+    private clubGiftPending:boolean = false;
     private strYLinfo:string = "";//预留信息
+
+    private ClearGiftInputs():void
+    {
+        const password = Tool.GetChild(this.node,"bk/密码");
+        const amount = Tool.GetChild(this.node,"bk/输入金额");
+        if(password && password.getComponent(cc.EditBox))
+            password.getComponent(cc.EditBox).string = "";
+        if(amount && amount.getComponent(cc.EditBox))
+            amount.getComponent(cc.EditBox).string = "";
+    }
 
     onLoad () {
         super.onLoad();
@@ -31,9 +44,23 @@ export default class panelGivePad extends UIPanelViewBase {
     }
 
     start () {
-        let arrayTemp = this.strUserData.split(",");
-        this.strID = arrayTemp[0];
-        this.strNum = arrayTemp[1];
+        this.clubGiftPending = false;
+        this.ClearGiftInputs();
+        let clubData:any = null;
+        try { clubData = JSON.parse(this.strUserData); } catch(error) { clubData = null; }
+        if(clubData && typeof clubData === "object" && clubData.userId != null)
+        {
+            this.strID = String(clubData.userId);
+            this.clubId = clubData.clubId == null ? "" : String(clubData.clubId);
+            this.strNum = clubData.amount == null ? "" : String(clubData.amount);
+        }
+        else
+        {
+            let arrayTemp = this.strUserData.split(",");
+            this.strID = arrayTemp[0];
+            this.strNum = arrayTemp[1];
+            this.clubId = "";
+        }
 
         if(this.strNum == "")
         {
@@ -58,6 +85,8 @@ export default class panelGivePad extends UIPanelViewBase {
     {
         if(button.node.name === "关闭")
         {
+            this.clubGiftPending = false;
+            this.ClearGiftInputs();
             UIManager.getInstance().closePanelByName(this.node.name);
         }
         else if(button.node.name === "确定赠送")
@@ -78,6 +107,26 @@ export default class panelGivePad extends UIPanelViewBase {
                 return;
             }
 
+            if(this.clubId !== "")
+            {
+                const strPass = Tool.GetChild(this.node,"bk/密码").getComponent(cc.EditBox).string;
+                if(strPass == "")
+                {
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入密码!");
+                    return;
+                }
+                if(this.clubGiftPending)
+                    return;
+                this.clubGiftPending = true;
+                const context = "club:gold:give-member:" + this.clubId + ":" + this.strID;
+                const strParam = JSON.stringify({
+                    header:"添加_俱乐部_成员_积分",club_id:this.clubId,user_id:this.strID,
+                    user_add_gold:Number(strNum),user_pwd:strPass,context
+                });
+                GameDataManager.getAccount().reqHallCommand(strParam,"P@添加_俱乐部_成员_积分_" + context);
+                return;
+            }
+
             let strPass = Tool.GetChild(this.node,"bk/密码").getComponent(cc.EditBox).string;
             if(strPass == "")
             {
@@ -85,21 +134,10 @@ export default class panelGivePad extends UIPanelViewBase {
                 return;
             }
 
-            // let yl = Tool.GetChild(this.node,"bk/预留信息").getComponent(cc.EditBox).string;
-            // if(yl == "")
-            // {
-            //     UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入预留信息!");
-            //     return;
-            // }
-
-            // if(yl != this.strYLinfo)
-            // {
-            //     UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"预留信息校验错误，操作失败!");
-            //     return;
-            // }
-
+            // 旧的「玩家资料 → 赠送」入口仍使用大厅通用金币转账。
             let strParam = "{\"header\":\"调用_方法_Exchange2\",\"target_guuid\":\"" + this.strID + "\",\"money_value\":\"" + strNum + "\",\"money_type\":\"gold\",\"user_pwd\":\"" + strPass + "\",\"client_version\":\"2022032201\"}";
             GameDataManager.getAccount().reqAccountCommand(strParam, "P@调用_方法_Exchange2");
+            this.ClearGiftInputs();
             UIManager.getInstance().closePanelByName(this.node.name);
         }
     }
@@ -112,6 +150,42 @@ export default class panelGivePad extends UIPanelViewBase {
 
     public onHallCommand(nCode:number, param:string)
     {
+        if(this.clubId !== "" && this.clubGiftPending && param && param.indexOf("添加_俱乐部_成员_积分") >= 0)
+        {
+            this.clubGiftPending = false;
+            if(nCode === 0x200 || nCode === 0x500)
+            {
+                KBEngine.Event.fire("ClubGoldGiftChanged", this.clubId);
+                this.ClearGiftInputs();
+                UIManager.getInstance().closePanelByName(this.node.name);
+            }
+            else
+            {
+                let error = "俱乐部金币赠送失败，请稍后重试！";
+                try
+                {
+                    const msg:any = JSON.parse(param);
+                    const result:any = msg && msg.result;
+                    if(result && result.error) error = String(result.error);
+                    else if(msg && msg.error) error = String(msg.error);
+                }
+                catch(error) {}
+                if(error.indexOf("请先设置交易密码") >= 0)
+                {
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,error,
+                        [(confirmed:boolean)=>{
+                            if(!confirmed)
+                                return;
+                            this.ClearGiftInputs();
+                            UIManager.getInstance().closePanelByName(this.node.name);
+                            KBEngine.Event.fire("OpenInitTransactionPassword");
+                        }]);
+                }
+                else
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,error);
+            }
+            return;
+        }
         if(param.indexOf("查询_用户_名字")>=0)
         {
             if (nCode == 0x200)

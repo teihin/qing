@@ -10,6 +10,16 @@
 - 「授信_俱乐部_额度」是额度转移接口：开通和已授信后的增加/减少都调用它，分别传正/负 `quota_fen`。成功后仍以 `GetClubQuota` 异步回包重新查询，额度 0 仍视为已授信。
 - 已改 `ClubManagementApi.ts`、`ClubManagementView.ts` 和 `panelMain.prefab`；TypeScript 转译、协议桩回归、Prefab JSON/节点引用检查通过。Creator 导入、实际服务器回包、构建和真机交互仍待验证。详见[交接](handoffs/2026-11-01-club-member-quota.md)。
 
+## 2026-11-01 俱乐部模式赠送金币路由（未构建、未真机）
+
+- “我的”页直赠、成员设置赠送、俱乐部房间内玩家头像赠送，在有当前俱乐部时统一调用 `添加_俱乐部_成员_积分`，发送 `club_id / user_id / user_add_gold`；无当前俱乐部或普通房仍保留大厅通用 `调用_方法_Exchange2`。
+- 服务端更新后，三条俱乐部赠送路径均先校验交易密码并发送 `user_pwd`；成员设置/头像入口成功后通知大厅刷新记录。
+- 2026-11-01 服务端失败回包会把上下文变为 `添加_俱乐部_成员_积分_club:gold:...`；`panelMain` 已截取其中真正的 `club:` 上下文，因此 `0x301` 会显示 `result.error`（如“请先设置交易密码”）。俱乐部赠送成功/关闭/再次打开会清空密码和输入内容，并忽略关闭后旧弹窗回包；遇到未设置交易密码时，确认提示会直接打开初始化交易密码界面，成员设置赠送还会先关闭赠送弹窗。
+- “赠送”页有当前俱乐部时改查 `查询_俱乐部_成员_积分_添加_记录`；真实回包同步返回空 `result`，随后由 `AddMemberGoldList` 推送 `guuid / name / gold / date` 列表，客户端已兼容该事件及多层包装，普通大厅仍查 `ExchangeInfo`。
+- 已改 `panelMain.ts`、`panelGivePad.ts`、`panelUserInfo.ts`；TypeScript 转译、赠送/密码/金币流水回归、请求字段静态断言、既有俱乐部协议桩回归和脚本/Prefab `git diff --check` 通过。Creator/真实服务器回包/构建/真机仍待验证。
+- 兑换钻石弹窗 `panelExchangeStone.ts` 在有当前俱乐部时读取 `Account.club_gold`，发送 `reqExChange2(..., "gold,<club_id>")`，余额校验/提示改为俱乐部金币，并监听 `set_club_gold`；无俱乐部时关闭入口/弹窗，顶部金币显示 0，不再回退到平台金币。
+- 无俱乐部时大厅“赠送/兑换钻石”入口、牌桌设置里的“兑换钻石”和牌桌玩家资料里的“赠送”均隐藏；无俱乐部金币余额统一显示 0。
+
 ## 2026-11-01 后台俱乐部管理模块（已部署）
 
 - XuanManager 新增「俱乐部管理」（`/game/clubs`，迁移 `041`）：列出全部俱乐部 → 成员代理树 → 给群主调额度。已部署正式环境，二进制 `78f3e416…`。

@@ -9,6 +9,7 @@ import Debug from "../common/Debug";
 import WebLoadingManager from "../common/WebLoadingManager";
 import MobileManager from "../mobile/MobileManager";
 import ConfigManager from "../logic/ConfigManager";
+import { normalizeRoomClubId } from "../logic/RoomClubContext";
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
 
@@ -17,6 +18,26 @@ export default class panelUserInfo extends UIPanelViewBase {
 
     private player:DrhPlayerLogic = null;
     private bIsVip:boolean = false
+
+    /** 牌局里的俱乐部模式以 roomSetting.club_id 为准，普通房不能误用当前大厅选中的俱乐部。 */
+    private CurrentRoomClubId():string
+    {
+        const account:any = GameDataManager.getAccount();
+        if(!account || account.roomSetting == null)
+            return "";
+        let raw = String(account.roomSetting).trim();
+        if(raw.indexOf("{{") === 0 && raw.lastIndexOf("}}") === raw.length - 2)
+            raw = raw.slice(1,-1);
+        try
+        {
+            const setting:any = JSON.parse(raw);
+            return normalizeRoomClubId(setting && setting.club_id);
+        }
+        catch(error)
+        {
+            return "";
+        }
+    }
 
     onLoad () {
         super.onLoad();
@@ -32,6 +53,7 @@ export default class panelUserInfo extends UIPanelViewBase {
         if(this.arrayEx.length>0)
         {
             this.player = this.arrayEx[0];
+            const roomClubId = this.CurrentRoomClubId();
 
             if(this.player.info.strUserID == GameDataManager.getAccount().guuid) //自己显示充值
             {
@@ -40,7 +62,7 @@ export default class panelUserInfo extends UIPanelViewBase {
             }
             else
             {
-                Tool.GetChild(this.node,"数据/赠送").active = true;
+                Tool.GetChild(this.node,"数据/赠送").active = roomClubId !== "";
                 Tool.GetChild(this.node,"数据/充值").active = false;
             }
         }
@@ -153,7 +175,11 @@ export default class panelUserInfo extends UIPanelViewBase {
         }
         else if(button.node.name === "赠送")
         {
-            UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,this.player.info.strUserID+",");
+            const clubId = this.CurrentRoomClubId();
+            if(clubId === "")
+                return;
+            const userData = JSON.stringify({userId:this.player.info.strUserID,clubId});
+            UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,userData);
         }
         else if(button.node.name === "语音回放")
         {
