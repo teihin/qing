@@ -90,6 +90,18 @@ export default class DirectChatTime {
         return date.getFullYear().toString() + "年" + md;
     }
 
+    /** 系统通报条的完整时间：一律 YYYY-MM-DD HH:MM:SS，不随「今天/昨天」变化。 */
+    public static FormatFull(value:any):string
+    {
+        let time = DirectChatTime.Parse(value);
+        if(time <= 0)
+            return "";
+        let date = new Date(time);
+        return date.getFullYear().toString() + "-" + DirectChatTime.Pad(date.getMonth() + 1) + "-"
+            + DirectChatTime.Pad(date.getDate()) + " " + DirectChatTime.Pad(date.getHours()) + ":"
+            + DirectChatTime.Pad(date.getMinutes()) + ":" + DirectChatTime.Pad(date.getSeconds());
+    }
+
     /** 两条消息间隔超过 5 分钟才插入时间分割线。 */
     public static NeedDivider(previousTime:number,currentTime:number):boolean
     {

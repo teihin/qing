@@ -2,12 +2,15 @@ import UIPanelViewBase from "../common/UIPanelViewBase";
 import Tool from "../common/Tool";
 import UIManager from "../common/UIManager";
 import Debug from "../common/Debug";
+import GameDataManager from "../GameDataManager";
 import { ShowPanelMode } from "../common/GameDef";
 import ImageManager from "../logic/ImageManager";
 import DirectChatManager, {
     DirectChatError, DirectAttachment, DirectMessage, DirectMessagePage, DirectPeer, DirectPickedImage
 } from "../logic/DirectChatManager";
 import DirectChatTime from "../common/DirectChatTime";
+
+const KBEngine = require("kbengine");
 
 const {ccclass, property} = cc._decorator;
 
@@ -27,6 +30,9 @@ interface BubbleUnit
     avatar:cc.Sprite;
     status:cc.Label;
     dividerLabel:cc.Label;
+    /** 系统通报条（上下分成功）的两行文字。 */
+    systemTime:cc.Label;
+    systemText:cc.Label;
 }
 
 /**
@@ -49,11 +55,13 @@ export default class panelMessageChat extends UIPanelViewBase {
     private dividerTemplate:cc.Node = null;
     private leftTemplate:cc.Node = null;
     private rightTemplate:cc.Node = null;
+    private systemTemplate:cc.Node = null;
 
     private dividerUnits:BubbleUnit[] = [];
     private leftUnits:BubbleUnit[] = [];
     private rightUnits:BubbleUnit[] = [];
-    private poolCursor:{[kind:string]:number} = {divider:0,left:0,right:0};
+    private systemUnits:BubbleUnit[] = [];
+    private poolCursor:{[kind:string]:number} = {divider:0,left:0,right:0,system:0};
     private loadBeforeFailed:boolean = false;
     private messages:DirectMessage[] = [];
     private beforeCursor:string = "";
@@ -83,6 +91,16 @@ export default class panelMessageChat extends UIPanelViewBase {
     private previewNode:cc.Node = null;
     private previewSprite:cc.Sprite = null;
     private previewMask:cc.Node = null;
+    private clubGoldButton:cc.Node = null;
+    private clubGiveButton:cc.Node = null;
+    private photoButton:cc.Node = null;
+    private imageButton:cc.Node = null;
+    private clubGoldQuotaRequested:boolean = false;
+    private clubGoldQuotaContext:string = "";
+    private clubGoldQuotaFen:number = 0;
+    /** 额度回包是否已到；没到之前不猜，两个入口都先不显示。 */
+    private clubGoldQuotaKnown:boolean = false;
+    private clubGoldQuotaGranted:boolean = false;
 
     private recordStartY:number = 0;
     private recordCancelling:boolean = false;
@@ -107,8 +125,12 @@ export default class panelMessageChat extends UIPanelViewBase {
         this.dividerTemplate = Tool.GetChild(this.node,"列表/view/content/时间条");
         this.leftTemplate = Tool.GetChild(this.node,"列表/view/content/消息-左");
         this.rightTemplate = Tool.GetChild(this.node,"列表/view/content/消息-右");
+        this.systemTemplate = Tool.GetChild(this.node,"列表/view/content/消息-系统");
         if(this.dividerTemplate != null)
             this.dividerTemplate.active = false;
+        if(this.systemTemplate != null)
+            this.systemTemplate.active = false;
+        KBEngine.Event.register("ClubGoldNotice",this,"OnClubGoldNotice");
         if(this.leftTemplate != null)
             this.leftTemplate.active = false;
         if(this.rightTemplate != null)
@@ -138,6 +160,17 @@ export default class panelMessageChat extends UIPanelViewBase {
         this.deleteButton = Tool.GetChild(this.node,"删除");
         if(this.deleteButton != null)
             this.deleteButton.active = false;
+
+        this.clubGoldButton = Tool.GetChild(this.node,"上下分");
+        this.photoButton = Tool.GetChild(this.node,"拍照上传");
+        this.imageButton = Tool.GetChild(this.node,"发送图片");
+        this.clubGiveButton = Tool.GetChild(this.node,"赠送积分");
+        // 先按预制体里的可见状态排一次，避免俱乐部信息回来前按钮位置是错的。
+        this.LayoutBottomEntries();
+        if(this.clubGiveButton != null)
+            this.clubGiveButton.active = false;
+        if(this.clubGoldButton != null)
+            this.clubGoldButton.active = false;
 
         this.voiceButton = Tool.GetChild(this.node,"语音");
         this.recordOverlay = Tool.GetChild(this.node,"录音浮层");
@@ -170,6 +203,8 @@ export default class panelMessageChat extends UIPanelViewBase {
         this.realtimeStateHandler = (state:any)=>{ this.OnRealtimeState(state); };
         this.manager.On("realtimeMessage",this.realtimeHandler);
         this.manager.On("realtimeState",this.realtimeStateHandler);
+        KBEngine.Event.register("GetClubQuota",this,"OnClubGoldQuota");
+        KBEngine.Event.register("onHallCommand",this,"OnClubGoldQuotaCommand");
     }
 
     start()
@@ -302,6 +337,7 @@ export default class panelMessageChat extends UIPanelViewBase {
             this.deleteButton.active = this.canDelete;
         if(this.voiceButton != null)
             this.voiceButton.opacity = this.canSend ? 255 : 120;
+        this.RefreshClubGoldButton();
         this.RefreshHeader();
         if(!this.canSend && this.readOnlyReason !== "")
             this.SetTopTip(this.readOnlyReason);
@@ -533,10 +569,18 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(this.disposed)
             return;
         this.ApplyPageMeta(page);
+        this.AppendToTail(items);
+    }
+
+    /** 把新消息追加到列表尾部并跟随滚动；实时推送与系统通报共用同一套逻辑。 */
+    private AppendToTail(items:DirectMessage[]):void
+    {
+        if(this.disposed || items == null || items.length === 0)
+            return;
         let added = 0;
         for(let item of items)
         {
-            if(this.IndexOfMessage(item.id) >= 0)
+            if(item == null || this.IndexOfMessage(item.id) >= 0)
                 continue;
             this.messages.push(item);
             added++;
@@ -583,17 +627,21 @@ export default class panelMessageChat extends UIPanelViewBase {
 
     // ================= 渲染 =================
 
-    /** 三类模板各一个节点池，重绘时优先复用，避免历史较多时无限创建节点。 */
-    private PoolOf(kind:"divider"|"left"|"right"):BubbleUnit[]
+    /** 四类模板各一个节点池，重绘时优先复用，避免历史较多时无限创建节点。 */
+    private PoolOf(kind:"divider"|"left"|"right"|"system"):BubbleUnit[]
     {
         if(kind === "divider")
             return this.dividerUnits;
+        if(kind === "system")
+            return this.systemUnits;
         return kind === "left" ? this.leftUnits : this.rightUnits;
     }
 
-    private CreateUnit(kind:"divider"|"left"|"right"):BubbleUnit
+    private CreateUnit(kind:"divider"|"left"|"right"|"system"):BubbleUnit
     {
-        let template = kind === "divider" ? this.dividerTemplate : (kind === "left" ? this.leftTemplate : this.rightTemplate);
+        let template = kind === "divider" ? this.dividerTemplate
+            : (kind === "system" ? this.systemTemplate
+            : (kind === "left" ? this.leftTemplate : this.rightTemplate));
         if(template == null || this.content == null)
             return null;
         let node = cc.instantiate(template);
@@ -611,7 +659,9 @@ export default class panelMessageChat extends UIPanelViewBase {
             voice:null,
             avatar:null,
             status:null,
-            dividerLabel:null
+            dividerLabel:null,
+            systemTime:null,
+            systemText:null
         };
         unit.bubbleSprite = unit.bubble == null ? null : unit.bubble.getComponent(cc.Sprite);
         let textNode = Tool.GetChild(node,"文字");
@@ -626,10 +676,13 @@ export default class panelMessageChat extends UIPanelViewBase {
         unit.status = statusNode == null ? null : statusNode.getComponent(cc.Label);
         let dividerLabelNode = Tool.GetChild(node,"时间");
         unit.dividerLabel = dividerLabelNode == null ? null : dividerLabelNode.getComponent(cc.Label);
+        let systemTextNode = Tool.GetChild(node,"内容");
+        unit.systemText = systemTextNode == null ? null : systemTextNode.getComponent(cc.Label);
+        unit.systemTime = kind === "system" ? unit.dividerLabel : null;
         return unit;
     }
 
-    private TakeUnit(kind:"divider"|"left"|"right"):BubbleUnit
+    private TakeUnit(kind:"divider"|"left"|"right"|"system"):BubbleUnit
     {
         let pool = this.PoolOf(kind);
         if(this.poolCursor[kind] < pool.length)
@@ -653,13 +706,15 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(this.content == null)
             return;
         this.PrepareScrollLayout();
-        this.poolCursor = {divider:0, left:0, right:0};
+        this.poolCursor = {divider:0, left:0, right:0, system:0};
         let cursor = 0;
         let previousTime = 0;
         for(let message of this.messages)
         {
             let time = DirectChatTime.Parse(message.createdAt);
-            if(DirectChatTime.NeedDivider(previousTime,time))
+            const isSystem = message.messageType === "system";
+            // 系统通报条自带完整年月日时分秒，不再额外插“今天/昨天”分隔条。
+            if(!isSystem && DirectChatTime.NeedDivider(previousTime,time))
             {
                 let divider = this.TakeUnit("divider");
                 if(divider != null)
@@ -674,6 +729,28 @@ export default class panelMessageChat extends UIPanelViewBase {
                     cursor += height;
                 }
                 previousTime = time;
+            }
+            if(isSystem)
+            {
+                let unit = this.TakeUnit("system");
+                if(unit == null)
+                    break;
+                this.poolCursor.system++;
+                unit.node.active = true;
+                unit.messageId = message.id;
+                // 通报条按自身 620 宽居中，不要跟着整行拉伸，否则底图会变形。
+                // 服务端只回 createdAt，本地兜底消息自带 systemTime，两边都显示完整时间。
+                if(unit.systemTime != null)
+                    unit.systemTime.string = message.systemTime || DirectChatTime.FormatFull(message.createdAt);
+                if(unit.systemText != null)
+                    unit.systemText.string = message.text || "";
+                // 模板高度固定，这里只在排布时上下各留 7px 间距，不拉伸节点。
+                let height = Math.max(96,unit.node.height) + 14;
+                unit.height = height;
+                unit.node.y = -(cursor + height / 2);
+                cursor += height;
+                previousTime = time;
+                continue;
             }
             let isSelf = message.senderGuuid === this.manager.CurrentGuuid();
             let unit = this.TakeUnit(isSelf ? "right" : "left");
@@ -691,9 +768,9 @@ export default class panelMessageChat extends UIPanelViewBase {
             previousTime = time;
         }
         // 未被使用的节点只隐藏，留在池里等下次复用。
-        for(let kind of ["divider","left","right"])
+        for(let kind of ["divider","left","right","system"])
         {
-            let pool = this.PoolOf(kind as "divider"|"left"|"right");
+            let pool = this.PoolOf(kind as "divider"|"left"|"right"|"system");
             for(let i = this.poolCursor[kind];i < pool.length;i++)
             {
                 if(cc.isValid(pool[i].node))
@@ -703,6 +780,74 @@ export default class panelMessageChat extends UIPanelViewBase {
         // content 顶部由 Widget(TOP) 固定，这里只更新内容高度。
         this.content.height = Math.max(cursor,this.scroll != null ? this.scroll.node.height : cursor);
         this.UpdateTopTipState();
+    }
+
+    /** 上下分/下分成功：往当前会话插一条系统通报条（仅本机可见，不进服务端）。 */
+    private OnClubGoldNotice(notice:any):void
+    {
+        if(notice == null || this.content == null || this.disposed)
+            return;
+        const clubId = String(notice.clubId || "");
+        if(clubId !== "" && this.clubId !== "" && clubId !== this.clubId)
+            return;
+        // 只往「被操作的那个人的会话」里插，避免出现在别的聊天里。
+        const peerId = this.peer == null ? "" : String(this.peer.guuid || "");
+        const targetId = String(notice.userId || "");
+        if(peerId !== "" && targetId !== "" && peerId !== targetId)
+            return;
+        const action = notice.action === "down" ? "down" : (notice.action === "give" ? "give" : "up");
+        const amount = Math.abs(Number(notice.amount));
+        if(!isFinite(amount) || amount <= 0)
+            return;
+        const text = this.BuildGoldNoticeText(notice,action,amount);
+        // 和文字/图片/语音消息一样落服务端：重进聊天、换设备、对方都看得到。
+        const clientMessageId = "n" + Date.now().toString(36)
+            + Math.floor(Math.random() * 0xFFFFFF).toString(36);
+        this.manager.SendSystemNotice(this.conversationId,text,clientMessageId)
+            .then((message:DirectMessage)=>{
+                if(this.disposed || message == null)
+                    return;
+                this.AppendToTail([message]);
+            })
+            .catch(()=>{
+                // 服务端拒绝或断网时至少在本机留一条，避免操作成功却没有任何反馈。
+                if(!this.disposed)
+                    this.AppendToTail([this.MakeLocalNotice(text)]);
+            });
+    }
+
+    private BuildGoldNoticeText(notice:any,action:string,amount:number):string
+    {
+        const name = String(notice.userName || notice.userId || "");
+        const verb = action === "up" ? "上分" : (action === "down" ? "下分" : "赠送");
+        let text = "玩家 " + name + " " + verb + " " + amount + " 成功";
+        // 回包带了变更后积分才补「从多少变成多少」，查不到就不编造。
+        const balance = Number(notice.balance);
+        if(isFinite(balance))
+        {
+            const before = action === "down" ? balance + amount : balance - amount;
+            text += "，积分 " + Math.max(0,before) + " → " + balance;
+        }
+        return text;
+    }
+
+    /** 服务端没发出去时的本机兜底，只在本机显示、不落库。 */
+    private MakeLocalNotice(text:string):DirectMessage
+    {
+        const now = new Date();
+        return {
+            id:"sys-" + now.getTime(),
+            messageType:"system",
+            text:text,
+            attachment:null,
+            senderGuuid:"",
+            senderName:"",
+            senderRole:"",
+            clientMessageId:"",
+            createdAt:DirectChatTime.FormatFull(now.getTime()),
+            pending:false,
+            failed:false
+        };
     }
 
     private UpdateTopTipState():void
@@ -1050,6 +1195,14 @@ export default class panelMessageChat extends UIPanelViewBase {
         {
             this.ConfirmDelete();
         }
+        else if(name === "上下分")
+        {
+            this.OpenClubGoldPad("updown");
+        }
+        else if(name === "赠送积分")
+        {
+            this.OpenClubGoldPad("give");
+        }
         else if(name === "新消息")
         {
             this.ScrollToBottom(true);
@@ -1076,6 +1229,181 @@ export default class panelMessageChat extends UIPanelViewBase {
         {
             super.onButtonClick(button);
         }
+    }
+
+    /**
+     * 上下分入口只对当前俱乐部的群主、盟主，或已授信且仍有可用额度的代理显示。
+     * 入口显示是体验层判断，真正的成员范围、余额和交易密码仍由大厅服务端校验。
+     */
+    private RefreshClubGoldButton():void
+    {
+        const role = String(this.role || "member");
+        const hasPeer = this.clubId !== "" && this.peer != null && this.peer.guuid !== "";
+        const hasQuota = this.clubGoldQuotaGranted && this.clubGoldQuotaFen > 0;
+        // 代理的额度是异步查询出来的：回包到之前不能按「无额度」处理，
+        // 否则有额度的代理会先闪一下「赠送」再跳成「上下分」。
+        const quotaKnown = role !== "agent" || this.clubGoldQuotaKnown;
+        // 赠送的对象范围：玩家、管理员，以及代理（下级代理/同级代理）。
+        // 服务端「赠送_俱乐部_积分」只校验两人带入时扣同一个授信代理的额度，不按角色拦，
+        // 所以给下级代理赠送同样成立；只有群主/盟主是对方的上级，不该出现赠送入口。
+        const peerRole = this.peer == null ? "" : String(this.peer.role || "");
+        const peerCanGift = peerRole === "" || peerRole === "member" || peerRole === "manager" || peerRole === "agent";
+
+        if(this.clubGoldButton != null)
+        {
+            if(role === "owner" || role === "leader")
+                this.clubGoldButton.active = hasPeer;
+            else
+                this.clubGoldButton.active = role === "agent" && quotaKnown && hasQuota && hasPeer;
+        }
+        // 自己是代理但没有可用额度（未授信或额度为 0）时，改为显示「赠送积分」：
+        // 代理没有额度就发不出筹码，只能拿自己账户里的积分送人，走「赠送_俱乐部_积分」。
+        if(this.clubGiveButton != null)
+            this.clubGiveButton.active = role === "agent" && quotaKnown && !hasQuota && peerCanGift && hasPeer;
+
+        this.LayoutBottomEntries();
+
+        if(role === "agent")
+            this.RequestClubGoldQuota();
+    }
+
+    /**
+     * 底部入口的水平位置按「当前实际显示几个」重新均分。
+     * 四个按钮的 Widget 只吃 BOTTOM，水平位置由这里给，隐藏掉一两个时不会留空洞。
+     */
+    private LayoutBottomEntries():void
+    {
+        const entries:cc.Node[] = [this.photoButton,this.imageButton,this.clubGiveButton,this.clubGoldButton];
+        const visible:cc.Node[] = [];
+        for(let node of entries)
+        {
+            if(node != null && node.active)
+                visible.push(node);
+        }
+        if(visible.length === 0)
+            return;
+        const width = 108;
+        const gap = 63;
+        const total = visible.length * width + (visible.length - 1) * gap;
+        let x = -total / 2 + width / 2;
+        for(let node of visible)
+        {
+            node.x = x;
+            x += width + gap;
+        }
+    }
+
+    private RequestClubGoldQuota():void
+    {
+        if(this.clubGoldQuotaRequested || this.clubId === "")
+            return;
+        const account:any = GameDataManager.getAccount();
+        const userId = account == null ? "" : String(account.guuid || "").trim();
+        if(userId === "")
+            return;
+        this.clubGoldQuotaRequested = true;
+        this.clubGoldQuotaContext = "chatgold:quota:" + this.clubId + ":" + userId;
+        try
+        {
+            GameDataManager.getAccount().reqHallCommand(JSON.stringify({
+                header:"查询_俱乐部_额度",
+                club_id:this.clubId,
+                user_id:userId,
+                context:this.clubGoldQuotaContext
+            }),"P@" + this.clubGoldQuotaContext);
+        }
+        catch(error)
+        {
+            this.clubGoldQuotaRequested = false;
+        }
+    }
+
+    /** GetClubQuota 是异步推送，兼容旧服的同名包装、result 包装和 JSON 字符串包装。 */
+    public OnClubGoldQuota(raw:any,secondaryRaw?:any):void
+    {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
+            raw = secondaryRaw;
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        if(data == null || typeof data !== "object")
+            return;
+        let body:any = data;
+        if(body.result != null)
+            body = this.ParseObject(body.result);
+        body = this.ParseObject(body);
+        if(body != null && body.GetClubQuota != null)
+            body = this.ParseObject(body.GetClubQuota);
+        if(body == null || typeof body !== "object")
+            return;
+        const context = String(data.context || body.context || "");
+        const sameContext = this.clubGoldQuotaContext !== "" &&
+            (context === this.clubGoldQuotaContext || context.indexOf(this.clubGoldQuotaContext) >= 0);
+        const returnedClub = String(body.club_id || data.club_id || "");
+        if(!sameContext && returnedClub !== this.clubId)
+            return;
+        if(returnedClub !== "" && returnedClub !== this.clubId)
+            return;
+        const fen = Number(body.quota_fen);
+        if(!Number.isFinite(fen))
+        {
+            this.clubGoldQuotaGranted = false;
+            this.clubGoldQuotaFen = 0;
+            this.clubGoldQuotaKnown = true;
+            this.RefreshClubGoldButton();
+            return;
+        }
+        this.clubGoldQuotaFen = fen;
+        this.clubGoldQuotaKnown = true;
+        this.clubGoldQuotaGranted = this.IsFlag(body.is_agent) && this.IsFlag(body.is_granted);
+        this.RefreshClubGoldButton();
+    }
+
+    public OnClubGoldQuotaCommand(nCode:number,param:string):void
+    {
+        if(this.clubGoldQuotaContext === "" || param == null || String(param).indexOf(this.clubGoldQuotaContext) < 0)
+            return;
+        if(nCode !== 0x200)
+        {
+            this.clubGoldQuotaGranted = false;
+            this.clubGoldQuotaFen = 0;
+            if(this.clubGoldButton != null)
+                this.clubGoldButton.active = false;
+        }
+    }
+
+    private ParseObject(value:any):any
+    {
+        if(typeof value !== "string")
+            return value;
+        try { return JSON.parse(value); }
+        catch(error) { return null; }
+    }
+
+    private IsFlag(value:any):boolean
+    {
+        if(value === true || value === 1)
+            return true;
+        const text = String(value == null ? "" : value).trim().toLowerCase();
+        return text === "1" || text === "true" || text === "yes" || text === "是";
+    }
+
+    private OpenClubGoldPad(mode:"updown"|"give"):void
+    {
+        if(this.clubId === "" || this.peer == null || this.peer.guuid === "")
+            return;
+        const entry = mode === "give" ? this.clubGiveButton : this.clubGoldButton;
+        if(entry == null || !entry.active)
+            return;
+        UIManager.getInstance().showPanel("panelClubGoldPad",ShowPanelMode.Top,JSON.stringify({
+            clubId:this.clubId,
+            userId:this.peer.guuid,
+            userName:this.peer.name || this.peer.guuid,
+            mode:mode
+        }));
     }
 
     // ================= 发送 =================

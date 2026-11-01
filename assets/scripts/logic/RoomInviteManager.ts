@@ -4,7 +4,7 @@ import GpsManager from "./GpsManager";
 import ConfigManager from "./ConfigManager";
 import QueueMatchManager from "./QueueMatchManager";
 import WebSceneLoader from "../common/WebSceneLoader";
-import { resolveRoomClubId, normalizeRoomClubId, withRoomClubId } from "./RoomClubContext";
+import { getAccountClubGold, normalizeRoomClubId, resolveRoomClubId, withRoomClubId } from "./RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -436,7 +436,7 @@ export default class RoomInviteManager extends cc.Component {
         }
 
         // V1及最初四段格式没有携带房间的实际最低带入。保留解析能力，
-        // 但minBuyIn为0，接收阶段会为安全起见忽略，避免给金币不足玩家弹窗。
+        // 但minBuyIn为0，接收阶段会为安全起见忽略，避免给余额不足玩家弹窗。
         if(parts.length >= 10 && parts[0] == "ROOM_INVITE" && parts[1] == "V1")
         {
             let roomID = Number(parts[3]);
@@ -480,10 +480,12 @@ export default class RoomInviteManager extends cc.Component {
         return null;
     }
 
-    private getAccountBalance(account:any):number
+    private getAccountBalance(account:any, clubId:string = ""):number
     {
         if(account == null)
             return 0;
+        if(normalizeRoomClubId(clubId) !== "")
+            return getAccountClubGold(account,clubId);
         let gold = Number(account.gold || 0);
         let gold2 = Number(account.gold2 || 0);
         if(!isFinite(gold))
@@ -496,7 +498,8 @@ export default class RoomInviteManager extends cc.Component {
     private canAffordInvite(invite:RoomInviteData, account:any):boolean
     {
         let minBuyIn = invite == null ? 0 : Number(invite.minBuyIn);
-        return isFinite(minBuyIn) && minBuyIn > 0 && this.getAccountBalance(account) >= minBuyIn;
+        const clubId = normalizeRoomClubId(invite == null ? "" : invite.clubId);
+        return isFinite(minBuyIn) && minBuyIn > 0 && this.getAccountBalance(account,clubId) >= minBuyIn;
     }
 
     private onSystemInfo(strMsg:string)
@@ -532,7 +535,7 @@ export default class RoomInviteManager extends cc.Component {
         if(!this.canAffordInvite(invite, account))
         {
             if(Number(invite.minBuyIn) > 0)
-                cc.log("[RoomInvite] 当前金币低于房间最低带入，不展示邀请", invite.minBuyIn);
+                cc.log("[RoomInvite] 当前余额低于房间最低带入，不展示邀请", invite.minBuyIn);
             else
                 cc.log("[RoomInvite] 邀请缺少最低带入信息，不展示邀请");
             return;
@@ -685,7 +688,8 @@ export default class RoomInviteManager extends cc.Component {
         if(!this.canAffordInvite(invite, account))
         {
             UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover,
-                "当前金币不足该房间最低带入" + Number(invite.minBuyIn).toString());
+                (normalizeRoomClubId(invite.clubId) !== "" ? "当前俱乐部金币不足该房间最低带入" : "当前金币不足该房间最低带入") +
+                Number(invite.minBuyIn).toString());
             return;
         }
         if(Number(account.roomID || 0) == Number(invite.roomID))
@@ -719,7 +723,7 @@ export default class RoomInviteManager extends cc.Component {
             return;
         }
         UIManager.getInstance().showPanel("panelLoading", ShowPanelMode.Top);
-        const clubId = resolveRoomClubId(account, invite.clubId);
+        const clubId = normalizeRoomClubId(invite.clubId);
         account.reqEnterRoom(roomType, Number(invite.roomID),
             withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
     }
@@ -791,7 +795,7 @@ export default class RoomInviteManager extends cc.Component {
             }
             this.navigationPhase = "entering";
             this.navigationDeadline = Date.now() + 15000;
-            const clubId = resolveRoomClubId(account, this.navigationInvite.clubId);
+            const clubId = normalizeRoomClubId(this.navigationInvite.clubId);
             account.reqEnterRoom(this.navigationInvite.roomType, Number(this.navigationInvite.roomID),
                 withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
         }, ()=>generation == this.navigationGeneration && this.navigationPhase == "transition");

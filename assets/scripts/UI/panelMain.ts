@@ -86,6 +86,9 @@ export default class panelMain extends UIPanelViewBase {
     /** 最近一次俱乐部赠送记录查询，异步推送没有统一带回 club_id 时用它配对。 */
     private clubGiftRecordClubId:string = "";
     private clubGiftRecordPage:number = 0;
+    /** 最近一次俱乐部金币流水查询的俱乐部和上下文；推送路由本身不带 club_id。 */
+    private clubGoldWaterClubId:string = "";
+    private clubGoldWaterRequestContext:string = "";
     private clubDetails:{[clubId:string]:any} = {};
     private clubAgentInfo:{[clubId:string]:any} = {};
     /** 当前玩家在各俱乐部的额度查询结果；额度只在有权限时渲染。 */
@@ -215,6 +218,7 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("AddMemberGoldList", this, "OnClubGiftRecordList");
         KBEngine.Event.register("查询_俱乐部_成员_积分_添加_记录", this, "OnClubGiftRecordList");
         KBEngine.Event.register("ListPlayerCashWater", this, "ListPlayerCashWater");
+        KBEngine.Event.register("ClubGoldWater", this, "OnClubGoldWaterList");
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("ClubGoldGiftChanged", this, "OnClubGoldGiftChanged");
         KBEngine.Event.register("OpenInitTransactionPassword", this, "OpenInitTransactionPassword");
@@ -1258,12 +1262,15 @@ export default class panelMain extends UIPanelViewBase {
                     return;
                 this.clubGoldGiftPending = true;
                 const context = "club:gold:give-main:" + clubId + ":" + strID;
+                // 「赠送金币」是玩家之间转账：必须走「赠送_俱乐部_积分」，扣的是自己账户的积分。
+                // 「添加_俱乐部_成员_积分」是代理按额度发筹码（后台侧也是直接加减目标积分、不扣操作者），
+                // 拿它做赠送等于白送，自己的积分不会被扣。
                 const clubParam = JSON.stringify({
-                    header:"添加_俱乐部_成员_积分",club_id:clubId,user_id:strID,
+                    header:"赠送_俱乐部_积分",club_id:clubId,user_id:strID,
                     user_add_gold:Number(strNum),user_pwd:strPass,context
                 });
                 GameDataManager.getAccount().reqHallCommand(
-                    clubParam,"P@添加_俱乐部_成员_积分_" + context);
+                    clubParam,"P@赠送_俱乐部_积分_" + context);
                 return;
             }
 
@@ -3089,7 +3096,7 @@ export default class panelMain extends UIPanelViewBase {
             }
             else if (nCode == 0x304)
             {
-                strMsg = "钱不够啦！";
+                strMsg = this.ResolveRoomClub() !== "" ? "俱乐部金币不足！" : "钱不够啦！";
             }
             else if (nCode == 0x305)
             {
@@ -3344,7 +3351,14 @@ export default class panelMain extends UIPanelViewBase {
         {
             strDate = strDate.replace(/^\d{4}[-\/]/,"").replace(/:[0-9]{2}(\.[0-9]+)?$/,"");
         }
-        node.getChildByName("type").getComponent(cc.Label).string = "赠送";
+        // 这条列表同时包含「添加」和「赠送」两类记录，type 列按服务端返回的值原样显示
+        // （写死「赠送」会把下分记录也说成赠送）；金额保留原符号，负数是减少。
+        // 只有服务端没给 type 时才按正负兜底。
+        const rawType = String(this.ReadClubGiftRecordValue(objOne,["type","record_type"],""));
+        const amountNumber = Number(amount);
+        const isMinus = isFinite(amountNumber) && amountNumber < 0;
+        const typeText = rawType !== "" ? rawType : (isMinus ? "扣除" : "赠送");
+        node.getChildByName("type").getComponent(cc.Label).string = typeText;
         node.getChildByName("id").getComponent(cc.Label).string = targetName + "\r\nID:" + targetId;
         node.getChildByName("count").getComponent(cc.Label).string = String(amount);
         node.getChildByName("time").getComponent(cc.Label).string = strDate;
@@ -3958,7 +3972,7 @@ export default class panelMain extends UIPanelViewBase {
         if(context.indexOf("p@") === 0 || context.indexOf("P@") === 0)
             context = context.substr(2);
         // Hall 服务端会把回调标签拼到客户端 context 前面，例如：
-        // 添加_俱乐部_成员_积分_club:gold:give-main:567671:718968。
+        // 赠送_俱乐部_积分_club:gold:give-main:567671:718968。
         // 截出真正的 club context，确保 0x200/0x301 都能进入对应提示分支。
         const clubContextIndex = context.indexOf("club:");
         if(clubContextIndex > 0)
@@ -3994,6 +4008,17 @@ export default class panelMain extends UIPanelViewBase {
                 this.RefreshDiscoveryClubFunds(false);
                 this.RefreshClubList(false);
             }
+            return true;
+        }
+        if(context.indexOf("club:gold:water:") === 0)
+        {
+            // 查询接口的同步回包通常只有空壳，列表由 ClubGoldWater 推送；
+            // 若服务端直接把列表放进 result，也在这里兼容显示。
+            if(nCode === 0x200 && response.result)
+                this.OnClubGoldWaterList(JSON.stringify(response.result));
+            else if(nCode !== 0x200 && context === this.clubGoldWaterRequestContext)
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    this.GetHallCommandError(param,"俱乐部金币流水查询失败，请稍后重试！"));
             return true;
         }
         if(context.indexOf("club:gold:give-main:") === 0)
@@ -4208,14 +4233,122 @@ export default class panelMain extends UIPanelViewBase {
     }
     //查询资金流水
     public GetLiuShuiInfo(nPage:number = 0)
-    {        
-        let strParam = "{\"header\":\"查询_玩家_现金流水\",\"user_id\":\"" + GameDataManager.getAccount().guuid + "\",\"page\":\"" + nPage.toString() + "\",\"count\":\"" + this.PAGE_PER_COUNT + "\"}";
-        GameDataManager.getAccount().reqHallCommand(strParam, "P@查询_玩家_现金流水");
+    {
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return;
+
+        const clubId = this.ResolveRoomClub();
+        if(clubId !== "")
+        {
+            // §11.1：俱乐部积分流水必须按俱乐部查询，数据从 ClubGoldWater 异步推送。
+            this.clubGoldWaterClubId = clubId;
+            this.clubGoldWaterRequestContext = "club:gold:water:" + clubId + ":" + nPage;
+            const strParam = JSON.stringify({
+                header:"查询_俱乐部_积分流水",
+                club_id:clubId,
+                user_id:"",
+                count:this.PAGE_PER_COUNT,
+                page:nPage,
+                context:this.clubGoldWaterRequestContext
+            });
+            account.reqHallCommand(strParam,"P@" + this.clubGoldWaterRequestContext);
+            return;
+        }
+
+        // 无俱乐部时保留大厅平台金币的存量流水接口。
+        this.clubGoldWaterClubId = "";
+        this.clubGoldWaterRequestContext = "";
+        const strParam = "{\"header\":\"查询_玩家_现金流水\",\"user_id\":\"" + account.guuid + "\",\"page\":\"" + nPage.toString() + "\",\"count\":\"" + this.PAGE_PER_COUNT + "\"}";
+        account.reqHallCommand(strParam, "P@查询_玩家_现金流水");
     }
 
     public ListPlayerCashWater(strMsg:string)
     {
+        // 俱乐部页面只接受 ClubGoldWater，避免旧路由回包覆盖俱乐部积分流水。
+        if(this.ResolveRoomClub() !== "")
+            return;
         this.scrollLiushui.UpdateList(strMsg,"ListPlayerCashWater","资金明细对象",this.PAGE_PER_COUNT,this.setLiushuiItemInfo.bind(this));
+    }
+
+    /** 俱乐部积分流水推送：{"ClubGoldWater":[...]}。推送样例不带 club_id，按最近一次请求配对。 */
+    public OnClubGoldWaterList(strMsg:any)
+    {
+        if(this.scrollLiushui == null || this.clubGoldWaterClubId === "")
+            return;
+        if(this.ResolveRoomClub() !== this.clubGoldWaterClubId)
+            return;
+
+        const payload = this.NormalizeClubGoldWaterList(strMsg);
+        if(payload == null)
+            return;
+        this.scrollLiushui.UpdateList(payload,"ClubGoldWater","资金明细对象",
+            this.PAGE_PER_COUNT,this.setClubGoldWaterItemInfo.bind(this));
+    }
+
+    private NormalizeClubGoldWaterList(strMsg:any):string
+    {
+        if(strMsg == null || strMsg === "")
+            return null;
+        let data:any = strMsg;
+        if(typeof strMsg === "string")
+        {
+            try { data = JSON.parse(strMsg); }
+            catch(error) { return null; }
+        }
+        if(data == null || typeof data !== "object")
+            return null;
+        if(Array.isArray(data["ClubGoldWater"]))
+            return JSON.stringify(data);
+        const result = data["result"];
+        if(result && Array.isArray(result["ClubGoldWater"]))
+            return JSON.stringify(result);
+        return null;
+    }
+
+    public setClubGoldWaterItemInfo(node:cc.Node,jItem:any)
+    {
+        node.active = true;
+
+        const type = jItem["type"] == null ? "" : String(jItem["type"]);
+        node.getChildByName("type").getComponent(cc.Label).string = type || "—";
+
+        // §11.1 的 gold 是整数元，负数表示减少；不要沿用旧流水的 old_money/new_money。
+        const gold = Number(jItem["gold"]);
+        const validGold = !isNaN(gold) && isFinite(gold);
+        const amount = validGold ? Math.trunc(gold) : 0;
+        const countNode = node.getChildByName("count");
+        countNode.getComponent(cc.Label).string = validGold ?
+            (amount > 0 ? "+" + amount.toString() : amount.toString()) : "--";
+
+        // 新接口返回 remark（前→后），对应列表中的「流向后」列；接口没有当前余额字段。
+        const remark = jItem["remark"] == null ? "" : String(jItem["remark"]);
+        node.getChildByName("now").getComponent(cc.Label).string = remark || "—";
+
+        const date = jItem["date"] == null ? "" : String(jItem["date"]);
+        const match = date.match(/^\d{4}[-\/]([0-9]{1,2})[-\/]([0-9]{1,2})[ T]([0-9]{1,2}):([0-9]{2})/);
+        const month = match && match[1].length === 1 ? "0" + match[1] : match ? match[1] : "";
+        const day = match && match[2].length === 1 ? "0" + match[2] : match ? match[2] : "";
+        const hour = match && match[3].length === 1 ? "0" + match[3] : match ? match[3] : "";
+        node.getChildByName("time").getComponent(cc.Label).string = match ?
+            month + "/" + day + " " + hour + ":" + match[4] : date;
+
+        const roomId = jItem["room_id"] == null ? "" : String(jItem["room_id"]).trim();
+        const iconType = roomId !== "" || type === "带入" || type === "结算" ? "game" :
+            (type === "添加积分" || type === "修改积分") ? "gift" :
+            amount > 0 ? "in" : amount < 0 ? "out" : "";
+        for(const key of ["in","out","gift","game"])
+        {
+            const icon = node.getChildByName("V8类型图标_" + key);
+            if(icon != null) icon.active = key === iconType;
+        }
+
+        if(amount > 0)
+            countNode.color = new cc.Color(167,231,29,255);
+        else if(amount < 0)
+            countNode.color = new cc.Color(255,65,52,255);
+        else
+            countNode.color = new cc.Color(239,225,194,255);
     }
     public setLiushuiItemInfo(node:cc.Node,jItem:any)
     {

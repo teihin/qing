@@ -36,6 +36,16 @@ for (const [type,oldMoney,newMoney,icon] of [['充值',10,110,'in'],['游戏输�
   if (newMoney<oldMoney) assert.ok(r.children.count.color.r>r.children.count.color.g);
   cases++;
 }
+for (const [type,gold,remark,roomId,icon] of [['带入','-100','500→400','123456','game'],['结算','150','0→150','123456','game'],['添加积分','80','20→100','','gift']]) {
+  const r=row(['type','count','now','time',...['in','out','gift','game'].map(k=>'V8类型图标_'+k)]);
+  main.setClubGoldWaterItemInfo(r,{type,gold,remark,room_id:roomId,date:'2026-11-01 15:20:11'});
+  assert.equal(r.children.type.label.string,type);
+  assert.equal(r.children.count.label.string,gold.startsWith('-')?gold:'+'+gold);
+  assert.equal(r.children.now.label.string,remark);
+  assert.equal(r.children.time.label.string,'11/01 15:20');
+  for (const key of ['in','out','gift','game']) assert.equal(r.children['V8类型图标_'+key].active,key===icon);
+  cases++;
+}
 for (const [type,money,status,out] of [['充值','500','已完成',false],['提现','200','审核中',true],['充值','100','未完成',false]]) {
   const r=row(['type','count','time','id','txt','状态文字','V7充值图标','V7提现图标']);
   wallet.setExchangeItem(r,{work_type:type,money,date:'2026-09-13 18:26:52',work_order:'example-id',status});

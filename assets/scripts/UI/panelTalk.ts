@@ -6,6 +6,7 @@ import DrhLogicMgr from "../logic/DrhLogicMgr";
 import ScrollViewEx from "../common/ScrollViewEx";
 import { ShowPanelMode } from "../common/GameDef";
 import WebLoadingManager from "../common/WebLoadingManager";
+import { getAccountClubGold, resolveRoomSettingClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -20,6 +21,7 @@ export default class panelTalk extends UIPanelViewBase {
         super.onLoad();
         KBEngine.Event.register("set_gold", this, "set_gold");
         KBEngine.Event.register("set_gold2", this, "set_gold");
+        KBEngine.Event.register("set_club_gold", this, "set_gold");
 
         KBEngine.Event.register("SayInfo", this, "OnPlayerSay"); //语音
 
@@ -39,7 +41,19 @@ export default class panelTalk extends UIPanelViewBase {
     {
         let item =  Tool.GetChild(this.node,"bk/gold");
         if(item != null)
-            item.getComponent(cc.Label).string = GameDataManager.getAccount().gold.toString()+(GameDataManager.getAccount().gold2==0?"":("."+GameDataManager.getAccount().gold2.toString().padStart(2,"0")));
+        {
+            const account:any = GameDataManager.getAccount();
+            const clubId = resolveRoomSettingClubId(account);
+            if(clubId !== "")
+                item.getComponent(cc.Label).string = String(getAccountClubGold(account,clubId));
+            else
+            {
+                const gold = Number(account == null ? 0 : account.gold || 0);
+                const gold2 = Number(account == null ? 0 : account.gold2 || 0);
+                item.getComponent(cc.Label).string = String(Number.isFinite(gold) ? gold : 0) +
+                    (Number.isFinite(gold2) && gold2 !== 0 ? ("." + gold2.toString().padStart(2,"0")) : "");
+            }
+        }
     }
     public onButtonClick(button:cc.Button)
     {

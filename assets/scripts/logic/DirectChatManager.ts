@@ -72,6 +72,11 @@ export interface DirectMessage
     /** 本地状态：发送中/发送失败，仅在客户端有效。 */
     pending:boolean;
     failed:boolean;
+    /**
+     * 仅 messageType === "system" 的本地通报使用：完整年月日时分秒，
+     * 这类消息由客户端自己插进列表，不来自 /api/direct。
+     */
+    systemTime?:string;
 }
 
 export interface DirectMember
@@ -1151,6 +1156,17 @@ export default class DirectChatManager
     {
         return this.SendMessageBody(conversationId,{
             messageType:"text", clientMessageId:clientMessageId, text:text
+        });
+    }
+
+    /**
+     * 俱乐部管理操作的系统通报（上分/下分成功）。
+     * 服务端只放行 owner/leader/agent 且文案符合固定格式，其余一律拒绝。
+     */
+    public SendSystemNotice(conversationId:string,text:string,clientMessageId:string):Promise<DirectMessage>
+    {
+        return this.SendMessageBody(conversationId,{
+            messageType:"system", clientMessageId:clientMessageId, text:text
         });
     }
 

@@ -4,7 +4,7 @@ import GameDataManager from "../GameDataManager";
 import Tool from "../common/Tool";
 import ImageManager from "../logic/ImageManager";
 import { ClosePanelMode, ShowPanelMode } from "../common/GameDef";
-import { resolveRoomClubId } from "../logic/RoomClubContext";
+import { resolveRoomClubId, resolveRoomSettingClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -101,7 +101,7 @@ export default class panelExchangeStone extends UIPanelViewBase
 
         // 大厅里没有「当前房间」，角色按大厅选中的俱乐部判；牌局里仍以房间 club_id 优先。
         // 「我的」入口传 strUserData="hall"。
-        this.clubId = resolveRoomClubId(account,"",this.strUserData !== "hall");
+        this.clubId = this.strUserData === "hall" ? resolveRoomClubId(account) : resolveRoomSettingClubId(account);
         if(this.clubId === "")
         {
             UIManager.getInstance().closePanelByName(this.node.name,ClosePanelMode.Normal);
@@ -476,7 +476,7 @@ export default class panelExchangeStone extends UIPanelViewBase
             // 同一帧再 showPanel 会命中「已存在」分支而复用旧界面，文本不刷新。挪到下一帧弹。
             this.scheduleOnce(()=>{
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-                    this.GetGoldLabel() + "不足，请先充值或联系客服！");
+                    this.GetGoldLabel() + "不足，请联系代理上分或联系客服！");
             },0);
             return;
         }
@@ -486,7 +486,7 @@ export default class panelExchangeStone extends UIPanelViewBase
         // 让 panelMain 的赠送回调先别抢这笔结果（它和大厅的「赠送」共用 onExChange）。
         panelExchangeStone.resultStamp = Date.now();
         // money_value 传**金币数**（消耗量），钻石由服务端按汇率乘出来；
-        // money_type 必须是英文逗号 + 字面量「非俱乐部」，服务端不做容错。
+        // money_type 必须明确区分平台金币与 `gold,<club_id>`，服务端不做容错。
         account.reqExChange2(String(account.guuid),gold,this.GetMoneyType());
     }
 

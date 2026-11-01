@@ -4,6 +4,29 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-01 我的页俱乐部金币流水接口（未构建、未真机）
+
+- `panelMain` 的「我的 → 资金明细」在有当前俱乐部时改用 `查询_俱乐部_积分流水`，带 `club_id / user_id / count / page / context`，列表接收 `ClubGoldWater`；按新接口的 `gold / type / remark / room_id / date` 解析，`gold` 按整数元显示。
+- 无当前俱乐部仍保留 `查询_玩家_现金流水`；俱乐部上下文下忽略旧 `ListPlayerCashWater`，避免平台金币流水覆盖俱乐部积分流水。
+- TypeScript 转译、既有金币/钱包流水回归、新 `ClubGoldWater` 请求与行显示离线检查通过；Creator 导入、真实服务器回包、构建和真机交互仍待验证。
+
+## 2026-11-01 牌桌内俱乐部金币口径（未构建、未真机）
+
+- 俱乐部房的带入窗口、牌桌聊天余额、房间邀请最低带入判断和牌桌兑换入口均按当前房间 `club_id` 读取 `Account.club_gold`；带入和余额不足提示不再把平台金币作为俱乐部余额，`set_club_gold` 会刷新已打开的带入窗口。
+- 牌桌玩家资料在俱乐部房隐藏平台充值入口；创建当前俱乐部房时显示该俱乐部金币；大厅进入俱乐部房失败码 `0x304` 显示“俱乐部金币不足”。普通大厅/普通房保留平台金币。详见[交接](handoffs/2026-11-01-ingame-club-gold.md)。
+- 8 个脚本 TypeScript 转译、俱乐部邀请桩回归和静态余额解析检查通过；Creator 导入、构建、真实服务器回包和真机交互仍待验证。
+
+## 2026-11-01 私聊上下分入口与弹窗（未构建、未真机）
+
+- 直聊消息页新增「上下分」入口：当前会话操作者为群主/盟主时显示；代理需先通过 `查询_俱乐部_额度` 返回 `is_agent=1 && is_granted=1` 且 `quota_fen > 0` 才显示。普通成员、未授信代理和无可用额度代理隐藏，最终权限仍由大厅服务端校验。
+- 新增独立 `panelClubGoldPad` Prefab/脚本（634×870，`bk` 居中、关闭按钮右上 Widget）：玩家名、金额、交易密码、100～50000 快捷金额、上分/下分。**上分/下分走 `panelMsgView` 二次确认**，确定后统一发 `添加_俱乐部_成员_积分`（下分传负数 `user_add_gold`，`修改_俱乐部_成员_积分` 服务端有问题、不再使用），成功通知 `ClubGoldGiftChanged`。
+- 成功后不再弹提示框，改为在聊天列表发一条 **system 消息**（和文字/图片/语音同样走 `/api/direct`，存库、重进可见、对方也能看到）：`消息-系统` 模板 + `系统消息底.png`，居中通栏、左侧金条，区别于左右气泡；上行完整年月日时分秒，下行「玩家 X 上分 N 成功，积分 A → B」。服务端只放行 owner/leader/agent 且文案必须匹配固定正则；余额只取回包字段、拿不到就省略该段。详见交接。
+- 底部入口扩成四个：拍照上传 / 发送图片 / 赠送积分 / 上下分。**代理没有可用额度时显示「赠送积分」**（与「上下分」互斥），赠送对象是玩家、管理员**和代理**（下级/同级代理；群主、盟主不显示）；点开是 `panelClubGoldPad` 的 `give` 模式（标题「赠送积分」、单按钮「确认赠送」、提示说明扣自己积分）。**赠送走独立命令 `赠送_俱乐部_积分`**（`club_id/user_id/user_add_gold/user_pwd`，扣自己积分、不动额度；上分那条 `添加_俱乐部_成员_积分` 是代理按额度发筹码，用它赠送等于白送），成功后系统消息文案为「玩家 X 赠送 N 成功」。
+- 美术已整套重做（不再复用 V7 赠送弹窗资源）：`assets/ImagesLuck/上下分/` 放面板/输入框/胶囊/双按钮/美术字，入口图标 `assets/ImagesLuck/聊天/上下分.png` 复用「拍照上传」底框像素。聊天页底部三按钮改 `LEFT/CENTER/RIGHT + bottom 76` 的 Widget。
+- 三个可复现工具：`tools/gen_chat_gold_pad_art.py`（画图）、`apply_chat_gold_pad_layout.py`（补 `.meta` + 重建 prefab）、`preview_chat_gold_pad.py`（离线渲染设计稿）。
+- 两个必记的引擎行为：**EditBox 不排版子 Label**（必须 `Widget(45)` 铺满 + `verticalAlign` 居中）；**`InputFlag` 中 PASSWORD=0、DEFAULT=5**（写 0 会让普通输入框变 ●●●）。
+- 静态检查通过（Prefab `__id__`/父子/`fileId` 完整、TS 转译 0 诊断、`inputFlag` 与 Widget 断言）；Creator 导入、实际大厅回包、构建、双账号和真机交互仍待验证。详见[交接](handoffs/2026-11-01-chat-gold-pad.md)。
+
 ## 2026-11-01 俱乐部成员额度展示与授信（未构建、未真机）
 
 - 成员列表对代理异步查询 `查询_俱乐部_额度`，仅在 `is_agent=1 && is_granted=1` 时在「比例」右侧显示 `quota_fen / 100`；玩家设置对直属代理显示「额度」和「开通额度/调整额度」。
@@ -12,7 +35,7 @@
 
 ## 2026-11-01 俱乐部模式赠送金币路由（未构建、未真机）
 
-- “我的”页直赠、成员设置赠送、俱乐部房间内玩家头像赠送，在有当前俱乐部时统一调用 `添加_俱乐部_成员_积分`，发送 `club_id / user_id / user_add_gold`；无当前俱乐部或普通房仍保留大厅通用 `调用_方法_Exchange2`。
+- “我的”页直赠在有当前俱乐部时调用 **`赠送_俱乐部_积分`**（`club_id / user_id / user_add_gold / user_pwd`，扣自己账户的积分、不动额度，双方须在同一授信代理下）；成员设置赠送、俱乐部房间内玩家头像赠送仍用 `添加_俱乐部_成员_积分`（代理按额度发筹码口径，是否同改待定）；无当前俱乐部或普通房仍保留大厅通用 `调用_方法_Exchange2`。
 - 服务端更新后，三条俱乐部赠送路径均先校验交易密码并发送 `user_pwd`；成员设置/头像入口成功后通知大厅刷新记录。
 - 2026-11-01 服务端失败回包会把上下文变为 `添加_俱乐部_成员_积分_club:gold:...`；`panelMain` 已截取其中真正的 `club:` 上下文，因此 `0x301` 会显示 `result.error`（如“请先设置交易密码”）。俱乐部赠送成功/关闭/再次打开会清空密码和输入内容，并忽略关闭后旧弹窗回包；遇到未设置交易密码时，确认提示会直接打开初始化交易密码界面，成员设置赠送还会先关闭赠送弹窗。
 - “赠送”页有当前俱乐部时改查 `查询_俱乐部_成员_积分_添加_记录`；真实回包同步返回空 `result`，随后由 `AddMemberGoldList` 推送 `guuid / name / gold / date` 列表，客户端已兼容该事件及多层包装，普通大厅仍查 `ExchangeInfo`。
@@ -42,55 +65,11 @@
 - 服务端多轮部署（CORS 预检、图片附件空 `external_media_id`、长连接、已读并发、固定入口+备注）均已完成并通过 Go 全量测试；各版本 SHA-256、备份名与逐项验证见[交接](handoffs/2026-10-31-direct-chat.md)。
 - 客户端尚未正式构建/热更，双账号、断网恢复、真机图片与录音仍待实测。
 
-## 2026-10-30 牌局回顾加「翻牌」按钮（未构建、未真机）
+## 2026-10-29～10-30（阶段归档）
 
-- 回顾窗口底部新增「翻牌」：翻开本局所有已发的牌（未发牌不显示），默认 500 钻、后台可改、按钮标价；价格来自 `ConfigManager.CONSUME_FLIP` + `stone_consume_price.go`，prefab/scene 同批；已付费或本来就全开的局显示「已翻开」、不扣费。`扣费提示` 底图自带按钮文字，`V8文字` 必须保持关闭。见[交接](handoffs/2026-10-30-review-flip-cards.md)。
-- `panelRecordInfo/牌局回顾` 同款「翻牌」在 `操作` 行右侧；显示条件只留「列表显示 + 有房间号」，**别再按场景名/`PanelGameView` 判断**（实机不出现）。详见表内交接。
-
-## 2026-10-30 俱乐部玩家备注（未构建、未真机）
-
-- 接入 `设置_俱乐部_成员_备注`（创建者/直属上级、30 字、中英文）；列表与信息显示 `名字(备注)`，备注行恢复、输入框对齐已修；转译/桩测试通过，Creator/真实回包/真机未验。见[交接](handoffs/2026-10-30-club-member-remark.md)。
-
-## 2026-10-30 大厅底栏改「客服 俱乐部 BY 推广 我的」（未构建、未真机）
-
-- `Down` 改为 客服/俱乐部/BY/推广/我的（原「公告」toggle 改名推广，客服仍是 Button）；`Main/公告` 分页保留但底栏不再进入。
-- `club_nav_bar_v8.png` 重绘并清掉公告区，`.meta`/UUID 未动、体积未增；推广复用全屏 `推广二维码` 页，打开收起底栏、关闭回原页。
-- 「我的」里的游戏推广行隐藏（按钮区 3 行、内容高 550，正好不滚）。见[交接](handoffs/2026-10-30-nav-tabs.md)。
-
-## 2026-10-30 机器人账号首次登录激活（已部署，未提交）
-
-- 机器人入会需要已登录建号，`kbe_accountinfos` 玩家行由首次登录生成，仍不后台预插 `tbl_Account`。迁移 040（`activated_at` 等 4 列）已执行：巡检按 `kbe_accountinfos` 补标，再给在线 Worker 排「只登录」激活会话，回查确认建号才落标记；未激活行不可投放（`409 ROBOT_NOT_ACTIVATED`）。
-- 已部署：后端 `0c602dbd…`、前端 `index-BgH2Ot-G.js` / `index-BvCWh9Hq.css`；回滚 `backups/xuanmanager.20261030-0108-rollback`、`web.previous-activation-20261030`。
-- **真实激活未演练**：唯一 Worker `mac-mini-2-local` 自 10-28 离线；本机 `bin/xuanagent` 已重建（含 `XUAN_LOGIN_ONLY`），待启动。
-  见[交接](handoffs/2026-10-30-account-activation.md)。
-
-## 2026-10-29 投放输赢目标支持「按周时段」（已部署，未提交）
-
-- 输赢目标新增 `profit_mode='schedule'`：周一到周日可多段（≤28，结束早于开始算跨零点），时段内按 `window_net` 控输赢，时段外先 `drain` 打完手里一局再让出 Worker（`schedule_state='released'`）。
-- 迁移 039（`profit_schedule/schedule_window/window_net/schedule_state`）已执行，后端与前端已上线，`go vet/build`、`tsc -b`、eslint、`vite build` 通过；**交互未实测，Worker 未重启**。见[交接](handoffs/2026-10-29-profit-weekly-schedule.md)。
-
-## 2026-10-29 控制台小步调整（已部署，未提交）
-
-- 侧边栏一级/二级配色区分；「自动化组」模块 45 隐藏，分组增删改并入**机器人管理 → 分组管理**（建组只填名称+策略；删组可搬走组内机器人）；创建/编辑机器人弹窗可内联新建分组并自动选中。
-- 回滚点 `web.previous-navlevels-20261029`、`web.previous-groupmanager-20261029`。**交互待实测**。见[侧边栏](handoffs/2026-10-29-sidebar-level-contrast.md)、[分组管理](handoffs/2026-10-29-group-manager-in-robots.md)、[删组搬迁](handoffs/2026-10-29-group-delete-move.md)、[组策略](handoffs/2026-10-29-group-strategy-only.md)、[内联建组](handoffs/2026-10-29-robot-inline-group-create.md)。
-
-## 2026-10-29 机器人密码改回密文 + 独立密钥（已部署，未提交）
-
-- 创建/改密恢复 `SealCredential` 落库（`v1:` 密文），心跳下发不变（解密后下发）；服务器 `runtime.env` 新增独立 `XUAN_CREDENTIAL_KEY`。
-- 新增 `server/cmd/xuanresea` 一次性回封工具，已装 `bin/xuanresea`；当前机器人表为空、无存量明文。
-- 后端 PID 22966（`de47f71e…`），前端 `index-CcSNTgVz.js`；回滚备份 `*.previous-sealpwd-20261029`。**端到端待主人验证**；密钥只存 runtime.env，建议另存离线备份。见[交接](handoffs/2026-10-29-robot-password-sealed.md)。
-
-## 2026-10-29 自动化：Worker 俱乐部模式 + 策略下发 + 控制台收尾（未提交，前后端已部署 v6）
-
-- **Worker**：进房必须自己在该俱乐部内；俱乐部房不结束，倒计时到 → 全员结算 → 分回身上 → 需重新带入（人仍在留座）。**每轮结算后离房换桌**，离开的房 10 分钟内不再进；**结算时已超目标则留房继续带入来输，最多连 2 次**。见[交接](handoffs/2026-10-29-worker-club-mode.md)。
-- **策略**：后台可建多套绑机器人、运行期下发。**策略 = 动作智力**（跑法/出牌节奏、安全线、牌力、收敛），**投放 = 选机器人 + 绑策略 + 底皮 + 输赢目标**（投放必选策略与输赢），草稿不下发。见[交接](handoffs/2026-10-29-automation-strategy-runtime.md)。
-- **机器人/控制台**：创建弹窗删「智力/倍数/参与调度」；密码改回**密文 + 独立密钥**；侧边栏可折叠；测试数据已清空。见[交接](handoffs/2026-10-29-automation-robots-and-console.md)。
-- 状态：038 已执行，后端 PID 18006、前端 `index-IE64Hwkm.js`；**未提交**。
-
-## 2026-10-29 牌桌小修与实时战绩（未构建、未真机）
-
-- 留座归零 fire `SelfSeatTimeout` 关「带入窗口」，`PlayerList` 后兜底收窗；俱乐部房隐藏 `RoomFrame/info/游戏时间`。见[交接](handoffs/2026-10-29-seat-timeout-close-buyin.md)、[交接](handoffs/2026-10-29-club-room-hide-clock.md)。
-- 「记录」在座行加第 4 列 `countdown`，`获取_房间_已结算_玩家_命令`（每页 20）滑到底翻页；`带入记录.prefab` 改 4 列 + `V8表头countdown`。见[交接](handoffs/2026-10-29-realtime-settled-list.md)。
+- 牌局回顾「翻牌」、俱乐部玩家备注、大厅底栏改版、机器人首次登录激活、投放「按周时段」、
+  控制台小步调整、机器人密码密文、Worker 俱乐部模式、牌桌小修与实时战绩：
+  原文与各自交接链接见[归档](archive/2026-11-01/current-oct29-30.md)。
 
 ## 2026-10-27 及更早（阶段归档）
 

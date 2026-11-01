@@ -94,6 +94,12 @@ func CanCreateFromMemberList(role string) bool {
 	return CanHideConversation(role)
 }
 
+// CanSendSystemNotice 表示该角色能否发系统通报（上下分/下分成功）。
+// 只有俱乐部管理角色能发，并且文案还要过 systemNoticePattern 的格式校验。
+func CanSendSystemNotice(role string) bool {
+	return role == RoleOwner || role == RoleLeader || role == RoleAgent
+}
+
 // NormalizeRole 把未知角色归一化为 member，避免脏数据影响权限判断。
 func NormalizeRole(role string) string {
 	switch role {

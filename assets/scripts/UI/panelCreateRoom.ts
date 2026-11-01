@@ -7,7 +7,7 @@ import Debug from "../common/Debug";
 import { ShowPanelMode, RoomType } from "../common/GameDef";
 import GpsManager from "../logic/GpsManager";
 import ConfigManager from "../logic/ConfigManager";
-import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
+import { getAccountClubGold, resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 
 const {ccclass, property} = cc._decorator;
 
@@ -67,7 +67,10 @@ export default class panelCreateRoom extends UIPanelViewBase {
     start () {
 
         Tool.GetChild(this.node,"列表/title/名称").getComponent(cc.Label).string = GameDataManager.getAccount().name+"的牌局";
-        Tool.GetChild(this.node,"列表/金币/gold").getComponent(cc.Label).string = GameDataManager.getAccount().gold;
+        const account:any = GameDataManager.getAccount();
+        const clubId = resolveRoomClubId(account);
+        const balance = clubId !== "" ? getAccountClubGold(account,clubId) : Number(account.gold || 0);
+        Tool.GetChild(this.node,"列表/金币/gold").getComponent(cc.Label).string = String(Number.isFinite(balance) ? balance : 0);
     }
 
     // update (dt) {}

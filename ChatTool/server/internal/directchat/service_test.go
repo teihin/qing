@@ -789,3 +789,82 @@ func TestConversationsAllAggregatesClubs(t *testing.T) {
 		t.Fatalf("应按最后消息时间倒序，首条应是俱乐部二：%+v", page.Items[0])
 	}
 }
+
+// 上下分/下分成功后的系统通报：管理角色 + 固定文案才放行，其余一律拒绝。
+func TestSystemNoticeRequiresManagerRoleAndFixedText(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	leader := env.session(t, "100003")
+	member := env.session(t, "100001")
+	conv, err := env.service.CreateConversation(ctx, leader, "111111", "100001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	notice := "玩家 玩家一 上分 100 成功，积分 1000 → 1100"
+	msg, _, err := env.service.SendMessage(ctx, leader, conv.ConversationID, SendRequest{
+		MessageType: MessageTypeSystem, ClientMessageID: "sys-ok", Text: notice})
+	if err != nil {
+		t.Fatalf("leader must be allowed to send system notice: %v", err)
+	}
+	if msg.MessageType != MessageTypeSystem || msg.Text != notice {
+		t.Fatalf("unexpected system message: %+v", msg)
+	}
+	// 不限格式就能发广告，所以自由文本必须拒绝。
+	if _, _, err := env.service.SendMessage(ctx, leader, conv.ConversationID, SendRequest{
+		MessageType: MessageTypeSystem, ClientMessageID: "sys-bad", Text: "系统公告：快来充值"}); AsError(err).Code != CodeMessageInvalid {
+		t.Fatalf("free-form system text must be rejected, got %v", err)
+	}
+	// 普通成员不能发系统通报。
+	if _, _, err := env.service.SendMessage(ctx, member, conv.ConversationID, SendRequest{
+		MessageType: MessageTypeSystem, ClientMessageID: "sys-member", Text: notice}); AsError(err).Code != CodeMessageInvalid {
+		t.Fatalf("member must not send system notice, got %v", err)
+	}
+}
+
+// 赠送积分也走同一个通报格式。
+func TestSystemNoticeAcceptsGiveVerb(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	agent := env.session(t, "100002")
+	conv, err := env.service.CreateConversation(ctx, agent, "111111", "100001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := env.service.SendMessage(ctx, agent, conv.ConversationID, SendRequest{
+		MessageType: MessageTypeSystem, ClientMessageID: "sys-give",
+		Text: "玩家 玩家一 赠送 200 成功，积分 800 → 1000"}); err != nil {
+		t.Fatalf("agent must be allowed to send give notice: %v", err)
+	}
+}
+
+// 有新消息（未读）的会话必须排在最前面，不能被固定上级入口挤到后面。
+func TestAllConversationsPutsUnreadFirst(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	a := env.session(t, "100001")
+	leader := env.session(t, "100003")
+
+	conv, err := env.service.CreateConversation(ctx, a, "111111", "100003")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := env.service.CreateConversation(ctx, a, "111111", "100002"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := env.service.SendMessage(ctx, leader, conv.ConversationID, SendRequest{
+		MessageType: MessageText, ClientMessageID: "c-unread", Text: "在吗"}); err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := env.service.AllConversations(ctx, a, 1, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Items) == 0 {
+		t.Fatal("no conversations")
+	}
+	if page.Items[0].Unread <= 0 {
+		t.Fatalf("unread conversation must be first, got peer=%s unread=%d default=%v",
+			page.Items[0].Peer.Guuid, page.Items[0].Unread, page.Items[0].IsDefaultTarget)
+	}
+}

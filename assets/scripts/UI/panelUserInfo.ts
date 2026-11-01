@@ -53,12 +53,13 @@ export default class panelUserInfo extends UIPanelViewBase {
         if(this.arrayEx.length>0)
         {
             this.player = this.arrayEx[0];
-            const roomClubId = this.CurrentRoomClubId();
+            const roomClubId = this.CurrentRoomClubId() || normalizeRoomClubId(this.player.info.req_club_id);
 
             if(this.player.info.strUserID == GameDataManager.getAccount().guuid) //自己显示充值
             {
                 Tool.GetChild(this.node,"数据/赠送").active = false;
-                Tool.GetChild(this.node,"数据/充值").active = true;
+                // 俱乐部房间没有平台金币充值入口，积分不足应联系代理上分。
+                Tool.GetChild(this.node,"数据/充值").active = roomClubId === "";
             }
             else
             {

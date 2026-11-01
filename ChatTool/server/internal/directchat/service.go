@@ -6,10 +6,15 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
 )
+
+// systemNoticePattern 是客户端唯一允许发出的系统通报格式：
+// 「玩家 名字 上分/下分/赠送 金额 成功」，可选带「，积分 A → B」。
+var systemNoticePattern = regexp.MustCompile(`^玩家 .{1,40} (上分|下分|赠送) [1-9]\d{0,11} 成功(，积分 \d{1,15} → \d{1,15})?$`)
 
 // Directory 是游戏俱乐部目录查询接口。生产实现直接读取游戏库，
 // 测试使用内存实现。它不允许直聊服务写入游戏库。
@@ -414,8 +419,14 @@ func (s *Service) AllConversations(ctx context.Context, session Session, page, p
 		}
 	}
 	sort.SliceStable(all, func(i, j int) bool {
-		// 普通玩家的直属上级代理入口必须固定出现在消息首页，不能因为
-		// 其他聊天较多而被最新消息排序挤到分页之外。
+		// 排序优先级：有未读的在前 → 固定上级入口次之 → 最后消息时间倒序。
+		// 之前把 IsDefaultTarget 无条件置顶，导致别人刚发来消息的会话被压到它后面，
+		// 看起来就是「有新消息的没排到最前面」。
+		unreadI := all[i].Unread > 0
+		unreadJ := all[j].Unread > 0
+		if unreadI != unreadJ {
+			return unreadI
+		}
 		if all[i].IsDefaultTarget != all[j].IsDefaultTarget {
 			return all[i].IsDefaultTarget
 		}
@@ -860,7 +871,17 @@ func (s *Service) SendMessage(ctx context.Context, session Session, conversation
 		msg.AttachmentID = attachment.ID
 		// 图片/语音消息正文为空，符合字段约束。
 	case MessageTypeSystem:
-		return MessageView{}, false, invalidMessage("客户端不能发送系统消息")
+		// 系统通报只给俱乐部管理角色用（上下分/下分成功），并且文案必须是固定格式。
+		// 这样既能持久化、跨端可见，又不会被客户端拿来发任意“系统消息”。
+		if !CanSendSystemNotice(msg.SenderRoleSnapshot) {
+			return MessageView{}, false, invalidMessage("没有发送系统消息的权限")
+		}
+		text := strings.TrimSpace(request.Text)
+		if !systemNoticePattern.MatchString(text) {
+			return MessageView{}, false, invalidMessage("系统消息格式不正确")
+		}
+		msg.MessageType = MessageTypeSystem
+		msg.Text = text
 	default:
 		return MessageView{}, false, invalidMessage("不支持的消息类型")
 	}
