@@ -268,10 +268,21 @@ export default class panelMain extends UIPanelViewBase {
             // 盟主=创建者的直属代理（is_leader=1），仍是代理的一种，只影响标签。
             const isLeader = role === "agent" && !!agent && Number(agent.is_leader) === 1;
             return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role,isLeader};
-        },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),player=>{
+        },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),(player,mode)=>{
             if(player && player.id)
             {
+                if(mode === "updown")
+                {
+                    // 上下分直接复用私聊里的上下分弹窗（上分/下分、快捷金额、交易密码），
+                    // entry=settings 让它在成功后弹提示框，而不是往聊天会话里插系统通报。
+                    UIManager.getInstance().showPanel("panelClubGoldPad",ShowPanelMode.Top,JSON.stringify({
+                        clubId:this.ResolveRoomClub(),userId:String(player.id),
+                        userName:String(player.name || player.id),mode:"updown",entry:"settings"
+                    }));
+                    return;
+                }
                 // 成员设置里的赠送必须绑定当前俱乐部，避免误走大厅通用金币转账。
+                // give = 赠送_俱乐部_积分（扣自己积分）；updown = 添加_俱乐部_成员_积分（代理按额度上下分）。
                 // panelGivePad 仍兼容旧的「玩家资料 → 赠送」入口。
                 UIManager.getInstance().showPanel("panelGivePad",ShowPanelMode.Cover,JSON.stringify({
                     userId:String(player.id),clubId:this.ResolveRoomClub()
@@ -3241,12 +3252,17 @@ export default class panelMain extends UIPanelViewBase {
     {
         this.scrollExchangeInfo.UpdateList(strMsg,"ExchangeInfo","赠送记录对象",this.PAGE_PER_COUNT,this.setExchangeItemInfo.bind(this));
     }
-    /** 俱乐部金币赠送成功后，成员设置/头像入口也要刷新「我的 → 赠送」记录。 */
-    public OnClubGoldGiftChanged(clubId:string)
+    /** 俱乐部金币赠送/上下分成功后，成员列表、玩家设置卡和「我的 → 赠送」记录都要刷新。 */
+    public OnClubGoldGiftChanged(clubId:string,userId?:string)
     {
         if(String(clubId || "") !== this.ResolveRoomClub())
             return;
         this.GetAllExchangeInfo(0);
+        // 赠送扣的是自己的积分，上下分会动自己的额度，顶部与「我的」的金币/额度必须跟着换。
+        this.set_gold(0);
+        this.RefreshDiscoveryClubFunds(true);
+        if(this.clubManagement)
+            this.clubManagement.OnPlayerGoldChanged(userId == null ? "" : String(userId));
     }
 
     /** 兼容列表直返、result 包装和同名对象包装。 */

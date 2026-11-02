@@ -19,6 +19,8 @@ export default class panelGivePad extends UIPanelViewBase {
     /** 成员设置入口传入时使用俱乐部积分；旧入口为空，继续走大厅通用金币转账。 */
     private clubId:string = "";
     private clubGiftPending:boolean = false;
+    /** 本次赠送请求的 context，用于把回包精确配对（服务端会把 label 拼在 context 前面）。 */
+    private clubGiftContext:string = "";
     private strYLinfo:string = "";//预留信息
 
     private ClearGiftInputs():void
@@ -45,6 +47,7 @@ export default class panelGivePad extends UIPanelViewBase {
 
     start () {
         this.clubGiftPending = false;
+        this.clubGiftContext = "";
         this.ClearGiftInputs();
         let clubData:any = null;
         try { clubData = JSON.parse(this.strUserData); } catch(error) { clubData = null; }
@@ -86,6 +89,7 @@ export default class panelGivePad extends UIPanelViewBase {
         if(button.node.name === "关闭")
         {
             this.clubGiftPending = false;
+            this.clubGiftContext = "";
             this.ClearGiftInputs();
             UIManager.getInstance().closePanelByName(this.node.name);
         }
@@ -118,12 +122,16 @@ export default class panelGivePad extends UIPanelViewBase {
                 if(this.clubGiftPending)
                     return;
                 this.clubGiftPending = true;
-                const context = "club:gold:give-member:" + this.clubId + ":" + this.strID;
+                // 赠送是玩家之间转账，必须走「赠送_俱乐部_积分」：扣自己的积分。
+                // 「添加_俱乐部_成员_积分」是代理按授信额度发筹码的上下分口径，用它赠送等于白送。
+                const header = "赠送_俱乐部_积分";
+                const context = "givepad:give:" + this.clubId + ":" + this.strID + ":" + Date.now();
+                this.clubGiftContext = context;
                 const strParam = JSON.stringify({
-                    header:"添加_俱乐部_成员_积分",club_id:this.clubId,user_id:this.strID,
-                    user_add_gold:Number(strNum),user_pwd:strPass,context
+                    header:header,club_id:this.clubId,user_id:this.strID,
+                    user_add_gold:Number(strNum),user_pwd:strPass,context:context
                 });
-                GameDataManager.getAccount().reqHallCommand(strParam,"P@添加_俱乐部_成员_积分_" + context);
+                GameDataManager.getAccount().reqHallCommand(strParam,"P@" + header + "_" + context);
                 return;
             }
 
@@ -150,14 +158,23 @@ export default class panelGivePad extends UIPanelViewBase {
 
     public onHallCommand(nCode:number, param:string)
     {
-        if(this.clubId !== "" && this.clubGiftPending && param && param.indexOf("添加_俱乐部_成员_积分") >= 0)
+        const text = param == null ? "" : String(param);
+        // 按 context 精确配对本次赠送；旧服回包不带 context 时退回命令名匹配。
+        const expectedHeader = "赠送_俱乐部_积分";
+        const matched = this.clubId !== "" && this.clubGiftPending && text !== "" &&
+            (this.clubGiftContext !== "" && text.indexOf(this.clubGiftContext) >= 0 ||
+             text.indexOf(expectedHeader) >= 0);
+        if(matched)
         {
             this.clubGiftPending = false;
+            this.clubGiftContext = "";
             if(nCode === 0x200 || nCode === 0x500)
             {
-                KBEngine.Event.fire("ClubGoldGiftChanged", this.clubId);
+                // 通知大厅：成员列表行、玩家设置卡、自己的金币和赠送记录都要按服务端结果刷新。
+                KBEngine.Event.fire("ClubGoldGiftChanged", this.clubId, this.strID);
                 this.ClearGiftInputs();
                 UIManager.getInstance().closePanelByName(this.node.name);
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"赠送成功！积分已更新");
             }
             else
             {

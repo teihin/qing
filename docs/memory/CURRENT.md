@@ -1,8 +1,16 @@
 # qing 当前状态
 
-更新时间：2026-11-01
+更新时间：2026-11-02
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-02 玩家设置「赠送」改口径 + 新增「上下分」（未构建、未真机）
+
+- 成员设置「赠送」改走 **`赠送_俱乐部_积分`**（扣自己积分，房间头像入口同改），不再误用 `添加_俱乐部_成员_积分`；「赠送」下方新增 **「玩家设置上下分」** 按钮（206,366，复用赠送底图）。
+- 点「上下分」**直接复用私聊页 `panelClubGoldPad`**（上分/下分+快捷金额+交易密码），入口 `{clubId,userId,userName,mode:"updown",entry:"settings"}`；`entry=settings` 时成功后弹 `panelMsgView`、不插聊天系统通报条。显示条件：自己 `查询_俱乐部_额度` 为 `is_agent=1 && is_granted=1`（20s 缓存）。
+- **成员列表自己那一行可点开**，面板里只留「赠送/上下分」，其余管理操作（设代理/比例/备注/额度/踢出）一律收起。两个行模板末尾各加透明「玩家热区」节点（`cc.Button` 无 Sprite，避开「对话」）把点击区从 70×70 头像扩到整块资料区。
+- 成功回包后 `ClubGoldGiftChanged(clubId, userId)`：大厅刷自己的金币/额度与赠送记录，`ClubManagementView.OnPlayerGoldChanged` 重取当前页（+1.5s 补一次）并就地更新设置卡积分/额度。
+- 已改 `ClubManagementView.ts`、`panelGivePad.ts`、`panelMain.ts`、`panelClubGoldPad.ts`、`panelMain.prefab`；TS 转译 0 诊断、Prefab 引用检查与 Creator 编译/导入通过。真实回包、构建、真机待验证。详见[交接](handoffs/2026-11-02-club-gift-updown.md)。
 
 ## 2026-11-01 我的页俱乐部金币流水接口（未构建、未真机）
 

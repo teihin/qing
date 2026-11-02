@@ -21,6 +21,8 @@ export interface ClubPlayer {
     /** 额度查询结果；quotaFen 保留服务端分单位，只有已授信代理才在成员行展示。 */
     quotaFen?:number; quotaIsAgent?:boolean; quotaGranted?:boolean;
 }
+/** give = 玩家之间赠送（扣自己积分）；updown = 代理按授信额度给成员上下分。 */
+export type ClubGiftMode = "give" | "updown";
 export interface ClubPeoplePage { items:ClubPlayer[]; total:number; }
 export interface ClubQuota { userId:string; quotaFen:number; isAgent:boolean; isGranted:boolean; }
 /** Adapt server payloads here. Resolve act only after the business result, not an async acceptance code. */
@@ -53,6 +55,15 @@ export default class ClubManagementView {
     private downlinePage:number = 0;
     private downlineTotal:number = 0;
     private downlineToken:number = 0;
+    /** 当前这一页的成员数据；赠送/上下分成功后用它就地刷新玩家设置卡。 */
+    private items:ClubPlayer[] = [];
+    /** 自己在当前俱乐部的额度（决定「上下分」按钮是否出现），null = 未知/查询中。 */
+    private myQuota:{club:string;agent:boolean;granted:boolean} = null;
+    private myQuotaAt:number = 0;
+    private myQuotaPending:boolean = false;
+    /** 自己的额度可能被上级中途改掉，缓存超过这个时间就重新查一次。 */
+    private static readonly QUOTA_TTL:number = 20000;
+    private goldRefreshTimer:any = null;
     private inputMode:"ratio"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"|null = null;
     /** 文档 4.11：note 上限 30 字（按字符计），服务端超长直接报错、不截断。 */
     private static readonly NOTE_MAX:number = 30;
@@ -61,7 +72,7 @@ export default class ClubManagementView {
     private readonly downlinePageSize:number = 4;
 
     constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,
-        private gift:(player:ClubPlayer)=>void = null,private notify:()=>void = null) {
+        private gift:(player:ClubPlayer,mode:ClubGiftMode)=>void = null,private notify:()=>void = null) {
         this.raisePopups();
     }
 
@@ -169,6 +180,11 @@ export default class ClubManagementView {
             this.downlineTotal = 0;
             ++this.downlineToken;
             this.inputMode = null;
+            // 换账号/换俱乐部后，列表快照与「我有没有额度」都必须重新取，不能沿用上一家的结论。
+            this.items = [];
+            this.myQuota = null;
+            this.myQuotaPending = false;
+            if(this.goldRefreshTimer != null) { clearTimeout(this.goldRefreshTimer);this.goldRefreshTimer = null; }
             for(const name of ["俱乐部成员弹窗","俱乐部申请弹窗","俱乐部操作确认","俱乐部玩家设置弹窗","玩家设置输入弹窗"]) this.active(name,false);
             this.clearRows();
         }
@@ -234,14 +250,14 @@ export default class ClubManagementView {
         if(["管理关闭","管理成员","管理返回成员","管理申请","管理上一页","管理下一页",
             "管理第一页","管理最后一页","管理刷新","管理查询成员","管理重置成员搜索",
             "管理退出","管理解散","管理收益","管理取消","管理确认",
-            "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置调整分数","玩家设置踢出俱乐部",
+            "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置上下分","玩家设置调整分数","玩家设置踢出俱乐部",
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
             "玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏","玩家设置禁止账号",
             "成员设置","成员设置非激活","下级成员","下级成员激活",
             "下级第一页","下级上一页","下级下一页","下级最后一页",
             "玩家设置输入关闭","玩家设置输入取消","玩家设置输入确认"].indexOf(name) < 0) return false;
         this.Refresh();
-        if(["玩家设置赠送金币","玩家设置调整分数","玩家设置踢出俱乐部","玩家设置调整比例",
+        if(["玩家设置赠送金币","玩家设置上下分","玩家设置调整分数","玩家设置踢出俱乐部","玩家设置调整比例",
             "玩家设置代理开关","玩家设置取消代理","玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏",
             "玩家设置禁止账号"].indexOf(name) >= 0 && this.blockReadOnlyPlayer()) return true;
         if(name === "玩家设置关闭") {
@@ -251,7 +267,12 @@ export default class ClubManagementView {
         } else if(name === "玩家设置复制ID") {
             if(this.selectedPlayer) this.message("玩家ID：" + this.selectedPlayer.id);
         } else if(name === "玩家设置赠送金币") {
-            if(this.selectedPlayer && this.gift) this.gift(this.selectedPlayer);
+            // 赠送是玩家之间转账（赠送_俱乐部_积分，扣自己的积分）。
+            if(this.selectedPlayer && this.gift) this.gift(this.selectedPlayer,"give");
+        } else if(name === "玩家设置上下分") {
+            // 上下分是代理按授信额度给成员发/收筹码（添加_俱乐部_成员_积分），没额度的代理不出现该入口。
+            if(!this.canUpDown()) { this.message("只有已开通额度的代理可以上下分");return true; }
+            if(this.selectedPlayer && this.gift) this.gift(this.selectedPlayer,"updown");
         } else if(name === "玩家设置调整分数") {
             // Keep the legacy node callback for older prefabs; the formal V8
             // popup now routes the visible action through panelGivePad.
@@ -478,7 +499,8 @@ export default class ClubManagementView {
         this.active("开通额度底",openRow,panel);
         this.active("开通额度",openRow,panel);
         const openAction = this.at("玩家设置开通额度",panel);
-        this.active("玩家设置开通额度",openRow && !this.readOnlyPlayer(),panel);
+        // 自己的额度由上级授信，本人这里不给开通入口；已开通时仍显示「已开通」状态。
+        this.active("玩家设置开通额度",openRow && !this.readOnlyPlayer() && !this.isSelfSelected(),panel);
         this.button("玩家设置开通额度",openRow && canGrant && !granted,panel);
         if(openAction) this.text("文字",granted ? "已开通" : "开通",openAction);
         this.active("额度底",currentRow,panel);
@@ -504,6 +526,118 @@ export default class ClubManagementView {
             if(row && cc.isValid(row)) this.fillMemberQuota(row,item);
             if(this.selectedPlayer && String(this.selectedPlayer.id) === playerId) this.refreshPlayerQuotaUi();
         });
+    }
+    /**
+     * 自己那一行只保留「赠送 / 上下分」：设代理、调比例、备注、授信、踢出这些
+     * 针对别人的管理操作全部收起（页签切换会重新激活，所以每次都要再走一遍）。
+     */
+    private syncSelfActions():void {
+        if(!this.isSelfSelected()) return;
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel) return;
+        for(const name of ["玩家设置调整比例","玩家设置代理开关","玩家设置开通额度",
+            "玩家设置增加额度","玩家设置减少额度","玩家设置备注","玩家设置踢出俱乐部"])
+            this.active(name,false,panel);
+    }
+    /** 当前玩家设置卡打开的是不是自己那一行（自己只能赠送/上下分，不能管理自己）。 */
+    private isSelfSelected():boolean {
+        const player = this.selectedPlayer;
+        return !!player && !!this.context && String(player.id) === String(this.context.accountId || "");
+    }
+    /**
+     * 「上下分」只看自己在这个俱乐部有没有被授信额度：走 查询_俱乐部_额度 查自己，
+     * GetClubQuota 是异步推送，回来之前按「不可用」处理，避免没额度的代理看到入口。
+     * 与聊天页 clubMoney 入口的判定保持一致（is_agent && is_granted）。
+     */
+    private canUpDown():boolean {
+        const quota = this.myQuota;
+        if(!quota || !this.context || !this.context.id) return false;
+        return quota.club === this.context.id && quota.agent && quota.granted;
+    }
+    private requestMyQuota():void {
+        const context = this.context;
+        if(!this.api || !context || !context.id || !context.accountId) return;
+        if(this.myQuotaPending) return;
+        const cached = this.myQuota && this.myQuota.club === context.id ?
+            Date.now() - this.myQuotaAt < ClubManagementView.QUOTA_TTL : false;
+        if(cached) return;
+        this.myQuotaPending = true;
+        const version = this.version;
+        this.api.getQuota(context.id,context.accountId).then(quota=>{
+            this.myQuotaPending = false;
+            if(!this.valid(version,context)) return;
+            this.myQuota = {club:context.id,agent:!!(quota && quota.isAgent),granted:!!(quota && quota.isGranted)};
+            this.myQuotaAt = Date.now();
+            this.syncUpDownButton();
+        }).catch(()=>{
+            this.myQuotaPending = false;
+            if(!this.valid(version,context)) return;
+            this.myQuota = {club:context.id,agent:false,granted:false};
+            this.myQuotaAt = Date.now();
+            this.syncUpDownButton();
+        });
+    }
+    /**
+     * 上下分入口的显示条件：非只读、自己在这个俱乐部有额度；自己那一行也允许（代理给自己补分）。
+     * 只看「操作者有没有额度」，与下面切的是成员页签还是下级成员页签无关——切页签不该让按钮消失。
+     */
+    private syncUpDownButton():void {
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        const player = this.selectedPlayer;
+        if(!panel || !player || !this.context) return;
+        const selfRow = String(player.id) === String(this.context.accountId || "");
+        const ownerRow = String(player.id) === String(this.context.ownerId || "");
+        // 老板那一行不开上下分，避免绕过授信给自己发筹码；自己是老板时按自己那行处理。
+        const show = !this.readOnlyPlayer() && this.canUpDown() && (selfRow || !ownerRow);
+        this.active("玩家设置上下分",show,panel);
+        this.button("玩家设置上下分",show,panel);
+    }
+    /**
+     * 赠送/上下分成功后由大厅转发过来：成员列表行上的积分和玩家设置卡里的积分都要重取，
+     * 服务端记账可能比回包晚一点，所以再补一次刷新，避免停在旧数字上。
+     */
+    public OnPlayerGoldChanged(userId:string = ""):void {
+        const context = this.context;
+        if(!context || !context.id) return;
+        const members = this.at("俱乐部成员弹窗");
+        const settings = this.at("俱乐部玩家设置弹窗");
+        const listOpen = !!(members && members.active);
+        const settingsOpen = !!(settings && settings.active);
+        if(!listOpen && !settingsOpen) return;
+        const target = String(userId || (this.selectedPlayer && this.selectedPlayer.id) || "");
+        this.refreshMemberData(target);
+        if(this.goldRefreshTimer != null) clearTimeout(this.goldRefreshTimer);
+        this.goldRefreshTimer = setTimeout(()=>{
+            this.goldRefreshTimer = null;
+            if(!cc.isValid(this.root)) return;
+            const stillOpen = this.at("俱乐部成员弹窗");
+            if(!stillOpen || !stillOpen.active) return;
+            if(!this.sameContext(context,this.getContext())) return;
+            this.refreshMemberData(target);
+        },1500);
+    }
+    private refreshMemberData(targetId:string):void {
+        const context = this.context;
+        if(!context || !context.id || !this.api) return;
+        this.load(this.page).then(()=>{
+            if(!this.sameContext(context,this.getContext())) return;
+            this.reloadPlayerCard(targetId);
+        });
+    }
+    /** 用新一页数据替换玩家设置卡：只改服务端会变的数值，不动页签/层级状态。 */
+    private reloadPlayerCard(targetId:string):void {
+        const player = this.selectedPlayer;
+        if(!player) return;
+        const id = String(targetId || player.id);
+        if(String(player.id) !== id) return;
+        const fresh = (this.items || []).filter(item=>String(item.id) === id)[0];
+        if(!fresh) return;
+        this.selectedPlayer = fresh;
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        this.text("玩家积分值",this.value(fresh.clubGold !== undefined ? fresh.clubGold : fresh.points),panel);
+        this.text("备注值",fresh.note || "未设置",panel);
+        this.text("比例值",this.isAgentPlayer(fresh) ? this.percentText(fresh) : "未开通",panel);
+        this.requestQuotaForPlayer(fresh,{...this.context},this.version);
     }
     /** 有备注时统一显示「名字(备注)」，成员列表、下级列表与玩家信息抬头共用。 */
     private displayName(item:ClubPlayer):string {
@@ -632,6 +766,13 @@ export default class ClubManagementView {
             this.message(text);
         });
     }
+    /**
+     * 行模板里的透明点击层「玩家热区」：盖住头像 + 姓名 + 玩家 ID 一整块，比只点头像好按。
+     * 老 prefab 没有这个节点时退回只绑头像，行为保持可用。
+     */
+    private playerHotzone(row:cc.Node):cc.Node {
+        return this.at("玩家热区",row) || this.at("头像",row);
+    }
     /** click 依赖 cc.Button 派发，TOUCH_END 是节点自身事件；两条都挂，滑动时按位移过滤。 */
     private bindPlayerSettings(target:cc.Node,item:ClubPlayer,context:ClubContext,depth:number):void {
         if(!target) return;
@@ -659,6 +800,7 @@ export default class ClubManagementView {
         target.on("click",openSettings,this);
     }
     private render(items:ClubPlayer[]):void {
+        this.items = items;
         const content = this.at("列表/view/content",this.panel());
         if(!content) return;
         const template = content.getChildByName("行模板");
@@ -680,9 +822,8 @@ export default class ClubManagementView {
             if(this.kind === "members") {
                 this.fillMemberRow(row,item);
                 this.requestQuotaForPlayer(item,context,this.version,row);
-                // 自己那一行没有玩家设置（设代理/调比例/踢出都针对别人），点了不弹窗。
-                const isSelf = String(item.id || "").trim() === String(context.accountId || "").trim();
-                if(!isSelf) this.bindPlayerSettings(this.at("头像",row),item,context,0);
+                // 自己那一行也能进玩家设置（里面只剩赠送/上下分），所以不再跳过绑定。
+                this.bindPlayerSettings(this.playerHotzone(row),item,context,0);
             }
             else {
                 this.text("姓名",item.name || "玩家 "+item.id,row);
@@ -707,9 +848,8 @@ export default class ClubManagementView {
         // 创建者、管理员、代理都能打开；代理只管理自己直属的下级，
         // 具体到踢人/改积分等按钮再按角色和层级收紧。
         if(!this.approver()) { this.message("仅创建者/管理员/代理可管理成员");return; }
-        // 玩家设置面板全是针对别人的操作（踢出、设备注、开代理、调比例），
-        // 自己那一行不提供设置入口，点了不弹窗。
-        if(String(item.id || "").trim() === String(this.context.accountId || "").trim()) return;
+        // 自己那一行也允许打开（代理给自己补分/赠送），但面板里只保留「赠送」「上下分」，
+        // 设代理、调比例、备注、额度、踢出等管理操作对本人一律收起（见下方 isSelf 判断）。
         const modal = this.at("俱乐部玩家设置弹窗");
         const panel = this.at("面板",modal);
         if(!modal || !panel) { this.message("玩家设置面板暂未加载");return; }
@@ -751,16 +891,20 @@ export default class ClubManagementView {
         const isOwner = item.id === this.context.ownerId || isSelf && this.context.role === "owner";
         // 跨级只读：连按钮一起收起，避免看起来还能点；行内数值仍保留可查看。
         const canAgent = !readOnly && this.canManageAgent();
+        // 自己那一行只留「赠送 / 上下分」，代理关系类操作整块收起（不给点也不显示）。
+        const canManageTarget = !isSelf;
         // 赠送走个人转赠面板，代理也可对直属下级使用。
         this.active("玩家设置赠送金币",!readOnly,panel);
+        // 上下分与赠送同一套美术，只有「自己被授信了额度」的代理才显示。
+        this.requestMyQuota();
         // 目前不允许踢出俱乐部，按钮保留但不显示。
         this.active("玩家设置踢出俱乐部",false,panel);
-        this.active("玩家设置调整比例",canAgent && isAgent,panel);
-        this.active("玩家设置代理开关",canAgent,panel);
-        this.button("玩家设置赠送金币",!readOnly && !isOwner,panel);
+        this.active("玩家设置调整比例",canAgent && isAgent && canManageTarget,panel);
+        this.active("玩家设置代理开关",canAgent && canManageTarget,panel);
+        this.button("玩家设置赠送金币",!readOnly && (!isOwner || isSelf),panel);
         this.button("玩家设置踢出俱乐部",false,panel);
-        this.button("玩家设置调整比例",canAgent && isAgent && !isSelf && !isOwner,panel);
-        this.button("玩家设置代理开关",canAgent && !isSelf && !isOwner,panel);
+        this.button("玩家设置调整比例",canAgent && isAgent && canManageTarget && !isOwner,panel);
+        this.button("玩家设置代理开关",canAgent && canManageTarget && !isOwner,panel);
         // 备注行对所有人可见；「设置备注」按钮由 showPlayerSettingsTab 按权限决定。
         this.button("玩家设置备注",this.canRemarkPlayer(),panel);
         // These two controls remain visible as reserved layout rows but have no
@@ -808,11 +952,15 @@ export default class ClubManagementView {
         this.button("玩家设置备注",member && this.canRemarkPlayer(),panel);
         // 页签切换会重新激活比例/代理行按钮，只读态必须在之后统一收起。
         if(this.readOnlyPlayer()) {
-            for(const name of ["玩家设置赠送金币","玩家设置踢出俱乐部","玩家设置调整比例",
+            for(const name of ["玩家设置赠送金币","玩家设置上下分","玩家设置踢出俱乐部","玩家设置调整比例",
                 "玩家设置代理开关","玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度"])
                 this.active(name,false,panel);
         }
         this.refreshPlayerQuotaUi();
+        // 上下分与页签无关：只要自己是已授信代理就一直显示，切换成员/下级成员页签不会消失。
+        this.syncUpDownButton();
+        // 切页签会把管理类行按钮重新激活，自己那一行要再统一收起一次。
+        this.syncSelfActions();
         this.active("玩家设置下级列表",!member,panel);
         this.active("成员设置",member,panel);
         this.active("成员设置非激活",!member,panel);
@@ -912,10 +1060,9 @@ export default class ClubManagementView {
             row.setPosition(0,list.height / 2 - pitch / 2 - index * pitch);
             this.fillMemberRow(row,item);
             this.requestQuotaForPlayer(item,context,this.version,row,this.downlineToken);
-            // 与成员列表一致：头像本身带 Button，事件必须绑在头像上才能收到；
+            // 与成员列表一致：绑在「玩家热区」透明点击层上（含头像/姓名/ID 一块），
             // 点开后同一个弹窗换成该成员资料，可以继续往下看，但不再允许修改。
-            const isSelf = String(item.id || "").trim() === String((context && context.accountId) || "").trim();
-            if(context && !isSelf) this.bindPlayerSettings(this.at("头像",row),item,context,depth + 1);
+            if(context) this.bindPlayerSettings(this.playerHotzone(row),item,context,depth + 1);
         });
         this.downlinePaging(panel);
     }

@@ -31,6 +31,11 @@ export default class panelClubGoldPad extends UIPanelViewBase {
     private action:"up"|"down"|"give"|"" = "";
     /** updown：上下分；give：赠送积分（代理没有可用额度时从自己积分里送）。 */
     private mode:"updown"|"give" = "updown";
+    /**
+     * 入口来源：chat = 私聊页（成功后往会话里插系统通报条）；
+     * settings = 俱乐部成员设置的玩家资料弹窗（成功后弹提示框，不往聊天里塞消息）。
+     */
+    private entry:"chat"|"settings" = "chat";
 
     onLoad():void {
         super.onLoad();
@@ -60,6 +65,7 @@ export default class panelClubGoldPad extends UIPanelViewBase {
             if(label != null) label.string = this.userName;
         }
         this.mode = data && data.mode === "give" ? "give" : "updown";
+        this.entry = data && data.entry === "settings" ? "settings" : "chat";
         this.ApplyMode();
     }
 
@@ -210,8 +216,17 @@ export default class panelClubGoldPad extends UIPanelViewBase {
         if(nCode === 0x200 || nCode === 0x500) {
             const amount = this.submitAmount;
             const balance = this.BalanceFrom(param);
-            KBEngine.Event.fire("ClubGoldGiftChanged",this.clubId);
-            // 成功反馈交给聊天页的系统消息条，不再单独弹提示框打断输入。
+            // 带上被操作人，大厅据此刷新成员列表行与玩家设置卡里的积分。
+            KBEngine.Event.fire("ClubGoldGiftChanged",this.clubId,this.userId);
+            if(this.entry === "settings") {
+                // 成员设置入口没有聊天上下文，用提示框给结果，也不再往会话里插系统通报。
+                this.Close();
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    action === "down" ? "下分成功！积分已更新" :
+                    action === "give" ? "赠送成功！积分已更新" : "上分成功！积分已更新");
+                return;
+            }
+            // 私聊入口的成功反馈交给聊天页的系统消息条，不再单独弹提示框打断输入。
             KBEngine.Event.fire("ClubGoldNotice",{
                 clubId:this.clubId,
                 userId:this.userId,
