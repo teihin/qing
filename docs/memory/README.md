@@ -15,7 +15,9 @@
 | BY→BF 游戏美术批量替换 | [替换交接](handoffs/2026-11-03-by-bf-art-replacement.md) | 原图合成、BF、透明边界、索引色 PNG、`.meta` |
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |
-| 后台俱乐部管理（俱乐部列表、成员代理树、群主额度） | [俱乐部管理交接](handoffs/2026-11-01-admin-club-management.md) | game.clubs、club_agent_info、quota_fen、增加_俱乐部_额度、-99、orphan |
+| 后台俱乐部管理（俱乐部列表、成员代理树、群主额度） | [俱乐部管理交接](handoffs/2026-11-01-admin-club-management.md)、[V2 联盟改造交接](handoffs/2026-11-03-admin-union-management.md) | game.clubs、club_agent_info、quota_fen、增加_俱乐部_额度、-99、orphan、union_id、union_quota |
+| 后台联盟管理（联盟列表/详情、联盟池注资、俱乐部按联盟筛选） | [联盟管理交接](handoffs/2026-11-03-admin-union-management.md) | game.unions、club_union_info、增加_联盟_额度、game.union.quota_adjust、V2 |
+| 后台房间战绩俱乐部信息与房间维护按俱乐部只读展示 | [房间与俱乐部交接](handoffs/2026-11-03-admin-room-records-club-maintenance.md) | room-records、club_guuid、club_invite_code_info、room-maintenance/clubs、只读 |
 | 牌桌内俱乐部金币、带入、邀请和兑换 | [牌桌内俱乐部金币交接](handoffs/2026-11-01-ingame-club-gold.md) | `Account.club_gold`、`club_id`、带入窗口、牌桌邀请、`gold,<club_id>` |
 | 私聊上下分入口与弹窗（权限、二次确认、美术与美术字、EditBox 排版陷阱） | [私聊上下分交接](handoffs/2026-11-01-chat-gold-pad.md) | `panelMessageChat`、`panelClubGoldPad`、`GetClubQuota`、交易密码、panelMsgView 确认、InputFlag、`gd_txt_*` |
 | 自动化后台（机器人=账号、投放、分组、Worker 路线、老客户端参考） | [自动化后台](topics/automation-console.md)、[落地交接](handoffs/2026-10-27-automation-console.md)、[限底皮+日志](handoffs/2026-10-28-automation-room-pi.md) | 机器人即账号、投放管理、邀请码、默认带入倍数、只进底皮、robot.room_pi |

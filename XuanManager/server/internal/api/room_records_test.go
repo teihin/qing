@@ -71,9 +71,10 @@ func TestResolvedRoomScorePrefersSettlement(t *testing.T) {
 }
 
 func TestParseRoomRecordListFilters(t *testing.T) {
-	request := httptest.NewRequest("GET", "/api/game/room-records?keyword=112859&dateFrom=2026-08-01&dateTo=2026-08-09", nil)
+	request := httptest.NewRequest("GET", "/api/game/room-records?keyword=112859&club=535696&inviteCode=928882&dateFrom=2026-08-01&dateTo=2026-08-09", nil)
 	filters, err := parseRoomRecordListFilters(request)
-	if err != nil || filters.Keyword != "112859" || filters.DateFrom != "2026-08-01" || filters.DateTo != "2026-08-09" {
+	if err != nil || filters.Keyword != "112859" || filters.Club != "535696" ||
+		filters.InviteCode != "928882" || filters.DateFrom != "2026-08-01" || filters.DateTo != "2026-08-09" {
 		t.Fatalf("unexpected filters: %#v %v", filters, err)
 	}
 	request = httptest.NewRequest("GET", "/api/game/room-records?dateFrom=2026-08-09&dateTo=2026-08-01", nil)
@@ -83,8 +84,21 @@ func TestParseRoomRecordListFilters(t *testing.T) {
 }
 
 func TestBuildRoomRecordListWhere(t *testing.T) {
-	where, args := buildRoomRecordListWhere(roomRecordListFilters{Keyword: "测试", DateFrom: "2026-08-01", DateTo: "2026-08-09"})
-	if !strings.Contains(where, "EXISTS") || !strings.Contains(where, "t.date >= ?") || len(args) != 6 {
+	where, args := buildRoomRecordListWhere(roomRecordListFilters{
+		Keyword: "测试", Club: "功能测试", InviteCode: "928882",
+		DateFrom: "2026-08-01", DateTo: "2026-08-09",
+	})
+	if !strings.Contains(where, "kbedm.club_guuid_info ci") ||
+		!strings.Contains(where, "kbedm.club_invite_code_info i") ||
+		!strings.Contains(where, "sm_club_make") ||
+		!strings.Contains(where, "t.date >= ?") || len(args) != 8 {
 		t.Fatalf("unexpected room list where: %s %#v", where, args)
+	}
+}
+
+func TestBuildRoomRecordListWhereUsesExactClubID(t *testing.T) {
+	where, args := buildRoomRecordListWhere(roomRecordListFilters{Club: "535696"})
+	if !strings.Contains(where, "t.club_guuid = ?") || len(args) != 1 || args[0] != "535696" {
+		t.Fatalf("expected exact club id filter, got %s %#v", where, args)
 	}
 }

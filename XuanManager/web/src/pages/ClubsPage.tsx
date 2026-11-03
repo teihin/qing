@@ -8,8 +8,9 @@ import type {
   ClubListResponse,
   ClubMemberNode,
   ClubMemberTree,
-  ClubQuotaAdjustmentResponse,
-  ClubQuotaState,
+  UnionDetailResponse,
+  UnionListItem,
+  UnionQuotaAdjustmentResponse,
 } from "../types";
 
 const roleLabels: Record<ClubMemberNode["role"], string> = {
@@ -73,6 +74,8 @@ interface ClubFilters {
   maxMembers: string;
   playerId: string;
   playerName: string;
+  /** 从联盟管理「详情」跳转过来时带的联盟过滤；空表示查看全部俱乐部。 */
+  unionId: string;
 }
 
 const emptyClubFilters: ClubFilters = {
@@ -80,7 +83,22 @@ const emptyClubFilters: ClubFilters = {
   keyword: "", clubId: "", name: "", ownerId: "",
   status: "", clubMode: "", taxMin: "", taxMax: "",
   minMembers: "", maxMembers: "", playerId: "", playerName: "",
+  unionId: "",
 };
+
+/** 联盟页跳转格式：#/game/clubs?unionId=123456&unionName=XX联盟 */
+function unionFromHash(): { unionId: string; unionName: string } {
+  const query = window.location.hash.split("?")[1] ?? "";
+  const params = new URLSearchParams(query);
+  return {
+    unionId: params.get("unionId")?.trim() ?? "",
+    unionName: params.get("unionName")?.trim() ?? "",
+  };
+}
+
+function filtersWithUnion(filters: ClubFilters, unionId: string): ClubFilters {
+  return filters.unionId === unionId ? filters : { ...filters, unionId };
+}
 
 /** 只统计当前维度下真正生效的条件数，用于「更多条件」角标。 */
 function activeFilterCount(filters: ClubFilters): number {
@@ -96,10 +114,11 @@ function activeFilterCount(filters: ClubFilters): number {
 /**
  * 俱乐部管理。
  *
- * 三件事：列出所有俱乐部、点进某个俱乐部看成员代理树、给群主调整俱乐部额度。
+ * 列出所有俱乐部、点进某个俱乐部看成员代理树；列表行可对所属联盟做「调整群主额度」。
  *
- * 额度不是后台账本：唯一真相在游戏服，这里的调整走游戏命令「增加_俱乐部_额度」（单位分），
- * 保存后由服务端回读校验。额度查询也依赖游戏服，查不到时显示「未确认」而不是 0。
+ * 联盟模式 V2：俱乐部额度挂在 club_guuid_info.union_quota，由联盟总群主在游戏内授信；
+ * 平台后台只能给联盟池注资（增加_联盟_额度），保存后回读联盟池并写审计。
+ * 俱乐部未加入联盟时没有可注资的联盟池，按钮禁用。
  */
 export default function ClubsPage({
   can,
@@ -109,13 +128,15 @@ export default function ClubsPage({
   notify: (message: string, kind?: "success" | "error") => void;
 }) {
   const [data, setData] = useState<ClubListResponse | null>(null);
-  const [draft, setDraft] = useState<ClubFilters>(emptyClubFilters);
-  const [applied, setApplied] = useState<ClubFilters>(emptyClubFilters);
+  const [draft, setDraft] = useState<ClubFilters>(() => ({ ...emptyClubFilters, unionId: unionFromHash().unionId }));
+  const [applied, setApplied] = useState<ClubFilters>(() => ({ ...emptyClubFilters, unionId: unionFromHash().unionId }));
+  const [unionName, setUnionName] = useState(() => unionFromHash().unionName);
   const [advanced, setAdvanced] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ClubListItem | null>(null);
+  const [quotaClub, setQuotaClub] = useState<ClubListItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -140,19 +161,53 @@ export default function ClubsPage({
     void load();
   }, [load]);
 
+  // 从联盟管理页跳过来时页签不变，只换了 hash 查询串；这里同步联盟过滤条件。
+  useEffect(() => {
+    const onHashChange = () => {
+      const next = unionFromHash();
+      setUnionName(next.unionName);
+      setDraft((current) => filtersWithUnion(current, next.unionId));
+      setApplied((current) => filtersWithUnion(current, next.unionId));
+      setPage(1);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
+  const clearUnionFilter = () => {
+    if (window.location.hash.includes("unionId=")) {
+      window.history.replaceState(null, "", "#/game/clubs");
+    }
+    setUnionName("");
+    setDraft((current) => ({ ...current, unionId: "" }));
+    setApplied((current) => ({ ...current, unionId: "" }));
+    setPage(1);
+  };
+
+  const resetFilters = () => {
+    if (window.location.hash.includes("unionId=")) {
+      window.history.replaceState(null, "", "#/game/clubs");
+    }
+    setUnionName("");
+    setDraft(emptyClubFilters);
+    setApplied(emptyClubFilters);
+    setPage(1);
+  };
+
   const update = (key: keyof ClubFilters, value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
 
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
+  const canAdjustQuota = can("game.union.quota_adjust");
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="CLUB OPERATIONS"
         title="俱乐部管理"
-        description="按俱乐部查看成员与代理树，并给群主调整俱乐部额度。额度的唯一真相在游戏服，后台只做注入与回读校验。"
+        description="按俱乐部查看成员与代理树；「调整群主额度」给所属联盟池注资。联盟池与俱乐部额度的唯一真相都在游戏服。"
         actions={<span className="readonly-badge"><i />额度以游戏服为准</span>}
       />
 
@@ -168,6 +223,19 @@ export default function ClubsPage({
           </div>
           <span className="toolbar__count">当前筛选 {data?.total ?? 0} 个俱乐部</span>
         </div>
+
+        {applied.unionId && (
+          <div className="union-filter-banner">
+            <div>
+              <span>当前只显示该联盟下的俱乐部</span>
+              <strong>{unionName || applied.unionId}</strong>
+              <small>联盟码：{applied.unionId}</small>
+            </div>
+            <Button type="button" variant="secondary" onClick={clearUnionFilter}>
+              查看全部俱乐部
+            </Button>
+          </div>
+        )}
 
         <form
           className="club-filter-panel"
@@ -241,11 +309,7 @@ export default function ClubsPage({
               <button
                 className="filter-reset"
                 type="button"
-                onClick={() => {
-                  setDraft(emptyClubFilters);
-                  setApplied(emptyClubFilters);
-                  setPage(1);
-                }}
+                onClick={resetFilters}
               >
                 清空筛选
               </button>
@@ -296,7 +360,7 @@ export default function ClubsPage({
               </Field>
               <div className="filter-actions">
                 <Button type="submit">应用组合条件</Button>
-                <Button type="button" variant="secondary" onClick={() => { setDraft(emptyClubFilters); setApplied(emptyClubFilters); setPage(1); }}>重置</Button>
+                <Button type="button" variant="secondary" onClick={resetFilters}>重置</Button>
               </div>
             </div>
           )}
@@ -318,6 +382,7 @@ export default function ClubsPage({
                     <th>俱乐部</th>
                     <th>状态 / 模式</th>
                     <th>群主</th>
+                    <th>联盟</th>
                     <th>人数</th>
                     <th>代理</th>
                     <th>群主额度</th>
@@ -351,11 +416,25 @@ export default function ClubsPage({
                           <span className="club-warning">未找到群主</span>
                         )}
                       </td>
+                      <td>
+                        {club.unionId ? (
+                          <>
+                            <strong>{club.unionName || club.unionId}</strong>
+                            <small className="cell-subtitle">
+                              联盟池 {amountFormatter.format((club.unionPoolQuotaFen ?? 0) / 100)} 元
+                            </small>
+                          </>
+                        ) : (
+                          <span className="club-quota-missing">未加入联盟</span>
+                        )}
+                      </td>
                       <td>{integerFormatter.format(club.memberCount)}</td>
                       <td>{integerFormatter.format(club.agentCount)}</td>
                       <td>
-                        {club.ownerQuotaFen === null || club.ownerQuotaFen === undefined ? (
-                          <span className="club-quota-missing" title="群主没有代理记录，或该俱乐部尚未给群主授信">未授信</span>
+                        {!club.unionId ? (
+                          <span className="club-quota-missing" title="俱乐部未加入联盟，没有联盟额度">—</span>
+                        ) : club.ownerQuotaFen === null || club.ownerQuotaFen === undefined ? (
+                          <span className="club-quota-missing" title="游戏服暂未返回俱乐部额度">未确认</span>
                         ) : (
                           <strong className="club-quota-value">{amountFormatter.format(club.ownerQuotaFen / 100)} 元</strong>
                         )}
@@ -365,6 +444,20 @@ export default function ClubsPage({
                         <div className="row-actions">
                           <button type="button" onClick={() => setSelected(club)}>
                             查看成员
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setQuotaClub(club)}
+                            disabled={!club.unionId || !canAdjustQuota}
+                            title={
+                              !club.unionId
+                                ? "该俱乐部未加入联盟，无法调整联盟池"
+                                : canAdjustQuota
+                                  ? "平台给该俱乐部所属联盟的联盟池注资（总群主额度）"
+                                  : "当前角色没有调整联盟池额度的权限"
+                            }
+                          >
+                            调整群主额度
                           </button>
                         </div>
                       </td>
@@ -414,10 +507,20 @@ export default function ClubsPage({
       {selected && (
         <ClubDetailModal
           club={selected}
-          canAdjust={can("game.club.quota_adjust")}
+          canAdjust={can("game.union.quota_adjust")}
           notify={notify}
           onClose={() => setSelected(null)}
           onChanged={() => void load()}
+        />
+      )}
+
+      {quotaClub && (
+        <UnionQuotaModal
+          club={quotaClub}
+          canAdjust={can("game.union.quota_adjust")}
+          notify={notify}
+          onClose={() => setQuotaClub(null)}
+          onDone={() => void load()}
         />
       )}
     </div>
@@ -439,7 +542,7 @@ function ClubDetailModal({
 }) {
   const [detail, setDetail] = useState<ClubDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [quotaTarget, setQuotaTarget] = useState<ClubMemberNode | null>(null);
+  const [quotaOpen, setQuotaOpen] = useState(false);
   const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
@@ -514,7 +617,8 @@ function ClubDetailModal({
                   key={root.playerId}
                   node={root}
                   canAdjust={canAdjust}
-                  onAdjust={setQuotaTarget}
+                  hasUnion={Boolean(detail.club.unionId)}
+                  onAdjust={() => setQuotaOpen(true)}
                 />
               ))
             )}
@@ -540,13 +644,12 @@ function ClubDetailModal({
         </div>
       )}
 
-      {quotaTarget && (
-        <ClubQuotaModal
-          club={club}
-          member={quotaTarget}
+      {quotaOpen && (
+        <UnionQuotaModal
+          club={detail?.club ?? club}
           canAdjust={canAdjust}
           notify={notify}
-          onClose={() => setQuotaTarget(null)}
+          onClose={() => setQuotaOpen(false)}
           onDone={() => {
             refreshQuery();
             onChanged();
@@ -560,11 +663,13 @@ function ClubDetailModal({
 function ClubTreeNode({
   node,
   canAdjust,
+  hasUnion,
   onAdjust,
 }: {
   node: ClubMemberTree;
   canAdjust: boolean;
-  onAdjust: (member: ClubMemberNode) => void;
+  hasUnion: boolean;
+  onAdjust: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
@@ -592,10 +697,10 @@ function ClubTreeNode({
         )}
         {node.inviteCode && <span className="club-tree__meta">邀请码 {node.inviteCode}</span>}
         {node.note && <span className="club-tree__meta">{node.note}</span>}
-        {canAdjust && node.role === "owner" && (
+        {canAdjust && hasUnion && node.role === "owner" && (
           <div className="row-actions">
-            <button type="button" onClick={() => onAdjust(node)}>
-              调整额度
+            <button type="button" onClick={onAdjust}>
+              调整群主额度
             </button>
           </div>
         )}
@@ -603,7 +708,7 @@ function ClubTreeNode({
       {hasChildren && !collapsed && (
         <div className="club-tree__children">
           {node.children.map((child) => (
-            <ClubTreeNode key={child.playerId} node={child} canAdjust={canAdjust} onAdjust={onAdjust} />
+            <ClubTreeNode key={child.playerId} node={child} canAdjust={canAdjust} hasUnion={hasUnion} onAdjust={onAdjust} />
           ))}
         </div>
       )}
@@ -612,60 +717,83 @@ function ClubTreeNode({
 }
 
 /**
- * 额度调整。金额按「元」输入，提交时换算成分，符合接口文档 §7 的 quota_fen 单位约定。
- * 服务端会先查一次当前额度做期望值校验，回读失败时明确回报，不假装成功。
+ * 联盟池注资（即「调整群主额度」）。
+ *
+ * 联盟模式 V2 下平台只能增加联盟池（总群主额度），不能直接改某个俱乐部的额度：
+ * 俱乐部额度由总群主在游戏内用「授信_联盟_额度」分配。
+ * 金额按「元」输入，提交换算成分，交给游戏服「增加_联盟_额度」并回读校验。
  */
-function ClubQuotaModal({
+function UnionQuotaModal({
   club,
-  member,
   canAdjust,
   notify,
   onClose,
   onDone,
 }: {
   club: ClubListItem;
-  member: ClubMemberNode;
   canAdjust: boolean;
   notify: (message: string, kind?: "success" | "error") => void;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [action, setAction] = useState<"add" | "subtract">("add");
+  const [union, setUnion] = useState<UnionListItem | null>(null);
+  const [loadError, setLoadError] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<ClubQuotaAdjustmentResponse | null>(null);
+  const [result, setResult] = useState<UnionQuotaAdjustmentResponse | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!club.unionId) {
+      setLoadError("该俱乐部未加入联盟，没有可注资的联盟池");
+      return undefined;
+    }
+    api<UnionDetailResponse>(`/api/game/unions/${club.unionId}`)
+      .then((response) => {
+        if (!cancelled) setUnion(response.union);
+      })
+      .catch((reason_) => {
+        if (!cancelled) setLoadError(errorMessage(reason_, "读取联盟额度失败"));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [club.unionId]);
+
+  const poolFen = union?.poolQuotaFen ?? club.unionPoolQuotaFen ?? null;
+  const unionLabel = union?.name || club.unionName || club.unionId;
   const parsed = Number(amount);
   const valid = Number.isFinite(parsed) && parsed > 0;
   const deltaFen = valid ? Math.round(parsed * 100) : 0;
-  const canSubmit = canAdjust && valid && reason.trim().length >= 2 && confirmed && !busy;
+  const canSubmit = canAdjust && Boolean(club.unionId) && Boolean(union) && valid &&
+    reason.trim().length >= 2 && confirmed && !busy && !loadError;
 
   const submit = async () => {
     if (!canSubmit) return;
     setBusy(true);
     setError("");
     try {
-      const outcome = await api<ClubQuotaAdjustmentResponse>(
-        `/api/game/clubs/${club.clubId}/quota-adjustments`,
+      const outcome = await api<UnionQuotaAdjustmentResponse>(
+        `/api/game/unions/${club.unionId}/quota-adjustments`,
         {
           method: "POST",
           ...jsonBody({
-            playerId: member.playerId,
-            action,
+            action: "add",
             amountYuan: parsed,
             reason: reason.trim(),
+            expectedPoolQuotaYuan: poolFen === null ? undefined : poolFen / 100,
             confirm: true,
           }),
         },
       );
       setResult(outcome);
-      notify(outcome.verified ? outcome.message : "额度调整已提交，但未回读校验，请到客户端确认", outcome.verified ? "success" : "error");
+      notify(outcome.verified ? outcome.message : "注资已提交，但未回读校验，请刷新后确认", outcome.verified ? "success" : "error");
       onDone();
     } catch (reason_) {
-      setError(errorMessage(reason_, "额度调整失败"));
+      setError(errorMessage(reason_, "联盟池注资失败"));
     } finally {
       setBusy(false);
     }
@@ -673,61 +801,66 @@ function ClubQuotaModal({
 
   return (
     <Modal
-      title={`调整「${member.name || member.playerId}」的俱乐部额度`}
-      eyebrow={`QUOTA · ${club.clubId}`}
+      title={`调整「${unionLabel}」的群主额度`}
+      eyebrow={`UNION QUOTA · ${club.unionId || "NO UNION"}`}
       onClose={onClose}
     >
       <div className="quota-intro">
         <p>
-          额度是平台注入给代理的钱，单位<strong>分</strong>；这里输入<strong>元</strong>，
-          提交后换算成分并交给游戏服「增加_俱乐部_额度」执行，成功后会回读当前额度。
+          这里调整的是<strong>联盟池</strong>（联盟总群主额度），单位<strong>分</strong>；
+          界面输入<strong>元</strong>，提交后交给游戏服「增加_联盟_额度」，成功后会回读联盟池。
         </p>
         <ul>
-          <li>只能给本俱乐部的群主调额度，其他身份请让代理在游戏内逐级授信。</li>
-          <li>扣减不能把额度变成负数，服务端会直接拒绝。</li>
+          <li>平台只能增加联盟池额度，不会直接改单个俱乐部的额度。</li>
+          <li>俱乐部额度由联盟总群主在游戏内「授信_联盟_额度」分配。</li>
           <li>操作会记入后台审计，原因必填（2–120 字）。</li>
         </ul>
+        <div className="union-quota-current">
+          <div>
+            <span>当前联盟池</span>
+            <strong>{poolFen === null ? "读取中…" : `${amountFormatter.format(poolFen / 100)} 元`}</strong>
+          </div>
+          <div>
+            <span>本俱乐部额度</span>
+            <strong>
+              {club.ownerQuotaFen === null || club.ownerQuotaFen === undefined
+                ? "未确认"
+                : `${amountFormatter.format(club.ownerQuotaFen / 100)} 元`}
+            </strong>
+          </div>
+        </div>
       </div>
 
       {result ? (
         <div className={`quota-result ${result.verified ? "is-ok" : "is-unverified"}`}>
-          <strong>{result.verified ? "额度已调整并回读校验" : "额度已提交，未回读校验"}</strong>
+          <strong>{result.verified ? "联盟池已注资并回读校验" : "注资已提交，未回读校验"}</strong>
           <p>{result.message}</p>
           <dl>
             <div>
-              <dt>本次变动</dt>
-              <dd>
-                {result.deltaFen >= 0 ? "+" : ""}
-                {amountFormatter.format(result.deltaFen / 100)} 元
-              </dd>
+              <dt>本次注资</dt>
+              <dd>+{amountFormatter.format(result.deltaFen / 100)} 元</dd>
             </div>
             <div>
-              <dt>当前额度</dt>
-              <dd>{result.quota.queried ? `${amountFormatter.format(result.quota.quotaYuan)} 元` : "未确认"}</dd>
+              <dt>注资后联盟池</dt>
+              <dd>{amountFormatter.format(result.poolQuotaYuan)} 元</dd>
             </div>
           </dl>
         </div>
       ) : (
         <form className="form-grid form-grid--single" onSubmit={submitGuard(submit)}>
-          {error && (
+          {(error || loadError) && (
             <div className="form-error">
               <span>!</span>
-              {error}
+              {error || loadError}
             </div>
           )}
           {!canAdjust && (
             <div className="form-error">
               <span>!</span>
-              当前角色没有调整俱乐部额度的权限
+              当前角色没有调整联盟池额度的权限
             </div>
           )}
-          <Field label="调整方式">
-            <select value={action} onChange={(event) => setAction(event.target.value as "add" | "subtract")}>
-              <option value="add">增加额度（平台注资）</option>
-              <option value="subtract">扣减额度（纠错）</option>
-            </select>
-          </Field>
-          <Field label="金额（元）" hint={valid ? `提交为 ${deltaFen} 分` : "支持两位小数，单次不超过 100 万元"}>
+          <Field label="注资金额（元）" hint={valid ? `提交为 ${deltaFen} 分` : "只能增加，支持两位小数，单次不超过 100 万元"}>
             <input
               type="number"
               min="0.01"
@@ -742,26 +875,18 @@ function ClubQuotaModal({
           </Field>
           <label className="confirm-check">
             <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-            <span>我确认本次操作会直接改变该俱乐部群主的额度</span>
+            <span>我确认本次注资只增加联盟池额度，不直接改变俱乐部额度</span>
           </label>
           <div className="form-actions">
             <Button type="button" variant="secondary" onClick={onClose}>
               取消
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {busy ? "提交中…" : "确认调整"}
+              {busy ? "提交中…" : "确认注资"}
             </Button>
           </div>
         </form>
       )}
     </Modal>
   );
-}
-
-/** 供测试与外部复用的纯函数：额度状态在界面上的文案。 */
-export function describeQuota(state: ClubQuotaState): string {
-  if (!state.queried) return "额度状态未确认";
-  if (state.isAgent !== 1) return "不是代理，无额度";
-  if (state.isGranted !== 1) return "等待上级授信";
-  return `${amountFormatter.format(state.quotaYuan)} 元`;
 }

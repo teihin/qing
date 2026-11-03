@@ -244,7 +244,9 @@ td strong { color: #294149; }
 .max-cell { max-width: 270px; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #a2b0b3; }
 .player-table { min-width: 1220px; }
-.money-value { color: #117b72; font-family: Georgia, "Songti SC", serif; font-size: 16px; }
+.money-value, .stone-value { color: #117b72; font-family: Georgia, "Songti SC", serif; font-size: 16px; }
+.club-chip-list { display: flex; flex-wrap: wrap; gap: 5px; max-width: 230px; }
+.club-chip { display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; padding: 4px 9px; border: 1px solid #cfe7e3; border-radius: 999px; color: #176f67; background: #f0f9f7; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 
 /* Operational controls: player balance, live rooms, payment channels and activities. */
 .balance-adjust-player { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 14px; margin-bottom: 18px; padding: 14px; border: 1px solid #deeaeb; border-radius: 12px; background: #f8fbfb; }
@@ -814,15 +816,17 @@ td strong { color: #294149; }
 .room-list-filter__copy > span { color: #19988e; font-size: 9px; font-weight: 900; letter-spacing: .15em; }
 .room-list-filter__copy strong { display: block; margin-top: 5px; color: #294b52; font-family: Georgia, "Songti SC", serif; font-size: 19px; }
 .room-list-filter__copy p { margin-top: 6px; color: #7a8f94; font-size: 12px; line-height: 1.6; }
-.room-list-filter form { display: grid; grid-template-columns: minmax(220px, 1.6fr) minmax(140px, .75fr) minmax(140px, .75fr) auto; align-items: end; gap: 10px; }
+.room-list-filter form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; }
+.room-list-filter form > label { flex: 1 1 150px; min-width: 130px; }
+.room-list-filter form > label.room-list-keyword { flex: 1 1 220px; }
 .room-list-filter label > span { display: block; margin-bottom: 6px; color: #6f858a; font-size: 11px; font-weight: 750; }
 .room-list-filter input { width: 100%; height: 42px; padding: 0 11px; border: 1px solid #d3e2e3; border-radius: 8px; color: #34535a; background: #fff; font-size: 13px; }
 .room-list-filter input:focus { border-color: #67b9b2; box-shadow: 0 0 0 3px rgba(50,157,147,.1); outline: 0; }
-.room-list-filter__actions { display: flex; gap: 7px; }
+.room-list-filter__actions { display: flex; gap: 7px; margin-left: auto; }
 .room-list-filter__actions button { height: 42px; padding: 0 14px; border: 1px solid #d4e1e2; border-radius: 8px; color: #657d82; background: #fff; font-size: 12px; font-weight: 800; white-space: nowrap; }
 .room-list-filter__actions button:last-child { border-color: #168d84; color: #fff; background: linear-gradient(135deg, #159b91, #087c74); }
 .room-list-panel { overflow: hidden; }
-.room-record-list-table { min-width: 1020px; }
+.room-record-list-table { min-width: 1180px; }
 .room-record-list-row { cursor: pointer; transition: background .15s ease, box-shadow .15s ease; }
 .room-record-list-row:hover { background: #f5fbfa; box-shadow: inset 3px 0 #28a197; }
 .room-record-list-row:focus-visible { background: #f3faf9; box-shadow: inset 0 0 0 2px #57b4ac; outline: 0; }
@@ -1016,6 +1020,21 @@ td strong { color: #294149; }
 .player-profile-section-title > button, .player-profile-link { min-height: 34px; padding: 0 11px; border: 1px solid #bdded9; border-radius: 8px; color: #147c74; background: #eff9f7; font-size: 11px; font-weight: 800; white-space: nowrap; }
 .player-profile-section-title > span { padding: 5px 9px; border-radius: 999px; color: #247d76; background: #edf8f6; font-size: 11px; font-weight: 800; }
 .player-finance-table { min-width: 760px; }
+.player-club-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 19px 0; }
+.player-club-grid { display: grid; gap: 14px; }
+.player-club-card { overflow: hidden; border: 1px solid #dfe9ea; border-radius: 13px; background: #fff; }
+.player-club-card > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; padding: 16px; border-bottom: 1px solid #e8eeee; background: #f8fbfb; }
+.player-club-card > header h3 { margin-top: 3px; color: #23454c; font-size: 16px; }
+.player-club-card > header p { margin-top: 5px; color: #81959a; font-size: 11px; }
+.club-role-badge { display: inline-flex; flex: 0 0 auto; align-items: center; padding: 5px 10px; border-radius: 999px; color: #0f766e; background: #e6f6f3; font-size: 11px; font-weight: 850; white-space: nowrap; }
+.player-club-meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding: 14px 16px; }
+.player-club-meta > div { padding: 10px 12px; border: 1px solid #e2ebec; border-radius: 10px; background: #fbfdfd; }
+.player-club-meta span, .player-club-meta strong { display: block; }
+.player-club-meta span { color: #7c9095; font-size: 11px; }
+.player-club-meta strong { margin-top: 5px; overflow-wrap: anywhere; color: #2c4e55; font-size: 14px; }
+.player-club-subordinates { padding: 0 16px 16px; }
+.player-club-subordinates .player-profile-section-title { margin: 0 -16px 12px; border-bottom: 1px solid #e8eeee; }
+.player-club-subordinate-table { min-width: 680px; }
 .player-room-history-table { min-width: 890px; }
 .player-history-context { display: block; max-width: 250px; overflow: hidden; color: #60787e; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .player-history-context.is-maintenance { max-width: 360px; color: #176f67; font-weight: 650; line-height: 1.55; text-overflow: initial; white-space: normal; }
@@ -1479,6 +1498,8 @@ td strong { color: #294149; }
   .transaction-metrics { grid-template-columns: repeat(2, 1fr); }
   .room-record-metrics { grid-template-columns: repeat(2, 1fr); }
   .player-fund-overview { grid-template-columns: repeat(2, 1fr); }
+  .player-club-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .player-club-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .room-list-filter { grid-template-columns: 1fr; gap: 16px; }
   .room-round-row { grid-template-columns: 58px 1.2fr repeat(2, .7fr) .9fr auto; }
   .room-round-net { display: none; }
@@ -1646,6 +1667,8 @@ td strong { color: #294149; }
   .player-profile-tabs button { min-height: 44px; padding: 7px 8px; text-align: center; }
   .player-profile-tabs small { display: none; }
   .player-fund-overview { grid-template-columns: 1fr; }
+  .player-club-overview, .player-club-meta { grid-template-columns: 1fr; }
+  .player-club-card > header { flex-direction: column; }
   .player-profile-section-title { align-items: flex-start; flex-direction: column; }
   .player-profile-section-title > button { width: 100%; }
   .agent-detail-grid, .tier-grid { grid-template-columns: 1fr; }
@@ -2448,3 +2471,76 @@ td strong { color: #294149; }
 .club-tree__quota { color: #2f6f86; font-size: 12px; font-weight: 700; }
 .club-quota-value { color: #1f6f83; font-variant-numeric: tabular-nums; }
 .club-quota-missing { color: #9aa8ab; font-size: 12px; }
+.row-actions button:disabled { color: #a8b6b8; cursor: not-allowed; background: transparent; }
+
+/* 联盟管理（V2） */
+.union-table { min-width: 1180px; }
+.union-filter-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 18px; border-bottom: 1px solid #cfe7e3; background: #eef9f7; }
+.union-filter-banner > div { display: grid; gap: 3px; min-width: 0; }
+.union-filter-banner span { color: #4c7f7a; font-size: 12px; }
+.union-filter-banner strong { overflow: hidden; color: #176f67; font-size: 16px; text-overflow: ellipsis; white-space: nowrap; }
+.union-filter-banner small { color: #6b8f8b; font-size: 11px; }
+.union-quota-current { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.union-quota-current > div { padding: 9px 11px; border: 1px solid #dfeceb; border-radius: 9px; background: #fff; }
+.union-quota-current span { display: block; color: #7c9298; font-size: 11px; }
+.union-quota-current strong { display: block; margin-top: 3px; color: #21414a; font-family: Georgia, "Songti SC", serif; font-size: 16px; }
+@media (max-width: 640px) {
+  .union-filter-banner { align-items: stretch; flex-direction: column; }
+  .union-quota-current { grid-template-columns: 1fr; }
+}
+
+/* 房间战绩：俱乐部信息 */
+.room-club-name { display: block; color: #24525a; font-size: 12px; }
+.room-club-missing { color: #9aa8ab; font-size: 12px; }
+.room-record-club { margin-top: 6px !important; color: #93b8ba !important; font-size: 12px !important; }
+.room-record-club strong { color: #d7f2ef; }
+
+/* 房间维护：按俱乐部聚合（只读） */
+.club-room-filter { display: grid; grid-template-columns: minmax(220px, .68fr) minmax(420px, 1.32fr); align-items: center; gap: 26px; padding: 20px 22px; border-color: #d8e8e7; background: linear-gradient(135deg, #fff, #f6fbfa); }
+.club-room-filter__copy > span { color: #19988e; font-size: 9px; font-weight: 900; letter-spacing: .15em; }
+.club-room-filter__copy strong { display: block; margin-top: 5px; color: #294b52; font-family: Georgia, "Songti SC", serif; font-size: 19px; }
+.club-room-filter__copy p { margin-top: 6px; color: #7a8f94; font-size: 12px; line-height: 1.6; }
+.club-room-filter form { display: flex; align-items: end; gap: 10px; }
+.club-room-filter form > label { flex: 1; min-width: 0; }
+.club-room-filter label > span { display: block; margin-bottom: 6px; color: #6f858a; font-size: 11px; font-weight: 750; }
+.club-room-filter input { width: 100%; height: 42px; padding: 0 11px; border: 1px solid #d3e2e3; border-radius: 8px; color: #34535a; background: #fff; font-size: 13px; }
+.club-room-filter input:focus { border-color: #67b9b2; box-shadow: 0 0 0 3px rgba(50,157,147,.1); outline: 0; }
+.club-room-filter__actions { display: flex; gap: 7px; }
+.club-room-filter__actions button { height: 42px; padding: 0 14px; border: 1px solid #d4e1e2; border-radius: 8px; color: #657d82; background: #fff; font-size: 12px; font-weight: 800; white-space: nowrap; }
+.club-room-filter__actions button:last-child { border-color: #168d84; color: #fff; background: linear-gradient(135deg, #159b91, #087c74); }
+
+.club-room-panel { overflow: hidden; }
+.club-room-panel__header h2 { margin-top: 3px; color: #1b3942; font-size: 18px; }
+.club-room-panel__header > span { width: auto; padding: 0 11px; color: #58757b; background: #edf7f5; font-size: 12px; }
+.club-room-group-list { display: grid; background: #f6f9f9; }
+.club-room-group-list.is-loading { pointer-events: none; opacity: .58; }
+.club-room-group + .club-room-group { border-top: 1px solid #e4ecec; }
+.club-room-group__header { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 16px; border: 0; background: #fff; text-align: left; cursor: pointer; }
+.club-room-group__header:hover { background: #f5fbfa; }
+.club-room-group__header:focus-visible { outline: 2px solid #57b4ac; outline-offset: -2px; }
+.club-room-group__toggle { width: 26px; height: 26px; flex: 0 0 26px; display: grid; place-items: center; border: 1px solid #cfe1df; border-radius: 7px; color: #1c7c73; background: #f1faf8; font-size: 16px; font-weight: 800; }
+.club-room-group__title { min-width: 0; display: grid; flex: 1; gap: 3px; }
+.club-room-group__title strong { color: #1c3f47; font-size: 15px; }
+.club-room-group__title small { overflow: hidden; color: #7d9297; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.club-room-group__stats { display: flex; flex-wrap: wrap; gap: 14px; color: #6f878c; font-size: 11px; }
+.club-room-group__stats b { color: #1d6f7e; font-family: Georgia, "Songti SC", serif; font-size: 15px; }
+.club-room-group__rooms { padding: 0 12px 12px 50px; background: #f6f9f9; }
+.club-room-table { min-width: 1020px; }
+.club-room-table td { vertical-align: top; }
+.club-room-status { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; color: #637b81; background: #eef3f3; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.club-room-status.is-playing { color: #087b72; background: #e7f7f4; }
+.club-room-status.is-waiting { color: #5578aa; background: #edf3fb; }
+.club-room-status.is-dissolving { color: #b34755; background: #fff0f2; }
+.club-room-remark { display: block; max-width: 180px; overflow: hidden; color: #6f858b; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .club-room-filter { grid-template-columns: 1fr; }
+  .club-room-group__header { flex-wrap: wrap; }
+  .club-room-group__stats { width: 100%; padding-left: 38px; }
+  .club-room-group__rooms { padding-left: 12px; }
+}
+@media (max-width: 640px) {
+  .club-room-filter form { flex-direction: column; align-items: stretch; }
+  .club-room-filter__actions { justify-content: flex-end; }
+  .room-list-filter__actions { margin-left: 0; }
+}

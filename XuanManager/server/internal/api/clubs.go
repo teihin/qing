@@ -10,22 +10,19 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
-	"time"
 )
 
-// 俱乐部管理：只读列出游戏库里的俱乐部与成员代理树，外加一个写操作——给群主调整额度。
+// 俱乐部管理：只读列出游戏库里的俱乐部与成员代理树。
 //
 // 数据来源：
-//   - club_guuid_info        俱乐部本体（club_name / club_status / club_mode / club_tax）
+//   - club_guuid_info        俱乐部本体（club_name / club_status / club_mode / club_tax / union_id / union_quota）
+//   - club_union_info        联盟模式 V2：俱乐部所属联盟与联盟池额度
 //   - tbl_Account            成员身份（sm_club_make / sm_club_join / sm_club_manage / sm_club_gold）
 //   - club_invite_code_info  代理邀请码（status='used' 且属于本人 = 是代理）
 //   - club_agent_info        直属上级（upper_guuid）与备注
 //
-// 额度不落后台表：唯一真相在游戏服，后台只负责发「增加_俱乐部_额度」并在写后回读校验。
-
-// clubQuotaMutationMu 串行化额度调整：额度是钱，并发叠加会让「结果不能小于 0」的判断失效。
-var clubQuotaMutationMu sync.Mutex
+// 额度不落后台表：唯一真相在游戏服。V2 下平台只能给联盟池注资（见 unions.go），
+// 俱乐部额度由联盟总群主在游戏内授信，后台不直接改额度。
 
 type clubListItem struct {
 	ClubID      string `json:"clubId"`
@@ -38,21 +35,27 @@ type clubListItem struct {
 	AgentCount  int64  `json:"agentCount"`
 	Tax         string `json:"tax"`
 	PayMode     string `json:"payMode"`
-	Union       string `json:"union"`
-	// OwnerQuotaFen 是群主在当前俱乐部的可用额度（club_agent_info.quota，单位分）。
-	// 指针为 nil 表示读不到（群主没有代理行或 quota 为 NULL），与「额度 0」不是一回事。
+	// Union 是旧双向结盟字段（club_union），V2 已停用，仅保留兼容。
+	Union string `json:"union"`
+	// UnionID / UnionName 是 V2 联盟归属；空表示未加入联盟。
+	UnionID   string `json:"unionId"`
+	UnionName string `json:"unionName"`
+	// UnionPoolQuotaFen 是所属联盟的联盟池余额（分），供「调整群主额度」展示。
+	UnionPoolQuotaFen *int64 `json:"unionPoolQuotaFen"`
+	// OwnerQuotaFen 是俱乐部当前可用额度（club_guuid_info.union_quota，单位分）。
+	// 未加入联盟时为 nil，与「额度 0」不是一回事。
 	OwnerQuotaFen *int64 `json:"ownerQuotaFen"`
 }
 
 type clubMemberNode struct {
-	PlayerID   string `json:"playerId"`
-	Name       string `json:"name"`
-	Role       string `json:"role"`
-	IsAgent    bool   `json:"isAgent"`
-	IsLeader   bool   `json:"isLeader"`
-	UpperID    string `json:"upperId"`
-	UpperName  string `json:"upperName"`
-	ClubGold   *int64 `json:"clubGold"`
+	PlayerID  string `json:"playerId"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	IsAgent   bool   `json:"isAgent"`
+	IsLeader  bool   `json:"isLeader"`
+	UpperID   string `json:"upperId"`
+	UpperName string `json:"upperName"`
+	ClubGold  *int64 `json:"clubGold"`
 	// QuotaFen 是 club_agent_info.quota（分）。null 表示未被授信，不是 0。
 	QuotaFen   *int64 `json:"quotaFen"`
 	InviteCode string `json:"inviteCode"`
@@ -89,6 +92,7 @@ type clubFilters struct {
 	OwnerID string
 	Status  string
 	Mode2   string
+	UnionID string
 	TaxMin  *int64
 	TaxMax  *int64
 	// 玩家维度
@@ -114,6 +118,7 @@ func parseClubFilters(r *http.Request) (clubFilters, error) {
 		OwnerID:    strings.TrimSpace(query.Get("ownerId")),
 		Status:     strings.TrimSpace(query.Get("status")),
 		Mode2:      strings.TrimSpace(query.Get("clubMode")),
+		UnionID:    strings.TrimSpace(query.Get("unionId")),
 		PlayerID:   strings.TrimSpace(query.Get("playerId")),
 		PlayerName: strings.TrimSpace(query.Get("playerName")),
 	}
@@ -133,6 +138,9 @@ func parseClubFilters(r *http.Request) (clubFilters, error) {
 	}
 	if filters.ClubID != "" && !isSixDigitCode(filters.ClubID) {
 		return clubFilters{}, errors.New("俱乐部 ID 必须是 6 位数字")
+	}
+	if filters.UnionID != "" && !isSixDigitCode(filters.UnionID) {
+		return clubFilters{}, errors.New("联盟 ID 必须是 6 位数字")
 	}
 	if filters.PlayerID != "" && !isSixDigitCode(filters.PlayerID) {
 		// 玩家 ID 也可能不是 6 位（历史账号），这里只拦明显非法输入。
@@ -193,6 +201,10 @@ func buildClubWhere(filters clubFilters) (string, []any) {
 	if filters.Name != "" {
 		conditions = append(conditions, "c.club_name LIKE ? ESCAPE '\\\\'")
 		args = append(args, "%"+escapeLike(filters.Name)+"%")
+	}
+	if filters.UnionID != "" {
+		conditions = append(conditions, "c.union_id = ?")
+		args = append(args, filters.UnionID)
 	}
 	if filters.Mode2 != "" {
 		conditions = append(conditions, "COALESCE(c.club_mode, '') = ?")
@@ -264,8 +276,12 @@ func (s *Server) handleListClubs(w http.ResponseWriter, r *http.Request, _ princ
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 c.club_guuid, COALESCE(c.club_name, ''), COALESCE(c.club_status, ''),
 COALESCE(c.club_mode, ''), c.club_tax, c.club_pay_mode,
-COALESCE(c.club_union, ''), COALESCE(c.number_count, 0)
+COALESCE(c.club_union, ''), COALESCE(c.number_count, 0),
+COALESCE(c.union_id, ''), COALESCE(c.union_quota, 0),
+COALESCE(cu.union_name, ''), COALESCE(cu.union_quota, 0)
 FROM kbedm.club_guuid_info c
+LEFT JOIN kbedm.club_union_info cu
+  ON cu.union_id = c.union_id AND cu.status <> 'init'
 WHERE `+where+`
 ORDER BY c.id DESC
 LIMIT ? OFFSET ?`, queryArgs...)
@@ -280,14 +296,20 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	for rows.Next() {
 		var item clubListItem
 		var tax, payMode any
+		var clubQuotaFen, unionPoolFen int64
 		if err := rows.Scan(&item.ClubID, &item.Name, &item.Status, &item.Mode,
-			&tax, &payMode, &item.Union, &item.MemberCount); err != nil {
+			&tax, &payMode, &item.Union, &item.MemberCount,
+			&item.UnionID, &clubQuotaFen, &item.UnionName, &unionPoolFen); err != nil {
 			s.logger.Error("scan club row", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取俱乐部数据失败")
 			return
 		}
 		item.Tax = stringOrEmpty(tax)
 		item.PayMode = stringOrEmpty(payMode)
+		if item.UnionID != "" {
+			item.OwnerQuotaFen = &clubQuotaFen
+			item.UnionPoolQuotaFen = &unionPoolFen
+		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -316,17 +338,6 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	} else {
 		s.logger.Error("read club owner names", "error", nameErr)
 	}
-	// 群主额度：一次批量查完，不能按行 N+1（列表最多 100 行）。
-	if quotas, quotaErr := s.clubOwnerQuotas(r.Context(), items); quotaErr == nil {
-		for index := range items {
-			if quota, ok := quotas[items[index].ClubID+"\x00"+items[index].OwnerID]; ok {
-				items[index].OwnerQuotaFen = quota
-			}
-		}
-	} else {
-		s.logger.Error("read club owner quotas", "error", quotaErr)
-	}
-
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "total": total, "page": page, "pageSize": size,
 		"mode": filters.Mode,
@@ -400,49 +411,6 @@ GROUP BY club_guuid`, agentArgs...)
 	return owners, counts, agentRows.Err()
 }
 
-// clubOwnerQuotas 批量读取每个俱乐部群主的额度（club_agent_info.quota，分）。
-//
-// 返回 map 用 "俱乐部ID\x00群主ID" 作键。注意「没有这一行」和「quota 为 NULL」
-// 都表示未授信/无数据，调用方据此保持指针为 nil，界面上不能显示成 0。
-// 用 (club_guuid, user_guuid) 元组 IN 一次查完，避免逐行查。
-func (s *Server) clubOwnerQuotas(ctx context.Context, items []clubListItem) (map[string]*int64, error) {
-	result := map[string]*int64{}
-	pairs := make([][2]string, 0, len(items))
-	for _, item := range items {
-		if item.ClubID != "" && item.OwnerID != "" {
-			pairs = append(pairs, [2]string{item.ClubID, item.OwnerID})
-		}
-	}
-	if len(pairs) == 0 {
-		return result, nil
-	}
-	placeholders := strings.TrimRight(strings.Repeat("(?,?),", len(pairs)), ",")
-	args := make([]any, 0, len(pairs)*2)
-	for _, pair := range pairs {
-		args = append(args, pair[0], pair[1])
-	}
-	rows, err := s.db.QueryContext(ctx, `SELECT club_guuid, user_guuid, quota
-FROM kbedm.club_agent_info
-WHERE status = 'used' AND (club_guuid, user_guuid) IN (`+placeholders+`)`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var clubID, ownerID string
-		var quota sql.NullInt64
-		if err := rows.Scan(&clubID, &ownerID, &quota); err != nil {
-			return nil, err
-		}
-		if !quota.Valid {
-			continue
-		}
-		value := quota.Int64
-		result[clubID+"\x00"+ownerID] = &value
-	}
-	return result, rows.Err()
-}
-
 func ownerIDsOf(items []clubListItem) []string {
 	seen := map[string]bool{}
 	ids := make([]string, 0, len(items))
@@ -503,16 +471,26 @@ func (s *Server) handleGetClub(w http.ResponseWriter, r *http.Request, _ princip
 func (s *Server) readClubDetail(ctx context.Context, clubID string) (clubDetailResponse, error) {
 	var detail clubDetailResponse
 	var tax, payMode any
-	err := s.db.QueryRowContext(ctx, `SELECT club_guuid, COALESCE(club_name, ''), COALESCE(club_status, ''),
-COALESCE(club_mode, ''), club_tax, club_pay_mode, COALESCE(club_union, ''), COALESCE(number_count, 0)
-FROM kbedm.club_guuid_info WHERE club_guuid = ? LIMIT 1`, clubID).Scan(
+	var clubQuotaFen, unionPoolFen int64
+	err := s.db.QueryRowContext(ctx, `SELECT c.club_guuid, COALESCE(c.club_name, ''), COALESCE(c.club_status, ''),
+COALESCE(c.club_mode, ''), c.club_tax, c.club_pay_mode, COALESCE(c.club_union, ''), COALESCE(c.number_count, 0),
+COALESCE(c.union_id, ''), COALESCE(c.union_quota, 0), COALESCE(cu.union_name, ''), COALESCE(cu.union_quota, 0)
+FROM kbedm.club_guuid_info c
+LEFT JOIN kbedm.club_union_info cu
+  ON cu.union_id = c.union_id AND cu.status <> 'init'
+WHERE c.club_guuid = ? LIMIT 1`, clubID).Scan(
 		&detail.Club.ClubID, &detail.Club.Name, &detail.Club.Status, &detail.Club.Mode,
-		&tax, &payMode, &detail.Club.Union, &detail.Club.MemberCount)
+		&tax, &payMode, &detail.Club.Union, &detail.Club.MemberCount,
+		&detail.Club.UnionID, &clubQuotaFen, &detail.Club.UnionName, &unionPoolFen)
 	if err != nil {
 		return detail, err
 	}
 	detail.Club.Tax = stringOrEmpty(tax)
 	detail.Club.PayMode = stringOrEmpty(payMode)
+	if detail.Club.UnionID != "" {
+		detail.Club.OwnerQuotaFen = &clubQuotaFen
+		detail.Club.UnionPoolQuotaFen = &unionPoolFen
+	}
 
 	members, err := s.readClubMembers(ctx, clubID, detail.Club.Mode)
 	if err != nil {
@@ -524,6 +502,15 @@ FROM kbedm.club_guuid_info WHERE club_guuid = ? LIMIT 1`, clubID).Scan(
 		if member.Role == "owner" {
 			detail.Club.OwnerID = member.PlayerID
 			detail.Club.OwnerName = member.Name
+		}
+	}
+	// V2 的额度挂在俱乐部（union_quota），代理不再有独立额度：
+	// 成员树里只给群主显示俱乐部额度，其他节点的旧 club_agent_info.quota 不再展示。
+	for index := range members {
+		if members[index].Role == "owner" {
+			members[index].QuotaFen = detail.Club.OwnerQuotaFen
+		} else {
+			members[index].QuotaFen = nil
 		}
 	}
 	for index := range members {
@@ -543,11 +530,11 @@ FROM kbedm.club_invite_code_info WHERE club_guuid = ? AND status = 'used'`, club
 }
 
 type rawClubMember struct {
-	Guuid     string
-	Name      string
-	IsOwner   bool
-	Manages   bool
-	ClubGold  *int64
+	Guuid    string
+	Name     string
+	IsOwner  bool
+	Manages  bool
+	ClubGold *int64
 }
 
 // readClubMembers 读取俱乐部成员并定角色、定直属上级。
@@ -835,318 +822,6 @@ func assignLevels(nodes []*clubMemberTree, level int) {
 		node.Level = level
 		assignLevels(node.Children, level+1)
 	}
-}
-
-type adjustClubQuotaRequest struct {
-	PlayerID          string   `json:"playerId"`
-	Action            string   `json:"action"`
-	AmountYuan        float64  `json:"amountYuan"`
-	Reason            string   `json:"reason"`
-	ExpectedQuotaYuan *float64 `json:"expectedQuotaYuan"`
-	Confirm           bool     `json:"confirm"`
-}
-
-type clubQuotaState struct {
-	PlayerID  string  `json:"playerId"`
-	ClubID    string  `json:"clubId"`
-	QuotaFen  int64   `json:"quotaFen"`
-	QuotaYuan float64 `json:"quotaYuan"`
-	IsAgent   int     `json:"isAgent"`
-	IsGranted int     `json:"isGranted"`
-	Queried   bool    `json:"queried"`
-}
-
-// handleAdjustClubQuota 给俱乐部群主调整额度。
-// 依据《俱乐部积分与额度方案-客户端接口文档》§7：增加_俱乐部_额度，单位是分，
-// 允许负值纠错但结果不能小于 0。
-func (s *Server) handleAdjustClubQuota(w http.ResponseWriter, r *http.Request, p principal) {
-	clubID, err := normalizeClubID(r.PathValue("clubId"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_CLUB_ID", err.Error())
-		return
-	}
-	var input adjustClubQuotaRequest
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	playerID, err := normalizeGamePlayerID(input.PlayerID)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
-		return
-	}
-	input.Action = strings.TrimSpace(strings.ToLower(input.Action))
-	if input.Action != "add" && input.Action != "subtract" {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_ACTION", "请选择增加或扣减额度")
-		return
-	}
-	if math.IsNaN(input.AmountYuan) || math.IsInf(input.AmountYuan, 0) {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "额度必须是数字")
-		return
-	}
-	deltaFen := int64(math.Round(math.Abs(input.AmountYuan) * 100))
-	if deltaFen == 0 {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "额度金额不能为 0")
-		return
-	}
-	if deltaFen > 100000000 {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "单次调整不能超过 100 万元")
-		return
-	}
-	if input.Action == "subtract" {
-		deltaFen = -deltaFen
-	}
-	if input.Reason, err = normalizeAdjustmentReason(input.Reason); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_REASON", err.Error())
-		return
-	}
-	if !input.Confirm {
-		writeError(w, http.StatusBadRequest, "ADJUSTMENT_CONFIRM_REQUIRED", "请确认本次操作会直接改变俱乐部额度")
-		return
-	}
-	if err := s.ensureClubOwner(r.Context(), clubID, playerID); err != nil {
-		var mismatch *clubMemberMismatch
-		if errors.As(err, &mismatch) {
-			writeError(w, http.StatusBadRequest, "CLUB_OWNER_REQUIRED", mismatch.Error())
-			return
-		}
-		s.logger.Error("verify club owner", "error", err, "clubId", clubID, "playerId", playerID)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验俱乐部群主失败")
-		return
-	}
-
-	clubQuotaMutationMu.Lock()
-	defer clubQuotaMutationMu.Unlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	before, beforeErr := s.queryClubQuota(ctx, clubID, playerID)
-	known := beforeErr == nil && before.Queried
-	if !known && beforeErr != nil {
-		s.logger.Error("query club quota before adjust", "error", beforeErr, "clubId", clubID, "playerId", playerID)
-	}
-	if known && input.ExpectedQuotaYuan != nil &&
-		math.Abs(before.QuotaYuan-*input.ExpectedQuotaYuan) > 0.005 {
-		writeError(w, http.StatusConflict, "QUOTA_CHANGED", "该成员额度已变化，请刷新后重新操作")
-		return
-	}
-	if known && deltaFen < 0 && before.QuotaFen+deltaFen < 0 {
-		writeError(w, http.StatusConflict, "INSUFFICIENT_QUOTA", "扣减后额度会小于 0，请先核对当前额度")
-		return
-	}
-
-	operationContext := gameOperationContext("club-quota")
-	requestAudit := map[string]any{
-		"clubId": clubID, "playerId": playerID, "action": input.Action,
-		"deltaFen": deltaFen, "reason": input.Reason, "context": operationContext,
-	}
-	auditBefore := map[string]any{"quotaFen": before.QuotaFen, "queried": known}
-
-	result, callErr := s.callGameCommand(ctx, "增加_俱乐部_额度", map[string]any{
-		"club_id": clubID, "user_id": playerID, "quota_fen": deltaFen, "context": operationContext,
-	})
-	if callErr != nil {
-		s.audit(ctx, &p, "game.club.quota_adjust", "game_club", clubID, requestAudit, auditBefore, nil,
-			502, "俱乐部额度调整服务调用失败", clientIP(r))
-		writeError(w, http.StatusBadGateway, "QUOTA_ADJUSTMENT_FAILED", "游戏服务调用失败，额度未确认变更")
-		return
-	}
-	if result.RetCode != 512 {
-		message := gameCommandErrorMessage(result, "俱乐部额度调整被拒绝")
-		s.audit(ctx, &p, "game.club.quota_adjust", "game_club", clubID, requestAudit, auditBefore, nil,
-			400, message, clientIP(r))
-		writeError(w, http.StatusBadRequest, "QUOTA_ADJUSTMENT_REJECTED", message)
-		return
-	}
-
-	// 命令受理不等于额度已经变了：能回读就回读，读不到要明确说明，不能装作已校验。
-	after, afterErr := s.waitForClubQuota(ctx, clubID, playerID, before, deltaFen, known)
-	verified := afterErr == nil && after.Queried
-	message := "俱乐部额度已调整，游戏服已回读校验"
-	if !verified {
-		message = "额度调整已提交，但未能回读校验；请稍后在客户端查看额度，确认无误再继续操作"
-		s.logger.Error("verify club quota after adjust", "error", afterErr, "clubId", clubID, "playerId", playerID)
-	}
-	resultCode := 0
-	if !verified {
-		resultCode = 202
-	}
-	s.audit(ctx, &p, "game.club.quota_adjust", "game_club", clubID, requestAudit, auditBefore,
-		map[string]any{"quotaFen": after.QuotaFen, "queried": after.Queried, "verified": verified},
-		resultCode, message, clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{
-		"quota": after, "deltaFen": deltaFen, "verified": verified, "message": message,
-	})
-}
-
-type clubMemberMismatch struct{ message string }
-
-func (m *clubMemberMismatch) Error() string { return m.message }
-
-// ensureClubOwner 只允许给该俱乐部的群主（创建者）调额度。
-// 额度是平台注入代理的钱，后台入口限定在群主这一层，避免绕过游戏服的授信链。
-func (s *Server) ensureClubOwner(ctx context.Context, clubID, playerID string) error {
-	var make, make2 sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT sm_club_make, sm_club_make2
-FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, playerID).Scan(&make, &make2)
-	if errors.Is(err, sql.ErrNoRows) {
-		return &clubMemberMismatch{"没有找到这个玩家"}
-	}
-	if err != nil {
-		return err
-	}
-	if !containsClubID(make.String, clubID) && !containsClubID(make2.String, clubID) {
-		return &clubMemberMismatch{"该玩家不是这个俱乐部的群主，额度调整只允许给群主"}
-	}
-	return nil
-}
-
-// queryClubQuota 读该成员在当前俱乐部的额度。
-// 游戏服的 GetClubQuota 走异步推送，后台按同步通道取；取不到就标记未确认，
-// 绝不能把「读不到」当成 0。
-// 游戏服的 查询_俱乐部_额度 只走 GetClubQuota 异步推送，同步回包通常是空壳，
-// 后台拿不到推送、也就无法据此校验。额度真正的落库点在 club_agent_info.quota（bigint，单位分），
-// 游戏服自己读写这一列，所以后台以它为准：先读库，读不到再退回命令（兼容只推异步的环境）。
-func (s *Server) queryClubQuota(ctx context.Context, clubID, playerID string) (clubQuotaState, error) {
-	state := clubQuotaState{PlayerID: playerID, ClubID: clubID}
-	if err := s.readClubQuotaFromDB(ctx, clubID, playerID, &state); err != nil {
-		return state, err
-	}
-	if state.Queried {
-		return state, nil
-	}
-	// 库里没有该成员的代理行时，再试一次游戏服，仍然只认同步回包里有 quota_fen 的情况。
-	result, err := s.callGameCommand(ctx, "查询_俱乐部_额度", map[string]any{
-		"club_id": clubID, "user_id": playerID,
-		"context": gameOperationContext("club-quota-query"),
-	})
-	if err != nil {
-		return state, nil
-	}
-	if result.RetCode != 512 {
-		return state, nil
-	}
-	payload := clubQuotaPayload(result.RetResult)
-	if payload == nil {
-		return state, nil
-	}
-	state.Queried = true
-	state.QuotaFen = payload.QuotaFen
-	state.QuotaYuan = float64(payload.QuotaFen) / 100
-	state.IsAgent = payload.IsAgent
-	state.IsGranted = payload.IsGranted
-	return state, nil
-}
-
-// readClubQuotaFromDB 读 club_agent_info.quota（分）。
-// quota 为 NULL 表示「还没被授信」，与「额度 0」不同：前者 Queried=false，界面显示未确认。
-func (s *Server) readClubQuotaFromDB(ctx context.Context, clubID, playerID string, state *clubQuotaState) error {
-	var quota sql.NullInt64
-	var upper sql.NullString
-	var status sql.NullString
-	err := s.db.QueryRowContext(ctx, `SELECT quota, upper_guuid, status
-FROM kbedm.club_agent_info WHERE club_guuid = ? AND user_guuid = ? LIMIT 1`,
-		clubID, playerID).Scan(&quota, &upper, &status)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if status.String != "" && status.String != "used" {
-		// 关系已失效：不是代理了，不能把旧额度当成可用额度。
-		return nil
-	}
-	state.IsAgent = 1
-	if strings.TrimSpace(upper.String) == "" {
-		state.IsGranted = 1 // 群主没有上级，天然已授信
-	}
-	if !quota.Valid {
-		return nil
-	}
-	state.Queried = true
-	state.IsGranted = 1
-	state.QuotaFen = quota.Int64
-	state.QuotaYuan = float64(quota.Int64) / 100
-	return nil
-}
-
-type clubQuotaPayloadResult struct {
-	QuotaFen  int64
-	IsAgent   int
-	IsGranted int
-}
-
-func clubQuotaPayload(raw json.RawMessage) *clubQuotaPayloadResult {
-	type quotaBody struct {
-		QuotaFen  *float64 `json:"quota_fen"`
-		IsAgent   *int     `json:"is_agent"`
-		IsGranted *int     `json:"is_granted"`
-	}
-	var body quotaBody
-	decode := func(data []byte) bool {
-		if len(strings.TrimSpace(string(data))) == 0 || string(data) == "null" {
-			return false
-		}
-		var direct quotaBody
-		if err := json.Unmarshal(data, &direct); err == nil && direct.QuotaFen != nil {
-			body = direct
-			return true
-		}
-		// 推送形态：{"GetClubQuota": {...}}
-		var wrapped struct {
-			GetClubQuota *quotaBody `json:"GetClubQuota"`
-		}
-		if err := json.Unmarshal(data, &wrapped); err == nil && wrapped.GetClubQuota != nil &&
-			wrapped.GetClubQuota.QuotaFen != nil {
-			body = *wrapped.GetClubQuota
-			return true
-		}
-		return false
-	}
-	if !decode(raw) {
-		var text string
-		if err := json.Unmarshal(raw, &text); err != nil || !decode([]byte(text)) {
-			return nil
-		}
-	}
-	result := &clubQuotaPayloadResult{QuotaFen: int64(math.Round(*body.QuotaFen))}
-	if body.IsAgent != nil {
-		result.IsAgent = *body.IsAgent
-	}
-	if body.IsGranted != nil {
-		result.IsGranted = *body.IsGranted
-	}
-	return result
-}
-
-func (s *Server) waitForClubQuota(ctx context.Context, clubID, playerID string,
-	before clubQuotaState, deltaFen int64, known bool) (clubQuotaState, error) {
-	expected := before.QuotaFen + deltaFen
-	var last clubQuotaState
-	var lastErr error
-	for attempt := 0; attempt < 6; attempt++ {
-		last, lastErr = s.queryClubQuota(ctx, clubID, playerID)
-		if lastErr == nil && last.Queried {
-			if !known || last.QuotaFen == expected {
-				return last, nil
-			}
-		}
-		if attempt < 5 {
-			select {
-			case <-ctx.Done():
-				return last, ctx.Err()
-			case <-time.After(400 * time.Millisecond):
-			}
-		}
-	}
-	if lastErr != nil {
-		return last, lastErr
-	}
-	if !last.Queried {
-		return last, errors.New("俱乐部额度无法回读")
-	}
-	return last, errors.New("俱乐部额度未达到预期值")
 }
 
 func gameCommandErrorMessage(result gameCommandResponse, fallback string) string {

@@ -65,6 +65,34 @@ type currentRoomsResponse struct {
 	RefreshedAt  time.Time      `json:"refreshedAt"`
 }
 
+type clubRoomGroup struct {
+	ClubID            string         `json:"clubId"`
+	ClubName          string         `json:"clubName"`
+	CreatorID         string         `json:"creatorId"`
+	CreatorName       string         `json:"creatorName"`
+	CreatorInviteCode string         `json:"creatorInviteCode"`
+	RoomCount         int            `json:"roomCount"`
+	PlayerCount       int            `json:"playerCount"`
+	WatcherCount      int            `json:"watcherCount"`
+	InholdCount       int            `json:"inholdCount"`
+	Rooms             []hallRoomItem `json:"rooms"`
+}
+
+type clubRoomsResponse struct {
+	Available    bool            `json:"available"`
+	Groups       []clubRoomGroup `json:"groups"`
+	Page         int             `json:"page"`
+	PageSize     int             `json:"pageSize"`
+	TotalClubs   int             `json:"totalClubs"`
+	TotalRooms   int             `json:"totalRooms"`
+	PlayerCount  int             `json:"playerCount"`
+	WatcherCount int             `json:"watcherCount"`
+	InholdCount  int             `json:"inholdCount"`
+	Source       string          `json:"source"`
+	Message      string          `json:"message"`
+	RefreshedAt  time.Time       `json:"refreshedAt"`
+}
+
 type dissolveRoomRequest struct {
 	Mode         string `json:"mode"`
 	Confirm      bool   `json:"confirm"`
@@ -153,6 +181,151 @@ func (s *Server) handleListCurrentRooms(w http.ResponseWriter, r *http.Request, 
 		Message:      "已从 KB 大厅实时内存读取当前活跃房间",
 		RefreshedAt:  time.Now(),
 	})
+}
+
+// handleListClubRooms 按俱乐部聚合 KB 大厅实时房间，供房间维护页只读展示。
+// 现在只做展示：不支持解散房间或修改全局创建开关。
+func (s *Server) handleListClubRooms(w http.ResponseWriter, r *http.Request, _ principal) {
+	page, pageSize := pageParams(r)
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	if len([]rune(keyword)) > 100 {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询文字不能超过 100 个字符")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+	rooms, err := s.fetchAllActiveHallRooms(ctx)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("read KB hall rooms for club grouping failed", "error", err)
+		}
+		writeError(w, http.StatusBadGateway, "ROOM_LIST_UNAVAILABLE", "获取大厅实时房间列表失败，请稍后重试")
+		return
+	}
+
+	groups, lookupErr := s.buildClubRoomGroups(ctx, rooms)
+	if lookupErr != nil && s.logger != nil {
+		// 俱乐部信息是展示增强，查询失败时仍返回房间，避免整个页面不可用。
+		s.logger.Error("lookup club info for room maintenance failed", "error", lookupErr)
+	}
+
+	filtered := make([]clubRoomGroup, 0, len(groups))
+	for _, group := range groups {
+		if keyword == "" || clubRoomGroupMatches(group, keyword) {
+			filtered = append(filtered, group)
+		}
+	}
+	sort.Slice(filtered, func(i, j int) bool {
+		if filtered[i].ClubID == "0" {
+			return false
+		}
+		if filtered[j].ClubID == "0" {
+			return true
+		}
+		return filtered[i].ClubID < filtered[j].ClubID
+	})
+
+	totalClubs, totalRooms, playerCount, watcherCount, inholdCount := 0, 0, 0, 0, 0
+	for _, group := range filtered {
+		totalRooms += group.RoomCount
+		playerCount += group.PlayerCount
+		watcherCount += group.WatcherCount
+		inholdCount += group.InholdCount
+	}
+	totalClubs = len(filtered)
+
+	start := (page - 1) * pageSize
+	end := start + pageSize
+	if start > totalClubs {
+		start = totalClubs
+	}
+	if end > totalClubs {
+		end = totalClubs
+	}
+	paged := append([]clubRoomGroup{}, filtered[start:end]...)
+
+	writeData(w, http.StatusOK, clubRoomsResponse{
+		Available:    true,
+		Groups:       paged,
+		Page:         page,
+		PageSize:     pageSize,
+		TotalClubs:   totalClubs,
+		TotalRooms:   totalRooms,
+		PlayerCount:  playerCount,
+		WatcherCount: watcherCount,
+		InholdCount:  inholdCount,
+		Source:       "kb_hall_active_rooms",
+		Message:      "已按俱乐部聚合 KB 大厅实时房间",
+		RefreshedAt:  time.Now(),
+	})
+}
+
+func groupHallRooms(rooms []hallRoomItem) (map[string]*clubRoomGroup, []string) {
+	groupMap := make(map[string]*clubRoomGroup)
+	clubIDs := make([]string, 0)
+	for _, room := range rooms {
+		clubID := strings.TrimSpace(room.ClubID)
+		if clubID == "" {
+			clubID = "0"
+		}
+		group, ok := groupMap[clubID]
+		if !ok {
+			group = &clubRoomGroup{ClubID: clubID, ClubName: strings.TrimSpace(room.ClubName), Rooms: []hallRoomItem{}}
+			groupMap[clubID] = group
+			if clubID != "0" {
+				clubIDs = append(clubIDs, clubID)
+			}
+		}
+		if group.ClubName == "" {
+			group.ClubName = strings.TrimSpace(room.ClubName)
+		}
+		group.Rooms = append(group.Rooms, room)
+		group.RoomCount++
+		group.PlayerCount += room.PlayerCount
+		group.WatcherCount += room.WatcherCount
+		group.InholdCount += room.InholdCount
+	}
+	return groupMap, clubIDs
+}
+
+func (s *Server) buildClubRoomGroups(ctx context.Context, rooms []hallRoomItem) ([]clubRoomGroup, error) {
+	groupMap, clubIDs := groupHallRooms(rooms)
+
+	infos, lookupErr := s.lookupClubInfo(ctx, clubIDs)
+	if lookupErr != nil {
+		infos = map[string]clubLookupInfo{}
+	}
+	groups := make([]clubRoomGroup, 0, len(groupMap))
+	for _, group := range groupMap {
+		if group.ClubID != "0" {
+			info := infos[group.ClubID]
+			if info.ClubName != "" {
+				group.ClubName = info.ClubName
+			}
+			group.CreatorID = info.OwnerID
+			group.CreatorName = info.OwnerName
+			group.CreatorInviteCode = info.InviteCode
+		} else if group.ClubName == "" {
+			group.ClubName = "未归属俱乐部"
+		}
+		sort.Slice(group.Rooms, func(i, j int) bool { return group.Rooms[i].RoomID < group.Rooms[j].RoomID })
+		groups = append(groups, *group)
+	}
+	return groups, lookupErr
+}
+
+func clubRoomGroupMatches(group clubRoomGroup, keyword string) bool {
+	needle := strings.ToLower(strings.TrimSpace(keyword))
+	if needle == "" {
+		return true
+	}
+	for _, value := range []string{group.ClubID, group.ClubName, group.CreatorID, group.CreatorName, group.CreatorInviteCode} {
+		if strings.Contains(strings.ToLower(value), needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func hallRoomPageParams(r *http.Request) (int, int) {
@@ -489,7 +662,7 @@ func (s *Server) fetchAllActiveHallRooms(ctx context.Context) ([]hallRoomItem, e
 	total := 0
 	for page := 0; page < maxPages; page++ {
 		result, err := s.callGameCommand(ctx, "查询_大厅_所有房间", map[string]any{
-			"page": page, "count": hallRoomMaxPageSize, "context": gameOperationContext("room-dissolve-verify"),
+			"page": page, "count": hallRoomMaxPageSize, "context": gameOperationContext("hall-room-list"),
 		})
 		if err != nil {
 			return nil, err

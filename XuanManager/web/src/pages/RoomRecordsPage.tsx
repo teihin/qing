@@ -17,8 +17,8 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
   const [list, setList] = useState<RoomRecordListResponse | null>(null);
   const [listLoading, setListLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [draftFilters, setDraftFilters] = useState({ keyword: "", dateFrom: "", dateTo: "" });
-  const [filters, setFilters] = useState({ keyword: "", dateFrom: "", dateTo: "" });
+  const [draftFilters, setDraftFilters] = useState({ keyword: "", club: "", inviteCode: "", dateFrom: "", dateTo: "" });
+  const [filters, setFilters] = useState({ keyword: "", club: "", inviteCode: "", dateFrom: "", dateTo: "" });
   const [roomId, setRoomId] = useState(initialRoomId);
   const [data, setData] = useState<RoomRecordResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -34,6 +34,8 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
     setListLoading(true);
     const params = new URLSearchParams({ page: String(page), pageSize: "20" });
     if (filters.keyword) params.set("keyword", filters.keyword);
+    if (filters.club) params.set("club", filters.club);
+    if (filters.inviteCode) params.set("inviteCode", filters.inviteCode);
     if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
     if (filters.dateTo) params.set("dateTo", filters.dateTo);
     try {
@@ -92,23 +94,27 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
       setPage(1);
       setFilters({
         keyword: draftFilters.keyword.trim(),
+        club: draftFilters.club.trim(),
+        inviteCode: draftFilters.inviteCode.trim(),
         dateFrom: draftFilters.dateFrom,
         dateTo: draftFilters.dateTo,
       });
       refreshListQuery();
     };
     const resetFilters = () => {
-      const empty = { keyword: "", dateFrom: "", dateTo: "" };
+      const empty = { keyword: "", club: "", inviteCode: "", dateFrom: "", dateTo: "" };
       setDraftFilters(empty); setFilters(empty); setPage(1);
       refreshListQuery();
     };
     return (
       <div className="page-stack">
-        <PageHeader eyebrow="ROOM GAME ARCHIVE" title="房间战绩" description="先从已结算房间列表中筛选房间，再进入查看整房战绩、逐局牌面和操作过程。" actions={<span className="readonly-badge"><i />战绩只读</span>} />
+        <PageHeader eyebrow="ROOM GAME ARCHIVE" title="房间战绩" description="先按房间、俱乐部或创建者邀请码筛选已结算房间，再进入查看整房战绩、逐局牌面和操作过程。" actions={<span className="readonly-badge"><i />战绩只读</span>} />
         <section className="panel room-list-filter">
-          <div className="room-list-filter__copy"><span>ROOM DIRECTORY</span><strong>筛选已结算房间</strong><p>支持房间号、房间名和参与玩家，默认按最新战绩排序。</p></div>
+          <div className="room-list-filter__copy"><span>ROOM DIRECTORY</span><strong>筛选已结算房间</strong><p>支持房间号、房间名、参与玩家、俱乐部 ID/名称和创建者邀请码，默认按最新战绩排序。</p></div>
           <form onSubmit={(event) => { event.preventDefault(); submitFilters(); }}>
             <label className="room-list-keyword"><span>房间或玩家</span><input value={draftFilters.keyword} onChange={(event) => setDraftFilters((value) => ({ ...value, keyword: event.target.value }))} placeholder="房间号 / 房间名 / 玩家" autoComplete="off" /></label>
+            <label><span>俱乐部 ID / 名称</span><input value={draftFilters.club} onChange={(event) => setDraftFilters((value) => ({ ...value, club: event.target.value }))} placeholder="例如 535696 或 功能测试" autoComplete="off" /></label>
+            <label><span>创建者邀请码</span><input value={draftFilters.inviteCode} onChange={(event) => setDraftFilters((value) => ({ ...value, inviteCode: event.target.value }))} placeholder="例如 928882" autoComplete="off" /></label>
             <label><span>开始日期</span><input type="date" value={draftFilters.dateFrom} onChange={(event) => setDraftFilters((value) => ({ ...value, dateFrom: event.target.value }))} /></label>
             <label><span>结束日期</span><input type="date" value={draftFilters.dateTo} onChange={(event) => setDraftFilters((value) => ({ ...value, dateTo: event.target.value }))} /></label>
             <div className="room-list-filter__actions"><button type="button" onClick={resetFilters}>重置</button><button type="submit">查询房间</button></div>
@@ -147,14 +153,14 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
 }
 
 function RoomRecordList({ items, onOpen }: { items: RoomRecordListItem[]; onOpen: (roomId: string) => void }) {
-  return <div className="table-wrap"><table className="room-record-list-table"><thead><tr><th>房间</th><th>地九王</th><th>参与玩家</th><th>局数 / 人数</th><th>累计带入</th><th>房间时间（北京时间）</th><th>状态</th><th>操作</th></tr></thead><tbody>{items.map((item) => <tr key={item.roomId} className="room-record-list-row" tabIndex={0} onClick={() => onOpen(item.roomId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(item.roomId); } }} aria-label={`查看房间 ${item.roomId} 战绩`}><td><strong className="room-list-id">{item.roomId}</strong><small className="cell-subtitle">{item.roomName || "未记录房间名"}</small></td><td>{item.isDijiuKing ? <DijiuKingBadge /> : null}</td><td><span className="room-list-participants">{item.participants.slice(0, 3).join("、") || "未记录"}</span>{item.participants.length > 3 && <small className="cell-subtitle">另有 {item.participants.length - 3} 名玩家</small>}</td><td><strong>{item.roundCount} 局</strong><small className="cell-subtitle">{item.playerCount} 名玩家</small></td><td><strong>{scoreFormatter.format(item.totalBuyIn)}</strong></td><td><span>{formatBeijingDateTime(item.startedAt || item.recordedAt)}</span><small className="cell-subtitle">至 {formatBeijingDateTime(item.endedAt || item.recordedAt)}</small></td><td><span className="room-list-status"><i />已结算</span></td><td><button type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.roomId); }}>查看战绩</button></td></tr>)}</tbody></table></div>;
+  return <div className="table-wrap"><table className="room-record-list-table"><thead><tr><th>房间</th><th>俱乐部</th><th>地九王</th><th>参与玩家</th><th>局数 / 人数</th><th>累计带入</th><th>房间时间（北京时间）</th><th>状态</th><th>操作</th></tr></thead><tbody>{items.map((item) => <tr key={item.roomId} className="room-record-list-row" tabIndex={0} onClick={() => onOpen(item.roomId)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(item.roomId); } }} aria-label={`查看房间 ${item.roomId} 战绩`}><td><strong className="room-list-id">{item.roomId}</strong><small className="cell-subtitle">{item.roomName || "未记录房间名"}</small></td><td>{item.clubId ? <><strong className="room-club-name">{item.clubName || item.clubId}</strong><small className="cell-subtitle">ID {item.clubId} · 邀请码 {item.creatorInviteCode || "—"}</small></> : <span className="room-club-missing">未归属俱乐部</span>}</td><td>{item.isDijiuKing ? <DijiuKingBadge /> : null}</td><td><span className="room-list-participants">{item.participants.slice(0, 3).join("、") || "未记录"}</span>{item.participants.length > 3 && <small className="cell-subtitle">另有 {item.participants.length - 3} 名玩家</small>}</td><td><strong>{item.roundCount} 局</strong><small className="cell-subtitle">{item.playerCount} 名玩家</small></td><td><strong>{scoreFormatter.format(item.totalBuyIn)}</strong></td><td><span>{formatBeijingDateTime(item.startedAt || item.recordedAt)}</span><small className="cell-subtitle">至 {formatBeijingDateTime(item.endedAt || item.recordedAt)}</small></td><td><span className="room-list-status"><i />已结算</span></td><td><button type="button" onClick={(event) => { event.stopPropagation(); onOpen(item.roomId); }}>查看战绩</button></td></tr>)}</tbody></table></div>;
 }
 
 function RoomOverview({ data }: { data: RoomRecordResponse }) {
   const room = data.room;
   const rules = [room.baseRule, room.mangoRule, room.durationRule].filter(Boolean);
   return <>
-    <section className="room-record-hero"><div className="room-record-hero__mark">{room.roomName || `1-${room.roomId}`}</div><div><span className="eyebrow">ROOM SUMMARY</span><h2>房间 {room.roomId}</h2>{room.isDijiuKing && <p><DijiuKingBadge /></p>}<div className="room-rule-tags">{rules.map((rule) => <span key={rule}>{rule}</span>)}</div></div><div className="room-record-period"><small>房间时间（北京时间）</small><strong>{formatBeijingDateTime(room.startedAt)}</strong><i>至</i><strong>{formatBeijingDateTime(room.endedAt)}</strong></div></section>
+    <section className="room-record-hero"><div className="room-record-hero__mark">{room.roomName || `1-${room.roomId}`}</div><div><span className="eyebrow">ROOM SUMMARY</span><h2>房间 {room.roomId}</h2>{room.isDijiuKing && <p><DijiuKingBadge /></p>}<p className="room-record-club">{room.clubId ? <>俱乐部 <strong>{room.clubName || room.clubId}</strong>（{room.clubId}） · 创建者 {room.creatorName || "—"} · 邀请码 {room.creatorInviteCode || "—"}</> : "未归属俱乐部"}</p><div className="room-rule-tags">{rules.map((rule) => <span key={rule}>{rule}</span>)}</div></div><div className="room-record-period"><small>房间时间（北京时间）</small><strong>{formatBeijingDateTime(room.startedAt)}</strong><i>至</i><strong>{formatBeijingDateTime(room.endedAt)}</strong></div></section>
     <section className="room-record-metrics"><RoomMetric label="实际牌局" value={`${room.roundCount} 局`} note={`${room.playerCount} 名玩家形成总战绩`} /><RoomMetric label="房间累计带入" value={scoreFormatter.format(room.totalBuyIn)} note="所有玩家累计带入合计" /><RoomMetric label="玩家总赢分" value={`+${scoreFormatter.format(room.totalWin)}`} note={`总输分 ${scoreFormatter.format(room.totalLoss)}`} tone="win" /><RoomMetric label="战绩总差额" value={formatScore(room.scoreBalance)} note="包含芒果、玩法扣分等差额" tone={room.scoreBalance >= 0 ? "win" : "loss"} /></section>
   </>;
 }

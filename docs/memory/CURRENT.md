@@ -1,16 +1,32 @@
 # qing 当前状态
 
-更新时间：2026-11-02
+更新时间：2026-11-03
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-03 后台玩家管理：钻石余额 + 所在俱乐部（已部署）
+
+- 玩家列表改为钻石余额/所在俱乐部，去掉现金余额、等级/角色/直属代理；加减分改加减钻石。详情页签改为「基本资料/所在俱乐部/房间战绩」，俱乐部页显示角色、俱乐部金币、上级及下级。
+- 新增 `GET .../clubs`、`.../subordinates`、`POST .../stone-adjustments`；加减钻石校验基准与扣减上限，调用 `异步_设置_玩家_属性` 并回读 `sm_stone`。
+- 2026-11-03 已部署正式（后端 `6cb80fd0…`、前端 `index-DJL003ny.js`）；健康 200，三个新接口未登录均 401。真实数据与页面交互待验收，见[交接](handoffs/2026-11-03-admin-player-diamonds-clubs.md)。
+
 ## 2026-11-02 玩家设置「赠送」改口径 + 新增「上下分」（未构建、未真机）
 
-- 成员设置「赠送」改走 **`赠送_俱乐部_积分`**（扣自己积分，房间头像入口同改），不再误用 `添加_俱乐部_成员_积分`；「赠送」下方新增 **「玩家设置上下分」** 按钮（206,366，复用赠送底图）。
-- 点「上下分」**直接复用私聊页 `panelClubGoldPad`**（上分/下分+快捷金额+交易密码），入口 `{clubId,userId,userName,mode:"updown",entry:"settings"}`；`entry=settings` 时成功后弹 `panelMsgView`、不插聊天系统通报条。显示条件：自己 `查询_俱乐部_额度` 为 `is_agent=1 && is_granted=1`（20s 缓存）。
-- **成员列表自己那一行可点开**，面板里只留「赠送/上下分」，其余管理操作（设代理/比例/备注/额度/踢出）一律收起。两个行模板末尾各加透明「玩家热区」节点（`cc.Button` 无 Sprite，避开「对话」）把点击区从 70×70 头像扩到整块资料区。
-- 成功回包后 `ClubGoldGiftChanged(clubId, userId)`：大厅刷自己的金币/额度与赠送记录，`ClubManagementView.OnPlayerGoldChanged` 重取当前页（+1.5s 补一次）并就地更新设置卡积分/额度。
-- 已改 `ClubManagementView.ts`、`panelGivePad.ts`、`panelMain.ts`、`panelClubGoldPad.ts`、`panelMain.prefab`；TS 转译 0 诊断、Prefab 引用检查与 Creator 编译/导入通过。真实回包、构建、真机待验证。详见[交接](handoffs/2026-11-02-club-gift-updown.md)。
+- 成员设置「赠送」改走 **`赠送_俱乐部_积分`**；新增「玩家设置上下分」复用 `panelClubGoldPad`，`entry=settings` 成功后弹提示、不插聊天通报；自己那行可点开，管理操作收起，行模板加透明热区扩大点击区。
+- 已改 `ClubManagementView.ts`、`panelGivePad.ts`、`panelMain.ts`、`panelClubGoldPad.ts`、`panelMain.prefab`；TS/Prefab/Creator 编译通过，真实回包、构建、真机待验证。详见[交接](handoffs/2026-11-02-club-gift-updown.md)。
+
+## 2026-11-03 后台联盟管理与「调整群主额度」（已部署）
+
+- 新增 `/game/unions`（`game.union.view`）：联盟列表/联盟池/成员数，「详情」跳 `/game/clubs?unionId=...` 过滤下辖俱乐部。
+- 俱乐部列表新增联盟列、V2 额度（`club_guuid_info.union_quota`）和「调整群主额度」：平台只调用 `增加_联盟_额度` 给联盟池注资，俱乐部额度仍由总群主授信。
+- 09:53 已部署：后端 `8a3f2627…`、前端 `index-Dvwrp3Q8.js`，迁移 `042` 已执行；回滚 `backups/xuanmanager.20261103-0952-rollback` + `web.previous-union-management-20261103-0952`。未做登录态/注资验收。见[交接](handoffs/2026-11-03-admin-union-management.md)。
+- 09:59 按 club 模式在导航隐藏「代理管理/交易记录/交易黑名单」（模块与权限保留，standard 模式恢复）；见[交接](handoffs/2026-11-03-admin-club-mode-hidden-modules.md)。
+
+## 2026-11-03 房间战绩俱乐部信息 + 房间维护只读改造（已部署）
+
+- 房间战绩列表/详情增加俱乐部名称、俱乐部 ID、创建者和创建者邀请码；支持按俱乐部 ID/名称和创建者邀请码筛选。
+- 房间维护改为按俱乐部聚合的只读页：一级俱乐部、展开二级房间，移除解散/全部解散/全局创建开关；支持按俱乐部/创建者/邀请码查询。
+- 10:21 已部署正式：后端 `2865d24c…`、前端 `index-efi7NGCa.js`/`index-BJt7iv_1.css`；新接口未登录 401，已移除写接口 404；回滚 `backups/xuanmanager.20261103-1020-rollback` + `web.previous-room-clubs-20261103-1020`。未做登录态验收；KB 当前 0 个活跃房间。见[交接](handoffs/2026-11-03-admin-room-records-club-maintenance.md)。
 
 ## 2026-11-01 我的页俱乐部金币流水接口（未构建、未真机）
 
@@ -26,14 +42,9 @@
 
 ## 2026-11-01 私聊上下分入口与弹窗（未构建、未真机）
 
-- 直聊消息页新增「上下分」入口：当前会话操作者为群主/盟主时显示；代理需先通过 `查询_俱乐部_额度` 返回 `is_agent=1 && is_granted=1` 且 `quota_fen > 0` 才显示。普通成员、未授信代理和无可用额度代理隐藏，最终权限仍由大厅服务端校验。
-- 新增独立 `panelClubGoldPad` Prefab/脚本（634×870，`bk` 居中、关闭按钮右上 Widget）：玩家名、金额、交易密码、100～50000 快捷金额、上分/下分。**上分/下分走 `panelMsgView` 二次确认**，确定后统一发 `添加_俱乐部_成员_积分`（下分传负数 `user_add_gold`，`修改_俱乐部_成员_积分` 服务端有问题、不再使用），成功通知 `ClubGoldGiftChanged`。
-- 成功后不再弹提示框，改为在聊天列表发一条 **system 消息**（和文字/图片/语音同样走 `/api/direct`，存库、重进可见、对方也能看到）：`消息-系统` 模板 + `系统消息底.png`，居中通栏、左侧金条，区别于左右气泡；上行完整年月日时分秒，下行「玩家 X 上分 N 成功，积分 A → B」。服务端只放行 owner/leader/agent 且文案必须匹配固定正则；余额只取回包字段、拿不到就省略该段。详见交接。
-- 底部入口扩成四个：拍照上传 / 发送图片 / 赠送积分 / 上下分。**代理没有可用额度时显示「赠送积分」**（与「上下分」互斥），赠送对象是玩家、管理员**和代理**（下级/同级代理；群主、盟主不显示）；点开是 `panelClubGoldPad` 的 `give` 模式（标题「赠送积分」、单按钮「确认赠送」、提示说明扣自己积分）。**赠送走独立命令 `赠送_俱乐部_积分`**（`club_id/user_id/user_add_gold/user_pwd`，扣自己积分、不动额度；上分那条 `添加_俱乐部_成员_积分` 是代理按额度发筹码，用它赠送等于白送），成功后系统消息文案为「玩家 X 赠送 N 成功」。
-- 美术已整套重做（不再复用 V7 赠送弹窗资源）：`assets/ImagesLuck/上下分/` 放面板/输入框/胶囊/双按钮/美术字，入口图标 `assets/ImagesLuck/聊天/上下分.png` 复用「拍照上传」底框像素。聊天页底部三按钮改 `LEFT/CENTER/RIGHT + bottom 76` 的 Widget。
-- 三个可复现工具：`tools/gen_chat_gold_pad_art.py`（画图）、`apply_chat_gold_pad_layout.py`（补 `.meta` + 重建 prefab）、`preview_chat_gold_pad.py`（离线渲染设计稿）。
-- 两个必记的引擎行为：**EditBox 不排版子 Label**（必须 `Widget(45)` 铺满 + `verticalAlign` 居中）；**`InputFlag` 中 PASSWORD=0、DEFAULT=5**（写 0 会让普通输入框变 ●●●）。
-- 静态检查通过（Prefab `__id__`/父子/`fileId` 完整、TS 转译 0 诊断、`inputFlag` 与 Widget 断言）；Creator 导入、实际大厅回包、构建、双账号和真机交互仍待验证。详见[交接](handoffs/2026-11-01-chat-gold-pad.md)。
+- 直聊消息页新增「上下分」入口，代理按 `查询_俱乐部_额度` 的 `is_agent/is_granted` 控制显示；新增 `panelClubGoldPad`（上分/下分/赠送），上分/下分走 `panelMsgView` 二次确认，赠送走独立 `赠送_俱乐部_积分`（扣自己积分、不动额度）。
+- 成功后在聊天列表写入 `消息-系统` 系统消息（`/api/direct` 存库），服务端校验 owner/leader/agent 与固定文案；聊天页底部扩为拍照/图片/赠送/上下分四入口。
+- 美术与布局、EditBox 排版/InputFlag 引擎坑、离线检查与未验证项详见[交接](handoffs/2026-11-01-chat-gold-pad.md)。
 
 ## 2026-11-01 俱乐部成员额度展示与授信（未构建、未真机）
 

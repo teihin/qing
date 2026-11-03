@@ -31,33 +31,41 @@ type playerFilters struct {
 }
 
 type playerItem struct {
-	ID               int64      `json:"id"`
-	PlayerID         string     `json:"playerId"`
-	LoginName        string     `json:"loginName"`
-	AccountName      string     `json:"accountName"`
-	Name             string     `json:"name"`
-	Photo            string     `json:"photo"`
-	Sex              string     `json:"sex"`
-	Role             string     `json:"role"`
-	Gold             int64      `json:"gold"`
-	Gold2            int64      `json:"gold2"`
-	Balance          float64    `json:"balance"`
-	Stone            int64      `json:"stone"`
-	Level            int64      `json:"level"`
-	VIP              int64      `json:"vip"`
-	VIPLevel         int64      `json:"vipLevel"`
-	AgentID          string     `json:"agentId"`
-	AgentName        string     `json:"agentName"`
-	RoomID           int64      `json:"roomId"`
-	RoomType         string     `json:"roomType"`
-	ClientVersion    string     `json:"clientVersion"`
-	ClientStatus     string     `json:"clientStatus"`
-	TotalRounds      int64      `json:"totalRounds"`
-	TotalScore       int64      `json:"totalScore"`
-	RegistrationTime string     `json:"registrationTime"`
-	LastLoginAt      *time.Time `json:"lastLoginAt"`
-	LoginCount       int64      `json:"loginCount"`
-	Remark           string     `json:"remark"`
+	ID               int64               `json:"id"`
+	PlayerID         string              `json:"playerId"`
+	LoginName        string              `json:"loginName"`
+	AccountName      string              `json:"accountName"`
+	Name             string              `json:"name"`
+	Photo            string              `json:"photo"`
+	Sex              string              `json:"sex"`
+	Role             string              `json:"role"`
+	Gold             int64               `json:"gold"`
+	Gold2            int64               `json:"gold2"`
+	Balance          float64             `json:"balance"`
+	Stone            int64               `json:"stone"`
+	Level            int64               `json:"level"`
+	VIP              int64               `json:"vip"`
+	VIPLevel         int64               `json:"vipLevel"`
+	AgentID          string              `json:"agentId"`
+	AgentName        string              `json:"agentName"`
+	RoomID           int64               `json:"roomId"`
+	RoomType         string              `json:"roomType"`
+	ClientVersion    string              `json:"clientVersion"`
+	ClientStatus     string              `json:"clientStatus"`
+	TotalRounds      int64               `json:"totalRounds"`
+	TotalScore       int64               `json:"totalScore"`
+	RegistrationTime string              `json:"registrationTime"`
+	LastLoginAt      *time.Time          `json:"lastLoginAt"`
+	LoginCount       int64               `json:"loginCount"`
+	Remark           string              `json:"remark"`
+	Clubs            []playerClubSummary `json:"clubs"`
+
+	// 俱乐部关系分散在五个逗号分隔列里，只用于拼 Clubs，不直接返回前端。
+	clubMake   string
+	clubJoin   string
+	clubMake2  string
+	clubJoin2  string
+	clubManage string
 }
 
 func (s *Server) handleListPlayers(w http.ResponseWriter, r *http.Request, _ principal) {
@@ -91,7 +99,10 @@ a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
 a.sm_vip, a.sm_vip_level, a.sm_agentID, COALESCE(agent.sm_name, ''),
 a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status,
 a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
-FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark
+FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
+COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
+COALESCE(a.sm_club_make2, ''), COALESCE(a.sm_club_join2, ''),
+COALESCE(a.sm_club_manage, '')
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
@@ -116,6 +127,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 			&item.RoomID, &item.RoomType, &item.ClientVersion, &item.ClientStatus,
 			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
 			&lastLogin, &item.LoginCount, &item.Remark,
+			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.clubManage,
 		); err != nil {
 			s.logger.Error("scan game player", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")
@@ -129,6 +141,11 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	if err := rows.Err(); err != nil {
 		s.logger.Error("iterate game players", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")
+		return
+	}
+	if err := s.attachPlayerClubs(r.Context(), items); err != nil {
+		s.logger.Error("attach player clubs", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家所在俱乐部失败")
 		return
 	}
 

@@ -59,3 +59,20 @@ func TestReplaceUserSessionStopsWhenUserCannotBeLocked(t *testing.T) {
 		t.Fatalf("unexpected statements after user lock failure: %#v", executor.queries)
 	}
 }
+
+func TestClubModeHidesStandardOnlyModules(t *testing.T) {
+	items := []moduleItem{
+		{Code: "dashboard"},
+		{Code: "game.agents"},
+		{Code: "game.transactions"},
+		{Code: "game.transaction_blacklist"},
+		{Code: "game.clubs"},
+	}
+	filtered := filterModulesForGameMode(items, "club")
+	if len(filtered) != 2 || filtered[0].Code != "dashboard" || filtered[1].Code != "game.clubs" {
+		t.Fatalf("club mode should hide agents/transactions/blacklist, got %+v", filtered)
+	}
+	if standard := filterModulesForGameMode(items, "standard"); len(standard) != len(items) {
+		t.Fatalf("standard mode must keep every module, got %+v", standard)
+	}
+}

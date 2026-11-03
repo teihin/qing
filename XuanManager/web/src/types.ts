@@ -195,6 +195,41 @@ export interface PlayerBalanceAdjustmentResult {
   message: string;
 }
 
+export interface PlayerStoneAdjustmentResult {
+  player: { playerId: string; name: string; stone: number; roomId: number };
+  delta: number;
+  context: string;
+  message: string;
+}
+
+export interface PlayerClubRef {
+  clubId: string;
+  name: string;
+}
+
+export interface PlayerClubMembership {
+  clubId: string;
+  clubName: string;
+  clubStatus: string;
+  clubMode: string;
+  role: string;
+  roleLabel: string;
+  clubGold: number | null;
+  upperId: string;
+  upperName: string;
+}
+
+export interface PlayerClubSubordinate {
+  playerId: string;
+  name: string;
+  role: string;
+  roleLabel: string;
+  clubGold: number | null;
+  upperId: string;
+  upperName: string;
+  depth: number;
+}
+
 export interface PlayerPasswordResetResult {
   playerId: string;
   message: string;
@@ -239,6 +274,35 @@ export interface CurrentRoomsResponse {
   page: number;
   pageSize: number;
   total: number;
+  playerCount: number;
+  watcherCount: number;
+  inholdCount: number;
+  source: string;
+  message: string;
+  refreshedAt: string;
+}
+
+/** 房间维护：按俱乐部聚合的实时房间。 */
+export interface ClubRoomGroup {
+  clubId: string;
+  clubName: string;
+  creatorId: string;
+  creatorName: string;
+  creatorInviteCode: string;
+  roomCount: number;
+  playerCount: number;
+  watcherCount: number;
+  inholdCount: number;
+  rooms: CurrentRoomItem[];
+}
+
+export interface ClubRoomsResponse {
+  available: boolean;
+  groups: ClubRoomGroup[];
+  page: number;
+  pageSize: number;
+  totalClubs: number;
+  totalRooms: number;
   playerCount: number;
   watcherCount: number;
   inholdCount: number;
@@ -447,6 +511,7 @@ export interface PlayerItem {
   lastLoginAt: string | null;
   loginCount: number;
   remark: string;
+  clubs: PlayerClubRef[];
 }
 
 export interface PlayerRoomSummary {
@@ -689,6 +754,11 @@ export interface TransactionResponse {
 export interface RoomRecordOverview {
   roomId: string;
   roomName: string;
+  clubId: string;
+  clubName: string;
+  creatorId: string;
+  creatorName: string;
+  creatorInviteCode: string;
   startedAt: string;
   endedAt: string;
   roundCount: number;
@@ -708,6 +778,11 @@ export interface RoomRecordOverview {
 export interface RoomRecordListItem {
   roomId: string;
   roomName: string;
+  clubId: string;
+  clubName: string;
+  creatorId: string;
+  creatorName: string;
+  creatorInviteCode: string;
   isDijiuKing: boolean;
   recordedAt: string;
   startedAt: string;
@@ -848,8 +923,14 @@ export interface ClubListItem {
   agentCount: number;
   tax: string;
   payMode: string;
+  /** 旧双向结盟字段（V2 已停用），仅保留兼容。 */
   union: string;
-  /** 群主在当前俱乐部的可用额度（分）。null = 无代理行或未授信，不能显示成 0。 */
+  /** V2 联盟归属；空表示未加入联盟。 */
+  unionId: string;
+  unionName: string;
+  /** 所属联盟的联盟池余额（分）；未加入联盟时为 null。 */
+  unionPoolQuotaFen: number | null;
+  /** 俱乐部当前可用额度 club_guuid_info.union_quota（分）；未加入联盟时为 null。 */
   ownerQuotaFen: number | null;
 }
 
@@ -893,19 +974,53 @@ export interface ClubDetailResponse {
   warnings: string[];
 }
 
-export interface ClubQuotaState {
-  playerId: string;
-  clubId: string;
-  quotaFen: number;
-  quotaYuan: number;
-  isAgent: number;
-  isGranted: number;
-  /** false 表示游戏服没有返回额度；此时额度「未知」，不是 0。 */
-  queried: boolean;
+/** 联盟管理（V2）：联盟池与关联俱乐部。 */
+export interface UnionListItem {
+  unionId: string;
+  name: string;
+  ownerId: string;
+  ownerName: string;
+  ownerClubId: string;
+  ownerClubName: string;
+  /** 联盟池余额（分）。 */
+  poolQuotaFen: number;
+  /** 已分给俱乐部的额度合计（分）。 */
+  totalClubQuotaFen: number;
+  memberCount: number;
+  status: string;
+  /** 游戏库里的创建时间（北京时间墙上时间）。 */
+  createdAt: string;
 }
 
-export interface ClubQuotaAdjustmentResponse {
-  quota: ClubQuotaState;
+export interface UnionListResponse {
+  items: UnionListItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface UnionClubItem {
+  clubId: string;
+  name: string;
+  status: string;
+  mode: string;
+  ownerId: string;
+  ownerName: string;
+  /** 俱乐部当前可用额度（分）。 */
+  quotaFen: number;
+  memberCount: number;
+  tax: string;
+}
+
+export interface UnionDetailResponse {
+  union: UnionListItem;
+  clubs: UnionClubItem[];
+}
+
+export interface UnionQuotaAdjustmentResponse {
+  unionId: string;
+  poolQuotaFen: number;
+  poolQuotaYuan: number;
   deltaFen: number;
   verified: boolean;
   message: string;

@@ -214,6 +214,29 @@ func (s *Server) clearAuthCookies(w http.ResponseWriter) {
 	}
 }
 
+// clubModeHiddenModules 是俱乐部模式下不展示的后台模块。
+// 这些页面属于标准模式（平台代理/现金交易）口径，俱乐部模式没有对应业务；
+// 只从会话导航过滤，模块和权限定义保留，切回 standard 模式会自动恢复。
+var clubModeHiddenModules = map[string]bool{
+	"game.agents":                true,
+	"game.transactions":          true,
+	"game.transaction_blacklist": true,
+}
+
+func filterModulesForGameMode(items []moduleItem, mode string) []moduleItem {
+	if mode != "club" {
+		return items
+	}
+	filtered := make([]moduleItem, 0, len(items))
+	for _, item := range items {
+		if clubModeHiddenModules[item.Code] {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
+}
+
 func (s *Server) allowedNavigation(r *http.Request, p principal) ([]moduleItem, error) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, parent_id, code, name, route, icon, sort_order, visible, status
 FROM mgr_module WHERE visible = 1 AND status = 'enabled' ORDER BY sort_order, id`)
@@ -229,8 +252,12 @@ FROM mgr_module WHERE visible = 1 AND status = 'enabled' ORDER BY sort_order, id
 		}
 		all = append(all, item)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	all = filterModulesForGameMode(all, s.cfg.GameMode)
 	if p.IsSuper {
-		return all, rows.Err()
+		return all, nil
 	}
 
 	allowed := map[int64]bool{}

@@ -12,14 +12,21 @@ import (
 )
 
 type roomRecordListFilters struct {
-	Keyword  string
-	DateFrom string
-	DateTo   string
+	Keyword    string
+	Club       string
+	InviteCode string
+	DateFrom   string
+	DateTo     string
 }
 
 type roomRecordListItem struct {
 	RoomID       string   `json:"roomId"`
 	RoomName     string   `json:"roomName"`
+	ClubID       string   `json:"clubId"`
+	ClubName     string   `json:"clubName"`
+	CreatorID    string   `json:"creatorId"`
+	CreatorName  string   `json:"creatorName"`
+	InviteCode   string   `json:"creatorInviteCode"`
 	IsDijiuKing  bool     `json:"isDijiuKing"`
 	RecordedAt   string   `json:"recordedAt"`
 	StartedAt    string   `json:"startedAt"`
@@ -33,6 +40,11 @@ type roomRecordListItem struct {
 type roomRecordOverview struct {
 	RoomID         string  `json:"roomId"`
 	RoomName       string  `json:"roomName"`
+	ClubID         string  `json:"clubId"`
+	ClubName       string  `json:"clubName"`
+	CreatorID      string  `json:"creatorId"`
+	CreatorName    string  `json:"creatorName"`
+	InviteCode     string  `json:"creatorInviteCode"`
 	StartedAt      string  `json:"startedAt"`
 	EndedAt        string  `json:"endedAt"`
 	RoundCount     int64   `json:"roundCount"`
@@ -164,6 +176,7 @@ FROM kbedm.usr_total_score t WHERE `+where, args...).Scan(&total); err != nil {
 	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 t.roomID,
+COALESCE(MAX(NULLIF(TRIM(t.club_guuid), '0')), ''),
 COALESCE(MAX(NULLIF(NULLIF(TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(t.remark2, ',', 5), ',', -1)), '0'), '')), ''),
 MAX(CASE WHEN TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(t.remark, ',', 11), ',', -1)) = '地方' THEN 1 ELSE 0 END),
 COALESCE(MAX(CONCAT(t.date, ' ', t.time)), ''),
@@ -185,7 +198,7 @@ GROUP BY t.roomID ORDER BY MAX(t.id) DESC LIMIT ? OFFSET ?`, queryArgs...)
 	for rows.Next() {
 		var item roomRecordListItem
 		var participants string
-		if err := rows.Scan(&item.RoomID, &item.RoomName, &item.IsDijiuKing,
+		if err := rows.Scan(&item.RoomID, &item.ClubID, &item.RoomName, &item.IsDijiuKing,
 			&item.RecordedAt, &item.StartedAt, &item.EndedAt, &item.RoundCount, &item.PlayerCount,
 			&item.TotalBuyIn, &participants); err != nil {
 			s.logger.Error("scan room record list", "error", err)
@@ -205,6 +218,22 @@ GROUP BY t.roomID ORDER BY MAX(t.id) DESC LIMIT ? OFFSET ?`, queryArgs...)
 		return
 	}
 
+	clubIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		clubIDs = append(clubIDs, item.ClubID)
+	}
+	if infos, clubErr := s.lookupClubInfo(r.Context(), clubIDs); clubErr != nil {
+		s.logger.Error("lookup room record clubs", "error", clubErr)
+	} else {
+		for index := range items {
+			info := infos[items[index].ClubID]
+			items[index].ClubName = info.ClubName
+			items[index].CreatorID = info.OwnerID
+			items[index].CreatorName = info.OwnerName
+			items[index].InviteCode = info.InviteCode
+		}
+	}
+
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "page": page, "pageSize": size, "total": total,
 	})
@@ -213,12 +242,18 @@ GROUP BY t.roomID ORDER BY MAX(t.id) DESC LIMIT ? OFFSET ?`, queryArgs...)
 func parseRoomRecordListFilters(r *http.Request) (roomRecordListFilters, error) {
 	query := r.URL.Query()
 	filters := roomRecordListFilters{
-		Keyword:  strings.TrimSpace(query.Get("keyword")),
-		DateFrom: strings.TrimSpace(query.Get("dateFrom")),
-		DateTo:   strings.TrimSpace(query.Get("dateTo")),
+		Keyword:    strings.TrimSpace(query.Get("keyword")),
+		Club:       strings.TrimSpace(query.Get("club")),
+		InviteCode: strings.TrimSpace(query.Get("inviteCode")),
+		DateFrom:   strings.TrimSpace(query.Get("dateFrom")),
+		DateTo:     strings.TrimSpace(query.Get("dateTo")),
 	}
-	if len([]rune(filters.Keyword)) > 100 {
-		return roomRecordListFilters{}, errors.New("查询文字不能超过 100 个字符")
+	for label, value := range map[string]string{
+		"查询文字": filters.Keyword, "俱乐部": filters.Club, "创建者邀请码": filters.InviteCode,
+	} {
+		if len([]rune(value)) > 100 {
+			return roomRecordListFilters{}, errors.New(label + "不能超过 100 个字符")
+		}
 	}
 	for label, value := range map[string]string{"开始日期": filters.DateFrom, "结束日期": filters.DateTo} {
 		if value != "" {
@@ -247,6 +282,28 @@ func buildRoomRecordListWhere(filters roomRecordListFilters) (string, []any) {
 )`)
 		args = append(args, filters.Keyword, filters.Keyword, like, like)
 	}
+	if filters.Club != "" {
+		if isSixDigitCode(filters.Club) {
+			clauses = append(clauses, "t.club_guuid = ?")
+			args = append(args, filters.Club)
+		} else {
+			clauses = append(clauses, `EXISTS (
+  SELECT 1 FROM kbedm.club_guuid_info ci
+  WHERE ci.club_guuid = t.club_guuid AND ci.club_name LIKE ? ESCAPE '\\'
+)`)
+			args = append(args, "%"+escapeLike(filters.Club)+"%")
+		}
+	}
+	if filters.InviteCode != "" {
+		clauses = append(clauses, `EXISTS (
+  SELECT 1 FROM kbedm.club_invite_code_info i
+  JOIN kbedm.tbl_Account a ON a.sm_guuid = i.user_guuid
+  WHERE i.invite_code = ? AND i.status = 'used' AND i.club_guuid = t.club_guuid
+    AND (FIND_IN_SET(t.club_guuid, REPLACE(COALESCE(a.sm_club_make, ''), ' ', '')) > 0
+      OR FIND_IN_SET(t.club_guuid, REPLACE(COALESCE(a.sm_club_make2, ''), ' ', '')) > 0)
+)`)
+		args = append(args, filters.InviteCode)
+	}
 	if filters.DateFrom != "" {
 		clauses = append(clauses, "t.date >= ?")
 		args = append(args, filters.DateFrom)
@@ -259,7 +316,7 @@ func buildRoomRecordListWhere(filters roomRecordListFilters) (string, []any) {
 }
 
 func (s *Server) queryRoomRecordPlayers(r *http.Request, roomID string) ([]roomRecordPlayer, roomRecordOverview, error) {
-	rows, err := s.db.QueryContext(r.Context(), `SELECT t.id, t.roomID, t.date, t.time, t.user_name, t.user_guuid,
+	rows, err := s.db.QueryContext(r.Context(), `SELECT t.id, t.roomID, t.club_guuid, t.date, t.time, t.user_name, t.user_guuid,
 t.score, t.rounds, t.number, t.remark, t.remark2,
 COALESCE(w.settlement_return, 0), (w.user_guuid IS NOT NULL)
 FROM kbedm.usr_total_score t
@@ -277,13 +334,16 @@ WHERE t.roomID = ? ORDER BY t.number ASC, t.id ASC`, roomID, roomID)
 	overview := roomRecordOverview{RoomID: roomID}
 	for rows.Next() {
 		var item roomRecordPlayer
-		var recordRoomID, date, clock, scoreRaw, remark, remark2 string
+		var recordRoomID, recordClubID, date, clock, scoreRaw, remark, remark2 string
 		var rounds, seat int64
 		var hasSettlement bool
-		if err := rows.Scan(&item.ID, &recordRoomID, &date, &clock, &item.PlayerName, &item.PlayerID,
+		if err := rows.Scan(&item.ID, &recordRoomID, &recordClubID, &date, &clock, &item.PlayerName, &item.PlayerID,
 			&scoreRaw, &rounds, &seat, &remark, &remark2,
 			&item.SettlementReturn, &hasSettlement); err != nil {
 			return nil, roomRecordOverview{}, err
+		}
+		if overview.ClubID == "" && recordClubID != "" && recordClubID != "0" {
+			overview.ClubID = recordClubID
 		}
 		item.Seat = seat
 		item.RecordedScore, _ = strconv.ParseFloat(scoreRaw, 64)
@@ -330,6 +390,17 @@ WHERE t.roomID = ? ORDER BY t.number ASC, t.id ASC`, roomID, roomID)
 	}
 	if len(players) == 0 {
 		return nil, roomRecordOverview{}, sql.ErrNoRows
+	}
+	if overview.ClubID != "" {
+		if infos, clubErr := s.lookupClubInfo(r.Context(), []string{overview.ClubID}); clubErr != nil {
+			s.logger.Error("lookup room record club", "error", clubErr, "clubId", overview.ClubID)
+		} else {
+			info := infos[overview.ClubID]
+			overview.ClubName = info.ClubName
+			overview.CreatorID = info.OwnerID
+			overview.CreatorName = info.OwnerName
+			overview.InviteCode = info.InviteCode
+		}
 	}
 	sort.SliceStable(players, func(i, j int) bool {
 		if players[i].Score == players[j].Score {

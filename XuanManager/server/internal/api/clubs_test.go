@@ -129,64 +129,6 @@ func TestClubMembershipWhereMatchesExactIDs(t *testing.T) {
 	}
 }
 
-func TestAdjustClubQuotaValidatesInputBeforeTouchingGameServer(t *testing.T) {
-	cases := []struct {
-		name string
-		body string
-	}{
-		{"zero amount", `{"playerId":"292989","action":"add","amountYuan":0,"reason":"运营注资","confirm":true}`},
-		{"missing confirm", `{"playerId":"292989","action":"add","amountYuan":100,"reason":"运营注资"}`},
-		{"bad action", `{"playerId":"292989","action":"set","amountYuan":100,"reason":"运营注资","confirm":true}`},
-		{"short reason", `{"playerId":"292989","action":"add","amountYuan":100,"reason":"a","confirm":true}`},
-		{"bad player id", `{"playerId":"12345","action":"add","amountYuan":100,"reason":"运营注资","confirm":true}`},
-		{"too large", `{"playerId":"292989","action":"add","amountYuan":1000001,"reason":"运营注资","confirm":true}`},
-	}
-	for _, test := range cases {
-		request := httptest.NewRequest(http.MethodPost, "/api/game/clubs/820084/quota-adjustments",
-			strings.NewReader(test.body))
-		request.SetPathValue("clubId", "820084")
-		response := httptest.NewRecorder()
-		server := &Server{}
-		server.handleAdjustClubQuota(response, request, principal{IsSuper: true})
-		if response.Code != http.StatusBadRequest {
-			t.Fatalf("%s: expected 400 before reaching the game server, got %d", test.name, response.Code)
-		}
-	}
-}
-
-func TestAdjustClubQuotaRejectsInvalidClubID(t *testing.T) {
-	request := httptest.NewRequest(http.MethodPost, "/api/game/clubs/abc/quota-adjustments",
-		strings.NewReader(`{"playerId":"292989","action":"add","amountYuan":100,"reason":"运营注资","confirm":true}`))
-	request.SetPathValue("clubId", "abc")
-	response := httptest.NewRecorder()
-	server := &Server{}
-	server.handleAdjustClubQuota(response, request, principal{IsSuper: true})
-	if response.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for a malformed club id, got %d", response.Code)
-	}
-}
-
-func TestClubQuotaPayloadReadsWrappedAndPlainShapes(t *testing.T) {
-	plain := clubQuotaPayload(json.RawMessage(`{"quota_fen":125000,"is_agent":1,"is_granted":1}`))
-	if plain == nil || plain.QuotaFen != 125000 || plain.IsAgent != 1 {
-		t.Fatalf("plain quota payload not parsed: %+v", plain)
-	}
-	wrapped := clubQuotaPayload(json.RawMessage(`{"GetClubQuota":{"quota_fen":500,"is_agent":1,"is_granted":0}}`))
-	if wrapped == nil || wrapped.QuotaFen != 500 || wrapped.IsGranted != 0 {
-		t.Fatalf("wrapped quota payload not parsed: %+v", wrapped)
-	}
-	quoted := clubQuotaPayload(json.RawMessage(`"{\"quota_fen\":800}"`))
-	if quoted == nil || quoted.QuotaFen != 800 {
-		t.Fatalf("quoted quota payload not parsed: %+v", quoted)
-	}
-	if got := clubQuotaPayload(json.RawMessage(`{}`)); got != nil {
-		t.Fatalf("an empty payload must stay unconfirmed instead of becoming zero, got %+v", got)
-	}
-	if got := clubQuotaPayload(json.RawMessage(`null`)); got != nil {
-		t.Fatalf("null payload must stay unconfirmed, got %+v", got)
-	}
-}
-
 func TestGameCommandErrorMessagePrefersServerWording(t *testing.T) {
 	direct := gameCommandResponse{RetResult: json.RawMessage(`{"error":"该俱乐部额度不足"}`)}
 	if got := gameCommandErrorMessage(direct, "兜底"); got != "该俱乐部额度不足" {
@@ -199,18 +141,6 @@ func TestGameCommandErrorMessagePrefersServerWording(t *testing.T) {
 	empty := gameCommandResponse{RetResult: json.RawMessage(`{}`)}
 	if got := gameCommandErrorMessage(empty, "兜底"); got != "兜底" {
 		t.Fatalf("fallback not used when the server sends no error: %q", got)
-	}
-}
-
-func TestReadClubQuotaDistinguishesUnsecuredFromZero(t *testing.T) {
-	// 纯逻辑校验：未被授信（quota 为 NULL）不能显示成 0 额度。
-	unsecured := clubQuotaState{Queried: false}
-	if unsecured.Queried {
-		t.Fatal("unsecured quota must not be reported as a known value")
-	}
-	zero := clubQuotaState{QuotaFen: 0, Queried: true, IsAgent: 1, IsGranted: 1}
-	if !zero.Queried || zero.QuotaFen != 0 {
-		t.Fatal("a granted agent with 0 quota is a known value and must stay distinguishable")
 	}
 }
 
@@ -228,6 +158,7 @@ func TestClubFiltersRejectInvalidInput(t *testing.T) {
 	cases := []string{
 		"mode=unknown",
 		"clubId=12345",
+		"unionId=12345",
 		"status=bogus",
 		"clubMode=9",
 		"taxMin=80&taxMax=10",
@@ -293,30 +224,18 @@ func TestClubFiltersAlwaysExcludePlaceholderClubs(t *testing.T) {
 	}
 }
 
-func TestClubOwnerQuotaKeySeparatesClubsAndPlayers(t *testing.T) {
-	// 键必须同时包含俱乐部与群主，避免两个俱乐部的同一人额度串行。
-	items := []clubListItem{
-		{ClubID: "567671", OwnerID: "718968"},
-		{ClubID: "645463", OwnerID: "354718968"},
+func TestClubUnionFilterBindsExactUnionID(t *testing.T) {
+	where, args := buildClubWhereForTest(t, "unionId=123456")
+	if !strings.Contains(where, "c.union_id = ?") {
+		t.Fatalf("union filter must bind the union_id column, got %s", where)
 	}
-	keys := map[string]bool{}
-	for _, item := range items {
-		keys[item.ClubID+"\x00"+item.OwnerID] = true
+	found := false
+	for _, arg := range args {
+		if arg == "123456" {
+			found = true
+		}
 	}
-	if len(keys) != 2 {
-		t.Fatalf("owner quota keys collided: %v", keys)
-	}
-	// 「没有这一行」与「quota 为 0」必须能区分：前者是 nil 指针，后者指向 0。
-	var missing *int64
-	zero := int64(0)
-	zeroPtr := &zero
-	if missing != nil {
-		t.Fatal("missing quota must stay nil")
-	}
-	if zeroPtr == nil || *zeroPtr != 0 {
-		t.Fatal("a granted owner with 0 quota must remain a known zero")
-	}
-	if missing == zeroPtr {
-		t.Fatal("missing quota must not be conflated with a zero value")
+	if !found {
+		t.Fatalf("union id not bound as an argument: %v", args)
 	}
 }

@@ -1,30 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError, jsonBody } from "../api";
-import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, formatDate } from "../components/ui";
+import { api, ApiError } from "../api";
+import { Button, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { formatBeijingDateTime } from "../time";
-import type { CurrentRoomItem, CurrentRoomsResponse } from "../types";
-
-type DissolveTarget = { roomId: number | null; all: boolean; mode: "force" | "friendly" };
-
-type DissolveResponse = {
-  status: "dissolved" | "pending" | "verification_unavailable" | "no_active_rooms";
-  message: string;
-  commandSent: boolean;
-  verified: boolean;
-  roomExists: boolean;
-  roomStatus?: string;
-  targetCount?: number;
-  acceptedCount?: number;
-  remainingCount?: number;
-  failedCount?: number;
-};
-
-type RoomCreationControlState = {
-  allowed: boolean;
-  status: string;
-  lastUpdatedBy: string;
-  lastUpdatedAt: string | null;
-};
+import type { ClubRoomGroup, ClubRoomsResponse, CurrentRoomItem } from "../types";
 
 type CurrentRoomWireItem = Partial<CurrentRoomItem> & {
   room_id?: number;
@@ -48,32 +26,54 @@ type CurrentRoomWireItem = Partial<CurrentRoomItem> & {
   create_datetime?: string;
 };
 
-type CurrentRoomsWireResponse = Omit<CurrentRoomsResponse, "items"> & { items?: CurrentRoomWireItem[] };
+type ClubRoomGroupWire = Omit<ClubRoomGroup, "rooms"> & { rooms?: CurrentRoomWireItem[] };
+type ClubRoomsWireResponse = Omit<ClubRoomsResponse, "groups"> & { groups?: ClubRoomGroupWire[] };
 
-const pageSizes = [20, 50, 100, 200];
+const pageSizes = [20, 50, 100];
 
-export default function RoomMaintenancePage({ can, notify }: { can: (permission: string) => boolean; notify: (message: string, kind?: "success" | "error") => void }) {
-  const [data, setData] = useState<CurrentRoomsResponse | null>(null);
-  const [pageSize, setPageSize] = useState(50);
-  const [roomId, setRoomId] = useState("");
-  const [roomIdError, setRoomIdError] = useState("");
-  const [loadError, setLoadError] = useState("");
+/**
+ * 房间维护（只读）。
+ *
+ * 当前所有活跃房间都是俱乐部内部房间，页面按俱乐部聚合展示：
+ * 一级是俱乐部，展开后二级是该俱乐部的房间。不提供解散、创建开关等任何房间操作。
+ */
+export default function RoomMaintenancePage({ notify }: {
+  can: (permission: string) => boolean;
+  notify: (message: string, kind?: "success" | "error") => void;
+}) {
+  const [data, setData] = useState<ClubRoomsResponse | null>(null);
+  const [draftKeyword, setDraftKeyword] = useState("");
+  const [keyword, setKeyword] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
-  const [target, setTarget] = useState<DissolveTarget | null>(null);
-  const [creationControl, setCreationControl] = useState<RoomCreationControlState | null>(null);
-  const [creationControlError, setCreationControlError] = useState("");
-  const [creationControlLoading, setCreationControlLoading] = useState(true);
-  const [creationControlTarget, setCreationControlTarget] = useState<boolean | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const load = useCallback(async (targetPage: number, targetPageSize: number, quiet = false) => {
+  const load = useCallback(async (targetPage: number, targetPageSize: number, targetKeyword: string, quiet = false) => {
     if (!quiet) setLoading(true);
     setLoadError("");
     try {
-      const response = await api<CurrentRoomsWireResponse>(`/api/admin/hall/rooms?page=${targetPage}&page_size=${targetPageSize}`);
-      setData({ ...response, items: Array.isArray(response.items) ? response.items.map(normalizeCurrentRoomItem) : [] });
-      setPageSize(response.pageSize);
+      const params = new URLSearchParams({ page: String(targetPage), pageSize: String(targetPageSize) });
+      if (targetKeyword) params.set("keyword", targetKeyword);
+      const response = await api<ClubRoomsWireResponse>(`/api/game/room-maintenance/clubs?${params.toString()}`);
+      setData({
+        available: Boolean(response.available),
+        groups: Array.isArray(response.groups) ? response.groups.map(normalizeClubRoomGroup) : [],
+        page: response.page ?? targetPage,
+        pageSize: response.pageSize ?? targetPageSize,
+        totalClubs: response.totalClubs ?? 0,
+        totalRooms: response.totalRooms ?? 0,
+        playerCount: response.playerCount ?? 0,
+        watcherCount: response.watcherCount ?? 0,
+        inholdCount: response.inholdCount ?? 0,
+        source: response.source ?? "",
+        message: response.message ?? "",
+        refreshedAt: response.refreshedAt ?? "",
+      });
+      if (response.pageSize && response.pageSize !== targetPageSize) setPageSize(response.pageSize);
     } catch (reason) {
-      const message = reason instanceof ApiError ? reason.message : "大厅实时房间列表加载失败";
+      const message = reason instanceof ApiError ? reason.message : "俱乐部房间列表加载失败";
       setData(null);
       setLoadError(message);
       if (!quiet) notify(message, "error");
@@ -82,131 +82,153 @@ export default function RoomMaintenancePage({ can, notify }: { can: (permission:
     }
   }, [notify]);
 
-  const loadCreationControl = useCallback(async (quiet = false) => {
-    if (!quiet) setCreationControlLoading(true);
-    setCreationControlError("");
-    try {
-      setCreationControl(await api<RoomCreationControlState>("/api/game/room-maintenance/creation-control"));
-    } catch (reason) {
-      const message = reason instanceof ApiError ? reason.message : "服务器创建房间开关读取失败";
-      setCreationControl(null);
-      setCreationControlError(message);
-      if (!quiet) notify(message, "error");
-    } finally {
-      if (!quiet) setCreationControlLoading(false);
-    }
-  }, [notify]);
+  useEffect(() => {
+    void load(page, pageSize, keyword);
+  }, [load, page, pageSize, keyword]);
 
-  useEffect(() => { void load(1, 50); void loadCreationControl(); }, [load, loadCreationControl]);
-
-  const refresh = useCallback(async () => {
-    await Promise.all([load(data?.page ?? 1, data?.pageSize ?? pageSize), loadCreationControl(true)]);
-  }, [data, load, loadCreationControl, pageSize]);
-  const openSingleDissolve = (mode: "force" | "friendly", selectedRoomId?: number) => {
-    const normalized = selectedRoomId ? String(selectedRoomId) : roomId.trim();
-    if (!/^\d+$/.test(normalized) || Number(normalized) <= 0) {
-      setRoomIdError("请输入有效的当前房间号");
+  const submitSearch = (event: React.FormEvent) => {
+    event.preventDefault();
+    const next = draftKeyword.trim();
+    if (page === 1 && keyword === next) {
+      void load(1, pageSize, next);
       return;
     }
-    setRoomIdError("");
-    setTarget({ roomId: Number(normalized), all: false, mode });
+    setExpanded({});
+    setPage(1);
+    setKeyword(next);
   };
 
-  const canDissolve = can("game.room_maintenance.dissolve");
-  const canDissolveAll = can("game.room_maintenance.dissolve_all");
-  const canControlRoomCreation = can("game.room_maintenance.creation_control");
-  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.pageSize ?? pageSize)));
-  const pagePeople = data ? data.playerCount + data.watcherCount : 0;
+  const resetSearch = () => {
+    setDraftKeyword("");
+    setExpanded({});
+    if (page === 1 && keyword === "") {
+      void load(1, pageSize, "");
+      return;
+    }
+    setPage(1);
+    setKeyword("");
+  };
+
+  const toggleClub = (clubId: string) => {
+    setExpanded((current) => ({ ...current, [clubId]: !current[clubId] }));
+  };
+
+  const totalPages = Math.max(1, Math.ceil((data?.totalClubs ?? 0) / (data?.pageSize ?? pageSize)));
 
   return <div className="page-stack">
     <PageHeader
-      eyebrow="LIVE ROOM CONTROL"
+      eyebrow="CLUB ROOM DIRECTORY"
       title="房间维护"
-      description="从 KB 大厅实时内存读取所有活跃房间，查看状态、玩法、规则和人数，并按权限执行房间维护。"
+      description="按俱乐部查看 KB 大厅当前活跃的俱乐部内部房间；本页只读，不提供解散房间或创建开关等操作。"
       actions={<div className="room-maintenance-header-actions">
-        <label><span>每页</span><select value={pageSize} disabled={loading} onChange={(event) => { const size = Number(event.target.value); setPageSize(size); void load(1, size); }}>{pageSizes.map((size) => <option key={size} value={size}>{size}</option>)}</select></label>
-        <Button variant="secondary" onClick={() => void refresh()} disabled={loading}>{loading ? "正在刷新…" : "刷新实时列表"}</Button>
+        <span className="readonly-badge"><i />只读展示</span>
+        <label><span>每页</span><select value={pageSize} disabled={loading} onChange={(event) => { const size = Number(event.target.value); setPageSize(size); setPage(1); }}>{pageSizes.map((size) => <option key={size} value={size}>{size} 个俱乐部</option>)}</select></label>
+        <Button variant="secondary" onClick={() => void load(page, pageSize, keyword)} disabled={loading}>{loading ? "正在刷新…" : "刷新实时列表"}</Button>
       </div>}
     />
 
     <section className="room-maintenance-metrics">
-      <article><span>当前活跃房间</span><strong>{data?.total ?? "—"}</strong><p>{data ? `第 ${data.page} / ${totalPages} 页` : "等待 KB 实时数据"}</p></article>
-      <article><span>本页玩家与观战</span><strong>{data ? pagePeople : "—"}</strong><p>{data ? `玩家 ${data.playerCount} · 观战 ${data.watcherCount} · 等待带入 ${data.inholdCount}` : "不使用账号历史房间字段"}</p></article>
-      <article className="room-maintenance-live"><span>数据来源</span><strong>{data ? "KB 实时内存" : "连接异常"}</strong><p>{data ? `刷新于 ${formatDate(data.refreshedAt)}` : "列表异常时不展示缓存房间"}</p></article>
+      <article><span>活跃俱乐部</span><strong>{data?.totalClubs ?? "—"}</strong><p>{data ? `第 ${data.page} / ${totalPages} 页 · 本页 ${data.groups.length} 个` : "等待 KB 实时数据"}</p></article>
+      <article><span>活跃房间</span><strong>{data?.totalRooms ?? "—"}</strong><p>{data ? `玩家 ${data.playerCount} · 观战 ${data.watcherCount} · 等待带入 ${data.inholdCount}` : "不使用账号历史房间字段"}</p></article>
+      <article className="room-maintenance-live"><span>数据来源</span><strong>{data ? "KB 实时内存" : "连接异常"}</strong><p>{data ? `刷新于 ${formatBeijingDateTime(data.refreshedAt)}` : "列表异常时不展示缓存房间"}</p></article>
     </section>
 
-    <section className={`panel room-creation-control ${creationControl?.allowed === false ? "is-blocked" : ""}`}>
-      <div className="room-creation-control__copy">
-        <span className="eyebrow">GLOBAL ROOM CREATION</span>
-        <div><h2>服务器创建新房间</h2>{creationControl && <em className={creationControl.allowed ? "is-allowed" : "is-blocked"}>{creationControl.status}</em>}</div>
-        {creationControlLoading ? <p>正在读取大厅配置 <code>can_all_create_room</code>…</p> : creationControlError ? <p className="is-error">{creationControlError}。当前状态未知，不允许提交修改。</p> : creationControl ? <p>{creationControl.allowed ? "玩家手动创建、BOSS 创建和系统自动补房当前均被允许。" : "已全局禁止玩家手动创建、BOSS 创建和系统自动补房；现有房间不会因此自动解散。"}{creationControl.lastUpdatedBy ? ` 最近由 ${creationControl.lastUpdatedBy} 修改${creationControl.lastUpdatedAt ? `（${formatDate(creationControl.lastUpdatedAt)}）` : ""}。` : ""}</p> : null}
+    <section className="panel club-room-filter">
+      <div className="club-room-filter__copy">
+        <span>CLUB FILTER</span>
+        <strong>按俱乐部筛选</strong>
+        <p>支持俱乐部 ID、俱乐部名称、创建者 ID/名称和创建者邀请码。</p>
       </div>
-      <div className="room-creation-control__actions">
-        {creationControlError && <Button variant="secondary" onClick={() => void loadCreationControl()} disabled={creationControlLoading}>重新读取</Button>}
-        {creationControl && canControlRoomCreation && <Button variant={creationControl.allowed ? "danger" : "primary"} onClick={() => setCreationControlTarget(!creationControl.allowed)}>{creationControl.allowed ? "禁止创建新房间" : "恢复允许创建"}</Button>}
-        {creationControl && !canControlRoomCreation && <span>当前角色仅可查看</span>}
-      </div>
+      <form onSubmit={submitSearch}>
+        <label><span>俱乐部 / 邀请码</span><input value={draftKeyword} onChange={(event) => setDraftKeyword(event.target.value)} placeholder="俱乐部 ID / 名称 / 创建者邀请码" autoComplete="off" /></label>
+        <div className="club-room-filter__actions">
+          <button type="button" onClick={resetSearch}>重置</button>
+          <button type="submit">查询俱乐部</button>
+        </div>
+      </form>
     </section>
 
-    <section className="panel room-maintenance-list-panel">
-      <header className="panel__header room-maintenance-list-header">
-        <div><span className="eyebrow">ACTIVE ROOMS</span><h2>大厅所有房间</h2></div>
-        {data && <span>共 {data.total} 个 · 本页 {data.items.length} 个</span>}
+    <section className="panel club-room-panel">
+      <header className="panel__header club-room-panel__header">
+        <div><span className="eyebrow">ACTIVE CLUB ROOMS</span><h2>按俱乐部展示</h2></div>
+        {data && <span>共 {data.totalClubs} 个俱乐部 · {data.totalRooms} 个房间</span>}
       </header>
       {loading && !data ? <LoadingBlock label="正在读取 KB 大厅实时房间" /> : loadError ? (
-        <div className="room-maintenance-load-error"><div className="operation-warning operation-warning--danger"><strong>实时房间列表读取失败</strong><p>{loadError}。当前页面不会回退显示玩家账号中的历史残留房间。</p></div><Button variant="secondary" onClick={() => void load(1, pageSize)}>重新读取</Button></div>
-      ) : data && data.items.length === 0 ? <EmptyState title="当前没有活跃房间" description="KB 大厅实时内存返回空列表，可稍后手动刷新。" /> : data ? (
+        <div className="room-maintenance-load-error"><div className="operation-warning operation-warning--danger"><strong>俱乐部房间列表读取失败</strong><p>{loadError}。当前页面不会回退显示账号历史房间或缓存数据。</p></div><Button variant="secondary" onClick={() => void load(page, pageSize, keyword)}>重新读取</Button></div>
+      ) : !data || data.groups.length === 0 ? <EmptyState title="没有找到俱乐部房间" description="当前没有活跃的俱乐部内部房间，或筛选条件没有命中。" /> : (
         <>
-          <div className={`current-room-list ${loading ? "is-loading" : ""}`}>
-            {data.items.map((room) => <CurrentRoomCard key={room.roomId} room={room} canDissolve={canDissolve} onDissolve={openSingleDissolve} />)}
+          <div className={`club-room-group-list ${loading ? "is-loading" : ""}`}>
+            {data.groups.map((group) => <ClubRoomGroupCard key={group.clubId} group={group} expanded={Boolean(expanded[group.clubId])} onToggle={() => toggleClub(group.clubId)} />)}
           </div>
           <footer className="table-pagination room-maintenance-pagination">
-            <span>第 {data.page} 页，共 {totalPages} 页；当前显示 {data.items.length} 个房间</span>
-            <div><button type="button" disabled={loading || data.page <= 1} onClick={() => void load(data.page - 1, data.pageSize)}>上一页</button><strong>{data.page} / {totalPages}</strong><button type="button" disabled={loading || data.page >= totalPages} onClick={() => void load(data.page + 1, data.pageSize)}>下一页</button></div>
+            <span>第 {data.page} 页，共 {totalPages} 页；本页 {data.groups.length} 个俱乐部</span>
+            <div><button type="button" disabled={loading || data.page <= 1} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{data.page} / {totalPages}</strong><button type="button" disabled={loading || data.page >= totalPages} onClick={() => setPage((value) => value + 1)}>下一页</button></div>
           </footer>
         </>
-      ) : null}
+      )}
     </section>
-
-    {(canDissolve || canDissolveAll) && <section className="panel room-maintenance-actions-panel">
-      {canDissolve && <div className="room-maintenance-manual">
-        <div><h3>按房间号维护</h3><p>列表中的房间可直接操作；也可以在这里输入 KB 当前存在的房间号。</p></div>
-        <Field label="当前房间号" hint="只接受正整数房间号">
-          <input inputMode="numeric" value={roomId} onChange={(event) => { setRoomId(event.target.value.replace(/\D/g, "")); setRoomIdError(""); }} placeholder="例如：851724" />
-        </Field>
-        {roomIdError && <div className="form-error"><span>!</span>{roomIdError}</div>}
-        <div className="room-bulk-actions"><Button variant="secondary" onClick={() => openSingleDissolve("friendly")}>友好解散指定房间</Button><Button variant="danger" onClick={() => openSingleDissolve("force")}>强制解散指定房间</Button></div>
-      </div>}
-      {canDissolveAll && <div className="room-maintenance-all">
-        <div><strong>全部房间操作</strong><p>由游戏服务处理全部当前房间，仅超级管理员可执行，并要求输入 ALL_ROOMS。</p></div>
-        <div className="room-bulk-actions"><Button variant="secondary" onClick={() => setTarget({ roomId: null, all: true, mode: "friendly" })}>友好解散全部</Button><Button variant="danger" onClick={() => setTarget({ roomId: null, all: true, mode: "force" })}>强制解散全部</Button></div>
-      </div>}
-    </section>}
-
-    {target && <DissolveModal target={target} onClose={() => setTarget(null)} onDone={(result) => { setTarget(null); notify(result.message, result.verified ? "success" : "error"); window.setTimeout(() => void refresh(), 300); }} />}
-    {creationControl && creationControlTarget !== null && <RoomCreationControlModal current={creationControl} targetAllowed={creationControlTarget} onClose={() => setCreationControlTarget(null)} onDone={(state, message) => { setCreationControl(state); setCreationControlTarget(null); notify(message); }} />}
   </div>;
 }
 
-function CurrentRoomCard({ room, canDissolve, onDissolve }: { room: CurrentRoomItem; canDissolve: boolean; onDissolve: (mode: "force" | "friendly", roomId: number) => void }) {
-  const status = room.roomStatus || "未知状态";
-  const normalizedStatus = `${room.roomStatus} ${room.gameStatus}`.toLowerCase();
-  const statusClass = normalizedStatus.includes("解散") || normalizedStatus.includes("dissolv") || normalizedStatus.includes("closing")
-    ? "is-dissolving"
-    : normalizedStatus.includes("游戏") || normalizedStatus.includes("playing")
-      ? "is-playing"
-      : normalizedStatus.includes("等待") || normalizedStatus.includes("wait")
-        ? "is-waiting"
-        : "is-ready";
-  const roundTarget = room.gameRound >= 99999 ? "不限" : room.gameRound;
-  return <article className={`current-room-card ${statusClass}`}>
-    <header><div><span>房间号</span><strong>{room.roomId}</strong><small>{room.roomName || `房间 ${room.roomId}`}</small></div><em className={statusClass}>{status}</em></header>
-    <div className="current-room-card__content">
-      <div className="current-room-stats"><div><span>局数</span><strong>{room.roundCount} / {roundTarget}</strong></div><div><span>玩家</span><strong>{room.playerCount} / {room.maxNumber || "—"}</strong></div><div><span>观战</span><strong>{room.watcherCount}</strong></div><div><span>等待带入</span><strong>{room.inholdCount}</strong></div></div>
-      <dl className="current-room-meta"><div><dt>创建时间（北京时间）</dt><dd>{formatBeijingDateTime(room.createDatetime)}</dd></div><div><dt>备注</dt><dd>{room.remark || "—"}</dd></div></dl>
-    </div>
-    {canDissolve && <footer><Button variant="secondary" onClick={() => onDissolve("friendly", room.roomId)}>友好解散</Button><Button variant="danger" onClick={() => onDissolve("force", room.roomId)}>强制解散</Button></footer>}
+function ClubRoomGroupCard({ group, expanded, onToggle }: { group: ClubRoomGroup; expanded: boolean; onToggle: () => void }) {
+  return <article className={`club-room-group ${expanded ? "is-expanded" : ""}`}>
+    <button type="button" className="club-room-group__header" aria-expanded={expanded} onClick={onToggle}>
+      <span className="club-room-group__toggle">{expanded ? "−" : "+"}</span>
+      <span className="club-room-group__title">
+        <strong>{group.clubName || group.clubId}</strong>
+        <small>俱乐部 ID：{group.clubId}{group.creatorName || group.creatorId ? ` · 创建者：${group.creatorName || group.creatorId}` : ""}{group.creatorId && group.creatorName ? `（${group.creatorId}）` : ""} · 邀请码：{group.creatorInviteCode || "—"}</small>
+      </span>
+      <span className="club-room-group__stats">
+        <span><b>{group.roomCount}</b> 房间</span>
+        <span><b>{group.playerCount}</b> 玩家</span>
+        <span><b>{group.watcherCount}</b> 观战</span>
+        <span><b>{group.inholdCount}</b> 等待带入</span>
+      </span>
+    </button>
+    {expanded && <div className="club-room-group__rooms">
+      <div className="table-wrap">
+        <table className="club-room-table">
+          <thead><tr><th>房间</th><th>状态</th><th>玩法 / 规则</th><th>局数</th><th>玩家 / 上限</th><th>观战</th><th>等待带入</th><th>创建时间（北京时间）</th><th>备注</th></tr></thead>
+          <tbody>
+            {group.rooms.map((room) => <tr key={room.roomId}>
+              <td><strong className="room-list-id">{room.roomId}</strong><small className="cell-subtitle">{room.roomName || "未命名房间"}</small></td>
+              <td><span className={`club-room-status ${roomStatusClass(room)}`}>{room.roomStatus || room.gameStatus || "未知状态"}</span>{room.gameStatus && room.gameStatus !== room.roomStatus && <small className="cell-subtitle">{room.gameStatus}</small>}</td>
+              <td><strong>{room.playMode || "—"}</strong><small className="cell-subtitle">{room.specialRule.length > 0 ? room.specialRule.join(" / ") : "无特殊规则"}</small></td>
+              <td>{room.roundCount} / {room.gameRound >= 99999 ? "不限" : room.gameRound}</td>
+              <td>{room.playerCount} / {room.maxNumber || "—"}</td>
+              <td>{room.watcherCount}</td>
+              <td>{room.inholdCount}</td>
+              <td>{formatBeijingDateTime(room.createDatetime)}</td>
+              <td><span className="club-room-remark">{room.remark || "—"}</span></td>
+            </tr>)}
+          </tbody>
+        </table>
+      </div>
+    </div>}
   </article>;
+}
+
+function roomStatusClass(room: CurrentRoomItem): string {
+  const status = `${room.roomStatus} ${room.gameStatus}`.toLowerCase();
+  if (status.includes("解散") || status.includes("dissolv") || status.includes("closing")) return "is-dissolving";
+  if (status.includes("游戏") || status.includes("playing")) return "is-playing";
+  if (status.includes("等待") || status.includes("wait")) return "is-waiting";
+  return "is-ready";
+}
+
+function normalizeClubRoomGroup(group: ClubRoomGroupWire): ClubRoomGroup {
+  return {
+    clubId: textValue(group.clubId),
+    clubName: textValue(group.clubName),
+    creatorId: textValue(group.creatorId),
+    creatorName: textValue(group.creatorName),
+    creatorInviteCode: textValue(group.creatorInviteCode),
+    roomCount: numberValue(group.roomCount),
+    playerCount: numberValue(group.playerCount),
+    watcherCount: numberValue(group.watcherCount),
+    inholdCount: numberValue(group.inholdCount),
+    rooms: Array.isArray(group.rooms) ? group.rooms.map(normalizeCurrentRoomItem) : [],
+  };
 }
 
 export function normalizeCurrentRoomItem(room: CurrentRoomWireItem): CurrentRoomItem {
@@ -241,45 +263,4 @@ function numberValue(value: unknown): number {
 
 function textValue(value: unknown): string {
   return typeof value === "string" ? value : value == null ? "" : String(value);
-}
-
-function DissolveModal({ target, onClose, onDone }: { target: DissolveTarget; onClose: () => void; onDone: (result: DissolveResponse) => void }) {
-  const [checked, setChecked] = useState(false);
-  const [scope, setScope] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const friendly = target.mode === "friendly";
-  const title = `${friendly ? "友好" : "强制"}解散${target.all ? "全部房间" : `房间 ${target.roomId}`}`;
-  const submit = async () => {
-    setBusy(true); setError("");
-    try {
-      const endpoint = target.all ? "/api/game/room-maintenance/dissolve-all" : `/api/game/room-maintenance/${target.roomId}/dissolve`;
-      const result = await api<DissolveResponse>(endpoint, { method: "POST", ...jsonBody({ mode: target.mode, confirm: checked, confirmScope: target.all ? scope : "" }) });
-      onDone(result);
-    } catch (reason) { setError(reason instanceof ApiError ? reason.message : "房间解散命令提交失败"); } finally { setBusy(false); }
-  };
-  const disabled = !checked || (target.all && scope !== "ALL_ROOMS");
-  return <Modal title={title} eyebrow="HIGH RISK OPERATION" onClose={onClose}><div className={`operation-warning ${friendly ? "" : "operation-warning--danger"}`}><strong>{friendly ? "给牌局正常收尾机会" : "立即中断房间牌局"}</strong><p>{friendly ? "后台会发送申请解散命令，并以 KB 实时房间列表复查结果作为成功依据。" : "强制解散可能打断正在进行的牌局；后台只有在实时列表确认房间消失或关闭后才会提示成功。"}</p></div>{error && <div className="form-error"><span>!</span>{error}</div>}{target.all && <Field label="范围确认" hint="请输入 ALL_ROOMS，防止误操作全部在线房间"><input value={scope} onChange={(event) => setScope(event.target.value)} placeholder="ALL_ROOMS" /></Field>}<label className="confirm-check"><input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} /><span>我已核对实时房间范围，并确认执行{friendly ? "友好" : "强制"}解散</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={friendly ? "primary" : "danger"} disabled={disabled || busy} onClick={() => void submit()}>{busy ? "正在执行并复查…" : "确认解散"}</Button></div></Modal>;
-}
-
-function RoomCreationControlModal({ current, targetAllowed, onClose, onDone }: { current: RoomCreationControlState; targetAllowed: boolean; onClose: () => void; onDone: (state: RoomCreationControlState, message: string) => void }) {
-  const [checked, setChecked] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const submit = async () => {
-    setBusy(true); setError("");
-    try {
-      const result = await api<{ state: RoomCreationControlState; message: string }>("/api/game/room-maintenance/creation-control", {
-        method: "PUT",
-        ...jsonBody({ allowed: targetAllowed, expectedAllowed: current.allowed, confirm: checked }),
-      });
-      onDone(result.state, result.message);
-    } catch (reason) {
-      setError(reason instanceof ApiError ? reason.message : "服务器创建房间开关修改失败");
-    } finally {
-      setBusy(false);
-    }
-  };
-  const title = targetAllowed ? "恢复允许创建新房间" : "全局禁止创建新房间";
-  return <Modal title={title} eyebrow="GLOBAL SERVER CONTROL" onClose={onClose}><div className={`operation-warning ${targetAllowed ? "" : "operation-warning--danger"}`}><strong>{targetAllowed ? "重新开放全部创建入口" : "关闭全部新房间创建入口"}</strong><p>{targetAllowed ? "保存后，玩家手动创建、BOSS 创建和系统自动补房将重新被允许。" : "保存后，玩家手动创建、BOSS 创建和系统自动补房都会被禁止；当前已经存在的房间不会被自动解散。"}</p></div>{error && <div className="form-error"><span>!</span>{error}</div>}<label className="confirm-check"><input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} /><span>我已了解该开关影响全部房间创建入口，并确认{targetAllowed ? "恢复允许" : "全局禁止"}创建新房间</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={targetAllowed ? "primary" : "danger"} disabled={!checked || busy} onClick={() => void submit()}>{busy ? "正在保存并回读…" : "确认修改"}</Button></div></Modal>;
 }

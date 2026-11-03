@@ -3,7 +3,7 @@ import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
 import { formatBeijingDateTime } from "../time";
-import type { PlayerBalanceAdjustmentResult, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, TransactionItem, TransactionResponse } from "../types";
+import type { PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneAdjustmentResult } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -17,15 +17,9 @@ interface PlayerFilters {
   playerId: string;
   name: string;
   loginName: string;
-  agentId: string;
-  agentName: string;
-  level: string;
   roomId: string;
-  role: string;
   clientStatus: string;
   clientVersion: string;
-  minBalance: string;
-  maxBalance: string;
   registeredFrom: string;
   registeredTo: string;
   loginFrom: string;
@@ -37,15 +31,9 @@ const emptyFilters: PlayerFilters = {
   playerId: "",
   name: "",
   loginName: "",
-  agentId: "",
-  agentName: "",
-  level: "",
   roomId: "",
-  role: "",
   clientStatus: "",
   clientVersion: "",
-  minBalance: "",
-  maxBalance: "",
   registeredFrom: "",
   registeredTo: "",
   loginFrom: "",
@@ -59,6 +47,8 @@ function playerFiltersFromHash(): PlayerFilters {
 }
 
 const balanceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const clubModeLabels: Record<string, string> = { "1": "普通模式", "2": "茶楼模式", "3": "带分模式" };
+const clubStatusLabels: Record<string, string> = { used: "正常", init: "未启用", del: "已解散" };
 
 export default function PlayersPage({ can, canViewSensitive, notify }: { can: (permission: string) => boolean; canViewSensitive: boolean; notify: (message: string, kind?: "success" | "error") => void }) {
   const [data, setData] = useState<PlayerResponse | null>(null);
@@ -117,7 +107,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       <PageHeader
         eyebrow="GAME PLAYERS"
         title="玩家管理"
-        description="查询玩家账号、余额、代理关系和客户端状态；按权限执行加减分和登录密码重置。"
+        description="查询玩家账号、钻石余额、所在俱乐部和客户端状态；按权限执行加减钻石和登录密码重置。"
         actions={<span className="readonly-badge"><i />敏感操作全程审计</span>}
       />
 
@@ -126,7 +116,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <div className="player-filter-primary">
             <div className="search-box search-box--wide">
               <span>⌕</span>
-              <input value={draft.keyword} onChange={(event) => update("keyword", event.target.value)} placeholder="输入玩家ID、登录账号、昵称、代理ID或代理名字" />
+              <input value={draft.keyword} onChange={(event) => update("keyword", event.target.value)} placeholder="输入玩家ID、登录账号或昵称" />
             </div>
             <Button type="submit">查询玩家</Button>
             <Button type="button" variant="secondary" onClick={() => setAdvanced((value) => !value)}>
@@ -140,15 +130,9 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
               <Field label="玩家ID"><input value={draft.playerId} onChange={(event) => update("playerId", event.target.value)} placeholder="精确匹配游戏ID" /></Field>
               <Field label="玩家昵称"><input value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="支持部分匹配" /></Field>
               <Field label="登录账号"><input value={draft.loginName} onChange={(event) => update("loginName", event.target.value)} placeholder="登录名或KBE账号" /></Field>
-              <Field label="直属代理ID"><input value={draft.agentId} onChange={(event) => update("agentId", event.target.value)} placeholder="精确匹配代理ID" /></Field>
-              <Field label="直属代理名字"><input value={draft.agentName} onChange={(event) => update("agentName", event.target.value)} placeholder="支持部分匹配" /></Field>
-              <Field label="玩家等级"><input type="number" min="0" value={draft.level} onChange={(event) => update("level", event.target.value)} placeholder="例如 98" /></Field>
-              <Field label="角色标记"><input value={draft.role} onChange={(event) => update("role", event.target.value)} placeholder="游戏内角色标签" /></Field>
               <Field label="当前房间ID"><input type="number" min="0" value={draft.roomId} onChange={(event) => update("roomId", event.target.value)} placeholder="0 表示未在房间" /></Field>
               <Field label="客户端状态"><input value={draft.clientStatus} onChange={(event) => update("clientStatus", event.target.value)} placeholder="精确匹配状态值" /></Field>
               <Field label="客户端版本"><input value={draft.clientVersion} onChange={(event) => update("clientVersion", event.target.value)} placeholder="精确匹配版本号" /></Field>
-              <Field label="最低余额"><input type="number" step="0.01" value={draft.minBalance} onChange={(event) => update("minBalance", event.target.value)} /></Field>
-              <Field label="最高余额"><input type="number" step="0.01" value={draft.maxBalance} onChange={(event) => update("maxBalance", event.target.value)} /></Field>
               <Field label="注册开始日期"><input type="date" value={draft.registeredFrom} onChange={(event) => update("registeredFrom", event.target.value)} /></Field>
               <Field label="注册结束日期"><input type="date" value={draft.registeredTo} onChange={(event) => update("registeredTo", event.target.value)} /></Field>
               <Field label="登录开始日期" hint="按北京时间当天 00:00 起算，从未登录过的玩家不会被筛选出来"><input type="date" value={draft.loginFrom} onChange={(event) => update("loginFrom", event.target.value)} /></Field>
@@ -170,18 +154,17 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <>
             <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
               <table className="player-table">
-                <thead><tr><th>玩家</th><th>登录账号</th><th>现金余额</th><th>等级 / 角色</th><th>直属代理</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
+                <thead><tr><th>玩家</th><th>登录账号</th><th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
                   <tr key={player.id}>
                     <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small></div></div></td>
                     <td><code>{player.loginName || "—"}</code>{player.accountName && player.accountName !== player.loginName && <small className="cell-subtitle">KBE：{player.accountName}</small>}</td>
-                    <td><strong className="money-value">{balanceFormatter.format(player.balance)}</strong><small className="cell-subtitle">游戏金币</small></td>
-                    <td><strong>等级 {player.level}</strong><small className="cell-subtitle">{player.role || "无角色标记"}</small></td>
-                    <td>{player.agentId ? <><strong>{player.agentName || "未知代理"}</strong><small className="cell-subtitle">ID：{player.agentId}</small></> : <span className="muted">无直属代理</span>}</td>
+                    <td><strong className="stone-value">{player.stone.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">钻石</small></td>
+                    <td>{player.clubs.length > 0 ? <div className="club-chip-list">{player.clubs.map((club) => <span className="club-chip" key={club.clubId} title={`俱乐部ID：${club.clubId}`}>{club.name || club.clubId}</span>)}</div> : <span className="muted">未加入俱乐部</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
                     <td>{formatDate(player.registrationTime)}</td>
                     <td>{formatDate(player.lastLoginAt)}</td>
-                    <td><div className="row-actions">{can("game.player.balance_adjust") && <button className="success-link" onClick={() => setAdjusting(player)}>加减分</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
+                    <td><div className="row-actions">{can("game.player.balance_adjust") && <button className="success-link" onClick={() => setAdjusting(player)}>加减钻石</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -200,7 +183,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       </section>
 
       {selected && <PlayerDetail player={selected} can={can} canViewSensitive={canViewSensitive} notify={notify} onClose={() => setSelected(null)} />}
-      {adjusting && <BalanceAdjustmentModal player={adjusting} onClose={() => setAdjusting(null)} onDone={(result) => { setAdjusting(null); notify(result.message); void load(); }} />}
+      {adjusting && <StoneAdjustmentModal player={adjusting} onClose={() => setAdjusting(null)} onDone={(result) => { setAdjusting(null); notify(result.message); void load(); }} />}
       {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
     </div>
   );
@@ -241,7 +224,7 @@ function ResetPlayerPasswordModal({ player, onClose, onDone }: { player: PlayerI
   </Modal>;
 }
 
-function BalanceAdjustmentModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (result: PlayerBalanceAdjustmentResult) => void }) {
+function StoneAdjustmentModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (result: PlayerStoneAdjustmentResult) => void }) {
   const [action, setAction] = useState<"add" | "subtract">("add");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
@@ -249,32 +232,30 @@ function BalanceAdjustmentModal({ player, onClose, onDone }: { player: PlayerIte
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const numericAmount = Number(amount);
-  const targetBalance = player.balance + (action === "add" ? numericAmount || 0 : -(numericAmount || 0));
+  const targetStone = player.stone + (action === "add" ? numericAmount || 0 : -(numericAmount || 0));
   const submit = async () => {
     setBusy(true); setError("");
     try {
-      const result = await api<PlayerBalanceAdjustmentResult>(`/api/game/players/${encodeURIComponent(player.playerId)}/balance-adjustments`, { method: "POST", ...jsonBody({ action, amount: numericAmount, reason, expectedBalance: player.balance, confirm: confirmed }) });
+      const result = await api<PlayerStoneAdjustmentResult>(`/api/game/players/${encodeURIComponent(player.playerId)}/stone-adjustments`, { method: "POST", ...jsonBody({ action, amount: numericAmount, reason, expectedStone: player.stone, confirm: confirmed }) });
       onDone(result);
-    } catch (reasonValue) { setError(reasonValue instanceof ApiError ? reasonValue.message : "玩家加减分失败"); } finally { setBusy(false); }
+    } catch (reasonValue) { setError(reasonValue instanceof ApiError ? reasonValue.message : "玩家加减钻石失败"); } finally { setBusy(false); }
   };
-  const invalid = !Number.isInteger(numericAmount) || numericAmount < 1 || numericAmount > 1000000 || reason.trim().length < 2 || !confirmed || (action === "subtract" && numericAmount > player.balance);
-  return <Modal title={`玩家加减分 · ${player.name || player.playerId}`} eyebrow="CUSTOMER SERVICE ADJUSTMENT" onClose={onClose}><div className="balance-adjust-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>ID {player.playerId} · 当前金币 {balanceFormatter.format(player.balance)}</p></div>{player.roomId > 0 && <em>房间 {player.roomId}</em>}</div>{player.roomId > 0 && <div className="operation-warning"><strong>玩家当前正在房间中，仍可加减分</strong><p>本次调整的是玩家账号金币，不直接修改当前牌桌已经带入的积分；提交后后台会回读账号余额并记录资金流水。</p></div>}{error && <div className="form-error"><span>!</span>{error}</div>}<div className="balance-action-tabs"><button type="button" className={action === "add" ? "is-active" : ""} onClick={() => setAction("add")}>增加金币</button><button type="button" className={action === "subtract" ? "is-active is-danger" : ""} onClick={() => setAction("subtract")}>扣减金币</button></div><div className="form-grid form-grid--single"><Field label="本次金币数量" hint="只支持整数金币；单次 1 到 1,000,000"><input type="number" min="1" max="1000000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入数量" /></Field><Field label="客服维护原因" hint="原因会显示在玩家资金情况和交易记录中，并同时进入操作审计"><textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：客服工单补偿，核对编号……" /></Field></div><div className={`balance-change-preview ${action === "subtract" ? "is-subtract" : ""}`}><div><span>操作前</span><strong>{balanceFormatter.format(player.balance)}</strong></div><i>→</i><div><span>预计操作后</span><strong>{balanceFormatter.format(targetBalance)}</strong></div></div><label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID、操作方向、金币数量和维护原因{player.roomId > 0 ? "，并知悉桌面已带入积分不会直接改变" : ""}</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={action === "subtract" ? "danger" : "primary"} disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在提交并回读…" : action === "add" ? "确认增加金币" : "确认扣减金币"}</Button></div></Modal>;
+  const invalid = !Number.isInteger(numericAmount) || numericAmount < 1 || numericAmount > 1000000 || reason.trim().length < 2 || !confirmed || (action === "subtract" && numericAmount > player.stone);
+  return <Modal title={`玩家加减钻石 · ${player.name || player.playerId}`} eyebrow="DIAMOND ADJUSTMENT" onClose={onClose}><div className="balance-adjust-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>ID {player.playerId} · 当前钻石 {player.stone.toLocaleString("zh-CN")}</p></div>{player.roomId > 0 && <em>房间 {player.roomId}</em>}</div>{player.roomId > 0 && <div className="operation-warning"><strong>玩家当前正在房间中，仍可加减钻石</strong><p>本次调整的是玩家账号钻石，牌桌已经带入的钻石以房间服务为准；提交后后台会回读账号钻石数量并记录操作审计。</p></div>}{error && <div className="form-error"><span>!</span>{error}</div>}<div className="balance-action-tabs"><button type="button" className={action === "add" ? "is-active" : ""} onClick={() => setAction("add")}>增加钻石</button><button type="button" className={action === "subtract" ? "is-active is-danger" : ""} onClick={() => setAction("subtract")}>扣减钻石</button></div><div className="form-grid form-grid--single"><Field label="本次钻石数量" hint="只支持整数钻石；单次 1 到 1,000,000"><input type="number" min="1" max="1000000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入数量" /></Field><Field label="客服维护原因" hint="原因会进入操作审计，便于后续核对"><textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：客服工单补偿，核对编号……" /></Field></div><div className={`balance-change-preview ${action === "subtract" ? "is-subtract" : ""}`}><div><span>操作前</span><strong>{player.stone.toLocaleString("zh-CN")}</strong></div><i>→</i><div><span>预计操作后</span><strong>{targetStone.toLocaleString("zh-CN")}</strong></div></div><label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID、操作方向、钻石数量和维护原因{player.roomId > 0 ? "，并知悉牌桌已带入的钻石以房间服务为准" : ""}</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={action === "subtract" ? "danger" : "primary"} disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在提交并回读…" : action === "add" ? "确认增加钻石" : "确认扣减钻石"}</Button></div></Modal>;
 }
 
-type PlayerDetailTab = "profile" | "finance" | "rooms";
+type PlayerDetailTab = "profile" | "clubs" | "rooms";
 
 function PlayerDetail({ player, can, canViewSensitive, notify, onClose }: { player: PlayerItem; can: (permission: string) => boolean; canViewSensitive: boolean; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void }) {
   const [tab, setTab] = useState<PlayerDetailTab>("profile");
-  const [finance, setFinance] = useState<TransactionResponse | null>(null);
-  const [financePage, setFinancePage] = useState(1);
-  const [financeLoading, setFinanceLoading] = useState(false);
+  const [clubs, setClubs] = useState<PlayerClubMembership[] | null>(null);
+  const [clubsLoading, setClubsLoading] = useState(false);
   const [rooms, setRooms] = useState<PlayerRoomHistoryResponse | null>(null);
   const [roomPage, setRoomPage] = useState(1);
   const [roomLoading, setRoomLoading] = useState(false);
   const [sensitive, setSensitive] = useState<PlayerSensitiveInfo | null>(null);
   const [sensitiveLoading, setSensitiveLoading] = useState(canViewSensitive);
   const [sensitiveError, setSensitiveError] = useState("");
-  const canViewFinance = can("game.transaction.view");
   const canViewRooms = can("game.room_record.view");
 
   const loadSensitive = useCallback(async () => {
@@ -289,15 +270,15 @@ function PlayerDetail({ player, can, canViewSensitive, notify, onClose }: { play
     } finally { setSensitiveLoading(false); }
   }, [canViewSensitive, notify, player.playerId]);
 
-  const loadFinance = useCallback(async () => {
-    if (!canViewFinance) return;
-    setFinanceLoading(true);
+  const loadClubs = useCallback(async () => {
+    setClubsLoading(true);
     try {
-      setFinance(await api<TransactionResponse>(`/api/game/transactions?playerId=${encodeURIComponent(player.playerId)}&page=${financePage}&pageSize=10`));
+      const result = await api<{ items: PlayerClubMembership[] }>(`/api/game/players/${encodeURIComponent(player.playerId)}/clubs`);
+      setClubs(result.items);
     } catch (reason) {
-      notify(reason instanceof ApiError ? reason.message : "玩家资金情况加载失败", "error");
-    } finally { setFinanceLoading(false); }
-  }, [canViewFinance, financePage, notify, player.playerId]);
+      notify(reason instanceof ApiError ? reason.message : "玩家所在俱乐部加载失败", "error");
+    } finally { setClubsLoading(false); }
+  }, [notify, player.playerId]);
 
   const loadRooms = useCallback(async () => {
     if (!canViewRooms) return;
@@ -309,7 +290,7 @@ function PlayerDetail({ player, can, canViewSensitive, notify, onClose }: { play
     } finally { setRoomLoading(false); }
   }, [canViewRooms, notify, player.playerId, roomPage]);
 
-  useEffect(() => { if (tab === "finance") void loadFinance(); }, [loadFinance, tab]);
+  useEffect(() => { if (tab === "clubs") void loadClubs(); }, [loadClubs, tab]);
   useEffect(() => { if (tab === "rooms") void loadRooms(); }, [loadRooms, tab]);
   useEffect(() => { if (tab === "profile" && canViewSensitive && !sensitive && !sensitiveError) void loadSensitive(); }, [canViewSensitive, loadSensitive, sensitive, sensitiveError, tab]);
 
@@ -321,12 +302,12 @@ function PlayerDetail({ player, can, canViewSensitive, notify, onClose }: { play
         <em>只读</em>
       </div>
       <nav className="player-profile-tabs" aria-label="玩家详情分类">
-        <button type="button" className={tab === "profile" ? "is-active" : ""} onClick={() => setTab("profile")}><span>基本资料</span><small>账号、资产与代理</small></button>
-        <button type="button" className={tab === "finance" ? "is-active" : ""} disabled={!canViewFinance} onClick={() => setTab("finance")}><span>资金情况</span><small>{canViewFinance ? "完整金币流水" : "当前角色无权限"}</small></button>
+        <button type="button" className={tab === "profile" ? "is-active" : ""} onClick={() => setTab("profile")}><span>基本资料</span><small>账号、钻石与游戏状态</small></button>
+        <button type="button" className={tab === "clubs" ? "is-active" : ""} onClick={() => setTab("clubs")}><span>所在俱乐部</span><small>角色、俱乐部金币与下级</small></button>
         <button type="button" className={tab === "rooms" ? "is-active" : ""} disabled={!canViewRooms} onClick={() => setTab("rooms")}><span>房间战绩</span><small>{canViewRooms ? "参战房间与输赢" : "当前角色无权限"}</small></button>
       </nav>
       {tab === "profile" && <PlayerProfileTab player={player} canViewSensitive={canViewSensitive} sensitive={sensitive} sensitiveLoading={sensitiveLoading} sensitiveError={sensitiveError} onRetrySensitive={() => void loadSensitive()} />}
-      {tab === "finance" && canViewFinance && <PlayerFinanceTab player={player} data={finance} page={financePage} loading={financeLoading} onPage={setFinancePage} />}
+      {tab === "clubs" && <PlayerClubsTab player={player} data={clubs} loading={clubsLoading} />}
       {tab === "rooms" && canViewRooms && <PlayerRoomsTab player={player} data={rooms} page={roomPage} loading={roomLoading} onPage={setRoomPage} />}
     </Modal>
   );
@@ -339,8 +320,6 @@ function PlayerProfileTab({ player, canViewSensitive, sensitive, sensitiveLoadin
         <div className="player-detail-grid">
           <Detail label="KBE账号" value={player.accountName} mono />
           <Detail label="性别" value={player.sex} />
-          <Detail label="角色标记" value={player.role} />
-          <Detail label="玩家等级" value={player.level} />
           <Detail label="VIP / VIP等级" value={`${player.vip} / ${player.vipLevel}`} />
           <Detail label="客户端状态" value={player.clientStatus || "未上报"} />
           <Detail label="客户端版本" value={player.clientVersion} />
@@ -348,20 +327,18 @@ function PlayerProfileTab({ player, canViewSensitive, sensitive, sensitiveLoadin
         </div>
       </section>
       <section className="player-detail-section">
-        <h3>资产与战绩</h3>
+        <h3>钻石与战绩</h3>
         <div className="player-detail-grid">
-          <Detail label="现金余额" value={balanceFormatter.format(player.balance)} highlight />
-          <Detail label="金币整数 / 小数" value={`${player.gold} / ${player.gold2}`} />
+          <Detail label="钻石余额" value={player.stone.toLocaleString("zh-CN")} highlight />
           <Detail label="累计局数" value={player.totalRounds} />
           <Detail label="累计总分" value={player.totalScore} />
           <Detail label="登录次数" value={player.loginCount} />
         </div>
       </section>
       <section className="player-detail-section">
-        <h3>代理关系</h3>
-        <div className="player-detail-grid">
-          <Detail label="直属代理" value={player.agentName ? `${player.agentName}（${player.agentId}）` : player.agentId} />
-        </div>
+        <h3>所在俱乐部</h3>
+        {player.clubs.length > 0 ? <div className="club-chip-list">{player.clubs.map((club) => <span className="club-chip" key={club.clubId} title={`俱乐部ID：${club.clubId}`}>{club.name || club.clubId}</span>)}</div> : <p className="muted">该玩家还没有加入俱乐部</p>}
+        <p className="field__hint">角色、俱乐部金币和下级玩家请在「所在俱乐部」页签查看。</p>
       </section>
       <section className="player-detail-section">
         <h3>注册与其他参数</h3>
@@ -398,29 +375,63 @@ function PlayerSensitiveSection({ player, data, loading, error, onRetry }: { pla
   </section>;
 }
 
-function PlayerFinanceTab({ player, data, page, loading, onPage }: { player: PlayerItem; data: TransactionResponse | null; page: number; loading: boolean; onPage: (page: number) => void }) {
-  if (loading && !data) return <LoadingBlock label="正在读取玩家完整资金情况" />;
-  if (!data) return <EmptyState title="资金情况暂时无法显示" description="请稍后重新打开资金情况页签。" />;
-  const totalPages = Math.max(1, Math.ceil(data.total / data.pageSize));
+function PlayerClubsTab({ player, data, loading }: { player: PlayerItem; data: PlayerClubMembership[] | null; loading: boolean }) {
+  if (loading && !data) return <LoadingBlock label="正在读取玩家所在俱乐部" />;
+  if (!data) return <EmptyState title="俱乐部信息暂时无法显示" description="请稍后重新打开所在俱乐部页签。" />;
+  if (data.length === 0) return <EmptyState title="该玩家还没有加入俱乐部" description="tbl_Account 中没有这个玩家的有效俱乐部关系。" />;
   return <div className="player-profile-tab-content">
-    <section className="player-fund-overview">
-      <ProfileMetric label="当前金币" value={balanceFormatter.format(data.player.currentBalance)} note={`${data.player.totalRecords} 条历史流水`} />
-      <ProfileMetric label="历史总流入" value={`+${balanceFormatter.format(data.summary.totalIn)}`} note={`最早记录 ${formatBeijingDateTime(data.summary.firstAt)}`} tone="win" />
-      <ProfileMetric label="历史总流出" value={`−${balanceFormatter.format(data.summary.totalOut)}`} note={`道具支出 ${balanceFormatter.format(data.summary.itemSpend)}`} tone="loss" />
-      <ProfileMetric label="金币净变化" value={formatPlayerScore(data.summary.netChange)} note={`游戏相关 ${formatPlayerScore(data.summary.gameNet)}`} tone={data.summary.netChange >= 0 ? "win" : "loss"} />
+    <section className="player-club-overview">
+      <ProfileMetric label="所在俱乐部" value={`${data.length} 个`} note="仅显示未删除的俱乐部" />
+      {data.slice(0, 3).map((membership) => <ProfileMetric key={membership.clubId} label={membership.clubName || membership.clubId} value={membership.roleLabel} note={`俱乐部ID ${membership.clubId}`} />)}
     </section>
-    <section className="player-profile-data-section">
-      <div className="player-profile-section-title"><div><h3>全部金币流水</h3><p>显示每笔金币变更前后余额、实际增减、关联内容和客服维护原因</p></div><button type="button" onClick={() => { window.location.hash = `/game/transactions?playerId=${encodeURIComponent(player.playerId)}`; }}>进入交易记录模块</button></div>
-      {data.items.length === 0 ? <EmptyState title="该玩家没有金币流水" description="服务器主金币流水中暂时没有这个玩家的记录。" /> : <div className="table-wrap"><table className="player-finance-table"><thead><tr><th>时间（北京时间）</th><th>业务类型</th><th>实际变化</th><th>变更前 → 变更后</th><th>关联内容</th></tr></thead><tbody>{data.items.map((item) => <PlayerFinanceRow key={item.id} item={item} />)}</tbody></table></div>}
-      <ProfilePagination page={page} totalPages={totalPages} total={data.total} loading={loading} onPage={onPage} unit="条流水" />
-    </section>
+    <div className="player-club-grid">
+      {data.map((membership) => <PlayerClubCard key={membership.clubId} player={player} membership={membership} />)}
+    </div>
   </div>;
 }
 
-function PlayerFinanceRow({ item }: { item: TransactionItem }) {
-  const roomContext = [item.remark1 ? `房间 ${item.remark1}` : "", item.remark3 && item.remark3 !== "0" ? `第 ${item.remark3} 局` : "", item.remark4].filter(Boolean).join(" · ");
-  const context = item.maintenanceReason ? `维护原因：${item.maintenanceReason}${item.maintenanceOperator ? ` · 操作人：${item.maintenanceOperator}` : ""}` : roomContext;
-  return <tr><td><strong>{formatBeijingDateTime(item.occurredAt)}</strong></td><td><strong>{item.optionType}</strong><small className="cell-subtitle">{financeCategoryLabel(item.category)}</small></td><td><strong className={`room-score room-score--${item.change > 0 ? "win" : item.change < 0 ? "loss" : "draw"}`}>{formatPlayerScore(item.change)}</strong></td><td><span className="balance-route">{balanceFormatter.format(item.oldBalance)}<i>→</i><strong>{balanceFormatter.format(item.newBalance)}</strong></span></td><td><span className={`player-history-context ${item.maintenanceReason ? "is-maintenance" : ""}`} title={context || undefined}>{context || "无关联说明"}</span></td></tr>;
+function PlayerClubCard({ player, membership }: { player: PlayerItem; membership: PlayerClubMembership }) {
+  const [subordinates, setSubordinates] = useState<PlayerClubSubordinate[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const loadSubordinates = async () => {
+    setLoading(true); setError("");
+    try {
+      const result = await api<{ items: PlayerClubSubordinate[]; total: number }>(`/api/game/players/${encodeURIComponent(player.playerId)}/clubs/${encodeURIComponent(membership.clubId)}/subordinates`);
+      setSubordinates(result.items);
+      setTotal(result.total);
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : "读取俱乐部下级玩家失败");
+    } finally { setLoading(false); }
+  };
+  return <section className="player-club-card">
+    <header>
+      <div>
+        <span className="eyebrow">CLUB MEMBERSHIP</span>
+        <h3>{membership.clubName || membership.clubId}</h3>
+        <p>俱乐部ID {membership.clubId}{membership.clubStatus ? ` · 状态 ${clubStatusLabels[membership.clubStatus] || membership.clubStatus}` : ""}</p>
+      </div>
+      <span className="club-role-badge">{membership.roleLabel}</span>
+    </header>
+    <div className="player-club-meta">
+      <div><span>俱乐部金币</span><strong>{membership.clubGold === null ? "未记录" : membership.clubGold.toLocaleString("zh-CN")}</strong></div>
+      <div><span>上级</span><strong>{membership.upperName || membership.upperId || "无"}</strong></div>
+      <div><span>上级ID</span><strong>{membership.upperId || "—"}</strong></div>
+      <div><span>模式</span><strong>{clubModeLabels[membership.clubMode] || membership.clubMode || "—"}</strong></div>
+    </div>
+    <div className="player-club-subordinates">
+      <div className="player-profile-section-title">
+        <div><h3>俱乐部下级玩家</h3><p>按当前俱乐部的上下级关系列出该玩家的全部下级</p></div>
+        <Button type="button" variant="secondary" disabled={loading} onClick={() => void loadSubordinates()}>{loading ? "正在读取…" : subordinates ? "刷新下级" : "查看下级玩家"}</Button>
+      </div>
+      {error && <div className="form-error"><span>!</span>{error}</div>}
+      {subordinates && (subordinates.length === 0 ? <EmptyState title="该玩家在这个俱乐部没有下级" description="当前俱乐部关系树中，这个玩家下面没有其他玩家。" /> : <>
+        <div className="table-wrap"><table className="player-club-subordinate-table"><thead><tr><th>玩家</th><th>层级</th><th>角色</th><th>俱乐部金币</th><th>上级</th></tr></thead><tbody>{subordinates.map((item) => <tr key={`${item.playerId}-${item.depth}`}><td><strong>{item.name || "未设置昵称"}</strong><small className="cell-subtitle">ID：{item.playerId}</small></td><td><strong>第 {item.depth} 层</strong></td><td><span className="club-role-badge">{item.roleLabel}</span></td><td><strong>{item.clubGold === null ? "未记录" : item.clubGold.toLocaleString("zh-CN")}</strong></td><td>{item.upperName || item.upperId || "—"}{item.upperName && item.upperId && <small className="cell-subtitle">ID：{item.upperId}</small>}</td></tr>)}</tbody></table></div>
+        <p className="field__hint">共 {total} 名下级玩家。</p>
+      </>)}
+    </div>
+  </section>;
 }
 
 function PlayerRoomsTab({ player, data, page, loading, onPage }: { player: PlayerItem; data: PlayerRoomHistoryResponse | null; page: number; loading: boolean; onPage: (page: number) => void }) {
@@ -452,10 +463,6 @@ function ProfileMetric({ label, value, note, tone = "default" }: { label: string
 
 function ProfilePagination({ page, totalPages, total, loading, onPage, unit }: { page: number; totalPages: number; total: number; loading: boolean; onPage: (page: number) => void; unit: string }) {
   return <footer className="table-pagination"><span>共 {total} {unit}</span><div><button type="button" disabled={page <= 1 || loading} onClick={() => onPage(page - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || loading} onClick={() => onPage(page + 1)}>下一页</button></div></footer>;
-}
-
-function financeCategoryLabel(category: TransactionItem["category"]) {
-  return { game: "游戏输赢", item: "道具消费", consumption: "其他消费", adjustment: "人工调整", other: "其他变化" }[category];
 }
 
 function formatPlayerScore(value: number) {

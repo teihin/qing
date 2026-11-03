@@ -9,6 +9,7 @@ import ModulesPage from "./pages/ModulesPage";
 import JackpotPerformancePage from "./pages/JackpotPerformancePage";
 import AgentsPage from "./pages/AgentsPage";
 import ClubsPage from "./pages/ClubsPage";
+import UnionsPage from "./pages/UnionsPage";
 import PlayersPage from "./pages/PlayersPage";
 import TransactionsPage from "./pages/TransactionsPage";
 import PlatformRevenuePage from "./pages/PlatformRevenuePage";
@@ -109,10 +110,10 @@ export default function App() {
 
   const can = useCallback((permission: string) => Boolean(session?.user.isSuper || session?.permissions.includes(permission)), [session]);
   const notify = useCallback((message: string, kind: "success" | "error" = "success") => setNotice({ message, kind }), []);
-  const navigate = (next: string) => {
+  const navigate = useCallback((next: string) => {
     window.location.hash = next;
-    setRoute(next);
-  };
+    setRoute(next.split("?")[0]);
+  }, []);
   const logout = async () => {
     try { await api("/api/auth/logout", { method: "POST" }); } catch { /* session is cleared locally regardless */ }
     setSession(null);
@@ -123,6 +124,7 @@ export default function App() {
     if (route === "/game/players" && can("game.player.view")) return <PlayersPage can={can} canViewSensitive={Boolean(session?.user.isProtectedRoot && session.user.username === "admin999")} notify={notify} />;
     if (route === "/game/jackpot" && can("game.jackpot.view")) return <JackpotPerformancePage can={can} notify={notify} />;
     if (route === "/game/agents" && can("game.agent.view")) return <AgentsPage notify={notify} />;
+    if (route === "/game/unions" && can("game.union.view")) return <UnionsPage can={can} notify={notify} onNavigate={navigate} />;
     if (route === "/game/clubs" && can("game.club.view")) return <ClubsPage can={can} notify={notify} />;
     if (route === "/game/transactions" && can("game.transaction.view")) return <TransactionsPage notify={notify} />;
     if ((route === "/configuration/platform-revenue" || route === "/game/platform-revenue") && session?.user.isSuper) return <PlatformRevenuePage notify={notify} />;
@@ -158,7 +160,7 @@ export default function App() {
     if (route === "/audit" && can("audit.view")) return <AuditPage notify={notify} />;
     if (can("dashboard.view")) return <DashboardPage notify={notify} />;
     return <div className="panel"><LoadingBlock label="当前角色没有可访问的功能模块" /></div>;
-  }, [route, can, notify, session?.user.isSuper, session?.user.isProtectedRoot, session?.user.username]);
+  }, [route, can, notify, navigate, session?.user.isSuper, session?.user.isProtectedRoot, session?.user.username]);
 
   if (session === undefined) return <div className="boot-screen"><span className="brand__mark brand__mark--large"><i>X</i></span><LoadingBlock label="正在建立安全会话" /></div>;
   if (session === null) return <LoginPage onSuccess={refreshSession} />;
