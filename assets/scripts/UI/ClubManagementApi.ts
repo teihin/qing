@@ -203,11 +203,13 @@ export default class HallClubManagementApi implements ClubManagementApi {
             adjustScore:"修改_俱乐部_成员_积分",setAgent:"设置_俱乐部_代理",
             changeAgentRatio:"修改_俱乐部_代理_比例",cancelAgent:"取消_俱乐部_代理",
             setNote:"设置_俱乐部_成员_备注",grantQuota:"授信_俱乐部_额度",
-            increaseQuota:"授信_俱乐部_额度",decreaseQuota:"授信_俱乐部_额度"
+            increaseQuota:"授信_俱乐部_额度",decreaseQuota:"授信_俱乐部_额度",
+            setUnionPercent:"设置_联盟_盟主_比例"
         };
         const extra:any = user ? {user_id:user} : {};
         if(action === "adjustScore") extra.user_modify_gold = Number(value);
         if(action === "setAgent" || action === "changeAgentRatio") extra.percent = Number(value);
+        if(action === "setUnionPercent") extra.percent = Number(value);
         if(action === "grantQuota") extra.quota_fen = Number(value);
         if(action === "increaseQuota") extra.quota_fen = Math.abs(Number(value));
         if(action === "decreaseQuota") extra.quota_fen = -Math.abs(Number(value));
@@ -224,6 +226,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(action === "increaseQuota") return {message:"额度已增加"};
         if(action === "decreaseQuota") return {message:"额度已减少"};
         if(action === "setNote") return {message:extra.note ? "备注已更新" : "备注已清空"};
+        if(action === "setUnionPercent") return {message:"盟主比例已调整为 " + Number(value) + "%"};
         if(action === "approve") {
             // 审批的最终 0x200 已表示入会完成。成员列表是独立推送，不能用它阻塞
             // 审批弹窗；否则 NumberList 缺失时会把已成功的操作误报成超时。

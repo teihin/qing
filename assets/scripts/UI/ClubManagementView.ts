@@ -7,7 +7,7 @@ export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications" | "union" | "allies";
 export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" | "promote" |
     "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent" | "setNote" |
-    "grantQuota" | "increaseQuota" | "decreaseQuota" | "unionApprove" | "unionReject";
+    "grantQuota" | "increaseQuota" | "decreaseQuota" | "unionApprove" | "unionReject" | "setUnionPercent";
 export interface ClubContext {
     accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; isLeader?:boolean;
     /** V2 联盟状态：未确认时不显示创建/加入入口，避免把网络未知当成无联盟。 */
@@ -496,6 +496,7 @@ export default class ClubManagementView {
             "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置上下分","玩家设置调整分数","玩家设置踢出俱乐部",
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
             "玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏","玩家设置禁止账号",
+            "玩家设置调整盟主比例",
             "成员设置","成员设置非激活","下级成员","下级成员激活",
             "下级第一页","下级上一页","下级下一页","下级最后一页",
             "玩家设置输入关闭","玩家设置输入取消","玩家设置输入确认"].indexOf(name) < 0) return false;
@@ -503,6 +504,9 @@ export default class ClubManagementView {
         if(["玩家设置赠送金币","玩家设置上下分","玩家设置调整分数","玩家设置踢出俱乐部","玩家设置调整比例",
             "玩家设置代理开关","玩家设置取消代理","玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏",
             "玩家设置禁止账号"].indexOf(name) >= 0 && this.blockReadOnlyPlayer()) return true;
+        if(["玩家设置赠送金币","玩家设置代理开关","玩家设置取消代理"].indexOf(name) >= 0 &&
+            this.isUnionLeaderPlayer()) return true;
+        if(name === "玩家设置调整盟主比例" && !this.isUnionLeaderPlayer()) return true;
         if(name === "玩家设置关闭") {
             this.active("俱乐部玩家设置弹窗",false);
             this.selectedPlayer = null;
@@ -524,6 +528,8 @@ export default class ClubManagementView {
             if(this.selectedPlayer) this.confirm("remove",this.selectedPlayer.id,this.selectedPlayer.name);
         } else if(name === "玩家设置调整比例") {
             if(this.selectedPlayer && this.isAgentPlayer(this.selectedPlayer)) this.openPlayerInput("ratio");
+        } else if(name === "玩家设置调整盟主比例") {
+            this.openPlayerInput("unionPercent");
         } else if(name === "玩家设置代理开关") {
             if(this.selectedPlayer && this.isAgentPlayer(this.selectedPlayer))
                 this.confirm("cancelAgent",this.selectedPlayer.id,this.selectedPlayer.name);
@@ -756,6 +762,7 @@ export default class ClubManagementView {
         const dialog = this.at("俱乐部申请弹窗");
         if(!dialog || !dialog.active) return;
         const items = page.items;
+        this.cacheUnionMemberClubs(items);
         this.total = items.length;
         const poolFen = Number(page.poolQuotaFen);
         if(Number.isFinite(poolFen)) this.allyPoolQuotaFen = poolFen;
@@ -850,6 +857,7 @@ export default class ClubManagementView {
             const result = await this.api.unionMembers();
             if(!this.valid(version,ctx) || this.kind !== "allies") return;
             const items = result && Array.isArray(result.items) ? result.items : [];
+            this.cacheUnionMemberClubs(items);
             this.total = items.length;
             this.renderUnionMembers(items);
             const poolFen = Number(result && result.poolQuotaFen);
@@ -1019,6 +1027,56 @@ export default class ClubManagementView {
         const player = this.selectedPlayer;
         return !!player && !!this.context && String(player.id) === String(this.context.accountId || "");
     }
+    /** 盟主是联盟内另一家俱乐部的创建者，开通代理与赠送不适用于该行；自己那行不算。 */
+    private isUnionLeaderPlayer(player:ClubPlayer = this.selectedPlayer):boolean {
+        if(!player || !this.context) return false;
+        if(String(player.id) === String(this.context.accountId || "")) return false;
+        if(this.memberIdentity(player,this.context) === "盟主") return true;
+        return String(player.role || "").trim() === "盟主";
+    }
+    /** 盟主比例行只对盟主显示，且只有总群主能调整。 */
+    private unionPercentRowNodes():string[] {
+        return ["盟主比例底","盟主比例","盟主比例值","玩家设置调整盟主比例"];
+    }
+    /** 联盟成员列表（owner_guuid → club_id），用于盟主行缺 club_id 时定位其真实俱乐部。 */
+    private unionMemberClubs:{[ownerId:string]:string} = {};
+    private cacheUnionMemberClubs(items:ClubUnionMember[]):void {
+        for(const item of items || []) {
+            const ownerId = String(item && item.ownerId || "").trim();
+            const clubId = String(item && item.clubId || "").trim();
+            if(ownerId && /^\d{6}$/.test(clubId)) this.unionMemberClubs[ownerId] = clubId;
+        }
+    }
+    /**
+     * 目标玩家所在俱乐部：NumberList 每行都带自己的 club_id，下级查询一律按它传。
+     * 行里没带时才用联盟成员列表（owner_guuid → club_id）兜底。
+     */
+    private resolvePlayerClubId(player:ClubPlayer):string {
+        const own = String(player && player.clubId || "").trim();
+        if(/^\d{6}$/.test(own)) return own;
+        const cached = this.unionMemberClubs[String(player && player.id || "")] || "";
+        return /^\d{6}$/.test(cached) ? cached : "";
+    }
+    /**
+     * 盟主行：收起代理比例、开通代理和赠送，改为显示独立的「盟主比例」行，
+     * 点「调整」走 设置_联盟_盟主_比例。非盟主行整行隐藏。
+     */
+    private syncUnionLeaderActions():void {
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel) return;
+        const unionLeader = this.isUnionLeaderPlayer();
+        const showPercent = unionLeader && this.settingsTab === "member";
+        for(const name of this.unionPercentRowNodes()) {
+            this.active(name,showPercent,panel);
+            this.button(name,showPercent && !this.readOnlyPlayer() && this.canReviewUnion(),panel);
+        }
+        if(!unionLeader) return;
+        for(const name of ["代理","代理底","代理开关文字","玩家设置代理开关","玩家设置赠送金币",
+            "比例","比例底","比例值","玩家设置调整比例"]) {
+            this.active(name,false,panel);
+            this.button(name,false,panel);
+        }
+    }
     /** V2：上下分只开放给俱乐部创建者（老板）；代理/管理员只能赠送。 */
     private canUpDown():boolean {
         return !!this.context && this.context.role === "owner";
@@ -1079,6 +1137,7 @@ export default class ClubManagementView {
         this.text("备注值",fresh.note || "未设置",panel);
         const freshIdentity = this.memberIdentity(fresh,this.context);
         this.text("比例值",(this.isAgentPlayer(fresh) || freshIdentity === "盟主" || freshIdentity === "大群主") ? this.percentText(fresh) : "未开通",panel);
+        this.text("盟主比例值",this.percentText(fresh),panel);
     }
     /** 有备注时统一显示「名字(备注)」，成员列表、下级列表与玩家信息抬头共用。 */
     private displayName(item:ClubPlayer):string {
@@ -1335,6 +1394,7 @@ export default class ClubManagementView {
         this.text("玩家积分值",this.value(item.clubGold !== undefined ? item.clubGold : item.points),panel);
         this.text("备注值",item.note || "未设置",panel);
         this.text("比例值",(isAgent || identity === "盟主" || identity === "大群主") ? this.percentText(item) : "未开通",panel);
+        this.text("盟主比例值",this.percentText(item),panel);
         this.text("代理开关文字",isAgent ? "开" : "关",panel);
         this.active("玩家设置代理开关/开",isAgent,panel);
         this.active("玩家设置代理开关/关",!isAgent,panel);
@@ -1349,17 +1409,19 @@ export default class ClubManagementView {
         // 自己那一行只留「赠送 / 上下分」，代理关系类操作整块收起（不给点也不显示）。
         const canManageTarget = !isSelf;
         // 赠送只对“其他人”，自己那行不显示赠送；老板给其他人可赠送+上下分，代理给其他人只有赠送。
-        const canGift = !isSelf && !isOwner;
+        // 盟主是联盟内另一家俱乐部的创建者，赠送与开通代理都不适用于该行。
+        const unionLeader = this.isUnionLeaderPlayer();
+        const canGift = !isSelf && !isOwner && !unionLeader;
         this.active("玩家设置赠送金币",!readOnly && canGift,panel);
         // 上下分只有俱乐部创建者显示（含自己那行）；代理没有上下分。
         // 目前不允许踢出俱乐部，按钮保留但不显示。
         this.active("玩家设置踢出俱乐部",false,panel);
         this.active("玩家设置调整比例",canAgent && isAgent && canManageTarget,panel);
-        this.active("玩家设置代理开关",canAgent && canManageTarget,panel);
+        this.active("玩家设置代理开关",canAgent && canManageTarget && !unionLeader,panel);
         this.button("玩家设置赠送金币",!readOnly && canGift,panel);
         this.button("玩家设置踢出俱乐部",false,panel);
         this.button("玩家设置调整比例",canAgent && isAgent && canManageTarget && !isOwner,panel);
-        this.button("玩家设置代理开关",canAgent && canManageTarget && !isOwner,panel);
+        this.button("玩家设置代理开关",canAgent && canManageTarget && !isOwner && !unionLeader,panel);
         // 备注行对所有人可见；「设置备注」按钮由 showPlayerSettingsTab 按权限决定。
         this.button("玩家设置备注",this.canRemarkPlayer(),panel);
         // These two controls remain visible as reserved layout rows but have no
@@ -1412,6 +1474,8 @@ export default class ClubManagementView {
         this.syncUpDownButton();
         // 切页签会把管理类行按钮重新激活，自己那一行要再统一收起一次。
         this.syncSelfActions();
+        // 盟主行的代理开关与赠送同样要在页签切换后重新收起。
+        this.syncUnionLeaderActions();
         this.active("玩家设置下级列表",!member,panel);
         this.active("成员设置",member,panel);
         this.active("成员设置非激活",!member,panel);
@@ -1433,8 +1497,10 @@ export default class ClubManagementView {
         const player = this.selectedPlayer;
         const context = this.context ? {...this.context} : null;
         if(!this.api || !context || !context.id || !player) return;
-        // 普通成员没有下级；只有代理才能按 agent_id 下钻其直属成员。
-        if(!this.isAgentPlayer(player)) {
+        // 普通成员没有下级；代理按 agent_id 下钻，盟主（另一家俱乐部的创建者）
+        // 的直属成员在自己俱乐部，必须改用 TA 的 club_id 查询。
+        const unionLeader = this.isUnionLeaderPlayer(player);
+        if(!this.isAgentPlayer(player) && !unionLeader) {
             this.selectedDownline = [];
             this.downlinePage = 0;
             this.downlineTotal = 0;
@@ -1451,7 +1517,26 @@ export default class ClubManagementView {
         this.selectedDownline = [];
         this.renderDownline(panel);
         try {
-            const result = await this.api.list(context.id,"members",page,this.downlinePageSize,"",playerId);
+            let queryClubId = this.resolvePlayerClubId(player);
+            if(unionLeader && !queryClubId && typeof (this.api as any).unionMembers === "function") {
+                // 盟主行没带 club_id 时，用「查询_我的_联盟」补查其所属俱乐部，再发成员查询。
+                try {
+                    const union = await this.api.unionMembers();
+                    if(token !== this.downlineToken ||
+                        !this.selectedPlayer || this.selectedPlayer.id !== playerId) return;
+                    this.cacheUnionMemberClubs(union && union.items);
+                    queryClubId = this.resolvePlayerClubId(player);
+                } catch(fetchError) {}
+            }
+            if(!queryClubId) {
+                // 盟主不兜底当前俱乐部（两家不是同一家）；代理/成员行缺 club_id 才用当前俱乐部。
+                if(unionLeader) {
+                    this.downlineError = "未获取到盟主所在俱乐部，请刷新盟友管理后重试";
+                    return;
+                }
+                queryClubId = context.id;
+            }
+            const result = await this.api.list(queryClubId,"members",page,this.downlinePageSize,"",playerId);
             if(token !== this.downlineToken || !this.valid(version,context) ||
                 !this.selectedPlayer || this.selectedPlayer.id !== playerId) return;
             const rows = result && Array.isArray(result.items) ? result.items : [];
@@ -1576,12 +1661,14 @@ export default class ClubManagementView {
             this.message(error && error.message || "额度调整失败，请稍后重试");
         }
     }
-    private openPlayerInput(mode:"ratio"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"):void {
+    private openPlayerInput(mode:"ratio"|"unionPercent"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"):void {
         this.unionQuotaMode = null;
         this.selectedUnionMember = null;
         // 比例与备注权限一致：创建者或该成员的直属上级代理。
         const quotaMode = ["quota","quotaIncrease","quotaDecrease"].indexOf(mode) >= 0;
-        const allowed = mode === "ratio" ? this.canManageAgent() : quotaMode ? this.canGrantQuota() : this.canRemarkPlayer();
+        const allowed = mode === "ratio" ? this.canManageAgent() :
+            mode === "unionPercent" ? this.isUnionLeaderPlayer() && this.canReviewUnion() :
+            quotaMode ? this.canGrantQuota() : this.canRemarkPlayer();
         if(!this.selectedPlayer || !allowed) return;
         if(this.blockReadOnlyPlayer()) return;
         const modal = this.at("玩家设置输入弹窗");
@@ -1594,18 +1681,20 @@ export default class ClubManagementView {
         // Prefab 里存的是 NUMERIC，不按用途切回来备注就只能打数字。
         edit.inputMode = mode === "remark" ? cc.EditBox.InputMode.SINGLE_LINE :
             quotaMode ? cc.EditBox.InputMode.DECIMAL : cc.EditBox.InputMode.NUMERIC;
-        const title = mode === "ratio" ? "调整比例" : mode === "quota" ? "开通额度" :
+        const title = mode === "ratio" ? "调整比例" : mode === "unionPercent" ? "调整盟主比例" :
+            mode === "quota" ? "开通额度" :
             mode === "quotaIncrease" ? "增加额度" : mode === "quotaDecrease" ? "减少额度" : "设置备注";
-        const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" : quotaMode ?
+        const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" :
+            mode === "unionPercent" ? "请输入 0-100 的整数比例（100=不抽）" : quotaMode ?
             (mode === "quotaDecrease" ? "请输入减少额度（元），支持两位小数" : "请输入增加额度（元），支持两位小数") :
             "请输入备注（最多 " + ClubManagementView.NOTE_MAX + " 字，留空可清空）";
         this.text("玩家设置输入标题",title,panel);
         this.text("玩家设置输入提示",prompt,panel);
         // EditBox 会把框内标签强制成单行 CLAMP，长句会被截断；完整说明留在上方提示，框内只放短占位。
-        this.text("提示",mode === "ratio" ? prompt : quotaMode ? "请输入额度" : "请输入备注",input);
+        this.text("提示",mode === "ratio" ? prompt : mode === "unionPercent" ? "0-100" : quotaMode ? "请输入额度" : "请输入备注",input);
         // 备注上限按文档 §4.11，超长服务端直接报错；这里先在输入层拦住，提示文案同源。
-        edit.maxLength = mode === "remark" ? ClubManagementView.NOTE_MAX : quotaMode ? 18 : 120;
-        edit.string = mode === "ratio" ?
+        edit.maxLength = mode === "remark" ? ClubManagementView.NOTE_MAX : quotaMode ? 18 : mode === "unionPercent" ? 3 : 120;
+        edit.string = mode === "ratio" || mode === "unionPercent" ?
             (this.selectedPlayer.agentPercent !== undefined ? String(this.selectedPlayer.agentPercent) : "0") :
             quotaMode ? "0" :
             (this.selectedPlayer.note || "");
@@ -1618,6 +1707,20 @@ export default class ClubManagementView {
         const input = this.at("玩家设置输入框",this.at("面板",this.at("玩家设置输入弹窗")));
         const edit = input && input.getComponent(cc.EditBox);
         const value = edit && edit.string ? edit.string.trim() : "";
+        if(mode === "unionPercent") {
+            const number = Number(value);
+            if(!/^\d+$/.test(value) || !Number.isInteger(number) || number < 0 || number > 100) {
+                this.message("盟主比例必须是 0-100 的整数");
+                return;
+            }
+            const player = this.selectedPlayer;
+            const clubId = String(player.clubId || "").trim();
+            if(!clubId) { this.message("缺少盟主俱乐部信息，请刷新后重试"); return; }
+            this.inputMode = null;
+            this.active("玩家设置输入弹窗",false);
+            this.submitUnionPercent(player,clubId,number);
+            return;
+        }
         if(mode === "ratio") {
             const number = Number(value);
             if(!/^\d+$/.test(value) || !Number.isInteger(number) || number < 0 || number > 100) {
@@ -1684,6 +1787,40 @@ export default class ClubManagementView {
             if(cc.isValid(this.root)) this.busy = false;
         }
         if(saved) await this.load(this.page);
+    }
+    /**
+     * 设置_联盟_盟主_比例：club_id 传目标盟主的俱乐部，percent 0-100（100=不抽）。
+     * 只有联盟总群主能改，服务端会再校验目标俱乐部是否在本联盟。
+     */
+    private async submitUnionPercent(player:ClubPlayer,clubId:string,percent:number):Promise<void> {
+        if(!this.api) { this.message("该功能暂未开放");return; }
+        if(this.busy) { this.message("操作进行中，请稍后再试");return; }
+        const club = {...this.context};
+        if(!this.sameContext(club,this.getContext())) { this.Refresh();return; }
+        if(!this.isUnionLeaderPlayer(player) || !this.canReviewUnion()) {
+            this.message("只有联盟大群主可以调整盟主比例");
+            return;
+        }
+        this.busy = true;
+        try {
+            const result = await this.api.act(clubId,"setUnionPercent","",String(percent));
+            if(!this.valid(this.version,club)) return;
+            this.busy = false;
+            player.agentPercent = String(percent);
+            if(this.selectedPlayer && String(this.selectedPlayer.id) === String(player.id)) {
+                this.selectedPlayer = player;
+                const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+                this.text("盟主比例值",this.percentText(player),panel);
+                this.text("比例值",this.percentText(player),panel);
+            }
+            this.message(result && result.message || ("盟主比例已调整为 " + percent + "%"));
+            await this.load(this.page);
+            this.reloadPlayerCard(player.id);
+        } catch(error) {
+            if(this.valid(this.version,club)) this.message(error && error.message || "盟主比例调整失败，请稍后重试");
+        } finally {
+            if(cc.isValid(this.root)) this.busy = false;
+        }
     }
     private submitPlayerValue(action:ClubAction,inputName:string,emptyMessage:string):void {
         const agentAction = ["setAgent","changeAgentRatio","cancelAgent"].indexOf(action) >= 0;
