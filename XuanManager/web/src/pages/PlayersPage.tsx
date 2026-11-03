@@ -3,7 +3,7 @@ import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
 import { formatBeijingDateTime } from "../time";
-import type { PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneAdjustmentResult } from "../types";
+import type { PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -59,7 +59,6 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
   const [loading, setLoading] = useState(true);
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<PlayerItem | null>(null);
-  const [adjusting, setAdjusting] = useState<PlayerItem | null>(null);
   const [resettingPassword, setResettingPassword] = useState<PlayerItem | null>(null);
   const [queryRevision, refreshQuery] = useQueryRefresh();
 
@@ -107,7 +106,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       <PageHeader
         eyebrow="GAME PLAYERS"
         title="玩家管理"
-        description="查询玩家账号、钻石余额、所在俱乐部和客户端状态；按权限执行加减钻石和登录密码重置。"
+        description="查询玩家账号、钻石余额、所在俱乐部和客户端状态；按权限执行登录密码重置。"
         actions={<span className="readonly-badge"><i />敏感操作全程审计</span>}
       />
 
@@ -164,7 +163,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
                     <td>{formatDate(player.registrationTime)}</td>
                     <td>{formatDate(player.lastLoginAt)}</td>
-                    <td><div className="row-actions">{can("game.player.balance_adjust") && <button className="success-link" onClick={() => setAdjusting(player)}>加减钻石</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
+                    <td><div className="row-actions">{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -183,7 +182,6 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       </section>
 
       {selected && <PlayerDetail player={selected} can={can} canViewSensitive={canViewSensitive} notify={notify} onClose={() => setSelected(null)} />}
-      {adjusting && <StoneAdjustmentModal player={adjusting} onClose={() => setAdjusting(null)} onDone={(result) => { setAdjusting(null); notify(result.message); void load(); }} />}
       {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
     </div>
   );
@@ -222,26 +220,6 @@ function ResetPlayerPasswordModal({ player, onClose, onDone }: { player: PlayerI
     <label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID和登录账号，并确认重置该玩家的登录密码</span></label>
     <div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在重置并校验…" : "确认重置密码"}</Button></div>
   </Modal>;
-}
-
-function StoneAdjustmentModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (result: PlayerStoneAdjustmentResult) => void }) {
-  const [action, setAction] = useState<"add" | "subtract">("add");
-  const [amount, setAmount] = useState("");
-  const [reason, setReason] = useState("");
-  const [confirmed, setConfirmed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const numericAmount = Number(amount);
-  const targetStone = player.stone + (action === "add" ? numericAmount || 0 : -(numericAmount || 0));
-  const submit = async () => {
-    setBusy(true); setError("");
-    try {
-      const result = await api<PlayerStoneAdjustmentResult>(`/api/game/players/${encodeURIComponent(player.playerId)}/stone-adjustments`, { method: "POST", ...jsonBody({ action, amount: numericAmount, reason, expectedStone: player.stone, confirm: confirmed }) });
-      onDone(result);
-    } catch (reasonValue) { setError(reasonValue instanceof ApiError ? reasonValue.message : "玩家加减钻石失败"); } finally { setBusy(false); }
-  };
-  const invalid = !Number.isInteger(numericAmount) || numericAmount < 1 || numericAmount > 1000000 || reason.trim().length < 2 || !confirmed || (action === "subtract" && numericAmount > player.stone);
-  return <Modal title={`玩家加减钻石 · ${player.name || player.playerId}`} eyebrow="DIAMOND ADJUSTMENT" onClose={onClose}><div className="balance-adjust-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>ID {player.playerId} · 当前钻石 {player.stone.toLocaleString("zh-CN")}</p></div>{player.roomId > 0 && <em>房间 {player.roomId}</em>}</div>{player.roomId > 0 && <div className="operation-warning"><strong>玩家当前正在房间中，仍可加减钻石</strong><p>本次调整的是玩家账号钻石，牌桌已经带入的钻石以房间服务为准；提交后后台会回读账号钻石数量并记录操作审计。</p></div>}{error && <div className="form-error"><span>!</span>{error}</div>}<div className="balance-action-tabs"><button type="button" className={action === "add" ? "is-active" : ""} onClick={() => setAction("add")}>增加钻石</button><button type="button" className={action === "subtract" ? "is-active is-danger" : ""} onClick={() => setAction("subtract")}>扣减钻石</button></div><div className="form-grid form-grid--single"><Field label="本次钻石数量" hint="只支持整数钻石；单次 1 到 1,000,000"><input type="number" min="1" max="1000000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入数量" /></Field><Field label="客服维护原因" hint="原因会进入操作审计，便于后续核对"><textarea rows={3} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：客服工单补偿，核对编号……" /></Field></div><div className={`balance-change-preview ${action === "subtract" ? "is-subtract" : ""}`}><div><span>操作前</span><strong>{player.stone.toLocaleString("zh-CN")}</strong></div><i>→</i><div><span>预计操作后</span><strong>{targetStone.toLocaleString("zh-CN")}</strong></div></div><label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID、操作方向、钻石数量和维护原因{player.roomId > 0 ? "，并知悉牌桌已带入的钻石以房间服务为准" : ""}</span></label><div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button variant={action === "subtract" ? "danger" : "primary"} disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在提交并回读…" : action === "add" ? "确认增加钻石" : "确认扣减钻石"}</Button></div></Modal>;
 }
 
 type PlayerDetailTab = "profile" | "clubs" | "rooms";

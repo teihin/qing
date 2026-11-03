@@ -426,7 +426,9 @@ export default class panelHongli extends UIPanelViewBase {
         }
         else if(button.node.name === "提取红利")
         {
-            UIManager.getInstance().showPanel("panelMyHongli", ShowPanelMode.Cover);
+            const account:any = GameDataManager.getAccount();
+            UIManager.getInstance().showPanel("panelMyHongli", ShowPanelMode.Cover,
+                JSON.stringify({club_id:resolveRoomClubId(account)}));
         }
         else if(button.node.name === "确认提取红利")
         {

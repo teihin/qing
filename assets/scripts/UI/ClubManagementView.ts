@@ -460,6 +460,8 @@ export default class ClubManagementView {
         }
         this.active("联盟操作/入盟申请",canReviewUnion,card);
         this.active("联盟操作/盟友管理",canReviewUnion,card);
+        // 联盟创建者额外显示「联盟红利」，复用我的红利面板的联盟口径。
+        this.active("联盟红利",canReviewUnion,card);
         // 与「创建/加入联盟」同宽同排版；同时兜底文案，旧 Prefab 缓存里若是「加入联盟」也能纠正。
         for(const pair of [["入盟申请","入盟申请",-158],["盟友管理","盟友管理",158]]) {
             const button = this.at("联盟操作/" + pair[0],card);
@@ -505,7 +507,9 @@ export default class ClubManagementView {
         if(operation && Math.abs(operation.height - opHeight) > 0.5)
             operation.height = opHeight;
 
-        const cardHeight = hasClub ? (hasUnion ? 320 : 200) : 0;
+        // 联盟创建者多一行「联盟红利」，卡片从 320 增高到 410。
+        const showUnionBonus = hasUnion && this.canReviewUnion(current);
+        const cardHeight = hasClub ? (hasUnion ? (showUnionBonus ? 410 : 320) : 200) : 0;
         const card = this.at("Main/我的/滚动区/view/content/当前俱乐部");
         if(card) {
             if(Math.abs(card.height - cardHeight) > 0.5) card.height = cardHeight;
@@ -534,7 +538,7 @@ export default class ClubManagementView {
         const name = button.node.name;
         if(["管理关闭","管理成员","管理返回成员","管理申请","管理上一页","管理下一页",
             "管理第一页","管理最后一页","管理刷新","管理查询成员","管理重置成员搜索",
-            "管理退出","管理解散","管理收益","创建联盟","加入联盟","入盟申请","盟友管理","管理取消","管理确认",
+            "管理退出","管理解散","管理收益","创建联盟","加入联盟","入盟申请","盟友管理","联盟红利","管理取消","管理确认",
             "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置上下分","玩家设置调整分数","玩家设置踢出俱乐部",
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
             "玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏","玩家设置禁止账号",
@@ -642,7 +646,7 @@ export default class ClubManagementView {
         else if(name === "管理刷新") { if(!this.loading) this.load(this.page); }
         else if(name === "管理退出") this.confirm("leave", "", "");
         else if(name === "管理收益") {
-            // panelMyHongli 按俱乐部口径查收益（查询_俱乐部_代理_收益），必须带 club_id。
+            // panelMyHongli 按俱乐部口径查红利统计和明细，必须带 club_id。
             if(this.context.id && this.context.role === "owner")
                 UIManager.getInstance().showPanel("panelMyHongli",ShowPanelMode.Cover,
                     JSON.stringify({club_id:this.context.id,club_name:this.context.name || ""}));
@@ -653,6 +657,11 @@ export default class ClubManagementView {
         }
         else if(name === "入盟申请") this.openUnionApplications();
         else if(name === "盟友管理") this.openAllies();
+        else if(name === "联盟红利") {
+            if(this.canReviewUnion())
+                UIManager.getInstance().showPanel("panelUnionHongli",ShowPanelMode.Cover,JSON.stringify({mode:"union"}));
+            else this.message("只有联盟大群主可以查看联盟红利");
+        }
         else if(name === "管理解散") this.confirm("dissolve", "", "");
         else if(name === "管理取消") {
             if(!this.busy) { this.active("俱乐部操作确认",false); this.pending = null; }
@@ -936,8 +945,6 @@ export default class ClubManagementView {
             row.active = true;
             row.setPosition(0,-100 - index * pitch);
             this.fillUnionMemberRow(row,item,icon,!!item.ownerId && item.ownerId === accountId);
-            // 大群主点俱乐部头像/名字进入该俱乐部成员列表，再点某个人开聊。
-            this.bindUnionMemberList(row,item);
             for(const pair of [["管理拒绝","decrease"],["管理同意","increase"]])
                 if(this.at(pair[0],row)) this.at(pair[0],row).on("click",()=>{
                     this.openUnionQuotaInput(item,pair[1] as "increase"|"decrease");
@@ -950,8 +957,7 @@ export default class ClubManagementView {
     private fillUnionMemberRow(row:cc.Node,item:ClubUnionMember,icon:cc.SpriteFrame,isUnionOwner:boolean):void {
         const name = item.clubName || "俱乐部 " + item.clubId;
         this.text("姓名",name + (isUnionOwner ? "（大群主）" : ""),row);
-        this.text("玩家ID","俱乐部ID: " + item.clubId + (item.ownerName ? "  群主：" + item.ownerName : "") +
-            " · 点名字查看成员",row);
+        this.text("玩家ID","俱乐部ID: " + item.clubId + (item.ownerName ? "  群主：" + item.ownerName : ""),row);
         const quotaFen = Number(item.quotaFen);
         const quotaNode = this.at("盟友额度",row);
         if(quotaNode) {
@@ -981,24 +987,6 @@ export default class ClubManagementView {
         if(avatarSprite) {
             if(item.ownerId) ImageManager.getInstance().BindPlayerListAvatar(item.ownerId,avatarSprite);
             else if(icon) avatarSprite.spriteFrame = icon;
-        }
-    }
-    /**
-     * 联盟大群主进入某个加盟俱乐部的成员列表。成员列表页复用 panelMessageMembers，
-     * 服务端允许大群主查询联盟内任意俱乐部成员并发起跨俱乐部会话。
-     */
-    private bindUnionMemberList(row:cc.Node,item:ClubUnionMember):void {
-        if(!this.canReviewUnion()) return;
-        const open = ():void=>{
-            if(!item.clubId) return;
-            UIManager.getInstance().showPanel("panelMessageMembers",ShowPanelMode.Cover,
-                JSON.stringify({clubId:item.clubId,clubName:item.clubName || ""}));
-        };
-        for(const name of ["头像","姓名","玩家ID"]) {
-            const node = this.at(name,row);
-            if(!node) continue;
-            node.targetOff(this);
-            node.on(cc.Node.EventType.TOUCH_END,open,this);
         }
     }
     private fenText(fen:any):string {

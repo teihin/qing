@@ -24,19 +24,3 @@ func TestClubRoleLabel(t *testing.T) {
 		}
 	}
 }
-
-func TestStoneAdjustmentConflict(t *testing.T) {
-	before := playerStoneState{Stone: 50}
-	if code, _ := stoneAdjustmentConflict(adjustPlayerStoneRequest{Action: "add", Amount: 10, ExpectedStone: 50}, before); code != "" {
-		t.Fatalf("expected add to pass, got %s", code)
-	}
-	if code, _ := stoneAdjustmentConflict(adjustPlayerStoneRequest{Action: "add", Amount: 10, ExpectedStone: 49}, before); code != "STONE_CHANGED" {
-		t.Fatalf("expected stale snapshot conflict, got %s", code)
-	}
-	if code, _ := stoneAdjustmentConflict(adjustPlayerStoneRequest{Action: "subtract", Amount: 51, ExpectedStone: 50}, before); code != "INSUFFICIENT_STONE" {
-		t.Fatalf("expected insufficient stone, got %s", code)
-	}
-	if code, _ := stoneAdjustmentConflict(adjustPlayerStoneRequest{Action: "subtract", Amount: 50, ExpectedStone: 50}, before); code != "" {
-		t.Fatalf("expected subtract to balance to pass, got %s", code)
-	}
-}

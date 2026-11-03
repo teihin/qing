@@ -8,7 +8,7 @@
 2. 保留原有「直属上级代理」固定会话（用户确认）。
 3. 俱乐部老板可对本俱乐部成员「上下分 + 赠送积分」；代理只能「赠送」，不能上下分。
 4. 联盟大群主可以和联盟内任意俱乐部的任意成员一对一聊天；同一个人按俱乐部各保留一条会话。
-5. 大群主找人入口走成员列表：盟友管理 → 俱乐部行 → 成员列表 → 点人聊天；成员列表里的盟主行也可直接对话。
+5. 大群主找人入口：成员列表里的盟主虚拟行可直接对话；盟友管理行不再打开成员列表（2026-11-04 移除了误开「选择聊天对象」的点击入口）。
 
 ## 服务端（ChatTool `/api/direct/*`）
 
@@ -32,8 +32,8 @@
 - `ClubManagementApi.ts`：成员行解析 `club_id`。
 - `ClubManagementView.ts`：
   - 成员行「对话」按 `item.clubId || context.id` 建会话，盟主虚拟行直接找对方俱乐部。
-  - 盟友管理行头像/名字可点，打开 `panelMessageMembers`（传 `{clubId, clubName}`）。
-  - 行内提示「点名字查看成员」。
+  - ~~盟友管理行头像/名字可点，打开 `panelMessageMembers`~~（2026-11-04 已移除：点击会误开「选择聊天对象」）。
+  - ~~行内提示「点名字查看成员」~~（随点击入口一并移除）。
 - `panelMessageMembers.ts`：入口参数兼容旧 clubId 字符串和 `{clubId, clubName}`；`start` 二次读取，避免 `setPanelInfo` 晚于 `onLoad`；大群主可查联盟内任意俱乐部并发起会话。
 
 ## 验证
@@ -58,4 +58,4 @@
 
 1. 确认 ChatTool 的 `CHAT_GAME_DB_*` 只读账号能 `SELECT club_union_info`（原来只用到 `tbl_Account` / `club_guuid_info` / `club_agent_info`）；在测试库执行 `GetUnionByClub` 等价 SQL，确认 `owner_guuid` 与 `union_id` 数据可用。
 2. 部署 ChatTool 后按「大群主、盟主、代理、普通玩家、跨俱乐部成员」五类账号联调：固定入口、不可删除、跨俱乐部收发、消息首页、未读、断线补偿。
-3. Creator 重新导入脚本，真机验证盟友管理 → 成员列表 → 聊天入口与聊天页底部按钮布局。
+3. Creator 重新导入脚本，真机验证成员列表盟主行直接对话与聊天页底部按钮布局（盟友行点击入口已移除）。

@@ -195,13 +195,6 @@ export interface PlayerBalanceAdjustmentResult {
   message: string;
 }
 
-export interface PlayerStoneAdjustmentResult {
-  player: { playerId: string; name: string; stone: number; roomId: number };
-  delta: number;
-  context: string;
-  message: string;
-}
-
 export interface PlayerClubRef {
   clubId: string;
   name: string;
