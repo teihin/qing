@@ -80,3 +80,9 @@
 - 结构改为 `列表`(cc.ScrollView) → `视口`(cc.Mask `_type=0` + Widget 四边 0) → `内容`(anchor 0.5/1) → `记录行`（模板，active=false）；`记录行2..8` 已删除。Prefab 对象数 302 → 205。
 - `panelMyHongli.ts`：新增 `initList/rowAt/layoutList/renderRows`，行按需克隆复用，按 `行数 × 75` 撑内容高度后 `scrollToTop`；`PAGE_SIZE` 8 → 15。
 - 未验证：无登录态，运行时滚动、翻页与长屏适配未实测；Creator 内视觉未复核。
+
+## 列表改用钻石池消耗表格美术（2026-11-03）
+
+- 目标：我的红利下方表头/列表与「钻石池消耗」统一。表头换成新资源 `assets/V7/money_v8_table_my_hongli.png`（892×111）：以 `money_v8_table_stone_pool.png` 为底，擦除原「时间/玩家/消耗积分/获得钻石」，从同族 `money_v8_table_exact.png` 移植「类型/金额」、保留「玩家/时间」字形，拼成「玩家/类型/金额/时间」；alpha 通道不变，体积 73KB < 原 89KB。原四列 `cc.Label` 保留但隐藏。
+- 列表：`列表面板` 换 `money_v8_list_panel9.png` 九宫格；`记录行` 模板换 `money_v8_row_panel.png`（684×84），行内字号 20→26、行高 30，`ROW_SPACING` 75→96；表头与行模板各加 3 条 `money_v8_row_rule.png` 列分隔（x=-171/0/171）。表头 692×86，列表 Widget top 362→390.263 保持 4px 间距。
+- 验证：Prefab JSON、引用/反向父子关系、TS 语法通过；离线预览确认四列与分隔线对齐。未验证：Creator 导入、构建、真机与真实数据行。

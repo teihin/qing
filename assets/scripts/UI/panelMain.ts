@@ -86,7 +86,7 @@ export default class panelMain extends UIPanelViewBase {
     private clubCreateDialogMode:"club"|"union" = "club";
     private clubCommandBusy:boolean = false;
     /** 当前俱乐部的 V2 联盟状态；查询未完成前不显示创建/加入入口。 */
-    private clubUnionStatus:{[clubId:string]:{known:boolean;hasUnion:boolean;unionId?:string;unionName?:string;isOwner?:boolean;ownerConfirmed?:boolean;quotaFen?:number}} = {};
+    private clubUnionStatus:{[clubId:string]:{known:boolean;hasUnion:boolean;unionId?:string;unionName?:string;isOwner?:boolean;ownerConfirmed?:boolean;quotaFen?:number;unionPercent?:number}} = {};
     private clubUnionAsked:{[clubId:string]:number} = {};
     /** ClubUnionQuota 推送不带 club_id，记录最近一次联盟状态查询对应的俱乐部。 */
     private clubUnionPendingClubId:string = "";
@@ -341,6 +341,10 @@ export default class panelMain extends UIPanelViewBase {
                 unionQuotaIsPool:union ? union.isOwner === true : undefined,
                 clubQuotaFen,
                 stonePool:this.clubStonePools[id],
+                // 卡片「比例」：代理取 ClubAgentInfo.percent；盟主取 ClubUnionQuota.union_percent。
+                agentPercent:role === "agent" && agent && Number.isFinite(Number(agent.percent)) ?
+                    Number(agent.percent) : undefined,
+                unionPercent:union && union.isOwner === false ? union.unionPercent : undefined,
                 // 必须保留 undefined：false 才表示「已明确不是总群主」，不能用未知当 false。
                 unionIsOwner:union ? union.isOwner : undefined};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),(player,mode)=>{
@@ -405,8 +409,8 @@ export default class panelMain extends UIPanelViewBase {
         if(GameDataManager.instance.nShowNotify)
         {
             ConfigManager.getInstance().GetOneHashKey("系统公告","大厅查询公告");
-            ConfigManager.getInstance().GetOneHashKey("充值公告","充值公告");
-            ConfigManager.getInstance().GetOneHashKey("活动公告","活动公告");
+            // ConfigManager.getInstance().GetOneHashKey("充值公告","充值公告");
+            // ConfigManager.getInstance().GetOneHashKey("活动公告","活动公告");
             GameDataManager.instance.nShowNotify = false;
         }
         //ConfigManager.getInstance().SetOneHashKey("世界杯2","暂未开放")
@@ -3890,8 +3894,17 @@ export default class panelMain extends UIPanelViewBase {
             (reuseOwner ? previous.isOwner : undefined);
         const quotaFen = quotaKnown ? quotaNumber :
             (previous && previous.unionId === unionId ? previous.quotaFen : undefined);
+        // union_percent 只对 is_owner=0 的盟主有意义（100=不抽）；总群主没有这一层比例。
+        const percentRaw = body.union_percent !== undefined ? body.union_percent : data.union_percent;
+        const percentNumber = Number(percentRaw);
+        const percentKnown = percentRaw !== undefined && percentRaw !== null &&
+            String(percentRaw).trim() !== "" && Number.isFinite(percentNumber);
+        const unionPercent = isOwner === false ?
+            (percentKnown ? percentNumber :
+                (previous && previous.isOwner === false && previous.unionId === unionId ? previous.unionPercent : undefined)) :
+            undefined;
         this.clubUnionStatus[clubId] = {known:true,hasUnion:unionId !== "",unionId:unionId || undefined,
-            unionName:unionName || undefined,isOwner,ownerConfirmed:ownerConfirmed || undefined,quotaFen};
+            unionName:unionName || undefined,isOwner,ownerConfirmed:ownerConfirmed || undefined,quotaFen,unionPercent};
         if(unionName) this.RememberUnionName(unionId,unionName);
         const info = this.clubDetails[clubId];
         if(info)
@@ -4980,7 +4993,7 @@ export default class panelMain extends UIPanelViewBase {
             {
                 if(!this.clubDetails[clubId])
                     this.clubDetails[clubId] = {club_id:clubId,club_name:""};
-                // 新文档用 union_apply 表示审核中的联盟码；本地先落值，入口立即切成「审核中」。
+                // 新文档用 union_apply 表示审核中的联盟码；只用于状态展示，不再隐藏创建/加入入口。
                 this.clubDetails[clubId].union_apply = this.unionJoinPendingUnionId;
             }
             this.unionJoinPendingClubId = "";

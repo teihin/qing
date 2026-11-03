@@ -30,8 +30,8 @@ const {ccclass} = cc._decorator;
 @ccclass
 export default class panelMyHongli extends UIPanelViewBase {
     private readonly PAGE_SIZE:number = 15;
-    /** 记录行行距：行高 61 + 间隔 14，与 Prefab 里模板行一致。 */
-    private readonly ROW_SPACING:number = 75;
+    /** 记录行行距：行高 84 + 间隔 12，与 Prefab 里模板行一致。 */
+    private readonly ROW_SPACING:number = 96;
     private page:number = 0;
     private totalPages:number = 1;
     private claimPending:boolean = false;

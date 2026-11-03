@@ -127,3 +127,11 @@
 - `assets/resources/UI/panelMain.prefab`
 - `assets/ImagesLuck/联盟/icon_apply.png` + `.meta`
 - `design-previews/待确认/2026-11-03-入盟申请/`
+
+## 入盟申请红点/提示音与申请中保留入口（2026-11-03 追加）
+
+- `ClubUnionApply` 推送原来只刷新已打开的审批列表；现在先走 `SetUnionPendingCount()` 计入待审数：数量增加时播 `eff/申请提示`，`Refresh()` 点亮「联盟操作/入盟申请/红点」并合并到「Down/我的/红点」；数量不变/减少不响。
+- `panelMain.prefab` 的「入盟申请」按钮下新增 `红点` 节点（cc.Label「●」28、红色、30×30、默认隐藏、x=142,y=20），由 `ClubManagementView` 控制显隐。
+- 登录/切换俱乐部后，总群主身份确认时 `syncUnionBadge()` 补查一次 `查询_联盟_加入申请`（静默、最多重试一次），覆盖离线期间到达的申请；主动打开审批列表只同步数量，不播音。
+- 取消「审核中只显示加入联盟」的旧口径：`canCreateJoin` 不再看 `union_apply`，审核通过前「创建联盟 / 加入联盟」两个按钮始终并排可点，可继续创建或申请其它联盟；`union_apply` 仅保留为状态数据。
+- 验证：TS 语法、Prefab JSON/引用检查通过。未验证：真实 `ClubUnionApply` 推送的红点/声音、登录补查回包、Creator 导入/构建/真机。

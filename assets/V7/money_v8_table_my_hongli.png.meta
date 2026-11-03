@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "1dd49f5a-1300-4e36-8582-fdf8ecbce68d",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 892,
+  "height": 111,
+  "platformSettings": {},
+  "subMetas": {
+    "money_v8_table_my_hongli": {
+      "ver": "1.0.6",
+      "uuid": "72b3e193-f81c-4779-ae4c-bc4f8894cd9b",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "1dd49f5a-1300-4e36-8582-fdf8ecbce68d",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 892,
+      "height": 111,
+      "rawWidth": 892,
+      "rawHeight": 111,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

@@ -506,8 +506,9 @@ export default class panelExchangeStone extends UIPanelViewBase
         }
         else if(nCode === 0x302)
         {
+            // 俱乐部模式发请求前已校过自己的俱乐部积分，这里的 0x302 是俱乐部钻石池不足。
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-                this.GetGoldLabel() + "不足，兑换失败！");
+                this.clubId === "" ? "金币不足，兑换失败！" : "俱乐部钻石池余额不足，兑换失败！");
         }
         else if(nCode === 0x307 || nCode === 0x308)
         {

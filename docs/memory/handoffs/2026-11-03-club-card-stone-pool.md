@@ -43,3 +43,15 @@
 1. Creator 打开项目，确认卡片右侧「钻石池」与额度、按钮不重叠。
 2. 群主账号进入「我的」核对数值与后台 `club_agent_info.stone` 一致；兑换一次确认实时下降。
 3. 非群主账号确认该行隐藏；真机长屏/短屏验收后考虑提交。
+
+## 兑换失败文案（2026-11-03 追加）
+
+- `panelExchangeStone.onExChange` 的 `0x302` 之前统一显示「俱乐部金币不足，兑换失败！」；俱乐部模式发请求前已校验自己的俱乐部积分，服务端此时返回的实际是俱乐部钻石池余额不足。现区分为：平台模式「金币不足，兑换失败！」、俱乐部模式「俱乐部钻石池余额不足，兑换失败！」。
+- 只改文案，未改协议/请求参数；未验证：真实 0x302 场景、Creator/真机。
+
+## 邀请码后显示比例（2026-11-03 追加）
+
+- 卡片邀请码行新增「比例」：代理显示 `ClubAgentInfo.percent`（`比例：30%`）；盟主（已入盟、`is_owner!==true` 的俱乐部创建者）显示 `ClubUnionQuota.union_percent`（`比例：100%`）；普通玩家/管理员/大群主/老板不显示。
+- 数据：`ClubContext` 增加 `agentPercent` / `unionPercent`；`panelMain.clubUnionStatus` 增加 `unionPercent`，`OnClubUnionQuota` 解析 `union_percent`（仅 `is_owner=0`，缺字段沿用上次值，is_owner=1 清空）。
+- Prefab：`当前俱乐部` 新增 `比例` Label（150×24，x=55,y=20，字号 21，金色 `255,238,197` + 描边，默认隐藏），位于邀请码与俱乐部额度之间。
+- 验证：TS 语法、Prefab JSON/引用检查通过。未验证：代理/盟主真实回包、比例变更推送后的刷新、Creator 导入/构建/真机。

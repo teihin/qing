@@ -14,6 +14,10 @@ export interface ClubContext {
     unionKnown?:boolean; hasUnion?:boolean; unionId?:string; unionName?:string; unionApplyId?:string;
     /** 联盟额度：总群主是联盟池（isPool=true），盟主是自己俱乐部额度。 */
     unionQuotaFen?:number; unionQuotaIsPool?:boolean; clubQuotaFen?:number;
+    /** 我在本俱乐部的代理比例（0-100）；只有代理有值。 */
+    agentPercent?:number;
+    /** 盟主比例（union_percent，0-100）；只有已入盟、非总群主的俱乐部创建者有值。 */
+    unionPercent?:number;
     /** 群主钻石池数量（个）；未知时 undefined。 */
     stonePool?:number;
     /** 只有联盟总群主能看入盟申请；is_owner 来自 查询_联盟_额度。 */
@@ -58,6 +62,11 @@ export default class ClubManagementView {
     private api:ClubManagementApi = null;
     private context:ClubContext = null;
     private counts:{[id:string]:number} = {};
+    /** 联盟入盟申请待审数；和俱乐部申请一样用红点+提示音提醒总群主。 */
+    private unionCount:number = 0;
+    /** 成为总群主后补查一次在途申请（离线期间不会收到推送）；失败最多重试一次。 */
+    private unionBadgeQueried:boolean = false;
+    private unionBadgeAttempts:number = 0;
     private kind:ClubListKind = "members";
     private page:number = 0;
     private total:number = 0;
@@ -136,6 +145,30 @@ export default class ClubManagementView {
         if(next > previous && this.notify) this.notify();
         this.Refresh();
     }
+    /** 入盟申请推送：与俱乐部申请同一口径，数量增加时亮红点并播提示音。 */
+    public SetUnionPendingCount(count:number):void {
+        this.applyUnionPendingCount(count,true);
+    }
+    private applyUnionPendingCount(count:number,notifyOnIncrease:boolean):void {
+        const next = Math.max(0,Math.floor(Number(count) || 0));
+        const previous = this.unionCount;
+        this.unionCount = next;
+        if(notifyOnIncrease && next > previous && this.canReviewUnion(this.getContext()) && this.notify)
+            this.notify();
+        this.Refresh();
+    }
+    /** 登录/切换俱乐部后，总群主身份确认时补查一次入盟申请，离线期间的申请也能亮红点。 */
+    private syncUnionBadge(canReview:boolean):void {
+        if(!canReview || this.unionBadgeQueried || !this.api) return;
+        if(this.loading || this.busy) return;
+        if(typeof (this.api as any).unionApplications !== "function") return;
+        if(this.unionBadgeAttempts >= 2) return;
+        this.unionBadgeQueried = true;
+        this.unionBadgeAttempts++;
+        this.api.unionApplications()
+            .then(page=>this.applyUnionPendingCount(page && Array.isArray(page.items) ? page.items.length : 0,false))
+            .catch(()=>{ this.unionBadgeQueried = false; });
+    }
 
     private at(path:string,root:cc.Node = this.root):cc.Node {
         for(const name of path.split('/')) {
@@ -182,20 +215,15 @@ export default class ClubManagementView {
         const inUnion = !!String(c && c.unionId || "").trim() || !!c && c.hasUnion === true;
         return !!c && !!c.id && c.role === "owner" && inUnion && c.unionIsOwner !== false;
     }
+    /** 未入盟的创建者始终显示「创建联盟 / 加入联盟」；申请审核中也保留，可继续创建或申请其它联盟。 */
     private canCreateJoin(c:ClubContext = this.context):boolean {
-        return !!c && !!c.id && c.role === "owner" && c.unionKnown === true &&
-            !c.hasUnion && !c.unionApplyId;
-    }
-    /** 已提交入盟申请、等待审批：文档要求只显示「加入联盟」并置灰提示审核中。 */
-    private unionApplying(c:ClubContext = this.context):boolean {
-        return !!c && !!c.id && c.role === "owner" && c.unionKnown === true &&
-            !c.hasUnion && !!c.unionApplyId;
+        return !!c && !!c.id && c.role === "owner" && c.unionKnown === true && !c.hasUnion;
     }
     /** 卡片底部联盟行是否显示：未入盟显示创建/加入，已入盟的总群主显示入盟申请。 */
     private unionRowVisible(c:ClubContext = this.context):boolean {
-        return this.canCreateJoin(c) || this.unionApplying(c) || this.canReviewUnion(c);
+        return this.canCreateJoin(c) || this.canReviewUnion(c);
     }
-    /** 卡片底部联盟区：已入盟（显示联盟名/额度）或未入盟但有创建/加入/审核中入口。 */
+    /** 卡片底部联盟区：已入盟（显示联盟名/额度）或未入盟但有创建/加入入口。 */
     private unionSectionVisible(c:ClubContext = this.context):boolean {
         if(!c || !c.id) return false;
         return !!String(c.unionId || "").trim() || this.unionRowVisible(c);
@@ -339,6 +367,9 @@ export default class ClubManagementView {
             this.unionQuotaMode = null;
             this.selectedUnionMember = null;
             this.allyPoolQuotaFen = undefined;
+            this.unionCount = 0;
+            this.unionBadgeQueried = false;
+            this.unionBadgeAttempts = 0;
             // 换账号/换俱乐部后，列表快照与「我有没有额度」都必须重新取，不能沿用上一家的结论。
             this.items = [];
             if(this.goldRefreshTimer != null) { clearTimeout(this.goldRefreshTimer);this.goldRefreshTimer = null; }
@@ -364,6 +395,15 @@ export default class ClubManagementView {
         const showStonePool = next.role === "owner";
         this.active("钻石池",showStonePool,card);
         this.text("钻石池",showStonePool ? "钻石池：" + (Number.isFinite(stonePool) ? stonePool : "--") : "",card);
+        // 邀请码后面显示比例：代理=代理比例，盟主=盟主比例；普通玩家/大群主/老板不显示。
+        let ratioText = "";
+        if(next.role === "agent" && Number.isFinite(Number(next.agentPercent)))
+            ratioText = "比例：" + Number(next.agentPercent) + "%";
+        else if(next.role === "owner" && next.hasUnion && next.unionIsOwner !== true &&
+            Number.isFinite(Number(next.unionPercent)))
+            ratioText = "比例：" + Number(next.unionPercent) + "%";
+        this.active("比例",ratioText !== "",card);
+        this.text("比例",ratioText,card);
         const canReviewUnion = this.canReviewUnion(next);
         // 「我的」卡片只在创建者（大群主/盟主/老板）或代理时显示身份牌；普通成员/管理员不占右侧位置。
         const showIdentity = !!next.id && (next.role === "owner" || next.role === "agent");
@@ -390,7 +430,6 @@ export default class ClubManagementView {
         this.active("操作/管理退出",false,card);
         this.active("操作/管理收益",!!next.id && next.role === "owner",card);
         const canCreateJoin = this.canCreateJoin(next);
-        const canApplyPending = this.unionApplying(next);
         const showUnionSection = this.unionSectionVisible(next);
         this.active("联盟信息",showUnionSection,card);
         if(showUnionSection) {
@@ -408,16 +447,16 @@ export default class ClubManagementView {
         this.active("联盟分割线",showUnionSection,card);
         this.active("联盟操作",showUnionSection,card);
         this.active("联盟操作/创建联盟",canCreateJoin,card);
-        this.active("联盟操作/加入联盟",canCreateJoin || canApplyPending,card);
-        // 文档：申请审核中只显示「加入联盟」并置灰提示；此时居中显示，不跟创建按钮并排。
+        this.active("联盟操作/加入联盟",canCreateJoin,card);
+        // 已提交申请也保留两个入口：审核通过前仍可继续创建联盟或申请其它联盟。
         const joinButton = this.at("联盟操作/加入联盟",card);
         if(joinButton) {
-            joinButton.setPosition(canApplyPending ? 0 : 158,0);
-            joinButton.opacity = canApplyPending ? 160 : 255;
+            joinButton.setPosition(158,0);
+            joinButton.opacity = 255;
             const joinLabel = this.at("文字",joinButton);
-            if(joinLabel) this.text("文字",canApplyPending ? "审核中" : "加入联盟",joinButton);
+            if(joinLabel) this.text("文字","加入联盟",joinButton);
             const joinComp = joinButton.getComponent(cc.Button);
-            if(joinComp) joinComp.interactable = !canApplyPending;
+            if(joinComp) joinComp.interactable = true;
         }
         this.active("联盟操作/入盟申请",canReviewUnion,card);
         this.active("联盟操作/盟友管理",canReviewUnion,card);
@@ -434,8 +473,11 @@ export default class ClubManagementView {
             this.text("文字",pair[1],button);
         }
         const dot = this.approver() && (this.counts[next.id] || 0) > 0;
+        const unionDot = canReviewUnion && this.unionCount > 0;
+        this.syncUnionBadge(canReviewUnion);
         this.active("操作/管理成员/红点",dot,card);
-        this.active("Down/我的/红点",dot);
+        this.active("联盟操作/入盟申请/红点",unionDot,card);
+        this.active("Down/我的/红点",dot || unionDot);
         this.active("俱乐部成员弹窗/面板/管理申请/红点",dot);
         // 弹窗抬头只给「俱乐部名 + 邀请码」，与俱乐部列表卡片的码保持一致；
         // 俱乐部 ID 是内部主键，成员不需要看，也不再展示。
@@ -729,6 +771,8 @@ export default class ClubManagementView {
             if(!this.valid(version,ctx) || this.kind !== "union") return;
             const items = result && Array.isArray(result.items) ? result.items : [];
             this.total = items.length;
+            // 主动打开审批列表只同步数量，不播提示音（声音只给新推送）。
+            this.applyUnionPendingCount(items.length,false);
             this.renderUnionApplications(items);
             this.text("统计",items.length ? "待审批 " + items.length + " 个俱乐部" : "待审批申请",this.panel());
             this.text("空状态","暂无入盟申请",this.panel());
@@ -740,9 +784,10 @@ export default class ClubManagementView {
             if(this.valid(version,ctx)) { this.loading = false;this.paging(); }
         }
     }
-    /** ClubUnionApply 推送：审批弹窗已打开时直接替换列表，不需要再发一次查询。 */
+    /** ClubUnionApply 推送：先更新红点/提示音，审批弹窗已打开时直接替换列表，不再发查询。 */
     public OnUnionApplicationsPushed(page:ClubUnionApplicationPage):void {
         if(!page || !Array.isArray(page.items)) return;
+        this.SetUnionPendingCount(page.items.length);
         if(this.kind !== "union" || this.loading || this.busy || !this.canReviewUnion()) return;
         const dialog = this.at("俱乐部申请弹窗");
         if(!dialog || !dialog.active) return;
