@@ -120,6 +120,21 @@ export default class panelMain extends UIPanelViewBase {
     private clubGoldWaterRequestContext:string = "";
     private clubDetails:{[clubId:string]:any} = {};
     private clubAgentInfo:{[clubId:string]:any} = {};
+    /** 群主钻石池数量（个），按俱乐部缓存；由查询/推送的最新 remark 后值更新。 */
+    private clubStonePools:{[clubId:string]:number} = {};
+    /** 钻石池查询节流，避免每次卡片刷新都重复发请求。 */
+    private clubStonePoolAsked:{[clubId:string]:number} = {};
+    /** 最近一次钻石池查询对应的俱乐部；ClubStoneWater 推送不带 club_id。 */
+    private clubStonePoolRequestClubId:string = "";
+    /** 「我的」页停留时每 30 秒补查一次，服务端不推送也能保持数字更新。 */
+    private clubStonePoolPoll = ():void=>{
+        if(this.currentMainTab !== "我的")
+            return;
+        const id = this.ResolveRoomClub();
+        if(id === "" || !this.IsClubOwner(id))
+            return;
+        this.RequestClubStonePool(id,true);
+    };
     /** 当前玩家在各俱乐部的额度查询结果；额度只在有权限时渲染。 */
     /** 额度查询节流，避免每次列表重绘都重复发请求。 */
     /** 发现页/登录后补拉俱乐部信息（含 union_id/union_quota）的节流。 */
@@ -248,6 +263,7 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("查询_俱乐部_成员_积分_添加_记录", this, "OnClubGiftRecordList");
         KBEngine.Event.register("ListPlayerCashWater", this, "ListPlayerCashWater");
         KBEngine.Event.register("ClubGoldWater", this, "OnClubGoldWaterList");
+        KBEngine.Event.register("ClubStoneWater", this, "OnClubStoneWater");
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("ClubGoldGiftChanged", this, "OnClubGoldGiftChanged");
         KBEngine.Event.register("OpenInitTransactionPassword", this, "OpenInitTransactionPassword");
@@ -324,6 +340,7 @@ export default class panelMain extends UIPanelViewBase {
                 unionQuotaFen:union ? union.quotaFen : undefined,
                 unionQuotaIsPool:union ? union.isOwner === true : undefined,
                 clubQuotaFen,
+                stonePool:this.clubStonePools[id],
                 // 必须保留 undefined：false 才表示「已明确不是总群主」，不能用未知当 false。
                 unionIsOwner:union ? union.isOwner : undefined};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),(player,mode)=>{
@@ -1108,7 +1125,9 @@ export default class panelMain extends UIPanelViewBase {
         const hasClub = this.ResolveRoomClub() !== "";
         const paths = [
             "Main/我的/滚动区/view/content/操作/赠送",
-            "Main/我的/滚动区/view/content/操作/兑换钻石"
+            "Main/我的/滚动区/view/content/操作/兑换钻石",
+            "Main/我的/滚动区/view/content/操作/上下分记录",
+            "Main/我的/滚动区/view/content/操作/钻石池消耗"
         ];
         for(const path of paths)
         {
@@ -1120,6 +1139,9 @@ export default class panelMain extends UIPanelViewBase {
         const layout = operation == null ? null : operation.getComponent(cc.Layout);
         if(layout != null)
             layout.updateLayout();
+        // 入口增减会改变 Grid 行数，同步按钮区/卡片/内容高度，避免底部留空或卡片重叠。
+        if(this.clubManagement)
+            this.clubManagement.syncProfileScroll(hasClub);
     }
     public set_photo(old)
     {
@@ -1485,6 +1507,24 @@ export default class panelMain extends UIPanelViewBase {
         {
             // 钻石流向单独成 prefab（只保留金币流向页的下半部分），避免大厅继续变大。
             UIManager.getInstance().showPanel("panelStoneWater",ShowPanelMode.Cover);
+        }
+        else if(button.node.name === "上下分记录")
+        {
+            if(this.ResolveRoomClub() === "")
+            {
+                this.RefreshClubFinanceMenuVisibility();
+                return;
+            }
+            UIManager.getInstance().showPanel("panelUpDownRecord",ShowPanelMode.Cover);
+        }
+        else if(button.node.name === "钻石池消耗")
+        {
+            if(this.ResolveRoomClub() === "")
+            {
+                this.RefreshClubFinanceMenuVisibility();
+                return;
+            }
+            UIManager.getInstance().showPanel("panelStonePoolCost",ShowPanelMode.Cover);
         }
         else if(button.node.name === "金币充值")
         {
@@ -2541,6 +2581,8 @@ export default class panelMain extends UIPanelViewBase {
                 // 联盟审批不会推送，进「我的」时补查一次，入盟后创建/加入入口自动收起。
                 this.RequestClubUnionStatus(id,false);
                 this.RequestClubUnionName(id,true);
+                // 群主钻石池只在群主卡片显示；查询节流，避免每次切页重复发。
+                this.RequestClubStonePool(id);
             }
         }
         if(strName !== "钱包")
@@ -2564,6 +2606,10 @@ export default class panelMain extends UIPanelViewBase {
         });
         if(switchedToPage)
             this.currentMainTab = strName;
+        // 只在「我的」页停留时轮询钻石池；切页/离开立即停。
+        this.unschedule(this.clubStonePoolPoll);
+        if(strName === "我的" && this.IsClubOwner(this.ResolveRoomClub()))
+            this.schedule(this.clubStonePoolPoll,30);
         if(strName === "发现")
             this.RefreshDiscoveryClubFunds(true);
 
@@ -3263,7 +3309,11 @@ export default class panelMain extends UIPanelViewBase {
         // 大厅里同时可能开着「兑换钻石」弹窗，它自己也监听 onExChange。
         // 这里的文案是给「赠送/转账」用的，兑换这笔要让它先说，别抢着弹「交易成功」。
         if(panelExchangeStone.ShouldIgnoreHallExchange())
+        {
+            // 兑换会消耗群主钻石池，回大厅后立即补查一次；非群主会被 IsClubOwner 拦住。
+            this.RequestClubStonePool(this.ResolveRoomClub(),true);
             return;
+        }
 
         let strMsg = "";
         if (nCode == 0x200) //成功
@@ -3658,6 +3708,15 @@ export default class panelMain extends UIPanelViewBase {
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
         // 推广页开着的场合（大厅「我的」里点进去），邀请码这行要跟着刷新。
         this.RefreshPromotionInviteCode();
+        if(Number(data.is_creator) === 1)
+        {
+            this.RequestClubStonePool(clubId);
+            if(this.currentMainTab === "我的")
+            {
+                this.unschedule(this.clubStonePoolPoll);
+                this.schedule(this.clubStonePoolPoll,30);
+            }
+        }
         if(!fromPush || Number(data.is_agent) === 1 || Number(data.is_creator) === 1)
             return;
         const now = Date.now();
@@ -3715,6 +3774,9 @@ export default class panelMain extends UIPanelViewBase {
         this.clubUnionNameAsked = {};
         this.clubUnionNamePendingClubId = "";
         this.unionCreateName = "";
+        this.clubStonePools = {};
+        this.clubStonePoolAsked = {};
+        this.clubStonePoolRequestClubId = "";
         if(!this.lobbyEntryResolved)
             this.ResolveLobbyEntryTab();
         // 刚创建 / 刚入会的俱乐部在这里落成默认俱乐部，后面的卡片、列表、房间筛选都取新值。
@@ -4706,6 +4768,18 @@ export default class panelMain extends UIPanelViewBase {
             context = context.substr(clubContextIndex);
         if(context.indexOf("club:") !== 0)
             return false;
+        if(context.indexOf("club:stone:pool:") === 0)
+        {
+            // 同步回包通常是空壳，正式数据走 ClubStoneWater；有 result 时也兼容处理。
+            if(nCode === 0x200 && response.result)
+                this.OnClubStoneWater(response.result);
+            else if(nCode !== 0x200)
+            {
+                this.clubStonePoolRequestClubId = "";
+                if(this.clubManagement) this.clubManagement.Refresh();
+            }
+            return true;
+        }
         if(context.indexOf("club:info:") === 0)
         {
             const id = context.substr("club:info:".length);
@@ -5136,6 +5210,130 @@ export default class panelMain extends UIPanelViewBase {
         this.clubGoldWaterRequestContext = "";
         const strParam = "{\"header\":\"查询_玩家_现金流水\",\"user_id\":\"" + account.guuid + "\",\"page\":\"" + nPage.toString() + "\",\"count\":\"" + this.PAGE_PER_COUNT + "\"}";
         account.reqHallCommand(strParam, "P@查询_玩家_现金流水");
+    }
+
+    //--------------------------------------------------------------------------
+    // 群主钻石池
+    //--------------------------------------------------------------------------
+    private IsClubOwner(clubId:string):boolean
+    {
+        const id = clubId == null ? "" : String(clubId).trim();
+        if(id === "")
+            return false;
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        const guuid = String(account.guuid || "");
+        if(guuid && String(account.club_make || "").split(",").map(x=>x.trim()).indexOf(id) >= 0)
+            return true;
+        const agent = this.clubAgentInfo[id];
+        return !!(agent && Number(agent.is_creator) === 1);
+    }
+
+    /**
+     * 群主钻石池只有群主/boss 能查；用流水最新一条的 remark「前→后」取当前池子。
+     * count 直接要 100（服务端总条数封顶 100），避免再翻页找最后一条。
+     */
+    public RequestClubStonePool(clubId:string,force:boolean = false):void
+    {
+        const id = clubId == null ? "" : String(clubId).trim();
+        if(id === "" || !this.IsClubOwner(id))
+            return;
+        const now = Date.now();
+        if(!force && now - (this.clubStonePoolAsked[id] || 0) < 15000)
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return;
+        this.clubStonePoolAsked[id] = now;
+        this.clubStonePoolRequestClubId = id;
+        const context = "club:stone:pool:" + id + ":" + now;
+        const strParam = JSON.stringify({
+            header:"查询_俱乐部_钻石流水",
+            club_id:id,
+            count:100,
+            page:0,
+            context
+        });
+        account.reqHallCommand(strParam,"P@" + context);
+    }
+
+    private ClubOwnerId(clubId:string):string
+    {
+        const info = this.clubDetails[clubId];
+        const owner = info && info.club_owner != null ? String(info.club_owner).trim() : "";
+        if(owner !== "")
+            return owner;
+        const agent = this.clubAgentInfo[clubId];
+        return agent && Number(agent.is_creator) === 1 ? String(agent.user_id || "").trim() : "";
+    }
+
+    /** ClubStoneWater 推送/同步回包：取日期最新的一条，读 remark 箭头后的池子数量。 */
+    public OnClubStoneWater(raw:any, secondaryRaw?:any):void
+    {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
+            raw = secondaryRaw;
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        if(data && data.result && !data.ClubStoneWater)
+            data = data.result;
+        if(data && data.ret_result && !data.ClubStoneWater)
+            data = data.ret_result;
+        if(data == null || !Array.isArray(data["ClubStoneWater"]))
+            return;
+
+        const rows = data["ClubStoneWater"];
+        let clubId = this.clubStonePoolRequestClubId;
+        if(clubId === "")
+        {
+            // 没有待配对的查询时，只接受当前俱乐部群主的推送；推送本身不带 club_id。
+            clubId = this.ResolveRoomClub();
+            if(clubId === "" || !this.IsClubOwner(clubId))
+                return;
+            const ownerId = this.ClubOwnerId(clubId);
+            const rowOwner = rows.length > 0 && rows[0] && rows[0].guuid != null ?
+                String(rows[0].guuid).trim() : "";
+            if(ownerId !== "" && rowOwner !== "" && ownerId !== rowOwner)
+                return;
+        }
+        if(this.ResolveRoomClub() !== clubId)
+            return;
+
+        if(rows.length === 0)
+        {
+            this.clubStonePools[clubId] = 0;
+            this.clubStonePoolRequestClubId = "";
+            if(this.clubManagement) this.clubManagement.Refresh();
+            return;
+        }
+
+        let latest:any = rows[0];
+        let latestTime = -Infinity;
+        for(const row of rows)
+        {
+            const time = Date.parse(String(row && row.date || "").replace(" ","T"));
+            if(!isFinite(time))
+                continue;
+            if(time >= latestTime)
+            {
+                latest = row;
+                latestTime = time;
+            }
+        }
+        const remark = latest == null || latest.remark == null ? "" : String(latest.remark);
+        const parts = remark.split(/→|->/);
+        const afterText = parts.length > 1 ? parts[parts.length - 1] : remark;
+        const pool = Number(String(afterText).replace(/[^\d.-]/g,""));
+        if(!isFinite(pool))
+            return;
+
+        this.clubStonePools[clubId] = Math.max(0,Math.trunc(pool));
+        this.clubStonePoolRequestClubId = "";
+        if(this.clubManagement) this.clubManagement.Refresh();
     }
 
     public ListPlayerCashWater(strMsg:string)

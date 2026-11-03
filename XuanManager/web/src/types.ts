@@ -932,6 +932,8 @@ export interface ClubListItem {
   unionPoolQuotaFen: number | null;
   /** 俱乐部当前可用额度 club_guuid_info.union_quota（分）；未加入联盟时为 null。 */
   ownerQuotaFen: number | null;
+  /** 群主钻石池：俱乐部创建者账号 sm_stone（钻）；找不到群主时为 null。 */
+  stonePool: number | null;
 }
 
 export interface ClubListResponse {
@@ -948,9 +950,8 @@ export interface ClubListResponse {
 export interface ClubMemberNode {
   playerId: string;
   name: string;
-  role: "owner" | "agent" | "manager" | "member";
+  role: "owner" | "agent" | "member";
   isAgent: boolean;
-  isLeader: boolean;
   upperId: string;
   upperName: string;
   clubGold: number | null;
@@ -1023,6 +1024,18 @@ export interface UnionQuotaAdjustmentResponse {
   poolQuotaFen: number;
   poolQuotaYuan: number;
   deltaFen: number;
+  verified: boolean;
+  message: string;
+}
+
+/** 群主钻石池加/减结果；stonePool 是操作后（回读到）的钻石数量。 */
+export interface ClubStonePoolAdjustmentResponse {
+  clubId: string;
+  ownerId: string;
+  ownerName: string;
+  action: "add" | "subtract";
+  stonePool: number;
+  delta: number;
   verified: boolean;
   message: string;
 }

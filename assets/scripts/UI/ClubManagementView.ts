@@ -14,6 +14,8 @@ export interface ClubContext {
     unionKnown?:boolean; hasUnion?:boolean; unionId?:string; unionName?:string; unionApplyId?:string;
     /** 联盟额度：总群主是联盟池（isPool=true），盟主是自己俱乐部额度。 */
     unionQuotaFen?:number; unionQuotaIsPool?:boolean; clubQuotaFen?:number;
+    /** 群主钻石池数量（个）；未知时 undefined。 */
+    stonePool?:number;
     /** 只有联盟总群主能看入盟申请；is_owner 来自 查询_联盟_额度。 */
     unionIsOwner?:boolean;
 }
@@ -357,6 +359,12 @@ export default class ClubManagementView {
         const showTopQuota = next.role === "owner" && Number.isFinite(topQuotaFen);
         this.active("俱乐部额度",showTopQuota,card);
         this.text("俱乐部额度",showTopQuota ? "额度：" + this.fenText(topQuotaFen) + " 元" : "",card);
+        // 钻石池只给群主看；数据来自 查询_俱乐部_钻石流水 最新一条的 remark 后值。
+        const stonePool = Number(next.stonePool);
+        const showStonePool = next.role === "owner";
+        this.active("钻石池图标",showStonePool,card);
+        this.active("钻石池",showStonePool,card);
+        this.text("钻石池",showStonePool ? "钻石池：" + (Number.isFinite(stonePool) ? stonePool : "--") : "",card);
         const canReviewUnion = this.canReviewUnion(next);
         // 「我的」卡片只在创建者（大群主/盟主/老板）或代理时显示身份牌；普通成员/管理员不占右侧位置。
         const showIdentity = !!next.id && (next.role === "owner" || next.role === "agent");
@@ -439,10 +447,11 @@ export default class ClubManagementView {
         this.syncProfileScroll(!!next.id,showUnionSection);
     }
     /**
-     * 「我的」滚动区内容高度：有卡片时 550；显示联盟区时卡片 320、内容 670。
-     * 卡片加高后中心会下移，子节点需要整体上移 60，才能让标题仍贴住卡片顶部、
-     * 联盟行落在底部，而不是在顶部留出一大块空白。
-     * 无卡片时只剩按钮区 350，内容不高于可视区时撑满 view，避免可滚动的空白。
+     * 「我的」滚动区内容高度。
+     *
+     * 有俱乐部时按钮区多「上下分记录 / 钻石池消耗」两个入口，Grid 从 3 行变 4 行
+     * （314.05 → 421.96）；卡片紧跟在按钮区下面（间距 12），所以卡片、内容高度都要跟着下移。
+     * 无俱乐部时「赠送 / 兑换钻石 / 上下分记录 / 钻石池消耗」都隐藏，按钮区回到 3 行，内容 350。
      */
     public syncProfileScroll(hasClub?:boolean,hasUnion?:boolean):void {
         const current = this.getContext();
@@ -450,10 +459,20 @@ export default class ClubManagementView {
             hasClub = !!current && !!current.id;
         if(hasUnion === undefined)
             hasUnion = this.unionSectionVisible(current);
+        const opHeight = hasClub ? 421.96 : 314.05;
+        const operation = this.at("Main/我的/滚动区/view/content/操作");
+        if(operation && Math.abs(operation.height - opHeight) > 0.5)
+            operation.height = opHeight;
+
+        const cardHeight = hasClub ? (hasUnion ? 320 : 200) : 0;
         const card = this.at("Main/我的/滚动区/view/content/当前俱乐部");
         if(card) {
-            const cardHeight = hasUnion ? 320 : 200;
             if(Math.abs(card.height - cardHeight) > 0.5) card.height = cardHeight;
+            const widget = card.getComponent(cc.Widget);
+            if(widget) {
+                widget.top = opHeight + 12;
+                widget.updateAlignment();
+            }
             const shift = hasUnion ? 60 : 0;
             for(const child of card.children) {
                 if(this.cardBaseY[child.name] === undefined) this.cardBaseY[child.name] = child.y;
@@ -464,7 +483,7 @@ export default class ClubManagementView {
         const view = this.at("Main/我的/滚动区/view");
         if(!content) return;
         const viewHeight = view ? view.height : 0;
-        const height = Math.max(hasClub ? (hasUnion ? 670 : 550) : 350,viewHeight);
+        const height = Math.max(opHeight + (hasClub ? 12 + cardHeight + 24 : 36),viewHeight);
         if(Math.abs(content.height - height) > 0.5) content.height = height;
         // content 顶部锚点，贴住 view 顶边；否则缩高后内容会整体下移。
         if(view) content.setPosition(0,viewHeight / 2);

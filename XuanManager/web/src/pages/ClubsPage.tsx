@@ -8,15 +8,12 @@ import type {
   ClubListResponse,
   ClubMemberNode,
   ClubMemberTree,
-  UnionDetailResponse,
-  UnionListItem,
-  UnionQuotaAdjustmentResponse,
+  ClubStonePoolAdjustmentResponse,
 } from "../types";
 
 const roleLabels: Record<ClubMemberNode["role"], string> = {
   owner: "群主",
   agent: "代理",
-  manager: "管理员",
   member: "成员",
 };
 
@@ -114,11 +111,10 @@ function activeFilterCount(filters: ClubFilters): number {
 /**
  * 俱乐部管理。
  *
- * 列出所有俱乐部、点进某个俱乐部看成员代理树；列表行可对所属联盟做「调整群主额度」。
+ * 列出所有俱乐部、点进某个俱乐部看成员代理树；群主额度只读展示。
  *
- * 联盟模式 V2：俱乐部额度挂在 club_guuid_info.union_quota，由联盟总群主在游戏内授信；
- * 平台后台只能给联盟池注资（增加_联盟_额度），保存后回读联盟池并写审计。
- * 俱乐部未加入联盟时没有可注资的联盟池，按钮禁用。
+ * 联盟模式 V2：俱乐部额度挂在 club_guuid_info.union_quota，由大群主在游戏内调整，
+ * 平台后台不提供额度调整入口，只保留群主钻石池的增加/扣减。
  */
 export default function ClubsPage({
   can,
@@ -136,7 +132,7 @@ export default function ClubsPage({
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ClubListItem | null>(null);
-  const [quotaClub, setQuotaClub] = useState<ClubListItem | null>(null);
+  const [stonePoolClub, setStonePoolClub] = useState<ClubListItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -200,14 +196,14 @@ export default function ClubsPage({
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
-  const canAdjustQuota = can("game.union.quota_adjust");
+  const canAdjustStonePool = can("game.club.stone_pool_adjust");
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="CLUB OPERATIONS"
         title="俱乐部管理"
-        description="按俱乐部查看成员与代理树；「调整群主额度」给所属联盟池注资。联盟池与俱乐部额度的唯一真相都在游戏服。"
+        description="按俱乐部查看成员与代理树、群主钻石池；群主额度由大群主在游戏内调整，后台只读展示。金额的唯一真相都在游戏服。"
         actions={<span className="readonly-badge"><i />额度以游戏服为准</span>}
       />
 
@@ -386,6 +382,7 @@ export default function ClubsPage({
                     <th>人数</th>
                     <th>代理</th>
                     <th>群主额度</th>
+                    <th>钻石池</th>
                     <th>抽成</th>
                     <th className="align-right">操作</th>
                   </tr>
@@ -439,6 +436,13 @@ export default function ClubsPage({
                           <strong className="club-quota-value">{amountFormatter.format(club.ownerQuotaFen / 100)} 元</strong>
                         )}
                       </td>
+                      <td>
+                        {club.stonePool === null || club.stonePool === undefined ? (
+                          <span className="club-quota-missing" title="没有找到俱乐部创建者">未找到群主</span>
+                        ) : (
+                          <strong className="club-quota-value">{integerFormatter.format(club.stonePool)} 钻</strong>
+                        )}
+                      </td>
                       <td>{club.tax || "—"}</td>
                       <td>
                         <div className="row-actions">
@@ -447,17 +451,17 @@ export default function ClubsPage({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setQuotaClub(club)}
-                            disabled={!club.unionId || !canAdjustQuota}
+                            onClick={() => setStonePoolClub(club)}
+                            disabled={!club.ownerId || !canAdjustStonePool}
                             title={
-                              !club.unionId
-                                ? "该俱乐部未加入联盟，无法调整联盟池"
-                                : canAdjustQuota
-                                  ? "平台给该俱乐部所属联盟的联盟池注资（总群主额度）"
-                                  : "当前角色没有调整联盟池额度的权限"
+                              !club.ownerId
+                                ? "没有找到俱乐部创建者，无法调整钻石池"
+                                : canAdjustStonePool
+                                  ? "增加或扣减群主名下的俱乐部钻石池"
+                                  : "当前角色没有调整群主钻石池的权限"
                             }
                           >
-                            调整群主额度
+                            调整钻石池
                           </button>
                         </div>
                       </td>
@@ -507,19 +511,19 @@ export default function ClubsPage({
       {selected && (
         <ClubDetailModal
           club={selected}
-          canAdjust={can("game.union.quota_adjust")}
+          canAdjustStonePool={canAdjustStonePool}
           notify={notify}
           onClose={() => setSelected(null)}
           onChanged={() => void load()}
         />
       )}
 
-      {quotaClub && (
-        <UnionQuotaModal
-          club={quotaClub}
-          canAdjust={can("game.union.quota_adjust")}
+      {stonePoolClub && (
+        <ClubStonePoolModal
+          club={stonePoolClub}
+          canAdjust={canAdjustStonePool}
           notify={notify}
-          onClose={() => setQuotaClub(null)}
+          onClose={() => setStonePoolClub(null)}
           onDone={() => void load()}
         />
       )}
@@ -529,20 +533,20 @@ export default function ClubsPage({
 
 function ClubDetailModal({
   club,
-  canAdjust,
+  canAdjustStonePool,
   notify,
   onClose,
   onChanged,
 }: {
   club: ClubListItem;
-  canAdjust: boolean;
+  canAdjustStonePool: boolean;
   notify: (message: string, kind?: "success" | "error") => void;
   onClose: () => void;
   onChanged: () => void;
 }) {
   const [detail, setDetail] = useState<ClubDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [quotaOpen, setQuotaOpen] = useState(false);
+  const [stonePoolOpen, setStonePoolOpen] = useState(false);
   const [queryRevision, refreshQuery] = useQueryRefresh();
 
   const load = useCallback(async () => {
@@ -566,7 +570,6 @@ function ClubDetailModal({
     return {
       total: detail.members.length,
       agents: detail.members.filter((member) => member.isAgent).length,
-      leaders: detail.members.filter((member) => member.isLeader).length,
     };
   }, [detail]);
 
@@ -588,12 +591,14 @@ function ClubDetailModal({
               <strong>{summary?.agents ?? 0}</strong>
             </div>
             <div>
-              <span>盟主</span>
-              <strong>{summary?.leaders ?? 0}</strong>
-            </div>
-            <div>
               <span>群主</span>
               <strong>{detail.club.ownerName || detail.club.ownerId || "未找到"}</strong>
+            </div>
+            <div>
+              <span>钻石池</span>
+              <strong>{detail.club.stonePool === null || detail.club.stonePool === undefined
+                ? "未找到"
+                : `${integerFormatter.format(detail.club.stonePool)} 钻`}</strong>
             </div>
           </div>
 
@@ -616,9 +621,8 @@ function ClubDetailModal({
                 <ClubTreeNode
                   key={root.playerId}
                   node={root}
-                  canAdjust={canAdjust}
-                  hasUnion={Boolean(detail.club.unionId)}
-                  onAdjust={() => setQuotaOpen(true)}
+                  canAdjustStonePool={canAdjustStonePool}
+                  onAdjustStonePool={() => setStonePoolOpen(true)}
                 />
               ))
             )}
@@ -644,12 +648,12 @@ function ClubDetailModal({
         </div>
       )}
 
-      {quotaOpen && (
-        <UnionQuotaModal
+      {stonePoolOpen && (
+        <ClubStonePoolModal
           club={detail?.club ?? club}
-          canAdjust={canAdjust}
+          canAdjust={canAdjustStonePool}
           notify={notify}
-          onClose={() => setQuotaOpen(false)}
+          onClose={() => setStonePoolOpen(false)}
           onDone={() => {
             refreshQuery();
             onChanged();
@@ -662,14 +666,12 @@ function ClubDetailModal({
 
 function ClubTreeNode({
   node,
-  canAdjust,
-  hasUnion,
-  onAdjust,
+  canAdjustStonePool,
+  onAdjustStonePool,
 }: {
   node: ClubMemberTree;
-  canAdjust: boolean;
-  hasUnion: boolean;
-  onAdjust: () => void;
+  canAdjustStonePool: boolean;
+  onAdjustStonePool: () => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const hasChildren = node.children.length > 0;
@@ -688,7 +690,6 @@ function ClubTreeNode({
         <span className={`club-role club-role--${node.role}`}>{labelOf(roleLabels, node.role)}</span>
         <span className="club-tree__name">
           {node.name || node.playerId}
-          {node.isLeader && <b className="club-leader">盟主</b>}
           <small>ID：{node.playerId}</small>
         </span>
         <span className="club-tree__gold">积分 {clubGoldText(node.clubGold)}</span>
@@ -697,10 +698,10 @@ function ClubTreeNode({
         )}
         {node.inviteCode && <span className="club-tree__meta">邀请码 {node.inviteCode}</span>}
         {node.note && <span className="club-tree__meta">{node.note}</span>}
-        {canAdjust && hasUnion && node.role === "owner" && (
+        {canAdjustStonePool && node.role === "owner" && (
           <div className="row-actions">
-            <button type="button" onClick={onAdjust}>
-              调整群主额度
+            <button type="button" onClick={onAdjustStonePool}>
+              调整钻石池
             </button>
           </div>
         )}
@@ -708,7 +709,12 @@ function ClubTreeNode({
       {hasChildren && !collapsed && (
         <div className="club-tree__children">
           {node.children.map((child) => (
-            <ClubTreeNode key={child.playerId} node={child} canAdjust={canAdjust} hasUnion={hasUnion} onAdjust={onAdjust} />
+            <ClubTreeNode
+              key={child.playerId}
+              node={child}
+              canAdjustStonePool={canAdjustStonePool}
+              onAdjustStonePool={onAdjustStonePool}
+            />
           ))}
         </div>
       )}
@@ -717,13 +723,12 @@ function ClubTreeNode({
 }
 
 /**
- * 联盟池注资（即「调整群主额度」）。
+ * 群主钻石池加/减。
  *
- * 联盟模式 V2 下平台只能增加联盟池（总群主额度），不能直接改某个俱乐部的额度：
- * 俱乐部额度由总群主在游戏内用「授信_联盟_额度」分配。
- * 金额按「元」输入，提交换算成分，交给游戏服「增加_联盟_额度」并回读校验。
+ * 池子是 club_agent_info 中俱乐部创建者那一行的 stone：玩家兑换钻石从这里扣。
+ * 增加和扣减都走游戏服「增加_俱乐部_钻石」，扣减按负数传入，成功后回读池子。
  */
-function UnionQuotaModal({
+function ClubStonePoolModal({
   club,
   canAdjust,
   notify,
@@ -736,64 +741,50 @@ function UnionQuotaModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [union, setUnion] = useState<UnionListItem | null>(null);
-  const [loadError, setLoadError] = useState("");
+  const [action, setAction] = useState<"add" | "subtract">("add");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState<UnionQuotaAdjustmentResponse | null>(null);
+  const [result, setResult] = useState<ClubStonePoolAdjustmentResponse | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!club.unionId) {
-      setLoadError("该俱乐部未加入联盟，没有可注资的联盟池");
-      return undefined;
-    }
-    api<UnionDetailResponse>(`/api/game/unions/${club.unionId}`)
-      .then((response) => {
-        if (!cancelled) setUnion(response.union);
-      })
-      .catch((reason_) => {
-        if (!cancelled) setLoadError(errorMessage(reason_, "读取联盟额度失败"));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [club.unionId]);
-
-  const poolFen = union?.poolQuotaFen ?? club.unionPoolQuotaFen ?? null;
-  const unionLabel = union?.name || club.unionName || club.unionId;
+  const pool = club.stonePool ?? null;
+  const isSubtract = action === "subtract";
   const parsed = Number(amount);
-  const valid = Number.isFinite(parsed) && parsed > 0;
-  const deltaFen = valid ? Math.round(parsed * 100) : 0;
-  const canSubmit = canAdjust && Boolean(club.unionId) && Boolean(union) && valid &&
-    reason.trim().length >= 2 && confirmed && !busy && !loadError;
+  const valid = Number.isInteger(parsed) && parsed >= 1 && parsed <= 1000000;
+  const delta = valid ? parsed : 0;
+  const overdraw = isSubtract && pool !== null && delta > pool;
+  const projected = pool === null ? null : isSubtract ? pool - delta : pool + delta;
+  const canSubmit = canAdjust && pool !== null && valid && !overdraw &&
+    reason.trim().length >= 2 && confirmed && !busy;
 
   const submit = async () => {
     if (!canSubmit) return;
     setBusy(true);
     setError("");
     try {
-      const outcome = await api<UnionQuotaAdjustmentResponse>(
-        `/api/game/unions/${club.unionId}/quota-adjustments`,
+      const outcome = await api<ClubStonePoolAdjustmentResponse>(
+        `/api/game/clubs/${club.clubId}/stone-pool-adjustments`,
         {
           method: "POST",
           ...jsonBody({
-            action: "add",
-            amountYuan: parsed,
+            action,
+            amount: parsed,
             reason: reason.trim(),
-            expectedPoolQuotaYuan: poolFen === null ? undefined : poolFen / 100,
+            expectedStone: pool,
             confirm: true,
           }),
         },
       );
       setResult(outcome);
-      notify(outcome.verified ? outcome.message : "注资已提交，但未回读校验，请刷新后确认", outcome.verified ? "success" : "error");
+      notify(
+        outcome.verified ? outcome.message : "钻石池变更已提交，但未回读校验，请刷新后确认",
+        outcome.verified ? "success" : "error",
+      );
       onDone();
     } catch (reason_) {
-      setError(errorMessage(reason_, "联盟池注资失败"));
+      setError(errorMessage(reason_, isSubtract ? "群主钻石池扣减失败" : "群主钻石池增加失败"));
     } finally {
       setBusy(false);
     }
@@ -801,88 +792,125 @@ function UnionQuotaModal({
 
   return (
     <Modal
-      title={`调整「${unionLabel}」的群主额度`}
-      eyebrow={`UNION QUOTA · ${club.unionId || "NO UNION"}`}
+      title={`${isSubtract ? "扣减" : "增加"}「${club.name || club.clubId}」的群主钻石池`}
+      eyebrow={`CLUB DIAMOND POOL · ${club.clubId}`}
       onClose={onClose}
     >
       <div className="quota-intro">
         <p>
-          这里调整的是<strong>联盟池</strong>（联盟总群主额度），单位<strong>分</strong>；
-          界面输入<strong>元</strong>，提交后交给游戏服「增加_联盟_额度」，成功后会回读联盟池。
+          群主钻石池挂在俱乐部创建者名下，玩家用俱乐部积分兑换的钻石从这里扣除。
         </p>
         <ul>
-          <li>平台只能增加联盟池额度，不会直接改单个俱乐部的额度。</li>
-          <li>俱乐部额度由联盟总群主在游戏内「授信_联盟_额度」分配。</li>
+          <li>增加和扣减都走游戏服「增加_俱乐部_钻石」，扣减按负数传入并回读池子。</li>
+          <li>扣减不能超过当前钻石池；单次 1–1,000,000 钻。</li>
           <li>操作会记入后台审计，原因必填（2–120 字）。</li>
         </ul>
         <div className="union-quota-current">
           <div>
-            <span>当前联盟池</span>
-            <strong>{poolFen === null ? "读取中…" : `${amountFormatter.format(poolFen / 100)} 元`}</strong>
+            <span>当前钻石池</span>
+            <strong>{pool === null ? "未找到群主" : `${integerFormatter.format(pool)} 钻`}</strong>
           </div>
           <div>
-            <span>本俱乐部额度</span>
-            <strong>
-              {club.ownerQuotaFen === null || club.ownerQuotaFen === undefined
-                ? "未确认"
-                : `${amountFormatter.format(club.ownerQuotaFen / 100)} 元`}
-            </strong>
+            <span>操作后预计</span>
+            <strong>{valid && projected !== null ? `${integerFormatter.format(projected)} 钻` : "—"}</strong>
           </div>
         </div>
       </div>
 
       {result ? (
         <div className={`quota-result ${result.verified ? "is-ok" : "is-unverified"}`}>
-          <strong>{result.verified ? "联盟池已注资并回读校验" : "注资已提交，未回读校验"}</strong>
+          <strong>
+            {result.verified
+              ? result.delta < 0
+                ? "群主钻石池已扣减并回读校验"
+                : "群主钻石池已增加并回读校验"
+              : "钻石池变更已提交，未回读校验"}
+          </strong>
           <p>{result.message}</p>
           <dl>
             <div>
-              <dt>本次注资</dt>
-              <dd>+{amountFormatter.format(result.deltaFen / 100)} 元</dd>
+              <dt>{result.delta < 0 ? "本次扣减" : "本次增加"}</dt>
+              <dd>{result.delta < 0 ? "−" : "+"}{integerFormatter.format(Math.abs(result.delta))} 钻</dd>
             </div>
             <div>
-              <dt>注资后联盟池</dt>
-              <dd>{amountFormatter.format(result.poolQuotaYuan)} 元</dd>
+              <dt>操作后钻石池</dt>
+              <dd>{integerFormatter.format(result.stonePool)} 钻</dd>
             </div>
           </dl>
+          <p>群主：{result.ownerName || result.ownerId}</p>
+          <div className="form-actions">
+            <Button type="button" onClick={onClose}>完成</Button>
+          </div>
         </div>
       ) : (
         <form className="form-grid form-grid--single" onSubmit={submitGuard(submit)}>
-          {(error || loadError) && (
+          {error && (
             <div className="form-error">
               <span>!</span>
-              {error || loadError}
+              {error}
             </div>
           )}
           {!canAdjust && (
             <div className="form-error">
               <span>!</span>
-              当前角色没有调整联盟池额度的权限
+              当前角色没有调整群主钻石池的权限
             </div>
           )}
-          <Field label="注资金额（元）" hint={valid ? `提交为 ${deltaFen} 分` : "只能增加，支持两位小数，单次不超过 100 万元"}>
+          {pool === null && (
+            <div className="form-error">
+              <span>!</span>
+              没有找到俱乐部创建者，无法调整钻石池
+            </div>
+          )}
+          {overdraw && (
+            <div className="form-error">
+              <span>!</span>
+              扣减数量不能超过当前钻石池
+            </div>
+          )}
+          <div className="balance-action-tabs">
+            <button type="button" className={action === "add" ? "is-active" : ""} onClick={() => setAction("add")}>
+              增加钻石
+            </button>
+            <button
+              type="button"
+              className={action === "subtract" ? "is-active is-danger" : ""}
+              onClick={() => setAction("subtract")}
+            >
+              扣减钻石
+            </button>
+          </div>
+          <Field
+            label={isSubtract ? "扣减数量（钻）" : "增加数量（钻）"}
+            hint={valid ? `提交为 ${isSubtract ? "-" : "+"}${delta} 钻` : "只支持整数钻石，单次 1 到 1,000,000"}
+          >
             <input
               type="number"
-              min="0.01"
-              step="0.01"
+              min="1"
+              max="1000000"
+              step="1"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
-              placeholder="例如 1000"
+              placeholder="例如 10000"
             />
           </Field>
           <Field label="原因" hint={`${Array.from(reason.trim()).length}/120，必填 2 字以上`}>
-            <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：平台季度注资" />
+            <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：群主补充兑换钻石" />
           </Field>
           <label className="confirm-check">
             <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
-            <span>我确认本次注资只增加联盟池额度，不直接改变俱乐部额度</span>
+            <span>
+              {isSubtract
+                ? "我确认本次操作会直接扣减群主钻石池，玩家兑换余额会随之减少"
+                : "我确认本次操作会直接增加群主钻石池"}
+            </span>
           </label>
           <div className="form-actions">
             <Button type="button" variant="secondary" onClick={onClose}>
               取消
             </Button>
-            <Button type="submit" disabled={!canSubmit}>
-              {busy ? "提交中…" : "确认注资"}
+            <Button type="submit" variant={isSubtract ? "danger" : "primary"} disabled={!canSubmit}>
+              {busy ? "提交中…" : isSubtract ? "确认扣减" : "确认增加"}
             </Button>
           </div>
         </form>

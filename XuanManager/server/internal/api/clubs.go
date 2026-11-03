@@ -45,6 +45,9 @@ type clubListItem struct {
 	// OwnerQuotaFen 是俱乐部当前可用额度（club_guuid_info.union_quota，单位分）。
 	// 未加入联盟时为 nil，与「额度 0」不是一回事。
 	OwnerQuotaFen *int64 `json:"ownerQuotaFen"`
+	// StonePool 是群主钻石池：club_agent_info 中该俱乐部创建者那一行的 stone（单位：钻）。
+	// 玩家兑换钻石会从这个池子扣；找不到群主时为 nil。
+	StonePool *int64 `json:"stonePool"`
 }
 
 type clubMemberNode struct {
@@ -52,7 +55,6 @@ type clubMemberNode struct {
 	Name      string `json:"name"`
 	Role      string `json:"role"`
 	IsAgent   bool   `json:"isAgent"`
-	IsLeader  bool   `json:"isLeader"`
 	UpperID   string `json:"upperId"`
 	UpperName string `json:"upperName"`
 	ClubGold  *int64 `json:"clubGold"`
@@ -338,6 +340,16 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	} else {
 		s.logger.Error("read club owner names", "error", nameErr)
 	}
+	if pools, poolErr := s.clubStonePools(r.Context(), items); poolErr == nil {
+		for index := range items {
+			if pool, ok := pools[items[index].ClubID]; ok {
+				value := pool
+				items[index].StonePool = &value
+			}
+		}
+	} else {
+		s.logger.Error("read club stone pools", "error", poolErr)
+	}
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "total": total, "page": page, "pageSize": size,
 		"mode": filters.Mode,
@@ -423,6 +435,55 @@ func ownerIDsOf(items []clubListItem) []string {
 	return ids
 }
 
+// readClubStonePool 读取单个俱乐部群主的钻石池；没有 agent 行时按 0 处理。
+func (s *Server) readClubStonePool(ctx context.Context, clubID, ownerID string) (int64, error) {
+	var stone int64
+	err := s.db.QueryRowContext(ctx, `SELECT COALESCE(stone, 0)
+FROM kbedm.club_agent_info
+WHERE club_guuid = ? AND user_guuid = ? AND status = 'used'
+LIMIT 1`, clubID, ownerID).Scan(&stone)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	return stone, err
+}
+
+// clubStonePools 批量读取每个俱乐部的群主钻石池（club_agent_info.stone）。
+// 用 (club_guuid,user_guuid) 精确匹配，避免把同一群主名下其他俱乐部的池子串过来。
+func (s *Server) clubStonePools(ctx context.Context, items []clubListItem) (map[string]int64, error) {
+	result := map[string]int64{}
+	parts := make([]string, 0, len(items))
+	args := make([]any, 0, len(items)*2)
+	for _, item := range items {
+		if item.ClubID == "" || item.OwnerID == "" {
+			continue
+		}
+		// 有群主但还没有 agent 行时，池子按 0 展示，而不是“未找到群主”。
+		result[item.ClubID] = 0
+		parts = append(parts, "(club_guuid = ? AND user_guuid = ?)")
+		args = append(args, item.ClubID, item.OwnerID)
+	}
+	if len(parts) == 0 {
+		return result, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT club_guuid, COALESCE(stone, 0)
+FROM kbedm.club_agent_info
+WHERE status = 'used' AND (`+strings.Join(parts, " OR ")+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var clubID string
+		var stone int64
+		if err := rows.Scan(&clubID, &stone); err != nil {
+			return nil, err
+		}
+		result[clubID] = stone
+	}
+	return result, rows.Err()
+}
+
 func (s *Server) playerNames(ctx context.Context, ids []string) (map[string]string, error) {
 	result := map[string]string{}
 	if len(ids) == 0 {
@@ -502,6 +563,13 @@ WHERE c.club_guuid = ? LIMIT 1`, clubID).Scan(
 		if member.Role == "owner" {
 			detail.Club.OwnerID = member.PlayerID
 			detail.Club.OwnerName = member.Name
+		}
+	}
+	if detail.Club.OwnerID != "" {
+		if stone, poolErr := s.readClubStonePool(ctx, clubID, detail.Club.OwnerID); poolErr == nil {
+			detail.Club.StonePool = &stone
+		} else {
+			s.logger.Error("read club stone pool", "error", poolErr, "clubId", clubID)
 		}
 	}
 	// V2 的额度挂在俱乐部（union_quota），代理不再有独立额度：
@@ -590,14 +658,6 @@ WHERE `+membershipAnyColumnSQL("a"),
 		return nil, err
 	}
 
-	ownerID := ""
-	for _, item := range raws {
-		if item.IsOwner {
-			ownerID = item.Guuid
-			break
-		}
-	}
-
 	members := make([]clubMemberNode, 0, len(raws))
 	for _, item := range raws {
 		node := clubMemberNode{PlayerID: item.Guuid, Name: item.Name, ClubGold: item.ClubGold}
@@ -611,11 +671,8 @@ WHERE `+membershipAnyColumnSQL("a"),
 		case hasRelation && relation.IsAgent:
 			node.IsAgent = true
 			node.Role = "agent"
-			// 盟主 = 创建者的直属代理（与游戏内 is_leader 同口径）。
-			node.IsLeader = ownerID != "" && relation.UpperID == ownerID
-		case item.Manages:
-			node.Role = "manager"
 		default:
+			// 俱乐部当前只有群主、代理、成员；旧的 club_manage 不再单列角色。
 			node.Role = "member"
 		}
 		if hasRelation {
@@ -627,8 +684,8 @@ WHERE `+membershipAnyColumnSQL("a"),
 		members = append(members, node)
 	}
 
-	// 创建者 → 代理 → 管理员 → 普通成员；同级按 ID，保证树渲染稳定。
-	rank := map[string]int{"owner": 0, "agent": 1, "manager": 2, "member": 3}
+	// 创建者 → 代理 → 普通成员；同级按 ID，保证树渲染稳定。
+	rank := map[string]int{"owner": 0, "agent": 1, "member": 2}
 	sort.SliceStable(members, func(i, j int) bool {
 		if rank[members[i].Role] != rank[members[j].Role] {
 			return rank[members[i].Role] < rank[members[j].Role]

@@ -4,6 +4,31 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-03 俱乐部管理与菜单顺序（已部署）
+
+- 移除俱乐部管理「调整群主额度」按钮与弹窗；「群主额度」改只读，由大群主在游戏内调整。
+- 联盟管理「加/减额度」及 `POST /api/game/unions/{unionId}/quota-adjustments` 保留，只调联盟池。
+- 菜单顺序改为玩家 → 联盟 → 俱乐部；前端 `index-B77sPvpw.js`、后端 `5751cd60…` 已部署，未登录态验收。详见[交接](handoffs/2026-11-03-admin-union-management.md)。
+
+## 2026-11-03 后台俱乐部钻石池（已部署，扣减待实测）
+
+- 俱乐部列表/详情新增「钻石池」：读 `club_agent_info.stone`（创建者行）；新增 `POST /api/game/clubs/{clubId}/stone-pool-adjustments`，权限 `game.club.stone_pool_adjust`、迁移 `043`，加/减都走 `增加_俱乐部_钻石`（扣减传负数）并回读审计。
+- Go 测试/vet、前端 lint/build 通过。已部署正式 8891：二进制 `18351c52…`、前端 `index-DzEoybUS.js`，迁移 043 已执行，健康 200、新路由未登录 401；游戏服负数支持与登录态交互未验证。详见[交接](handoffs/2026-11-03-admin-club-stone-pool.md)。
+
+## 2026-11-03 我的页「钻石池消耗」（未构建、未真机）
+
+- 「我的」第4行右侧新增「钻石池消耗」（有俱乐部显示，第二列版式）；独立 `panelStonePoolCost` 弹窗复用金币流向，标题/表头为时间/玩家/消耗积分/获得钻石，行模板带钻石图标。
+- 接口 `查询_俱乐部_钻石兑换_记录` / `ClubStoneExchangeList`；`panelMain` 加入口。TS/Prefab/UUID/贴图检查通过；Creator/构建/真实回包待验证。详见[交接](handoffs/2026-11-03-my-stone-pool-cost.md)。
+
+## 2026-11-03 俱乐部卡片钻石池（未构建、未真机）
+
+- 群主卡片额度下方新增「钻石池」图标+数量（仅群主显示）；值取 `查询_俱乐部_钻石流水`/`ClubStoneWater` 最新 `remark` 后值，进入我的/兑换/推送时刷新；`panelMain` 查询节流+推送，prefab 加文字/18px 图标。TS/Prefab 通过，Creator/构建/真机待验证。详见[交接](handoffs/2026-11-03-club-card-stone-pool.md)。
+
+## 2026-11-03 我的页「上下分记录」（未构建、未真机）
+
+- 「我的」新增「上下分记录」（有俱乐部显示），弹窗复用金币流向；接口 `查询_俱乐部_成员_积分_添加_记录`（整本俱乐部，无 user_id）/ `AddMemberGoldList`，按 `type=添加积分` 过滤；表头时间/玩家/金额/余额，行显示玩家+操作人两行。
+- 新增 `panelUpDownRecord` 与两行行模板；TS/Prefab/UUID/贴图检查通过；Creator/构建/真实回包待验证。详见[交接](handoffs/2026-11-03-my-updown-record.md)。
+
 ## 2026-11-03 消息/直聊按联盟层级调整（服务端已部署，客户端未构建）
 
 - 固定联系人改为「直属上级代理 + 本俱乐部老板 + 联盟大群主」，三级按 guuid 去重；固定会话服务端拒绝删除。普通玩家默认看到老板与（入盟后的）大群主，代理保留直属上级。
@@ -91,16 +116,9 @@
 - 真实数据验证通过；性能根因 `COALESCE(club_status,'')` 导致索引失效，修复后列表 3.8s→24ms，并给 Caddy 加 gzip。回滚点与完整细节见[交接](handoffs/2026-11-01-admin-club-management.md)。
 - 未验证：Creator、客户端（`assets/` 全程未改）。
 
-## 2026-10-31 俱乐部 1 对 1 私聊（服务端已部署）
+## 2026-10-31 俱乐部 1 对 1 私聊（已归档）
 
-- 服务端 `/api/direct/*` + `chat_direct_*`（迁移 `006`），直聊关系改为 `CHAT_GAME_DB_*` 只读直查游戏库，不再用俱乐部同步副本。
-- 客户端 `DirectChatManager` + 消息页（`Main` 第 5 分页）；已修 Cocos `onLoad` 早于 `setPanelInfo` 导致的空会话 ID 404。
-- 轮询已改为独立 WebSocket（`ws-ticket` + `ws`，`message.new`/`message.sent` 只带游标），文本/语音优先 WS、断线用同一 `clientMessageId` 回退 HTTP；已读游标改为数据库条件更新，只允许向前。
-- 固定上级代理入口按 `club_agent_info.upper_guuid` 生成、`canDelete=false`；`note` 只对上级链可见，列表显示“昵称（备注） [俱乐部名称]”。
-- 服务端多轮部署（CORS 预检、图片附件空 `external_media_id`、长连接、已读并发、固定入口+备注）均已完成并通过 Go 全量测试；各版本 SHA-256、备份名与逐项验证见[交接](handoffs/2026-10-31-direct-chat.md)。
-- 客户端尚未正式构建/热更，双账号、断网恢复、真机图片与录音仍待实测。
-- 2026-11-02 通过安卓 `192.168.3.100:9527` V8 Inspector 复现：`ws-ticket` HTTP 返回 200，但原生直聊 WebSocket 在 `OPEN` 前 `onerror → CLOSED`；同一临时票据由电脑连接公网 `ws://154.37.155.17/chattool/api/direct/ws` 可 `OPEN`。根因为服务端先用网页 Origin 白名单拒绝 Cocos 原生来源；修复为已带一次性 ticket 时跳过网页 Origin 校验，已部署到 `/www/html/.chattool`，公网健康 200，`Origin: file://` 无效 ticket 已进入 401 ticket 鉴权；真实双账号安卓回归仍待执行，见[安卓长连接交接](handoffs/2026-11-02-android-direct-chat-ws-origin.md)。
-- 2026-11-02 直聊图片：安卓/iOS 原生桥已补齐「相册选图 + 拍照」，回调增加 `error` 字段（`denied`/`unsupported`），TS 侧 `PickImage(source)` 与消息页「拍照上传」「发送图片」分别走相机与相册。Java 已过 `:qing:compileDebugJavaWithJavac`、iOS 过 `clang -fsyntax-only`、TS 过语法制检；**未出包、未真机验证**，见[图片与拍照交接](handoffs/2026-11-02-direct-chat-image-camera.md)。
+- 服务端直聊、WebSocket 长连接、安卓 Origin 修复与图片/拍照等细节见[归档](archive/2026-11-03/current-oct31-direct-chat.md)；双账号与真机回归仍未完成。
 
 ## 2026-10-29～10-30（阶段归档）
 

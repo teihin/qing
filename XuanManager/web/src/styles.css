@@ -2388,7 +2388,7 @@ td strong { color: #294149; }
 .automation-worker-line { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 10px; margin-top: 8px; color: #587077; font-size: 12px; }
 
 /* 俱乐部管理：列表 + 成员代理树 + 额度调整 */
-.club-table { min-width: 1000px; }
+.club-table { min-width: 1180px; }
 /* 俱乐部查询：维度切换 + 组合条件 */
 .club-filter-panel { border-bottom: 1px solid #e8eeee; background: #fbfdfd; }
 .club-filter-primary { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 15px 18px; }
@@ -2432,12 +2432,10 @@ td strong { color: #294149; }
 .club-tree__name small { display: block; margin-top: 2px; color: #86999d; font-size: 11px; font-weight: 500; }
 .club-tree__gold { margin-left: auto; color: #7a6a3d; font-size: 12px; font-weight: 700; }
 .club-tree__meta { color: #8b9ea2; font-size: 11px; }
-.club-leader { margin-left: 6px; padding: 1px 6px; border-radius: 999px; color: #8a6a22; background: #fcf3e1; font-size: 10px; font-weight: 800; }
 
 .club-role { flex: 0 0 auto; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 800; }
 .club-role--owner { color: #8a5a1f; background: #fbf1de; }
 .club-role--agent { color: #1f6f83; background: #e8f5f8; }
-.club-role--manager { color: #5a6187; background: #eef0f9; }
 .club-role--member { color: #5f7478; background: #eef3f3; }
 
 .club-orphan { padding: 13px 15px; border: 1px solid #ecdcdc; border-radius: 11px; background: #fdf7f7; }

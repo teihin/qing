@@ -88,6 +88,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/players/{playerId}/rooms", s.authorized("game.room_record.view", false, s.handlePlayerRoomHistory))
 	s.mux.Handle("GET /api/game/clubs", s.authorized("game.club.view", false, s.handleListClubs))
 	s.mux.Handle("GET /api/game/clubs/{clubId}", s.authorized("game.club.view", false, s.handleGetClub))
+	s.mux.Handle("POST /api/game/clubs/{clubId}/stone-pool-adjustments", s.authorized("game.club.stone_pool_adjust", true, s.handleAdjustClubStonePool))
 	s.mux.Handle("GET /api/game/unions", s.authorized("game.union.view", false, s.handleListUnions))
 	s.mux.Handle("GET /api/game/unions/{unionId}", s.authorized("game.union.view", false, s.handleGetUnion))
 	s.mux.Handle("POST /api/game/unions/{unionId}/quota-adjustments", s.authorized("game.union.quota_adjust", true, s.handleAdjustUnionQuota))
