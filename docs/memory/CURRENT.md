@@ -22,7 +22,7 @@
 
 ## 2026-11-03 俱乐部卡片钻石池（未构建、未真机）
 
-- 群主卡片额度下方新增「钻石池」图标+数量（仅群主显示）；值取 `查询_俱乐部_钻石流水`/`ClubStoneWater` 最新 `remark` 后值，进入我的/兑换/推送时刷新；`panelMain` 查询节流+推送，prefab 加文字/18px 图标。TS/Prefab 通过，Creator/构建/真机待验证。详见[交接](handoffs/2026-11-03-club-card-stone-pool.md)。
+- 群主卡片额度下方新增「钻石池」数量（仅群主显示）；值取 `查询_俱乐部_钻石流水`/`ClubStoneWater` 最新 `remark` 后值，进入我的/兑换/推送时刷新；`panelMain` 查询节流+推送，prefab 加文字。TS/Prefab 通过，Creator/构建/真机待验证。详见[交接](handoffs/2026-11-03-club-card-stone-pool.md)。
 
 ## 2026-11-03 我的页「上下分记录」（未构建、未真机）
 

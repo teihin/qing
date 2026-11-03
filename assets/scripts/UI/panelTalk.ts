@@ -6,7 +6,7 @@ import DrhLogicMgr from "../logic/DrhLogicMgr";
 import ScrollViewEx from "../common/ScrollViewEx";
 import { ShowPanelMode } from "../common/GameDef";
 import WebLoadingManager from "../common/WebLoadingManager";
-import { getAccountClubGold, resolveRoomSettingClubId } from "../logic/RoomClubContext";
+import { getAccountClubGold, resolveMyRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
@@ -43,7 +43,7 @@ export default class panelTalk extends UIPanelViewBase {
         if(item != null)
         {
             const account:any = GameDataManager.getAccount();
-            const clubId = resolveRoomSettingClubId(account);
+            const clubId = resolveMyRoomClubId(account);
             if(clubId !== "")
                 item.getComponent(cc.Label).string = String(getAccountClubGold(account,clubId));
             else

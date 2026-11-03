@@ -362,7 +362,6 @@ export default class ClubManagementView {
         // 钻石池只给群主看；数据来自 查询_俱乐部_钻石流水 最新一条的 remark 后值。
         const stonePool = Number(next.stonePool);
         const showStonePool = next.role === "owner";
-        this.active("钻石池图标",showStonePool,card);
         this.active("钻石池",showStonePool,card);
         this.text("钻石池",showStonePool ? "钻石池：" + (Number.isFinite(stonePool) ? stonePool : "--") : "",card);
         const canReviewUnion = this.canReviewUnion(next);

@@ -20,7 +20,7 @@ import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
 import { jackpotAmount, jackpotTier, jackpotTime } from "../common/JackpotDisplay";
-import { getAccountClubGold, normalizeRoomClubId, resolveRoomSettingClubId, withRoomClubId } from "../logic/RoomClubContext";
+import { getAccountClubGold, isUnionRoom, normalizeRoomClubId, resolveMyRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -816,16 +816,16 @@ export default class panelGameView extends UIPanelViewBase {
     private GetCurrentRoomClubId():string
     {
         const account:any = GameDataManager.getAccount();
-        const roomClubId = resolveRoomSettingClubId(account);
-        if(roomClubId !== "")
-            return roomClubId;
-        // 老房间回包可能只在本人 PlayerInfo.req_club_id 带回俱乐部，兼容该正式字段。
-        if(this.gameLogic != null && typeof this.gameLogic.GetPlayerCtlByID === "function")
-        {
-            const self = this.gameLogic.GetPlayerCtlByID(0);
-            return normalizeRoomClubId(self && self.info && self.info.req_club_id);
-        }
-        return "";
+        return resolveMyRoomClubId(account,this.GetSelfReqClubId());
+    }
+
+    /** 服务端在 PlayerList 里下发的“本人本房间入口俱乐部”，联盟房即玩家自己的俱乐部。 */
+    private GetSelfReqClubId():string
+    {
+        if(this.gameLogic == null || typeof this.gameLogic.GetPlayerCtlByID !== "function")
+            return "";
+        const self = this.gameLogic.GetPlayerCtlByID(0);
+        return normalizeRoomClubId(self && self.info && self.info.req_club_id);
     }
 
     private GetCurrentRoomGold():number
@@ -861,19 +861,26 @@ export default class panelGameView extends UIPanelViewBase {
         const minimumMatch = roomSetting.match(/最小带入\s*([0-9]+(?:\.[0-9]+)?)/);
         const strMin = minimumMatch ? minimumMatch[1] : "0";
         const balance = this.GetCurrentRoomGold();
-        const clubRoom = this.GetCurrentRoomClubId() !== "";
+        const clubId = this.GetCurrentRoomClubId();
+        const unionRoom = isUnionRoom(account);
+        const clubRoom = clubId !== "";
         const nHisIn = Number(this.gameLogic.GetPlayerCtlByID(0).info.begin_score);
         display.configure(Number(strMin),balance,Number(this.CheckSmallPlay(nHisIn.toString())));
 
         const shortage = Tool.GetChild(this.node,"带入窗口/余额不足提示");
         if(shortage == null)
             return;
-        shortage.active = balance < Number(strMin);
+        shortage.active = (unionRoom && clubId === "") || balance < Number(strMin);
         const label = Tool.GetChild(this.node,"带入窗口/余额不足提示/txt");
         if(label != null)
-            label.getComponent(cc.Label).string = clubRoom
-                ? "俱乐部金币不足，请联系代理上分！"
-                : "金币余额不足" + Number(strMin) + "，请先充值！";
+        {
+            if(unionRoom && clubId === "")
+                label.getComponent(cc.Label).string = "正在确认俱乐部信息，请稍候";
+            else
+                label.getComponent(cc.Label).string = clubRoom
+                    ? "俱乐部金币不足，请联系代理上分！"
+                    : "金币余额不足" + Number(strMin) + "，请先充值！";
+        }
     }
 
     onButtonClick(button:cc.Button)
@@ -989,7 +996,13 @@ export default class panelGameView extends UIPanelViewBase {
 
 
 
+            const account = GameDataManager.getAccount();
             const strClubID = this.GetCurrentRoomClubId();
+            if(isUnionRoom(account) && strClubID === "")
+            {
+                this.ShowMsg("正在确认俱乐部信息，请稍候！");
+                return;
+            }
 
 
             //预坐后确认带入，或者已经正式坐下后的普通补分，都不再传site。
@@ -1837,7 +1850,7 @@ export default class panelGameView extends UIPanelViewBase {
             {
                 GameDataManager.getAccount().bReSendFull = true;
                 const account = GameDataManager.getAccount();
-                const clubId = resolveRoomSettingClubId(account);
+                const clubId = resolveMyRoomClubId(account,this.GetSelfReqClubId());
                 account.reqEnterRoom(RoomType.Custom,nRoomID,withRoomClubId("",clubId));
             }
             else
@@ -2209,7 +2222,11 @@ export default class panelGameView extends UIPanelViewBase {
                 if(param == "坐下_事件1" && this.preSitState == "submitting")
                 {
                     this.CancelPreSitReservation(true);
-                    this.ShowMsg(this.GetCurrentRoomClubId() !== "" ? "俱乐部金币不足或额度不足！" : "带入失败，请重新选择座位！");
+                    const account = GameDataManager.getAccount();
+                    const clubId = this.GetCurrentRoomClubId();
+                    // 联盟房只校验玩家自己的积分，不再提示俱乐部额度。
+                    this.ShowMsg(isUnionRoom(account) ? "俱乐部金币不足！" :
+                        (clubId !== "" ? "俱乐部金币不足或额度不足！" : "带入失败，请重新选择座位！"));
                 }
             }
         }
@@ -3701,7 +3718,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         let playerCount = this.CountSeatedPlayers();
         let minBuyIn = this.GetRoomInviteMinBuyIn();
-        const clubId = resolveRoomSettingClubId(account);
+        const clubId = this.GetCurrentRoomClubId();
         let sent = manager.sendInvite(RoomType.Custom, roomID, this.gameLogic.strRoomDipi, minBuyIn, playerCount, this.gameLogic.MAX_PLAYER, clubId);
         this.RefreshRoomInviteEntry();
         if(sent)

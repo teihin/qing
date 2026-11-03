@@ -4,7 +4,7 @@ import GpsManager from "./GpsManager";
 import ConfigManager from "./ConfigManager";
 import QueueMatchManager from "./QueueMatchManager";
 import WebSceneLoader from "../common/WebSceneLoader";
-import { getAccountClubGold, normalizeRoomClubId, resolveRoomClubId, withRoomClubId } from "./RoomClubContext";
+import { getAccountClubGold, isAccountClubId, normalizeRoomClubId, resolveMyRoomClubId, resolveRoomClubId, withRoomClubId } from "./RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -343,7 +343,7 @@ export default class RoomInviteManager extends cc.Component {
         let count = Math.max(0, Math.floor(Number(currentPlayers) || 0));
         let max = Math.max(count, Math.floor(Number(maxPlayers) || 0));
         let displayText = inviterName + "邀请你加入房间" + numericRoomID.toString();
-        const inviteClubId = normalizeRoomClubId(clubId) || resolveRoomClubId(account, "", true);
+        const inviteClubId = normalizeRoomClubId(clubId) || resolveMyRoomClubId(account);
         let content = [
             "ROOM_INVITE",
             "V3",
@@ -495,11 +495,33 @@ export default class RoomInviteManager extends cc.Component {
         return gold + gold2 / 100;
     }
 
+    /**
+     * 邀请里的 club_id 是房间归属俱乐部；联盟共享房要回落到玩家自己的俱乐部。
+     * 普通俱乐部房邀请的俱乐部如果确实是自己的俱乐部，则保留邀请里的值。
+     */
+    private resolveInviteClubId(invite:RoomInviteData, account:any):string
+    {
+        const inviteClubId = normalizeRoomClubId(invite == null ? "" : invite.clubId);
+        if(inviteClubId === "")
+            return "";
+        if(isAccountClubId(account, inviteClubId))
+            return inviteClubId;
+        return resolveRoomClubId(account);
+    }
+
     private canAffordInvite(invite:RoomInviteData, account:any):boolean
     {
         let minBuyIn = invite == null ? 0 : Number(invite.minBuyIn);
-        const clubId = normalizeRoomClubId(invite == null ? "" : invite.clubId);
-        return isFinite(minBuyIn) && minBuyIn > 0 && this.getAccountBalance(account,clubId) >= minBuyIn;
+        if(!isFinite(minBuyIn) || minBuyIn <= 0)
+            return false;
+        const inviteClubId = normalizeRoomClubId(invite == null ? "" : invite.clubId);
+        if(inviteClubId === "")
+            return this.getAccountBalance(account) >= minBuyIn;
+        // 联盟共享房的邀请俱乐部是房间归属俱乐部，不能拿来判断被邀请人的余额。
+        const ownClubId = this.resolveInviteClubId(invite, account);
+        if(ownClubId === "")
+            return true;
+        return this.getAccountBalance(account,ownClubId) >= minBuyIn;
     }
 
     private onSystemInfo(strMsg:string)
@@ -723,7 +745,7 @@ export default class RoomInviteManager extends cc.Component {
             return;
         }
         UIManager.getInstance().showPanel("panelLoading", ShowPanelMode.Top);
-        const clubId = normalizeRoomClubId(invite.clubId);
+        const clubId = this.resolveInviteClubId(invite, account);
         account.reqEnterRoom(roomType, Number(invite.roomID),
             withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
     }
@@ -795,7 +817,7 @@ export default class RoomInviteManager extends cc.Component {
             }
             this.navigationPhase = "entering";
             this.navigationDeadline = Date.now() + 15000;
-            const clubId = normalizeRoomClubId(this.navigationInvite.clubId);
+            const clubId = this.resolveInviteClubId(this.navigationInvite, account);
             account.reqEnterRoom(this.navigationInvite.roomType, Number(this.navigationInvite.roomID),
                 withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
         }, ()=>generation == this.navigationGeneration && this.navigationPhase == "transition");

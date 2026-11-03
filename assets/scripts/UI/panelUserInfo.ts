@@ -9,7 +9,7 @@ import Debug from "../common/Debug";
 import WebLoadingManager from "../common/WebLoadingManager";
 import MobileManager from "../mobile/MobileManager";
 import ConfigManager from "../logic/ConfigManager";
-import { normalizeRoomClubId } from "../logic/RoomClubContext";
+import { normalizeRoomClubId, resolveMyRoomClubId } from "../logic/RoomClubContext";
 var KBEngine = require("kbengine");
 const {ccclass, property} = cc._decorator;
 
@@ -19,24 +19,23 @@ export default class panelUserInfo extends UIPanelViewBase {
     private player:DrhPlayerLogic = null;
     private bIsVip:boolean = false
 
-    /** 牌局里的俱乐部模式以 roomSetting.club_id 为准，普通房不能误用当前大厅选中的俱乐部。 */
+    /** 牌局里的俱乐部以玩家自己的结算俱乐部为准；联盟共享房不能读房间归属的 club_id。 */
     private CurrentRoomClubId():string
     {
         const account:any = GameDataManager.getAccount();
-        if(!account || account.roomSetting == null)
-            return "";
-        let raw = String(account.roomSetting).trim();
-        if(raw.indexOf("{{") === 0 && raw.lastIndexOf("}}") === raw.length - 2)
-            raw = raw.slice(1,-1);
-        try
-        {
-            const setting:any = JSON.parse(raw);
-            return normalizeRoomClubId(setting && setting.club_id);
-        }
-        catch(error)
-        {
-            return "";
-        }
+        const reqClubId = this.player && this.player.info ? this.player.info.req_club_id : "";
+        return resolveMyRoomClubId(account,reqClubId);
+    }
+
+    /** 资料卡/赠送按目标玩家在本房间的入口俱乐部优先，取不到再回退自己的结算俱乐部。 */
+    private TargetClubId():string
+    {
+        const target = this.player && this.player.info ? normalizeRoomClubId(this.player.info.req_club_id) : "";
+        const account:any = GameDataManager.getAccount();
+        const isSelf = !!(this.player && this.player.info && account && this.player.info.strUserID == account.guuid);
+        if(isSelf)
+            return resolveMyRoomClubId(account,target);
+        return target || this.CurrentRoomClubId();
     }
 
     onLoad () {
@@ -53,7 +52,7 @@ export default class panelUserInfo extends UIPanelViewBase {
         if(this.arrayEx.length>0)
         {
             this.player = this.arrayEx[0];
-            const roomClubId = this.CurrentRoomClubId() || normalizeRoomClubId(this.player.info.req_club_id);
+            const roomClubId = this.TargetClubId();
 
             if(this.player.info.strUserID == GameDataManager.getAccount().guuid) //自己显示充值
             {
@@ -176,7 +175,7 @@ export default class panelUserInfo extends UIPanelViewBase {
         }
         else if(button.node.name === "赠送")
         {
-            const clubId = this.CurrentRoomClubId();
+            const clubId = this.TargetClubId();
             if(clubId === "")
                 return;
             const userData = JSON.stringify({userId:this.player.info.strUserID,clubId});

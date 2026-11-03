@@ -1,5 +1,6 @@
 /**
- * 统一解析进入俱乐部房间时使用的 club_id，并把它写入 roomSetting。
+ * 房间俱乐部统一解析：roomSetting 的 club_id/union_id、玩家自己的结算俱乐部，
+ * 以及进房参数里的 club_id 拼装。
  */
 export function normalizeRoomClubId(value:any):string
 {
@@ -7,6 +8,17 @@ export function normalizeRoomClubId(value:any):string
         return "";
     const id = String(value).trim();
     return /^\d{6}$/.test(id) ? id : "";
+}
+
+export function normalizeRoomUnionId(value:any):string
+{
+    return normalizeRoomClubId(value);
+}
+
+interface RoomSettingInfo
+{
+    clubId:string;
+    unionId:string;
 }
 
 function accountClubIds(account:any):string[]
@@ -26,28 +38,39 @@ function accountClubIds(account:any):string[]
     return result;
 }
 
-function readRoomSettingClubId(account:any):string
+function readRoomSetting(account:any):RoomSettingInfo
 {
+    const result:RoomSettingInfo = { clubId:"", unionId:"" };
     if(account == null || account.roomSetting == null)
-        return "";
+        return result;
     let raw = String(account.roomSetting).trim();
     if(raw.indexOf("{{") === 0 && raw.lastIndexOf("}}") === raw.length - 2)
         raw = raw.slice(1,-1);
     try
     {
         const setting = JSON.parse(raw);
-        return normalizeRoomClubId(setting && setting.club_id);
+        result.clubId = normalizeRoomClubId(setting && setting.club_id);
+        result.unionId = normalizeRoomUnionId(setting && setting.union_id);
     }
-    catch(error)
-    {
-        return "";
-    }
+    catch(error) {}
+    return result;
 }
 
 /** 只读取当前房间的俱乐部，不回退到大厅当前选中的俱乐部。 */
 export function resolveRoomSettingClubId(account:any):string
 {
-    return readRoomSettingClubId(account);
+    return readRoomSetting(account).clubId;
+}
+
+/** 联盟房返回 6 位联盟码；普通房和成员旧房为空串。 */
+export function resolveRoomSettingUnionId(account:any):string
+{
+    return readRoomSetting(account).unionId;
+}
+
+export function isUnionRoom(account:any):boolean
+{
+    return resolveRoomSettingUnionId(account) !== "";
 }
 
 /**
@@ -93,7 +116,7 @@ export function resolveRoomClubId(account:any, preferred:any = "", preferRoomSet
     const explicit = normalizeRoomClubId(preferred);
     if(explicit)
         return explicit;
-    const roomClubId = preferRoomSetting ? readRoomSettingClubId(account) : "";
+    const roomClubId = preferRoomSetting ? readRoomSetting(account).clubId : "";
     if(roomClubId)
         return roomClubId;
     const ids = accountClubIds(account);
@@ -101,6 +124,76 @@ export function resolveRoomClubId(account:any, preferred:any = "", preferRoomSet
     if(selected && (ids.length === 0 || ids.indexOf(selected) >= 0))
         return selected;
     return ids.length > 0 ? ids[0] : "";
+}
+
+let cachedRoomSettingRaw:string = "";
+let cachedMyRoomClubId:string = "";
+
+function isOwnClubId(account:any, clubId:string):boolean
+{
+    if(clubId === "")
+        return false;
+    const ids = accountClubIds(account);
+    return ids.length === 0 || ids.indexOf(clubId) >= 0;
+}
+
+/** 给定俱乐部 ID 是否是账号自己的俱乐部；账号俱乐部列表尚未加载时不拦。 */
+export function isAccountClubId(account:any, clubId:any):boolean
+{
+    return isOwnClubId(account,normalizeRoomClubId(clubId));
+}
+
+function syncMyRoomClubCache(account:any):void
+{
+    const raw = account == null || account.roomSetting == null ? "" : String(account.roomSetting);
+    if(raw !== cachedRoomSettingRaw)
+    {
+        cachedRoomSettingRaw = raw;
+        cachedMyRoomClubId = "";
+    }
+}
+
+/** 记录服务端确认的本房间结算俱乐部；切房后由 roomSetting 原文变化自动清空。 */
+export function setMyRoomClubId(value:any):void
+{
+    cachedMyRoomClubId = normalizeRoomClubId(value);
+}
+
+/**
+ * 牌桌内真正用于积分/带入/兑换/结算的俱乐部。
+ * 普通俱乐部房沿用 roomSetting.club_id；联盟共享房用玩家自己的俱乐部，
+ * 不能回退到房间归属俱乐部，否则会拿房间老板的俱乐部去查余额。
+ */
+export function resolveMyRoomClubId(account:any, selfReqClubId:any = ""):string
+{
+    syncMyRoomClubCache(account);
+    const setting = readRoomSetting(account);
+    const reqClubId = normalizeRoomClubId(selfReqClubId);
+    if(setting.unionId === "")
+    {
+        if(setting.clubId !== "")
+            return setting.clubId;
+        // 老房间回包可能只在本人 PlayerInfo.req_club_id 带回俱乐部。
+        return reqClubId;
+    }
+
+    if(isOwnClubId(account, reqClubId))
+    {
+        cachedMyRoomClubId = reqClubId;
+        return reqClubId;
+    }
+    if(isOwnClubId(account, cachedMyRoomClubId))
+        return cachedMyRoomClubId;
+
+    // 服务端还没下发当前玩家俱乐部时，用大厅当前选中的俱乐部兜底；
+    // 多俱乐部玩家仍优先使用 PlayerList 的 req_club_id。
+    const fallback = resolveRoomClubId(account);
+    if(isOwnClubId(account, fallback))
+    {
+        cachedMyRoomClubId = fallback;
+        return fallback;
+    }
+    return "";
 }
 
 /** 兼容旧的双大括号输入，但始终输出服务器要求的单层 JSON。 */

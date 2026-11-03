@@ -11,6 +11,7 @@ import MobileManager from "../mobile/MobileManager";
 import ScrollViewEx from "../common/ScrollViewEx";
 import QueueMatchManager from "./QueueMatchManager";
 import RoomCountdown from "./RoomCountdown";
+import { setMyRoomClubId } from "./RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -252,7 +253,7 @@ export default class DrhLogicMgr extends cc.Component {
     }
 
     /**
-     * 当前是否俱乐部房间（roomSetting 里带非空 club_id）。
+     * 当前是否俱乐部/联盟房间（roomSetting 里 club_id 或 union_id 非空）。
      * 切房时 roomSetting 会换，这里按原文比对，变了才重新解析。
      */
     private IsRoomClockClubRoom():boolean {
@@ -264,7 +265,8 @@ export default class DrhLogicMgr extends cc.Component {
             try {
                 const setting = JSON.parse(raw);
                 const clubId = setting != null && setting.club_id != null ? String(setting.club_id).trim() : "";
-                this.roomClockIsClubRoom = clubId !== "" && clubId !== "0";
+                const unionId = setting != null && setting.union_id != null ? String(setting.union_id).trim() : "";
+                this.roomClockIsClubRoom = (clubId !== "" && clubId !== "0") || unionId !== "";
             }
             catch (error) {}
         }
@@ -802,6 +804,8 @@ export default class DrhLogicMgr extends cc.Component {
             if(one.hasOwnProperty("req_club_id"))
             {
                 player.req_club_id = one["req_club_id"].toString();
+                if(player.strUserID == GameDataManager.getAccount().guuid)
+                    setMyRoomClubId(player.req_club_id);
             }
 
 

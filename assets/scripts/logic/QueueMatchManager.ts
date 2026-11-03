@@ -1,7 +1,7 @@
 import UIManager from "../common/UIManager";
 import { ShowPanelMode } from "../common/GameDef";
 import WebSceneLoader from "../common/WebSceneLoader";
-import { resolveRoomClubId, normalizeRoomClubId, withRoomClubId } from "./RoomClubContext";
+import { resolveRoomClubId, normalizeRoomClubId, isAccountClubId, withRoomClubId } from "./RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -765,8 +765,15 @@ export default class QueueMatchManager extends cc.Component {
         let account = this.getAccount();
         if(account == null)
             return;
+        // 联盟共享房的匹配结果可能带房间归属俱乐部；进房统一用玩家自己的俱乐部。
+        if(!isAccountClubId(account, this.targetRoomClubID))
+        {
+            const ownClubId = resolveRoomClubId(account);
+            if(ownClubId)
+                this.targetRoomClubID = ownClubId;
+        }
         if(!this.targetRoomClubID)
-            this.targetRoomClubID = resolveRoomClubId(account, "", true);
+            this.targetRoomClubID = resolveRoomClubId(account);
         let currentRoomID = Number(account.roomID);
         let generation = ++this.switchGeneration;
         this.armSwitchWatchdog(generation);
@@ -867,7 +874,7 @@ export default class QueueMatchManager extends cc.Component {
             this.failTargetRoom("游戏连接已断开");
             return;
         }
-        const clubId = this.targetRoomClubID || resolveRoomClubId(account, "", true);
+        const clubId = this.targetRoomClubID || resolveRoomClubId(account);
         account.reqEnterRoom("Custom", this.targetRoomID,
             withRoomClubId("{{\"special_rule\": \"观战\"}}",clubId));
     }

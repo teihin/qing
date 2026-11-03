@@ -4,7 +4,7 @@ import GameDataManager from "../GameDataManager";
 import Tool from "../common/Tool";
 import ImageManager from "../logic/ImageManager";
 import { ClosePanelMode, ShowPanelMode } from "../common/GameDef";
-import { resolveRoomClubId, resolveRoomSettingClubId } from "../logic/RoomClubContext";
+import { resolveMyRoomClubId, resolveRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -99,9 +99,10 @@ export default class panelExchangeStone extends UIPanelViewBase
             return;
         }
 
-        // 大厅里没有「当前房间」，角色按大厅选中的俱乐部判；牌局里仍以房间 club_id 优先。
+        // 大厅里没有「当前房间」，角色按大厅选中的俱乐部判；牌局里用玩家自己的结算俱乐部，
+        // 联盟共享房不能拿房间归属俱乐部去扣积分。
         // 「我的」入口传 strUserData="hall"。
-        this.clubId = this.strUserData === "hall" ? resolveRoomClubId(account) : resolveRoomSettingClubId(account);
+        this.clubId = this.strUserData === "hall" ? resolveRoomClubId(account) : resolveMyRoomClubId(account);
         if(this.clubId === "")
         {
             UIManager.getInstance().closePanelByName(this.node.name,ClosePanelMode.Normal);

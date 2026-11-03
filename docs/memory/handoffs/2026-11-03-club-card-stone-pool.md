@@ -20,20 +20,22 @@
   - 进入「我的」、`OnClubAgentInfo`（创建者）、兑换结果（`onExChange` 兑换忽略窗口）触发查询；换俱乐部/入退会时清空缓存。
   - 会读取 `查询_俱乐部_钻石流水` 最新一条的 `remark` 后值；只对群主发请求。
 - `assets/scripts/UI/ClubManagementView.ts`
-  - `ClubContext` 新增 `stonePool`；卡片新增「钻石池」图标和文字，只有 `role=owner` 显示，额度下方。
+  - `ClubContext` 新增 `stonePool`；卡片新增「钻石池」文字，只有 `role=owner` 显示，额度下方；不再带前置钻石图标。
 - `assets/resources/UI/panelMain.prefab`
-  - 「当前俱乐部」新增两个节点：`钻石池` 文字（140×21，x=262、y=-7，字号 19）和 `钻石池图标`（18×18，x=178），默认隐藏，由代码按群主身份显隐。
-  - 文字/图标沿用「额度」同款 Label/Outline 与行内钻石图标，位置和字色按卡片右侧空位排布。
+  - 「当前俱乐部」新增 `钻石池` 文字（180×24，x=239、y=-7，字号/行高 21/24 与「俱乐部额度」一致），默认隐藏，由代码按群主身份显隐；文字左边缘 149，使「钻石池：」与「额度：」的冒号都落在 x=212。
+  - 原 18px `钻石池图标` 节点及其 Sprite 已删除，`ClubManagementView` 不再控制该节点。
 
 ## 布局预览
 
 - `design-previews/待确认/2026-11-03-俱乐部钻石池/card_pool_mock_1x.png`
 - `design-previews/待确认/2026-11-03-俱乐部钻石池/card_pool_detail_2x.png`
+- 两张预览仍是「带钻石图标、字号 19」的旧版；2026-11-03 改为无图标、字号 21 并与「额度：」冒号对齐，尚未重出预览图。
 
 ## 验证
 
 - `node --experimental-strip-types --check`：`panelMain.ts`、`ClubManagementView.ts` 通过。
-- Prefab JSON 引用、节点/组件反向引用、新增节点父子关系检查通过。
+- Prefab JSON 引用、节点/组件反向引用、新增节点父子关系检查通过；删除图标后无悬空 `__id__`，`钻石池图标` 无残留引用。
+- 对齐按 Prefab 数值核算：额度左边缘 170 + 2 字宽 = 212，钻石池左边缘 149 + 3 字宽 = 212；本地字体渲染核对冒号与数值同列。
 - 未验证：真实 `ClubStoneWater` 推送与 `remark` 格式、流水为空/超过 100 条、兑换后池子刷新、非群主权限、Creator 导入/构建/真机。
 
 ## 下一步
