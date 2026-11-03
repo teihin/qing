@@ -79,6 +79,9 @@
   否则编辑器会把新节点当成"额外节点"而不是 prefab 的一份子。
   2026-10-26 加「兑换钻石」按钮就栽在这：prefab 改完 library 也导入了，编辑器/运行都还是 8 个按钮。
 - **手写/生成 Prefab 引用脚本组件用「5 头压缩 uuid」23 字符**（如 `d41a8PtsLlNyrBYfqkaV+As`），算法=hex[:5]+每 3 个 hex（自 index 5）→2 个 base64；资源 `.meta` 里的 uuid 是 36 字符标准形式，别混。`Tool.GetChild` 按名字取**第一个**同名子节点，同层级重名按钮必须改名。
+- **别把新增节点的 `_prefab` 值当成坏数据**：Cocos 2.4 给 prefab 里新增的节点保存时可能写成
+  `{"__id__": <已有 cc.PrefabInfo 的 id>, "fileId": "…"}`（没有 `__type__`），HEAD 里没有先例也不等于损坏；
+  判据是 `library/imports/<前2位>/<uuid>.json` 有本次导入产物且 mtime 对得上（2026-11-02 panelMain 的两个「玩家热区」即此，21:29 保存 → 21:30 导入成功）。
 - 改完 Prefab/贴图后 `library/` 需 Creator 重新导入；`assets/resources/project.manifest` 是构建产物，跑 `1生成热更新包.command` 重建，**不要手改**。
 - **Creator 开着时覆盖 PNG，`.meta` 会被自动改写**（`trimType:"auto"` 重算 trim，使 `_sizeMode=0` 元素放大约 5%）。
   根治：按原 trim 矩形给新图四边补 `alpha=2` 边界像素；收尾 `git checkout HEAD -- <每个 .meta>`。判断是否在跑：`pgrep -fl CocosCreator`。

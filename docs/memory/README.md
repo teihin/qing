@@ -12,6 +12,7 @@
 | V8 全套按序实施、当前任务进度 | [全套进度](handoffs/2026-09-11-v8-all-pages.md)、[注册实施](handoffs/2026-09-11-register-v8-exact.md) | 56 张、长短屏、静态原图、动态控件 |
 | 俱乐部快速注册无邀请码 | [注册交接](handoffs/2026-10-24-club-registration.md) | `XUAN_GAME_MODE`、四行注册、空上级链、动态头像 |
 | 已有 V7 实现、资源、长屏、钱包、公告、后续模块 | [V7 实施记录](topics/v7-ui.md) | Prefab、UUID、四档高度、历史实现；旧图不再作为设计依据 |
+| BY→BF 游戏美术批量替换 | [替换交接](handoffs/2026-11-03-by-bf-art-replacement.md) | 原图合成、BF、透明边界、索引色 PNG、`.meta` |
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |
 | 后台俱乐部管理（俱乐部列表、成员代理树、群主额度） | [俱乐部管理交接](handoffs/2026-11-01-admin-club-management.md) | game.clubs、club_agent_info、quota_fen、增加_俱乐部_额度、-99、orphan |
