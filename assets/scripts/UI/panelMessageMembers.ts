@@ -18,6 +18,7 @@ export default class panelMessageMembers extends UIPanelViewBase {
 
     private manager:DirectChatManager = null;
     private clubId:string = "";
+    private clubName:string = "";
     private scroll:cc.ScrollView = null;
     private content:cc.Node = null;
     private template:cc.Node = null;
@@ -40,9 +41,7 @@ export default class panelMessageMembers extends UIPanelViewBase {
     {
         super.onLoad();
         this.manager = DirectChatManager.GetInstance();
-        this.clubId = this.strUserData == null ? "" : String(this.strUserData).trim();
-        if(this.clubId === "")
-            this.clubId = this.manager.CurrentClubId();
+        this.ApplyTarget(this.strUserData == null ? "" : String(this.strUserData));
 
         let scrollNode = Tool.GetChild(this.node,"列表");
         this.scroll = scrollNode == null ? null : scrollNode.getComponent(cc.ScrollView);
@@ -71,6 +70,8 @@ export default class panelMessageMembers extends UIPanelViewBase {
 
     start()
     {
+        // setPanelInfo 可能晚于 onLoad；这里再读一次目标俱乐部，避免打开成当前俱乐部。
+        this.ApplyTarget(this.strUserData == null ? "" : String(this.strUserData));
         let title = Tool.GetChild(this.node,"标题");
         if(title != null)
         {
@@ -78,10 +79,42 @@ export default class panelMessageMembers extends UIPanelViewBase {
             if(label != null)
             {
                 let club = this.manager.CurrentClub();
-                label.string = club == null ? "选择聊天对象" : "选择聊天对象 · " + club.clubName;
+                let name = this.clubName;
+                if(name === "" && club != null && club.clubId === this.clubId)
+                    name = club.clubName;
+                label.string = name === "" ? "选择聊天对象" : "选择聊天对象 · " + name;
             }
         }
         this.Reload();
+    }
+
+    /**
+     * 解析入口参数：旧版直接传 clubId 字符串；联盟大群主从盟友列表进入时传
+     * {clubId, clubName}。没带目标时回退到当前俱乐部。
+     */
+    private ApplyTarget(value:string):void
+    {
+        let raw = value == null ? "" : String(value).trim();
+        let clubId = "";
+        let clubName = "";
+        if(raw.charAt(0) === "{")
+        {
+            try
+            {
+                let data = JSON.parse(raw);
+                clubId = String(data.clubId || "").trim();
+                clubName = String(data.clubName || "");
+            }
+            catch(error) { clubId = ""; }
+        }
+        else
+        {
+            clubId = raw;
+        }
+        if(clubId === "")
+            clubId = this.manager.CurrentClubId();
+        this.clubId = clubId;
+        this.clubName = clubName;
     }
 
     private Reload():void
@@ -131,7 +164,7 @@ export default class panelMessageMembers extends UIPanelViewBase {
     private ErrorText(error:any):string
     {
         if(error instanceof DirectChatError && error.code === "NOT_CLUB_MEMBER")
-            return "你已不在该俱乐部";
+            return "无权查看该俱乐部成员";
         if(error instanceof DirectChatError && error.code === "DIRECT_RELATION_UNAVAILABLE")
             return "俱乐部关系服务暂时不可用，请稍后重试";
         return error != null && error.message != null ? String(error.message) : "网络异常，请稍后重试";

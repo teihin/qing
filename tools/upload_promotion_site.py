@@ -46,7 +46,7 @@ REQUIRED_SITE_FILES = {
     "assets/by-logo.png",
     "assets/by-app-icon.png",
     "assets/by-login-background.png",
-    "downloads/BY.mobileconfig",
+    "downloads/BF.mobileconfig",
 }
 PUBLIC_EXCLUDED_NAMES = {"Caddyfile.example"}
 PUBLIC_EXCLUDED_SUFFIXES = {".md"}
@@ -180,7 +180,7 @@ def create_promotion_archive(
     expected_names = [entry.archive_name for entry in entries]
     if len(names) != len(set(names)) or set(names) != set(expected_names):
         raise RuntimeError("生成的推广网站ZIP内容与预期文件不一致")
-    if "index.html" not in names or "downloads/BY.mobileconfig" not in names:
+    if "index.html" not in names or "downloads/BF.mobileconfig" not in names:
         raise RuntimeError("生成的推广网站ZIP缺少入口页或苹果描述文件")
 
 
@@ -209,7 +209,7 @@ def validate_mobileconfig(profile_path: Path, expected_game_url: str) -> None:
             )
     icon = payload.get("Icon")
     if not isinstance(icon, bytes) or len(icon) < 1024:
-        raise RuntimeError("苹果描述文件没有内嵌有效的BY桌面图标")
+        raise RuntimeError("苹果描述文件没有内嵌有效的BF桌面图标")
 
 
 def collect_source_files(source_dir: Path) -> tuple[list[ArchiveEntry], dict, str]:
@@ -372,7 +372,7 @@ mkdir -- "$stage"
 unzip -q "$archive" -d "$stage"
 [ -f "$stage/index.html" ]
 [ -f "$stage/site-config.json" ]
-[ -f "$stage/downloads/BY.mobileconfig" ]
+[ -f "$stage/downloads/BF.mobileconfig" ]
 if [ "$apk_in_archive" = "1" ]; then
     [ -f "$stage/downloads/BY.apk" ]
 else
@@ -393,7 +393,7 @@ actual_file_count=$(find "$stage" -type f | wc -l | tr -d ' ')
 [ "$actual_file_count" = "$file_count" ]
 [ "$(sha256sum "$stage/index.html" | awk '{{print $1}}')" = "$index_sha256" ]
 [ "$(sha256sum "$stage/site-config.json" | awk '{{print $1}}')" = "$config_sha256" ]
-[ "$(sha256sum "$stage/downloads/BY.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
+[ "$(sha256sum "$stage/downloads/BF.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
 [ "$(sha256sum "$stage/downloads/BY.apk" | awk '{{print $1}}')" = "$apk_sha256" ]
 
 if [ -e "$target" ] && [ ! -d "$target" ]; then
@@ -412,7 +412,7 @@ deployed_file_count=$(find "$target" -type f | wc -l | tr -d ' ')
 [ "$deployed_file_count" = "$file_count" ]
 [ "$(sha256sum "$target/index.html" | awk '{{print $1}}')" = "$index_sha256" ]
 [ "$(sha256sum "$target/site-config.json" | awk '{{print $1}}')" = "$config_sha256" ]
-[ "$(sha256sum "$target/downloads/BY.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
+[ "$(sha256sum "$target/downloads/BF.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
 [ "$(sha256sum "$target/downloads/BY.apk" | awk '{{print $1}}')" = "$apk_sha256" ]
 
 rm -f -- "$archive"
@@ -422,7 +422,7 @@ printf 'PROMOTION_SITE_DEPLOY_OK files=%s index_sha256=%s\n' "$deployed_file_cou
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="上传BY推广下载网站到正式网页目录")
+    parser = argparse.ArgumentParser(description="上传BF推广下载网站到正式网页目录")
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--source-dir", type=Path, default=DEFAULT_SOURCE_DIR)
     parser.add_argument("--apk-dir", type=Path, default=DEFAULT_APK_DIR)
@@ -443,7 +443,7 @@ def main() -> int:
     host, port, user, identity_file = upload_common.resolve_connection(args)
     index_sha256 = upload_common.sha256_file(source_dir / "index.html")
     config_sha256 = upload_common.sha256_file(source_dir / "site-config.json")
-    profile_sha256 = upload_common.sha256_file(source_dir / "downloads" / "BY.mobileconfig")
+    profile_sha256 = upload_common.sha256_file(source_dir / "downloads" / "BF.mobileconfig")
     public_url = str(site_config["promotionSiteUrl"]).strip()
 
     remote_apk_sha256: str | None = None

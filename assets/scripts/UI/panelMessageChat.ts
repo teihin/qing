@@ -96,12 +96,7 @@ export default class panelMessageChat extends UIPanelViewBase {
     private clubGiveButton:cc.Node = null;
     private photoButton:cc.Node = null;
     private imageButton:cc.Node = null;
-    private clubGoldQuotaRequested:boolean = false;
-    private clubGoldQuotaContext:string = "";
-    private clubGoldQuotaFen:number = 0;
     /** 额度回包是否已到；没到之前不猜，两个入口都先不显示。 */
-    private clubGoldQuotaKnown:boolean = false;
-    private clubGoldQuotaGranted:boolean = false;
 
     private recordStartY:number = 0;
     private recordCancelling:boolean = false;
@@ -204,8 +199,6 @@ export default class panelMessageChat extends UIPanelViewBase {
         this.realtimeStateHandler = (state:any)=>{ this.OnRealtimeState(state); };
         this.manager.On("realtimeMessage",this.realtimeHandler);
         this.manager.On("realtimeState",this.realtimeStateHandler);
-        KBEngine.Event.register("GetClubQuota",this,"OnClubGoldQuota");
-        KBEngine.Event.register("onHallCommand",this,"OnClubGoldQuotaCommand");
     }
 
     start()
@@ -1237,39 +1230,28 @@ export default class panelMessageChat extends UIPanelViewBase {
     }
 
     /**
-     * 上下分入口只对当前俱乐部的群主、盟主，或已授信且仍有可用额度的代理显示。
+     * V2：俱乐部老板可对本俱乐部成员「上下分」和「赠送」；
+     * 代理只有「赠送」，不能再上下分。大群主跨俱乐部会话不显示资金入口。
      * 入口显示是体验层判断，真正的成员范围、余额和交易密码仍由大厅服务端校验。
      */
     private RefreshClubGoldButton():void
     {
         const role = String(this.role || "member");
         const hasPeer = this.clubId !== "" && this.peer != null && this.peer.guuid !== "";
-        const hasQuota = this.clubGoldQuotaGranted && this.clubGoldQuotaFen > 0;
-        // 代理的额度是异步查询出来的：回包到之前不能按「无额度」处理，
-        // 否则有额度的代理会先闪一下「赠送」再跳成「上下分」。
-        const quotaKnown = role !== "agent" || this.clubGoldQuotaKnown;
-        // 赠送的对象范围：玩家、管理员，以及代理（下级代理/同级代理）。
-        // 服务端「赠送_俱乐部_积分」只校验两人带入时扣同一个授信代理的额度，不按角色拦，
-        // 所以给下级代理赠送同样成立；只有群主/盟主是对方的上级，不该出现赠送入口。
+        // 赠送对象：玩家、管理员、代理（下级/同级代理）。老板/大群主是对方的上级，不出现赠送。
         const peerRole = this.peer == null ? "" : String(this.peer.role || "");
         const peerCanGift = peerRole === "" || peerRole === "member" || peerRole === "manager" || peerRole === "agent";
+        // 大群主不在本俱乐部成员表里，老板不能对大群主上下分。
+        const peerIsUnionOwner = peerRole === "union_owner";
 
+        // 上下分只给俱乐部创建者且对方是本俱乐部成员；代理（含旧的 leader 直属代理）只能赠送。
         if(this.clubGoldButton != null)
-        {
-            if(role === "owner" || role === "leader")
-                this.clubGoldButton.active = hasPeer;
-            else
-                this.clubGoldButton.active = role === "agent" && quotaKnown && hasQuota && hasPeer;
-        }
-        // 自己是代理但没有可用额度（未授信或额度为 0）时，改为显示「赠送积分」：
-        // 代理没有额度就发不出筹码，只能拿自己账户里的积分送人，走「赠送_俱乐部_积分」。
+            this.clubGoldButton.active = role === "owner" && hasPeer && !peerIsUnionOwner;
         if(this.clubGiveButton != null)
-            this.clubGiveButton.active = role === "agent" && quotaKnown && !hasQuota && peerCanGift && hasPeer;
+            this.clubGiveButton.active = (role === "owner" || role === "agent" || role === "leader") &&
+                peerCanGift && hasPeer;
 
         this.LayoutBottomEntries();
-
-        if(role === "agent")
-            this.RequestClubGoldQuota();
     }
 
     /**
@@ -1296,104 +1278,6 @@ export default class panelMessageChat extends UIPanelViewBase {
             node.x = x;
             x += width + gap;
         }
-    }
-
-    private RequestClubGoldQuota():void
-    {
-        if(this.clubGoldQuotaRequested || this.clubId === "")
-            return;
-        const account:any = GameDataManager.getAccount();
-        const userId = account == null ? "" : String(account.guuid || "").trim();
-        if(userId === "")
-            return;
-        this.clubGoldQuotaRequested = true;
-        this.clubGoldQuotaContext = "chatgold:quota:" + this.clubId + ":" + userId;
-        try
-        {
-            GameDataManager.getAccount().reqHallCommand(JSON.stringify({
-                header:"查询_俱乐部_额度",
-                club_id:this.clubId,
-                user_id:userId,
-                context:this.clubGoldQuotaContext
-            }),"P@" + this.clubGoldQuotaContext);
-        }
-        catch(error)
-        {
-            this.clubGoldQuotaRequested = false;
-        }
-    }
-
-    /** GetClubQuota 是异步推送，兼容旧服的同名包装、result 包装和 JSON 字符串包装。 */
-    public OnClubGoldQuota(raw:any,secondaryRaw?:any):void
-    {
-        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
-            raw = secondaryRaw;
-        let data:any = raw;
-        if(typeof data === "string")
-        {
-            try { data = JSON.parse(data); }
-            catch(error) { return; }
-        }
-        if(data == null || typeof data !== "object")
-            return;
-        let body:any = data;
-        if(body.result != null)
-            body = this.ParseObject(body.result);
-        body = this.ParseObject(body);
-        if(body != null && body.GetClubQuota != null)
-            body = this.ParseObject(body.GetClubQuota);
-        if(body == null || typeof body !== "object")
-            return;
-        const context = String(data.context || body.context || "");
-        const sameContext = this.clubGoldQuotaContext !== "" &&
-            (context === this.clubGoldQuotaContext || context.indexOf(this.clubGoldQuotaContext) >= 0);
-        const returnedClub = String(body.club_id || data.club_id || "");
-        if(!sameContext && returnedClub !== this.clubId)
-            return;
-        if(returnedClub !== "" && returnedClub !== this.clubId)
-            return;
-        const fen = Number(body.quota_fen);
-        if(!Number.isFinite(fen))
-        {
-            this.clubGoldQuotaGranted = false;
-            this.clubGoldQuotaFen = 0;
-            this.clubGoldQuotaKnown = true;
-            this.RefreshClubGoldButton();
-            return;
-        }
-        this.clubGoldQuotaFen = fen;
-        this.clubGoldQuotaKnown = true;
-        this.clubGoldQuotaGranted = this.IsFlag(body.is_agent) && this.IsFlag(body.is_granted);
-        this.RefreshClubGoldButton();
-    }
-
-    public OnClubGoldQuotaCommand(nCode:number,param:string):void
-    {
-        if(this.clubGoldQuotaContext === "" || param == null || String(param).indexOf(this.clubGoldQuotaContext) < 0)
-            return;
-        if(nCode !== 0x200)
-        {
-            this.clubGoldQuotaGranted = false;
-            this.clubGoldQuotaFen = 0;
-            if(this.clubGoldButton != null)
-                this.clubGoldButton.active = false;
-        }
-    }
-
-    private ParseObject(value:any):any
-    {
-        if(typeof value !== "string")
-            return value;
-        try { return JSON.parse(value); }
-        catch(error) { return null; }
-    }
-
-    private IsFlag(value:any):boolean
-    {
-        if(value === true || value === 1)
-            return true;
-        const text = String(value == null ? "" : value).trim().toLowerCase();
-        return text === "1" || text === "true" || text === "yes" || text === "是";
     }
 
     private OpenClubGoldPad(mode:"updown"|"give"):void

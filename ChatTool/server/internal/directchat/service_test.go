@@ -27,6 +27,16 @@ func (env *testEnv) session(t *testing.T, guuid string) Session {
 	return session
 }
 
+func (env *testEnv) addSession(t *testing.T, guuid, name string) Session {
+	t.Helper()
+	token, _, err := env.service.CreateDevSession(context.Background(), guuid, name)
+	if err != nil {
+		t.Fatalf("dev session %s: %v", guuid, err)
+	}
+	env.tokens[guuid] = token
+	return env.session(t, guuid)
+}
+
 // devOptions 让 CreateDevSession 可用（测试里只开到需要的用例）。
 func devOptions() Options {
 	return Options{SessionTTL: time.Hour, CursorKey: []byte("cursor-key-for-tests"), AllowDevLogin: true}
@@ -193,8 +203,9 @@ func TestAllConversationsAcrossClubs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 2 {
-		t.Fatalf("expected one fixed superior-agent conversation per club, got %d", len(page.Items))
+	// 两条真实会话 + 每个俱乐部一条固定「俱乐部老板」入口。
+	if len(page.Items) != 4 {
+		t.Fatalf("expected two real conversations and two fixed club-owner entries, got %d: %+v", len(page.Items), page.Items)
 	}
 	if page.Items[0].ClubID != "222222" || page.Items[0].ClubName != "测试俱乐部二" || page.Items[0].LastMessage != "俱乐部二" {
 		t.Fatalf("newest cross-club conversation must be first: %+v", page.Items[0])
@@ -209,6 +220,9 @@ func TestAllConversationsAcrossClubs(t *testing.T) {
 	if seen["111111:100002"] != 1 || seen["222222:100002"] != 1 {
 		t.Fatalf("same peer in different clubs must remain two rows: %#v", seen)
 	}
+	if seen["111111:100004"] != 1 || seen["222222:100004"] != 1 {
+		t.Fatalf("each club must carry one fixed club-owner entry: %#v", seen)
+	}
 }
 
 func TestAllConversationsIncludesClubSuperiorsWithoutHistory(t *testing.T) {
@@ -220,13 +234,18 @@ func TestAllConversationsIncludesClubSuperiorsWithoutHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 2 {
-		t.Fatalf("global message list must include both club superior entries without history, got %d: %+v", len(page.Items), page.Items)
+	if len(page.Items) != 4 {
+		t.Fatalf("global message list must include superior and club-owner entries per club, got %d: %+v", len(page.Items), page.Items)
 	}
+	peers := map[string]bool{}
 	for _, item := range page.Items {
-		if !item.IsDefaultTarget || item.ConversationID != "" || item.Peer.Guuid != "100002" {
-			t.Fatalf("history-free superior entry is not fixed/default: %+v", item)
+		if !item.IsDefaultTarget || item.ConversationID != "" {
+			t.Fatalf("history-free fixed entry is not default: %+v", item)
 		}
+		peers[item.Peer.Guuid] = true
+	}
+	if !peers["100002"] || !peers["100004"] {
+		t.Fatalf("fixed entries must cover superior agent and club owner: %#v", peers)
 	}
 }
 
@@ -428,8 +447,10 @@ func TestHideRulesAndReveal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agentList.Items) != 0 {
-		t.Fatalf("hidden conversation must disappear from own list, got %d", len(agentList.Items))
+	for _, item := range agentList.Items {
+		if item.ConversationID == conv.ConversationID {
+			t.Fatalf("hidden conversation must disappear from own list: %+v", agentList.Items)
+		}
 	}
 	if !agentList.CanDelete {
 		t.Fatal("agent must see delete permission")
@@ -457,8 +478,17 @@ func TestHideRulesAndReveal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(agentList.Items) != 1 || agentList.Items[0].Unread != 1 {
-		t.Fatalf("new message must reveal conversation with unread=1, got %+v", agentList.Items)
+	revived := false
+	for _, item := range agentList.Items {
+		if item.ConversationID == conv.ConversationID {
+			revived = true
+			if item.Unread != 1 {
+				t.Fatalf("revived conversation must carry unread=1: %+v", item)
+			}
+		}
+	}
+	if !revived {
+		t.Fatalf("new message must reveal conversation: %+v", agentList.Items)
 	}
 	// 从玩家列表再次打开：恢复原会话，不产生重复会话。
 	reopened, err := env.service.CreateConversation(ctx, agent, "111111", "100001")
@@ -475,8 +505,14 @@ func TestHideRulesAndReveal(t *testing.T) {
 		t.Fatal(err)
 	}
 	agentList, _ = env.service.Conversations(ctx, agent, "111111", 1, 30)
-	if len(agentList.Items) != 1 {
-		t.Fatalf("reopen after hide must restore the conversation, got %d", len(agentList.Items))
+	restored := false
+	for _, item := range agentList.Items {
+		if item.ConversationID == conv.ConversationID {
+			restored = true
+		}
+	}
+	if !restored {
+		t.Fatalf("reopen after hide must restore the conversation: %+v", agentList.Items)
 	}
 }
 
@@ -489,10 +525,10 @@ func TestDefaultTargetsForMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 {
-		t.Fatalf("player must see one fixed superior-agent target, got %d", len(page.Items))
+	if len(page.Items) != 2 {
+		t.Fatalf("player must see fixed superior-agent and club-owner targets, got %d: %+v", len(page.Items), page.Items)
 	}
-	want := []string{"100002"} // 固定直属上级代理
+	want := []string{"100002", "100004"} // 直属上级代理 + 俱乐部老板
 	for i, guuid := range want {
 		item := page.Items[i]
 		if !item.IsDefaultTarget || item.ConversationID != "" {
@@ -536,8 +572,17 @@ func TestExistingSuperiorAgentConversationStaysFixed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 || !page.Items[0].IsDefaultTarget || page.Items[0].ConversationID != conversation.ConversationID {
-		t.Fatalf("existing superior-agent conversation must remain fixed: %+v", page.Items)
+	found := false
+	for _, item := range page.Items {
+		if item.ConversationID == conversation.ConversationID {
+			found = true
+			if !item.IsDefaultTarget || item.Peer.Guuid != "100002" {
+				t.Fatalf("existing superior-agent conversation must remain fixed: %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("existing superior-agent conversation missing from list: %+v", page.Items)
 	}
 	if err := env.service.Hide(ctx, player, conversation.ConversationID); AsError(err).Code != CodeDeleteForbidden {
 		t.Fatal("ordinary player must not delete the fixed superior-agent conversation")
@@ -556,7 +601,19 @@ func TestAgentAlsoGetsClubSuperiorAsFixedConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 1 || !page.Items[0].IsDefaultTarget || page.Items[0].Peer.Guuid != "100003" {
+	if len(page.Items) != 2 {
+		t.Fatalf("agent must see superior and club-owner fixed entries, got %+v", page.Items)
+	}
+	foundSuperior := false
+	for _, item := range page.Items {
+		if !item.IsDefaultTarget {
+			t.Fatalf("agent fixed entries must be default: %+v", item)
+		}
+		if item.Peer.Guuid == "100003" {
+			foundSuperior = true
+		}
+	}
+	if !foundSuperior {
 		t.Fatalf("agent must see club superior fixed entry: %+v", page.Items)
 	}
 
@@ -590,7 +647,14 @@ func TestMemberNoteOnlyVisibleToSuperiorChain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(playerList.Items) != 1 || playerList.Items[0].Peer.Note != "" {
+	var playerConversation *ConversationView
+	for i := range playerList.Items {
+		if playerList.Items[i].ConversationID == conversation.ConversationID {
+			playerConversation = &playerList.Items[i]
+			break
+		}
+	}
+	if playerConversation == nil || playerConversation.Peer.Note != "" {
 		t.Fatalf("downline must not see superior note: %+v", playerList.Items)
 	}
 
@@ -866,5 +930,153 @@ func TestAllConversationsPutsUnreadFirst(t *testing.T) {
 	if page.Items[0].Unread <= 0 {
 		t.Fatalf("unread conversation must be first, got peer=%s unread=%d default=%v",
 			page.Items[0].Peer.Guuid, page.Items[0].Unread, page.Items[0].IsDefaultTarget)
+	}
+}
+
+// ---------------- 联盟模式 V2 ----------------
+
+func unionEnv(t *testing.T) (*testEnv, Session, Session, Session) {
+	t.Helper()
+	env := newDevEnv(t)
+	union := Union{ID: "900001", Name: "测试联盟", OwnerGuuid: "100009", OwnerClub: "111111"}
+	env.store.addUnion("111111", union)
+	env.store.addUnion("222222", union)
+	unionOwner := env.addSession(t, "100009", "大群主")
+	return env, unionOwner, env.session(t, "100001"), env.session(t, "100003")
+}
+
+func TestUnionOwnerAndClubOwnerAreFixedTargets(t *testing.T) {
+	env, _, player, _ := unionEnv(t)
+	ctx := context.Background()
+
+	page, err := env.service.Conversations(ctx, player, "111111", 1, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"100002", "100004", "100009"}
+	if len(page.Items) != len(want) {
+		t.Fatalf("player must see superior, club owner and union owner fixed entries, got %d: %+v", len(page.Items), page.Items)
+	}
+	for i, guuid := range want {
+		item := page.Items[i]
+		if !item.IsDefaultTarget || item.ConversationID != "" {
+			t.Fatalf("fixed entry %d must be default: %+v", i, item)
+		}
+		if item.Peer.Guuid != guuid {
+			t.Fatalf("fixed target order mismatch at %d: got %s want %s", i, item.Peer.Guuid, guuid)
+		}
+	}
+	if page.Items[2].Peer.Role != RoleUnionOwner {
+		t.Fatalf("union owner must expose union_owner role: %+v", page.Items[2].Peer)
+	}
+
+	conversation, err := env.service.CreateConversation(ctx, player, "111111", "100009")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := env.service.Hide(ctx, player, conversation.ConversationID); AsError(err).Code != CodeDeleteForbidden {
+		t.Fatalf("member must not delete union-owner conversation, got %v", err)
+	}
+}
+
+func TestUnionOwnerCanChatWithAnyMemberAcrossClubs(t *testing.T) {
+	env, unionOwner, player, outsider := unionEnv(t)
+	ctx := context.Background()
+
+	conversation, err := env.service.CreateConversation(ctx, unionOwner, "222222", "100001")
+	if err != nil {
+		t.Fatalf("union owner must open cross-club conversation: %v", err)
+	}
+	if _, _, err := env.service.SendMessage(ctx, unionOwner, conversation.ConversationID, SendRequest{
+		MessageType: MessageText, ClientMessageID: "union-owner-hello", Text: "你好"}); err != nil {
+		t.Fatal(err)
+	}
+	reply, _, err := env.service.SendMessage(ctx, player, conversation.ConversationID, SendRequest{
+		MessageType: MessageText, ClientMessageID: "member-reply", Text: "收到"})
+	if err != nil {
+		t.Fatalf("member must reply in union-owner conversation: %v", err)
+	}
+	if reply.SenderRole != RoleMember {
+		t.Fatalf("member reply must keep member role, got %q", reply.SenderRole)
+	}
+
+	// 普通代理不能跨俱乐部找别人，只能找本俱乐部成员或大群主。
+	_, crossErr := env.service.CreateConversation(ctx, outsider, "222222", "100001")
+	if biz := AsError(crossErr); biz.Code != CodePeerNotClubMember && biz.Code != CodeNotClubMember {
+		t.Fatalf("non-union cross-club chat must be rejected, got %v", biz)
+	}
+	// 但可以找本俱乐部的大群主。
+	if _, err := env.service.CreateConversation(ctx, outsider, "111111", "100009"); err != nil {
+		t.Fatalf("club member must open conversation with union owner: %v", err)
+	}
+
+	// 大群主的消息首页必须包含跨俱乐部会话。
+	page, err := env.service.AllConversations(ctx, unionOwner, 1, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range page.Items {
+		if item.ConversationID == conversation.ConversationID && item.ClubID == "222222" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("union owner cross-club conversation missing from global list: %+v", page.Items)
+	}
+}
+
+func TestUnionOwnerCanListAnyClubMembers(t *testing.T) {
+	env, unionOwner, _, outsider := unionEnv(t)
+	ctx := context.Background()
+
+	page, err := env.service.Members(ctx, unionOwner, "222222", "", 1, 30)
+	if err != nil {
+		t.Fatalf("union owner must list union club members: %v", err)
+	}
+	found := false
+	for _, item := range page.Items {
+		if item.Guuid == "100001" {
+			found = true
+			if !item.CanChat {
+				t.Fatalf("union owner must be allowed to chat with club members: %+v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected player 100001 in club 222222 members: %+v", page.Items)
+	}
+	if _, err := env.service.Members(ctx, outsider, "222222", "", 1, 30); err == nil {
+		t.Fatal("non-member must not list another club's members")
+	}
+}
+
+func TestUnionOwnerConversationsStaySeparatePerClub(t *testing.T) {
+	env, unionOwner, _, _ := unionEnv(t)
+	ctx := context.Background()
+
+	first, err := env.service.CreateConversation(ctx, unionOwner, "111111", "100001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := env.service.CreateConversation(ctx, unionOwner, "222222", "100001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.ConversationID == second.ConversationID {
+		t.Fatal("same person in different clubs must keep separate conversations")
+	}
+	page, err := env.service.AllConversations(ctx, unionOwner, 1, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for _, item := range page.Items {
+		if item.Peer.Guuid == "100001" {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Fatalf("union owner must see one conversation per club, got %d: %+v", count, page.Items)
 	}
 }

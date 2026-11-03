@@ -80,7 +80,36 @@ export default class panelMain extends UIPanelViewBase {
     private clubManagementApi:HallClubManagementApi = null;
     public clubManagement:ClubManagementView = null;
     private clubInputId:string = "";
+    /** 加入弹窗当前模式：普通俱乐部邀请码或 V2 联盟号。 */
+    private clubJoinDialogMode:"club"|"union" = "club";
+    /** 创建弹窗当前模式：普通俱乐部或 V2 联盟。 */
+    private clubCreateDialogMode:"club"|"union" = "club";
     private clubCommandBusy:boolean = false;
+    /** 当前俱乐部的 V2 联盟状态；查询未完成前不显示创建/加入入口。 */
+    private clubUnionStatus:{[clubId:string]:{known:boolean;hasUnion:boolean;unionId?:string;unionName?:string;isOwner?:boolean;ownerConfirmed?:boolean;quotaFen?:number}} = {};
+    private clubUnionAsked:{[clubId:string]:number} = {};
+    /** ClubUnionQuota 推送不带 club_id，记录最近一次联盟状态查询对应的俱乐部。 */
+    private clubUnionPendingClubId:string = "";
+    /** 联盟号到联盟名称的缓存；俱乐部回包缺 union_name 时由 ClubMyUnion 补齐。 */
+    private clubUnionNames:{[unionId:string]:string} = {};
+    private clubUnionNameAsked:{[clubId:string]:number} = {};
+    private clubUnionNamePendingClubId:string = "";
+    private unionCreateCostPending:number = 0;
+    private unionCreateClubId:string = "";
+    /** 本次「申请_加入_联盟」的俱乐部与联盟码；成功后立即把 union_apply 落到俱乐部信息。 */
+    private unionJoinPendingClubId:string = "";
+    private unionJoinPendingUnionId:string = "";
+    private unionCreateName:string = "";
+    private unionCreatePushReceived:boolean = false;
+    private unionChargeBusy:boolean = false;
+    private readonly unionChargeTimeoutHandler = ()=>{
+        if(!this.unionChargeBusy)
+            return;
+        this.unionChargeBusy = false;
+        this.unionCreateCostPending = 0;
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+            "联盟创建已受理，但钻石扣除处理超时，请稍后在「钻石流向」核对！");
+    };
     /** 「我的 → 赠送」当前是否有一笔俱乐部积分请求等待回包。 */
     private clubGoldGiftPending:boolean = false;
     /** 最近一次俱乐部赠送记录查询，异步推送没有统一带回 club_id 时用它配对。 */
@@ -92,9 +121,9 @@ export default class panelMain extends UIPanelViewBase {
     private clubDetails:{[clubId:string]:any} = {};
     private clubAgentInfo:{[clubId:string]:any} = {};
     /** 当前玩家在各俱乐部的额度查询结果；额度只在有权限时渲染。 */
-    private clubQuotaInfo:{[clubId:string]:any} = {};
     /** 额度查询节流，避免每次列表重绘都重复发请求。 */
-    private clubQuotaAsked:{[clubId:string]:number} = {};
+    /** 发现页/登录后补拉俱乐部信息（含 union_id/union_quota）的节流。 */
+    private clubInfoAsked:{[clubId:string]:number} = {};
     /** 收到代理信息推送后补查一次的节流时间，防止回包再触发补查形成循环。 */
     private clubAgentRecheck:{[clubId:string]:number} = {};
     /** 推广页缺邀请码时补查代理信息的时间戳，同样按俱乐部节流。 */
@@ -227,7 +256,9 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_club_manage", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_gold", this, "OnClubGoldChanged");
         KBEngine.Event.register("ClubAgentInfo", this, "OnClubAgentInfo");
-        KBEngine.Event.register("GetClubQuota", this, "OnClubQuota");
+        KBEngine.Event.register("ClubUnionQuota", this, "OnClubUnionQuota");
+        KBEngine.Event.register("ClubUnionCreate", this, "OnClubUnionCreate");
+        KBEngine.Event.register("ClubMyUnion", this, "OnClubMyUnion");
 
         KBEngine.Event.register("UserHashInfo",this, "OnUserHashInfo");
         KBEngine.Event.register("UserHash2Info",this, "UserHash2Info");
@@ -257,7 +288,10 @@ export default class panelMain extends UIPanelViewBase {
             const id = this.ResolveRoomClub();
             const info = this.clubDetails[id];
             const agent = this.clubAgentInfo[id];
-            const inviteCode = agent && agent.invite_code != null ? String(agent.invite_code).trim() : "";
+            // 老板的邀请码有时只在俱乐部信息里返回；代理信息未到时回退，避免卡片出现空的「邀请码:」。
+            const agentCode = agent && agent.invite_code != null ? String(agent.invite_code).trim() : "";
+            const infoCode = info && info.invite_code != null ? String(info.invite_code).trim() : "";
+            const inviteCode = agentCode || infoCode;
             // 未登录/重连期间 getAccount() 为空，这里不能抛错中断大厅初始化。
             const guuid = account ? String(account.guuid || "") : "";
             const owns = account && String(account.club_make || "").split(",").map(x=>x.trim()).indexOf(id) >= 0;
@@ -265,9 +299,33 @@ export default class panelMain extends UIPanelViewBase {
             // 这里直接用代理信息判角色：owns/manages 已经在前面判过了，
             // 再走 IsClubAgentIn 会多一次 make/manage 排除，反而把代理判成成员。
             const role = owns ? "owner" : manages ? "manager" : this.IsClubAgent(agent) ? "agent" : "member";
-            // 盟主=创建者的直属代理（is_leader=1），仍是代理的一种，只影响标签。
+            // is_leader 只表示创建者的直属代理；V2 下所有代理统一显示「代理」，不再作为盟主标签。
             const isLeader = role === "agent" && !!agent && Number(agent.is_leader) === 1;
-            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role,isLeader};
+            const union = this.clubUnionStatus[id];
+            // 2026-11-03 v2.1：查询_俱乐部_信息 直接返回 union_id / union_apply / union_quota，
+            // union_id 一旦有值不会再回到空。以俱乐部信息为准，查询_联盟_额度的失败不能把已入盟改回未入盟。
+            const infoUnionId = String(info && info.union_id || "").trim();
+            const infoApplyId = String(info && info.union_apply || "").trim();
+            const statusUnionId = union && union.known && union.hasUnion ? String(union.unionId || "").trim() : "";
+            const unionId = infoUnionId || statusUnionId;
+            const unionName = String((union && union.unionName) ||
+                (info && (info.union_name || info.unionName)) || this.CachedUnionName(unionId) || "").trim();
+            const infoClubQuotaRaw = info && info.union_quota;
+            const infoClubQuota = Number(infoClubQuotaRaw);
+            const infoClubQuotaKnown = infoClubQuotaRaw !== undefined && infoClubQuotaRaw !== null &&
+                String(infoClubQuotaRaw).trim() !== "" && Number.isFinite(infoClubQuota);
+            const clubQuotaFen = infoClubQuotaKnown ? infoClubQuota :
+                (union && union.isOwner !== true && union.quotaFen !== undefined ? union.quotaFen : undefined);
+            return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),
+                id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role,isLeader,
+                unionKnown:!!info || (!!union && union.known),hasUnion:unionId !== "",
+                unionId:unionId || undefined,unionName:unionName || undefined,
+                unionApplyId:infoApplyId || undefined,
+                unionQuotaFen:union ? union.quotaFen : undefined,
+                unionQuotaIsPool:union ? union.isOwner === true : undefined,
+                clubQuotaFen,
+                // 必须保留 undefined：false 才表示「已明确不是总群主」，不能用未知当 false。
+                unionIsOwner:union ? union.isOwner : undefined};
         },text=>UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,text),(player,mode)=>{
             if(player && player.id)
             {
@@ -288,11 +346,15 @@ export default class panelMain extends UIPanelViewBase {
                     userId:String(player.id),clubId:this.ResolveRoomClub()
                 }));
             }
-        },()=>this.PlayAudio("eff/申请提示"));
+        },()=>this.PlayAudio("eff/申请提示"),action=>this.HandleClubUnionAction(action));
         this.RefreshDiscoveryClubFunds(true);
         this.clubManagement.Refresh();
         this.clubManagementApi = new HallClubManagementApi((id,count)=>this.clubManagement.SetPendingCount(id,count),
-            (id)=>this.IsClubAgentIn(id),()=>this.GetClubAgentIds());
+            (id)=>this.IsClubAgentIn(id),()=>this.GetClubAgentIds(),
+            // 文档：有客户端就推送。申请/授信成功后服务端随时可能推全量列表，
+            // 已打开的入盟申请/盟友管理直接吃推送刷新，不再依赖用户手动刷新。
+            page=>this.clubManagement.OnUnionApplicationsPushed(page),
+            page=>this.clubManagement.OnUnionMembersPushed(page));
         this.clubManagement.SetApi(this.clubManagementApi);
         this.clubManagementApi.RefreshBadges();
         this.schedule(()=>this.clubManagementApi.RefreshBadges(),30);
@@ -504,13 +566,13 @@ export default class panelMain extends UIPanelViewBase {
         return agent && agent.invite_code != null ? String(agent.invite_code).trim() : "";
     }
 
-    private RequestCurrentClubAgent(clubId:string):void
+    private RequestCurrentClubAgent(clubId:string,force:boolean = false):void
     {
         const account = GameDataManager.getAccount();
         if(!account || !clubId)
             return;
         const now = Date.now();
-        if(now - (this.clubInviteCodeAsked[clubId] || 0) < 10000)
+        if(!force && now - (this.clubInviteCodeAsked[clubId] || 0) < 10000)
             return;
         this.clubInviteCodeAsked[clubId] = now;
         account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_代理_信息",club_id:clubId}),"p@club:agent:" + clubId);
@@ -916,7 +978,7 @@ export default class panelMain extends UIPanelViewBase {
         // 创建俱乐部弹窗开着时，余额一变就把「花费/余额够不够」跟着刷，别让玩家按旧余额判断。
         const createDialog = this.node.getChildByName("创建俱乐部弹窗");
         if(createDialog != null && createDialog.active)
-            this.RefreshClubCreateCostHint();
+            this.clubCreateDialogMode === "union" ? this.RefreshUnionCreateCostHint() : this.RefreshClubCreateCostHint();
     }
     set_name(name:string)
     {
@@ -1097,6 +1159,7 @@ export default class panelMain extends UIPanelViewBase {
             this.selectedRoomClubId = id;
             if(this.roomClubAccountKey) cc.sys.localStorage.setItem(this.roomClubAccountKey,id);
             this.clubManagement.Refresh();
+            this.RequestClubUnionStatus(id,true);
             // 切换俱乐部后顶部金币要跟着换成新俱乐部的积分，不能留着上一家的数字。
             this.set_gold(0);
             this.switchTabSel("发现");
@@ -1596,19 +1659,39 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "创建俱乐部")
         {
+            this.clubJoinDialogMode = "club";
+            this.clubCreateDialogMode = "club";
+            this.SetCreateDialogText("club");
             Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox).string = "";
             this.RefreshClubCreateCostHint();
             this.node.getChildByName("创建俱乐部弹窗").active = true;
         }
         else if(button.node.name === "加入俱乐部")
         {
+            this.clubJoinDialogMode = "club";
+            this.SetJoinDialogText("club");
             this.clubInputId = "";
             this.RefreshClubIdDisplay();
             this.node.getChildByName("加入俱乐部弹窗").active = true;
         }
+        else if(button.node.name === "加入联盟")
+        {
+            this.OpenJoinUnionDialog();
+        }
         else if(button.node.name === "关闭俱乐部弹窗")
         {
-            button.node.parent.parent.active = false;
+            const popup = button.node.parent.parent;
+            if(popup === this.node.getChildByName("创建俱乐部弹窗"))
+            {
+                this.clubCreateDialogMode = "club";
+                this.SetCreateDialogText("club");
+            }
+            else
+            {
+                this.clubJoinDialogMode = "club";
+                this.SetJoinDialogText("club");
+            }
+            popup.active = false;
         }
         else if(button.node.parent.name === "俱乐部键盘")
         {
@@ -1622,11 +1705,11 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "确认创建俱乐部")
         {
-            this.CreateClub();
+            this.clubCreateDialogMode === "union" ? this.CreateUnion() : this.CreateClub();
         }
         else if(button.node.name === "申请加入俱乐部")
         {
-            this.JoinClub();
+            this.clubJoinDialogMode === "union" ? this.JoinUnion() : this.JoinClub();
         }
 
 
@@ -2449,8 +2532,15 @@ export default class panelMain extends UIPanelViewBase {
             {
                 if(!this.clubDetails[id])
                     account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_信息",club_id:id}),"p@club:info:" + id);
-                if(!this.clubAgentInfo[id])
-                    account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_代理_信息",club_id:id}),"p@club:agent:" + id);
+                const cachedAgent = this.clubAgentInfo[id];
+                const cachedCode = cachedAgent && cachedAgent.invite_code != null ?
+                    String(cachedAgent.invite_code).trim() : "";
+                // 代理信息在但邀请码为空时也要补查，卡片上的「邀请码:」不能空着。
+                if(!cachedAgent || !cachedCode)
+                    this.RequestCurrentClubAgent(id,true);
+                // 联盟审批不会推送，进「我的」时补查一次，入盟后创建/加入入口自动收起。
+                this.RequestClubUnionStatus(id,false);
+                this.RequestClubUnionName(id,true);
             }
         }
         if(strName !== "钱包")
@@ -2528,7 +2618,7 @@ export default class panelMain extends UIPanelViewBase {
             }
             if(view.height <= 0)
                 return;
-            // 内容高度按「有没有当前俱乐部卡片」取 550 / 350，统一由俱乐部视图计算。
+            // 内容高度按「有没有当前俱乐部卡片、是否显示联盟入口」取 550/660/350，统一由俱乐部视图计算。
             if(this.clubManagement)
                 this.clubManagement.syncProfileScroll();
             const scrollView = scroll.getComponent(cc.ScrollView);
@@ -3617,8 +3707,14 @@ export default class panelMain extends UIPanelViewBase {
     {
         this.clubAgentInfo = {};
         this.clubAgentRecheck = {};
-        this.clubQuotaInfo = {};
-        this.clubQuotaAsked = {};
+        this.clubInfoAsked = {};
+        this.clubUnionStatus = {};
+        this.clubUnionAsked = {};
+        this.clubUnionPendingClubId = "";
+        this.clubUnionNames = {};
+        this.clubUnionNameAsked = {};
+        this.clubUnionNamePendingClubId = "";
+        this.unionCreateName = "";
         if(!this.lobbyEntryResolved)
             this.ResolveLobbyEntryTab();
         // 刚创建 / 刚入会的俱乐部在这里落成默认俱乐部，后面的卡片、列表、房间筛选都取新值。
@@ -3632,6 +3728,7 @@ export default class panelMain extends UIPanelViewBase {
             this.RefreshClubList();
         if(this.scrollRoom && this.GetRoomListFilter().key !== this.roomListDesiredFilterKey)
             this.getAllRooms(0,true);
+        this.RequestClubUnionStatus(this.ResolveRoomClub(),false);
     }
 
     public OnClubGoldChanged()
@@ -3644,6 +3741,368 @@ export default class panelMain extends UIPanelViewBase {
             this.RefreshClubList(false);
     }
 
+    /** 查询当前俱乐部是否已有 V2 联盟；只有俱乐部创建者需要这个状态。 */
+    private RequestClubUnionStatus(clubId:string,force:boolean = false):void
+    {
+        if(!clubId || !this.IsClubCreator(clubId))
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(!account || !account.guuid)
+            return;
+        const now = Date.now();
+        if(!force && now - (this.clubUnionAsked[clubId] || 0) < 5000)
+            return;
+        if(force && now - (this.clubUnionAsked[clubId] || 0) < 1000)
+            return;
+        this.clubUnionAsked[clubId] = now;
+        this.clubUnionPendingClubId = clubId;
+        account.reqHallCommand(JSON.stringify({
+            header:"查询_联盟_额度",context:"club:union:status:" + clubId
+        }),"p@club:union:status:" + clubId);
+    }
+
+    /** ClubUnionQuota 没有固定携带 club_id，优先使用请求 context 绑定当前俱乐部。 */
+    public OnClubUnionQuota(raw:any,secondaryRaw?:any):void
+    {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
+            raw = secondaryRaw;
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        if(!data || typeof data !== "object")
+            return;
+        let body:any = data.ClubUnionQuota;
+        if(!body && data.result !== undefined)
+        {
+            let result:any = data.result;
+            if(typeof result === "string")
+            {
+                try { result = JSON.parse(result); }
+                catch(error) { result = null; }
+            }
+            if(result && typeof result === "object")
+                body = result.ClubUnionQuota || result;
+        }
+        if(!body)
+            body = data;
+        if(typeof body === "string")
+        {
+            try { body = JSON.parse(body); }
+            catch(error) { return; }
+        }
+        const context = String(data.context || (body && body.context) || "");
+        const match = context.match(/(?:^|:)union:(?:status|quota):([0-9]+)$/);
+        const clubId = String(body.club_id || data.club_id ||
+            (match ? match[1] : (this.clubUnionPendingClubId || this.ResolveRoomClub())));
+        if(!clubId)
+            return;
+        const pushUnionId = String(body.union_id || data.union_id || "").trim();
+        const previous = this.clubUnionStatus[clubId];
+        const infoUnionId = String((this.clubDetails[clubId] && this.clubDetails[clubId].union_id) || "").trim();
+        const previousUnionId = previous && previous.hasUnion ? String(previous.unionId || "").trim() : "";
+        // 推送里缺 union_id 时不能用空串覆盖：按「本次推送 → 俱乐部信息 → 上次确认」取第一个非空值。
+        const unionId = pushUnionId || infoUnionId || previousUnionId;
+        const bodyName = String(body.union_name || body.unionName || data.union_name || "").trim();
+        const cachedName = unionId ? this.CachedUnionName(unionId) : "";
+        const unionName = bodyName || cachedName;
+        // union_quota 单位分：总群主是联盟池，盟主是自己俱乐部额度。
+        const quotaRaw = body.union_quota !== undefined ? body.union_quota : data.union_quota;
+        const quotaNumber = Number(quotaRaw);
+        const quotaKnown = quotaRaw !== undefined && quotaRaw !== null && String(quotaRaw).trim() !== "" &&
+            Number.isFinite(quotaNumber);
+        // is_owner=1 才是联盟总群主；部分 ClubUnionQuota 推送不带该字段（例如额度刷新），
+        // 缺席时要沿用上一次结论，不能把已确认的总群主改回 false。
+        const ownerValue = body.is_owner !== undefined ? body.is_owner : data.is_owner;
+        const ownerKnown = ownerValue !== undefined && ownerValue !== null && String(ownerValue).trim() !== "";
+        const ownerFlag = ownerValue === 1 || ownerValue === "1" ||
+            ownerValue === true || String(ownerValue).toLowerCase() === "true";
+        const reuseOwner = previous && (previous.unionId === unionId ||
+            (!previous.unionId && previous.isOwner === true));
+        // 创建/查询_我的_联盟 已确认的 owner 是账号级事实，不能被后续单俱乐部 is_owner=0 覆盖。
+        const ownerConfirmed = !!(previous && previous.ownerConfirmed &&
+            (!previous.unionId || previous.unionId === unionId));
+        const isOwner = unionId === "" ? false : ownerConfirmed ? true : ownerKnown ? ownerFlag :
+            (reuseOwner ? previous.isOwner : undefined);
+        const quotaFen = quotaKnown ? quotaNumber :
+            (previous && previous.unionId === unionId ? previous.quotaFen : undefined);
+        this.clubUnionStatus[clubId] = {known:true,hasUnion:unionId !== "",unionId:unionId || undefined,
+            unionName:unionName || undefined,isOwner,ownerConfirmed:ownerConfirmed || undefined,quotaFen};
+        if(unionName) this.RememberUnionName(unionId,unionName);
+        const info = this.clubDetails[clubId];
+        if(info)
+        {
+            if(unionId)
+            {
+                info.union_id = unionId;
+                if(unionName) info.union_name = unionName;
+                // is_owner=0 的 union_quota 是本俱乐部额度；is_owner=1 是联盟池，不能写进俱乐部额度。
+                if(isOwner === false && quotaKnown) info.union_quota = quotaFen;
+            }
+            else
+            {
+                info.union_id = "";
+                delete info.union_name;
+                delete info.union_quota;
+            }
+        }
+        // 名称已知但 is_owner 缺失时也要探一次「我的联盟」：该命令只有总群主能成功，
+        // 用它兜底确认「大群主」，避免按钮因为额度推送缺字段而一直收起。
+        if(unionId)
+            this.RequestClubUnionName(clubId);
+        if(this.clubManagement)
+        {
+            this.clubManagement.Refresh();
+            // 盟友弹窗按俱乐部展示额度，额度推送只带池/本俱乐部数值，需重拉「我的联盟」。
+            this.clubManagement.OnUnionQuotaPushed();
+        }
+        // 发现页顶部「额度」也依赖这次推送；不刷新的话要切一次俱乐部页再回来才显示。
+        this.RefreshDiscoveryClubFunds(false);
+        this.RefreshClubList(false);
+    }
+
+    /** 联盟名缓存：内存 + localStorage，重启后仍能显示名称而不是退化成联盟号。 */
+    private CachedUnionName(unionId:string):string
+    {
+        if(!unionId) return "";
+        const memory = this.clubUnionNames[unionId];
+        if(memory) return memory;
+        const stored = cc.sys.localStorage.getItem("unionName:" + unionId);
+        if(stored) { this.clubUnionNames[unionId] = stored; return stored; }
+        return "";
+    }
+    private RememberUnionName(unionId:string,name:string):void
+    {
+        const text = String(name || "").trim();
+        if(!unionId || !text) return;
+        this.clubUnionNames[unionId] = text;
+        cc.sys.localStorage.setItem("unionName:" + unionId,text);
+    }
+
+    private ResolveClubUnionId(clubId:string):string
+    {
+        // 新文档：俱乐部信息里的 union_id 是权威归属；状态缓存只是补充。
+        const info = this.clubDetails[clubId];
+        const infoUnionId = String(info && info.union_id || "").trim();
+        if(infoUnionId) return infoUnionId;
+        const status = this.clubUnionStatus[clubId];
+        return status && status.known && status.hasUnion ? String(status.unionId || "").trim() : "";
+    }
+
+    /** 联盟号已知但名称或总群主身份缺失时补查「我的联盟」；盟主无权限时静默退化为只显示联盟号。 */
+    private RequestClubUnionName(clubId:string,force:boolean = false):void
+    {
+        if(!clubId || !this.IsClubCreator(clubId))
+            return;
+        const unionId = this.ResolveClubUnionId(clubId);
+        const status = this.clubUnionStatus[clubId];
+        // isOwner=false 也可能是额度推送缺字段造成的旧结论，仍要探一次才能纠正。
+        const needOwner = !status || status.isOwner !== true;
+        // 只缺名称或只缺总群主身份都要探一次；两者都已知才跳过。
+        if(!unionId || (this.CachedUnionName(unionId) && !needOwner))
+            return;
+        const now = Date.now();
+        const asked = this.clubUnionNameAsked[clubId] || 0;
+        // 失败后 asked 会被写成未来时间，作为冷却；成功前 10 秒内不重复查。
+        // 进「我的」时 force=true，绕过早先失败留下的长冷却，保证总群主能重新确认。
+        if(!force && (now < asked || now - asked < 10000))
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(!account || !account.guuid)
+            return;
+        this.clubUnionNameAsked[clubId] = now;
+        this.clubUnionNamePendingClubId = clubId;
+        account.reqHallCommand(JSON.stringify({
+            header:"查询_我的_联盟",context:"club:union:name:" + clubId
+        }),"p@club:union:name:" + clubId);
+    }
+
+    /** ClubMyUnion 同时带回联盟名称和成员俱乐部，可补齐列表卡片上其他俱乐部的联盟归属。 */
+    public OnClubMyUnion(raw:any,secondaryRaw?:any):void
+    {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
+            raw = secondaryRaw;
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        if(!data || typeof data !== "object")
+            return;
+        let body:any = data.ClubMyUnion;
+        if(!body && data.result !== undefined)
+        {
+            let result:any = data.result;
+            if(typeof result === "string")
+            {
+                try { result = JSON.parse(result); }
+                catch(error) { result = null; }
+            }
+            if(result && typeof result === "object")
+                body = result.ClubMyUnion || result;
+        }
+        if(!body) body = data;
+        if(typeof body === "string")
+        {
+            try { body = JSON.parse(body); }
+            catch(error) { return; }
+        }
+        if(!body || typeof body !== "object")
+            return;
+        // 有的 ClubMyUnion 推送只带 union_name/members，不带 union_id；用请求 context 或待查询俱乐部反推。
+        const context = String(data.context || (body && body.context) || "");
+        const nameMatch = context.match(/(?:^|:)union:name:([0-9]+)$/);
+        const pendingClub = nameMatch ? nameMatch[1] : this.clubUnionNamePendingClubId;
+        let unionId = String(body.union_id || body.unionId || "").trim();
+        if(!unionId && pendingClub)
+            unionId = this.ResolveClubUnionId(pendingClub);
+        if(!unionId)
+            return;
+        const unionName = String(body.union_name || body.unionName || "").trim();
+        const poolRaw = body.union_quota !== undefined ? body.union_quota : body.unionQuota;
+        const poolNumber = Number(poolRaw);
+        const poolKnown = poolRaw !== undefined && poolRaw !== null && String(poolRaw).trim() !== "" &&
+            Number.isFinite(poolNumber);
+        if(unionName)
+            this.RememberUnionName(unionId,unionName);
+        for(const id in this.clubUnionStatus)
+        {
+            const status = this.clubUnionStatus[id];
+            if(status && status.unionId === unionId && unionName)
+                status.unionName = unionName;
+        }
+        for(const id in this.clubDetails)
+        {
+            const info = this.clubDetails[id];
+            if(!info || String(info.union_id || "").trim() !== unionId)
+                continue;
+            if(unionName && !info.union_name)
+                info.union_name = unionName;
+        }
+        // members 里的俱乐部属于同一联盟；即使当前玩家只加入了其中几家，也能拿到名字和归属。
+        const members:any[] = Array.isArray(body.members) ? body.members : [];
+        for(const member of members)
+        {
+            const id = String(member && (member.club_id || member.clubId) || "").trim();
+            if(!id)
+                continue;
+            if(!this.clubDetails[id])
+                this.clubDetails[id] = {club_id:id,club_name:member.club_name || member.clubName || ""};
+            const info = this.clubDetails[id];
+            info.union_id = unionId;
+            if(unionName)
+                info.union_name = info.union_name || unionName;
+            const memberQuotaRaw = member.union_quota;
+            const memberQuota = Number(memberQuotaRaw);
+            if(memberQuotaRaw !== undefined && memberQuotaRaw !== null && String(memberQuotaRaw).trim() !== "" &&
+                Number.isFinite(memberQuota))
+                info.union_quota = memberQuota;
+            const status = this.clubUnionStatus[id];
+            if(status && status.known)
+            {
+                status.hasUnion = true;
+                status.unionId = unionId;
+                if(unionName)
+                    status.unionName = unionName;
+            }
+        }
+        // 总群主的卡片额度来自联盟池；ClubMyUnion 的 union_quota 就是池余额，拿到就同步到当前总群主俱乐部。
+        const currentClubId = this.ResolveRoomClub();
+        const currentStatus = currentClubId ? this.clubUnionStatus[currentClubId] : null;
+        if(currentStatus && currentStatus.unionId === unionId && currentStatus.isOwner === true && poolKnown)
+            currentStatus.quotaFen = poolNumber;
+        const pending = pendingClub;
+        this.clubUnionNamePendingClubId = "";
+        if(pending)
+        {
+            this.clubUnionNameAsked[pending] = Date.now();
+            // 查询_我的_联盟 成功本身就证明调用者是总群主；只有目标俱乐部确实属于这个联盟时
+            // 才落到它头上，避免多俱乐部账号串到别家联盟。
+            const pendingUnionId = this.ResolveClubUnionId(pending);
+            if(!pendingUnionId || pendingUnionId === unionId)
+            {
+                const status = this.clubUnionStatus[pending];
+                if(status)
+                {
+                    status.known = true;
+                    status.hasUnion = true;
+                    status.unionId = unionId;
+                    status.isOwner = true;
+                    status.ownerConfirmed = true;
+                    if(unionName) status.unionName = unionName;
+                    if(poolKnown) status.quotaFen = poolNumber;
+                }
+                else this.clubUnionStatus[pending] = {known:true,hasUnion:true,unionId:unionId,
+                    unionName:unionName || undefined,isOwner:true,ownerConfirmed:true,
+                    quotaFen:poolKnown ? poolNumber : undefined};
+                const info = this.clubDetails[pending];
+                if(info)
+                {
+                    info.union_id = unionId;
+                    if(unionName) info.union_name = unionName;
+                }
+            }
+        }
+        if(this.clubManagement) this.clubManagement.Refresh();
+        this.RefreshDiscoveryClubFunds(false);
+        this.RefreshClubList(false);
+    }
+
+    /** 创建联盟完成后由 ClubUnionCreate 推送联盟号；状态先落本地，按钮立即隐藏。 */
+    public OnClubUnionCreate(raw:any,secondaryRaw?:any):void
+    {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
+            raw = secondaryRaw;
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        if(!data || typeof data !== "object")
+            return;
+        let body:any = data.ClubUnionCreate;
+        if(!body && data.result !== undefined)
+        {
+            let result:any = data.result;
+            if(typeof result === "string")
+            {
+                try { result = JSON.parse(result); }
+                catch(error) { result = null; }
+            }
+            if(result && typeof result === "object")
+                body = result.ClubUnionCreate || result;
+        }
+        if(!body) body = data;
+        const context = String(data.context || (body && body.context) || "");
+        const match = context.match(/(?:^|:)union:create:([0-9]+)$/);
+        const clubId = String((match && match[1]) || this.unionCreateClubId || this.ResolveRoomClub());
+        const unionId = String(body.union_id || data.union_id || "").trim();
+        if(!clubId || !unionId)
+            return;
+        this.unionCreatePushReceived = true;
+        const unionName = this.unionCreateName.trim();
+        this.clubUnionStatus[clubId] = {known:true,hasUnion:true,unionId,unionName:unionName || undefined,isOwner:true,ownerConfirmed:true};
+        // 创建成功即把 union_id 写回俱乐部信息，后续额度查询即使竞态失败也不会把入口改回创建/加入。
+        if(!this.clubDetails[clubId])
+            this.clubDetails[clubId] = {club_id:clubId,club_name:""};
+        this.clubDetails[clubId].union_id = unionId;
+        if(this.clubDetails[clubId].union_quota === undefined)
+            this.clubDetails[clubId].union_quota = 0;
+        if(unionName)
+        {
+            this.RememberUnionName(unionId,unionName);
+            this.clubDetails[clubId].union_name = unionName;
+        }
+        this.unionCreateName = "";
+        if(this.clubManagement) this.clubManagement.Refresh();
+        this.RefreshClubList(false);
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"联盟创建成功，联盟号：" + unionId);
+    }
+
     /** 刷新发现页 Title 下当前俱乐部的积分和额度。额度未确认有权限前保持隐藏。 */
     private RefreshDiscoveryClubFunds(requestQuota:boolean = true):void
     {
@@ -3651,7 +4110,6 @@ export default class panelMain extends UIPanelViewBase {
         if(!title)
             return;
 
-        const account:any = GameDataManager.getAccount();
         const clubId = this.ResolveRoomClub();
         const goldRoot = title.getChildByName("金币框");
         const goldNode = goldRoot && goldRoot.getChildByName("gold") ?
@@ -3661,18 +4119,36 @@ export default class panelMain extends UIPanelViewBase {
             goldLabel.string = clubId ? this.GetClubGold(clubId) : "0";
 
         const quotaNode = title.getChildByName("额度");
-        const agent = clubId ? this.clubAgentInfo[clubId] : null;
-        const showQuota = !!clubId && this.CanShowClubQuota(clubId,account,agent);
+        const unionQuota = this.UnionQuotaDisplay(clubId);
         if(quotaNode)
         {
-            quotaNode.active = showQuota;
+            quotaNode.active = unionQuota.visible;
             const quotaLabel = quotaNode.getComponent(cc.Label);
             if(quotaLabel)
-                quotaLabel.string = showQuota ? "额度：" + this.FormatClubQuota(clubId) : "";
+                quotaLabel.string = unionQuota.visible ? unionQuota.label + "：" + unionQuota.text : "";
+        }
+        // 联盟池只给总群主；放在俱乐部额度下面一行。
+        const poolFen = this.UnionPoolFen(clubId);
+        const poolNode = title.getChildByName("联盟池");
+        if(poolNode)
+        {
+            const showPool = poolFen !== undefined;
+            poolNode.active = showPool;
+            if(showPool)
+            {
+                const poolLabel = poolNode.getComponent(cc.Label);
+                if(poolLabel) poolLabel.string = "联盟池：" + this.FormatFen(poolFen);
+            }
         }
 
         if(clubId && requestQuota)
-            this.RequestClubQuota(clubId,true);
+        {
+            const info = this.clubDetails[clubId];
+            // 登录后 clubDetails 往往还没加载，发现页要主动补拉，否则要等进俱乐部页才显示额度。
+            if(!info || info.union_id === undefined || info.union_quota === undefined)
+                this.RequestClubInfo(clubId);
+            this.RequestClubUnionStatus(clubId,false);
+        }
     }
 
     /**
@@ -3702,92 +4178,67 @@ export default class panelMain extends UIPanelViewBase {
         return number.toString();
     }
 
-    private IsClubOwner(clubId:string,account:any,agent:any):boolean
+    /**
+     * V2 额度显示口径：
+     * - 俱乐部创建者（老板）才显示；
+     * - 联盟总群主（is_owner=1）显示联盟池；
+     * - 加盟俱乐部老板（is_owner=0）显示本俱乐部 union_quota。
+     */
+    private UnionQuotaDisplay(clubId:string):{visible:boolean;label:string;text:string}
     {
-        const owners = String(account && account.club_make || "").split(",").map(id=>id.trim());
-        return owners.indexOf(clubId) >= 0 || !!(agent && Number(agent.is_creator) === 1);
-    }
-
-    /** 额度显示必须同时满足服务端返回额度数据和权限；未知状态一律不显示。 */
-    private CanShowClubQuota(clubId:string,account:any,agent:any):boolean
-    {
-        const quota = this.clubQuotaInfo[clubId];
-        if(!quota || quota.quota_fen === undefined || quota.quota_fen === null)
-            return false;
-        if(String(quota.quota_fen).trim() === "" || !Number.isFinite(Number(quota.quota_fen)))
-            return false;
-        if(this.IsClubOwner(clubId,account,agent))
-            return true;
-        // 代理关系发生变化后，不能继续沿用旧的已授信快照。
-        if(agent && !this.IsClubAgent(agent))
-            return false;
-        return Number(quota.is_agent) === 1 && Number(quota.is_granted) === 1;
-    }
-
-    private FormatClubQuota(clubId:string):string
-    {
-        const quota = this.clubQuotaInfo[clubId];
-        if(!quota)
-            return "";
-        const fen = Number(quota.quota_fen);
-        if(!Number.isFinite(fen))
-            return "";
+        if(!clubId || !this.IsClubCreator(clubId))
+            return {visible:false,label:"",text:""};
+        const info = this.clubDetails[clubId];
+        // 俱乐部信息（查询_俱乐部_信息）是权威归属：只要已入盟且带回 union_quota，
+        // 即使 查询_联盟_额度 还没回包，发现页也应立即显示本俱乐部额度。
+        const infoUnionId = String(info && info.union_id || "").trim();
+        const infoRaw = info && info.union_quota;
+        const infoNumber = Number(infoRaw);
+        const infoKnown = infoRaw !== undefined && infoRaw !== null && String(infoRaw).trim() !== "" &&
+            Number.isFinite(infoNumber);
+        const status = this.clubUnionStatus[clubId];
+        const knownUnion = !!infoUnionId || !!(status && status.known && status.hasUnion);
+        if(!knownUnion)
+            return {visible:false,label:"",text:""};
+        // 额度位统一显示本俱乐部额度；总群主的联盟池另在名字下面显示。
+        const fen = infoKnown ? infoNumber :
+            (status && status.isOwner !== true && status.quotaFen !== undefined &&
+                Number.isFinite(Number(status.quotaFen)) ? Number(status.quotaFen) : undefined);
+        if(fen === undefined)
+            return {visible:false,label:"",text:""};
         const yuan = fen / 100;
+        const text = Number.isInteger(yuan) ? String(yuan) : yuan.toFixed(2).replace(/\.?0+$/,"");
+        return {visible:true,label:"额度",text};
+    }
+    private FormatFen(fen:any):string
+    {
+        const number = Number(fen);
+        if(!Number.isFinite(number)) return "";
+        const yuan = number / 100;
         return Number.isInteger(yuan) ? String(yuan) : yuan.toFixed(2).replace(/\.?0+$/,"");
     }
-
-    /** 额度接口是异步 GetClubQuota 推送；没有权限的账号也可以查询，但只显示有权限的结果。 */
-    private RequestClubQuota(clubId:string,requestDetails:boolean):void
+    /** 联盟池只对总群主显示（is_owner=1 的 union_quota）。 */
+    private UnionPoolFen(clubId:string):number
     {
-        if(!requestDetails || !clubId)
-            return;
-        const account:any = GameDataManager.getAccount();
-        if(!account || !account.guuid)
-            return;
-        const now = Date.now();
-        if(now - (this.clubQuotaAsked[clubId] || 0) < 5000)
-            return;
-        this.clubQuotaAsked[clubId] = now;
-        account.reqHallCommand(JSON.stringify({
-            header:"查询_俱乐部_额度",
-            club_id:clubId,
-            user_id:"",
-            context:"club:quota:" + clubId
-        }),"p@club:quota:" + clubId);
+        const status = this.clubUnionStatus[clubId];
+        if(!status || status.isOwner !== true || status.quotaFen === undefined)
+            return undefined;
+        const fen = Number(status.quotaFen);
+        return Number.isFinite(fen) ? fen : undefined;
     }
 
-    /** GetClubQuota 的异步回包不保证外层是否包了一层同名对象或 result。 */
-    public OnClubQuota(raw:any,secondaryRaw?:any):void
+    /** 登录/发现页补拉俱乐部信息：v2.1 回包带 union_id / union_apply / union_quota。 */
+    private RequestClubInfo(clubId:string):void
     {
-        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean"))
-            raw = secondaryRaw;
-        let data:any = raw;
-        if(typeof data === "string")
-        {
-            try { data = JSON.parse(data); }
-            catch(error) { return; }
-        }
-        if(!data || typeof data !== "object")
-            return;
-        let body:any = data.GetClubQuota;
-        if(!body && data.result && typeof data.result === "object")
-            body = data.result.GetClubQuota || data.result;
-        if(!body)
-            body = data;
-        if(typeof body === "string")
-        {
-            try { body = JSON.parse(body); }
-            catch(error) { return; }
-        }
-        const quota:any = body && body.GetClubQuota ? body.GetClubQuota : body;
-        const context = String(data.context || (body && body.context) || (quota && quota.context) || "");
-        const contextMatch = context.match(/(?:^|:)quota:([0-9]+)$/);
-        const clubId = String(quota.club_id || data.club_id || (contextMatch ? contextMatch[1] : ""));
-        if(!clubId)
-            return;
-        this.clubQuotaInfo[clubId] = quota;
-        this.RefreshDiscoveryClubFunds(false);
-        this.RefreshClubList(false);
+        if(!clubId) return;
+        const account:any = GameDataManager.getAccount();
+        if(!account || !account.guuid) return;
+        const now = Date.now();
+        if(now - (this.clubInfoAsked[clubId] || 0) < 5000) return;
+        this.clubInfoAsked[clubId] = now;
+        account.reqHallCommand(JSON.stringify({
+            header:"查询_俱乐部_信息",club_id:clubId
+        }),"p@club:info:" + clubId);
     }
 
     private RefreshClubList(requestDetails:boolean = true)
@@ -3796,6 +4247,7 @@ export default class panelMain extends UIPanelViewBase {
         if(!page)
             return;
         const currentId = this.ResolveRoomClub();
+        this.RequestClubUnionStatus(currentId,requestDetails);
         const joinedIds = this.GetMyClubIds();
         // 当前俱乐部固定排在第一位，其余保持原有关系顺序。
         const ids = currentId && joinedIds.indexOf(currentId) >= 0 ?
@@ -3833,23 +4285,51 @@ export default class panelMain extends UIPanelViewBase {
             const ownerIds = String(account.club_make || "").split(",");
             const isOwner = ownerIds.indexOf(id) >= 0 || !!(agent && Number(agent.is_creator) === 1);
             const isAgent = this.IsClubAgent(agent);
+            const status = this.clubUnionStatus[id];
+            const infoUnionId = String(info && info.union_id || "").trim();
+            const statusUnionId = status && status.known && status.hasUnion ? String(status.unionId || "").trim() : "";
+            // 俱乐部信息的 union_id 为权威归属；额度查询失败/竞态不能把已入盟清掉。
+            const unionId = infoUnionId || statusUnionId;
+            const unionName = String((status && status.unionName) ||
+                (info && (info.union_name || info.unionName)) || this.CachedUnionName(unionId) || "").trim();
             const nameLabel = row.getChildByName("俱乐部名称");
             if(nameLabel)
-                nameLabel.getComponent(cc.Label).string = name;
+            {
+                // 联盟俱乐部显示「俱乐部名(联盟名)」；名称未回来时先显示联盟号，避免卡片只剩一个图标。
+                const suffix = unionName || (unionId ? "联盟" + unionId : "");
+                const label = nameLabel.getComponent(cc.Label);
+                label.string = unionId ? name + "(" + suffix + ")" : name;
+                // 带联盟后缀时整体降一档字号，避免 260 宽的标题在缺省字号下被压得过小。
+                label.fontSize = unionId ? 32 : 38;
+                label.lineHeight = unionId ? 36 : 40;
+            }
+            const unionBadge = row.getChildByName("联盟徽记");
+            if(unionBadge)
+                unionBadge.active = unionId !== "";
+            if(unionId)
+                this.RequestClubUnionName(id);
             const goldLabel = row.getChildByName("俱乐部金币");
             if(goldLabel)
             {
                 goldLabel.active = true;
                 goldLabel.getComponent(cc.Label).string = this.GetClubGold(id);
             }
-            this.RequestClubQuota(id,requestDetails);
+            const unionQuota = this.UnionQuotaDisplay(id);
             const quotaLabel = row.getChildByName("额度");
-            const showQuota = this.CanShowClubQuota(id,account,agent);
             if(quotaLabel)
             {
-                quotaLabel.active = showQuota;
-                if(showQuota)
-                    quotaLabel.getComponent(cc.Label).string = "额度：" + this.FormatClubQuota(id);
+                quotaLabel.active = unionQuota.visible;
+                if(unionQuota.visible)
+                    quotaLabel.getComponent(cc.Label).string = unionQuota.label + "：" + unionQuota.text;
+            }
+            const poolFen = this.UnionPoolFen(id);
+            const poolLabel = row.getChildByName("联盟池");
+            if(poolLabel)
+            {
+                const showPool = poolFen !== undefined;
+                poolLabel.active = showPool;
+                if(showPool)
+                    poolLabel.getComponent(cc.Label).string = "联盟池：" + this.FormatFen(poolFen) + " 元";
             }
             // 邀请码每人都展示：代理/老板显示自己的码，普通成员回包里带的就是他上级的码（服务端口径）。
             // 注意这个码只影响「展示」，身份判定仍只看 is_agent，两者互不牵连。
@@ -3871,7 +4351,8 @@ export default class panelMain extends UIPanelViewBase {
                 else
                     ImageManager.getInstance().SetLocalAvatar(avatar,"1");
             }
-            const role = isOwner ? "老板" : isAgent ? (Number(agent.is_leader) === 1 ? "盟主" : "代理") : "";
+            const role = isOwner ? (unionId ? (status && status.isOwner === true ? "大群主" : "盟主") : "老板") :
+                isAgent ? "代理" : "";
             const playerBase = row.getComponent(cc.Sprite);
             if(playerBase)
                 playerBase.enabled = role === "";
@@ -3895,10 +4376,188 @@ export default class panelMain extends UIPanelViewBase {
         list.getComponent(cc.ScrollView).scrollToTop(0);
     }
 
+    private HandleClubUnionAction(action:"create"|"join"):void
+    {
+        if(action === "create")
+            this.OpenCreateUnionDialog();
+        else
+            this.OpenJoinUnionDialog();
+    }
+
+    private IsClubCreator(clubId:string):boolean
+    {
+        const account:any = GameDataManager.getAccount();
+        if(!account || !clubId)
+            return false;
+        const ids = String(account.club_make || "").split(",").map(id=>id.trim());
+        if(ids.indexOf(clubId) >= 0)
+            return true;
+        const agent = this.clubAgentInfo[clubId];
+        return !!agent && Number(agent.is_creator) === 1;
+    }
+
+    private CanOpenUnionAction(showMessage:boolean = true):boolean
+    {
+        const clubId = this.ResolveRoomClub();
+        if(!clubId || !this.IsClubCreator(clubId))
+        {
+            if(showMessage)
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只有当前俱乐部创建者可以操作联盟！");
+            return false;
+        }
+        const status = this.clubUnionStatus[clubId];
+        if(!status || !status.known)
+        {
+            this.RequestClubUnionStatus(clubId,true);
+            if(showMessage)
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"正在查询联盟状态，请稍后再试！");
+            return false;
+        }
+        if(status.hasUnion)
+        {
+            if(showMessage)
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"当前俱乐部已经加入联盟！");
+            return false;
+        }
+        return true;
+    }
+
+    private OpenCreateUnionDialog():void
+    {
+        if(!this.CanOpenUnionAction())
+            return;
+        this.clubCreateDialogMode = "union";
+        this.unionCreateName = "";
+        this.SetCreateDialogText("union");
+        Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox).string = "";
+        this.RefreshUnionCreateCostHint();
+        this.node.getChildByName("创建俱乐部弹窗").active = true;
+    }
+
+    private SetCreateDialogText(mode:"club"|"union"):void
+    {
+        const union = mode === "union";
+        const values:{[path:string]:string} = union ? {
+            "创建俱乐部弹窗/面板/标题底/标题":"创建联盟",
+            "创建俱乐部弹窗/面板/名称标题":"联盟名称",
+            "创建俱乐部弹窗/面板/名称输入/PLACEHOLDER_LABEL":"请输入联盟名称",
+            "创建俱乐部弹窗/面板/确认创建俱乐部/确定文字":"确认创建联盟",
+            "创建俱乐部弹窗/面板/说明":"创建后您将成为联盟总群主"
+        } : {
+            "创建俱乐部弹窗/面板/标题底/标题":"创建俱乐部",
+            "创建俱乐部弹窗/面板/名称标题":"俱乐部名称",
+            "创建俱乐部弹窗/面板/名称输入/PLACEHOLDER_LABEL":"请输入俱乐部名称",
+            "创建俱乐部弹窗/面板/确认创建俱乐部/确定文字":"确认创建",
+            "创建俱乐部弹窗/面板/说明":"创建后可邀请好友加入"
+        };
+        Object.keys(values).forEach(path=>{
+            const node = Tool.GetChild(this.node,path);
+            const label = node && node.getComponent(cc.Label);
+            if(label) label.string = values[path];
+        });
+    }
+
+    private RefreshUnionCreateCostHint():void
+    {
+        const node = Tool.GetChild(this.node,"创建俱乐部弹窗/面板/费用提示");
+        const label = node == null ? null : node.getComponent(cc.Label);
+        if(label == null)
+            return;
+        const cost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_CREATE_UNION);
+        const account = GameDataManager.getAccount();
+        const stone = account == null || account.stone == null ? 0 : Number(account.stone);
+        if(cost <= 0)
+        {
+            label.string = "创建联盟免费";
+            node.color = new cc.Color(255,238,197);
+        }
+        else if(stone < cost)
+        {
+            label.string = "创建联盟需消耗" + cost + "钻石，当前余额" + stone + "，钻石不足";
+            node.color = new cc.Color(255,120,110);
+        }
+        else
+        {
+            label.string = "创建联盟需消耗" + cost + "钻石（当前余额" + stone + "）";
+            node.color = new cc.Color(255,238,197);
+        }
+    }
+
+    private CreateUnion():void
+    {
+        if(!this.CanOpenUnionAction())
+            return;
+        const edit = Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox);
+        const name = edit.string.trim();
+        if(!name)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入联盟名称！");
+            return;
+        }
+        const cost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_CREATE_UNION);
+        if(cost > 0)
+        {
+            const account:any = GameDataManager.getAccount();
+            const stone = account == null || account.stone == null ? 0 : Number(account.stone);
+            if(stone < cost)
+            {
+                this.RefreshUnionCreateCostHint();
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    "钻石不足" + cost + "，无法创建联盟！");
+                return;
+            }
+        }
+        const clubId = this.ResolveRoomClub();
+        this.unionCreateCostPending = cost;
+        this.unionCreateClubId = clubId;
+        this.unionCreateName = name;
+        this.unionCreatePushReceived = false;
+        this.SendClubCommand({header:"创建_联盟",club_id:clubId,
+            union_name:name,context:"club:union:create:" + clubId},"union:create:" + clubId);
+    }
+
+    private OpenJoinUnionDialog():void
+    {
+        if(!this.CanOpenUnionAction())
+            return;
+        this.clubJoinDialogMode = "union";
+        this.clubInputId = "";
+        this.SetJoinDialogText("union");
+        this.RefreshClubIdDisplay();
+        this.node.getChildByName("加入俱乐部弹窗").active = true;
+    }
+
+    private SetJoinDialogText(mode:"club"|"union"):void
+    {
+        const union = mode === "union";
+        const title = Tool.GetChild(this.node,"加入俱乐部弹窗/面板/标题底/标题");
+        if(title && title.getComponent(cc.Label)) title.getComponent(cc.Label).string = union ? "加入联盟" : "加入俱乐部";
+        const inputLabel = Tool.GetChild(this.node,"加入俱乐部弹窗/面板/俱乐部ID输入框/俱乐部ID显示");
+        if(inputLabel && inputLabel.getComponent(cc.Label)) inputLabel.getComponent(cc.Label).string = union ? "请输入联盟号" : "请输入邀请码";
+        const confirm = Tool.GetChild(this.node,"加入俱乐部弹窗/面板/申请加入俱乐部/确定文字");
+        if(confirm && confirm.getComponent(cc.Label)) confirm.getComponent(cc.Label).string = union ? "申请加入联盟" : "申请加入俱乐部";
+    }
+
+    private JoinUnion():void
+    {
+        if(!/^\d{6}$/.test(this.clubInputId))
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入6位联盟号！");
+            return;
+        }
+        if(!this.CanOpenUnionAction())
+            return;
+        const clubId = this.ResolveRoomClub();
+        this.unionJoinPendingClubId = clubId;
+        this.unionJoinPendingUnionId = this.clubInputId;
+        this.SendClubCommand({header:"申请_加入_联盟",club_id:clubId,union_id:this.clubInputId,
+            context:"club:union:join:" + clubId},"union:join:" + clubId);
+    }
+
     private RefreshClubIdDisplay()
     {
         const label = Tool.GetChild(this.node,"加入俱乐部弹窗/面板/俱乐部ID输入框/俱乐部ID显示").getComponent(cc.Label);
-        label.string = this.clubInputId || "请输入邀请码";
+        label.string = this.clubInputId || (this.clubJoinDialogMode === "union" ? "请输入联盟号" : "请输入邀请码");
     }
 
     private SendClubCommand(request:any,context:string)
@@ -3943,6 +4602,11 @@ export default class panelMain extends UIPanelViewBase {
 
     private CreateClub()
     {
+        if(this.clubCreateDialogMode === "union")
+        {
+            this.CreateUnion();
+            return;
+        }
         const edit = Tool.GetChild(this.node,"创建俱乐部弹窗/面板/名称输入").getComponent(cc.EditBox);
         const name = edit.string.trim();
         if(!name)
@@ -3994,6 +4658,23 @@ export default class panelMain extends UIPanelViewBase {
         GameDataManager.getAccount().reqHallCommand(strParam,"P@玩家_消费_命令_创建俱乐部");
     }
 
+    /** 创建联盟受理后扣除默认/后台配置的联盟创建费。 */
+    private ChargeUnionCreateFee():void
+    {
+        const nCost = this.unionCreateCostPending;
+        if(nCost <= 0)
+        {
+            this.unionCreateCostPending = 0;
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"联盟创建请求已受理。");
+            return;
+        }
+        const strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_CREATE_UNION);
+        this.unionChargeBusy = true;
+        this.unschedule(this.unionChargeTimeoutHandler);
+        this.scheduleOnce(this.unionChargeTimeoutHandler,8);
+        GameDataManager.getAccount().reqHallCommand(strParam,"P@玩家_消费_命令_创建联盟");
+    }
+
     private JoinClub()
     {
         // 新规则：凭 6 位邀请码入会，码里带俱乐部，不再单独输入俱乐部 ID。
@@ -4030,8 +4711,31 @@ export default class panelMain extends UIPanelViewBase {
             const id = context.substr("club:info:".length);
             if(nCode === 0x200 && response.result && response.result.club_id)
             {
-                this.clubDetails[id] = response.result;
+                const result:any = response.result;
+                const oldInfo = this.clubDetails[id];
+                if(oldInfo)
+                {
+                    const has=Object.prototype.hasOwnProperty;
+                    // union_id 一旦有值不会回到空；旧服务端/竞态下回包可能缺字段或给空串，不能把已入盟清掉。
+                    const knownUnion = this.ResolveClubUnionId(id) || String(oldInfo.union_id || "").trim();
+                    if(!has.call(result,"union_id") || (!String(result.union_id || "").trim() && knownUnion))
+                        result.union_id = knownUnion;
+                    if(!has.call(result,"union_name") && oldInfo.union_name)
+                        result.union_name = oldInfo.union_name;
+                    if(!has.call(result,"union_apply") && oldInfo.union_apply)
+                        result.union_apply = oldInfo.union_apply;
+                    if(!has.call(result,"union_quota") && oldInfo.union_quota !== undefined)
+                        result.union_quota = oldInfo.union_quota;
+                }
+                this.clubDetails[id] = result;
+                const unionId = String(result.union_id || "").trim();
+                const unionName = String(result.union_name || result.unionName || "").trim();
+                if(unionId && unionName)
+                    this.RememberUnionName(unionId,unionName);
+                if(unionId)
+                    this.RequestClubUnionName(id);
                 if(this.clubManagement) this.clubManagement.Refresh();
+                this.RefreshDiscoveryClubFunds(false);
                 this.RefreshClubList(false);
             }
             return true;
@@ -4044,15 +4748,74 @@ export default class panelMain extends UIPanelViewBase {
             // 代理信息的正式结果通过 ClubAgentInfo 推送，0x200 的同步结果通常为空。
             return true;
         }
-        if(context.indexOf("club:quota:") === 0)
+        if(context.indexOf("club:union:name:") === 0)
         {
-            // 额度数据走异步 GetClubQuota；同步失败时清掉旧快照，避免权限撤销后继续显示旧额度。
-            if(nCode !== 0x200)
+            const id = context.substr("club:union:name:".length);
+            if(nCode === 0x200)
             {
-                const id = context.substr("club:quota:".length);
-                delete this.clubQuotaInfo[id];
-                this.RefreshDiscoveryClubFunds(false);
-                this.RefreshClubList(false);
+                // 正式名称通常走 ClubMyUnion 推送；同步 result 也兼容处理。
+                if(response.result || response.ClubMyUnion)
+                    this.OnClubMyUnion(response);
+            }
+            else
+            {
+                // 盟主可能没有「我的联盟」权限；冷却 5 分钟，避免每次刷新都发无效请求。
+                const error = this.GetHallCommandError(param,"");
+                const notOwner = error.indexOf("总群主") >= 0 || error.indexOf("你还没有联盟") >= 0;
+                // 明确非总群主冷却 5 分钟；网络/其它失败 10 秒后可重探，避免总群主被一次失败卡住。
+                this.clubUnionNameAsked[id] = Date.now() + (notOwner ? 300000 : 10000);
+                this.clubUnionNamePendingClubId = "";
+                // 明确不是总群主时落 isOwner=false，避免把「大群主」和入盟申请按钮误显示给盟主。
+                if(notOwner)
+                {
+                    const noUnion = error.indexOf("你还没有联盟") >= 0;
+                    const status = this.clubUnionStatus[id];
+                    // 创建成功或上一次「查询_我的_联盟」已确认 owner 时，单次失败不改身份。
+                    if(!(status && status.ownerConfirmed))
+                    {
+                        if(status)
+                        {
+                            status.isOwner = false;
+                            if(noUnion)
+                            {
+                                status.known = true;
+                                status.hasUnion = false;
+                                status.unionId = undefined;
+                            }
+                        }
+                        else this.clubUnionStatus[id] = {known:true,hasUnion:!noUnion,isOwner:false};
+                        if(this.clubManagement) this.clubManagement.Refresh();
+                    }
+                }
+            }
+            return true;
+        }
+        if(context.indexOf("club:union:status:") === 0)
+        {
+            const id = context.substr("club:union:status:".length);
+            if(nCode === 0x200)
+            {
+                // 正式数据通常通过 ClubUnionQuota 推送；同步 result 也兼容处理。
+                if(response.result || response.ClubUnionQuota)
+                    this.OnClubUnionQuota(response);
+            }
+            else
+            {
+                const error = this.GetHallCommandError(param,"");
+                // 新文档：俱乐部 union_id 一旦有值不会回到空。额度查询失败/竞态时不能用空结果覆盖已入盟状态。
+                const existing = this.ResolveClubUnionId(id);
+                const previous = this.clubUnionStatus[id];
+                if(existing)
+                {
+                    this.clubUnionStatus[id] = {known:true,hasUnion:true,unionId:existing,
+                        unionName:(previous && previous.unionName) || this.CachedUnionName(existing) || undefined,
+                        isOwner:previous ? previous.isOwner : undefined};
+                }
+                else if(error.indexOf("你还没有联盟") >= 0)
+                    this.clubUnionStatus[id] = {known:true,hasUnion:false,isOwner:false};
+                else
+                    this.clubUnionStatus[id] = {known:false,hasUnion:false,isOwner:false};
+                if(this.clubManagement) this.clubManagement.Refresh();
             }
             return true;
         }
@@ -4097,7 +4860,9 @@ export default class panelMain extends UIPanelViewBase {
                     this.GetHallCommandError(param,"赠送记录查询失败，请稍后重试！"));
             return true;
         }
-        if(context !== "club:create" && context !== "club:join")
+        const isUnionCreate = context.indexOf("club:union:create:") === 0;
+        const isUnionJoin = context.indexOf("club:union:join:") === 0;
+        if(context !== "club:create" && context !== "club:join" && !isUnionCreate && !isUnionJoin)
             return false;
         this.unschedule(this.clubCommandTimeoutHandler);
         this.clubCommandBusy = false;
@@ -4106,12 +4871,52 @@ export default class panelMain extends UIPanelViewBase {
             // 命令没被受理就不会有新俱乐部出现，撤掉待切换标记，避免以后误切默认俱乐部。
             this.CancelPendingDefaultClub();
             // 名字重复 / 超过 10 家都在这里同步失败，没受理就不扣费。
-            this.clubCreateCostPending = 0;
+            if(isUnionCreate)
+                this.unionCreateCostPending = 0;
+            else if(isUnionJoin)
+            {
+                this.unionJoinPendingClubId = "";
+                this.unionJoinPendingUnionId = "";
+            }
+            else
+                this.clubCreateCostPending = 0;
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-                this.GetHallCommandError(param,context === "club:create" ? "创建俱乐部失败！" : "申请加入俱乐部失败！"));
+                this.GetHallCommandError(param,isUnionCreate ? "创建联盟失败！" :
+                    isUnionJoin ? "申请加入联盟失败！" :
+                    context === "club:create" ? "创建俱乐部失败！" : "申请加入俱乐部失败！"));
             return true;
         }
-        if(context === "club:create")
+        if(isUnionCreate)
+        {
+            const clubId = context.substr("club:union:create:".length);
+            this.unionCreateClubId = clubId;
+            // ClubUnionCreate 推送通常晚于同步回包；这里保留已有状态，别把推送写入的名称覆盖掉。
+            const previous = this.clubUnionStatus[clubId] || {};
+            this.clubUnionStatus[clubId] = {known:true,hasUnion:true,isOwner:true,
+                unionId:previous.unionId,unionName:previous.unionName || this.unionCreateName || undefined};
+            this.node.getChildByName("创建俱乐部弹窗").active = false;
+            this.clubCreateDialogMode = "club";
+            this.SetCreateDialogText("club");
+            this.ChargeUnionCreateFee();
+        }
+        else if(isUnionJoin)
+        {
+            const clubId = context.substr("club:union:join:".length) || this.unionJoinPendingClubId;
+            if(clubId)
+            {
+                if(!this.clubDetails[clubId])
+                    this.clubDetails[clubId] = {club_id:clubId,club_name:""};
+                // 新文档用 union_apply 表示审核中的联盟码；本地先落值，入口立即切成「审核中」。
+                this.clubDetails[clubId].union_apply = this.unionJoinPendingUnionId;
+            }
+            this.unionJoinPendingClubId = "";
+            this.unionJoinPendingUnionId = "";
+            this.node.getChildByName("加入俱乐部弹窗").active = false;
+            this.clubJoinDialogMode = "club";
+            if(this.clubManagement) this.clubManagement.Refresh();
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"加入联盟申请已提交，请等待联盟总群主审批。");
+        }
+        else if(context === "club:create")
         {
             this.node.getChildByName("创建俱乐部弹窗").active = false;
             // 受理成功才扣费，提示语由扣费回包给出（带真实扣费金额）。
@@ -4135,6 +4940,27 @@ export default class panelMain extends UIPanelViewBase {
         }
         if(this.HandleClubHallCommand(nCode,param))
             return;
+        const isUnionCreateChargeReply = param.indexOf("玩家_消费_命令_创建联盟") >= 0 ||
+            (this.unionChargeBusy && param.indexOf("玩家_消费_命令") >= 0 && param.indexOf("创建联盟") >= 0);
+        if(isUnionCreateChargeReply)
+        {
+            const nCharged = this.unionCreateCostPending;
+            this.unionCreateCostPending = 0;
+            this.unschedule(this.unionChargeTimeoutHandler);
+            this.unionChargeBusy = false;
+            if(nCode == 0x200)
+            {
+                if(!this.unionCreatePushReceived)
+                    UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                        nCharged > 0 ? "创建联盟成功，已扣除" + nCharged + "钻石。" : "创建联盟成功！");
+            }
+            else
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    "联盟已创建，但钻石扣除失败：" + this.GetHallCommandError(param,"未知原因") + "。请联系客服处理！");
+            }
+            return;
+        }
         const isClubCreateChargeReply = param.indexOf("玩家_消费_命令_创建俱乐部") >= 0 ||
             (this.clubChargeBusy && param.indexOf("玩家_消费_命令") >= 0 && param.indexOf("创建俱乐部") >= 0);
         if(isClubCreateChargeReply)

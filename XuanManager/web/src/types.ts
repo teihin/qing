@@ -1019,6 +1019,7 @@ export interface UnionDetailResponse {
 
 export interface UnionQuotaAdjustmentResponse {
   unionId: string;
+  action: "add" | "subtract";
   poolQuotaFen: number;
   poolQuotaYuan: number;
   deltaFen: number;

@@ -76,17 +76,19 @@ func AsError(err error) *Error {
 }
 
 // 角色取值。manager 按普通成员处理（不显示删除），但仍可被同俱乐部成员聊天。
+// union_owner 是联盟总群主在「非自己俱乐部」会话里的合成身份，不落库。
 const (
-	RoleOwner   = "owner"
-	RoleLeader  = "leader"
-	RoleAgent   = "agent"
-	RoleManager = "manager"
-	RoleMember  = "member"
+	RoleOwner      = "owner"
+	RoleLeader     = "leader"
+	RoleAgent      = "agent"
+	RoleManager    = "manager"
+	RoleMember     = "member"
+	RoleUnionOwner = "union_owner"
 )
 
 // CanHideConversation 表示该角色是否有「删除（隐藏）聊天」入口。
 func CanHideConversation(role string) bool {
-	return role == RoleOwner || role == RoleLeader || role == RoleAgent
+	return role == RoleOwner || role == RoleLeader || role == RoleAgent || role == RoleUnionOwner
 }
 
 // CanCreateFromMemberList 表示玩家列表的「聊天」按钮是否对该角色开放。
@@ -103,7 +105,7 @@ func CanSendSystemNotice(role string) bool {
 // NormalizeRole 把未知角色归一化为 member，避免脏数据影响权限判断。
 func NormalizeRole(role string) string {
 	switch role {
-	case RoleOwner, RoleLeader, RoleAgent, RoleManager, RoleMember:
+	case RoleOwner, RoleLeader, RoleAgent, RoleManager, RoleMember, RoleUnionOwner:
 		return role
 	default:
 		return RoleMember
@@ -136,6 +138,15 @@ type Club struct {
 	Role       string `json:"role"`
 	Unread     int    `json:"unread"`
 	OwnerGuuid string `json:"-"`
+	UnionID    string `json:"-"`
+}
+
+// Union 是联盟模式 V2 的联盟实体（club_union_info）。
+type Union struct {
+	ID         string
+	Name       string
+	OwnerGuuid string
+	OwnerClub  string
 }
 
 // Member 是俱乐部成员（含角色与上下级关系）。
@@ -148,6 +159,8 @@ type Member struct {
 	Online              bool   `json:"online"`
 	SuperiorAgentGuuid  string `json:"-"`
 	SuperiorLeaderGuuid string `json:"-"`
+	/** 该成员同时是俱乐部所在联盟的总群主；角色仍保留俱乐部内身份。 */
+	IsUnionOwner bool `json:"-"`
 }
 
 // Conversation 是一条俱乐部内的双人会话。

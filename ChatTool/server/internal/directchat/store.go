@@ -208,17 +208,36 @@ WHERE p.conversation_id = ? AND p.guuid = ?
 
 // ListConversations 返回当前俱乐部内、当前用户参与且未隐藏的会话。
 func (s *SQLStore) ListConversations(ctx context.Context, clubID, guuid string, offset, limit int) ([]ConversationItem, int, error) {
+	return s.listConversations(ctx, clubID, guuid, offset, limit)
+}
+
+// ListConversationsByUser 返回当前用户参与的全部会话（跨俱乐部）。
+// 联盟总群主的跨俱乐部私聊归属对方俱乐部，不在自己的 ListMyClubs 结果里，
+// 所以消息首页必须按参与者读取。
+func (s *SQLStore) ListConversationsByUser(ctx context.Context, guuid string, offset, limit int) ([]ConversationItem, int, error) {
+	return s.listConversations(ctx, "", guuid, offset, limit)
+}
+
+func (s *SQLStore) listConversations(ctx context.Context, clubID, guuid string, offset, limit int) ([]ConversationItem, int, error) {
+	where := "c.status = 'active'"
+	args := []any{guuid}
+	if strings.TrimSpace(clubID) != "" {
+		where += " AND c.club_id = ?"
+		args = append(args, clubID)
+	}
 	var total int
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM chat_direct_conversation c
 JOIN chat_direct_participant p ON p.conversation_id = c.id AND p.guuid = ? AND p.hidden_at IS NULL
-WHERE c.club_id = ? AND c.status = 'active'`, guuid, clubID).Scan(&total); err != nil {
+WHERE `+where, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
+	queryArgs := append([]any{}, args...)
+	queryArgs = append(queryArgs, limit, offset)
 	rows, err := s.db.QueryContext(ctx, `SELECT `+conversationColumns+`, p.hidden_at
 FROM chat_direct_conversation c
 JOIN chat_direct_participant p ON p.conversation_id = c.id AND p.guuid = ? AND p.hidden_at IS NULL
-WHERE c.club_id = ? AND c.status = 'active'
-ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, guuid, clubID, limit, offset)
+WHERE `+where+`
+ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}

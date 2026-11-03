@@ -1,4 +1,4 @@
-# BY 官方下载站
+# BF 官方下载站
 
 这是一个零依赖静态下载站，支持：
 
@@ -19,7 +19,7 @@ WebHome/
 ├── site-config.json
 ├── assets/
 ├── downloads/
-│   ├── BY.mobileconfig
+│   ├── BF.mobileconfig
 │   └── BY.apk              # 上传时由app/release唯一APK映射，不需手工复制
 └── scripts/generate_mobileconfig.py
 ```
@@ -37,7 +37,7 @@ WebHome/
 
 ```bash
 python3 WebHome/scripts/generate_mobileconfig.py
-plutil -lint WebHome/downloads/BY.mobileconfig
+plutil -lint WebHome/downloads/BF.mobileconfig
 ```
 
 ## 本地预览

@@ -16,10 +16,14 @@
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |
 | 后台俱乐部管理（俱乐部列表、成员代理树、群主额度） | [俱乐部管理交接](handoffs/2026-11-01-admin-club-management.md)、[V2 联盟改造交接](handoffs/2026-11-03-admin-union-management.md) | game.clubs、club_agent_info、quota_fen、增加_俱乐部_额度、-99、orphan、union_id、union_quota |
-| 后台联盟管理（联盟列表/详情、联盟池注资、俱乐部按联盟筛选） | [联盟管理交接](handoffs/2026-11-03-admin-union-management.md) | game.unions、club_union_info、增加_联盟_额度、game.union.quota_adjust、V2 |
+| 后台联盟管理（联盟列表/详情、联盟池加/减额度、俱乐部按联盟筛选） | [联盟管理交接](handoffs/2026-11-03-admin-union-management.md) | game.unions、club_union_info、增加_联盟_额度、负数扣减、game.union.quota_adjust、V2 |
+| 我的页创建/加入联盟入口、10000 钻创建费、联盟号输入 | [联盟入口交接](handoffs/2026-11-03-club-union-create-join-ui.md) | 创建_联盟、申请_加入_联盟、ClubUnionCreate、ClubUnionQuota、unionKnown、创建联盟消费 |
+| 我的页入盟申请审批（总群主、复用俱乐部申请弹窗、同意/拒绝） | [入盟申请交接](handoffs/2026-11-03-club-union-apply-review.md) | 查询_联盟_加入申请、ClubUnionApply、is_owner、同意_加入_联盟、拒绝_加入_联盟、icon_apply |
+| 我的页当前俱乐部与俱乐部列表显示联盟名称/联盟号/徽记 | [联盟归属展示交接](handoffs/2026-11-03-club-union-display.md) | union_name、ClubMyUnion、查询_我的_联盟、联盟徽记、俱乐部名(联盟名) |
 | 后台房间战绩俱乐部信息与房间维护按俱乐部只读展示 | [房间与俱乐部交接](handoffs/2026-11-03-admin-room-records-club-maintenance.md) | room-records、club_guuid、club_invite_code_info、room-maintenance/clubs、只读 |
 | 牌桌内俱乐部金币、带入、邀请和兑换 | [牌桌内俱乐部金币交接](handoffs/2026-11-01-ingame-club-gold.md) | `Account.club_gold`、`club_id`、带入窗口、牌桌邀请、`gold,<club_id>` |
 | 私聊上下分入口与弹窗（权限、二次确认、美术与美术字、EditBox 排版陷阱） | [私聊上下分交接](handoffs/2026-11-01-chat-gold-pad.md) | `panelMessageChat`、`panelClubGoldPad`、`GetClubQuota`、交易密码、panelMsgView 确认、InputFlag、`gd_txt_*` |
+| 消息/直聊按联盟层级（固定老板+大群主、不可删、大群主跨俱乐部门聊、老板上下分+赠送、代理仅赠送） | [联盟直聊交接](handoffs/2026-11-03-direct-chat-union-permissions.md)、[俱乐部 1 对 1 私聊](handoffs/2026-10-31-direct-chat.md) | union_owner、club_union_info、固定联系人、跨俱乐部会话、AllConversations、panelMessageMembers |
 | 自动化后台（机器人=账号、投放、分组、Worker 路线、老客户端参考） | [自动化后台](topics/automation-console.md)、[落地交接](handoffs/2026-10-27-automation-console.md)、[限底皮+日志](handoffs/2026-10-28-automation-room-pi.md) | 机器人即账号、投放管理、邀请码、默认带入倍数、只进底皮、robot.room_pi |
 | Worker 节点通道（注册/租约、命令、事件、在线状态、参考 agent） | [Worker 通道](topics/automation-worker-channel.md)、[在线状态交接](handoffs/2026-10-28-worker-realtime-online.md) | `/agent/v1`、X-Agent-Token、租约 20 秒、offline 上报、命令状态机、xuanagent、janitor |
 | 真实游戏客户端（KBEngine 无头登录、俱乐部/进房协议、密码落库、agent-client 落地、xuanagent 启动与重编） | [真实客户端探查](topics/automation-real-client.md)、[落地交接](handoffs/2026-10-28-automation-real-client.md) | nip.io、kbengine.js、预坐/坐下、login_password、0x306、xuanagent.json、交叉编译 |

@@ -90,3 +90,15 @@ func TestStoneConsumePriceCatalogHasNoDuplicateCode(t *testing.T) {
 		}
 	}
 }
+
+func TestStoneConsumePriceCatalogIncludesCreateUnion(t *testing.T) {
+	for _, item := range stoneConsumePriceCatalog {
+		if item.Code == "创建联盟" {
+			if item.Default != 10000 {
+				t.Fatalf("创建联盟 default = %d, want 10000", item.Default)
+			}
+			return
+		}
+	}
+	t.Fatal("创建联盟 must be configurable in the stone consume price catalog")
+}

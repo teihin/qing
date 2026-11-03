@@ -23,6 +23,10 @@ type Directory interface {
 	GetClub(ctx context.Context, clubID string) (Club, error)
 	GetMember(ctx context.Context, clubID, guuid string) (Member, bool, error)
 	ListMembers(ctx context.Context, clubID, keyword, excludeGuuid string, offset, limit int) ([]Member, int, error)
+	/** 俱乐部所属联盟；未入盟 ok=false。 */
+	GetUnionByClub(ctx context.Context, clubID string) (Union, bool, error)
+	/** 跨俱乐部展示昵称/头像（联盟总群主不是对方俱乐部成员）。 */
+	GetAccount(ctx context.Context, guuid string) (GameUser, bool, error)
 }
 
 // Store 是直聊自身数据访问接口。SQLStore 是生产实现；测试使用内存实现。
@@ -38,6 +42,8 @@ type Store interface {
 	HideConversation(ctx context.Context, conversationID, guuid string) error
 	SetLastRead(ctx context.Context, conversationID, guuid, messageID string) error
 	ListConversations(ctx context.Context, clubID, guuid string, offset, limit int) ([]ConversationItem, int, error)
+	/** 跨俱乐部：当前用户参与的全部会话（联盟总群主的跨俱乐部私聊在这里出现）。 */
+	ListConversationsByUser(ctx context.Context, guuid string, offset, limit int) ([]ConversationItem, int, error)
 
 	GetMessage(ctx context.Context, conversationID, messageID string) (Message, bool, error)
 	FindMessageByClientID(ctx context.Context, conversationID, senderGuuid, clientID string) (Message, bool, error)
@@ -289,9 +295,9 @@ type MemberView struct {
 	CanChat bool   `json:"canChat"`
 }
 
-// Members 分页返回当前俱乐部成员，不包含自己。
+// Members 分页返回当前俱乐部成员，不包含自己。联盟总群主可查看联盟内任意俱乐部。
 func (s *Service) Members(ctx context.Context, session Session, clubID, keyword string, page, pageSize int) (MemberPage, error) {
-	me, err := s.requireMembership(ctx, session.Guuid, clubID)
+	me, err := s.viewerForClub(ctx, session, clubID)
 	if err != nil {
 		return MemberPage{}, err
 	}
@@ -318,7 +324,7 @@ func (s *Service) Members(ctx context.Context, session Session, clubID, keyword 
 		views = append(views, MemberView{
 			Guuid: peer.Guuid, Name: peer.Name, Note: peer.Note, Avatar: peer.Avatar,
 			Role: peer.Role, Online: member.Online,
-			CanChat: CanCreateFromMemberList(me.Role),
+			CanChat: CanCreateFromMemberList(me.Role) || me.IsUnionOwner,
 		})
 	}
 	return MemberPage{ClubID: clubID, Items: views, Page: page, PageSize: pageSize,
@@ -347,9 +353,9 @@ type AllConversationPage struct {
 	HasMore  bool               `json:"hasMore"`
 }
 
-// Conversations 返回当前俱乐部会话与玩家默认入口。
+// Conversations 返回当前俱乐部会话与玩家固定入口。
 func (s *Service) Conversations(ctx context.Context, session Session, clubID string, page, pageSize int) (ConversationPage, error) {
-	me, err := s.requireMembership(ctx, session.Guuid, clubID)
+	me, err := s.viewerForClub(ctx, session, clubID)
 	if err != nil {
 		return ConversationPage{}, err
 	}
@@ -380,8 +386,9 @@ func (s *Service) Conversations(ctx context.Context, session Session, clubID str
 	}, nil
 }
 
-// AllConversations 返回当前账号所有已加入俱乐部的会话摘要，并按最新消息统一排序。
-// 俱乐部只是列表项的归属字段，不会合并同名玩家或跨俱乐部消息历史。
+// AllConversations 返回当前账号所有会话摘要，并按最新消息统一排序。
+// 会话不跨俱乐部合并：同一个人在多个俱乐部各有一条；联盟总群主的跨俱乐部
+// 会话按对方所在俱乐部归属，因此这里不能只遍历“我的俱乐部”。
 func (s *Service) AllConversations(ctx context.Context, session Session, page, pageSize int) (AllConversationPage, error) {
 	if page < 1 {
 		page = 1
@@ -392,36 +399,50 @@ func (s *Service) AllConversations(ctx context.Context, session Session, page, p
 	if pageSize > MaxPageSize {
 		pageSize = MaxPageSize
 	}
+	all := make([]ConversationView, 0)
+	seen := map[string]bool{}
+	for offset := 0; ; offset += MaxPageSize {
+		items, total, err := s.store.ListConversationsByUser(ctx, session.Guuid, offset, MaxPageSize)
+		if err != nil {
+			return AllConversationPage{}, err
+		}
+		for _, item := range items {
+			view, ok := s.conversationView(ctx, session, item)
+			if !ok {
+				continue
+			}
+			key := view.ClubID + "|" + view.Peer.Guuid
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			all = append(all, view)
+		}
+		if offset+len(items) >= total || len(items) == 0 {
+			break
+		}
+	}
+	// 固定入口按俱乐部补齐：本俱乐部老板、直属上级代理、联盟大群主。
 	clubs, err := s.directory.ListMyClubs(ctx, session.Guuid)
 	if err != nil {
 		return AllConversationPage{}, err
 	}
-	all := make([]ConversationView, 0)
 	for _, club := range clubs {
-		me, err := s.requireMembership(ctx, session.Guuid, club.ClubID)
+		me, err := s.viewerForClub(ctx, session, club.ClubID)
 		if err != nil {
-			return AllConversationPage{}, err
+			continue
 		}
-		// 一次俱乐部最多取 MaxPageSize，继续翻页直到该俱乐部的所有摘要都取完，
-		// 再在内存中做跨俱乐部排序和全局分页，避免某个俱乐部占满首页。
-		for offset := 0; ; offset += MaxPageSize {
-			items, total, err := s.store.ListConversations(ctx, club.ClubID, session.Guuid, offset, MaxPageSize)
-			if err != nil {
-				return AllConversationPage{}, err
+		for _, target := range s.defaultTargets(ctx, club, me) {
+			key := club.ClubID + "|" + target.Guuid
+			if seen[key] {
+				continue
 			}
-			if err := s.enrichConversationPeers(ctx, club.ClubID, items); err != nil {
-				return AllConversationPage{}, relationUnavailable(err)
-			}
-			all = append(all, s.buildConversationViews(ctx, session, club, me, items)...)
-			if offset+len(items) >= total || len(items) == 0 {
-				break
-			}
+			seen[key] = true
+			all = append(all, s.fixedConversationView(ctx, session, club, me, target))
 		}
 	}
 	sort.SliceStable(all, func(i, j int) bool {
 		// 排序优先级：有未读的在前 → 固定上级入口次之 → 最后消息时间倒序。
-		// 之前把 IsDefaultTarget 无条件置顶，导致别人刚发来消息的会话被压到它后面，
-		// 看起来就是「有新消息的没排到最前面」。
 		unreadI := all[i].Unread > 0
 		unreadJ := all[j].Unread > 0
 		if unreadI != unreadJ {
@@ -456,6 +477,62 @@ func (s *Service) AllConversations(ctx context.Context, session Session, page, p
 	return AllConversationPage{Items: items, Page: page, PageSize: pageSize, HasMore: end < len(all)}, nil
 }
 
+// conversationView 把一个真实会话转成列表项。俱乐部或查看者权限已失效时跳过。
+func (s *Service) conversationView(ctx context.Context, session Session, item ConversationItem) (ConversationView, bool) {
+	conv := item.Conversation
+	club, err := s.directory.GetClub(ctx, conv.ClubID)
+	if err != nil {
+		return ConversationView{}, false
+	}
+	me, err := s.viewerForClub(ctx, session, club.ClubID)
+	if err != nil {
+		return ConversationView{}, false
+	}
+	peer, peerOK, err := s.peerForClub(ctx, club.ClubID, item.PeerGuuid)
+	if err != nil {
+		return ConversationView{}, false
+	}
+	if !peerOK {
+		// 对方已退出：保留历史摘要，用已知资料或 guuid 占位。
+		peer = Member{Guuid: item.PeerGuuid, Name: item.PeerGuuid, Role: RoleMember}
+		if strings.TrimSpace(item.Peer.Guuid) != "" {
+			peer = item.Peer
+		}
+	}
+	return ConversationView{
+		ConversationID:  conv.ID,
+		IsDefaultTarget: s.isFixedTarget(ctx, club, me, item.PeerGuuid),
+		ID:              conv.ID,
+		ClubID:          club.ClubID,
+		ClubName:        club.ClubName,
+		Peer:            s.peerView(ctx, session, me, club.ClubID, peer),
+		LastMessage:     item.LastText,
+		LastMessageType: item.LastType,
+		LastMessageAt:   fmtMilliTime(conv.LastMessageAt),
+		Unread:          item.Unread,
+		CanSend:         peerOK,
+	}, true
+}
+
+// fixedConversationView 生成固定联系人入口；已有隐藏会话时也复用同一 conversationId。
+func (s *Service) fixedConversationView(ctx context.Context, session Session, club Club, me Member, target Member) ConversationView {
+	view := ConversationView{
+		IsDefaultTarget: true,
+		ClubID:          club.ClubID,
+		ClubName:        club.ClubName,
+		Peer:            s.peerView(ctx, session, me, club.ClubID, target),
+		CanSend:         true,
+	}
+	_, _, pairKey := PairKey(session.Guuid, target.Guuid)
+	if existing, ok, err := s.store.FindConversation(ctx, club.ClubID, pairKey); err == nil && ok {
+		view.ConversationID = existing.ID
+		view.ID = existing.ID
+		view.LastMessage, view.LastMessageType = s.lastPreview(ctx, existing)
+		view.LastMessageAt = fmtMilliTime(existing.LastMessageAt)
+	}
+	return view
+}
+
 func (s *Service) enrichConversationPeers(ctx context.Context, clubID string, items []ConversationItem) error {
 	for i := range items {
 		if items[i].PeerGuuid == "" {
@@ -476,48 +553,19 @@ func (s *Service) buildConversationViews(ctx context.Context, session Session, c
 	views := make([]ConversationView, 0, len(items)+3)
 	seen := map[string]bool{}
 	for _, item := range items {
-		view := ConversationView{
-			ConversationID:  item.Conversation.ID,
-			IsDefaultTarget: isFixedSuperiorTarget(me.SuperiorAgentGuuid, item.PeerGuuid),
-			ID:              item.Conversation.ID,
-			ClubID:          club.ClubID,
-			ClubName:        club.ClubName,
-			Peer:            s.peerView(ctx, session, me, club.ClubID, item.Peer),
-			LastMessage:     item.LastText,
-			LastMessageType: item.LastType,
-			// 跨俱乐部排序需要保留毫秒，否则同一秒内的新消息会被俱乐部名称排序打乱。
-			LastMessageAt: fmtMilliTime(item.Conversation.LastMessageAt),
-			Unread:        item.Unread,
-			HiddenAt:      "",
-			CanSend:       true,
-		}
-		if view.Peer.Name == "" {
-			view.Peer.Name = item.PeerGuuid
-			view.Peer.Role = RoleMember
+		view, ok := s.conversationView(ctx, session, item)
+		if !ok {
+			continue
 		}
 		seen[item.PeerGuuid] = true
 		views = append(views, view)
 	}
-	for _, target := range s.defaultTargets(ctx, club.ClubID, me) {
+	for _, target := range s.defaultTargets(ctx, club, me) {
 		if seen[target.Guuid] {
 			continue
 		}
-		view := ConversationView{
-			IsDefaultTarget: true,
-			ClubID:          club.ClubID,
-			ClubName:        club.ClubName,
-			Peer:            s.peerView(ctx, session, me, club.ClubID, target),
-			CanSend:         true,
-		}
-		_, _, pairKey := PairKey(session.Guuid, target.Guuid)
-		if existing, ok, err := s.store.FindConversation(ctx, club.ClubID, pairKey); err == nil && ok {
-			view.ConversationID = existing.ID
-			view.ID = existing.ID
-			view.LastMessage, view.LastMessageType = s.lastPreview(ctx, existing)
-			view.LastMessageAt = fmtMilliTime(existing.LastMessageAt)
-		}
 		seen[target.Guuid] = true
-		views = append(views, view)
+		views = append(views, s.fixedConversationView(ctx, session, club, me, target))
 	}
 	return views
 }
@@ -533,27 +581,40 @@ func (s *Service) lastPreview(ctx context.Context, conv Conversation) (string, s
 	return previewText(msg), msg.MessageType
 }
 
-// defaultTargets 为有直属上级代理的俱乐部成员固定生成入口，并过滤无效关系。
-func (s *Service) defaultTargets(ctx context.Context, clubID string, me Member) []Member {
-	var result []Member
-	seen := map[string]bool{me.Guuid: true}
-	candidates := []string{me.SuperiorAgentGuuid}
-	for _, guuid := range candidates {
-		guuid = strings.TrimSpace(guuid)
+// defaultTargets 返回固定联系人：直属上级代理、本俱乐部老板、联盟大群主。
+// 三代关系重合时按顺序去重；对方已退出俱乐部或不存在时跳过。
+func (s *Service) defaultTargets(ctx context.Context, club Club, me Member) []Member {
+	result := make([]Member, 0, 3)
+	// 大群主在联盟内没有需要固定置顶的上级/老板入口，直接用成员列表找人。
+	if me.IsUnionOwner || me.Role == RoleUnionOwner {
+		return result
+	}
+	seen := map[string]bool{strings.TrimSpace(me.Guuid): true}
+	add := func(member Member) {
+		guuid := strings.TrimSpace(member.Guuid)
 		if guuid == "" || seen[guuid] {
-			continue
-		}
-		member, ok, err := s.directory.GetMember(ctx, clubID, guuid)
-		if err != nil || !ok {
-			continue
-		}
-		// upper_guuid 必须仍指向本俱乐部的代理链节点；创建者作为根代理也
-		// 是合法直属上级。避免脏关系把普通成员显示成固定上级入口。
-		if member.Role != RoleAgent && member.Role != RoleLeader && member.Role != RoleOwner {
-			continue
+			return
 		}
 		seen[guuid] = true
 		result = append(result, member)
+	}
+	if strings.TrimSpace(me.SuperiorAgentGuuid) != "" {
+		if member, ok, err := s.directory.GetMember(ctx, club.ClubID, me.SuperiorAgentGuuid); err == nil && ok {
+			// upper_guuid 必须仍指向本俱乐部的代理链节点；创建者作为根代理也是合法直属上级。
+			if member.Role == RoleAgent || member.Role == RoleLeader || member.Role == RoleOwner || member.Role == RoleUnionOwner {
+				add(member)
+			}
+		}
+	}
+	if strings.TrimSpace(club.OwnerGuuid) != "" {
+		if member, ok, err := s.directory.GetMember(ctx, club.ClubID, club.OwnerGuuid); err == nil && ok {
+			add(member)
+		}
+	}
+	if union, ok, err := s.directory.GetUnionByClub(ctx, club.ClubID); err == nil && ok {
+		if member, ok, err := s.peerForClub(ctx, club.ClubID, union.OwnerGuuid); err == nil && ok {
+			add(member)
+		}
 	}
 	return result
 }
@@ -562,12 +623,23 @@ func isFixedSuperiorTarget(superiorGuuid, peerGuuid string) bool {
 	return strings.TrimSpace(superiorGuuid) != "" && strings.TrimSpace(superiorGuuid) == strings.TrimSpace(peerGuuid)
 }
 
-func (s *Service) isFixedSuperiorConversation(ctx context.Context, session Session, conv Conversation, peerGuuid string) (bool, error) {
-	me, err := s.requireMembership(ctx, session.Guuid, conv.ClubID)
-	if err != nil {
-		return false, err
+// isFixedTarget 判断会话是否是不能删除的固定入口：直属上级代理、本俱乐部老板、联盟大群主。
+func (s *Service) isFixedTarget(ctx context.Context, club Club, me Member, peerGuuid string) bool {
+	peerGuuid = strings.TrimSpace(peerGuuid)
+	if peerGuuid == "" {
+		return false
 	}
-	return isFixedSuperiorTarget(me.SuperiorAgentGuuid, peerGuuid), nil
+	if isFixedSuperiorTarget(me.SuperiorAgentGuuid, peerGuuid) {
+		return true
+	}
+	if strings.TrimSpace(club.OwnerGuuid) == peerGuuid {
+		return true
+	}
+	if union, ok, err := s.directory.GetUnionByClub(ctx, club.ClubID); err == nil && ok &&
+		strings.TrimSpace(union.OwnerGuuid) == peerGuuid {
+		return true
+	}
+	return false
 }
 
 func (s *Service) peerView(ctx context.Context, session Session, viewer Member, clubID string, member Member) PeerView {
@@ -608,6 +680,10 @@ func (s *Service) canSeeMemberNote(ctx context.Context, clubID string, viewer, t
 }
 
 // CreateConversation 创建或获取会话（幂等）。同时清除当前用户的隐藏状态。
+//
+// clubID 是会话归属俱乐部：同俱乐部聊天就是该俱乐部；联盟总群主跨俱乐部
+// 聊天时是对方所在的俱乐部。普通成员只能和本俱乐部成员、以及本联盟大群主
+// 建会话；大群主可以和联盟内任意成员建会话。
 func (s *Service) CreateConversation(ctx context.Context, session Session, clubID, peerGuuid string) (ConversationView, error) {
 	peerGuuid = strings.TrimSpace(peerGuuid)
 	if peerGuuid == "" {
@@ -620,11 +696,11 @@ func (s *Service) CreateConversation(ctx context.Context, session Session, clubI
 	if err != nil {
 		return ConversationView{}, err
 	}
-	me, err := s.requireMembership(ctx, session.Guuid, clubID)
+	me, err := s.viewerForClub(ctx, session, clubID)
 	if err != nil {
 		return ConversationView{}, err
 	}
-	peer, ok, err := s.directory.GetMember(ctx, clubID, peerGuuid)
+	peer, ok, err := s.peerForClub(ctx, clubID, peerGuuid)
 	if err != nil {
 		return ConversationView{}, relationUnavailable(err)
 	}
@@ -682,7 +758,7 @@ type MessagePage struct {
 
 // Messages 查询历史（before 游标）或增量（after 消息 ID）。
 func (s *Service) Messages(ctx context.Context, session Session, conversationID, before, after string, limit int) (MessagePage, error) {
-	conv, role, peer, err := s.requireConversation(ctx, session, conversationID)
+	conv, me, peer, err := s.requireConversation(ctx, session, conversationID)
 	if err != nil {
 		return MessagePage{}, err
 	}
@@ -692,14 +768,15 @@ func (s *Service) Messages(ctx context.Context, session Session, conversationID,
 	if limit > MaxPageSize {
 		limit = MaxPageSize
 	}
-	fixedSuperior, err := s.isFixedSuperiorConversation(ctx, session, conv, peer.Guuid)
+	club, err := s.directory.GetClub(ctx, conv.ClubID)
 	if err != nil {
 		return MessagePage{}, err
 	}
-	page := MessagePage{ConversationID: conv.ID, Peer: peer, Role: role,
-		CanDelete: CanHideConversation(role) && !fixedSuperior, CanSend: true, Items: []MessageView{}}
+	fixed := s.isFixedTarget(ctx, club, me, peer.Guuid)
+	page := MessagePage{ConversationID: conv.ID, Peer: peer, Role: me.Role,
+		CanDelete: CanHideConversation(me.Role) && !fixed, CanSend: true, Items: []MessageView{}}
 	// 对方已退出俱乐部：保留历史可读，但不能再发送。
-	peerMember, peerOK, err := s.directory.GetMember(ctx, conv.ClubID, peer.Guuid)
+	_, peerOK, err := s.peerForClub(ctx, conv.ClubID, peer.Guuid)
 	if err != nil {
 		return MessagePage{}, relationUnavailable(err)
 	}
@@ -736,7 +813,6 @@ func (s *Service) Messages(ctx context.Context, session Session, conversationID,
 		} else {
 			page.AfterCursor = cursorMsg.ID
 		}
-		_ = peerMember
 		return page, nil
 	}
 
@@ -790,15 +866,12 @@ func (s *Service) SendMessage(ctx context.Context, session Session, conversation
 	if err != nil {
 		return MessageView{}, false, err
 	}
-	// 双方必须仍属于该俱乐部；关系服务不可用时拒绝发送，不能降级放行。
-	if _, err := s.requireMembership(ctx, session.Guuid, conv.ClubID); err != nil {
-		return MessageView{}, false, err
-	}
+	// 接收方必须仍在该俱乐部，或仍是该俱乐部的联盟大群主。
 	receiver := conv.PeerGuuid(session.Guuid)
 	if receiver == "" || receiver == session.Guuid {
 		return MessageView{}, false, errConvForbidden
 	}
-	if _, ok, err := s.directory.GetMember(ctx, conv.ClubID, receiver); err != nil {
+	if _, ok, err := s.peerForClub(ctx, conv.ClubID, receiver); err != nil {
 		return MessageView{}, false, relationUnavailable(err)
 	} else if !ok {
 		return MessageView{}, false, errPeerNotClubMember
@@ -941,17 +1014,18 @@ func (s *Service) MarkRead(ctx context.Context, session Session, conversationID,
 	return s.store.SetLastRead(ctx, conv.ID, session.Guuid, messageID)
 }
 
-// Hide 隐藏当前用户的会话入口（删除）。角色不足时返回 DIRECT_DELETE_FORBIDDEN。
+// Hide 隐藏当前用户的会话入口（删除）。固定联系人（上级代理/俱乐部老板/大群主）
+// 或角色不足时返回 DIRECT_DELETE_FORBIDDEN。
 func (s *Service) Hide(ctx context.Context, session Session, conversationID string) error {
-	conv, role, peer, err := s.requireConversation(ctx, session, conversationID)
+	conv, me, peer, err := s.requireConversation(ctx, session, conversationID)
 	if err != nil {
 		return err
 	}
-	fixedSuperior, err := s.isFixedSuperiorConversation(ctx, session, conv, peer.Guuid)
+	club, err := s.directory.GetClub(ctx, conv.ClubID)
 	if err != nil {
 		return err
 	}
-	if !CanHideConversation(role) || fixedSuperior {
+	if !CanHideConversation(me.Role) || s.isFixedTarget(ctx, club, me, peer.Guuid) {
 		return errDeleteForbidden
 	}
 	// 只更新当前参与者的隐藏状态，不删除消息、不影响对方。
@@ -990,9 +1064,6 @@ type AttachmentTicket struct {
 func (s *Service) CreateAttachment(ctx context.Context, session Session, conversationID string, request AttachmentRequest) (AttachmentTicket, error) {
 	conv, _, _, err := s.requireConversation(ctx, session, conversationID)
 	if err != nil {
-		return AttachmentTicket{}, err
-	}
-	if _, err := s.requireMembership(ctx, session.Guuid, conv.ClubID); err != nil {
 		return AttachmentTicket{}, err
 	}
 	id, err := NewID()
@@ -1131,10 +1202,14 @@ func (s *Service) CompleteAttachment(ctx context.Context, session Session, conve
 
 func (s *Service) senderRole(ctx context.Context, clubID, guuid string) string {
 	member, ok, err := s.directory.GetMember(ctx, clubID, guuid)
-	if err != nil || !ok {
-		return RoleMember
+	if err == nil && ok {
+		return member.Role
 	}
-	return member.Role
+	if union, ok, err := s.directory.GetUnionByClub(ctx, clubID); err == nil && ok &&
+		strings.TrimSpace(union.OwnerGuuid) == strings.TrimSpace(guuid) {
+		return RoleUnionOwner
+	}
+	return RoleMember
 }
 
 // requireMembership 校验当前用户是否属于俱乐部。
@@ -1160,33 +1235,113 @@ func (s *Service) requireMembership(ctx context.Context, guuid, clubID string) (
 	return member, nil
 }
 
-// requireConversation 校验会话归属：会话存在、当前用户是参与者、仍属于该俱乐部。
-func (s *Service) requireConversation(ctx context.Context, session Session, conversationID string) (Conversation, string, PeerView, error) {
+// viewerForClub 返回当前用户在俱乐部里的身份。联盟总群主不是其他俱乐部的
+// 成员，但对联盟内任意俱乐部使用合成身份 union_owner，可读成员、可发起会话。
+func (s *Service) viewerForClub(ctx context.Context, session Session, clubID string) (Member, error) {
+	clubID = strings.TrimSpace(clubID)
+	if clubID == "" {
+		return Member{}, errClubNotFound
+	}
+	if _, err := s.directory.GetClub(ctx, clubID); err != nil {
+		var biz *Error
+		if errors.As(err, &biz) {
+			return Member{}, biz
+		}
+		return Member{}, relationUnavailable(err)
+	}
+	member, ok, err := s.directory.GetMember(ctx, clubID, session.Guuid)
+	if err != nil {
+		return Member{}, relationUnavailable(err)
+	}
+	if ok {
+		if union, hasUnion, unionErr := s.directory.GetUnionByClub(ctx, clubID); unionErr == nil && hasUnion &&
+			strings.TrimSpace(union.OwnerGuuid) == strings.TrimSpace(session.Guuid) {
+			member.IsUnionOwner = true
+		}
+		return member, nil
+	}
+	union, ok, err := s.directory.GetUnionByClub(ctx, clubID)
+	if err != nil {
+		return Member{}, relationUnavailable(err)
+	}
+	if ok && strings.TrimSpace(union.OwnerGuuid) == strings.TrimSpace(session.Guuid) {
+		name := strings.TrimSpace(session.Name)
+		if name == "" {
+			name = session.Guuid
+		}
+		return Member{Guuid: session.Guuid, Name: name, Avatar: session.Avatar, Role: RoleUnionOwner}, nil
+	}
+	return Member{}, errNotClubMember
+}
+
+// peerForClub 读取会话对方。联盟总群主不在对方俱乐部成员表里，需要用
+// club_union_info.owner_guuid 判定，并从账号表补昵称头像。
+func (s *Service) peerForClub(ctx context.Context, clubID, peerGuuid string) (Member, bool, error) {
+	peerGuuid = strings.TrimSpace(peerGuuid)
+	if peerGuuid == "" {
+		return Member{}, false, nil
+	}
+	member, ok, err := s.directory.GetMember(ctx, clubID, peerGuuid)
+	if err != nil {
+		return Member{}, false, err
+	}
+	if ok {
+		if union, hasUnion, unionErr := s.directory.GetUnionByClub(ctx, clubID); unionErr == nil && hasUnion &&
+			strings.TrimSpace(union.OwnerGuuid) == peerGuuid {
+			member.IsUnionOwner = true
+		}
+		return member, true, nil
+	}
+	union, ok, err := s.directory.GetUnionByClub(ctx, clubID)
+	if err != nil || !ok {
+		return Member{}, false, err
+	}
+	if strings.TrimSpace(union.OwnerGuuid) != peerGuuid {
+		return Member{}, false, nil
+	}
+	user, has, err := s.directory.GetAccount(ctx, peerGuuid)
+	if err != nil {
+		return Member{}, false, err
+	}
+	name := peerGuuid
+	avatar := ""
+	if has {
+		if strings.TrimSpace(user.Name) != "" {
+			name = user.Name
+		}
+		avatar = user.Avatar
+	}
+	return Member{Guuid: peerGuuid, Name: name, Avatar: avatar, Role: RoleUnionOwner}, true, nil
+}
+
+// requireConversation 校验会话归属：会话存在、当前用户是参与者，并且仍是该
+// 俱乐部成员或该俱乐部的联盟大群主。
+func (s *Service) requireConversation(ctx context.Context, session Session, conversationID string) (Conversation, Member, PeerView, error) {
 	conv, ok, err := s.store.GetConversation(ctx, strings.TrimSpace(conversationID))
 	if err != nil {
-		return Conversation{}, "", PeerView{}, err
+		return Conversation{}, Member{}, PeerView{}, err
 	}
 	if !ok {
-		return Conversation{}, "", PeerView{}, errConvMissing
+		return Conversation{}, Member{}, PeerView{}, errConvMissing
 	}
 	participant, ok, err := s.store.GetParticipant(ctx, conv.ID, session.Guuid)
 	if err != nil {
-		return Conversation{}, "", PeerView{}, err
+		return Conversation{}, Member{}, PeerView{}, err
 	}
 	if !ok {
-		return Conversation{}, "", PeerView{}, errConvForbidden
+		return Conversation{}, Member{}, PeerView{}, errConvForbidden
 	}
 	_ = participant
-	me, err := s.requireMembership(ctx, session.Guuid, conv.ClubID)
+	me, err := s.viewerForClub(ctx, session, conv.ClubID)
 	if err != nil {
-		return Conversation{}, "", PeerView{}, err
+		return Conversation{}, Member{}, PeerView{}, err
 	}
 	peerGuuid := conv.PeerGuuid(session.Guuid)
 	peer := PeerView{Guuid: peerGuuid, Name: peerGuuid, Role: RoleMember}
-	if member, ok, err := s.directory.GetMember(ctx, conv.ClubID, peerGuuid); err == nil && ok {
+	if member, ok, err := s.peerForClub(ctx, conv.ClubID, peerGuuid); err == nil && ok {
 		peer = s.peerView(ctx, session, me, conv.ClubID, member)
 	}
-	return conv, me.Role, peer, nil
+	return conv, me, peer, nil
 }
 
 // messageViews 组装消息返回结构（含临时媒体地址）。

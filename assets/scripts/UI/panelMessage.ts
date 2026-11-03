@@ -251,9 +251,9 @@ export default class panelMessage extends UIPanelViewBase {
                 name += "（" + item.peer.note + "）";
             if(item.clubName !== "") {
                 name += " [" + item.clubName + "]";
-                // 俱乐部名称后明确标识群主/盟主，避免玩家只看到名字而不知道对方身份。
+                // 俱乐部名称后明确标识老板/大群主，避免玩家只看到名字而不知道对方身份。
                 let peerRole = item.peer == null ? "" : String(item.peer.role || "");
-                if(peerRole === "owner" || peerRole === "leader")
+                if(peerRole === "owner" || peerRole === "union_owner")
                     name += "（" + DirectChatManager.RoleName(peerRole) + "）";
             }
             nameLabel.string = name;

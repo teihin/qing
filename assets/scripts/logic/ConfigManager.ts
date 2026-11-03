@@ -28,6 +28,8 @@ export default class ConfigManager extends cc.Component {
     public static readonly CONSUME_FLIP:string = "翻牌";
     /** 创建俱乐部收一次费，默认 10000 钻；成功受理后才扣，见 panelMain.CreateClub。 */
     public static readonly CONSUME_CREATE_CLUB:string = "创建俱乐部";
+    /** 创建联盟收一次费，默认 10000 钻；成功受理后才扣，见 panelMain.CreateUnion。 */
+    public static readonly CONSUME_CREATE_UNION:string = "创建联盟";
     // 注：VIP 三档（购买VIP月卡/半年卡/年卡）已停用，2026-10-26 起没有 VIP 消费，
     //     后台配置页也不再维护这三项；客户端 VIP 面板只保留信息展示。
 
@@ -47,7 +49,8 @@ export default class ConfigManager extends cc.Component {
         "切牌":1,
         "举报":50,
         "翻牌":500,
-        "创建俱乐部":10000
+        "创建俱乐部":10000,
+        "创建联盟":10000
     };
 
     /** 后台下发的钻石单价，key 为消费项名。 */

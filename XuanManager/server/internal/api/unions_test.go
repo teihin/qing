@@ -38,6 +38,22 @@ func TestNormalizeUnionQuotaReasonTrimsAndValidates(t *testing.T) {
 	}
 }
 
+func TestNormalizeUnionQuotaAction(t *testing.T) {
+	for _, test := range []struct{ input, want string }{
+		{"", "add"},
+		{" ADD ", "add"},
+		{"subtract", "subtract"},
+	} {
+		value, err := normalizeUnionQuotaAction(test.input)
+		if err != nil || value != test.want {
+			t.Fatalf("action %q: got %q %v, want %q", test.input, value, err, test.want)
+		}
+	}
+	if _, err := normalizeUnionQuotaAction("remove"); err == nil {
+		t.Fatal("unknown action should be rejected")
+	}
+}
+
 func TestAdjustUnionQuotaValidatesInputBeforeTouchingGameServer(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -47,7 +63,7 @@ func TestAdjustUnionQuotaValidatesInputBeforeTouchingGameServer(t *testing.T) {
 		{"bad union id", "abc", `{"action":"add","amountYuan":100,"reason":"运营注资","confirm":true}`},
 		{"zero amount", "123456", `{"action":"add","amountYuan":0,"reason":"运营注资","confirm":true}`},
 		{"negative amount", "123456", `{"action":"add","amountYuan":-100,"reason":"运营注资","confirm":true}`},
-		{"subtract", "123456", `{"action":"subtract","amountYuan":100,"reason":"运营注资","confirm":true}`},
+		{"unknown action", "123456", `{"action":"remove","amountYuan":100,"reason":"运营注资","confirm":true}`},
 		{"missing confirm", "123456", `{"action":"add","amountYuan":100,"reason":"运营注资"}`},
 		{"short reason", "123456", `{"action":"add","amountYuan":100,"reason":"a","confirm":true}`},
 		{"too large", "123456", `{"action":"add","amountYuan":1000001,"reason":"运营注资","confirm":true}`},

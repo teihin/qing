@@ -1,12 +1,12 @@
 {
-  "siteName": "BY 官方下载",
-  "gameName": "BY",
+  "siteName": "BF 官方下载",
+  "gameName": "BF",
   "versionText": "官方最新版",
   "promotionSiteUrl": "https://154-37-155-17.nip.io/webhome/",
   "androidApkUrl": "./downloads/BY.apk",
-  "iosProfileUrl": "./downloads/BY.mobileconfig",
+  "iosProfileUrl": "./downloads/BF.mobileconfig",
   "iosGameUrl": "https://154-37-155-17.nip.io/web-mobile/",
   "profileIdentifier": "io.sslip.154-37-155-17.eightl.webclip",
-  "profileOrganization": "BY",
-  "profileDescription": "BY苹果签名版"
+  "profileOrganization": "BF",
+  "profileDescription": "BF苹果签名版"
 }

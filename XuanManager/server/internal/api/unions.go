@@ -18,8 +18,8 @@ import (
 //   - club_guuid_info       俱乐部归属（union_id）与俱乐部可用额度（union_quota，单位分）
 //   - tbl_Account           俱乐部创建者（sm_club_make / sm_club_make2）
 //
-// 平台后台只能给联盟池注资（游戏命令「增加_联盟_额度」，仅 boss），
-// 俱乐部额度由联盟总群主在游戏内用「授信_联盟_额度」下发。
+// 平台后台可以给联盟池加/减额度：都走游戏命令「增加_联盟_额度」（仅 boss），
+// 扣减按负数 quota_fen 传入。俱乐部额度仍由联盟总群主在游戏内用「授信_联盟_额度」下发。
 // 后台不直接改额度表，避免和游戏服形成第二份真相。
 
 // unionQuotaMutationMu 串行化联盟池注资：额度是钱，并发叠加会让回读校验失去意义。
@@ -252,6 +252,7 @@ type adjustUnionQuotaRequest struct {
 
 type unionQuotaAdjustmentResponse struct {
 	UnionID       string  `json:"unionId"`
+	Action        string  `json:"action"`
 	PoolQuotaFen  int64   `json:"poolQuotaFen"`
 	PoolQuotaYuan float64 `json:"poolQuotaYuan"`
 	DeltaFen      int64   `json:"deltaFen"`
@@ -259,8 +260,9 @@ type unionQuotaAdjustmentResponse struct {
 	Message       string  `json:"message"`
 }
 
-// handleAdjustUnionQuota 给联盟池注资。
-// 联盟模式 V2 只提供「增加_联盟_额度」（仅 boss、只能正数），
+// handleAdjustUnionQuota 给联盟池加/减额度。
+// 联盟模式 V2 的写入口仍是「增加_联盟_额度」（仅 boss）；扣减按负数 quota_fen 传，
+// 由游戏服按旧「增加_俱乐部_额度」的负值纠错口径处理。
 // 俱乐部额度由联盟总群主在游戏内授信，后台不越权分配。
 func (s *Server) handleAdjustUnionQuota(w http.ResponseWriter, r *http.Request, p principal) {
 	unionID, err := normalizeUnionID(r.PathValue("unionId"))
@@ -272,30 +274,37 @@ func (s *Server) handleAdjustUnionQuota(w http.ResponseWriter, r *http.Request, 
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	input.Action = strings.TrimSpace(strings.ToLower(input.Action))
-	if input.Action != "" && input.Action != "add" {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_ACTION", "平台只能增加联盟池额度，不能扣减或直接分配俱乐部额度")
+	input.Action, err = normalizeUnionQuotaAction(input.Action)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_ACTION", err.Error())
 		return
 	}
 	if math.IsNaN(input.AmountYuan) || math.IsInf(input.AmountYuan, 0) || input.AmountYuan <= 0 {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "注资金额必须大于 0")
+		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "调整金额必须大于 0")
 		return
 	}
 	deltaFen := int64(math.Round(input.AmountYuan * 100))
 	if deltaFen <= 0 {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "注资金额不能为 0")
+		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "调整金额不能为 0")
 		return
 	}
 	if deltaFen > 100000000 {
-		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "单次注资不能超过 100 万元")
+		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_AMOUNT", "单次调整不能超过 100 万元")
 		return
+	}
+	if input.Action == "subtract" {
+		deltaFen = -deltaFen
 	}
 	if input.Reason, err = normalizeUnionQuotaReason(input.Reason); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_ADJUSTMENT_REASON", err.Error())
 		return
 	}
 	if !input.Confirm {
-		writeError(w, http.StatusBadRequest, "ADJUSTMENT_CONFIRM_REQUIRED", "请确认本次操作会直接增加联盟池额度")
+		message := "请确认本次操作会直接增加联盟池额度"
+		if input.Action == "subtract" {
+			message = "请确认本次操作会直接扣减联盟池额度"
+		}
+		writeError(w, http.StatusBadRequest, "ADJUSTMENT_CONFIRM_REQUIRED", message)
 		return
 	}
 
@@ -320,10 +329,14 @@ func (s *Server) handleAdjustUnionQuota(w http.ResponseWriter, r *http.Request, 
 		writeError(w, http.StatusConflict, "QUOTA_CHANGED", "联盟池额度已变化，请刷新后重新操作")
 		return
 	}
+	if input.Action == "subtract" && before+deltaFen < 0 {
+		writeError(w, http.StatusConflict, "INSUFFICIENT_UNION_QUOTA", "扣减后联盟池额度会小于 0，请先核对当前额度")
+		return
+	}
 
 	operationContext := gameOperationContext("union-quota")
 	requestAudit := map[string]any{
-		"unionId": unionID, "action": "add", "deltaFen": deltaFen,
+		"unionId": unionID, "action": input.Action, "deltaFen": deltaFen,
 		"reason": input.Reason, "context": operationContext,
 	}
 	auditBefore := map[string]any{"poolQuotaFen": before}
@@ -348,8 +361,11 @@ func (s *Server) handleAdjustUnionQuota(w http.ResponseWriter, r *http.Request, 
 	after, afterErr := s.waitForUnionPoolQuota(ctx, unionID, before+deltaFen)
 	verified := afterErr == nil
 	message := "联盟池额度已增加，游戏服已回读校验"
+	if input.Action == "subtract" {
+		message = "联盟池额度已扣减，游戏服已回读校验"
+	}
 	if !verified {
-		message = "注资已提交，但未能回读校验；请稍后刷新联盟列表确认，不要重复提交"
+		message = "额度变更已提交，但未能回读校验；请稍后刷新联盟列表确认，不要重复提交"
 		s.logger.Error("verify union quota after adjust", "error", afterErr, "unionId", unionID)
 	}
 	resultCode := 0
@@ -359,7 +375,7 @@ func (s *Server) handleAdjustUnionQuota(w http.ResponseWriter, r *http.Request, 
 	s.audit(ctx, &p, "game.union.quota_adjust", "game_union", unionID, requestAudit, auditBefore,
 		map[string]any{"poolQuotaFen": after, "verified": verified}, resultCode, message, clientIP(r))
 	writeData(w, http.StatusOK, unionQuotaAdjustmentResponse{
-		UnionID: unionID, PoolQuotaFen: after, PoolQuotaYuan: float64(after) / 100,
+		UnionID: unionID, Action: input.Action, PoolQuotaFen: after, PoolQuotaYuan: float64(after) / 100,
 		DeltaFen: deltaFen, Verified: verified, Message: message,
 	})
 }
@@ -397,6 +413,17 @@ func normalizeUnionID(value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if !isSixDigitCode(value) {
 		return "", errors.New("联盟 ID 必须是 6 位数字")
+	}
+	return value, nil
+}
+
+func normalizeUnionQuotaAction(value string) (string, error) {
+	value = strings.TrimSpace(strings.ToLower(value))
+	if value == "" {
+		return "add", nil
+	}
+	if value != "add" && value != "subtract" {
+		return "", errors.New("请选择增加或扣减额度")
 	}
 	return value, nil
 }

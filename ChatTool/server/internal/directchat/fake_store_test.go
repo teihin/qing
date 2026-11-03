@@ -11,6 +11,8 @@ import (
 type fakeStore struct {
 	clubs        map[string]Club
 	members      map[string]map[string]Member // clubID -> guuid -> member
+	unions       map[string]Union             // clubID -> union
+	accounts     map[string]GameUser
 	convs        map[string]Conversation
 	participants map[string]map[string]Participant // convID -> guuid -> participant
 	messages     map[string]Message
@@ -23,6 +25,8 @@ func newFakeStore() *fakeStore {
 	return &fakeStore{
 		clubs:        map[string]Club{},
 		members:      map[string]map[string]Member{},
+		unions:       map[string]Union{},
+		accounts:     map[string]GameUser{},
 		convs:        map[string]Conversation{},
 		participants: map[string]map[string]Participant{},
 		messages:     map[string]Message{},
@@ -45,6 +49,34 @@ func (f *fakeStore) addClub(clubID, name, owner string, members ...Member) {
 }
 
 func (f *fakeStore) removeMember(clubID, guuid string) { delete(f.members[clubID], guuid) }
+
+// addUnion 让 clubID 成为 union 内的俱乐部；owner 账号自动登记，便于跨俱乐部展示。
+func (f *fakeStore) addUnion(clubID string, union Union) {
+	f.unions[clubID] = union
+	if _, ok := f.accounts[union.OwnerGuuid]; !ok {
+		f.accounts[union.OwnerGuuid] = GameUser{Guuid: union.OwnerGuuid, Name: "大群主" + union.OwnerGuuid}
+	}
+}
+
+func (f *fakeStore) GetUnionByClub(_ context.Context, clubID string) (Union, bool, error) {
+	union, ok := f.unions[clubID]
+	if !ok || union.ID == "" {
+		return Union{}, false, nil
+	}
+	return union, true, nil
+}
+
+func (f *fakeStore) GetAccount(_ context.Context, guuid string) (GameUser, bool, error) {
+	if user, ok := f.accounts[guuid]; ok {
+		return user, true, nil
+	}
+	for _, members := range f.members {
+		if member, ok := members[guuid]; ok {
+			return GameUser{Guuid: member.Guuid, Name: member.Name, Avatar: member.Avatar}, true, nil
+		}
+	}
+	return GameUser{}, false, nil
+}
 
 func (f *fakeStore) ListMyClubs(_ context.Context, guuid string) ([]Club, error) {
 	var result []Club
@@ -204,9 +236,17 @@ func (f *fakeStore) SetLastRead(_ context.Context, convID, guuid, messageID stri
 }
 
 func (f *fakeStore) ListConversations(ctx context.Context, clubID, guuid string, offset, limit int) ([]ConversationItem, int, error) {
+	return f.listConversations(ctx, clubID, guuid, offset, limit)
+}
+
+func (f *fakeStore) ListConversationsByUser(ctx context.Context, guuid string, offset, limit int) ([]ConversationItem, int, error) {
+	return f.listConversations(ctx, "", guuid, offset, limit)
+}
+
+func (f *fakeStore) listConversations(ctx context.Context, clubID, guuid string, offset, limit int) ([]ConversationItem, int, error) {
 	var items []ConversationItem
 	for convID, conv := range f.convs {
-		if conv.ClubID != clubID || conv.Status != "active" {
+		if (clubID != "" && conv.ClubID != clubID) || conv.Status != "active" {
 			continue
 		}
 		participant, ok := f.participants[convID][guuid]
@@ -214,7 +254,7 @@ func (f *fakeStore) ListConversations(ctx context.Context, clubID, guuid string,
 			continue
 		}
 		item := ConversationItem{Conversation: conv, HiddenAt: participant.HiddenAt, PeerGuuid: conv.PeerGuuid(guuid)}
-		item.Peer = f.members[clubID][item.PeerGuuid]
+		item.Peer = f.members[conv.ClubID][item.PeerGuuid]
 		if conv.LastMessageID != "" {
 			if msg, ok := f.messages[conv.LastMessageID]; ok {
 				item.LastType = msg.MessageType

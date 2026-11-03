@@ -4,11 +4,39 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-03 消息/直聊按联盟层级调整（服务端已部署，客户端未构建）
+
+- 固定联系人改为「直属上级代理 + 本俱乐部老板 + 联盟大群主」，三级按 guuid 去重；固定会话服务端拒绝删除。普通玩家默认看到老板与（入盟后的）大群主，代理保留直属上级。
+- 联盟大群主可查看联盟内任意俱乐部成员并与其一对一聊天，会话按对方俱乐部各一条；消息首页改为按参与者读取全部会话，跨俱乐部私聊可见。
+- 聊天页上下分只给俱乐部老板；赠送给老板和代理；代理不再显示上下分。大群主入口：盟友管理行点俱乐部名 → 成员列表 → 点人聊天，盟主虚拟行可直接对话。
+- 已改 `ChatTool/server/internal/directchat/*`、`DirectChatManager.ts`、`panelMessage.ts`、`panelMessageChat.ts`、`ClubManagementView.ts`、`ClubManagementApi.ts`、`panelMessageMembers.ts`。Go build/vet/test 与 TS 语法检查通过；二进制 `40fc3e4c…` 已部署（回滚 `bin/chattool.previous-union-chat-20261103-1915`），健康 200、联盟表只读可查；真实账号联调、Creator/真机待验证。详见[交接](handoffs/2026-11-03-direct-chat-union-permissions.md)。
+
+## 2026-11-03 我的页「入盟申请」审批入口（未构建、未真机）
+
+- 联盟区域新增「入盟申请」「盟友管理」按钮：总群主判定为「已入盟且 `unionIsOwner !== false`」，缺 `is_owner` 时保留旧值并用 `查询_我的_联盟` 成功兜底；身份牌按大群主/盟主/老板显示，代理统一「代理」。已入盟以 `info.union_id` 为准，额度失败不覆盖；`union_apply` 审核中置灰加入联盟。
+- 复用俱乐部申请弹窗：入盟申请逐条同意/拒绝（`同意_加入_联盟` / `拒绝_加入_联盟`），盟友管理列联盟池/俱乐部额度，支持增减；发现页、列表、卡片按权限显示。
+- 推送实时刷新：审批/盟友列表收到推送即刷新；额度推送同步顶部并重拉「我的联盟」
+- 卡片去掉「当前俱乐部」标题，俱乐部名/邀请码上移放大；俱乐部额度在邀请码行右侧；下方联盟区只放联盟徽记/联盟名(ID)/联盟池，与入盟申请/盟友管理同区；卡片 320 高、内容上移 60。TS/Prefab 检查通过；Creator 自动导入未刷新时需重编译/构建。详见[交接](handoffs/2026-11-03-club-union-apply-review.md)。
+
+## 2026-11-03 我的页与俱乐部列表显示联盟归属（未构建、未真机）
+
+- 「我的 → 当前俱乐部」标题行显示联盟徽记与 `联盟名(联盟号)`；俱乐部列表卡片对联盟俱乐部显示左上角徽记，名称改为 `俱乐部名(联盟名)`。新图 `assets/ImagesLuck/联盟/union_badge.png`。
+- 名称读 `查询_俱乐部_信息.union_name`、`ClubUnionQuota`、`ClubMyUnion`；缺失时创建者补查 `查询_我的_联盟`，失败回退联盟号；盟主端名称稳定性依赖服务端补字段。
+- TS 语法、Prefab 结构/贴图引用、按 Prefab 渲染预览通过；Creator 导入、真实回包、构建与真机待验证。详见[交接](handoffs/2026-11-03-club-union-display.md)。
+
+## 2026-11-03 我的页「创建联盟 / 加入联盟」入口（未构建、未真机）
+
+- 当前俱乐部卡片底部新增联盟分割线与两个按钮；仅俱乐部创建者且 `查询_联盟_额度` 确认未入盟时显示，已入盟/非创建者收起，卡片高度在 200/320 间切换。
+- 「创建联盟」复用创建俱乐部弹窗输入联盟名，提示并扣除默认 10000 钻（`创建_联盟` 受理后再发 `玩家_消费_命令_创建联盟`）；「加入联盟」复用加入俱乐部弹窗输入 6 位联盟号，发送 `申请_加入_联盟`。
+- 新金色图标与分割线由 ImageGen 生成，按钮底板复用 `agent_v8_button_base.png`；三张新图已写入 `.meta` 并被 Prefab 引用。
+- XuanManager 钻石消费价格目录补「创建联盟」默认 10000，后台可配置；11:03 后端 `7289909…` 已部署，回滚 `backups/xuanmanager.20261103-1102-rollback`，价格哈希需后台保存一次。
+- TS 语法、Creator 重新导入、Prefab/资源引用检查通过；真实回包、构建、真机与双账号联盟流程待验证。详见[交接](handoffs/2026-11-03-club-union-create-join-ui.md)。
+
 ## 2026-11-03 后台玩家管理：钻石余额 + 所在俱乐部（已部署）
 
-- 玩家列表改为钻石余额/所在俱乐部，去掉现金余额、等级/角色/直属代理；加减分改加减钻石。详情页签改为「基本资料/所在俱乐部/房间战绩」，俱乐部页显示角色、俱乐部金币、上级及下级。
-- 新增 `GET .../clubs`、`.../subordinates`、`POST .../stone-adjustments`；加减钻石校验基准与扣减上限，调用 `异步_设置_玩家_属性` 并回读 `sm_stone`。
-- 2026-11-03 已部署正式（后端 `6cb80fd0…`、前端 `index-DJL003ny.js`）；健康 200，三个新接口未登录均 401。真实数据与页面交互待验收，见[交接](handoffs/2026-11-03-admin-player-diamonds-clubs.md)。
+- 玩家列表改为钻石余额/所在俱乐部，去掉现金余额、等级/角色/直属代理；加减分改加减钻石。详情页签为「基本资料/所在俱乐部/房间战绩」，俱乐部页显示角色、俱乐部金币、上级及下级。
+- 新增 `GET .../clubs`、`.../subordinates`、`POST .../stone-adjustments`（校验基准与扣减上限，`异步_设置_玩家_属性` 后回读 `sm_stone`）。
+- 已部署正式（后端 `6cb80fd0…`、前端 `index-DJL003ny.js`）；健康 200、新接口未登录 401；数据与交互待验收，见[交接](handoffs/2026-11-03-admin-player-diamonds-clubs.md)。
 
 ## 2026-11-02 玩家设置「赠送」改口径 + 新增「上下分」（未构建、未真机）
 
@@ -17,10 +45,9 @@
 
 ## 2026-11-03 后台联盟管理与「调整群主额度」（已部署）
 
-- 新增 `/game/unions`（`game.union.view`）：联盟列表/联盟池/成员数，「详情」跳 `/game/clubs?unionId=...` 过滤下辖俱乐部。
-- 俱乐部列表新增联盟列、V2 额度（`club_guuid_info.union_quota`）和「调整群主额度」：平台只调用 `增加_联盟_额度` 给联盟池注资，俱乐部额度仍由总群主授信。
-- 09:53 已部署：后端 `8a3f2627…`、前端 `index-Dvwrp3Q8.js`，迁移 `042` 已执行；回滚 `backups/xuanmanager.20261103-0952-rollback` + `web.previous-union-management-20261103-0952`。未做登录态/注资验收。见[交接](handoffs/2026-11-03-admin-union-management.md)。
-- 09:59 按 club 模式在导航隐藏「代理管理/交易记录/交易黑名单」（模块与权限保留，standard 模式恢复）；见[交接](handoffs/2026-11-03-admin-club-mode-hidden-modules.md)。
+- 新增 `/game/unions`：联盟列表/联盟池/成员数，详情跳俱乐部管理；行内「加/减额度」调整联盟池。
+- 俱乐部列表加联盟列、V2 额度和「调整群主额度」：统一走 `增加_联盟_额度`（扣减传负数）；俱乐部额度仍由总群主授信。
+- 09:53 部署首版（迁移 `042`），13:49 部署加/减额度，后端 `37746a0d…`、前端 `index-DY4BzOQU.js`；回滚 `backups/xuanmanager.20261103-1349-rollback` + `web.previous-union-quota-20261103-1349`；登录态/注资扣减待验收。09:59 club 模式导航隐藏「代理管理/交易记录/交易黑名单」，模块与权限保留。
 
 ## 2026-11-03 房间战绩俱乐部信息 + 房间维护只读改造（已部署）
 
@@ -54,26 +81,15 @@
 
 ## 2026-11-01 俱乐部模式赠送金币路由（未构建、未真机）
 
-- “我的”页直赠在有当前俱乐部时调用 **`赠送_俱乐部_积分`**（`club_id / user_id / user_add_gold / user_pwd`，扣自己账户的积分、不动额度，双方须在同一授信代理下）；成员设置赠送、俱乐部房间内玩家头像赠送仍用 `添加_俱乐部_成员_积分`（代理按额度发筹码口径，是否同改待定）；无当前俱乐部或普通房仍保留大厅通用 `调用_方法_Exchange2`。
-- 服务端更新后，三条俱乐部赠送路径均先校验交易密码并发送 `user_pwd`；成员设置/头像入口成功后通知大厅刷新记录。
-- 2026-11-01 服务端失败回包会把上下文变为 `添加_俱乐部_成员_积分_club:gold:...`；`panelMain` 已截取其中真正的 `club:` 上下文，因此 `0x301` 会显示 `result.error`（如“请先设置交易密码”）。俱乐部赠送成功/关闭/再次打开会清空密码和输入内容，并忽略关闭后旧弹窗回包；遇到未设置交易密码时，确认提示会直接打开初始化交易密码界面，成员设置赠送还会先关闭赠送弹窗。
-- “赠送”页有当前俱乐部时查 **`查询_俱乐部_积分流水`**（`club_id` + `user_id` 留空=查自己 + **`only_add:1`** 只看「添加积分/积分赠送」+ `count/page`），同步回包只有空壳，列表由 **`ClubGoldWater`** 推送；该推送与「资金明细」页共用，客户端按最近一次请求的 context（`club:gold:add-record:` / `club:gold:water:`）分派到赠送列表或资金明细列表。流水没有对方 ID，记录行按 `opter_name` 显示操作人、`type` 缩成两字（添加/赠送/收到）；旧的 `AddMemberGoldList` 解析保留兼容。普通大厅仍查 `ExchangeInfo`。
-- 已改 `panelMain.ts`、`panelGivePad.ts`、`panelUserInfo.ts`；TypeScript 转译、赠送/密码/金币流水回归、请求字段静态断言、既有俱乐部协议桩回归和脚本/Prefab `git diff --check` 通过。Creator/真实服务器回包/构建/真机仍待验证。
-- 兑换钻石弹窗 `panelExchangeStone.ts` 在有当前俱乐部时读取 `Account.club_gold`，发送 `reqExChange2(..., "gold,<club_id>")`，余额校验/提示改为俱乐部金币，并监听 `set_club_gold`；无俱乐部时关闭入口/弹窗，顶部金币显示 0，不再回退到平台金币。
-- 无俱乐部时大厅“赠送/兑换钻石”入口、牌桌设置里的“兑换钻石”和牌桌玩家资料里的“赠送”均隐藏；无俱乐部金币余额统一显示 0。
+- 有当前俱乐部时，赠走 **`赠送_俱乐部_积分`**（扣自己积分、校验交易密码）；上下分仍走 `添加_俱乐部_成员_积分`；赠送流水查 `查询_俱乐部_积分流水 + only_add:1`，由 `ClubGoldWater` 推送。兑换钻石读 `Account.club_gold` 并带 `gold,<club_id>`；无俱乐部时相关入口隐藏。
+- 完整实现、失败回包 context 处理与交接链接见[归档](archive/2026-11-03/current-nov01-gift-routing.md)。
 
 ## 2026-11-01 后台俱乐部管理模块（已部署）
 
-- XuanManager 新增「俱乐部管理」（`/game/clubs`，迁移 `041`）：列出全部俱乐部 → 成员代理树 → 给群主调额度。已部署正式环境，二进制 `78f3e416…`。
-- 群主按 `sm_club_make`/`sm_club_make2` 用 `FIND_IN_SET` 反查（`club_guuid_info` 无 owner 列）。树按 `club_agent_info.upper_guuid` 嵌套，上级缺失/指错/成环进 `orphan` 并提示，不硬挂；`club_gold` 兼容数字与 `{"俱乐部ID":积分}`，`-99` 显示「暂无数据」。
-- **额度以 `club_agent_info.quota`（分）为准**：游戏服 `查询_俱乐部_额度` 只推异步 `GetClubQuota`，收不到同步回包，原实现会永远 `verified=false`；已改为读库，`NULL`=未授信而非 0。
-- 写操作只限俱乐部群主，输入元/换算分，扣减不得为负，回读校验失败标 `verified=false`，全程串行并写审计。
-- 真实数据验证通过：4 个俱乐部群主全部正确；`567671` 三层代理树 9 人、0 orphan；群主额度 900000 分、a2 100000 分；+1 元→900100 后已扣回还原 900000。非群主/超额/无 CSRF/未登录均按预期拦截。
-- 公网 index/js/css 三个资源哈希与本地构建逐字节一致；回滚点为 `bin/xuanmanager.previous-club-management-20261101`（`0c602dbd…`）+ 同名 `web.previous-…`。
-- 列表新增「群主额度」列（`ownerQuotaFen`，分→元），读 `club_agent_info.quota`，元组 `IN` 批量查不逐行；无记录/`NULL` 显示「未授信」而非 0。
-- 查询支持**俱乐部维度**（ID/名称/群主/状态/模式/抽成/成员数）与**玩家维度**（玩家 ID/名字反查其所在俱乐部，用 EXISTS，不重复出行），已部署。
-- **性能**：线上列表原 3.8s，根因是 `COALESCE(club_status,'')` 让索引失效（扫 89 万行 + filesort），改成直接比较后 3.7s→24ms；另给 Caddy 加 `encode gzip`，JS 741KB→200KB。现列表接口 7–13ms、页面查询 57ms。
-- 未验证：Creator、客户端（`assets/` 全程未改）。见[交接](handoffs/2026-11-01-admin-club-management.md)。
+- XuanManager 新增「俱乐部管理」（`/game/clubs`，迁移 `041`）：俱乐部列表 → 成员代理树 → 群主额度，已部署；二进制 `78f3e416…`。额度以 `club_agent_info.quota`（分）为准，读库判断，`NULL`=未授信。
+- 群主按 `sm_club_make`/`sm_club_make2` 反查；树按 `upper_guuid` 嵌套，异常进 `orphan`。支持俱乐部/玩家维度查询、`ownerQuotaFen` 列与俱乐部群主写操作审计。
+- 真实数据验证通过；性能根因 `COALESCE(club_status,'')` 导致索引失效，修复后列表 3.8s→24ms，并给 Caddy 加 gzip。回滚点与完整细节见[交接](handoffs/2026-11-01-admin-club-management.md)。
+- 未验证：Creator、客户端（`assets/` 全程未改）。
 
 ## 2026-10-31 俱乐部 1 对 1 私聊（服务端已部署）
 

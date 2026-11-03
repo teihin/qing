@@ -161,10 +161,12 @@ export default class DirectChatManager
     public static RoleName(role:any):string
     {
         let value = role == null ? "" : String(role);
+        if(value === "union_owner")
+            return "大群主";
         if(value === "owner")
-            return "群主";
+            return "老板";
         if(value === "leader")
-            return "盟主";
+            return "代理";
         if(value === "agent")
             return "代理";
         if(value === "manager")
@@ -172,11 +174,11 @@ export default class DirectChatManager
         return "玩家";
     }
 
-    /** 群主、盟主、代理才有「删除（隐藏）聊天」入口；服务端仍会再校验一次。 */
+    /** 群主、联盟大群主、代理才有「删除（隐藏）聊天」入口；服务端仍会再校验一次。 */
     public static CanDeleteRole(role:any):boolean
     {
         let value = role == null ? "" : String(role);
-        return value === "owner" || value === "leader" || value === "agent";
+        return value === "owner" || value === "leader" || value === "agent" || value === "union_owner";
     }
 
     // ---------------- 身份与令牌 ----------------

@@ -79,10 +79,10 @@ func (d *GameDirectory) GetClub(ctx context.Context, clubID string) (Club, error
 		return Club{}, errClubNotFound
 	}
 	var club Club
-	err := d.db.QueryRowContext(ctx, `SELECT club_guuid, COALESCE(club_name, '')
+	err := d.db.QueryRowContext(ctx, `SELECT club_guuid, COALESCE(club_name, ''), COALESCE(union_id, '')
 FROM club_guuid_info
 WHERE club_guuid = ? AND COALESCE(club_status, '') NOT IN ('init', 'del')
-LIMIT 1`, clubID).Scan(&club.ClubID, &club.ClubName)
+LIMIT 1`, clubID).Scan(&club.ClubID, &club.ClubName, &club.UnionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Club{}, errClubNotFound
 	}
@@ -94,6 +94,42 @@ LIMIT 1`, clubID).Scan(&club.ClubID, &club.ClubName)
 		return Club{}, err
 	}
 	return club, nil
+}
+
+// GetUnionByClub 返回俱乐部所属联盟。未入盟返回 ok=false。
+func (d *GameDirectory) GetUnionByClub(ctx context.Context, clubID string) (Union, bool, error) {
+	clubID = strings.TrimSpace(clubID)
+	if clubID == "" {
+		return Union{}, false, nil
+	}
+	var union Union
+	err := d.db.QueryRowContext(ctx, `SELECT cu.union_id, COALESCE(cu.union_name, ''),
+COALESCE(cu.owner_guuid, ''), COALESCE(cu.club_guuid, '')
+FROM club_guuid_info cg
+JOIN club_union_info cu ON cu.union_id = cg.union_id
+WHERE cg.club_guuid = ? AND COALESCE(cg.union_id, '') <> ''
+LIMIT 1`, clubID).Scan(&union.ID, &union.Name, &union.OwnerGuuid, &union.OwnerClub)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Union{}, false, nil
+	}
+	if err != nil {
+		return Union{}, false, err
+	}
+	return union, true, nil
+}
+
+// GetAccount 按 guuid 读取跨俱乐部展示所需的昵称和头像。
+func (d *GameDirectory) GetAccount(ctx context.Context, guuid string) (GameUser, bool, error) {
+	var user GameUser
+	err := d.db.QueryRowContext(ctx, `SELECT sm_guuid, COALESCE(sm_name, ''), COALESCE(sm_photo, '')
+FROM tbl_Account WHERE sm_guuid = ? LIMIT 1`, strings.TrimSpace(guuid)).Scan(&user.Guuid, &user.Name, &user.Avatar)
+	if errors.Is(err, sql.ErrNoRows) {
+		return GameUser{}, false, nil
+	}
+	if err != nil {
+		return GameUser{}, false, err
+	}
+	return user, true, nil
 }
 
 func (d *GameDirectory) GetMember(ctx context.Context, clubID, guuid string) (Member, bool, error) {

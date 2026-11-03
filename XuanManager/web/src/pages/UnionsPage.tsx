@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { api, ApiError } from "../api";
-import { Button, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
-import type { UnionListItem, UnionListResponse } from "../types";
+import { api, ApiError, jsonBody } from "../api";
+import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
+import type { UnionListItem, UnionListResponse, UnionQuotaAdjustmentResponse } from "../types";
 
 const amountFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const integerFormatter = new Intl.NumberFormat("zh-CN");
@@ -19,7 +19,8 @@ function errorMessage(reason: unknown, fallback: string): string {
 /**
  * 联盟管理（联盟模式 V2）。
  *
- * 列出全部联盟与联盟信息；点击「详情」进入俱乐部管理，并按 unionId 过滤出该联盟下的俱乐部。
+ * 列出全部联盟与联盟信息；行内「加额度 / 减额度」调整联盟池，点击「详情」进入俱乐部管理，
+ * 并按 unionId 过滤出该联盟下的俱乐部。
  * 额度只展示：联盟池在 club_union_info.union_quota，俱乐部额度在 club_guuid_info.union_quota。
  */
 export default function UnionsPage({
@@ -37,6 +38,8 @@ export default function UnionsPage({
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
+  const [adjustTarget, setAdjustTarget] = useState<{ union: UnionListItem; action: "add" | "subtract" } | null>(null);
+  const canAdjust = can("game.union.quota_adjust");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,11 +76,11 @@ export default function UnionsPage({
       <PageHeader
         eyebrow="UNION OPERATIONS"
         title="联盟管理"
-        description="联盟模式 V2：查看联盟总群主、联盟池与俱乐部数量；详情进入俱乐部管理查看该联盟下的全部俱乐部。"
+        description="联盟模式 V2：查看联盟总群主、联盟池与俱乐部数量；行内可给联盟池加/减额度，详情进入俱乐部管理查看该联盟下的全部俱乐部。"
         actions={
           <span className="readonly-badge">
             <i />
-            {can("game.union.quota_adjust") ? "联盟池以游戏服为准" : "只读：无联盟池注资权限"}
+            {canAdjust ? "联盟池以游戏服为准，可加/减额度" : "只读：无联盟池调整权限"}
           </span>
         }
       />
@@ -191,6 +194,25 @@ export default function UnionsPage({
                       </td>
                       <td>
                         <div className="row-actions">
+                          {canAdjust && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setAdjustTarget({ union, action: "add" })}
+                                title="给该联盟的联盟池增加额度"
+                              >
+                                加额度
+                              </button>
+                              <button
+                                type="button"
+                                className="is-danger"
+                                onClick={() => setAdjustTarget({ union, action: "subtract" })}
+                                title="从该联盟的联盟池扣减额度"
+                              >
+                                减额度
+                              </button>
+                            </>
+                          )}
                           <button type="button" onClick={() => openClubs(union)} title="进入俱乐部管理查看该联盟下的俱乐部">
                             详情
                           </button>
@@ -238,6 +260,192 @@ export default function UnionsPage({
           </>
         )}
       </section>
+
+      {adjustTarget && (
+        <UnionQuotaModal
+          union={adjustTarget.union}
+          action={adjustTarget.action}
+          notify={notify}
+          onClose={() => setAdjustTarget(null)}
+          onDone={() => void load()}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * 联盟池加/减额度。
+ *
+ * 联盟模式 V2 下平台调整的对象是联盟池（总群主可分配额度）：
+ * 增加与扣减都走游戏服「增加_联盟_额度」，扣减按负数 quota_fen 传入。
+ * 金额按「元」输入，提交换算成分，成功后回读联盟池。
+ */
+function UnionQuotaModal({
+  union,
+  action,
+  notify,
+  onClose,
+  onDone,
+}: {
+  union: UnionListItem;
+  action: "add" | "subtract";
+  notify: (message: string, kind?: "success" | "error") => void;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<UnionQuotaAdjustmentResponse | null>(null);
+
+  const isSubtract = action === "subtract";
+  const parsed = Number(amount);
+  const valid = Number.isFinite(parsed) && parsed > 0;
+  const deltaFen = valid ? Math.round(parsed * 100) : 0;
+  const overdraw = isSubtract && deltaFen > union.poolQuotaFen;
+  const projectedFen = isSubtract ? union.poolQuotaFen - deltaFen : union.poolQuotaFen + deltaFen;
+  const canSubmit = valid && !overdraw && reason.trim().length >= 2 && confirmed && !busy;
+
+  const submit = async () => {
+    if (!canSubmit) return;
+    setBusy(true);
+    setError("");
+    try {
+      const outcome = await api<UnionQuotaAdjustmentResponse>(
+        `/api/game/unions/${union.unionId}/quota-adjustments`,
+        {
+          method: "POST",
+          ...jsonBody({
+            action,
+            amountYuan: parsed,
+            reason: reason.trim(),
+            expectedPoolQuotaYuan: union.poolQuotaFen / 100,
+            confirm: true,
+          }),
+        },
+      );
+      setResult(outcome);
+      notify(
+        outcome.verified ? outcome.message : "额度变更已提交，但未回读校验，请刷新后确认",
+        outcome.verified ? "success" : "error",
+      );
+      onDone();
+    } catch (reason_) {
+      setError(errorMessage(reason_, isSubtract ? "联盟池扣减失败" : "联盟池注资失败"));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title={`${isSubtract ? "扣减" : "增加"}「${union.name || union.unionId}」的联盟额度`}
+      eyebrow={`UNION QUOTA · ${union.unionId}`}
+      onClose={onClose}
+    >
+      <div className="quota-intro">
+        <p>
+          这里调整的是<strong>联盟池</strong>（联盟总群主可分配额度），单位<strong>分</strong>；
+          界面输入<strong>元</strong>，提交后交给游戏服「增加_联盟_额度」
+          {isSubtract ? "按负数扣减" : "注资"}，成功后会回读联盟池。
+        </p>
+        <ul>
+          <li>扣减不能超过当前联盟池，扣减后额度不会小于 0。</li>
+          <li>平台只调整联盟池，不直接改各俱乐部的额度。</li>
+          <li>操作会记入后台审计，原因必填（2–120 字）。</li>
+        </ul>
+        <div className="union-quota-current">
+          <div>
+            <span>当前联盟池</span>
+            <strong>{amountFormatter.format(union.poolQuotaFen / 100)} 元</strong>
+          </div>
+          <div>
+            <span>操作后预计</span>
+            <strong>{valid ? `${amountFormatter.format(projectedFen / 100)} 元` : "—"}</strong>
+          </div>
+        </div>
+      </div>
+
+      {result ? (
+        <div className={`quota-result ${result.verified ? "is-ok" : "is-unverified"}`}>
+          <strong>
+            {result.verified
+              ? result.action === "subtract"
+                ? "联盟池已扣减并回读校验"
+                : "联盟池已注资并回读校验"
+              : "额度变更已提交，未回读校验"}
+          </strong>
+          <p>{result.message}</p>
+          <dl>
+            <div>
+              <dt>{result.deltaFen < 0 ? "本次扣减" : "本次增加"}</dt>
+              <dd>
+                {result.deltaFen < 0 ? "−" : "+"}
+                {amountFormatter.format(Math.abs(result.deltaFen) / 100)} 元
+              </dd>
+            </div>
+            <div>
+              <dt>变更后联盟池</dt>
+              <dd>{amountFormatter.format(result.poolQuotaYuan)} 元</dd>
+            </div>
+          </dl>
+          <div className="form-actions">
+            <Button type="button" onClick={onClose}>
+              完成
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <form className="form-grid form-grid--single" onSubmit={submitGuard(submit)}>
+          {error && (
+            <div className="form-error">
+              <span>!</span>
+              {error}
+            </div>
+          )}
+          {overdraw && (
+            <div className="form-error">
+              <span>!</span>
+              扣减金额不能超过当前联盟池
+            </div>
+          )}
+          <Field
+            label={isSubtract ? "扣减金额（元）" : "增加金额（元）"}
+            hint={valid ? `提交为 ${isSubtract ? "-" : "+"}${deltaFen} 分` : "支持两位小数，单次不超过 100 万元"}
+          >
+            <input
+              type="number"
+              min="0.01"
+              step="0.01"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              placeholder="例如 1000"
+            />
+          </Field>
+          <Field label="原因" hint={`${Array.from(reason.trim()).length}/120，必填 2 字以上`}>
+            <input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="例如：平台季度注资" />
+          </Field>
+          <label className="confirm-check">
+            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
+            <span>
+              {isSubtract
+                ? "我确认本次操作会直接扣减联盟池额度，不直接改动各俱乐部额度"
+                : "我确认本次操作只增加联盟池额度，不直接改变俱乐部额度"}
+            </span>
+          </label>
+          <div className="form-actions">
+            <Button type="button" variant="secondary" onClick={onClose}>
+              取消
+            </Button>
+            <Button type="submit" variant={isSubtract ? "danger" : "primary"} disabled={!canSubmit}>
+              {busy ? "提交中…" : isSubtract ? "确认扣减" : "确认注资"}
+            </Button>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }

@@ -44,6 +44,8 @@ var stoneConsumePriceCatalog = []stoneConsumePriceItem{
 	{Code: "翻牌", Name: "牌局回顾一键翻牌", Scene: "牌桌 · 牌局回顾 · 翻牌", Default: 500, LegacyMoney: 0, LegacyUnit: ""},
 	// 创建俱乐部是新增收费点（原来免费），没有对应金币价，LegacyMoney 留 0。
 	{Code: "创建俱乐部", Name: "创建俱乐部", Scene: "大厅 · 俱乐部 · 创建俱乐部", Default: 10000, LegacyMoney: 0, LegacyUnit: ""},
+	// 创建联盟同样是新增收费点，默认 10000 钻；客户端成功受理联盟创建后才扣。
+	{Code: "创建联盟", Name: "创建联盟", Scene: "大厅 · 我的 · 创建联盟", Default: 10000, LegacyMoney: 0, LegacyUnit: ""},
 }
 
 // stoneConsumePriceRetired 是已停用的消费项：不再出现在后台页面，也不再写入配置。
