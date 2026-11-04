@@ -911,7 +911,7 @@ export default class panelGameView extends UIPanelViewBase {
                 label.getComponent(cc.Label).string = "正在确认俱乐部信息，请稍候";
             else
                 label.getComponent(cc.Label).string = clubRoom
-                    ? "俱乐部金币不足，请联系代理上分！"
+                    ? "俱乐部金币不足，请联系合伙人上分！"
                     : "金币余额不足" + Number(strMin) + "，请先充值！";
         }
     }
@@ -2112,11 +2112,11 @@ export default class panelGameView extends UIPanelViewBase {
                 this.ClearPreSitState(true);
                 let message = strWord;
                 if (strWord.indexOf("未加入联盟") >= 0)
-                    message = "该俱乐部未加入联盟，请联系总群主加入联盟";
+                    message = "该俱乐部未加入联盟，请联系大盟主加入联盟";
                 else if (strWord.indexOf("额度不足") >= 0)
-                    message = "该俱乐部额度不足，请联系联盟总群主（或确认俱乐部已加入联盟）";
+                    message = "该俱乐部额度不足，请联系大盟主（或确认俱乐部已加入联盟）";
                 else if (strWord.indexOf("俱乐部金币不足") >= 0)
-                    message = "俱乐部金币不足，请联系代理上分";
+                    message = "俱乐部金币不足，请联系合伙人上分";
                 this.ShowModalPrompt(message);
                 return;
             }

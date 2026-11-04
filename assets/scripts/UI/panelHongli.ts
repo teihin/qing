@@ -83,7 +83,7 @@ export default class panelHongli extends UIPanelViewBase {
         this.jackpotLabel("奖池业绩/统计日", "统计日：" + String(info.date || "昨日"));
         this.jackpotLabel("奖池业绩/分页/页码", (this.jackpotPage + 1) + " / " + this.jackpotPages);
         this.jackpotLabel("奖池业绩/汇总/数据", "我：" + this.jackpotRatio(info.my_performance, info.all_performance) + "    下发：" + this.jackpotRatio(info.granted_performance, info.all_performance) + "    剩：" + this.jackpotRatio(info.proxy_performance, info.all_performance));
-        this.jackpotLabel("奖池业绩/状态", info.list.length ? "" : "暂无已开通业绩的下级代理");
+        this.jackpotLabel("奖池业绩/状态", info.list.length ? "" : "暂无已开通业绩的下级合伙人");
         const rows = Tool.GetChild(this.node, "奖池业绩/列表/view/content").children;
         rows.forEach((row, index) => {
             row.active = index < info.list.length;
@@ -408,7 +408,7 @@ export default class panelHongli extends UIPanelViewBase {
             let strName = button.node.parent.getChildByName("name").getComponent(cc.Label).string;
 
             this.node.getChildByName("添加代理面板").active = true;
-            Tool.GetChild(this.node,"添加代理面板/bk/msg").getComponent(cc.Label).string = "是否确认将以下玩家添加为代理?\r\n\r\n" + strName + "  [" + strID + "]";
+            Tool.GetChild(this.node,"添加代理面板/bk/msg").getComponent(cc.Label).string = "是否确认将以下玩家添加为合伙人?\r\n\r\n" + strName + "  [" + strID + "]";
             Tool.GetChild(this.node,"添加代理面板/bk/id").getComponent(cc.Label).string = strID;
         }
         else if(button.node.name === "确认添加代理")
@@ -645,11 +645,11 @@ export default class panelHongli extends UIPanelViewBase {
         }
         else if(button.node.name === "红利说明")
         {
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只有有效代理才能提取红利，成为有效代理的条件为：最少拥有5个打满100手的直属玩家。");
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只有有效合伙人才能提取红利，成为有效合伙人的条件为：最少拥有5个打满100手的直属玩家。");
         }
         else if(button.node.name === "奖池说明")
         {
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只有有效代理才能提取奖池收益，成为有效代理的条件为：最少拥有5个打满100手的直属玩家。");
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只有有效合伙人才能提取奖池收益，成为有效合伙人的条件为：最少拥有5个打满100手的直属玩家。");
         }
         else if(button.node.name === "奖池收益")
         {
@@ -901,7 +901,7 @@ export default class panelHongli extends UIPanelViewBase {
         {
             if (nCode == 0x200)
             {
-                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "添加代理成功！");
+                UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "添加合伙人成功！");
                 this.scheduleOnce(()=>{
                     this.GetMyPlayer(this.scrollMyPlayers.nCurPage);
                 },0.3);      
@@ -1188,7 +1188,7 @@ export default class panelHongli extends UIPanelViewBase {
             }
             else
             {
-                node.getChildByName("type").getComponent(cc.Label).string = "代理";                
+                node.getChildByName("type").getComponent(cc.Label).string = "合伙人";                
             }
             btn.node.active = false;
         }
@@ -1674,7 +1674,7 @@ export default class panelHongli extends UIPanelViewBase {
             node.getChildByName("info/0").active = false;
         else
             Tool.GetChild(node,"info/0").getComponent(cc.Label).string = "盟主:"+arrayAll[0];
-        Tool.GetChild(node,"info/1").getComponent(cc.Label).string = "代理:"+arrayAll[1];
+        Tool.GetChild(node,"info/1").getComponent(cc.Label).string = "合伙人:"+arrayAll[1];
         Tool.GetChild(node,"info/2").getComponent(cc.Label).string = "总计:"+arrayAll[2];
     }
     //查询代理昨日总业绩

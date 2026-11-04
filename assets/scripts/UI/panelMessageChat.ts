@@ -109,6 +109,7 @@ export default class panelMessageChat extends UIPanelViewBase {
     private imageTextureCache:{[url:string]:cc.SpriteFrame} = {};
     private disposed:boolean = false;
     private scrollLayoutReady:boolean = false;
+    private lastViewHeight:number = 0;
 
     onLoad()
     {
@@ -485,11 +486,21 @@ export default class panelMessageChat extends UIPanelViewBase {
         this.content.anchorY = 1;
         this.content.width = viewNode.width;
         this.content.x = 0;
+        let anchorOffset = 1 - viewNode.anchorY;
         // 只在首次建立列表时放到视口顶部。重绘消息时必须保留 ScrollView 当前的 content.y，
         // 否则 content.height 改变后会先被重置到初始位置，再被 ScrollView 拉到底部造成跳跃。
         if(!this.scrollLayoutReady)
-            this.content.y = viewNode.height * (1 - viewNode.anchorY);
-        this.scrollLayoutReady = true;
+        {
+            this.content.y = viewNode.height * anchorOffset;
+            this.scrollLayoutReady = true;
+        }
+        else if(this.lastViewHeight > 0 && Math.abs(viewNode.height - this.lastViewHeight) > 0.5)
+        {
+            // onLoad 时 Widget 可能还没按实际屏幕高度对齐；视口高度变化时同步平移
+            // content 顶部，保持当前滚动偏移不变，避免内容整体偏出可视区。
+            this.content.y += (viewNode.height - this.lastViewHeight) * anchorOffset;
+        }
+        this.lastViewHeight = viewNode.height;
     }
 
     private MarkLatestRead():void

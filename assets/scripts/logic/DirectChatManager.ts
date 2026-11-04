@@ -160,16 +160,17 @@ export default class DirectChatManager
     /** 角色显示名：角色只影响入口和删除按钮，不改变会话模型（文档 5.3）。 */
     public static RoleName(role:any):string
     {
-        let value = role == null ? "" : String(role);
-        if(value === "union_owner")
-            return "大群主";
-        if(value === "owner")
-            return "老板";
-        if(value === "leader")
-            return "代理";
-        if(value === "agent")
-            return "代理";
-        if(value === "manager")
+        let value = role == null ? "" : String(role).trim();
+        const key = value.toLowerCase();
+        if(key === "union_owner" || value === "大盟主")
+            return "大盟主";
+        if(key === "owner" || value === "老板" || value === "群主")
+            return "群主";
+        if(value === "盟主")
+            return "盟主";
+        if(key === "leader" || key === "agent" || value === "代理" || value === "合伙人")
+            return "合伙人";
+        if(key === "manager" || value === "管理员")
             return "管理员";
         return "玩家";
     }
@@ -389,8 +390,17 @@ export default class DirectChatManager
         let opts = options == null ? {} : options;
         let generation = this.accountGeneration;
         let url = path.indexOf("http") === 0 ? path : this.ApiBase() + path;
+        let startedAt = Date.now();
         return this.EnsureSession().then(()=>{
-            return this.Send(method,url,body,opts,false);
+            let authMs = Date.now() - startedAt;
+            let sendAt = Date.now();
+            return this.Send(method,url,body,opts,false).then((data:any)=>{
+                // 首次进页面偶发数秒等待；拆成鉴权/请求两段便于定位是登录还是网络。
+                let total = Date.now() - startedAt;
+                if(total >= 1000)
+                    Debug.Log("直聊请求较慢 " + path + " 总=" + total + "ms 鉴权=" + authMs + "ms 请求=" + (Date.now() - sendAt) + "ms");
+                return data;
+            });
         }).then((data:any)=>{
             if(generation !== this.accountGeneration)
                 throw new DirectChatError("账号已切换","DIRECT_ACCOUNT_CHANGED");
@@ -563,7 +573,11 @@ export default class DirectChatManager
                 body.ticket = ticket;
             else
                 body.payload = this.BuildLinkPayload(account);
+            let authStartedAt = Date.now();
             this.Send("POST",this.ApiBase() + "/session",body,{timeout:15000},true).then((data:any)=>{
+                let authCost = Date.now() - authStartedAt;
+                if(authCost >= 1000)
+                    Debug.Log("直聊会话建立耗时 " + authCost + "ms");
                 if(generation !== this.accountGeneration)
                 {
                     reject(new DirectChatError("账号已切换","DIRECT_ACCOUNT_CHANGED"));
@@ -897,6 +911,12 @@ export default class DirectChatManager
                 this.Fire("conversations",target,result);
                 return result;
             });
+    }
+
+    /** 最近一次成功的全局会话第一页；仅用于消息页首屏先渲染。 */
+    public CachedAllConversations():DirectConversationPage
+    {
+        return this.allConversationCache;
     }
 
     /** 加载当前账号所有俱乐部的会话摘要，服务端按最新消息做全局分页。 */

@@ -75,6 +75,19 @@ func (d *GameDirectory) ListMyClubs(ctx context.Context, guuid string) ([]Club, 
 
 func (d *GameDirectory) GetClub(ctx context.Context, clubID string) (Club, error) {
 	clubID = strings.TrimSpace(clubID)
+	if cache := requestCacheFrom(ctx); cache != nil {
+		if item, ok := cache.clubs[clubID]; ok {
+			return item.club, item.err
+		}
+		club, err := d.getClubUncached(ctx, clubID)
+		cache.clubs[clubID] = clubLookup{club: club, err: err}
+		return club, err
+	}
+	return d.getClubUncached(ctx, clubID)
+}
+
+func (d *GameDirectory) getClubUncached(ctx context.Context, clubID string) (Club, error) {
+	clubID = strings.TrimSpace(clubID)
 	if clubID == "" {
 		return Club{}, errClubNotFound
 	}
@@ -99,6 +112,19 @@ LIMIT 1`, clubID).Scan(&club.ClubID, &club.ClubName, &club.UnionID)
 // GetUnionByClub 返回俱乐部所属联盟。未入盟返回 ok=false。
 func (d *GameDirectory) GetUnionByClub(ctx context.Context, clubID string) (Union, bool, error) {
 	clubID = strings.TrimSpace(clubID)
+	if cache := requestCacheFrom(ctx); cache != nil {
+		if item, ok := cache.unions[clubID]; ok {
+			return item.union, item.ok, item.err
+		}
+		union, ok, err := d.getUnionByClubUncached(ctx, clubID)
+		cache.unions[clubID] = unionLookup{union: union, ok: ok, err: err}
+		return union, ok, err
+	}
+	return d.getUnionByClubUncached(ctx, clubID)
+}
+
+func (d *GameDirectory) getUnionByClubUncached(ctx context.Context, clubID string) (Union, bool, error) {
+	clubID = strings.TrimSpace(clubID)
 	if clubID == "" {
 		return Union{}, false, nil
 	}
@@ -120,6 +146,19 @@ LIMIT 1`, clubID).Scan(&union.ID, &union.Name, &union.OwnerGuuid, &union.OwnerCl
 
 // GetAccount 按 guuid 读取跨俱乐部展示所需的昵称和头像。
 func (d *GameDirectory) GetAccount(ctx context.Context, guuid string) (GameUser, bool, error) {
+	guuid = strings.TrimSpace(guuid)
+	if cache := requestCacheFrom(ctx); cache != nil {
+		if item, ok := cache.accounts[guuid]; ok {
+			return item.user, item.ok, item.err
+		}
+		user, ok, err := d.getAccountUncached(ctx, guuid)
+		cache.accounts[guuid] = accountLookup{user: user, ok: ok, err: err}
+		return user, ok, err
+	}
+	return d.getAccountUncached(ctx, guuid)
+}
+
+func (d *GameDirectory) getAccountUncached(ctx context.Context, guuid string) (GameUser, bool, error) {
 	var user GameUser
 	err := d.db.QueryRowContext(ctx, `SELECT sm_guuid, COALESCE(sm_name, ''), COALESCE(sm_photo, '')
 FROM tbl_Account WHERE sm_guuid = ? LIMIT 1`, strings.TrimSpace(guuid)).Scan(&user.Guuid, &user.Name, &user.Avatar)
@@ -133,6 +172,21 @@ FROM tbl_Account WHERE sm_guuid = ? LIMIT 1`, strings.TrimSpace(guuid)).Scan(&us
 }
 
 func (d *GameDirectory) GetMember(ctx context.Context, clubID, guuid string) (Member, bool, error) {
+	clubID = strings.TrimSpace(clubID)
+	guuid = strings.TrimSpace(guuid)
+	if cache := requestCacheFrom(ctx); cache != nil {
+		key := clubID + "|" + guuid
+		if item, ok := cache.members[key]; ok {
+			return item.member, item.ok, item.err
+		}
+		member, ok, err := d.getMemberUncached(ctx, clubID, guuid)
+		cache.members[key] = memberLookup{member: member, ok: ok, err: err}
+		return member, ok, err
+	}
+	return d.getMemberUncached(ctx, clubID, guuid)
+}
+
+func (d *GameDirectory) getMemberUncached(ctx context.Context, clubID, guuid string) (Member, bool, error) {
 	club, err := d.GetClub(ctx, clubID)
 	if err != nil {
 		if errors.Is(err, errClubNotFound) {
@@ -242,6 +296,19 @@ ORDER BY a.id ASC LIMIT 1`, clubID, clubID).Scan(&owner)
 }
 
 func (d *GameDirectory) agentRelations(ctx context.Context, clubID string) (map[string]agentRelation, error) {
+	clubID = strings.TrimSpace(clubID)
+	if cache := requestCacheFrom(ctx); cache != nil {
+		if item, ok := cache.relations[clubID]; ok {
+			return item.relations, item.err
+		}
+		relations, err := d.agentRelationsUncached(ctx, clubID)
+		cache.relations[clubID] = relationsLookup{relations: relations, err: err}
+		return relations, err
+	}
+	return d.agentRelationsUncached(ctx, clubID)
+}
+
+func (d *GameDirectory) agentRelationsUncached(ctx context.Context, clubID string) (map[string]agentRelation, error) {
 	// 俱乐部模式的直属关系只取 club_agent_info.upper_guuid；
 	// tbl_Account.sm_agentID 属于平台模式，不能作为本俱乐部的上级。
 	rows, err := d.db.QueryContext(ctx, `SELECT r.user_guuid, COALESCE(r.upper_guuid, ''), COALESCE(r.note, ''),

@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>游戏设置 · 游戏规则</title>
+<style>
+@font-face{font-family:'PingFF';src:url('../../../assets/font/PingFF.ttf') format('truetype');font-display:block;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{background:#02080f;}
+body{font-family:'PingFang SC','Hiragino Sans GB','Microsoft YaHei',sans-serif;-webkit-font-smoothing:antialiased;}
+.stage{display:flex;gap:0;align-items:flex-start;background:#02080f;}
+body[class*="only-"] .stage{width:941px;height:1672px;}
+body.only-list .phone:not(.list),
+body.only-create .phone:not(.create),
+body.only-delete .phone:not(.delete){display:none;}
+
+.phone{position:relative;width:941px;height:1672px;overflow:hidden;flex:0 0 941px;background:#031424;}
+.bg{position:absolute;inset:0;background:url('../../../assets/V7/casino_bg.png') center/cover no-repeat;filter:saturate(.92) brightness(.72);}
+.shade{position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,13,26,.50) 0%,rgba(2,15,30,.62) 42%,rgba(1,10,20,.80) 100%);}
+.vignette{position:absolute;inset:0;background:radial-gradient(120% 70% at 50% 30%,rgba(20,90,150,.18),rgba(0,0,0,.35) 100%);}
+
+/* ---------- 顶栏 ---------- */
+.topbar{position:relative;height:94px;display:flex;align-items:center;padding:26px 30px 0;}
+.back{width:46px;height:52px;display:flex;align-items:center;justify-content:center;}
+.back svg{filter:drop-shadow(0 2px 3px rgba(0,0,0,.5));}
+.title{margin-left:14px;font-family:'PingFF','PingFang SC',sans-serif;font-size:44px;letter-spacing:2px;font-weight:700;
+background:linear-gradient(180deg,#fffbe0 0%,#fbe6ad 40%,#e0b463 72%,#f6dda0 100%);-webkit-background-clip:text;background-clip:text;color:transparent;
+filter:drop-shadow(0 2px 4px rgba(0,0,0,.55));}
+.title-line{margin-left:18px;flex:1;height:1px;background:linear-gradient(90deg,rgba(240,205,130,.55),rgba(240,205,130,0));}
+
+/* ---------- 页签 ---------- */
+.tabs{position:relative;margin:16px 30px 0;height:84px;display:flex;align-items:stretch;justify-content:space-between;
+background:linear-gradient(180deg,rgba(6,28,50,.72),rgba(4,20,36,.55));border:1px solid rgba(96,178,226,.28);border-radius:16px;padding:0 6px;}
+.tab{position:relative;flex:1;display:flex;align-items:center;justify-content:center;font-size:29px;color:#8db3cf;letter-spacing:1px;}
+.tab.active{color:#ffe9ae;font-weight:700;text-shadow:0 0 14px rgba(120,220,255,.35);}
+.tab.active::after{content:'';position:absolute;left:26%;right:26%;bottom:8px;height:4px;border-radius:3px;
+background:linear-gradient(90deg,rgba(127,230,255,0),#7fe6ff,rgba(127,230,255,0));box-shadow:0 0 12px rgba(127,230,255,.9);}
+.tab.active::before{content:'';position:absolute;inset:6px 2px;border-radius:10px;
+background:linear-gradient(180deg,rgba(80,190,255,.16),rgba(80,190,255,.02));}
+
+/* ---------- 主卡片 ---------- */
+.main{position:relative;margin:22px 30px 0;height:1428px;}
+.panel{position:relative;height:100%;display:flex;flex-direction:column;padding:26px 26px 24px;border-radius:26px;
+background:linear-gradient(180deg,rgba(11,52,90,.94) 0%,rgba(7,36,62,.95) 55%,rgba(5,28,50,.96) 100%);
+border:1.5px solid rgba(104,199,244,.42);
+box-shadow:0 14px 44px rgba(0,0,0,.45),inset 0 0 44px rgba(34,150,235,.10),inset 0 1px 0 rgba(170,235,255,.18);}
+.panel::after{content:'';position:absolute;inset:7px;border-radius:20px;border:1px solid rgba(120,205,245,.12);pointer-events:none;}
+
+.panel-head{display:flex;align-items:center;gap:16px;padding:2px 4px 18px;}
+.head-icon{width:62px;height:62px;border-radius:14px;display:flex;align-items:center;justify-content:center;
+background:linear-gradient(180deg,rgba(38,111,163,.55),rgba(9,48,80,.6));border:1px solid rgba(126,214,255,.35);}
+.head-text{flex:1;}
+.h1{font-family:'PingFF','PingFang SC',sans-serif;font-size:38px;letter-spacing:1px;
+background:linear-gradient(180deg,#fff8d2,#f5d791 55%,#d3a24d);-webkit-background-clip:text;background-clip:text;color:transparent;
+filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));}
+.sub{margin-top:6px;font-size:24px;color:#8fb6d1;letter-spacing:.5px;}
+.count-chip{flex:0 0 auto;padding:10px 18px;border-radius:999px;font-size:25px;color:#8ff0ff;
+background:linear-gradient(180deg,rgba(33,152,199,.30),rgba(12,70,110,.35));border:1px solid rgba(108,224,255,.5);
+box-shadow:0 0 16px rgba(70,210,255,.18) inset;}
+
+.summary{display:flex;align-items:center;gap:12px;margin:0 4px 18px;padding:14px 18px;border-radius:12px;
+background:linear-gradient(180deg,rgba(24,88,132,.30),rgba(8,42,70,.30));border:1px solid rgba(96,190,235,.22);font-size:24px;color:#b9d8ea;}
+.summary b{color:#ffe1a0;font-weight:600;}
+.summary .dot{width:10px;height:10px;border-radius:50%;background:#66f0c8;box-shadow:0 0 9px #66f0c8;}
+.summary .sp{flex:1;}
+.summary .hint{color:#7ea9c4;font-size:22px;}
+
+.scroll{flex:1;display:flex;flex-direction:column;gap:18px;overflow:hidden;padding:2px 4px 4px;}
+
+/* ---------- 规则卡片 ---------- */
+.rule{position:relative;flex:0 0 auto;border-radius:18px;padding:22px 24px 20px;
+background:linear-gradient(180deg,rgba(16,66,106,.86),rgba(8,40,68,.88));
+border:1px solid rgba(92,184,230,.34);box-shadow:0 6px 18px rgba(0,0,0,.28),inset 0 1px 0 rgba(160,230,255,.12);}
+.rule-top{display:flex;align-items:center;gap:14px;}
+.dipi{font-family:'PingFF','PingFang SC',sans-serif;font-size:34px;letter-spacing:1px;color:#fbe3a4;}
+.dipi small{font-size:23px;color:#8fb6d1;margin-right:8px;letter-spacing:0;}
+.badge{padding:6px 14px;border-radius:8px;font-size:22px;letter-spacing:.5px;}
+.badge.nine{color:#9df7ff;background:linear-gradient(180deg,rgba(30,160,205,.42),rgba(10,70,105,.5));border:1px solid rgba(120,232,255,.55);box-shadow:0 0 12px rgba(90,220,255,.16);}
+.badge.normal{color:#9db6c8;background:rgba(70,110,140,.20);border:1px solid rgba(140,180,205,.28);}
+.del{margin-left:auto;padding:8px 18px;border-radius:9px;font-size:23px;color:#ffb9a8;
+background:rgba(92,36,34,.35);border:1px solid rgba(220,120,100,.55);}
+.rule-meta{margin-top:12px;font-size:24px;color:#98bdd6;letter-spacing:.3px;}
+.rule-meta b{color:#d8ecf8;font-weight:500;}
+.divider{height:1px;margin:16px 0 14px;background:linear-gradient(90deg,rgba(110,200,245,.35),rgba(110,200,245,.06));}
+.stats{display:flex;gap:16px;}
+.stat{flex:1;padding:12px 16px;border-radius:11px;background:linear-gradient(180deg,rgba(22,80,120,.36),rgba(8,42,68,.34));
+border:1px solid rgba(92,182,228,.24);display:flex;align-items:baseline;gap:10px;}
+.stat .k{font-size:23px;color:#8fb6d1;}
+.stat .v{font-family:'PingFF','PingFang SC',sans-serif;font-size:36px;color:#ffe3a1;}
+.stat .tag{font-size:19px;color:#73c9e8;padding:2px 8px;border:1px solid rgba(110,205,240,.35);border-radius:6px;}
+.rule-foot{display:flex;align-items:center;margin-top:14px;font-size:23px;color:#94b9d2;}
+.rule-foot .rooms{display:flex;align-items:center;gap:9px;color:#cfe8f5;}
+.rule-foot .live{width:9px;height:9px;border-radius:50%;background:#6ef0cb;box-shadow:0 0 8px #6ef0cb;}
+.rule-foot .idle{width:9px;height:9px;border-radius:50%;background:#7e93a4;}
+.rule-foot .sp{flex:1;}
+.rule-foot .warn{color:#d8b06c;font-size:21px;}
+
+/* ---------- 底部按钮 ---------- */
+.footer{padding:18px 4px 2px;}
+.btn-primary{height:96px;border-radius:16px;display:flex;align-items:center;justify-content:center;gap:12px;
+font-family:'PingFF','PingFang SC',sans-serif;font-size:36px;letter-spacing:2px;color:#4a2f05;
+background:linear-gradient(180deg,#fff3c6 0%,#f8d78c 38%,#e3ae55 72%,#f6dc9c 100%);
+border:1px solid #ffe9b0;box-shadow:0 8px 22px rgba(228,170,80,.30),inset 0 1px 0 rgba(255,255,255,.8);}
+.btn-primary .plus{font-size:40px;margin-top:-3px;}
+
+/* ---------- 弹窗通用 ---------- */
+.mask{position:absolute;inset:0;background:rgba(1,7,14,.90);backdrop-filter:blur(6px);}
+.dialog{position:absolute;left:50%;transform:translateX(-50%);border-radius:26px;
+background:linear-gradient(180deg,#0d3d66 0%,#082c4c 46%,#06233e 100%);
+border:1.5px solid rgba(120,214,255,.55);
+box-shadow:0 24px 70px rgba(0,0,0,.65),inset 0 0 60px rgba(30,140,220,.12),inset 0 1px 0 rgba(190,240,255,.22);}
+.dialog::before{content:'';position:absolute;inset:8px;border-radius:19px;border:1px solid rgba(120,205,245,.14);pointer-events:none;}
+.dlg-title{font-family:'PingFF','PingFang SC',sans-serif;text-align:center;font-size:42px;letter-spacing:2px;
+background:linear-gradient(180deg,#fff8d2,#f5d791 55%,#d3a24d);-webkit-background-clip:text;background-clip:text;color:transparent;
+filter:drop-shadow(0 2px 4px rgba(0,0,0,.45));}
+.dlg-sub{text-align:center;font-size:24px;color:#8fb6d1;margin-top:10px;}
+
+/* ---------- 创建弹窗 ---------- */
+.dialog.create{top:118px;width:850px;padding:34px 34px 30px;}
+.sec{margin-top:26px;}
+.sec-head{display:flex;align-items:baseline;gap:12px;margin-bottom:14px;}
+.sec-name{font-size:29px;color:#ffe2a6;font-weight:600;letter-spacing:.5px;}
+.sec-note{font-size:21px;color:#7fa7c2;}
+.sec-note.right{margin-left:auto;}
+.dipi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.chip{height:84px;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
+background:linear-gradient(180deg,rgba(18,72,110,.60),rgba(8,38,62,.62));border:1px solid rgba(90,180,225,.30);color:#cfe6f4;}
+.chip .c1{font-family:'PingFF','PingFang SC',sans-serif;font-size:31px;letter-spacing:.5px;}
+.chip .c2{font-size:19px;color:#7fa7c2;}
+.chip.on{background:linear-gradient(180deg,rgba(44,132,178,.62),rgba(12,62,98,.78));border:1.5px solid #79e2ff;
+box-shadow:0 0 18px rgba(90,220,255,.25),inset 0 0 20px rgba(80,210,255,.14);}
+.chip.on .c1{color:#9df7ff;}
+.chip.on .c2{color:#a9e6fa;}
+.chip.dis{opacity:.34;}
+.chip.dis .c1{text-decoration:line-through;}
+
+.rowline{display:flex;align-items:center;gap:16px;padding:14px 18px;border-radius:12px;
+background:linear-gradient(180deg,rgba(20,76,114,.42),rgba(8,40,66,.36));border:1px solid rgba(90,180,225,.26);}
+.rowline .rl-name{font-size:28px;color:#e2f2fc;}
+.rowline .rl-note{font-size:21px;color:#7fa7c2;margin-top:3px;}
+.rowline .sp{flex:1;}
+.switch{width:104px;height:52px;border-radius:999px;display:flex;overflow:hidden;border:1px solid rgba(120,214,255,.55);}
+.switch span{flex:1;display:flex;align-items:center;justify-content:center;font-size:25px;}
+.switch .on{background:linear-gradient(180deg,#63e4ff,#1f9fd8);color:#04314b;font-weight:700;box-shadow:0 0 14px rgba(90,220,255,.5);}
+.switch .off{background:rgba(12,48,76,.7);color:#7f9db2;}
+
+.stepper{display:flex;align-items:center;gap:18px;}
+.round-btn{width:76px;height:76px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:42px;color:#ffe3a1;
+background:linear-gradient(180deg,rgba(30,96,140,.55),rgba(8,42,70,.65));border:1.5px solid rgba(120,210,250,.45);}
+.value-box{flex:1;height:84px;border-radius:12px;display:flex;align-items:center;justify-content:center;
+background:linear-gradient(180deg,rgba(6,28,48,.75),rgba(10,48,76,.65));border:1px solid rgba(100,200,245,.38);}
+.value-box .num{font-family:'PingFF','PingFang SC',sans-serif;font-size:52px;color:#ffe3a1;letter-spacing:2px;}
+.value-box .unit{font-size:28px;color:#e8c47e;margin-left:4px;}
+.quick{display:flex;gap:12px;margin-top:12px;}
+.qchip{flex:1;height:58px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:25px;color:#a9cbe0;
+background:rgba(12,52,82,.45);border:1px solid rgba(90,180,225,.26);}
+.qchip.on{color:#062f47;font-weight:700;background:linear-gradient(180deg,#8cecff,#3cb8e8);border-color:#a9f3ff;box-shadow:0 0 14px rgba(90,220,255,.3);}
+.tip-line{margin-top:10px;font-size:21px;color:#7fa7c2;letter-spacing:.3px;}
+.tip-line b{color:#ffd58f;font-weight:500;}
+
+.autobar{display:flex;margin-top:26px;border-radius:12px;overflow:hidden;border:1px solid rgba(90,180,225,.26);
+background:linear-gradient(180deg,rgba(18,70,106,.45),rgba(7,36,60,.45));}
+.autobar .cell{flex:1;padding:14px 0;text-align:center;border-right:1px solid rgba(90,180,225,.18);}
+.autobar .cell:last-child{border-right:none;}
+.autobar .k{font-size:21px;color:#7fa7c2;}
+.autobar .v{font-family:'PingFF','PingFang SC',sans-serif;font-size:33px;color:#ffe3a1;margin-top:5px;}
+
+.dlg-actions{display:flex;gap:22px;margin-top:30px;}
+.btn-ghost,.btn-sure{flex:1;height:92px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:33px;letter-spacing:2px;}
+.btn-ghost{color:#cfe6f4;background:rgba(10,44,72,.55);border:1.5px solid rgba(120,200,240,.42);}
+.btn-sure{font-family:'PingFF','PingFang SC',sans-serif;color:#4a2f05;background:linear-gradient(180deg,#fff3c6,#f8d78c 38%,#e3ae55 72%,#f6dc9c);
+border:1px solid #ffe9b0;box-shadow:0 8px 22px rgba(228,170,80,.28);}
+
+/* ---------- 删除弹窗 ---------- */
+.dialog.delete{top:430px;width:760px;padding:38px 38px 32px;}
+.trash{width:104px;height:104px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+background:radial-gradient(circle at 50% 35%,rgba(190,90,70,.30),rgba(60,24,24,.28));border:1px solid rgba(235,140,115,.5);
+box-shadow:0 0 26px rgba(230,110,80,.18) inset;}
+.del-card{margin-top:22px;border-radius:14px;padding:18px 20px;background:linear-gradient(180deg,rgba(20,76,114,.45),rgba(8,40,66,.4));
+border:1px solid rgba(90,180,225,.28);}
+.del-card .dc-top{display:flex;align-items:center;gap:12px;}
+.del-card .dc-name{font-family:'PingFF','PingFang SC',sans-serif;font-size:31px;color:#fbe3a4;}
+.del-card .dc-meta{margin-top:9px;font-size:23px;color:#93b9d2;}
+.del-warn{margin-top:20px;padding:16px 18px;border-radius:12px;font-size:23px;line-height:36px;color:#f0cfae;
+background:linear-gradient(180deg,rgba(96,62,26,.30),rgba(52,34,16,.28));border:1px solid rgba(210,160,90,.36);}
+.del-warn b{color:#ffd58f;font-weight:600;}
+
+/* ---------- 总览 ---------- */
+.row{display:flex;gap:36px;padding:36px;}
+.sheet{display:flex;flex-direction:column;gap:16px;}
+.cap{font-size:24px;color:#dcecf8;text-align:center;letter-spacing:2px;}
+.cap b{color:#ffd98f;}
+.mini{width:470px;height:835px;overflow:hidden;border-radius:18px;box-shadow:0 14px 40px rgba(0,0,0,.55);}
+.mini .phone{transform:scale(.4995);transform-origin:top left;}
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<script>
+const ONLY = new URLSearchParams(location.search).get('only') || '';
+if (ONLY) document.body.classList.add('only-' + ONLY);
+
+const SVG_GOLD = `<defs><linearGradient id="g1" x1="0" y1="0" x2="0" y2="1">
+<stop offset="0" stop-color="#fff7d2"/><stop offset=".45" stop-color="#f4d189"/><stop offset="1" stop-color="#c9963f"/>
+</linearGradient></defs>`;
+
+function bg(){return `<div class="bg"></div><div class="shade"></div><div class="vignette"></div>`;}
+
+function topbar(){
+  return `<div class="topbar">
+    <div class="back"><svg width="40" height="40" viewBox="0 0 40 40">${SVG_GOLD}
+      <path d="M25 6 L11 20 L25 34" fill="none" stroke="url(#g1)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="title">游戏设置</div>
+    <div class="title-line"></div>
+  </div>`;
+}
+
+function tabs(){
+  const list = ['游戏规则','奖池设置','牌桌设置','提示音设置','其他设置'];
+  return `<div class="tabs">${list.map((t,i)=>`<div class="tab ${i===0?'active':''}">${t}</div>`).join('')}</div>`;
+}
+
+function ruleCard(o){
+  return `<div class="rule">
+    <div class="rule-top">
+      <div class="dipi"><small>底皮</small>${o.dipi}</div>
+      <div class="badge ${o.nine?'nine':'normal'}">${o.nine?'地九王':'常规'}</div>
+      <div class="del">删除</div>
+    </div>
+    <div class="rule-meta">准入 <b>${o.min}</b> &nbsp;·&nbsp; <b>8</b> 人 &nbsp;·&nbsp; <b>30</b> 分钟</div>
+    <div class="divider"></div>
+    <div class="stats">
+      <div class="stat"><span class="k">抽水</span><span class="v">${o.water}%</span></div>
+      <div class="stat"><span class="k">暗抽</span><span class="v">${o.dark}%</span><span class="tag">仅群主</span></div>
+    </div>
+    <div class="rule-foot">
+      <span class="rooms"><span class="${o.rooms?'live':'idle'}"></span>${o.rooms ? `房间 ${o.join + o.playing} 个 · 满员/开局自动补房` : '暂无房间，开局后自动补房'}</span>
+      <span class="sp"></span>
+      ${o.water===0?'<span class="warn">不抽水 · 不分账</span>':''}
+    </div>
+  </div>`;
+}
+
+function listScreen(){
+  const cards = [
+    ruleCard({dipi:'1/3',nine:true,min:50,water:5,dark:1,rooms:true,join:1,playing:2}),
+    ruleCard({dipi:'5/10',nine:false,min:250,water:3,dark:0,rooms:false}),
+    ruleCard({dipi:'10/20',nine:true,min:500,water:2,dark:0,rooms:true,join:1,playing:1}),
+    ruleCard({dipi:'20/40',nine:false,min:1000,water:5,dark:2,rooms:true,join:1,playing:0})
+  ];
+  return `<div class="main"><div class="panel">
+    <div class="panel-head">
+      <div class="head-icon"><svg width="40" height="40" viewBox="0 0 40 40">${SVG_GOLD}
+        <rect x="8" y="5" width="24" height="31" rx="4" fill="none" stroke="url(#g1)" stroke-width="2.6"/>
+        <rect x="14" y="2.5" width="12" height="6" rx="2.5" fill="url(#g1)"/>
+        <path d="M14 16h12M14 22h12M14 28h7" stroke="url(#g1)" stroke-width="2.6" stroke-linecap="round"/></svg></div>
+      <div class="head-text"><div class="h1">游戏规则</div>
+        <div class="sub">创建后自动开房 · 满员/开局自动补房</div></div>
+      <div class="count-chip">4 条规则</div>
+    </div>
+    <div class="summary"><span class="dot"></span><span>已创建 <b>4</b> 条规则 · <b>6</b> 个房间</span>
+      <span class="sp"></span><span class="hint">满员/开局自动补房</span></div>
+    <div class="scroll">${cards.join('')}</div>
+    <div class="footer"><div class="btn-primary"><span class="plus">＋</span>创建游戏规则</div></div>
+  </div></div>`;
+}
+
+function createDialog(){
+  const dipis = [
+    {k:'1/3',m:50,on:true},{k:'2/5',m:100},{k:'5/10',m:250},{k:'10/20',m:500},{k:'20/40',m:1000}
+  ];
+  return `<div class="mask"></div>
+  <div class="dialog create">
+    <div class="dlg-title">创建游戏规则</div>
+    <div class="dlg-sub">可按底皮创建多条规则 · 创建后自动开房</div>
+
+    <div class="sec">
+      <div class="sec-head"><span class="sec-name">底皮</span><span class="sec-note">准入由底皮自动推导</span></div>
+      <div class="dipi-grid">${dipis.map(d=>`<div class="chip ${d.on?'on':''}">
+        <div class="c1">${d.k}</div><div class="c2">准入 ${d.m}</div></div>`).join('')}</div>
+    </div>
+
+    <div class="sec">
+      <div class="rowline">
+        <div><div class="rl-name">地九王</div><div class="rl-note">开启后按地九王规则结算，可与普通桌同时存在</div></div>
+        <div class="sp"></div>
+        <div class="switch"><span class="on">开</span><span class="off">关</span></div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><span class="sec-name">抽水比例</span><span class="sec-note">房间总水率 0~20%</span>
+        <span class="sec-note right">0 = 不抽水</span></div>
+      <div class="stepper">
+        <div class="round-btn">−</div>
+        <div class="value-box"><span class="num">5</span><span class="unit">%</span></div>
+        <div class="round-btn">＋</div>
+      </div>
+      <div class="quick">${[0,2,3,5,10].map(v=>`<div class="qchip ${v===5?'on':''}">${v}%</div>`).join('')}</div>
+      <div class="tip-line">抽水从每手输赢中按比例提取，进入代理分账。</div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-head"><span class="sec-name">暗抽比例</span>
+        <span class="sec-note">按玩家输赢的百分点 · 仅群主可见</span>
+        <span class="sec-note right">0 = 不暗抽</span></div>
+      <div class="stepper">
+        <div class="round-btn">−</div>
+        <div class="value-box"><span class="num">0</span><span class="unit">%</span></div>
+        <div class="round-btn">＋</div>
+      </div>
+      <div class="quick">${[0,1,2,3,5].map(v=>`<div class="qchip ${v===0?'on':''}">${v}%</div>`).join('')}</div>
+      <div class="tip-line">不能大于抽水比例；代理单独设置可覆盖本值，<b>玩家与代理均不可见</b>。</div>
+    </div>
+
+    <div class="autobar">
+      <div class="cell"><div class="k">准入</div><div class="v">50 分</div></div>
+      <div class="cell"><div class="k">人数</div><div class="v">8 人</div></div>
+      <div class="cell"><div class="k">时长</div><div class="v">30 分钟</div></div>
+    </div>
+
+    <div class="dlg-actions"><div class="btn-ghost">取消</div><div class="btn-sure">创建并开房</div></div>
+  </div>`;
+}
+
+function deleteDialog(){
+  return `<div class="mask"></div>
+  <div class="dialog delete">
+    <div class="trash"><svg width="52" height="52" viewBox="0 0 52 52">${SVG_GOLD}
+      <path d="M12 15h28M21 15V9h10v6M16 15l2 28h16l2-28M23 22v14M29 22v14" fill="none" stroke="url(#g1)" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="dlg-title">删除游戏规则</div>
+    <div class="dlg-sub">删除后该规则的房间不再补房</div>
+
+    <div class="del-card">
+      <div class="dc-top"><span class="dc-name">底皮 1/3</span><span class="badge nine">地九王</span></div>
+      <div class="dc-meta">准入 50 · 8 人 · 30 分钟</div>
+      <div class="dc-meta">抽水 5% · 暗抽 1% · 3 个房间</div>
+    </div>
+
+    <div class="del-warn">
+      未开局的房间立即关闭；<b>正在进行的牌局会在本局结算后关闭</b>；不再补该规则的新房。其他规则不受影响。
+    </div>
+
+    <div class="dlg-actions"><div class="btn-ghost">取消</div><div class="btn-sure">确认删除</div></div>
+  </div>`;
+}
+
+function phone(kind){
+  let overlay = '';
+  if (kind === 'create') overlay = createDialog();
+  if (kind === 'delete') overlay = deleteDialog();
+  return `<div class="phone ${kind}">${bg()}${topbar()}${tabs()}${listScreen()}${overlay}</div>`;
+}
+
+const stage = document.getElementById('stage');
+if (ONLY) {
+  stage.innerHTML = phone(ONLY);
+} else {
+  const caps = [['list','① 规则列表'],['create','② 创建规则'],['delete','③ 删除确认']];
+  stage.innerHTML = '<div class="row">' + caps.map(([k,c])=>
+    `<div class="sheet"><div class="cap">${c}</div><div class="mini">${phone(k)}</div></div>`).join('') + '</div>';
+}
+</script>
+</body>
+</html>

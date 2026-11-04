@@ -25,7 +25,7 @@ export interface ClubContext {
 }
 export interface ClubPlayer {
     id:string; name:string; role?:string; balance?:string;
-    /** 该成员所属俱乐部；V2 大群主成员列表里的盟主虚拟行会带自己俱乐部的 ID。 */
+    /** 该成员所属俱乐部；V2 大盟主成员列表里的盟主虚拟行会带自己俱乐部的 ID。 */
     clubId?:string;
     clubGold?:string; isAgent?:boolean; isLeader?:boolean; agentPercent?:string; status?:string;
     /** 服务端 NumberList 的 note：俱乐部内该成员的备注，恒存在、无值为空串。 */
@@ -40,6 +40,15 @@ export interface ClubPlayer {
 /** give = 玩家之间赠送（扣自己积分）；updown = 代理按授信额度给成员上下分。 */
 export type ClubGiftMode = "give" | "updown";
 export interface ClubPeoplePage { items:ClubPlayer[]; total:number; }
+/** updown = 上下分流水；game = 牌局流水（带入/结算）。 */
+export type ClubRecordKind = "updown" | "game";
+/** 查询_俱乐部_积分流水 的 ClubGoldWater 行；balance 取 remark（变动后余额）。 */
+export interface ClubRecord {
+    date:string; type:string; amount:number; balance:string; roomId:string; opterName:string;
+    /** 增加对象（被加分人）：guuid/name 是流水归属的玩家。 */
+    userId?:string; userName?:string;
+}
+export interface ClubRecordPage { items:ClubRecord[]; total:number; page:number; }
 /** 联盟入盟申请只有俱乐部维度；服务端不返回分页，一次推送全部待审俱乐部。 */
 export interface ClubUnionApplication { clubId:string; clubName:string; ownerId?:string; ownerName?:string; }
 export interface ClubUnionApplicationPage { items:ClubUnionApplication[]; total:number; }
@@ -56,6 +65,8 @@ export interface ClubManagementApi {
     unionAct(clubId:string,targetClubId:string,approve:boolean):Promise<{message?:string}>;
     unionMembers():Promise<ClubUnionMemberPage>;
     unionQuotaAdjust(targetClubId:string,quotaFen:number):Promise<{message?:string}>;
+    /** 按俱乐部 + 玩家查积分流水；上下分（only_add=1）与牌局（带入/结算）共用该接口。 */
+    records(clubId:string,userId:string,kind:ClubRecordKind,page:number,count:number):Promise<ClubRecordPage>;
 }
 
 /** UI-only controller. All art/layout lives in panelMain.prefab. No adapter means no network writes. */
@@ -79,12 +90,19 @@ export default class ClubManagementView {
     /** 0 = 从成员列表打开（自己的直属下级，可管理）；>=1 = 由「下级成员」逐层点开，跨级只读。 */
     private settingsDepth:number = 0;
     private selectedDownline:ClubPlayer[] = [];
-    private settingsTab:"member"|"downline" = "member";
+    private settingsTab:"member"|"downline"|"records" = "member";
     private downlineLoading:boolean = false;
     private downlineError:string = "";
     private downlinePage:number = 0;
     private downlineTotal:number = 0;
     private downlineToken:number = 0;
+    private recordKind:ClubRecordKind = "updown";
+    private recordRows:ClubRecord[] = [];
+    private recordLoading:boolean = false;
+    private recordError:string = "";
+    private recordPage:number = 0;
+    private recordTotal:number = 0;
+    private recordToken:number = 0;
     /** 当前这一页的成员数据；赠送/上下分成功后用它就地刷新玩家设置卡。 */
     private items:ClubPlayer[] = [];
     /** 卡片加高显示联盟行时子节点要整体上移，避免卡片顶部留出大空白。 */
@@ -103,6 +121,8 @@ export default class ClubManagementView {
     private readonly pageSize:number = 20;
     /** 与 Prefab 中「玩家设置下级列表」一屏可放的行数一致。 */
     private readonly downlinePageSize:number = 4;
+    /** 积分流水接口单页条数；列表可滚动，不再限制一屏行数。 */
+    private readonly recordPageSize:number = 20;
 
     constructor(private root:cc.Node,private getContext:()=>ClubContext,private message:(text:string)=>void,
         private gift:(player:ClubPlayer,mode:ClubGiftMode)=>void = null,private notify:()=>void = null,
@@ -233,11 +253,11 @@ export default class ClubManagementView {
     }
     /**
      * 俱乐部创建者的显示身份：
-     * 联盟总群主=大群主；当前俱乐部已入盟=盟主；未入盟=老板。
+     * 联盟总群主=大盟主；当前俱乐部已入盟=盟主；未入盟=群主。
      */
     private creatorRole(c:ClubContext = this.context):string {
-        if(!c || !c.hasUnion) return "老板";
-        return c.unionIsOwner === true ? "大群主" : "盟主";
+        if(!c || !c.hasUnion) return "群主";
+        return c.unionIsOwner === true ? "大盟主" : "盟主";
     }
     /**
      * 俱乐部申请与入盟申请共用同一个弹窗：只换标题、抬头和数据源，
@@ -389,9 +409,10 @@ export default class ClubManagementView {
         const nameLabel = nameNode && nameNode.getComponent(cc.Label);
         if(nameLabel) nameLabel.overflow = cc.Label.Overflow.SHRINK;
         this.text("邀请码",next.id ? next.inviteCode || "" : "从俱乐部选择后查看信息",card);
-        // 本俱乐部额度放在上方俱乐部区；下方联盟区只显示联盟名/ID/联盟池。
+        // 本俱乐部额度放在上方俱乐部区；未加入联盟的俱乐部不展示额度。
         const topQuotaFen = Number(next.clubQuotaFen);
-        const showTopQuota = next.role === "owner" && Number.isFinite(topQuotaFen);
+        const inUnion = next.hasUnion === true || !!String(next.unionId || "").trim();
+        const showTopQuota = next.role === "owner" && inUnion && Number.isFinite(topQuotaFen);
         this.active("俱乐部额度",showTopQuota,card);
         this.text("俱乐部额度",showTopQuota ? "额度：" + this.fenText(topQuotaFen) + " 元" : "",card);
         // 钻石池只给群主看；数据来自 查询_俱乐部_钻石流水 最新一条的 remark 后值。
@@ -399,7 +420,7 @@ export default class ClubManagementView {
         const showStonePool = next.role === "owner";
         this.active("钻石池",showStonePool,card);
         this.text("钻石池",showStonePool ? "钻石池：" + (Number.isFinite(stonePool) ? stonePool : "--") : "",card);
-        // 邀请码后面显示比例：代理=代理比例，盟主=盟主比例；普通玩家/大群主/老板不显示。
+        // 邀请码后面显示比例：代理=代理比例，盟主=盟主比例；普通玩家/大盟主/群主不显示。
         let ratioText = "";
         if(next.role === "agent" && Number.isFinite(Number(next.agentPercent)))
             ratioText = "比例：" + Number(next.agentPercent) + "%";
@@ -409,9 +430,9 @@ export default class ClubManagementView {
         this.active("比例",ratioText !== "",card);
         this.text("比例",ratioText,card);
         const canReviewUnion = this.canReviewUnion(next);
-        // 「我的」卡片只在创建者（大群主/盟主/老板）或代理时显示身份牌；普通成员/管理员不占右侧位置。
+        // 「我的」卡片只在创建者（大盟主/盟主/群主）或代理时显示身份牌；普通成员/管理员不占右侧位置。
         const showIdentity = !!next.id && (next.role === "owner" || next.role === "agent");
-        this.text("身份",!showIdentity ? "" : next.role === "owner" ? this.creatorRole(next) : "代理",card);
+        this.text("身份",!showIdentity ? "" : next.role === "owner" ? this.creatorRole(next) : "合伙人",card);
         this.active("身份底",showIdentity,card);
         // 上方只保留俱乐部信息；联盟名+联盟号、额度、联盟池整体放到卡片下方联盟区。
         const unionId = next.id ? String(next.unionId || "").trim() : "";
@@ -419,7 +440,7 @@ export default class ClubManagementView {
         const unionName = String(next.unionName || "").trim();
         this.active("栏目",false,card);
         this.active("联盟徽记",showUnion,card);
-        // 左侧固定位显示俱乐部创建者（大群主/盟主/老板）的真实头像；没有俱乐部时整块隐藏。
+        // 左侧固定位显示俱乐部创建者（大盟主/盟主/群主）的真实头像；没有俱乐部时整块隐藏。
         this.active("俱乐部徽记",!!next.id,card);
         const crest = next.id ? this.at("俱乐部徽记",card) : null;
         const crestSprite = crest && crest.getComponent(cc.Sprite);
@@ -548,6 +569,8 @@ export default class ClubManagementView {
             "玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏","玩家设置禁止账号",
             "玩家设置调整盟主比例",
             "成员设置","成员设置非激活","下级成员","下级成员激活",
+            "额度记录","额度记录激活","记录_上下分","记录_上下分激活","记录_牌局","记录_牌局激活",
+            "记录第一页","记录上一页","记录下一页","记录最后一页",
             "下级第一页","下级上一页","下级下一页","下级最后一页",
             "玩家设置输入关闭","玩家设置输入取消","玩家设置输入确认"].indexOf(name) < 0) return false;
         this.Refresh();
@@ -601,6 +624,22 @@ export default class ClubManagementView {
             this.showPlayerSettingsTab("member");
         } else if(name === "下级成员" || name === "下级成员激活") {
             this.showPlayerSettingsTab("downline");
+        } else if(name === "额度记录" || name === "额度记录激活") {
+            this.showPlayerSettingsTab("records");
+        } else if(name === "记录_上下分" || name === "记录_上下分激活") {
+            this.selectRecordKind("updown");
+        } else if(name === "记录_牌局" || name === "记录_牌局激活") {
+            this.selectRecordKind("game");
+        } else if(name === "记录第一页") {
+            if(!this.recordLoading && this.recordPage > 0) this.loadRecords(0);
+        } else if(name === "记录上一页") {
+            if(!this.recordLoading && this.recordPage > 0) this.loadRecords(this.recordPage - 1);
+        } else if(name === "记录下一页") {
+            if(!this.recordLoading && (this.recordPage + 1) * this.recordPageSize < this.recordTotal)
+                this.loadRecords(this.recordPage + 1);
+        } else if(name === "记录最后一页") {
+            const last = Math.max(0,this.recordPages() - 1);
+            if(!this.recordLoading && this.recordPage < last) this.loadRecords(last);
         } else if(name === "下级第一页") {
             this.loadDownline(0);
         } else if(name === "下级上一页") {
@@ -664,7 +703,7 @@ export default class ClubManagementView {
         else if(name === "联盟红利") {
             if(this.canReviewUnion())
                 UIManager.getInstance().showPanel("panelUnionHongli",ShowPanelMode.Cover,JSON.stringify({mode:"union"}));
-            else this.message("只有联盟大群主可以查看联盟红利");
+            else this.message("只有联盟大盟主可以查看联盟红利");
         }
         else if(name === "管理解散") this.confirm("dissolve", "", "");
         else if(name === "管理取消") {
@@ -679,7 +718,7 @@ export default class ClubManagementView {
         // 代理点「俱乐部成员」同样能看直属列表；行内可操作项由 openPlayerSettings 按角色和层级收紧。
         if(kind === "union" || kind === "allies") {
             if(!this.canReviewUnion()) {
-                this.message(kind === "allies" ? "只有联盟大群主可以查看盟友" : "只有联盟大群主可以查看入盟申请");
+                this.message(kind === "allies" ? "只有联盟大盟主可以查看盟友" : "只有联盟大盟主可以查看入盟申请");
                 return;
             }
         } else if(!this.approver()) return;
@@ -878,7 +917,7 @@ export default class ClubManagementView {
     }
     private fillUnionApplicationRow(row:cc.Node,item:ClubUnionApplication,icon:cc.SpriteFrame):void {
         this.text("姓名",item.clubName || "俱乐部 " + item.clubId,row);
-        this.text("玩家ID","俱乐部ID: " + item.clubId + (item.ownerName ? "  群主：" + item.ownerName : ""),row);
+        this.text("玩家ID","俱乐部ID: " + item.clubId + (item.ownerName ? "  盟主：" + item.ownerName : ""),row);
         // 俱乐部名与群主名长度不可控，缩放而不是硬截断，保证两行都完整可读。
         for(const name of ["姓名","玩家ID"]) {
             const node = this.at(name,row);
@@ -989,8 +1028,8 @@ export default class ClubManagementView {
             this.text("文字","调整比例",adjustButton);
         }
         const name = item.clubName || "俱乐部 " + item.clubId;
-        this.text("姓名",name + (isOwnClub ? "（大群主）" : ""),row);
-        this.text("玩家ID","俱乐部ID: " + item.clubId + (item.ownerName ? "  群主：" + item.ownerName : ""),row);
+        this.text("姓名",name + (isOwnClub ? "（大盟主）" : ""),row);
+        this.text("玩家ID","俱乐部ID: " + item.clubId + (item.ownerName ? "  盟主：" + item.ownerName : ""),row);
         const quotaFen = Number(item.quotaFen);
         const quotaNode = this.at("盟友额度",row);
         if(quotaNode) {
@@ -1081,9 +1120,9 @@ export default class ClubManagementView {
     }
     private fillMemberQuota(row:cc.Node,item:ClubPlayer,identity:string):void {
         if(!item) { this.active("额度",false,row);this.active("额度值",false,row);return; }
-        // 只有大群主和盟主有俱乐部额度；代理、普通成员不显示。
+        // 只有大盟主和盟主有俱乐部额度；代理、普通成员不显示。
         const fen = Number(item.clubQuotaFen);
-        const show = (identity === "大群主" || identity === "盟主") && Number.isFinite(fen);
+        const show = (identity === "大盟主" || identity === "盟主") && Number.isFinite(fen);
         this.active("额度",show,row);
         this.active("额度值",show,row);
         if(show) {
@@ -1158,11 +1197,11 @@ export default class ClubManagementView {
             this.button(name,false,panel);
         }
     }
-    /** V2：上下分只开放给俱乐部创建者（老板）；代理/管理员只能赠送。 */
+    /** V2：上下分只开放给俱乐部创建者（群主）；代理/管理员只能赠送。 */
     private canUpDown():boolean {
         return !!this.context && this.context.role === "owner";
     }
-    /** 上下分入口：俱乐部创建者打开其他成员时显示；自己那行/老板行不显示。 */
+    /** 上下分入口：俱乐部创建者打开其他成员时显示；自己那行/群主行不显示。 */
     private syncUpDownButton():void {
         const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
         const player = this.selectedPlayer;
@@ -1195,6 +1234,10 @@ export default class ClubManagementView {
             if(!this.sameContext(context,this.getContext())) return;
             this.refreshMemberData(target);
         },1500);
+        // 上下分成功后，额度记录页也要重新取一次，避免停留在旧流水。
+        if(settingsOpen && this.settingsTab === "records" &&
+            this.selectedPlayer && String(this.selectedPlayer.id) === target)
+            this.loadRecords(0);
     }
     private refreshMemberData(targetId:string):void {
         const context = this.context;
@@ -1217,7 +1260,7 @@ export default class ClubManagementView {
         this.text("玩家积分值",this.value(fresh.clubGold !== undefined ? fresh.clubGold : fresh.points),panel);
         this.text("备注值",fresh.note || "未设置",panel);
         const freshIdentity = this.memberIdentity(fresh,this.context);
-        this.text("比例值",(this.isAgentPlayer(fresh) || freshIdentity === "盟主" || freshIdentity === "大群主") ? this.percentText(fresh) : "未开通",panel);
+        this.text("比例值",(this.isAgentPlayer(fresh) || freshIdentity === "盟主" || freshIdentity === "大盟主") ? this.percentText(fresh) : "未开通",panel);
         this.text("盟主比例值",this.percentText(fresh),panel);
     }
     /** 有备注时统一显示「名字(备注)」，成员列表、下级列表与玩家信息抬头共用。 */
@@ -1275,16 +1318,33 @@ export default class ClubManagementView {
         const node = color ? this.at(name + "值",row) : null;
         if(node) node.color = color;
     }
-    /** 成员身份统一口径：创建者（大群主/盟主/老板）、管理员、代理、成员。 */
+    /** 成员身份统一口径：创建者（大盟主/盟主/群主）、管理员、合伙人、成员。 */
     private memberIdentity(item:ClubPlayer,context:ClubContext):string {
         if(!item) return "成员";
         const isOwner = item.id === context.ownerId ||
             (item.id === context.accountId && context.role === "owner");
         const isSelf = item.id === context.accountId;
         const isAgent = this.isAgentPlayer(item);
-        return isOwner ? this.creatorRole(context) :
-            isSelf && context.role === "manager" ? "管理员" :
-            isAgent ? "代理" : item.role || "成员";
+        if(isOwner) return this.creatorRole(context);
+        if(isSelf && context.role === "manager") return "管理员";
+        const role = this.roleDisplay(item.role);
+        // 创建者优先于 is_agent：创建者本身就是根代理（is_agent=1），不能显示成合伙人。
+        // 大盟主看属下俱乐部时，行带的是那家俱乐部的 club_id，其创建者就是盟主。
+        const crossClub = !!item.clubId && !!context.id && item.clubId !== context.id;
+        if(role === "群主") return crossClub ? "盟主" : "群主";
+        if(role === "盟主" || role === "大盟主") return role;
+        return isAgent ? "合伙人" : role;
+    }
+    /** 服务端 role 值 → 界面口径；内部 role 键不变。 */
+    private roleDisplay(role:any):string {
+        const raw = role === undefined || role === null ? "" : String(role).trim();
+        const key = raw.toLowerCase();
+        if(["agent","leader","代理","合伙人"].indexOf(key) >= 0) return "合伙人";
+        if(["manager","管理员"].indexOf(key) >= 0) return "管理员";
+        if(["union_owner","unionowner","大盟主"].indexOf(key) >= 0) return "大盟主";
+        if(["owner","老板","创建者","群主"].indexOf(key) >= 0) return "群主";
+        if(key === "盟主") return "盟主";
+        return raw || "成员";
     }
     /** 成员列表与下级成员列表共用同一套行内容，保证两处显示一致。 */
     private fillMemberRow(row:cc.Node,item:ClubPlayer):void {
@@ -1300,8 +1360,8 @@ export default class ClubManagementView {
         this.active("盟主底色",identity === "盟主",row);
         this.metricText(row,"团队人数",item.teamCount);
         this.metricText(row,"积分",item.clubGold !== undefined ? item.clubGold : item.points);
-        // 代理有代理比例；盟主/大群主默认有联盟比例（盟主虚拟行 is_agent=0，也必须显示）。
-        const showPercent = isAgent || identity === "盟主" || identity === "大群主";
+        // 代理有代理比例；盟主/大盟主默认有联盟比例（盟主虚拟行 is_agent=0，也必须显示）。
+        const showPercent = isAgent || identity === "盟主" || identity === "大盟主";
         this.active("比例",showPercent,row);
         this.active("比例值",showPercent,row);
         if(showPercent) {
@@ -1330,7 +1390,7 @@ export default class ClubManagementView {
     /**
      * 俱乐部成员列表的「对话」入口。
      *
-     * 群主（owner）、代理（agent/leader）可以发起同俱乐部会话；联盟大群主
+     * 群主（owner）、代理（agent/leader）可以发起同俱乐部会话；联盟大盟主
      * 还可以对成员行自带的 club_id 发起跨俱乐部会话（盟主虚拟行就是其它俱乐部）。
      * 管理员与普通成员不显示按钮，服务端仍会再校验关系。
      */
@@ -1441,7 +1501,7 @@ export default class ClubManagementView {
         if(!item) return;
         // 创建者、管理员、代理都能打开；代理只管理自己直属的下级，
         // 具体到踢人/改积分等按钮再按角色和层级收紧。
-        if(!this.approver()) { this.message("仅创建者/管理员/代理可管理成员");return; }
+        if(!this.approver()) { this.message("仅创建者/管理员/合伙人可管理成员");return; }
         // 自己那一行也允许打开（代理给自己补分/赠送），但面板里只保留「赠送」「上下分」，
         // 设代理、调比例、备注、额度、踢出等管理操作对本人一律收起（见下方 isSelf 判断）。
         const modal = this.at("俱乐部玩家设置弹窗");
@@ -1456,8 +1516,15 @@ export default class ClubManagementView {
         this.downlineError = "";
         this.downlinePage = 0;
         this.downlineTotal = 0;
+        this.recordKind = "updown";
+        this.recordRows = [];
+        this.recordLoading = false;
+        this.recordError = "";
+        this.recordPage = 0;
+        this.recordTotal = 0;
         // 切换玩家后旧请求一律作废；下级列表只在点开「下级成员」页签时才查。
         ++this.downlineToken;
+        ++this.recordToken;
         this.active("俱乐部玩家设置弹窗",true);
         this.active("玩家设置只读提示",readOnly,panel);
         this.text("玩家姓名",this.displayName(item),panel);
@@ -1474,7 +1541,7 @@ export default class ClubManagementView {
         if(statusNode) statusNode.color = online ? new cc.Color(155,255,109) : new cc.Color(201,216,228);
         this.text("玩家积分值",this.value(item.clubGold !== undefined ? item.clubGold : item.points),panel);
         this.text("备注值",item.note || "未设置",panel);
-        this.text("比例值",(isAgent || identity === "盟主" || identity === "大群主") ? this.percentText(item) : "未开通",panel);
+        this.text("比例值",(isAgent || identity === "盟主" || identity === "大盟主") ? this.percentText(item) : "未开通",panel);
         this.text("盟主比例值",this.percentText(item),panel);
         this.text("代理开关文字",isAgent ? "开" : "关",panel);
         this.active("玩家设置代理开关/开",isAgent,panel);
@@ -1489,7 +1556,7 @@ export default class ClubManagementView {
         const canAgent = !readOnly && this.canManageAgent();
         // 自己那一行只留「赠送 / 上下分」，代理关系类操作整块收起（不给点也不显示）。
         const canManageTarget = !isSelf;
-        // 赠送只对“其他人”，自己那行不显示赠送；老板给其他人可赠送+上下分，代理给其他人只有赠送。
+        // 赠送只对“其他人”，自己那行不显示赠送；群主给其他人可赠送+上下分，代理给其他人只有赠送。
         // 盟主是联盟内另一家俱乐部的创建者，赠送与开通代理都不适用于该行。
         const unionLeader = this.isUnionLeaderPlayer();
         const canGift = !isSelf && !isOwner && !unionLeader;
@@ -1510,6 +1577,7 @@ export default class ClubManagementView {
         this.button("玩家设置禁止游戏",false,panel);
         this.button("玩家设置禁止账号",false,panel);
         this.renderDownline(panel);
+        this.renderRecords(panel);
         this.showPlayerSettingsTab("member");
     }
     private settingsMemberNodes():string[] {
@@ -1517,11 +1585,7 @@ export default class ClubManagementView {
             "代理开关文字","玩家设置代理开关"];
     }
     private roleText(item:ClubPlayer):string {
-        const role = String(item.role || "").trim();
-        if(role === "owner" || role === "老板" || role === "创建者") return "老板";
-        if(role === "manager" || role === "管理员") return "管理员";
-        if(role === "agent" || role === "代理") return "代理";
-        return "成员";
+        return this.roleDisplay(item && item.role);
     }
     /** 身份牌是九宫格，按字数定宽；左边界固定，状态跟着右移，避免叠字。 */
     private layoutRole(text:string,panel:cc.Node):void {
@@ -1536,11 +1600,13 @@ export default class ClubManagementView {
         const status = this.at("玩家状态",panel);
         if(status) status.setPosition(-9 + Math.max(0,width - 60),419);
     }
-    private showPlayerSettingsTab(tab:"member"|"downline"):void {
+    private showPlayerSettingsTab(tab:"member"|"downline"|"records"):void {
         const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
         if(!panel) return;
         this.settingsTab = tab;
         const member = tab === "member";
+        const downline = tab === "downline";
+        const records = tab === "records";
         this.settingsMemberNodes().forEach(name=>this.active(name,member,panel));
         // 备注行随成员页签显示；只有创建者/直属上级代理能看到编辑按钮。
         this.active("玩家设置备注",member && this.canRemarkPlayer(),panel);
@@ -1557,20 +1623,38 @@ export default class ClubManagementView {
         this.syncSelfActions();
         // 盟主行的代理开关与赠送同样要在页签切换后重新收起。
         this.syncUnionLeaderActions();
-        this.active("玩家设置下级列表",!member,panel);
+        this.active("玩家设置下级列表",downline,panel);
+        this.active("玩家设置额度记录",records,panel);
         this.active("成员设置",member,panel);
         this.active("成员设置非激活",!member,panel);
-        this.active("下级成员",member,panel);
-        this.active("下级成员激活",!member,panel);
-        this.active("成员设置选中线",member,panel);
-        this.active("下级成员选中线",!member,panel);
-        this.active("成员设置选中菱形",member,panel);
-        this.active("下级成员选中菱形",!member,panel);
+        this.active("下级成员",!downline,panel);
+        this.active("下级成员激活",downline,panel);
+        this.active("额度记录",!records,panel);
+        this.active("额度记录激活",records,panel);
+        // 旧下划线/菱形已由胶囊页签取代，避免任何状态把它们重新点亮。
+        for(const name of ["成员设置选中线","下级成员选中线","成员设置选中菱形","下级成员选中菱形"])
+            this.active(name,false,panel);
         // 分页条只属于下级成员列表，成员设置页签里整组隐藏。
         for(const name of ["下级第一页","下级上一页","下级页码","下级下一页","下级最后一页"])
-            this.active(name,!member,panel);
+            this.active(name,downline,panel);
         // 下级成员只在点击页签时查询，避免每次打开玩家设置都多发一次列表请求。
-        if(!member) this.loadDownline(this.downlinePage);
+        if(downline) this.loadDownline(this.downlinePage);
+        if(records) {
+            this.renderRecords(panel);
+            if(!this.recordRows.length && !this.recordLoading && !this.recordError)
+                this.loadRecords(this.recordPage);
+        }
+    }
+    private selectRecordKind(kind:ClubRecordKind):void {
+        if(this.settingsTab !== "records") this.showPlayerSettingsTab("records");
+        if(this.recordKind === kind) return;
+        this.recordKind = kind;
+        this.recordRows = [];
+        this.recordPage = 0;
+        this.recordTotal = 0;
+        this.recordError = "";
+        ++this.recordToken;
+        this.loadRecords(0);
     }
     private async loadDownline(page:number):Promise<void> {
         const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
@@ -1617,12 +1701,13 @@ export default class ClubManagementView {
                 }
                 queryClubId = context.id;
             }
+            // 查下属固定同时带目标人 ID（agent_id）和 club_id，盟主也按同一个口径查。
             const result = await this.api.list(queryClubId,"members",page,this.downlinePageSize,"",playerId);
             if(token !== this.downlineToken || !this.valid(version,context) ||
                 !this.selectedPlayer || this.selectedPlayer.id !== playerId) return;
             const rows = result && Array.isArray(result.items) ? result.items : [];
-            // 直属口径回包首行是被查代理本人；「下级成员」页签只列其直属成员。
-            this.selectedDownline = rows.filter(item => String(item.id || "") !== String(playerId));
+            // 直接展示服务端回包（直属口径首行是被查节点本人，也照常显示，不再过滤）。
+            this.selectedDownline = rows;
             this.downlineTotal = Math.max(0,Number(result && result.total) || 0);
             this.downlineError = "";
         } catch(error) {
@@ -1681,6 +1766,123 @@ export default class ClubManagementView {
             if(context) this.bindPlayerSettings(this.playerHotzone(row),item,context,depth + 1);
         });
         this.downlinePaging(panel);
+    }
+    private recordPages():number {
+        return Math.max(1,Math.ceil(this.recordTotal / this.recordPageSize));
+    }
+    private async loadRecords(page:number):Promise<void> {
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel) return;
+        const player = this.selectedPlayer;
+        const context = this.context ? {...this.context} : null;
+        if(!this.api || !this.api.records || !context || !context.id || !player) return;
+        // 记录按「目标玩家所在俱乐部 + 玩家 ID」查询；盟主属于另一家俱乐部，不能兜底当前俱乐部。
+        let queryClubId = this.resolvePlayerClubId(player);
+        if(!queryClubId) {
+            if(this.isUnionLeaderPlayer(player)) {
+                this.recordRows = [];
+                this.recordTotal = 0;
+                this.recordError = "未获取到盟主所在俱乐部，请刷新盟友管理后重试";
+                this.renderRecords(panel);
+                return;
+            }
+            queryClubId = context.id;
+        }
+        const playerId = player.id;
+        const kind = this.recordKind;
+        const token = ++this.recordToken;
+        const version = this.version;
+        this.recordPage = page;
+        this.recordLoading = true;
+        this.recordError = "";
+        // 翻页先清空旧页，避免失败时列表还显示上一页数据。
+        this.recordRows = [];
+        this.renderRecords(panel);
+        try {
+            const result = await this.api.records(queryClubId,playerId,kind,page,this.recordPageSize);
+            if(token !== this.recordToken || !this.valid(version,context) ||
+                !this.selectedPlayer || this.selectedPlayer.id !== playerId ||
+                this.recordKind !== kind) return;
+            this.recordRows = result && Array.isArray(result.items) ? result.items : [];
+            this.recordTotal = Math.max(0,Number(result && result.total) || 0);
+            this.recordError = "";
+        } catch(error) {
+            if(token === this.recordToken && this.valid(version,context) &&
+                this.selectedPlayer && this.selectedPlayer.id === playerId && this.recordKind === kind)
+                this.recordError = error && error.message || "记录加载失败";
+        } finally {
+            if(token === this.recordToken && this.valid(version,context) &&
+                this.selectedPlayer && this.selectedPlayer.id === playerId && this.recordKind === kind) {
+                this.recordLoading = false;
+                this.renderRecords(panel);
+            }
+        }
+    }
+    private renderRecords(panel:cc.Node):void {
+        const list = this.at("玩家设置额度记录/玩家设置记录列表",panel);
+        if(!list) return;
+        const updown = this.recordKind === "updown";
+        this.active("玩家设置额度记录/记录_上下分",!updown,panel);
+        this.active("玩家设置额度记录/记录_上下分激活",updown,panel);
+        this.active("玩家设置额度记录/记录_牌局",updown,panel);
+        this.active("玩家设置额度记录/记录_牌局激活",!updown,panel);
+        this.text("玩家设置额度记录/记录表头/表头_说明",updown ? "增加对象" : "房间",panel);
+
+        const view = this.at("view",list);
+        const content = this.at("view/content",list);
+        const template = this.at("view/content/记录行模板",list);
+        if(!content || !template) return;
+        for(const row of content.children.slice())
+            if(row !== template && row.name.indexOf("记录行_") === 0) { row.removeFromParent(); row.destroy(); }
+
+        const rows = this.recordRows || [];
+        const empty = this.at("玩家设置额度记录/记录空状态",panel);
+        if(empty) {
+            empty.active = rows.length === 0;
+            const label = empty.getComponent(cc.Label);
+            if(label) label.string = this.recordLoading ? "加载中…" : this.recordError || "暂无记录";
+        }
+        const viewHeight = view ? view.height : 450;
+        const pitch = 86;
+        content.height = Math.max(viewHeight,rows.length * pitch);
+        content.setPosition(0,viewHeight / 2);
+        rows.forEach((item,index)=>{
+            const row = cc.instantiate(template);
+            row.name = "记录行_" + index;
+            row.parent = content;
+            row.active = true;
+            row.setPosition(0,-pitch / 2 - index * pitch);
+            this.fillRecordRow(row,item,updown);
+        });
+        const scroll = list.getComponent(cc.ScrollView);
+        if(scroll) scroll.scrollToTop(0);
+
+        this.text("玩家设置额度记录/记录页码",(this.recordPage + 1) + " / " + this.recordPages(),panel);
+        const busy = this.recordLoading || this.busy;
+        const hasPrev = this.recordPage > 0;
+        const hasNext = (this.recordPage + 1) * this.recordPageSize < this.recordTotal;
+        const pager = this.at("玩家设置额度记录",panel);
+        this.button("记录第一页",!busy && hasPrev,pager);
+        this.button("记录上一页",!busy && hasPrev,pager);
+        this.button("记录下一页",!busy && hasNext,pager);
+        this.button("记录最后一页",!busy && hasNext,pager);
+    }
+    private fillRecordRow(row:cc.Node,item:ClubRecord,updown:boolean):void {
+        const date = item.date || "";
+        this.text("时间",date.length > 16 ? date.slice(5,16) : date,row);
+        this.text("类型",item.type || "—",row);
+        const amount = Number(item.amount);
+        const valid = Number.isFinite(amount);
+        this.text("金额",valid ? (amount > 0 ? "+" + amount : String(amount)) : "—",row);
+        const amountNode = this.at("金额",row);
+        if(amountNode) amountNode.color = valid && amount < 0 ?
+            new cc.Color(237,141,113) : valid && amount > 0 ?
+                new cc.Color(129,232,177) : new cc.Color(231,240,246);
+        this.text("余额",item.balance === "" || item.balance === undefined ? "—" : item.balance,row);
+        // 增加对象 = 流水归属玩家（guuid/name）；牌局无房间号时同样显示对象名。
+        const target = item.userName || item.userId || "—";
+        const note = updown ? target : (item.roomId ? "房间 " + item.roomId : target);
+        this.text("说明",note,row);
     }
     /** 盟友管理 → 指定俱乐部额度调整：输入元，发送授信_联盟_额度（正数划拨、负数收回）。 */
     private openUnionQuotaInput(member:ClubUnionMember,mode:"increase"|"decrease"):void {
@@ -1932,7 +2134,7 @@ export default class ClubManagementView {
         const club = {...this.context};
         if(!this.sameContext(club,this.getContext())) { this.Refresh();return; }
         if(!this.isUnionLeaderPlayer(player) || !this.canReviewUnion()) {
-            this.message("只有联盟大群主可以调整盟主比例");
+            this.message("只有联盟大盟主可以调整盟主比例");
             return;
         }
         this.busy = true;
@@ -1968,7 +2170,7 @@ export default class ClubManagementView {
         const number = Number(value);
         if(!Number.isFinite(number) || number < 0 ||
             (action !== "adjustScore" && (!Number.isInteger(number) || number > 100))) {
-            this.message(action === "adjustScore" ? "请输入不小于 0 的积分" : "代理比例必须是 0-100 的整数");
+            this.message(action === "adjustScore" ? "请输入不小于 0 的积分" : "合伙人比例必须是 0-100 的整数");
             return;
         }
         this.confirm(action,this.selectedPlayer.id,this.selectedPlayer.name,value);
@@ -1999,9 +2201,9 @@ export default class ClubManagementView {
             action === "remove" ? "确认将「"+(name || userId)+"」移出俱乐部？\n玩家 ID: "+userId :
             action === "promote" ? "确认将「"+(name || userId)+"」设为管理员？\n玩家 ID: "+userId :
             action === "adjustScore" ? "确认将「"+(name || userId)+"」积分调整为 "+value+"？" :
-            action === "setAgent" ? "确认给「"+(name || userId)+"」开通代理？" :
-            action === "changeAgentRatio" ? "确认将「"+(name || userId)+"」代理比例调整为 "+value+"%？" :
-            action === "cancelAgent" ? "确认取消「"+(name || userId)+"」的代理资格？" :
+            action === "setAgent" ? "确认给「"+(name || userId)+"」开通合伙人？" :
+            action === "changeAgentRatio" ? "确认将「"+(name || userId)+"」合伙人比例调整为 "+value+"%？" :
+            action === "cancelAgent" ? "确认取消「"+(name || userId)+"」的合伙人资格？" :
             action === "unionApprove" ? "同意「"+(name || userId)+"」加入联盟？\n俱乐部ID: "+userId :
             action === "unionReject" ? "拒绝「"+(name || userId)+"」加入联盟？\n俱乐部ID: "+userId :
             (action === "approve" ? "同意" : "拒绝")+"「"+(name || userId)+"」加入俱乐部？\n玩家 ID: "+userId;

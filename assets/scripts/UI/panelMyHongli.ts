@@ -357,7 +357,7 @@ export default class panelMyHongli extends UIPanelViewBase {
         if(raw === "clubroot") return "创建者";
         if(raw === "unionroot") return "联盟上缴";
         const match = /^club(\d+)$/.exec(raw);
-        if(match) return match[1] + "级代理";
+        if(match) return match[1] + "级合伙人";
         return raw || "分成";
     }
 

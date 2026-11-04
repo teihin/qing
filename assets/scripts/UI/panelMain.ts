@@ -70,6 +70,12 @@ export default class panelMain extends UIPanelViewBase {
             this.scheduleOnce(()=>this.getAllRooms(0,true));
         }
     };
+    /** 游戏规则创建/删除后延迟刷新房间列表；多次触发合并成最后一次。 */
+    private roomListRuleRefreshScheduled:boolean = false;
+    private readonly roomListRuleRefreshHandler = ()=>{
+        this.roomListRuleRefreshScheduled = false;
+        this.getAllRooms(0,true);
+    };
 
     private listSet = ['战绩','代理','资金明细','赠送','设置'];
     private walletReturnToCashWater:boolean = false;
@@ -249,6 +255,7 @@ export default class panelMain extends UIPanelViewBase {
         
 
         KBEngine.Event.register("AllRoomInfo", this, "OnClubRoomInfo");
+        KBEngine.Event.register("RefreshClubRoomList", this, "OnRefreshClubRoomList");
 
         KBEngine.Event.register("onEnterRoom", this, "onEnterRoom");
         KBEngine.Event.register("onGetReturnedRoom", this, "onGetReturnedRoom");
@@ -315,7 +322,7 @@ export default class panelMain extends UIPanelViewBase {
             // 这里直接用代理信息判角色：owns/manages 已经在前面判过了，
             // 再走 IsClubAgentIn 会多一次 make/manage 排除，反而把代理判成成员。
             const role = owns ? "owner" : manages ? "manager" : this.IsClubAgent(agent) ? "agent" : "member";
-            // is_leader 只表示创建者的直属代理；V2 下所有代理统一显示「代理」，不再作为盟主标签。
+            // is_leader 只表示创建者的直属代理；V2 下所有代理统一显示「合伙人」，不再作为盟主标签。
             const isLeader = role === "agent" && !!agent && Number(agent.is_leader) === 1;
             const union = this.clubUnionStatus[id];
             // 2026-11-03 v2.1：查询_俱乐部_信息 直接返回 union_id / union_apply / union_quota，
@@ -459,6 +466,9 @@ export default class panelMain extends UIPanelViewBase {
         }).then((unread)=>{
             this.RefreshDirectChatBadge(unread.total);
         }).catch(()=>{});
+        // 预先拉一次消息首页并加载页面资源，避免首次点「消息」时再等连接和 Prefab。
+        manager.LoadAllConversations(1).catch(()=>{});
+        cc.loader.loadRes("UI/panelMessage",()=>{});
     }
 
     private RefreshDirectChatBadge(total:number):void
@@ -1552,7 +1562,7 @@ export default class panelMain extends UIPanelViewBase {
             }
             else
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"你不是代理，没有权限操作！");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"你不是合伙人，没有权限操作！");
             }
             
         }
@@ -1649,7 +1659,7 @@ export default class panelMain extends UIPanelViewBase {
         {
             if(Number(GameDataManager.getAccount().level)<50 && !cc.sys.isBrowser)
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只有代理才能创建私密房!");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"只有合伙人才能创建私密房!");
                 return; 
             }
             UIManager.getInstance().showPanel("panelCreateRoom",ShowPanelMode.Cover);
@@ -2814,6 +2824,16 @@ export default class panelMain extends UIPanelViewBase {
         this.scheduleOnce(()=>this.getAllRooms(0,true));
     }
 
+    /** 游戏规则创建/删除后延迟刷新房间列表，避开服务端建房/关房推送。 */
+    public OnRefreshClubRoomList(delay:number = 1.5)
+    {
+        const seconds = Math.max(0, Number(delay) || 0);
+        if(this.roomListRuleRefreshScheduled)
+            this.unschedule(this.roomListRuleRefreshHandler);
+        this.roomListRuleRefreshScheduled = true;
+        this.scheduleOnce(this.roomListRuleRefreshHandler, seconds);
+    }
+
     // 获取房间列表。请求串行化，避免滚动和快速切换分类产生重复页或串包。
     getAllRooms(nPage:number = 0,_bFouce:boolean = false)
     {
@@ -2830,7 +2850,8 @@ export default class panelMain extends UIPanelViewBase {
 
         if(this.roomListLoading)
         {
-            if(filter.key !== this.roomListRequestFilterKey)
+            // 强制刷新（例如创建/删除玩法后的延迟刷新）不能被在途请求吞掉。
+            if(_bFouce || filter.key !== this.roomListRequestFilterKey)
                 this.roomListPendingRefresh = true;
             else
                 this.roomListPendingRefresh = false;
@@ -3930,7 +3951,7 @@ export default class panelMain extends UIPanelViewBase {
             }
         }
         // 名称已知但 is_owner 缺失时也要探一次「我的联盟」：该命令只有总群主能成功，
-        // 用它兜底确认「大群主」，避免按钮因为额度推送缺字段而一直收起。
+        // 用它兜底确认「大盟主」，避免按钮因为额度推送缺字段而一直收起。
         if(unionId)
             this.RequestClubUnionName(clubId);
         if(this.clubManagement)
@@ -4432,8 +4453,8 @@ export default class panelMain extends UIPanelViewBase {
                 else
                     ImageManager.getInstance().SetLocalAvatar(avatar,"1");
             }
-            const role = isOwner ? (unionId ? (status && status.isOwner === true ? "大群主" : "盟主") : "老板") :
-                isAgent ? "代理" : "";
+            const role = isOwner ? (unionId ? (status && status.isOwner === true ? "大盟主" : "盟主") : "群主") :
+                isAgent ? "合伙人" : "";
             const playerBase = row.getComponent(cc.Sprite);
             if(playerBase)
                 playerBase.enabled = role === "";
@@ -4554,7 +4575,7 @@ export default class panelMain extends UIPanelViewBase {
             "创建俱乐部弹窗/面板/名称标题":"联盟名称",
             "创建俱乐部弹窗/面板/名称输入/PLACEHOLDER_LABEL":"请输入联盟名称",
             "创建俱乐部弹窗/面板/确认创建俱乐部/确定文字":"确认创建联盟",
-            "创建俱乐部弹窗/面板/说明":"创建后您将成为联盟总群主"
+            "创建俱乐部弹窗/面板/说明":"创建后您将成为大盟主"
         } : {
             "创建俱乐部弹窗/面板/标题底/标题":"创建俱乐部",
             "创建俱乐部弹窗/面板/名称标题":"俱乐部名称",
@@ -5038,7 +5059,7 @@ export default class panelMain extends UIPanelViewBase {
             this.node.getChildByName("加入俱乐部弹窗").active = false;
             this.clubJoinDialogMode = "club";
             if(this.clubManagement) this.clubManagement.Refresh();
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"加入联盟申请已提交，请等待联盟总群主审批。");
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"加入联盟申请已提交，请等待大盟主审批。");
         }
         else if(context === "club:create")
         {

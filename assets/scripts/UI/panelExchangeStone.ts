@@ -17,7 +17,7 @@ const {ccclass} = cc._decorator;
  * 普通场景使用 `gold,非俱乐部`，俱乐部场景使用 `gold,<club_id>`；结果只认
  * `onExChange(0x200/0x301/0x302)`。
  *
- * 角色只按本项目口径显示三种：**老板 / 代理 / 玩家**（没有「合伙人」）。
+ * 角色只按本项目口径显示三种：**群主 / 合伙人 / 玩家**。
  * 判定优先用 `查询_俱乐部_代理_信息` 的 `is_creator` / `is_agent`，
  * 拿不到回包时退化成 `club_make` 判定；`club_manage`（管理员）不单列，按玩家显示。
  *
@@ -312,16 +312,16 @@ export default class panelExchangeStone extends UIPanelViewBase
         if(account == null)
             return "玩家";
 
-        // 老板＝俱乐部创建者。club_make 是账号属性，代理信息没回来也能先判出来。
+        // 群主＝俱乐部创建者。club_make 是账号属性，代理信息没回来也能先判出来。
         if(this.SplitHas(account.club_make,this.clubId))
-            return "老板";
+            return "群主";
 
         if(this.agentInfo != null)
         {
             if(Number(this.agentInfo.is_creator) === 1)
-                return "老板";
+                return "群主";
             if(Number(this.agentInfo.is_agent) === 1)
-                return "代理";
+                return "合伙人";
         }
         // 管理员（club_manage）和普通成员在本口子里都按「玩家」显示。
         return "玩家";
@@ -477,7 +477,7 @@ export default class panelExchangeStone extends UIPanelViewBase
             // 同一帧再 showPanel 会命中「已存在」分支而复用旧界面，文本不刷新。挪到下一帧弹。
             this.scheduleOnce(()=>{
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-                    this.GetGoldLabel() + "不足，请联系代理上分或联系客服！");
+                    this.GetGoldLabel() + "不足，请联系合伙人上分或联系客服！");
             },0);
             return;
         }

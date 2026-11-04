@@ -20,6 +20,17 @@ GRAY = (143, 166, 186, 255)
 WHITE = (234, 242, 252, 255)
 DARK = (48, 30, 8, 255)
 DARKOUT = (2, 18, 31, 255)
+CYAN = (120, 220, 250, 255)
+RED = (255, 176, 162, 255)
+
+# 创建游戏规则只开放 1/3 起到底皮 20/40；0.1/0.2 与 50/100 不在前台提供。
+DIPI_OPTIONS = (
+    ("1", "1/3", 50),
+    ("2", "2/5", 100),
+    ("5", "5/10", 250),
+    ("10", "10/20", 500),
+    ("20", "20/40", 1000),
+)
 
 BASE64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 
@@ -92,10 +103,12 @@ def widget(n, flags, left=0, right=0, top=0, bottom=0, hc=0, vc=0,
     return n
 
 
-def label(n, text, fs, color, h_align=1, bold=True, outline=None, ow=1):
+def label(n, text, fs, color, h_align=1, bold=True, outline=None, ow=1,
+          wrap=False, lh=None, overflow=None):
     n.color = color
     n.comps.append({"kind": "label", "text": text, "fs": fs, "color": color,
-                    "h": h_align, "bold": bold, "outline": outline})
+                    "h": h_align, "bold": bold, "outline": outline,
+                    "wrap": wrap, "lh": lh, "overflow": overflow})
     if outline:
         n.comps.append({"kind": "outline", "color": outline[0], "width": outline[1]})
     return n
@@ -200,13 +213,14 @@ def build(n, parent_id=None, is_root=False, objs=None):
                          "_materials": [{"__uuid__": MAT}],
                          "_srcBlendFactor": 770, "_dstBlendFactor": 771,
                          "_string": comp["text"], "_N$string": comp["text"],
-                         "_fontSize": comp["fs"], "_lineHeight": int(comp["fs"] * 1.18),
-                         "_enableWrapText": False, "_N$file": {"__uuid__": FONT},
+                         "_fontSize": comp["fs"],
+                         "_lineHeight": comp["lh"] or int(comp["fs"] * 1.18),
+                         "_enableWrapText": bool(comp.get("wrap")), "_N$file": {"__uuid__": FONT},
                          "_isSystemFontUsed": False, "_spacingX": 0,
                          "_batchAsBitmap": False, "_styleFlags": 1 if comp["bold"] else 0,
                          "_underlineHeight": 2, "_N$horizontalAlign": comp["h"],
                          "_N$verticalAlign": 1, "_N$fontFamily": "Arial",
-                         "_N$overflow": 2, "_N$cacheMode": 0, "_id": ""}
+                         "_N$overflow": comp.get("overflow") or 2, "_N$cacheMode": 0, "_id": ""}
         elif k == "outline":
             objs[cid] = {"__type__": "cc.LabelOutline", "_name__": "", "_objFlags": 0,
                          "_enabled": True, "node": {"__id__": n.nid},
@@ -268,6 +282,9 @@ def build(n, parent_id=None, is_root=False, objs=None):
                 "_type": 0, "_segments": 64, "_N$alphaThreshold": 0,
                 "_N$inverted": False, "_id": ""
             }
+        elif k == "block":
+            objs[cid] = {"__type__": "cc.BlockInputEvents", "_name": "", "_objFlags": 0,
+                         "_enabled": True, "node": {"__id__": n.nid}, "_id": ""}
         elif k == "layout":
             objs[cid] = {"__type__": "cc.Layout", "_name": "", "_objFlags": 0,
                          "_enabled": True, "node": {"__id__": n.nid},
@@ -286,9 +303,17 @@ BACKGROUND_SPRITE_COMP_ID = [0]
 
 
 def text_node(name, text, fs, color, pos, size, h_align=1, anchor=(0.5, 0.5),
-              bold=True, outline=None):
+              bold=True, outline=None, wrap=False, lh=None, overflow=None):
     n = N(name, pos, size, anchor)
-    label(n, text, fs, color, h_align, bold, outline)
+    label(n, text, fs, color, h_align, bold, outline, wrap=wrap, lh=lh,
+          overflow=overflow)
+    return n
+
+
+def info_chip(name, text, pos, size=(300, 64), fs=22, color=CREAM):
+    n = N(name, pos, size)
+    sprite(n, SPR["chip"], sliced=True)
+    n.add(text_node("文字", text, fs, color, (0, 0), size))
     return n
 
 
@@ -332,17 +357,17 @@ def build_tree():
 
     tabs = N("页签", (0, 554), (702, 64))
     widget(tabs, 41, 24, 24, 92, 0, 0, 0, 702, 64)
-    names = ["奖池设置", "牌桌设置", "提示音设置", "其他设置"]
+    names = ["游戏规则", "奖池设置", "牌桌设置", "提示音设置", "其他设置"]
     for i, name in enumerate(names):
-        tab = N("页签_%d" % i, (-258 + i * 172, 0), (160, 64))
+        tab = N("页签_%d" % i, (-282 + i * 141, 0), (136, 64))
         sprite(tab, SPR["tab_on"] if i == 0 else SPR["tab_off"], sliced=True)
         button(tab)
-        tab.add(text_node("文字", name, 28, DARK if i == 0 else (169, 192, 214, 255),
-                          (0, 0), (160, 64)))
+        tab.add(text_node("文字", name, 24, DARK if i == 0 else (169, 192, 214, 255),
+                          (0, 0), (136, 64)))
         tabs.add(tab)
     root.add(tabs)
 
-    card = N("卡片", (0, -68), (702, 1118))
+    card = N("卡片", (0, -68), (702, 1118), active=False)
     sprite(card, SPR["panel"], sliced=True)
     widget(card, 45, 24, 24, 176, 40, 0, 0, 702, 1118)
     card_title = text_node("卡片标题", "奖池设置", 32, GOLD, (-254, 508), (320, 46),
@@ -453,6 +478,63 @@ def build_tree():
     card.add(total)
     root.add(card)
 
+    # ---------------------------------------------------------------- 游戏规则
+    rules = N("规则卡片", (0, -68), (702, 1118), active=True)
+    sprite(rules, SPR["panel"], sliced=True)
+    widget(rules, 45, 24, 24, 176, 40, 0, 0, 702, 1118)
+    rules_title = text_node("卡片标题", "游戏规则", 32, GOLD, (-254, 508), (320, 46),
+                            0, (0, 0.5), True, (DARKOUT, 1))
+    widget(rules_title, 9, 76, 0, 22, 0, 0, 0, 320, 46)
+    rules.add(rules_title)
+    rules_sub = text_node("卡片说明", "创建后自动开房 · 满员/开局自动补房", 22, GRAY,
+                          (-254, 464), (500, 32), 0, (0, 0.5))
+    widget(rules_sub, 9, 76, 0, 70, 0, 0, 0, 500, 32)
+    rules.add(rules_sub)
+    rules_badge = N("卡片图标", (-286, 506), (44, 44))
+    sprite(rules_badge, SPR["badge"])
+    widget(rules_badge, 9, 28, 0, 25, 0, 0, 0, 44, 44)
+    rules.add(rules_badge)
+    rules_summary = text_node("汇总", "正在读取游戏规则…", 22, GRAY, (0, 416), (654, 34))
+    widget(rules_summary, 41, 24, 24, 126, 0, 0, 0, 654, 34)
+    rules.add(rules_summary)
+
+    rules_scroll = N("滚动", (0, -27), (654, 830))
+    rules_scroll.comps.append({"kind": "scrollview"})
+    widget(rules_scroll, 45, 0, 0, 171, 117, 0, 0, 654, 830)
+    rules_view = N("view", (0, 0), (654, 830))
+    rules_view.comps.append({"kind": "mask"})
+    widget(rules_view, 45, 0, 0, 0, 0, 0, 0, 654, 830)
+    rules_content = N("content", (0, 415), (654, 830), anchor=(0.5, 1))
+
+    rule_row = N("规则行", (0, 0), (654, 250), active=False)
+    sprite(rule_row, SPR["row"], sliced=True)
+    rule_badge = N("徽章", (-304, 84), (32, 32))
+    sprite(rule_badge, SPR["badge"])
+    rule_row.add(rule_badge)
+    rule_row.add(text_node("底皮", "底皮 1/3", 30, GOLD, (-276, 84), (180, 40),
+                           0, (0, 0.5), True, (DARKOUT, 1)))
+    rule_row.add(text_node("类型", "地九王", 21, CYAN, (-90, 86), (120, 30),
+                           0, (0, 0.5), True))
+    rule_row.add(chip_btn("删除", "删除", (262, 84), (96, 48), "chip", 22, RED))
+    rule_row.add(text_node("准入", "准入 50 · 8 人 · 30 分钟", 21, GRAY, (-306, 42),
+                           (420, 30), 0, (0, 0.5), False))
+    rule_row.add(info_chip("抽水", "抽水 5%", (-166, -8), (300, 64), 23))
+    rule_row.add(info_chip("暗抽", "暗抽 1% · 仅群主", (166, -8), (300, 64), 22))
+    rule_row.add(text_node("房间", "房间 3 个 · 满员/开局自动补房", 21, GRAY,
+                           (-306, -64), (560, 30), 0, (0, 0.5), False))
+    rules_content.add(rule_row)
+
+    rules_view.add(rules_content)
+    rules_scroll.add(rules_view)
+    rules.add(rules_scroll)
+
+    rules.add(text_node("空提示", "暂无游戏规则，点击下方创建", 22, GRAY, (0, -27), (654, 120)))
+    create_entry = chip_btn("创建游戏规则", "＋ 创建游戏规则", (0, -505), (654, 92),
+                            "btn_gold", 30, DARK, True)
+    widget(create_entry, 44, 24, 24, 10, 0, 0, 0, 654, 92)
+    rules.add(create_entry)
+    root.add(rules)
+
     modal = N("弹窗", (0, 0), (750, 1334), active=False)
     widget(modal, 45, 0, 0, 0, 0)
     mask = N("弹窗遮罩", (0, 0), (750, 1334), color=(0, 0, 0, 255), opacity=160)
@@ -491,7 +573,200 @@ def build_tree():
     pane.add(chip_btn("弹窗取消", "取消", (-125, -200), (220, 64), "chip", 30, GRAY))
     pane.add(chip_btn("弹窗确定", "确定", (125, -200), (220, 64), "btn_gold", 30, DARK, True))
     root.add(modal)
+
+    # ---------------------------------------------------------------- 创建规则弹窗
+    create_modal = N("创建规则弹窗", (0, 0), (750, 1334), active=False)
+    widget(create_modal, 45, 0, 0, 0, 0)
+    create_mask = N("创建规则遮罩", (0, 0), (750, 1334), color=(0, 0, 0, 255), opacity=160)
+    sprite(create_mask, BLACK)
+    button(create_mask)
+    widget(create_mask, 45, 0, 0, 0, 0)
+    create_modal.add(create_mask)
+
+    create_pane = N("面板", (0, 0), (702, 1020))
+    sprite(create_pane, SPR["panel"], sliced=True)
+    create_pane.comps.append({"kind": "block"})
+    widget(create_pane, 18, 0, 0, 0, 0, 0, 0, 702, 1020)
+    create_modal.add(create_pane)
+    create_pane.add(text_node("标题", "创建游戏规则", 34, GOLD, (0, 460), (600, 48),
+                              1, (0.5, 0.5), True, (DARKOUT, 1.5)))
+    create_pane.add(text_node("副标题", "可按底皮创建多条规则 · 创建后自动开房", 20, GRAY,
+                              (0, 424), (600, 30)))
+    create_pane.add(text_node("底皮标题", "底皮", 26, GOLD, (-320, 380), (200, 34),
+                              0, (0, 0.5), True, (DARKOUT, 1)))
+    create_pane.add(text_node("底皮说明", "准入由底皮自动推导", 18, GRAY, (-228, 380),
+                              (300, 26), 0, (0, 0.5), False))
+    for i, (key, dipi_label, admit) in enumerate(DIPI_OPTIONS):
+        chip = N("底皮_%d" % i, (-256 + i * 128, 322), (116, 76))
+        sprite(chip, SPR["tab_on"] if i == 0 else SPR["chip"], sliced=True)
+        button(chip)
+        chip.add(text_node("名称", dipi_label, 24, DARK if i == 0 else CREAM,
+                           (0, 12), (116, 34)))
+        chip.add(text_node("准入", "准入 %d" % admit, 17, DARK if i == 0 else GRAY,
+                           (0, -20), (116, 24), 1, (0.5, 0.5), False))
+        create_pane.add(chip)
+
+    nine_row = N("地九王行", (0, 230), (654, 76))
+    sprite(nine_row, SPR["row"], sliced=True)
+    nine_row.add(text_node("名称", "地九王", 26, GOLD, (-300, 14), (300, 34),
+                           0, (0, 0.5), True, (DARKOUT, 1)))
+    nine_row.add(text_node("说明", "开启后按地九王规则结算", 18, GRAY, (-300, -16),
+                           (400, 24), 0, (0, 0.5), False))
+    nine_sw = N("地九王开关", (268, 0), (104, 52))
+    button(nine_sw)
+    nine_on = N("开", (0, 0), (104, 52), active=True)
+    sprite(nine_on, SPR["toggle_on"])
+    nine_on.add(text_node("文字", "开", 20, (255, 242, 216, 255), (-24, 0), (38, 38),
+                          1, (0.5, 0.5), True, (DARKOUT, 1)))
+    nine_off = N("关", (0, 0), (104, 52), active=False)
+    sprite(nine_off, SPR["toggle_off"])
+    nine_off.add(text_node("文字", "关", 20, (255, 242, 216, 255), (24, 0), (38, 38),
+                           1, (0.5, 0.5), True, (DARKOUT, 1)))
+    nine_sw.add(nine_on)
+    nine_sw.add(nine_off)
+    nine_row.add(nine_sw)
+    create_pane.add(nine_row)
+
+    create_pane.add(text_node("抽水标题", "抽水比例", 26, GOLD, (-320, 174), (200, 34),
+                              0, (0, 0.5), True, (DARKOUT, 1)))
+    create_pane.add(text_node("抽水说明", "房间总水率 0~20%", 18, GRAY, (-200, 174),
+                              (260, 26), 0, (0, 0.5), False))
+    create_pane.add(text_node("抽水右侧", "0 = 不抽水", 18, GRAY, (320, 174),
+                              (200, 26), 1, (1, 0.5), False))
+    create_pane.add(chip_btn("抽水减", "－", (-270, 120), (64, 64), "chip", 36, CREAM))
+    water_box = N("抽水值", (0, 120), (360, 64))
+    sprite(water_box, SPR["chip"], sliced=True)
+    water_box.add(text_node("数值", "5%", 36, GOLD, (0, 0), (360, 64)))
+    create_pane.add(water_box)
+    create_pane.add(chip_btn("抽水加", "＋", (270, 120), (64, 64), "chip", 36, CREAM))
+    for i, value in enumerate((0, 2, 3, 5, 10)):
+        create_pane.add(chip_btn("抽水快捷_%d" % i, "%d%%" % value,
+                                 (-256 + i * 128, 62), (116, 48),
+                                 "tab_on" if value == 5 else "chip", 22,
+                                 DARK if value == 5 else CREAM, value == 5))
+    create_pane.add(text_node("抽水提示", "抽水从每手输赢中按比例提取，进入代理分账。",
+                              18, GRAY, (0, 20), (654, 26), 1, (0.5, 0.5), False))
+
+    create_pane.add(text_node("暗抽标题", "暗抽比例", 26, GOLD, (-320, -36), (200, 34),
+                              0, (0, 0.5), True, (DARKOUT, 1)))
+    create_pane.add(text_node("暗抽说明", "按玩家输赢 · 仅群主可见", 18, GRAY, (-200, -36),
+                              (300, 26), 0, (0, 0.5), False))
+    create_pane.add(text_node("暗抽右侧", "0 = 不暗抽", 18, GRAY, (320, -36),
+                              (200, 26), 1, (1, 0.5), False))
+    create_pane.add(chip_btn("暗抽减", "－", (-270, -88), (64, 64), "chip", 36, CREAM))
+    dark_box = N("暗抽值", (0, -88), (360, 64))
+    sprite(dark_box, SPR["chip"], sliced=True)
+    dark_box.add(text_node("数值", "0%", 36, GOLD, (0, 0), (360, 64)))
+    create_pane.add(dark_box)
+    create_pane.add(chip_btn("暗抽加", "＋", (270, -88), (64, 64), "chip", 36, CREAM))
+    for i, value in enumerate((0, 1, 2, 3, 5)):
+        create_pane.add(chip_btn("暗抽快捷_%d" % i, "%d%%" % value,
+                                 (-256 + i * 128, -150), (116, 48),
+                                 "tab_on" if value == 0 else "chip", 22,
+                                 DARK if value == 0 else CREAM, value == 0))
+    create_pane.add(text_node("暗抽提示", "不能大于抽水比例；代理单独覆盖，玩家与代理不可见。",
+                              18, GRAY, (0, -188), (654, 26), 1, (0.5, 0.5), False))
+
+    auto_bar = N("自动信息", (0, -238), (654, 76))
+    sprite(auto_bar, SPR["row"], sliced=True)
+    for name, key, value, x in (("准入", "准入", "50 分", -218),
+                                ("人数", "人数", "8 人", 0),
+                                ("时长", "时长", "30 分钟", 218)):
+        auto_bar.add(text_node(name, key, 18, GRAY, (x, 14), (180, 24),
+                               1, (0.5, 0.5), False))
+        auto_bar.add(text_node(name + "值", value, 26, GOLD, (x, -13), (180, 32)))
+    create_pane.add(auto_bar)
+    create_pane.add(text_node("创建提示", "创建后自动开 1 个可加入房，满员/开局补房。",
+                              18, GRAY, (0, -292), (654, 26), 1, (0.5, 0.5), False))
+    create_pane.add(chip_btn("创建规则取消", "取消", (-160, -400), (300, 80),
+                             "chip", 30, GRAY))
+    create_pane.add(chip_btn("创建规则确认", "创建并开房", (160, -400), (300, 80),
+                             "btn_gold", 30, DARK, True))
+    root.add(create_modal)
+
+    # ---------------------------------------------------------------- 删除规则弹窗
+    delete_modal = N("删除规则弹窗", (0, 0), (750, 1334), active=False)
+    widget(delete_modal, 45, 0, 0, 0, 0)
+    delete_mask = N("删除规则遮罩", (0, 0), (750, 1334), color=(0, 0, 0, 255), opacity=160)
+    sprite(delete_mask, BLACK)
+    button(delete_mask)
+    widget(delete_mask, 45, 0, 0, 0, 0)
+    delete_modal.add(delete_mask)
+
+    delete_pane = N("面板", (0, 0), (620, 470))
+    sprite(delete_pane, SPR["panel"], sliced=True)
+    delete_pane.comps.append({"kind": "block"})
+    widget(delete_pane, 18, 0, 0, 0, 0, 0, 0, 620, 470)
+    delete_modal.add(delete_pane)
+    delete_pane.add(text_node("标题", "删除游戏规则", 32, GOLD, (0, 180), (560, 46),
+                              1, (0.5, 0.5), True, (DARKOUT, 1.5)))
+    delete_pane.add(text_node("副标题", "删除后该规则的房间不再补房", 20, GRAY,
+                              (0, 142), (560, 30)))
+    summary = N("规则摘要", (0, 68), (560, 100))
+    sprite(summary, SPR["chip"], sliced=True)
+    summary.add(text_node("名称", "底皮 1/3 · 地九王", 24, GOLD, (0, 30), (520, 34)))
+    summary.add(text_node("准入摘要", "准入 50 · 8 人 · 30 分钟", 18, GRAY,
+                          (0, -2), (520, 24), 1, (0.5, 0.5), False))
+    summary.add(text_node("收益摘要", "抽水 5% · 暗抽 1% · 3 个房间", 18, GRAY,
+                          (0, -30), (520, 24), 1, (0.5, 0.5), False))
+    delete_pane.add(summary)
+    delete_pane.add(text_node("警告", "未开局的房间立即关闭；正在进行的牌局会在本局结算后关闭；不再补该规则的新房。",
+                              18, (240, 200, 150, 255), (0, -58), (540, 80),
+                              1, (0.5, 0.5), False, wrap=True, lh=24, overflow=1))
+    delete_pane.add(text_node("提示", "", 18, RED, (0, -120), (540, 24),
+                              1, (0.5, 0.5), False))
+    delete_pane.add(chip_btn("删除规则取消", "取消", (-130, -176), (240, 72),
+                             "chip", 28, GRAY))
+    delete_pane.add(chip_btn("删除规则确认", "确认删除", (130, -176), (240, 72),
+                             "btn_gold", 28, DARK, True))
+    root.add(delete_modal)
     return root
+
+
+def node_file_ids(objs):
+    """node id -> 路径 -> PrefabInfo.fileId；用于重建时保留既有节点身份。"""
+    paths = {}
+
+    def walk(index, parent_path):
+        node = objs[index]
+        if not isinstance(node, dict) or node.get("__type__") != "cc.Node":
+            return
+        path = (parent_path + "/" + node["_name"]) if parent_path else node["_name"]
+        paths[path] = node
+        for child in node.get("_children", []):
+            walk(child["__id__"], path)
+
+    root = next(index for index, obj in enumerate(objs)
+                if isinstance(obj, dict) and obj.get("__type__") == "cc.Node"
+                and obj.get("_parent") is None)
+    walk(root, "")
+    return paths
+
+
+def reuse_existing_file_ids(objs, out_path):
+    if not os.path.exists(out_path):
+        return
+    try:
+        old = json.load(open(out_path, encoding="utf-8"))
+    except Exception:
+        return
+    old_paths = node_file_ids(old)
+    new_paths = node_file_ids(objs)
+    kept = 0
+    for path, node in new_paths.items():
+        old_node = old_paths.get(path)
+        if old_node is None:
+            continue
+        old_ref = old_node.get("_prefab")
+        new_ref = node.get("_prefab")
+        if not old_ref or not new_ref:
+            continue
+        old_info = old[old_ref["__id__"]]
+        new_info = objs[new_ref["__id__"]]
+        if old_info.get("fileId"):
+            new_info["fileId"] = old_info["fileId"]
+            kept += 1
+    print("kept fileIds:", kept)
 
 
 def main():
@@ -513,13 +788,18 @@ def main():
         if isinstance(o, dict) and o.get("__type__") == "cc.EditBox":
             o["_N$background"] = {"__id__": bg_comp}
 
-    content_node = node_by_name.get("content")
+    # 每个 ScrollView 绑定自己 view 下的 content；两张卡片各有一套滚动区。
     for o in objs:
-        if isinstance(o, dict) and o.get("__type__") == "cc.ScrollView":
-            o["_N$content"] = {"__id__": content_node}
-            o["content"] = {"__id__": content_node}
+        if not isinstance(o, dict) or o.get("__type__") != "cc.ScrollView":
+            continue
+        scroll_node = objs[o["node"]["__id__"]]
+        view_id = scroll_node["_children"][0]["__id__"]
+        content_id = objs[view_id]["_children"][0]["__id__"]
+        o["_N$content"] = {"__id__": content_id}
+        o["content"] = {"__id__": content_id}
 
     out = os.path.join(ROOT, "assets", "resources", "UI", "panelGameSettings.prefab")
+    reuse_existing_file_ids(objs, out)
     with open(out, "w", encoding="utf-8") as f:
         json.dump(objs, f, ensure_ascii=False, indent=2)
     meta = {

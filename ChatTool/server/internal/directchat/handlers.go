@@ -86,7 +86,8 @@ func (h *Handler) authorized(next sessionHandlerFunc) http.HandlerFunc {
 			writeDirectError(w, err)
 			return
 		}
-		next(w, r, session)
+		// 单次请求内复用俱乐部/成员/联盟查询；会话列表逐条转换时不再重复读游戏库。
+		next(w, r.WithContext(WithRequestCache(r.Context())), session)
 	}
 }
 

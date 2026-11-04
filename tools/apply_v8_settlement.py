@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Author V8-new settlement components. No runtime skin or network changes."""
+"""Author V8-new settlement components. No runtime skin or network changes.
+
+注意：settlement_v8_list_panel.png 已在 2026-11-04 由
+tools/regen_settings_frame_assets.py 重绘为柔边圆角；重跑本工具会覆盖回旧切图，
+之后需再运行重绘脚本。
+"""
 import hashlib
 import json
 from pathlib import Path

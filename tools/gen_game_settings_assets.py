@@ -5,6 +5,10 @@
 用法：python3 tools/gen_game_settings_assets.py
 输出：assets/V8/game_settings/*.png + .meta
 只写本目录；不改动既有资源与 Prefab。
+
+注意：gs_chip / gs_tab_on / gs_tab_off / gs_btn_gold 的当前版本已由
+tools/regen_settings_frame_assets.py 重绘为柔边圆角。若只需更新这几张底板，
+请运行该脚本；重跑本工具会把它们覆盖回旧切图。
 """
 import json, os, random, uuid
 

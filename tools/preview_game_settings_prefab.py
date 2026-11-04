@@ -23,6 +23,17 @@ for m in glob.glob(os.path.join(ROOT, "assets", "**", "*.png.meta"), recursive=T
         UUID2PNG[v["uuid"]] = m[: -len(".meta")]
 
 d = json.load(open(PREFAB, encoding="utf-8"))
+SHOW = [name for name in os.environ.get("PREVIEW_SHOW", "").split(",") if name]
+if SHOW:
+    for o in d:
+        if isinstance(o, dict) and o.get("__type__") == "cc.Node" and o.get("_name") in (
+                "卡片", "规则卡片", "弹窗", "创建规则弹窗", "删除规则弹窗"):
+            o["_active"] = o.get("_name") in SHOW
+if os.environ.get("PREVIEW_RULE_ROW"):
+    for o in d:
+        if isinstance(o, dict) and o.get("__type__") == "cc.Node" and o.get("_name") == "规则行":
+            o["_active"] = True
+            o["_trs"]["array"][1] = -125
 if os.environ.get("SHOW_MODAL"):
     for o in d:
         if isinstance(o, dict) and o.get("__type__") == "cc.Node" and o.get("_name") == "弹窗":
@@ -35,13 +46,15 @@ def comp(node, t):
     return None, None
 
 
-def layout(node, px, py, pw, ph):
+def layout(node, px, py, pw, ph, parent_anchor=(0.5, 0.5)):
     """返回 (cx, cy, w, h)，坐标以画布左上为原点。"""
     x, y = node["_trs"]["array"][0], node["_trs"]["array"][1]
     w, h = node["_contentSize"]["width"], node["_contentSize"]["height"]
     ax, ay = node["_anchorPoint"]["x"], node["_anchorPoint"]["y"]
-    left = px + pw / 2 + x - w * ax
-    top = py + ph / 2 - y - h * (1 - ay)
+    ox = px + pw * parent_anchor[0]
+    oy = py + ph * (1 - parent_anchor[1])
+    left = ox + x - w * ax
+    top = oy - y - h * (1 - ay)
     widg, _ = comp(node, "cc.Widget")
     if widg:
         f = widg["_alignFlags"]
@@ -91,11 +104,11 @@ canvas = Image.new("RGBA", (W, H), (3, 10, 20, 255))
 draw = ImageDraw.Draw(canvas)
 
 
-def render(nid, px, py, pw, ph, forced=None, clip_bottom=None):
+def render(nid, px, py, pw, ph, forced=None, clip_bottom=None, parent_anchor=(0.5, 0.5)):
     node = d[nid]
     if not node.get("_active", True):
         return
-    left, top, w, h = forced if forced else layout(node, px, py, pw, ph)
+    left, top, w, h = forced if forced else layout(node, px, py, pw, ph, parent_anchor)
     left, top, w, h = int(round(left)), int(round(top)), max(1, int(round(w))), max(1, int(round(h)))
     sp, _ = comp(node, "cc.Sprite")
     if sp and sp.get("_spriteFrame"):
@@ -138,11 +151,12 @@ def render(nid, px, py, pw, ph, forced=None, clip_bottom=None):
             render(c["__id__"], left, top, w, h, (left + (w - cw) / 2, cy, cw, ch), child_clip)
             cy += ch + lay.get("_N$spacingY", 0)
         return
+    anchor = (node["_anchorPoint"]["x"], node["_anchorPoint"]["y"])
     for c in node.get("_children", []):
-        render(c["__id__"], left, top, w, h, clip_bottom=child_clip)
+        render(c["__id__"], left, top, w, h, clip_bottom=child_clip, parent_anchor=anchor)
 
 
 render(1, 0, 0, W, H)
-out = "/tmp/panelGameSettings_preview_modal.png" if os.environ.get("SHOW_MODAL") else "/tmp/panelGameSettings_preview.png"
+out = os.environ.get("PREVIEW_OUT") or ("/tmp/panelGameSettings_preview_modal.png" if os.environ.get("SHOW_MODAL") else "/tmp/panelGameSettings_preview.png")
 canvas.convert("RGB").save(out)
 print("saved", out)

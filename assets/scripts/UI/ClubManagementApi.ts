@@ -1,6 +1,7 @@
 import GameDataManager from "../GameDataManager";
 import {ClubManagementApi,ClubListKind,ClubAction,ClubPeoplePage,
-    ClubUnionApplication,ClubUnionApplicationPage,ClubUnionMember,ClubUnionMemberPage} from "./ClubManagementView";
+    ClubUnionApplication,ClubUnionApplicationPage,ClubUnionMember,ClubUnionMemberPage,
+    ClubRecord,ClubRecordPage,ClubRecordKind} from "./ClubManagementView";
 const KBEngine = require("kbengine");
 interface Pending {
     account:string; club:string; kind:string; header:string; page:number; user:string;
@@ -83,6 +84,12 @@ export default class HallClubManagementApi implements ClubManagementApi {
         reject:(e:Error)=>void;timer:any} = null;
     private unionMembersPending:{key:string;account:string;resolve:(v:ClubUnionMemberPage)=>void;
         reject:(e:Error)=>void;timer:any} = null;
+    /** 单次只允许一条记录查询在途，ClubGoldWater 推送不带 context 时按它配对。 */
+    private recordsPending:{key:string;account:string;club:string;user:string;kind:ClubRecordKind;
+        resolve:(v:ClubRecordPage)=>void;reject:(e:Error)=>void;timer:any} = null;
+    /** 快速切换上下分/牌局时排队，避免两条无 context 的流水推送互相顶替。 */
+    private recordsQueue:Array<{club:string;user:string;kind:ClubRecordKind;page:number;count:number;
+        account:string;resolve:(v:ClubRecordPage)=>void;reject:(e:Error)=>void}> = [];
     constructor(private badge:(club:string,count:number)=>void,
         private isAgent:(club:string)=>boolean = ()=>false,
         private agentClubs:()=>string[] = ()=>[],
@@ -98,6 +105,8 @@ export default class HallClubManagementApi implements ClubManagementApi {
         KBEngine.Event.register("ClubReqInfo",this,"OnBadge");
         KBEngine.Event.register("ClubUnionApply",this,"OnUnionApply");
         KBEngine.Event.register("ClubMyUnion",this,"OnUnionMembers");
+        // 查询_俱乐部_积分流水 的列表统一走 ClubGoldWater；玩家设置里的额度记录也用它。
+        KBEngine.Event.register("ClubGoldWater",this,"OnClubGoldWater");
     }
     public Dispose():void {
         this.disposed = true;
@@ -113,6 +122,12 @@ export default class HallClubManagementApi implements ClubManagementApi {
             this.unionMembersPending.reject(new Error("页面已关闭"));
             this.unionMembersPending = null;
         }
+        if(this.recordsPending) {
+            clearTimeout(this.recordsPending.timer);
+            this.recordsPending.reject(new Error("页面已关闭"));
+            this.recordsPending = null;
+        }
+        this.recordsQueue.splice(0).forEach(job=>job.reject(new Error("页面已关闭")));
         this.applicationQueue.splice(0).forEach(job=>job.reject(new Error("页面已关闭")));
         Object.keys(this.pending).forEach(key=>this.finish(key,new Error("页面已关闭")));
     }
@@ -219,9 +234,9 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(action === "promote") return {message:outcome.accepted ? "设置管理员请求已受理，请刷新确认" : "已设为管理员"};
         if(action === "remove") return {message:"已删除俱乐部成员"};
         if(action === "adjustScore") return {message:outcome.accepted ? "积分调整请求已受理，请刷新确认" : "积分已调整"};
-        if(action === "setAgent") return {message:"已开通代理，请刷新确认比例"};
-        if(action === "changeAgentRatio") return {message:"代理比例已调整"};
-        if(action === "cancelAgent") return {message:"已取消代理"};
+        if(action === "setAgent") return {message:"已开通合伙人，请刷新确认比例"};
+        if(action === "changeAgentRatio") return {message:"合伙人比例已调整"};
+        if(action === "cancelAgent") return {message:"已取消合伙人"};
         if(action === "grantQuota") return {message:"额度已设置"};
         if(action === "increaseQuota") return {message:"额度已增加"};
         if(action === "decreaseQuota") return {message:"额度已减少"};
@@ -311,6 +326,118 @@ export default class HallClubManagementApi implements ClubManagementApi {
             }
         });
     }
+    /**
+     * 玩家额度记录：同一接口按 kind 切换口径。
+     * - updown：only_add=1，只看服务端命名的上分/下分；
+     * - game：only_add=0，不做类型过滤，回包原样展示。
+     * 列表走 ClubGoldWater 异步推送（样例不带 context），因此同一时间只允许一条在途。
+     */
+    public records(clubId:string,userId:string,kind:ClubRecordKind,page:number,count:number):Promise<ClubRecordPage> {
+        if(this.disposed) return Promise.reject(new Error("页面已关闭"));
+        return new Promise((resolve,reject)=>{
+            this.recordsQueue.push({club:clubId,user:userId,kind,page,count,
+                account:this.account(),resolve,reject});
+            this.pumpRecords();
+        });
+    }
+    private pumpRecords():void {
+        if(this.disposed || this.recordsPending) return;
+        const job = this.recordsQueue.shift();
+        if(!job) return;
+        if(job.account !== this.account()) {
+            job.reject(new Error("账号已切换"));
+            this.pumpRecords();
+            return;
+        }
+        const context = this.prefix + "r" + (++this.serial);
+        const timer = setTimeout(()=>{
+            if(!this.recordsPending || this.recordsPending.key !== context) return;
+            const failed = this.recordsPending;
+            this.recordsPending = null;
+            clearTimeout(failed.timer);
+            failed.reject(new Error("记录查询超时，请刷新重试"));
+            this.pumpRecords();
+        },12000);
+        this.recordsPending = {key:context,account:this.account(),club:job.club,user:job.user,
+            kind:job.kind,resolve:job.resolve,reject:job.reject,timer};
+        try {
+            GameDataManager.getAccount().reqHallCommand(JSON.stringify({
+                header:"查询_俱乐部_积分流水",
+                club_id:job.club,
+                user_id:job.user,
+                only_add:job.kind === "updown" ? 1 : 0,
+                count:job.count,
+                page:job.page,
+                context
+            }),"p@" + context);
+        } catch(error) {
+            clearTimeout(timer);
+            this.recordsPending = null;
+            job.reject(new Error("请求发送失败"));
+            this.pumpRecords();
+        }
+    }
+    private finishRecords(page:ClubRecordPage):void {
+        const pending = this.recordsPending;
+        if(!pending) return;
+        this.recordsPending = null;
+        clearTimeout(pending.timer);
+        if(pending.account !== this.account()) pending.reject(new Error("账号已切换"));
+        else pending.resolve(page);
+        this.pumpRecords();
+    }
+    /** ClubGoldWater 行：{date,type,gold,remark,room_id,opter_name,guuid,name,number,count}。 */
+    public OnClubGoldWater(raw:any,secondaryRaw?:any):void {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean")) raw = secondaryRaw;
+        const pending = this.recordsPending;
+        if(!pending) return;
+        const data = this.parse(raw);
+        if(!data) return;
+        // 少数回包会带 context；对不上说明不是这次记录查询，交给其它页面处理。
+        const pushedContext = this.context(data);
+        if(pushedContext && pushedContext !== pending.key) return;
+        let body:any = data;
+        if(!Array.isArray(body.ClubGoldWater) && data.result !== undefined) {
+            const parsed = this.parse(data.result);
+            body = parsed !== null ? parsed : data.result;
+            if(body && body.ClubGoldWater !== undefined) body = body;
+        }
+        const rows:any[] = body && Array.isArray(body.ClubGoldWater) ? body.ClubGoldWater :
+            Array.isArray(body) ? body : [];
+        if(!rows.length && !(body && Array.isArray(body.ClubGoldWater))) return;
+        // 推送不带 context；若带了别的玩家 guuid，说明是其它页面的流水，不能拿来结束本次查询。
+        if(pending.user && rows.length &&
+            rows.every((row:any)=>!row || row.guuid == null || String(row.guuid) !== pending.user))
+            return;
+        const updown = pending.kind === "updown";
+        // 上下分只看服务端命名好的上分/下分；牌局不做类型过滤，回包原样展示。
+        const want = ["上分","下分"];
+        const items:ClubRecord[] = [];
+        for(const row of rows) {
+            if(!row || typeof row !== "object") continue;
+            const type = String(row.type || "");
+            if(updown && want.indexOf(type) < 0) continue;
+            const amount = Number(row.gold);
+            items.push({
+                date:String(row.date || ""),
+                type,
+                amount:Number.isFinite(amount) ? amount : 0,
+                balance:row.remark === undefined || row.remark === null ? "" : String(row.remark),
+                roomId:String(row.room_id || ""),
+                opterName:String(row.opter_name || ""),
+                userId:String(row.guuid || ""),
+                userName:String(row.name || "")
+            });
+        }
+        const first:any = rows[0] || {};
+        const total = Number(first.count);
+        const page = Number(first.number);
+        this.finishRecords({
+            items,
+            total:Number.isFinite(total) ? Math.max(0,total) : rows.length,
+            page:Number.isFinite(page) ? page : 0
+        });
+    }
     public RefreshBadges():void {
         const a=GameDataManager.getAccount();
         if(!a || this.disposed)return;
@@ -377,6 +504,34 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 if(this.unionMembersPending !== pending) return;
                 this.unionMembersPending=null;
                 pending.resolve({items:[],total:0});
+            },1500);
+            return;
+        }
+        // 额度记录：同步回包通常只有空壳，列表走 ClubGoldWater 推送。
+        const recordsReply = !!this.recordsPending &&
+            (key === this.recordsPending.key || (!key && Object.keys(this.pending).length === 0));
+        if(recordsReply) {
+            const error=data.error || (data.result && data.result.error);
+            if(error || (code !== 0x200 && code !== 0x500)) {
+                const failed=this.recordsPending;
+                this.recordsPending=null;
+                clearTimeout(failed.timer);
+                failed.reject(new Error(String(error || "记录查询失败")));
+                this.pumpRecords();
+                return;
+            }
+            let body:any=data.result;
+            if(typeof body === "string") body=this.parse(body);
+            if(data.ClubGoldWater || (body && Array.isArray(body.ClubGoldWater))) {
+                this.OnClubGoldWater(raw);
+                return;
+            }
+            const pending=this.recordsPending;
+            clearTimeout(pending.timer);
+            pending.timer=setTimeout(()=>{
+                if(this.recordsPending !== pending) return;
+                this.finishRecords({items:[],total:0,
+                    page:Number(body && body.page) || 0});
             },1500);
             return;
         }
