@@ -445,7 +445,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(!this.disposed && this.onUnionApplyPush && (explicitList || items.length > 0))
             this.onUnionApplyPush(page);
     }
-    /** ClubMyUnion：{union_id,union_name,members:[{club_id,club_name,owner_guuid,owner_name,union_quota}]}。 */
+    /** ClubMyUnion：{union_id,union_name,members:[{club_id,club_name,owner_guuid,owner_name,union_quota,union_percent?}]}。 */
     public OnUnionMembers(raw:any,secondaryRaw?:any):void {
         if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean")) raw = secondaryRaw;
         const data=this.parse(raw);if(!data)return;
@@ -478,12 +478,17 @@ export default class HallClubManagementApi implements ClubManagementApi {
             const clubId=String(row.club_id || row.clubId || "").trim();
             if(!clubId) continue;
             const quota=Number(row.union_quota);
+            const percentRaw=row.union_percent !== undefined ? row.union_percent :
+                row.percent !== undefined ? row.percent : row.unionPercent;
+            const percent=Number(percentRaw);
             items.push({
                 clubId,
                 clubName:String(row.club_name || row.clubName || row.name || ("俱乐部 " + clubId)),
                 ownerId:String(row.owner_guuid || row.owner_id || row.ownerId || ""),
                 ownerName:String(row.owner_name || row.ownerName || ""),
-                quotaFen:Number.isFinite(quota) ? quota : undefined
+                quotaFen:Number.isFinite(quota) ? quota : undefined,
+                unionPercent:percentRaw !== undefined && percentRaw !== null &&
+                    String(percentRaw).trim() !== "" && Number.isFinite(percent) ? percent : undefined
             });
         }
         const page={items,total:items.length,poolQuotaFen};

@@ -601,6 +601,8 @@ export default class panelMain extends UIPanelViewBase {
 
     start () {
 
+        this.schedule(()=>this.RefreshGameSettingsEntry(),1);
+
         this.scrollExchangeInfo = Tool.GetChild(this.node,"赠送/赠送记录列表").getComponent(ScrollViewEx);
         this.scrollExchangeInfo.callBackFresh = this.GetAllExchangeInfo.bind(this);
 
@@ -1409,6 +1411,10 @@ export default class panelMain extends UIPanelViewBase {
             }
             else
                 button.node.parent.parent.active = false;
+        }
+        else if(button.node.name === "游戏设置入口")
+        {
+            UIManager.getInstance().showPanel("panelGameSettings", ShowPanelMode.Cover);
         }
         else if(button.node.name === "设置")
         {
@@ -4457,6 +4463,37 @@ export default class panelMain extends UIPanelViewBase {
             this.OpenCreateUnionDialog();
         else
             this.OpenJoinUnionDialog();
+    }
+
+    /** 游戏设置入口：仅联盟盟主，或未加入联盟的俱乐部老板可见。 */
+    private RefreshGameSettingsEntry():void
+    {
+        const entry = Tool.GetChild(this.node,"Main/发现/游戏设置入口");
+        if(!entry)
+            return;
+        const clubId = this.ResolveRoomClub();
+        let show = false;
+        if(clubId)
+        {
+            const union:any = this.clubUnionStatus[clubId];
+            const info:any = this.clubDetails[clubId];
+            const hasUnion = !!(union && union.hasUnion) ||
+                !!(info && String(info.union_id || "").trim() !== "");
+            // 联盟盟主是账号级身份，不因当前选中的俱乐部不同而消失。
+            let isUnionOwner = false;
+            for(const key in this.clubUnionStatus)
+            {
+                if(this.clubUnionStatus[key] && this.clubUnionStatus[key].isOwner === true)
+                {
+                    isUnionOwner = true;
+                    break;
+                }
+            }
+            // 已入盟只认联盟盟主；未入盟才给俱乐部老板。
+            show = isUnionOwner || (!hasUnion && this.IsClubCreator(clubId));
+        }
+        if(entry.active !== show)
+            entry.active = show;
     }
 
     private IsClubCreator(clubId:string):boolean

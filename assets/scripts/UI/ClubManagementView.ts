@@ -44,7 +44,8 @@ export interface ClubPeoplePage { items:ClubPlayer[]; total:number; }
 export interface ClubUnionApplication { clubId:string; clubName:string; ownerId?:string; ownerName?:string; }
 export interface ClubUnionApplicationPage { items:ClubUnionApplication[]; total:number; }
 /** ClubMyUnion.members：联盟内所有俱乐部（含总群主自己那家），union_quota 单位为分。 */
-export interface ClubUnionMember { clubId:string; clubName:string; ownerId?:string; ownerName?:string; quotaFen?:number; }
+export interface ClubUnionMember { clubId:string; clubName:string; ownerId?:string; ownerName?:string;
+    quotaFen?:number; unionPercent?:number; }
 export interface ClubUnionMemberPage { items:ClubUnionMember[]; total:number; poolQuotaFen?:number; }
 /** Adapt server payloads here. Resolve act only after the business result, not an async acceptance code. */
 export interface ClubManagementApi {
@@ -90,11 +91,13 @@ export default class ClubManagementView {
     private cardBaseY:{[name:string]:number} = {};
     private goldRefreshTimer:any = null;
     private inputMode:"ratio"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"|null = null;
-    /** 盟友管理里的额度调整走同一个输入弹窗，单独记录目标俱乐部和方向。 */
+    /** 盟友管理里的额度/盟主比例调整走同一个输入弹窗，单独记录目标俱乐部和方向。 */
     private selectedUnionMember:ClubUnionMember = null;
-    private unionQuotaMode:"increase"|"decrease"|null = null;
+    private unionQuotaMode:"increase"|"decrease"|"percent"|null = null;
     /** 最近一次盟友列表返回的联盟池额度（分），用于弹窗抬头。 */
     private allyPoolQuotaFen:number = undefined;
+    /** 设置比例成功后先记住本地值，避免 ClubMyUnion 回包暂未带 union_percent 时界面回退成「—」。 */
+    private allyPercentOverrides:{[clubId:string]:number} = {};
     /** 文档 4.11：note 上限 30 字（按字符计），服务端超长直接报错、不截断。 */
     private static readonly NOTE_MAX:number = 30;
     private readonly pageSize:number = 20;
@@ -367,6 +370,7 @@ export default class ClubManagementView {
             this.unionQuotaMode = null;
             this.selectedUnionMember = null;
             this.allyPoolQuotaFen = undefined;
+            this.allyPercentOverrides = {};
             this.unionCount = 0;
             this.unionBadgeQueried = false;
             this.unionBadgeAttempts = 0;
@@ -932,37 +936,66 @@ export default class ClubManagementView {
         if(!content) return;
         const template = content.getChildByName("行模板");
         if(!template) return;
-        const pitch = 200;
+        // 盟友行比申请行多一条盟主比例，行高和行距一起放大；底板是九宫格，可直接拉高。
+        const pitch = 236;
         const view = this.at("列表/view",this.panel());
         content.height = Math.max(view ? view.height : 0,items.length * pitch);
         if(view) content.setPosition(0,view.height / 2);
         const icon = this.unionIconFrame();
         const accountId = String(this.context && this.context.accountId || "");
+        const ownClubId = String(this.context && this.context.id || "");
         items.forEach((item,index)=>{
             const row = cc.instantiate(template);
             row.name = "盟友_" + item.clubId;
             row.parent = content;
             row.active = true;
             row.setPosition(0,-100 - index * pitch);
-            this.fillUnionMemberRow(row,item,icon,!!item.ownerId && item.ownerId === accountId);
+            // 群主 ID 缺失时用当前俱乐部 ID 兜底，避免把自己的俱乐部当成盟主行。
+            const isOwnClub = (!!item.ownerId && item.ownerId === accountId) ||
+                (!!ownClubId && item.clubId === ownClubId);
+            this.fillUnionMemberRow(row,item,icon,isOwnClub);
             for(const pair of [["管理拒绝","decrease"],["管理同意","increase"]])
                 if(this.at(pair[0],row)) this.at(pair[0],row).on("click",()=>{
                     this.openUnionQuotaInput(item,pair[1] as "increase"|"decrease");
                 },this);
+            const percentButton = this.at("盟友比例调整",row);
+            if(percentButton) percentButton.on("click",()=>this.openUnionPercentInput(item),this);
         });
         const scroll = this.at("列表",this.panel());
         const scrollView = scroll && scroll.getComponent(cc.ScrollView);
         if(!keepScroll && scrollView) scrollView.scrollToTop(0);
     }
-    private fillUnionMemberRow(row:cc.Node,item:ClubUnionMember,icon:cc.SpriteFrame,isUnionOwner:boolean):void {
+    private fillUnionMemberRow(row:cc.Node,item:ClubUnionMember,icon:cc.SpriteFrame,isOwnClub:boolean):void {
+        // 盟友行 220 高：姓名/ID/额度/比例四行，底部「减少额度 / 调整比例 / 增加额度」一行。
+        row.setContentSize(570,220);
+        const avatarNode = this.at("头像",row);
+        if(avatarNode) avatarNode.setPosition(-226,46);
+        const nameNode = this.at("姓名",row);
+        if(nameNode) nameNode.setPosition(43,74);
+        const idNode = this.at("玩家ID",row);
+        if(idNode) idNode.setPosition(43,42);
+        for(const pair of [["管理拒绝",-166],["管理同意",0]]) {
+            const button = this.at(pair[0],row);
+            if(!button) continue;
+            button.setContentSize(160,54);
+            button.setPosition(pair[1],-72);
+            const label = this.at("文字",button);
+            if(label) label.setContentSize(150,44);
+        }
+        const adjustButton = this.at("盟友比例调整",row);
+        if(adjustButton) {
+            adjustButton.setContentSize(160,54);
+            adjustButton.setPosition(166,-72);
+            this.text("文字","调整比例",adjustButton);
+        }
         const name = item.clubName || "俱乐部 " + item.clubId;
-        this.text("姓名",name + (isUnionOwner ? "（大群主）" : ""),row);
+        this.text("姓名",name + (isOwnClub ? "（大群主）" : ""),row);
         this.text("玩家ID","俱乐部ID: " + item.clubId + (item.ownerName ? "  群主：" + item.ownerName : ""),row);
         const quotaFen = Number(item.quotaFen);
         const quotaNode = this.at("盟友额度",row);
         if(quotaNode) {
             quotaNode.color = new cc.Color(255,238,197);
-            quotaNode.setPosition(43,-12);
+            quotaNode.setPosition(43,10);
             quotaNode.setContentSize(386,24);
             const quotaLabel = quotaNode.getComponent(cc.Label);
             if(quotaLabel) { quotaLabel.fontSize = 20;quotaLabel.lineHeight = 24; }
@@ -970,7 +1003,11 @@ export default class ClubManagementView {
         this.active("盟友额度",Number.isFinite(quotaFen),row);
         if(Number.isFinite(quotaFen))
             this.text("盟友额度","俱乐部额度：" + this.fenText(quotaFen) + " 元",row);
-        for(const labelName of ["姓名","玩家ID","盟友额度"]) {
+        // 总群主自己那家没有上层，缺省按 100% 展示；所有行都可以调整，服务端会再校验目标俱乐部。
+        this.active("盟友比例",true,row);
+        this.syncUnionPercentText(row,item,isOwnClub);
+        this.active("盟友比例调整",true,row);
+        for(const labelName of ["姓名","玩家ID","盟友额度","盟友比例"]) {
             const node = this.at(labelName,row);
             const label = node && node.getComponent(cc.Label);
             if(label) label.overflow = cc.Label.Overflow.SHRINK;
@@ -988,6 +1025,17 @@ export default class ClubManagementView {
             if(item.ownerId) ImageManager.getInstance().BindPlayerListAvatar(item.ownerId,avatarSprite);
             else if(icon) avatarSprite.spriteFrame = icon;
         }
+    }
+    private unionPercentValue(item:ClubUnionMember,isOwnClub:boolean):number {
+        const value = Number(item.unionPercent);
+        if(Number.isFinite(value)) return value;
+        const override = Number(this.allyPercentOverrides[item.clubId]);
+        if(Number.isFinite(override)) return override;
+        return isOwnClub ? 100 : undefined;
+    }
+    private syncUnionPercentText(row:cc.Node,item:ClubUnionMember,isOwnClub:boolean):void {
+        const percent = this.unionPercentValue(item,isOwnClub);
+        this.text("盟友比例","盟主比例：" + (percent !== undefined ? percent + "%" : "—"),row);
     }
     private fenText(fen:any):string {
         const number = Number(fen);
@@ -1658,6 +1706,30 @@ export default class ClubManagementView {
         edit.string = "0";
         this.active("玩家设置输入弹窗",true);
     }
+    /** 盟友管理 → 盟主比例：输入 0-100，发送 设置_联盟_盟主_比例（100=不抽）。 */
+    private openUnionPercentInput(member:ClubUnionMember):void {
+        if(!member || !this.canReviewUnion()) return;
+        if(this.busy) { this.message("操作进行中，请稍后再试");return; }
+        const modal = this.at("玩家设置输入弹窗");
+        const panel = this.at("面板",modal);
+        const input = this.at("玩家设置输入框",panel);
+        const edit = input && input.getComponent(cc.EditBox);
+        if(!modal || !panel || !edit) { this.message("输入弹窗暂未加载");return; }
+        this.unionQuotaMode = "percent";
+        this.selectedUnionMember = member;
+        this.inputMode = null;
+        const clubName = member.clubName || ("俱乐部 " + member.clubId);
+        const isOwnClub = !!this.context && ((!!member.ownerId && member.ownerId === this.context.accountId) ||
+            (!!this.context.id && member.clubId === this.context.id));
+        const percent = this.unionPercentValue(member,isOwnClub);
+        this.text("玩家设置输入标题","调整盟主比例",panel);
+        this.text("玩家设置输入提示",clubName + "：请输入 0-100 的整数比例（100=不抽）",panel);
+        this.text("提示","0-100",input);
+        edit.inputMode = cc.EditBox.InputMode.NUMERIC;
+        edit.maxLength = 3;
+        edit.string = percent !== undefined ? String(percent) : "100";
+        this.active("玩家设置输入弹窗",true);
+    }
     private finishUnionQuotaInput():void {
         const mode = this.unionQuotaMode;
         const member = this.selectedUnionMember;
@@ -1666,6 +1738,18 @@ export default class ClubManagementView {
         const input = this.at("玩家设置输入框",panel);
         const edit = input && input.getComponent(cc.EditBox);
         const value = edit && edit.string ? edit.string.trim() : "";
+        if(mode === "percent") {
+            const percent = Number(value);
+            if(!/^\d+$/.test(value) || !Number.isInteger(percent) || percent < 0 || percent > 100) {
+                this.message("盟主比例必须是 0-100 的整数");
+                return;
+            }
+            this.unionQuotaMode = null;
+            this.selectedUnionMember = null;
+            this.active("玩家设置输入弹窗",false);
+            this.applyUnionPercent(member,percent);
+            return;
+        }
         const yuan = Number(value);
         if(!/^\d+(?:\.\d{1,2})?$/.test(value) || !Number.isFinite(yuan) ||
             yuan <= 0 || yuan > 90071992547409.91) {
@@ -1692,6 +1776,23 @@ export default class ClubManagementView {
         } catch(error) {
             this.busy = false;
             this.message(error && error.message || "额度调整失败，请稍后重试");
+        }
+    }
+    private async applyUnionPercent(member:ClubUnionMember,percent:number):Promise<void> {
+        if(!this.api) { this.message("该功能暂未开放");return; }
+        if(this.busy) { this.message("操作进行中，请稍后再试");return; }
+        this.busy = true;
+        try {
+            const result = await this.api.act(member.clubId,"setUnionPercent","",String(percent));
+            this.busy = false;
+            // members 回包不带比例时，用本地值保证刚设置的结果立即显示。
+            this.allyPercentOverrides[member.clubId] = percent;
+            member.unionPercent = percent;
+            this.message(result && result.message || ("盟主比例已调整为 " + percent + "%"));
+            if(this.kind === "allies") await this.loadUnionMembers();
+        } catch(error) {
+            this.busy = false;
+            this.message(error && error.message || "盟主比例调整失败，请稍后重试");
         }
     }
     private openPlayerInput(mode:"ratio"|"unionPercent"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"):void {
