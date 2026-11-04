@@ -36,6 +36,9 @@ export default class DrhLogicMgr extends cc.Component {
     public strCreatorName = ""; //创建者名字
     public strMsgRoomID = ""; //消息来源房间号
     public strClubID = ""; //俱乐部ID
+    /** 最近一次 PlayerList 的本池本底皮余额/全部底皮合计，单位元；奖池弹窗无权限时兜底显示。 */
+    public lastRewardPool = "";
+    public lastTotalRewardMoney = "";
 
     public game_round = "0";
     public round_count = "0";
@@ -82,6 +85,12 @@ export default class DrhLogicMgr extends cc.Component {
     public arraySaySave = new Array<string>(); //语音队列缓存
     public bSaying = false; //是否正在播放语音
 
+    /** 服务端下发的池级奖池开关；null 表示尚未下发，按奖池金额兜底判断。 */
+    private jackpotSwitch:boolean = null;
+    private jackpotConfigRequested = false;
+    private jackpotConfigRoomID = "";
+    private readonly jackpotConfigContext = "P@房间_获取_俱乐部_奖池_配置";
+
     private roomCountdown = new RoomCountdown();
     private roomClockLabel:cc.Label = null;
     private roomClockNode:cc.Node = null;
@@ -117,6 +126,11 @@ export default class DrhLogicMgr extends cc.Component {
         this.MAX_PLAYER = json["max_number"];
 
         this.node.getChildByName("坐下控制").active = true;
+
+        // 俱乐部房先隐藏奖池展示，等 PlayerList / 奖池配置带回实际状态后再决定是否显示。
+        if (this.playingView != null && this.IsRoomClockClubRoom())
+            this.playingView.SetJackpotVisible(false);
+        this.RequestJackpotConfig();
 
         GameDataManager.getAccount().reqPlayerList();
         GameDataManager.getAccount().reqExec("查询_解散_事件")
@@ -262,6 +276,9 @@ export default class DrhLogicMgr extends cc.Component {
         if (raw !== this.roomClockSettingRaw) {
             this.roomClockSettingRaw = raw;
             this.roomClockIsClubRoom = false;
+            this.jackpotSwitch = null;
+            this.jackpotConfigRequested = false;
+            this.jackpotConfigRoomID = "";
             try {
                 const setting = JSON.parse(raw);
                 const clubId = setting != null && setting.club_id != null ? String(setting.club_id).trim() : "";
@@ -329,6 +346,7 @@ export default class DrhLogicMgr extends cc.Component {
         KBEngine.Event.register("EntitiesEnabled", this, "OnClientActive");
         KBEngine.Event.register("OnPlayNextAudio", this, "OnPlayNextAudio");
         KBEngine.Event.register("DismissInfo", this, "OnDismissInfo");
+        KBEngine.Event.register("onHallCommand", this, "OnHallCommand");
     }
 
     public SetBettingSpotlightEnabled(enabled:boolean)
@@ -684,10 +702,16 @@ export default class DrhLogicMgr extends cc.Component {
             this.game_end_time = data["game_end_time"];
         }
 
+        if(data.hasOwnProperty("reward_pool"))
+        {
+            this.lastRewardPool = data["reward_pool"].toString();
+        }
         if(data.hasOwnProperty("total_reward_money"))
         {
             let strJiang = data["total_reward_money"].toString();
-            this.UpdateCurJiangChi(strJiang);
+            this.lastTotalRewardMoney = strJiang;
+            this.UpdateCurJiangChi(strJiang, this.ReadRewardOn(data));
+            this.RequestJackpotConfig();
         }
 
         let strRoomID = GameDataManager.getAccount().roomID;
@@ -1672,8 +1696,95 @@ export default class DrhLogicMgr extends cc.Component {
         return cc.Vec2.ZERO;
     }
 
+    /**
+     * 服务端明确下发奖池开关时优先使用；当前 PlayerList 未带该字段，
+     * 关闭奖池时只是把 reward_pool / total_reward_money 置 0。
+     */
+    private ReadRewardOn(data:any):boolean
+    {
+        if (data == null) return null;
+        return typeof data["reward_on"] === "boolean" ? data["reward_on"] : null;
+    }
+
+    private GetRoomRewardPoolKey():string
+    {
+        const account = GameDataManager.getAccount();
+        let raw = account == null || account.roomSetting == null ? "" : String(account.roomSetting).trim();
+        if (raw.indexOf("{{") === 0 && raw.lastIndexOf("}}") === raw.length - 2)
+            raw = raw.slice(1, -1);
+        if (raw === "") return "";
+        let setting:any = null;
+        try { setting = JSON.parse(raw); } catch (error) { return ""; }
+        if (setting == null) return "";
+        const unionId = setting.union_id == null ? "" : String(setting.union_id).trim();
+        if (unionId !== "" && unionId !== "0") return unionId;
+        const clubId = setting.club_id == null ? "" : String(setting.club_id).trim();
+        if (clubId !== "" && clubId !== "0") return "club-" + clubId;
+        return "";
+    }
+
+    private GetRoomClubId():string
+    {
+        const account = GameDataManager.getAccount();
+        let raw = account == null || account.roomSetting == null ? "" : String(account.roomSetting).trim();
+        if (raw.indexOf("{{") === 0 && raw.lastIndexOf("}}") === raw.length - 2)
+            raw = raw.slice(1, -1);
+        if (raw === "") return "";
+        let setting:any = null;
+        try { setting = JSON.parse(raw); } catch (error) { return ""; }
+        if (setting == null || setting.club_id == null) return "";
+        const clubId = String(setting.club_id).trim();
+        return clubId !== "" && clubId !== "0" ? clubId : "";
+    }
+
+    /** 池主/运维可读开关；普通成员无权限时静默失败，回落到奖池金额判断。 */
+    private RequestJackpotConfig()
+    {
+        if (!this.IsRoomClockClubRoom()) return;
+        const roomID = String(GameDataManager.getAccount().roomID || "");
+        if (roomID === "" || roomID === "0") return;
+        if (this.jackpotConfigRequested && this.jackpotConfigRoomID === roomID) return;
+        this.jackpotConfigRequested = true;
+        this.jackpotConfigRoomID = roomID;
+        const clubId = this.GetRoomClubId();
+        const poolKey = this.GetRoomRewardPoolKey();
+        let param = "{\"header\":\"获取_俱乐部_奖池_配置\",\"context\":\"" + this.jackpotConfigContext + "\"";
+        if (clubId !== "")
+            param += ",\"club_id\":\"" + clubId + "\"";
+        if (poolKey !== "")
+            param += ",\"pool_key\":\"" + poolKey + "\"";
+        param += "}";
+        GameDataManager.getAccount().reqHallCommand(param, this.jackpotConfigContext);
+    }
+
+    public OnHallCommand(nCode:number, param:string)
+    {
+        if (!param || param.indexOf(this.jackpotConfigContext) < 0) return;
+        if (nCode !== 0x200 || !this.IsRoomClockClubRoom()) return;
+        let msg:any = null;
+        try { msg = JSON.parse(param); } catch (error) { return; }
+        let data:any = msg ? (msg["result"] || msg["ret_result"] || msg) : null;
+        if (typeof data === "string")
+        {
+            try { data = JSON.parse(data); } catch (error) { return; }
+        }
+        if (!data || typeof data["reward_on"] !== "boolean") return;
+        const roomID = String(GameDataManager.getAccount().roomID || "");
+        if (roomID === "" || roomID === "0" || roomID !== this.jackpotConfigRoomID) return;
+        const expectedClub = this.GetRoomClubId();
+        const actualClub = data["club_id"] == null ? "" : String(data["club_id"]);
+        const expectedPool = this.GetRoomRewardPoolKey();
+        const actualPool = data["pool_key"] == null ? "" : String(data["pool_key"]);
+        const poolOk = expectedPool === "" || actualPool === "" || actualPool === expectedPool;
+        const clubOk = actualClub !== "" && (expectedClub === "" || actualClub === expectedClub);
+        if (actualClub !== "" ? (!poolOk && !clubOk) : !poolOk) return;
+        this.jackpotSwitch = data["reward_on"];
+        if (this.playingView != null)
+            this.playingView.SetJackpotVisible(data["reward_on"]);
+    }
+
     //更新奖池数据
-    public UpdateCurJiangChi(strNum:string)
+    public UpdateCurJiangChi(strNum:string, rewardOn:boolean = null)
     {
         // 至少七格；仅补前导零，保留服务器原值的所有位数和精度。
         // 格子与数字共用位图字形，长金额整体缩小，不会跨格错位。
@@ -1688,6 +1799,22 @@ export default class DrhLogicMgr extends cc.Component {
         label.fontSize = Math.min(label.lineHeight,
             Math.floor(label.node.width * 4 / (Math.max(1, display.length) * 3)));
         label.string = display;
+
+        if (!this.IsRoomClockClubRoom())
+        {
+            this.jackpotSwitch = null;
+            if (this.playingView != null)
+                this.playingView.SetJackpotVisible(true);
+            return;
+        }
+
+        if (rewardOn != null)
+            this.jackpotSwitch = rewardOn;
+        let enabled = this.jackpotSwitch;
+        if (enabled == null)
+            enabled = Number(display.replace(/,/g, "")) > 0;
+        if (this.playingView != null)
+            this.playingView.SetJackpotVisible(enabled);
     }
 
     //增加屏蔽语音

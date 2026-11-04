@@ -16,6 +16,10 @@
 - 首个 Tab「奖池设置」：顶部「奖池总开关」对应 `reward_on`（默认关，关=列表置灰不可改、不进池/不派奖，值保留），下方 5 档牌型比例；底皮提留不在客户端展示。用按池命令 `获取/设置_俱乐部_奖池_配置`（只读写 `reward_card_bili` 与 `reward_on`）；获取带池键、回包回填；第 5 档键「丁二皇」/界面「单独丁儿皇」。
 - 切图在 `assets/V8/game_settings/`；Prefab/布局/脚本/UUID 检查通过，Creator 导入、构建、真机与真实回包待验证。详见[交接](handoffs/2026-11-04-game-settings-jackpot.md)。
 
+## 2026-11-04 房间内奖池展示按开关隐藏（未构建、未真机）
+
+- 俱乐部房进入时隐藏顶部奖池条、实时战绩与牌局回顾的奖池信息；优先读 `获取_俱乐部_奖池_配置.reward_on` 并校验池键，普通成员无权限时按奖池金额 0 兜底。大厅/房间请求均带 `club_id`（文档已支持，优先于 `pool_key`），大厅设置保存带回读到的 `pool_key` 并校验回包；游戏设置「奖池设置」单页滚动区内含 5 档比例 + 8 档底皮余额，余额按元编辑、接口按分写 `reward_balance`，池关闭时整体置灰不可改；房间奖池弹窗走俱乐部配置接口。节点/Preview 静态核对通过，Creator/构建/真机/真实回包待验证。详见[交接](handoffs/2026-11-04-game-settings-jackpot.md)。
+
 ## 2026-11-04 我的页：联盟红利按钮与面板（未构建、未真机）
 
 - 当前俱乐部卡片联盟区新增「联盟红利」，仅联盟创建者可见；复用「我的红利」新增 `panelUnionHongli`，`panelMyHongli` 加 `mode=union`。
@@ -94,8 +98,7 @@
 
 ## 2026-11-02 玩家设置「赠送」改口径 + 新增「上下分」（未构建、未真机）
 
-- 成员设置「赠送」改走 **`赠送_俱乐部_积分`**；新增「玩家设置上下分」复用 `panelClubGoldPad`，`entry=settings` 成功后弹提示、不插聊天通报；自己那行可点开，管理操作收起，行模板加透明热区扩大点击区。
-- 已改 `ClubManagementView.ts`、`panelGivePad.ts`、`panelMain.ts`、`panelClubGoldPad.ts`、`panelMain.prefab`；TS/Prefab/Creator 编译通过，真实回包、构建、真机待验证。详见[交接](handoffs/2026-11-02-club-gift-updown.md)。
+- 赠送改走 `赠送_俱乐部_积分`；新增玩家设置上下分复用 `panelClubGoldPad`。TS/Prefab/Creator 编译通过，真实回包、构建、真机待验证。详见[交接](handoffs/2026-11-02-club-gift-updown.md)。
 
 ## 2026-11-03 后台联盟管理与「调整群主额度」（已部署）
 
@@ -109,17 +112,9 @@
 - 房间维护改为按俱乐部聚合的只读页：一级俱乐部、展开二级房间，移除解散/全部解散/全局创建开关；支持按俱乐部/创建者/邀请码查询。
 - 10:21 已部署正式：后端 `2865d24c…`、前端 `index-efi7NGCa.js`/`index-BJt7iv_1.css`；新接口未登录 401，已移除写接口 404；回滚 `backups/xuanmanager.20261103-1020-rollback` + `web.previous-room-clubs-20261103-1020`。未做登录态验收；KB 当前 0 个活跃房间。见[交接](handoffs/2026-11-03-admin-room-records-club-maintenance.md)。
 
-## 2026-11-01 我的页俱乐部金币流水接口（未构建、未真机）
+## 2026-11-01 资金明细 / 牌桌金币 / 私聊上下分（未构建、未真机）
 
-- 有俱乐部时「资金明细」改走 `查询_俱乐部_积分流水`/`ClubGoldWater`（`gold` 按整数元显示），无俱乐部保留 `查询_玩家_现金流水`；Creator/真实回包/构建/真机待验证。
-
-## 2026-11-01 牌桌内俱乐部金币口径（未构建、未真机）
-
-- 俱乐部房的带入/聊天余额/邀请最低带入/兑换入口按房间 `club_id` 读 `Account.club_gold`，隐藏平台充值；`0x304` 提示俱乐部金币不足。详见[交接](handoffs/2026-11-01-ingame-club-gold.md)。
-
-## 2026-11-01 私聊上下分入口与弹窗（未构建、未真机）
-
-- 新增 `panelClubGoldPad` 与聊天页四入口；显示权限已按 2026-11-03 联盟口径调整（老板上下分、赠送老板/代理）。细节见[交接](handoffs/2026-11-01-chat-gold-pad.md)。
+- 有俱乐部时资金明细走 `查询_俱乐部_积分流水`；牌桌带入/余额/邀请/兑换按房间 `club_id` 读 `Account.club_gold`；私聊四入口用 `panelClubGoldPad`。详见[牌桌金币](handoffs/2026-11-01-ingame-club-gold.md)、[私聊上下分](handoffs/2026-11-01-chat-gold-pad.md)。
 
 ## 2026-10-31～11-01（已归档）
 

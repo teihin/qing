@@ -9,7 +9,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PREFAB = os.path.join(ROOT, "assets", "resources", "UI", "panelGameSettings.prefab")
-W, H = 750, 1334
+W, H = 750, int(os.environ.get("PREVIEW_H", "1334"))
 FONT_PATH = "/System/Library/Fonts/Hiragino Sans GB.ttc"
 
 # uuid -> png
@@ -91,7 +91,7 @@ canvas = Image.new("RGBA", (W, H), (3, 10, 20, 255))
 draw = ImageDraw.Draw(canvas)
 
 
-def render(nid, px, py, pw, ph, forced=None):
+def render(nid, px, py, pw, ph, forced=None, clip_bottom=None):
     node = d[nid]
     if not node.get("_active", True):
         return
@@ -125,17 +125,21 @@ def render(nid, px, py, pw, ph, forced=None):
             ox = left + (w - tw) / 2
         oy = top + (h - size * 1.25) / 2
         draw.text((ox, oy), txt, font=font, fill=col)
+    has_mask = comp(node, "cc.Mask")[0] is not None
+    child_clip = top + h if has_mask else clip_bottom
     lay, _ = comp(node, "cc.Layout")
     if lay:
         cy = top + lay.get("_N$paddingTop", 0)
         for c in node.get("_children", []):
             cw = d[c["__id__"]]["_contentSize"]["width"]
             ch = d[c["__id__"]]["_contentSize"]["height"]
-            render(c["__id__"], left, top, w, h, (left + (w - cw) / 2, cy, cw, ch))
+            if child_clip is not None and cy + ch > child_clip:
+                break
+            render(c["__id__"], left, top, w, h, (left + (w - cw) / 2, cy, cw, ch), child_clip)
             cy += ch + lay.get("_N$spacingY", 0)
         return
     for c in node.get("_children", []):
-        render(c["__id__"], left, top, w, h)
+        render(c["__id__"], left, top, w, h, clip_bottom=child_clip)
 
 
 render(1, 0, 0, W, H)

@@ -5,8 +5,8 @@
 只写 assets/resources/UI/panelGameSettings.prefab(.meta)；
 SpriteFrame 全部复用既有 V7 资源与本目录 gs_* 切图。
 
-注意：池级总开关行由 tools/patch_game_settings_pool_switch.py 追加；
-重建后必须再运行该补丁，且本脚本会换 Prefab UUID（现有正式文件不要用它覆盖）。
+当前正式布局：单页签「奖池设置」内用滚动区容纳 5 档牌型比例 + 8 个底皮奖池数量；
+Prefab UUID 固定沿用现有正式文件，避免资源引用漂移。不要用其它随机 UUID 覆盖。
 """
 import json, os, uuid, base64, random, string
 
@@ -51,7 +51,6 @@ SPR = {
     "panel": V7("club_settings_panel_v8"),
     "toggle_on": V7("register_toggle_on_exact"),
     "toggle_off": V7("register_toggle_off_exact"),
-    "gear_btn": gs("gs_gear_btn"),
     "badge": gs("gs_badge_star"),
     "tab_on": gs("gs_tab_on"),
     "tab_off": gs("gs_tab_off"),
@@ -61,7 +60,7 @@ SPR = {
     "back": gs("gs_back"),
 }
 
-PREFAB_UUID = str(uuid.uuid4())
+PREFAB_UUID = "1d247d66-a2b2-4c04-a530-99d156851e8b"
 SCRIPT_UUID = "9c1f7a3e-5b24-4d68-9e0f-2a7c4b8d6e51"
 SCRIPT_TYPE = compress_uuid(SCRIPT_UUID)
 
@@ -252,6 +251,23 @@ def build(n, parent_id=None, is_root=False, objs=None):
                 "placeholderFontColor": {"__type__": "cc.Color", "r": 120, "g": 154, "b": 182, "a": 255},
                 "node": {"__id__": n.nid}}
             objs[cid]["_N$background"] = {"__id__": None}
+        elif k == "scrollview":
+            objs[cid] = {
+                "__type__": "cc.ScrollView", "_name": "", "_objFlags": 0,
+                "_enabled": True, "node": {"__id__": n.nid},
+                "horizontal": False, "vertical": True, "inertia": True, "brake": 0.5,
+                "elastic": True, "bounceDuration": 1, "scrollEvents": [],
+                "cancelInnerEvents": True, "_N$content": None, "content": None,
+                "_N$horizontalScrollBar": None, "_N$verticalScrollBar": None, "_id": ""
+            }
+        elif k == "mask":
+            objs[cid] = {
+                "__type__": "cc.Mask", "_name": "", "_objFlags": 0,
+                "node": {"__id__": n.nid}, "_enabled": True,
+                "_materials": [{"__uuid__": MAT}], "_spriteFrame": None,
+                "_type": 0, "_segments": 64, "_N$alphaThreshold": 0,
+                "_N$inverted": False, "_id": ""
+            }
         elif k == "layout":
             objs[cid] = {"__type__": "cc.Layout", "_name": "", "_objFlags": 0,
                          "_enabled": True, "node": {"__id__": n.nid},
@@ -333,7 +349,7 @@ def build_tree():
                            0, (0, 0.5), True, (DARKOUT, 1))
     widget(card_title, 9, 76, 0, 22, 0, 0, 0, 320, 46)
     card.add(card_title)
-    card_sub = text_node("卡片说明", "各牌型奖池开关与分红比例", 22, GRAY, (-254, 464),
+    card_sub = text_node("卡片说明", "各牌型比例与底皮奖池数量", 22, GRAY, (-254, 464),
                          (420, 32), 0, (0, 0.5))
     widget(card_sub, 9, 76, 0, 70, 0, 0, 0, 420, 32)
     card.add(card_sub)
@@ -342,9 +358,42 @@ def build_tree():
     widget(badge, 9, 28, 0, 25, 0, 0, 0, 44, 44)
     card.add(badge)
 
-    rows = N("列表", (0, -22), (654, 628))
-    rows.comps.append({"kind": "layout", "sy": 12})
-    widget(rows, 41, 0, 0, 110, 0, 0, 0, 654, 628)
+    pool_row = N("池总开关行", (0, 0), (654, 64))
+    sprite(pool_row, SPR["row"], sliced=True)
+    widget(pool_row, 41, 0, 0, 110, 0, 0, 0, 654, 64)
+    pool_row.add(text_node("名称", "奖池总开关", 26, GOLD, (-246, 12), (300, 34),
+                           0, (0, 0.5), True, (DARKOUT, 1)))
+    pool_row.add(text_node("说明", "关闭后不进池、不派奖、不提留", 16, GRAY, (-246, -18),
+                           (300, 22), 0, (0, 0.5), False))
+    pool_sw = N("池总开关", (122, 0), (104, 52))
+    button(pool_sw)
+    pool_on = N("开", (0, 0), (104, 52), active=False)
+    sprite(pool_on, SPR["toggle_on"])
+    pool_on.add(text_node("文字", "开", 20, (255, 242, 216, 255), (-24, 0), (38, 38),
+                          1, (0.5, 0.5), True, (DARKOUT, 1)))
+    pool_off = N("关", (0, 0), (104, 52), active=True)
+    sprite(pool_off, SPR["toggle_off"])
+    pool_off.add(text_node("文字", "关", 20, (255, 242, 216, 255), (24, 0), (38, 38),
+                           1, (0.5, 0.5), True, (DARKOUT, 1)))
+    pool_sw.add(pool_on)
+    pool_sw.add(pool_off)
+    pool_row.add(pool_sw)
+    card.add(pool_row)
+
+    # 单页滚动区：5 档牌型比例 + 8 个底皮奖池数量放在同一张卡片里。
+    # 滚动区用 top+bottom Widget 随卡片高度拉伸，长屏不会在底部留空。
+    scroll = N("滚动", (0, -22), (654, 870))
+    scroll.comps.append({"kind": "scrollview"})
+    widget(scroll, 45, 0, 0, 182, 66, 0, 0, 654, 870)
+    view = N("view", (0, 0), (654, 870))
+    view.comps.append({"kind": "mask"})
+    widget(view, 45, 0, 0, 0, 0, 0, 0, 654, 870)
+    content = N("content", (0, 435), (654, 1604), anchor=(0.5, 1))
+    content.comps.append({"kind": "layout", "sy": 12})
+    widget(content, 17, 0, 0, 0, 0, 0, 0, 654, 1604)
+
+    content.add(text_node("牌型标题", "牌型比例", 28, GOLD, (0, 0), (654, 44),
+                          0, (0.5, 0.5), True, (DARKOUT, 1)))
     tiers = [("天皇", 20), ("地皇", 10), ("朵皇", 10), ("朵朵", 2), ("单独丁儿皇", 2)]
     for i, (name, pct) in enumerate(tiers):
         row = N("行_%d" % i, (0, 0), (654, 116))
@@ -372,8 +421,31 @@ def build_tree():
         button(pc)
         pc.add(text_node("数值", "%d%%" % pct, 26, CREAM, (0, 0), (124, 52)))
         row.add(pc)
-        rows.add(row)
-    card.add(rows)
+        content.add(row)
+
+    content.add(text_node("底皮标题", "底皮奖池数量（元 · 覆盖写入，上下滑动查看全部）", 28, GOLD, (0, 0),
+                          (654, 44), 0, (0.5, 0.5), True, (DARKOUT, 1)))
+    dipis = ["0.1/0.3", "0.2/0.5", "1/3", "2/5", "5/10", "10/20", "20/40", "50/100"]
+    for i, dipi in enumerate(dipis):
+        row = N("底皮行_%d" % i, (0, 0), (654, 96))
+        sprite(row, SPR["row"], sliced=True)
+        b = N("徽章", (-288, 0), (48, 48))
+        sprite(b, SPR["badge"])
+        row.add(b)
+        row.add(text_node("名称", "底皮 " + dipi, 26, GOLD, (-246, 0), (300, 44),
+                          0, (0, 0.5), True, (DARKOUT, 1)))
+        chip = N("数量_%d" % i, (200, 8), (200, 52))
+        sprite(chip, SPR["chip"], sliced=True)
+        button(chip)
+        chip.add(text_node("数值", "0 元", 24, CREAM, (0, 0), (200, 52)))
+        row.add(chip)
+        row.add(text_node("提示", "点击修改", 16, GRAY, (200, -30), (200, 18),
+                          1, (0.5, 0.5), False))
+        content.add(row)
+
+    view.add(content)
+    scroll.add(view)
+    card.add(scroll)
 
     total = text_node("合计", "合计 44% · 各档独立按底皮奖池计算", 22, GRAY, (0, -529),
                       (654, 32))
@@ -440,6 +512,12 @@ def main():
     for o in objs:
         if isinstance(o, dict) and o.get("__type__") == "cc.EditBox":
             o["_N$background"] = {"__id__": bg_comp}
+
+    content_node = node_by_name.get("content")
+    for o in objs:
+        if isinstance(o, dict) and o.get("__type__") == "cc.ScrollView":
+            o["_N$content"] = {"__id__": content_node}
+            o["content"] = {"__id__": content_node}
 
     out = os.path.join(ROOT, "assets", "resources", "UI", "panelGameSettings.prefab")
     with open(out, "w", encoding="utf-8") as f:

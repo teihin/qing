@@ -41,7 +41,7 @@
 | A-21 | `assets/V7/shield_room_exact.png` | `assets/resources/UI/panelMain.prefab` | 房间盾牌中央及英文 `BY` | 已确认（已有 BF 版本，跳过） |
 | A-22 | `assets/V7/startup_scene_long_v8.png` | `assets/resources/UI/panelUpdate.prefab` | 更新/进入游戏长图中的盾牌与英文 `BY` | 已确认（已有 BF 版本，跳过） |
 | A-23 | `assets/V7/wallet_v8_realname_shield.png` | `assets/resources/Prefabs/钱包.prefab` | 钱包实名页盾牌中央及英文 `BY` | 已确认（已有 BF 版本，跳过） |
-| A-24 | `assets/V7/游戏内/游戏就绪_434x145.png` | `assets/Scenes/drh8.fire`、`assets/resources/UI/panelGameView.prefab` | 牌桌“BY游戏已就绪”中的 `BY` | 已替换（本轮） |
+| A-24 | `assets/V7/游戏内/游戏就绪_434x145.png` | `assets/Scenes/drh8.fire`、`assets/resources/UI/panelGameView.prefab` | 牌桌“BY游戏已就绪”中的 `BY` | 已修正（2026-11-04，清除重叠后重新生成） |
 | A-25 | `assets/resources/pk2/bigbig.png` | `assets/Scenes/drh8.fire`、`assets/resources/Prefabs/handbig.prefab`、`assets/resources/Prefabs/丢牌对象.prefab`、多个回顾 Prefab、`panelGameView.prefab` | 特殊牌背中央 `BY` | 已替换（本轮） |
 
 ### B 组：牌桌动态牌背与切牌动画
@@ -90,8 +90,14 @@
 - `WebHome/assets/by-*`、`ChatTool/web/`：推广站和客服站资源，不属于游戏客户端美术。
 - `assets/V7/announcement_shield_v8_exact.png`、`assets/V7/register_modal_panel_exact.png` 等当前没有 Prefab/Scene 使用引用的旧/备用切图。
 - `assets/resources/other/drh/room_ready_art.png`：当前牌桌实际引用的是 `assets/V7/游戏内/游戏就绪_434x145.png`。
+
 - `assets/resources/zuotype/牌背3.png`、`assets/resources/zuotype/搓背3.png`：当前 `GetCardBackIndex()` 不会选中。
 - 只含 `8L` 或 `BL`、不含当前 `BY` 的旧图：本次目标是 `BY→BF`，不在本清单中擅自扩大为旧品牌清理。
+
+### A-24 后续修正（2026-11-04）
+
+- `游戏就绪_434x145.png` 上一版把新的 `BF` 直接叠在原 `BY` 图层上，产生旧字母和底部装饰重影；已重新生成单层透明 PNG。
+- 仍保持 434×145 画布、原文件名和 `.meta`/UUID/引用不变；仅完成静态图像检查，Creator 导入、构建和真机仍待验证。
 
 ## 替换后验证要求
 

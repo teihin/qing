@@ -20,11 +20,14 @@ import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
 import { jackpotAmount, jackpotTier, jackpotTime } from "../common/JackpotDisplay";
-import { getAccountClubGold, isUnionRoom, normalizeRoomClubId, resolveMyRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
+import { getAccountClubGold, isUnionRoom, normalizeRoomClubId, resolveMyRoomClubId, resolveRoomSettingClubId, resolveRoomSettingUnionId, withRoomClubId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 
 const {ccclass, property} = cc._decorator;
+
+/** 服务端 reward_card_bili 的固定键顺序；0 = 该牌型不派奖/不展示。 */
+const JACKPOT_HAND_KEYS: string[] = ["天皇", "地皇", "朵皇", "朵朵", "丁二皇"];
 
 @ccclass
 export default class panelGameView extends UIPanelViewBase {
@@ -72,6 +75,7 @@ export default class panelGameView extends UIPanelViewBase {
 
     private scrollJCList:ScrollViewEx = null;
     private jackpotRecordVersion = 0;
+    private jackpotVisible:boolean = true;
     private realtimeRecordVersion = 0;
 
     // 实时战绩：前半段是在座未结算玩家（接口一），后半段是已结算记录（接口二，分页无限滚动）
@@ -98,6 +102,9 @@ export default class panelGameView extends UIPanelViewBase {
     private roomInviteSeatGuardUntil:number = 0;
     private lastModalPrompt:string = "";
     private lastModalPromptTime:number = 0;
+    /** 服务端 PromptInfo 的序号/时间：坐下失败时等专用提示，避免再弹笼统的“金币不足”。 */
+    private promptInfoSerial:number = 0;
+    private lastPromptInfoTime:number = 0;
 
     private queueEntryLabel:cc.Label = null;
     private queueEntryNode:cc.Node = null;
@@ -458,6 +465,32 @@ export default class panelGameView extends UIPanelViewBase {
         Tool.GetChild(this.node,"系统设置").active = false;
         Tool.GetChild(this.node,"牌型提示").active = false;
         Tool.GetChild(this.node,"带入窗口").active = false;
+    }
+
+    /** 奖池未开启时隐藏桌内奖池条、实时战绩/牌局回顾里的奖池信息。 */
+    public SetJackpotVisible(visible:boolean)
+    {
+        this.jackpotVisible = visible;
+        this.ApplyJackpotVisibility();
+    }
+
+    private ApplyJackpotVisibility()
+    {
+        const visible = this.jackpotVisible;
+        this.SetNodeActive("奖池条", visible);
+        this.SetNodeActive("实时战绩/奖池", visible);
+        this.SetNodeActive("实时战绩/V8奖池标题", visible);
+        this.SetNodeActive("牌局回顾/奖池", visible);
+        this.SetNodeActive("牌局回顾/奖池背景", visible);
+        if (!visible)
+            this.SetNodeActive("奖池面板", false);
+    }
+
+    private SetNodeActive(path:string, active:boolean)
+    {
+        const node = Tool.GetChild(this.node, path);
+        if (node != null && node.active !== active)
+            node.active = active;
     }
 
     public onDaMove(event:cc.Event.EventTouch)
@@ -1216,6 +1249,7 @@ export default class panelGameView extends UIPanelViewBase {
         else if(button.node.name === "记录")
         {
             this.node.getChildByName("实时战绩").active = true;
+            this.ApplyJackpotVisibility();
             this.GetReadRecordInfo();
             this.GetWatchList();
 
@@ -1231,6 +1265,7 @@ export default class panelGameView extends UIPanelViewBase {
         else if(button.node.name === "信息")
         {
             this.node.getChildByName("牌局回顾").active = true;
+            this.ApplyJackpotVisibility();
 
             // Reopen on the card view even when the previous visit ended on text.
             Tool.GetChild(this.node,"牌局回顾/回顾列表").active = true;
@@ -1744,6 +1779,20 @@ export default class panelGameView extends UIPanelViewBase {
     //查询奖池信息
     public GetAllJiangChiInfo()
     {
+        const account = GameDataManager.getAccount();
+        const clubId = resolveRoomSettingClubId(account);
+        const unionId = resolveRoomSettingUnionId(account);
+        if (clubId !== "" || unionId !== "")
+        {
+            // 俱乐部/联盟房走池主查询；普通成员无权限时用 PlayerList 的当前档/合计兜底。
+            const context = "P@房间_奖池面板_获取_俱乐部_奖池_配置";
+            const params:any = { header: "获取_俱乐部_奖池_配置", context: context };
+            if (clubId !== "") params.club_id = clubId;
+            if (unionId !== "") params.pool_key = unionId;
+            else if (clubId !== "") params.pool_key = "club-" + clubId;
+            GameDataManager.getAccount().reqHallCommand(JSON.stringify(params), context);
+            return;
+        }
         let strParam = "{\"header\":\"查询_奖池_信息\"}";
         GameDataManager.getAccount().reqHallCommand(strParam, "P@查询_奖池_信息");
     }
@@ -2028,6 +2077,20 @@ export default class panelGameView extends UIPanelViewBase {
         UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, strMsg);
     }
 
+    /**
+     * 坐下失败时服务端会另发 PromptInfo 区分“俱乐部金币不足”和“该俱乐部额度不足”。
+     * 先给专用提示留出到达时间；没有专用提示再弹中性的兜底文案。
+     */
+    private ShowSitFailureFallback(strMsg:string)
+    {
+        const serial = this.promptInfoSerial;
+        this.scheduleOnce(() => {
+            if (this.promptInfoSerial !== serial) return;
+            if (Date.now() - this.lastPromptInfoTime < 1500) return;
+            this.ShowModalPrompt(strMsg);
+        }, 0.6);
+    }
+
     onPromptInfo(strMsg:string)
     {
         let json = this.ParsePromptInfo(strMsg);
@@ -2039,12 +2102,22 @@ export default class panelGameView extends UIPanelViewBase {
         let strWord = json["word"];
         if(strWord!=null && strWord != "")
         {
+            this.promptInfoSerial++;
+            this.lastPromptInfoTime = Date.now();
             if(strWord.indexOf("带入金币不足") >= 0 || strWord.indexOf("俱乐部金币不足") >= 0 ||
-                strWord.indexOf("俱乐部额度不足") >= 0 || strWord.indexOf("该俱乐部额度不足") >= 0)
+                strWord.indexOf("俱乐部额度不足") >= 0 || strWord.indexOf("该俱乐部额度不足") >= 0 ||
+                strWord.indexOf("未加入联盟") >= 0)
             {
                 // 预坐失败由服务端释放座位，只清理客户端状态，不再额外发送起立。
                 this.ClearPreSitState(true);
-                this.ShowModalPrompt(strWord);
+                let message = strWord;
+                if (strWord.indexOf("未加入联盟") >= 0)
+                    message = "该俱乐部未加入联盟，请联系总群主加入联盟";
+                else if (strWord.indexOf("额度不足") >= 0)
+                    message = "该俱乐部额度不足，请联系联盟总群主（或确认俱乐部已加入联盟）";
+                else if (strWord.indexOf("俱乐部金币不足") >= 0)
+                    message = "俱乐部金币不足，请联系代理上分";
+                this.ShowModalPrompt(message);
                 return;
             }
             else if (strWord == "房主同意坐下")
@@ -2190,10 +2263,11 @@ export default class panelGameView extends UIPanelViewBase {
                 this.ClearPreSitState(true);
                 if(bWasPreSitting)
                 {
-                    let strMsg = nCode == 0x302
-                        ? (this.GetCurrentRoomClubId() !== "" ? "俱乐部金币不足！" : "带入金币不足！")
-                        : "占座失败，请重新选择座位！";
-                    this.ShowModalPrompt(strMsg);
+                    const account = GameDataManager.getAccount();
+                    const clubRoom = this.GetCurrentRoomClubId() !== "" || isUnionRoom(account);
+                    this.ShowSitFailureFallback(clubRoom
+                        ? "带入失败，请检查俱乐部额度或积分"
+                        : "占座失败，请重新选择座位！");
                 }
             }
             return;
@@ -2223,10 +2297,12 @@ export default class panelGameView extends UIPanelViewBase {
                 {
                     this.CancelPreSitReservation(true);
                     const account = GameDataManager.getAccount();
-                    const clubId = this.GetCurrentRoomClubId();
-                    // 联盟房只校验玩家自己的积分，不再提示俱乐部额度。
-                    this.ShowMsg(isUnionRoom(account) ? "俱乐部金币不足！" :
-                        (clubId !== "" ? "俱乐部金币不足或额度不足！" : "带入失败，请重新选择座位！"));
+                    const clubRoom = this.GetCurrentRoomClubId() !== "" || isUnionRoom(account);
+                    // 具体是“俱乐部金币不足”还是“该俱乐部额度不足”以服务端 PromptInfo 为准；
+                    // 这里只在中性兜底，避免把额度不足误报成金币不足。
+                    this.ShowSitFailureFallback(clubRoom
+                        ? "带入失败，请检查俱乐部额度或积分"
+                        : "带入失败，请重新选择座位！");
                 }
             }
         }
@@ -4442,6 +4518,104 @@ export default class panelGameView extends UIPanelViewBase {
             GameDataManager.getAccount().reqGameCommand(strParam, "玩家_补芒_查询");  
     }
     private pospos = 0
+    /** 弹窗使用同一份奖池数据：优先俱乐部池 reward_balance（分），旧服务端回退 rewards/all_rewards。 */
+    private ApplyJackpotInfo(data:any)
+    {
+        const rewards = data["rewards"] || {};
+        const balance = data["reward_balance"];
+        const hasBalance = balance != null && typeof balance === "object" && Object.keys(balance).length > 0;
+        const overview = "奖池面板/容器/奖池总览/";
+        let total:any = data["all_rewards"];
+        if (hasBalance) {
+            let totalFen = 0;
+            for (const key in balance) {
+                const value = Number(balance[key]);
+                if (isFinite(value)) totalFen += value;
+            }
+            total = this.FormatJackpotFen(totalFen);
+        }
+        this.SetJackpotLabel(overview + "总金额/num", jackpotAmount(total));
+        ["1/3", "2/5", "5/10", "10/20", "20/40", "50/100"].forEach(tier => {
+            const value = hasBalance
+                ? this.FormatJackpotFen(Number(balance["底皮" + tier]))
+                : rewards["底皮" + tier];
+            this.SetJackpotLabel(overview + "各级奖池奖励设定/底皮" + tier.replace("/", "-"),
+                jackpotAmount(value));
+        });
+        const tier = jackpotTier(GameDataManager.getAccount().roomSetting);
+        const current = hasBalance
+            ? this.FormatJackpotFen(Number(balance[tier]))
+            : rewards[tier];
+        this.SetJackpotLabel("奖池面板/容器/奖池/金额/num", jackpotAmount(current));
+        this.SetJackpotLabel("奖池面板/容器/奖池/当前级别", tier ? tier.replace("底皮", "底皮 ") : "底皮 —");
+        this.ApplyJackpotRatios(data["reward_card_bili"]);
+    }
+
+    /** 只显示配置里比例 > 0 的牌型；无配置（普通成员/旧接口）时整块隐藏。 */
+    private ApplyJackpotRatios(bili:any)
+    {
+        const root = "奖池面板/容器/奖池/";
+        const container = Tool.GetChild(this.node, root + "牌型列表");
+        const has = bili != null && typeof bili === "object";
+        let any = false;
+        for (let i = 0; i < JACKPOT_HAND_KEYS.length; i++) {
+            const row = Tool.GetChild(container, "牌型_" + i);
+            if (!row) continue;
+            const ratio = has
+                ? Math.max(0, Math.min(100, Math.floor(Number(bili[JACKPOT_HAND_KEYS[i]]) || 0)))
+                : 0;
+            row.active = ratio > 0;
+            if (ratio > 0) {
+                any = true;
+                const label = Tool.GetChild(row, "比例");
+                const comp = label ? label.getComponent(cc.Label) : null;
+                if (comp) comp.string = ratio + "%";
+            }
+        }
+        const header = Tool.GetChild(this.node, root + "V8牌型表头");
+        const rule = Tool.GetChild(this.node, root + "V8规则");
+        const title = Tool.GetChild(this.node, root + "V8分节标题");
+        if (header) header.active = any;
+        if (rule) rule.active = any;
+        if (title) title.active = any;
+        if (container) {
+            container.active = any;
+            if (any) {
+                const layout = container.getComponent(cc.Layout);
+                if (layout) layout.updateLayout();
+            }
+        }
+    }
+
+    private SetJackpotLabel(path:string, text:string)
+    {
+        const node = Tool.GetChild(this.node, path);
+        const label = node ? node.getComponent(cc.Label) : null;
+        if (label) label.string = text;
+    }
+
+    private FormatJackpotFen(fen:number):string
+    {
+        const value = Math.max(0, Math.floor(Number(fen) || 0));
+        return value % 100 === 0 ? String(value / 100) : (value / 100).toFixed(2);
+    }
+
+    /** 普通成员读不到池主配置时：当前档/合计用 PlayerList 的推送值，各级明细显示不可见。 */
+    private ShowJackpotFallback()
+    {
+        const current = this.gameLogic ? this.gameLogic.lastRewardPool : "";
+        const total = this.gameLogic ? this.gameLogic.lastTotalRewardMoney : "";
+        const overview = "奖池面板/容器/奖池总览/";
+        this.SetJackpotLabel(overview + "总金额/num", jackpotAmount(total));
+        ["1/3", "2/5", "5/10", "10/20", "20/40", "50/100"].forEach(tier => {
+            this.SetJackpotLabel(overview + "各级奖池奖励设定/底皮" + tier.replace("/", "-"), "—");
+        });
+        const tier = jackpotTier(GameDataManager.getAccount().roomSetting);
+        this.SetJackpotLabel("奖池面板/容器/奖池/金额/num", jackpotAmount(current));
+        this.SetJackpotLabel("奖池面板/容器/奖池/当前级别", tier ? tier.replace("底皮", "底皮 ") : "底皮 —");
+        this.ApplyJackpotRatios(null);
+    }
+
     public onHallCommand(nCode:number,param:string)
     {
         if(param.indexOf("查询_奖池_信息") >= 0)
@@ -4449,18 +4623,23 @@ export default class panelGameView extends UIPanelViewBase {
             if(nCode == 0x200)
             {
                 let json = JSON.parse(param);
-                let data = json["result"];
-                const rewards = data["rewards"] || {};
-                const overview = "奖池面板/容器/奖池总览/";
-                Tool.GetChild(this.node, overview + "总金额/num").getComponent(cc.Label).string = jackpotAmount(data["all_rewards"]);
-                ["1/3", "2/5", "5/10", "10/20", "20/40", "50/100"].forEach(tier => {
-                    Tool.GetChild(this.node, overview + "各级奖池奖励设定/底皮" + tier.replace("/", "-"))
-                        .getComponent(cc.Label).string = jackpotAmount(rewards["底皮" + tier]);
-                });
-                const tier = jackpotTier(GameDataManager.getAccount().roomSetting);
-                Tool.GetChild(this.node, "奖池面板/容器/奖池/金额/num").getComponent(cc.Label).string = jackpotAmount(rewards[tier]);
-                Tool.GetChild(this.node, "奖池面板/容器/奖池/当前级别").getComponent(cc.Label).string = tier ? tier.replace("底皮", "底皮 ") : "底皮 —";
+                let data = json["result"] || {};
+                this.ApplyJackpotInfo(data);
             }
+        }
+        else if(param.indexOf("房间_奖池面板_获取_俱乐部_奖池_配置") >= 0)
+        {
+            let data:any = null;
+            if(nCode == 0x200) {
+                try {
+                    const json = JSON.parse(param);
+                    data = json["result"] || json["ret_result"] || json;
+                    if (typeof data === "string") data = JSON.parse(data);
+                }
+                catch (error) { data = null; }
+            }
+            if(data && (data["reward_balance"] || data["rewards"] || data["all_rewards"])) this.ApplyJackpotInfo(data);
+            else this.ShowJackpotFallback();
         }
         else if(param.indexOf("举报_玩家_信息")>=0)
         {
