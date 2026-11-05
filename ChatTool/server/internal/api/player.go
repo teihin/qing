@@ -361,6 +361,18 @@ func (s *Server) handlePlayerTyping(w http.ResponseWriter, r *http.Request, p pl
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handlePlayerClear 清除玩家这一侧的聊天记录：只记录清除时间，消息行保留，客服仍可见。
+func (s *Server) handlePlayerClear(w http.ResponseWriter, r *http.Request, p playerPrincipal) {
+	_, err := s.db.ExecContext(r.Context(), `UPDATE chat_conversation
+SET player_cleared_at = NOW(6), player_last_read_at = NOW(), updated_at = NOW()
+WHERE id = ? AND player_id = ?`, p.ConversationID, p.PlayerID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法清除聊天记录")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handlePlayerRead(w http.ResponseWriter, r *http.Request, p playerPrincipal) {
 	_, err := s.db.ExecContext(r.Context(), `UPDATE chat_conversation SET player_last_read_at = NOW() WHERE id = ? AND player_id = ?`, p.ConversationID, p.PlayerID)
 	if err != nil {

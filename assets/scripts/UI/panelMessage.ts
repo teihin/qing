@@ -18,6 +18,8 @@ const LIST_CACHE_VERSION = 1;
 const LOAD_MORE_DISTANCE = 260;
 /** 顶部负向回弹超过该距离（设计像素）后松手触发刷新。 */
 const PULL_REFRESH_DISTANCE = 40;
+/** 会话行之间的纵向间距；置顶官方客服与第一条会话之间同样留出。 */
+const ROW_GAP = 16;
 
 /**
  * 消息首页：当前账号所有俱乐部的会话列表。
@@ -35,6 +37,8 @@ export default class panelMessage extends UIPanelViewBase {
     private scroll:cc.ScrollView = null;
     private content:cc.Node = null;
     private itemTemplate:cc.Node = null;
+    /** 官方客服固定置顶行，不参与会话分页和缓存。 */
+    private pinnedItem:cc.Node = null;
     private items:cc.Node[] = [];
 
     private loadingNode:cc.Node = null;
@@ -49,6 +53,10 @@ export default class panelMessage extends UIPanelViewBase {
     /** 右上角聊天托管开关：只对服务端判定符合身份的大群主/盟主显示。 */
     private hostingButton:cc.Node = null;
     private hostingLabel:cc.Label = null;
+    private hostingStateLabel:cc.Label = null;
+    private hostingDotLabel:cc.Label = null;
+    private hostingSwitchOn:cc.Node = null;
+    private hostingSwitchOff:cc.Node = null;
     private hostingInfo:DirectHostingInfo = null;
     private hostingBusy:boolean = false;
 
@@ -68,6 +76,12 @@ export default class panelMessage extends UIPanelViewBase {
 
     private busy:boolean = false;
 
+    /** 牌桌内打开时隐藏实心大厅背景，改用半透明遮罩，保持能看见牌桌进程。 */
+    private ingameOverlay:boolean = false;
+    private backgroundNode:cc.Node = null;
+    private overlayMaskNode:cc.Node = null;
+    private backButton:cc.Node = null;
+
     private onAllConversationsHandler:(page:any)=>void = null;
     private onConversationReadHandler:(conversationId:string)=>void = null;
 
@@ -81,6 +95,16 @@ export default class panelMessage extends UIPanelViewBase {
         this.itemTemplate = this.NodeOf("列表/view/content/会话项");
         if(this.itemTemplate != null)
             this.itemTemplate.active = false;
+        this.pinnedItem = this.NodeOf("列表/view/content/官方客服");
+        if(this.pinnedItem != null)
+        {
+            let button = this.pinnedItem.getComponent(cc.Button);
+            if(button != null)
+            {
+                button.node.targetOff(this);
+                button.node.on("click",()=>{ this.OpenOfficialKefu(); },this);
+            }
+        }
 
         this.loadingNode = this.NodeOf("加载");
         this.emptyNode = this.NodeOf("空态");
@@ -94,6 +118,15 @@ export default class panelMessage extends UIPanelViewBase {
         this.hostingButton = this.NodeOf("聊天托管");
         let hostingText = this.hostingButton == null ? null : Tool.GetChild(this.hostingButton,"文字");
         this.hostingLabel = hostingText == null ? null : hostingText.getComponent(cc.Label);
+        let hostingState = this.hostingButton == null ? null : Tool.GetChild(this.hostingButton,"状态");
+        this.hostingStateLabel = hostingState == null ? null : hostingState.getComponent(cc.Label);
+        let hostingDot = this.hostingButton == null ? null : Tool.GetChild(this.hostingButton,"指示点");
+        this.hostingDotLabel = hostingDot == null ? null : hostingDot.getComponent(cc.Label);
+        this.hostingSwitchOn = this.hostingButton == null ? null : this.hostingButton.getChildByName("开关-开");
+        this.hostingSwitchOff = this.hostingButton == null ? null : this.hostingButton.getChildByName("开关-关");
+        this.backgroundNode = this.NodeOf("背景");
+        this.overlayMaskNode = this.NodeOf("游戏内遮罩");
+        this.backButton = this.NodeOf("返回");
         if(this.hostingButton != null)
             this.hostingButton.active = false;
         if(this.pullTipNode != null)
@@ -113,9 +146,35 @@ export default class panelMessage extends UIPanelViewBase {
 
     start()
     {
+        this.ApplyEntryStyle();
         this.started = true;
         this.Refresh(true);
         this.LoadHostingStatus(false);
+    }
+
+    /**
+     * 大厅里它是 Main 下的常驻分页，保持原实心背景；
+     * 牌桌内通过 UIManager 以 Cover 打开并传「游戏内」，改为半透明浮层透出牌桌。
+     */
+    private ApplyEntryStyle():void
+    {
+        this.ingameOverlay = this.arrayEx != null && this.arrayEx.length > 0 && this.arrayEx[0] == "游戏内";
+        if(this.backgroundNode != null)
+            this.backgroundNode.active = !this.ingameOverlay;
+        if(this.overlayMaskNode != null)
+            this.overlayMaskNode.active = this.ingameOverlay;
+        if(this.backButton != null)
+            this.backButton.active = this.ingameOverlay;
+        if(!this.ingameOverlay)
+            return;
+        // 返回键占住左上角，标题居中，避免压住「消息」两个字。
+        let title = this.NodeOf("标题");
+        let titleWidget = title == null ? null : title.getComponent(cc.Widget);
+        if(titleWidget != null)
+        {
+            let parentWidth = title.parent == null ? 750 : title.parent.width;
+            titleWidget.left = (parentWidth - title.width) / 2;
+        }
     }
 
     onEnable()
@@ -292,6 +351,8 @@ export default class panelMessage extends UIPanelViewBase {
         this.moreRequestSerial++;
         this.loadingFirst = true;
         this.loadingMore = false;
+        // 首屏行还没渲染时 content 高度是 0，ScrollView 会把拖动钳成 0，加载中就没法下拉。
+        this.EnsureScrollable();
         if(showLoading)
             this.ShowLoading();
         let requestStartedAt = Date.now();
@@ -408,9 +469,10 @@ export default class panelMessage extends UIPanelViewBase {
         if(this.items.length === this.list.length)
         {
             let itemHeight = this.ItemHeight();
+            this.LayoutPinned();
             for(let i = 0;i < this.list.length;i++)
             {
-                this.items[i].y = -itemHeight / 2 - i * itemHeight;
+                this.items[i].y = this.RowY(i,itemHeight);
                 this.RenderItem(this.items[i],this.list[i]);
             }
             this.UpdateBottomTip();
@@ -686,13 +748,14 @@ export default class panelMessage extends UIPanelViewBase {
                 this.errorLabel.string = text;
         }
         this.ClearItems();
+        this.LayoutPinned();
         if(this.content != null)
         {
             let viewNode = this.scroll == null ? null : this.scroll.node.getChildByName("view");
             if(viewNode != null)
             {
                 this.AlignContentToViewTop(viewNode);
-                this.content.height = Math.max(1,viewNode.height + 1);
+                this.content.height = Math.max(this.PinnedHeight(),viewNode.height + 1);
             }
         }
         this.RestoreScrollOffset(0);
@@ -734,9 +797,63 @@ export default class panelMessage extends UIPanelViewBase {
         this.content.y = viewNode.height * (1 - viewNode.anchorY);
     }
 
+    /**
+     * 还没渲染任何行时把 content 垫到一屏 +1：与渲染后的短列表同一套回弹条件，
+     * 否则 content 比 view 矮时 ScrollView 的 _clampDelta 会把拖动直接钳成 0。
+     */
+    private EnsureScrollable():void
+    {
+        if(this.scroll == null || this.content == null)
+            return;
+        let viewNode = this.scroll.node.getChildByName("view");
+        if(viewNode == null)
+            return;
+        this.PrepareScrollLayout();
+        let minHeight = viewNode.height + 1;
+        if(this.content.height >= minHeight)
+            return;
+        this.AlignContentToViewTop(viewNode);
+        this.content.height = minHeight;
+    }
+
     private ItemHeight():number
     {
         return this.itemTemplate == null ? 118 : Math.max(96,this.itemTemplate.height);
+    }
+
+    private PinnedHeight():number
+    {
+        return this.pinnedItem == null || !cc.isValid(this.pinnedItem) ?
+            0 : Math.max(96,this.pinnedItem.height);
+    }
+
+    /** 置顶行下方的列表起点；没有置顶行时从内容顶部直接开始。 */
+    private RowTop():number
+    {
+        let pinnedHeight = this.PinnedHeight();
+        return pinnedHeight > 0 ? pinnedHeight + ROW_GAP : 0;
+    }
+
+    /** 官方客服行始终占列表第一格；真实会话从它下面开始排，行与行之间留 ROW_GAP。 */
+    private RowY(index:number,itemHeight:number):number
+    {
+        return -this.RowTop() - itemHeight / 2 - index * (itemHeight + ROW_GAP);
+    }
+
+    /** 动态列表的真实内容高度：置顶行 + 行间距 + 每行高度，末尾再留一个间距。 */
+    private ListHeight(itemHeight:number,count:number):number
+    {
+        if(count <= 0)
+            return this.PinnedHeight();
+        return this.RowTop() + count * itemHeight + (count - 1) * ROW_GAP + ROW_GAP;
+    }
+
+    private LayoutPinned():void
+    {
+        if(this.pinnedItem == null || !cc.isValid(this.pinnedItem))
+            return;
+        this.pinnedItem.active = true;
+        this.pinnedItem.y = -this.PinnedHeight() / 2;
     }
 
     private AppendRow(index:number,itemHeight:number):void
@@ -749,7 +866,7 @@ export default class panelMessage extends UIPanelViewBase {
         node.x = 0;
         node.anchorX = 0.5;
         node.anchorY = 0.5;
-        node.y = -itemHeight / 2 - index * itemHeight;
+        node.y = this.RowY(index,itemHeight);
         this.RenderItem(node,this.list[index]);
         this.items.push(node);
     }
@@ -760,9 +877,12 @@ export default class panelMessage extends UIPanelViewBase {
         if(this.content == null || this.itemTemplate == null)
             return;
         let itemHeight = this.ItemHeight();
+        this.LayoutPinned();
         for(let i = Math.max(0,fromIndex);i < this.list.length;i++)
             this.AppendRow(i,itemHeight);
-        this.content.height = Math.max(itemHeight,itemHeight * this.list.length,this.ViewHeight() + 1);
+        let pinnedHeight = this.PinnedHeight();
+        this.content.height = Math.max(pinnedHeight + itemHeight,
+            this.ListHeight(itemHeight,this.list.length),this.ViewHeight() + 1);
     }
 
     /**
@@ -781,7 +901,9 @@ export default class panelMessage extends UIPanelViewBase {
         let oldOffset = this.scroll == null ? 0 : Math.max(0,this.scroll.getScrollOffset().y);
         this.PrepareScrollLayout();
         this.ClearItems();
+        this.LayoutPinned();
         let itemHeight = this.ItemHeight();
+        let pinnedHeight = this.PinnedHeight();
         if(this.list.length === 0)
         {
             this.ShowEmpty("暂时没有聊天记录");
@@ -789,7 +911,7 @@ export default class panelMessage extends UIPanelViewBase {
             {
                 if(scrollToTop || oldOffset <= 2)
                     this.AlignContentToViewTop(viewNode);
-                this.content.height = Math.max(1,viewNode.height + 1);
+                this.content.height = Math.max(pinnedHeight,viewNode.height + 1);
             }
             this.RestoreScrollOffset(0);
             this.UpdateBottomTip();
@@ -802,10 +924,11 @@ export default class panelMessage extends UIPanelViewBase {
         // 与房间列表一致：content 至少比 view 高 1px，短列表也能进入 ScrollView 的
         // 弹性拖动/回弹流程，否则不足一屏时位移会被钳成 0。
         let viewHeight = viewNode == null ? 0 : viewNode.height;
-        this.content.height = Math.max(itemHeight,itemHeight * this.list.length,viewHeight + 1);
+        this.content.height = Math.max(pinnedHeight + itemHeight,
+            this.ListHeight(itemHeight,this.list.length),viewHeight + 1);
         for(let i = 0;i < this.list.length;i++)
             this.AppendRow(i,itemHeight);
-        this.RestoreScrollOffset(scrollToTop ? 0 : oldOffset + Math.max(0,insertedAtTop) * itemHeight);
+        this.RestoreScrollOffset(scrollToTop ? 0 : oldOffset + Math.max(0,insertedAtTop) * (itemHeight + ROW_GAP));
         this.UpdateBottomTip();
     }
 
@@ -865,6 +988,9 @@ export default class panelMessage extends UIPanelViewBase {
         if(previewLabel != null)
         {
             previewLabel.string = this.PreviewText(item);
+            // 昵称与摘要拉开两级；未读会话摘要提亮一档（对齐消息列表效果稿）。
+            previewLabel.node.color = item.unread > 0 ?
+                cc.color(185,212,234,255) : cc.color(134,166,196,255);
             // 预览是单行摘要。Prefab 中该 Label 原本是自动宽度，长文本会把右侧
             // 时间挤出卡片；这里只约束运行时实例的摘要区域，不改用户手动调整的 Prefab。
             previewLabel.enableWrapText = false;
@@ -928,6 +1054,19 @@ export default class panelMessage extends UIPanelViewBase {
 
     // ================= 交互 =================
 
+    /** 置顶的官方客服固定进入 BF 直聊；后台客服在「客服消息」里接待。 */
+    private OpenOfficialKefu():void
+    {
+        if(this.busy)
+            return;
+        this.busy = true;
+        UIManager.getInstance().showPanel("panelMessageChat",ShowPanelMode.Cover,
+            JSON.stringify({service:"official"}),
+            this.ingameOverlay ? ["游戏内"] : null);
+        // 面板由 UIManager 异步创建，这里不等待返回；短暂防抖避免连点叠出两层。
+        this.scheduleOnce(()=>{ this.busy = false; },0.4);
+    }
+
     private OpenChat(item:DirectConversation):void
     {
         if(this.busy)
@@ -942,14 +1081,16 @@ export default class panelMessage extends UIPanelViewBase {
         {
             this.busy = false;
             UIManager.getInstance().showPanel("panelMessageChat",ShowPanelMode.Cover,
-                JSON.stringify({clubId:clubId,conversationId:item.conversationId,peer:item.peer}));
+                JSON.stringify({clubId:clubId,conversationId:item.conversationId,peer:item.peer}),
+                this.ingameOverlay ? ["游戏内"] : null);
             return;
         }
         // 默认入口没有真实会话：先创建/恢复，再进入详情。
         this.manager.OpenConversation(clubId,item.peer.guuid).then((conversation)=>{
             this.busy = false;
             UIManager.getInstance().showPanel("panelMessageChat",ShowPanelMode.Cover,
-                JSON.stringify({clubId:clubId,conversationId:conversation.conversationId,peer:conversation.peer}));
+                JSON.stringify({clubId:clubId,conversationId:conversation.conversationId,peer:conversation.peer}),
+                this.ingameOverlay ? ["游戏内"] : null);
             this.ScheduleSilentRefresh();
         }).catch((error:any)=>{
             this.busy = false;
@@ -1002,8 +1143,23 @@ export default class panelMessage extends UIPanelViewBase {
         this.hostingInfo = info;
         if(this.hostingButton != null)
             this.hostingButton.active = info != null && info.eligible;
+        let enabled = info != null && info.enabled;
         if(this.hostingLabel != null)
-            this.hostingLabel.string = info != null && info.enabled ? "聊天托管：已开启" : "聊天托管：未开启";
+            this.hostingLabel.string = "聊天托管";
+        if(this.hostingStateLabel != null)
+        {
+            this.hostingStateLabel.string = enabled ? "已开启" : "未开启";
+            this.hostingStateLabel.node.color = enabled ? cc.color(246,206,132) : cc.color(143,166,189);
+        }
+        if(this.hostingDotLabel != null)
+        {
+            this.hostingDotLabel.node.color = enabled ? cc.color(246,206,132) : cc.color(104,126,148);
+            this.hostingDotLabel.node.opacity = enabled ? 255 : 165;
+        }
+        if(this.hostingSwitchOn != null)
+            this.hostingSwitchOn.active = enabled;
+        if(this.hostingSwitchOff != null)
+            this.hostingSwitchOff.active = !enabled;
     }
 
     private ToggleHosting():void

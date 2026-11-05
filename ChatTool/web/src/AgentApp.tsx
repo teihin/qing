@@ -2,13 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, ty
 import { agentSessionExpiredEvent, agentSessionURL, api, ApiError, jsonBody, notifyAgentSessionExpired, setAgentExpectedID, setCSRF } from './api'
 import { createClientMessageID, gameAdminPlayerURL, playIncomingMessageSound, readAgentSoundPreference, writeAgentSoundPreference } from './client'
 import { Avatar, EmptyState, LoadingScreen, MessageBubble, StatusDot, formatAgo, formatDateTime } from './components'
+import HostingLedgerPage from './HostingLedgerPage'
 import type { Agent, Conversation, ConversationDetail, Message, ServiceChannel, TeamMember } from './types'
 
 type Dashboard = { queued: number; active: number; myActive: number; myUnread: number; allUnread: number; onlineAgents: number; todayClosed: number }
 type QuickReply = { id: number; title: string; content: string; category: string }
 type PlayerMemo = { id: number; playerId: string; content: string; createdBy: number; createdByName: string; createdAt: string }
 type HostedPeer = { guuid: string; name: string; note?: string; avatar: string; role: string; roleName?: string }
-type HostedOwner = { guuid: string; name: string; avatar: string; role: string; roleName: string; groupType: string; groupId: string; groupName: string; clubId: string; clubName: string; enabledAt: string; conversationCount: number; unread: number; lastMessageAt: string }
+type HostedOwner = { guuid: string; name: string; avatar: string; role: string; roleName: string; groupType: string; groupId: string; groupName: string; clubId: string; clubName: string; enabled: boolean; enabledAt: string; disabledAt: string; conversationCount: number; unread: number; lastMessageAt: string }
 type HostedGroup = { key: string; type: string; name: string; items: HostedOwner[] }
 type HostedConversation = { conversationId: string; clubId: string; clubName: string; peer: HostedPeer; lastMessage: string; lastMessageType: string; lastMessageAt: string; unread: number; canSend: boolean; hostedGuuid: string; hostedName: string; hostedRole: string; hostedRoleName?: string }
 type HostedMessage = { id: string; messageType: 'text' | 'image' | 'voice' | 'system'; text: string; senderGuuid: string; senderName: string; senderRole: string; attachment?: { url?: string; thumbnailUrl?: string; durationMs?: number } | null; createdAt: string }
@@ -111,7 +112,6 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   const [quickReplies, setQuickReplies] = useState<QuickReply[]>([])
   const [team, setTeam] = useState<TeamMember[]>([])
   const [channels, setChannels] = useState<ServiceChannel[]>([{ code: agent.channelCode, displayName: agent.channelName }])
-  const [presence, setPresence] = useState(agent.presence)
   const [text, setText] = useState('')
   const [internalNote, setInternalNote] = useState(false)
   const [sending, setSending] = useState(false)
@@ -138,6 +138,8 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   const [hostedSending, setHostedSending] = useState(false)
   const [hostedBalance, setHostedBalance] = useState<HostedBalance | null>(null)
   const [goldAction, setGoldAction] = useState<'' | 'up' | 'down'>('')
+  const [showLedger, setShowLedger] = useState(false)
+  const [deletingHostedOwner, setDeletingHostedOwner] = useState('')
   const hostedLoadSerial = useRef(0)
   const lastHostedSoundID = useRef('')
   const lastHostedSoundAt = useRef(0)
@@ -152,6 +154,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   const playerTypingExpiry = useRef<number | undefined>(undefined)
   const conversationLoadSerial = useRef(0)
   const selectedLoadSerial = useRef(0)
+  const autoClaimPending = useRef('')
   const lastSoundMessageID = useRef('')
 
   const loadDashboard = useCallback(async () => setDashboard(await api<Dashboard>('/api/agent/dashboard')), [])
@@ -247,17 +250,32 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   const loadSelected = useCallback(async (id = selectedID) => {
     if (!id) return
     const serial = ++selectedLoadSerial.current
-    const nextDetail = await api<ConversationDetail>(`/api/agent/conversations/${id}`)
+    let nextDetail = await api<ConversationDetail>(`/api/agent/conversations/${id}`)
     if (serial !== selectedLoadSerial.current) return
+    // 点进待接入会话即自动接入，不再需要单独的「立即接入」按钮。
+    if (nextDetail.status === 'queued' && autoClaimPending.current === id) {
+      autoClaimPending.current = ''
+      try {
+        await api(`/api/agent/conversations/${id}/claim`, { method: 'POST', body: jsonBody({}) })
+        if (serial !== selectedLoadSerial.current) return
+        setScope('mine')
+        nextDetail = await api<ConversationDetail>(`/api/agent/conversations/${id}`)
+        if (serial !== selectedLoadSerial.current) return
+        await loadDashboard()
+      } catch (reason) {
+        autoClaimPending.current = ''
+        setError(reason instanceof ApiError ? reason.message : '接入会话失败')
+      }
+    }
     setDetail(nextDetail)
-    if (nextDetail.status !== 'queued' || agent.role === 'supervisor') {
+    if (nextDetail.status !== 'queued') {
       const result = await api<{ items: Message[] }>(`/api/agent/conversations/${id}/messages`)
       if (serial !== selectedLoadSerial.current) return
       setMessages(Array.isArray(result.items) ? result.items : [])
       await api<void>(`/api/agent/conversations/${id}/read`, { method: 'POST', body: jsonBody({}) })
       await loadDashboard()
     } else if (serial === selectedLoadSerial.current) setMessages([])
-  }, [agent.role, loadDashboard, selectedID])
+  }, [loadDashboard, selectedID])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -348,6 +366,17 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
 	    } catch { /* ignore malformed realtime event */ }
 	  })
 	  source.addEventListener('hosted.read', () => void loadHostedGroups().catch(() => undefined))
+	  source.addEventListener('hosted.deleted', (event) => {
+		try {
+		  const data = JSON.parse((event as MessageEvent).data) as { hostedGuuid?: string }
+		  if (hostedSelectionRef.current?.guuid === data.hostedGuuid) {
+			setHostedSelection(null)
+			setHostedMessages([])
+			setHostedBalance(null)
+		  }
+		} catch { /* 忽略无效事件 */ }
+		void loadHostedGroups().catch(() => undefined)
+	  })
 	  source.addEventListener('player.memo.changed', () => setMemoRevision((value) => value + 1))
 	  source.addEventListener('session.replaced', (event) => {
 		try {
@@ -410,11 +439,13 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     window.clearTimeout(playerTypingExpiry.current)
   }, [stopAgentTyping])
 
-  const selectConversation = (id: string) => { stopAgentTyping(); updatePlayerTyping(false); setSelectedID(id); setDetailOpen(true); setError('') }
-  const changePresence = async (value: Agent['presence']) => {
-    if (value !== 'online') stopAgentTyping()
-    try { await api('/api/agent/presence', { method: 'POST', body: jsonBody({ presence: value }) }); setPresence(value); await Promise.all([loadDashboard(), loadConversations()]) }
-    catch (reason) { setError(reason instanceof ApiError ? reason.message : '在线状态更新失败') }
+  const selectConversation = (item: Conversation) => {
+    // 没有玩家消息的空会话无法接入；有消息的待接入会话点开即自动接入。
+    const hasMessage = item.lastMessage.trim() !== '' || item.lastMessageType !== ''
+    autoClaimPending.current = item.status === 'queued' && hasMessage ? item.id : ''
+    stopAgentTyping(); updatePlayerTyping(false); setDetailOpen(true); setError('')
+    if (selectedID === item.id) void loadSelected(item.id).catch((reason) => setError(reason instanceof ApiError ? reason.message : '会话加载失败'))
+    else setSelectedID(item.id)
   }
   const logout = async () => { stopAgentTyping(); try { await api('/api/agent/auth/logout', { method: 'POST', body: jsonBody({}) }) } finally { onLogout() } }
   const send = async (event: FormEvent) => {
@@ -439,11 +470,6 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     try { const form = new FormData(); form.append('file', file); const item = await api<Message>(`/api/agent/conversations/${selectedID}/uploads`, { method: 'POST', body: form }); setMessages((current) => [...current, item]) }
     catch (reason) { setError(reason instanceof ApiError ? reason.message : '文件上传失败') }
     finally { setUploading(false) }
-  }
-  const claim = async () => {
-    if (!selectedID) return
-    try { await api(`/api/agent/conversations/${selectedID}/claim`, { method: 'POST', body: jsonBody({}) }); setScope('mine'); await Promise.all([loadSelected(selectedID), loadDashboard()]) }
-    catch (reason) { setError(reason instanceof ApiError ? reason.message : '接入会话失败') }
   }
   const close = async () => {
     if (!selectedID || !confirm('确认结束这个会话吗？')) return
@@ -480,6 +506,33 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
       .then(() => loadHostedGroups().catch(() => undefined))
       .catch((reason) => setError(reason instanceof ApiError ? reason.message : '托管消息加载失败'))
     void loadHostedBalance(item.hostedGuuid, item.conversationId).catch(() => undefined)
+  }
+  const deleteHostedOwner = async (owner: HostedOwner) => {
+    if (deletingHostedOwner) return
+    if (!confirm(`确认永久删除「${owner.name}」的托管聊天记录？\n会同时删除该托管账号下的会话、消息和图片，且无法恢复。`)) return
+    setDeletingHostedOwner(owner.guuid)
+    setError('')
+    try {
+      await api(`/api/agent/hosted/owners/${encodeURIComponent(owner.guuid)}`, { method: 'DELETE' })
+      setHostedSelection((current) => current?.guuid === owner.guuid ? null : current)
+      setHostedMessages([])
+      setHostedBalance(null)
+      setHostedConversations((current) => {
+        const next = { ...current }
+        delete next[owner.guuid]
+        return next
+      })
+      setExpandedOwners((current) => {
+        const next = { ...current }
+        delete next[owner.guuid]
+        return next
+      })
+      await loadHostedGroups()
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : '删除托管聊天记录失败')
+    } finally {
+      setDeletingHostedOwner('')
+    }
   }
   const sendHostedMessage = async (event: FormEvent) => {
     event.preventDefault()
@@ -521,7 +574,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
 
   const filteredTabs = useMemo(() => [
     { value: 'hosted', label: '聊天托管', count: hostedUnread },
-    { value: 'mine', label: '我的会话', count: dashboard.myUnread },
+    { value: 'mine', label: '客服消息', count: dashboard.myUnread },
     { value: 'queue', label: '待接入', count: dashboard.queued },
     ...(agent.role === 'supervisor' ? [{ value: 'all', label: '全部会话', count: dashboard.allUnread }] : []),
     { value: 'closed', label: '已结束', count: 0 },
@@ -530,11 +583,11 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   return <main className="agent-shell">
     <header className="agent-topbar"><div className="agent-logo"><span className="brand-mark brand-mark-small">BY</span><div><strong>玩家服务中枢</strong><small>{agent.channelName}</small></div></div>
       <div className="topbar-metrics"><span><b>{dashboard.queued}</b> 人待接入</span><span><b>{dashboard.myActive}</b> 个接待中</span><span><b>{dashboard.onlineAgents}</b> 位客服在线</span></div>
-      <div className="agent-account"><StatusDot status={presence} /><select value={presence} onChange={(event) => void changePresence(event.target.value as Agent['presence'])}><option value="online">在线接待</option><option value="away">暂时离开</option><option value="offline">停止接待</option></select><Avatar name={agent.displayName} /><div><strong>{agent.displayName}</strong><small>{agent.role === 'supervisor' ? '客服主管' : '在线客服'}</small></div><button className={`sound-toggle ${soundEnabled ? 'active' : ''}`} type="button" aria-pressed={soundEnabled} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); writeAgentSoundPreference(next); if (next) void playIncomingMessageSound() }}>{soundEnabled ? '声音开' : '声音关'}</button><button type="button" onClick={() => setShowPassword(true)}>改密码</button>{agent.role === 'supervisor' && <button type="button" onClick={() => setShowTeam(true)}>团队</button>}<button className="logout-button" type="button" onClick={() => void logout()}>退出</button></div>
+      <div className="agent-account"><Avatar name={agent.displayName} /><div><strong>{agent.displayName}</strong><small>{agent.role === 'supervisor' ? '客服主管' : '在线客服'}</small></div><button className={`sound-toggle ${soundEnabled ? 'active' : ''}`} type="button" aria-pressed={soundEnabled} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); writeAgentSoundPreference(next); if (next) void playIncomingMessageSound() }}>{soundEnabled ? '声音开' : '声音关'}</button><button type="button" onClick={() => setShowLedger(true)}>对账统计</button><button type="button" onClick={() => setShowPassword(true)}>改密码</button>{agent.role === 'supervisor' && <button type="button" onClick={() => setShowTeam(true)}>团队</button>}<button className="logout-button" type="button" onClick={() => void logout()}>退出</button></div>
     </header>
     <section className={`agent-workspace ${detailOpen ? 'mobile-detail-open' : ''}`}>
       <aside className="conversation-sidebar">
-        <div className="sidebar-heading"><div><h2>{scope === 'hosted' ? '聊天托管' : '会话'}</h2><span>{scope === 'hosted' ? hostedGroups.reduce((sum, group) => sum + group.items.length, 0) : conversations.length}</span></div><button type="button" onClick={() => void (scope === 'hosted' ? loadHostedGroups() : loadConversations())} aria-label="刷新列表">↻</button></div>
+        <div className="sidebar-heading"><div><h2>{scope === 'hosted' ? '聊天托管' : '客服消息'}</h2><span>{scope === 'hosted' ? hostedGroups.reduce((sum, group) => sum + group.items.length, 0) : conversations.length}</span></div><button type="button" onClick={() => void (scope === 'hosted' ? loadHostedGroups() : loadConversations())} aria-label="刷新列表">↻</button></div>
         <div className="conversation-tabs">{filteredTabs.map((tab) => <button key={tab.value} className={scope === tab.value ? 'active' : ''} onClick={() => { stopAgentTyping(); updatePlayerTyping(false); selectedLoadSerial.current += 1; setScope(tab.value); setSelectedID(''); setDetail(null); setMessages([]); setConversations([]); setHostedSelection(null); setHostedMessages([]); setHostedText(''); setDetailOpen(false) }}>{tab.label}{tab.count > 0 && <b>{tab.count}</b>}</button>)}</div>
         {scope !== 'hosted' && <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索玩家昵称或ID" /></label>}
         {scope === 'hosted' ? <div className="conversation-list hosted-list">{hostedGroups.length === 0 ? <EmptyState icon="托" title="暂无托管账号" text={hostedLoading ? '正在读取托管账号…' : '群主、盟主或大盟主在游戏内开启聊天托管后会显示在这里'} /> : hostedGroups.map((group) => {
@@ -555,25 +608,29 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
                 <button type="button" className={`hosted-owner-row ${hostedSelection?.guuid === owner.guuid ? 'selected' : ''}`} onClick={() => toggleHostedOwner(owner)}>
                   <Avatar name={owner.name} url={owner.avatar} size="small" />
                   <span className="hosted-owner-copy"><strong>{owner.name}</strong><small>{owner.roleName} · {owner.groupName}</small></span>
+                  {!owner.enabled && <b className="hosted-readonly-badge">已取消</b>}
                   <span className="hosted-owner-meta">{owner.conversationCount} 个会话</span>
                   {owner.unread > 0 && <b className="hosted-count-badge">{owner.unread > 99 ? '99+' : owner.unread}</b>}
                   <i>{expanded ? '▾' : '▸'}</i>
                 </button>
                 {expanded && (items == null ? <p className="hosted-hint">正在读取会话…</p> : items.length === 0 ? <p className="hosted-hint">暂无会话</p> : items.map((item) => <button type="button" key={item.conversationId} className={`hosted-conversation-row ${item.unread > 0 ? 'unread' : ''} ${hostedSelection?.conversationId === item.conversationId ? 'selected' : ''}`} onClick={() => selectHostedConversation(item)}>
-                  <span className="hosted-conversation-title"><strong>{item.peer.name}</strong><time>{formatAgo(normalizeDirectTime(item.lastMessageAt))}</time></span>
-                  <small>{item.clubName}{item.peer.roleName ? ` · ${item.peer.roleName}` : ''}</small>
-                  <span className="hosted-conversation-preview">{item.lastMessageType === 'image' ? '[图片]' : item.lastMessageType === 'voice' ? '[语音]' : (item.lastMessage || '暂无消息')}</span>
+                  <Avatar name={item.peer.name} url={item.peer.avatar} size="small" />
+                  <span className="hosted-conversation-copy">
+                    <span className="hosted-conversation-title"><strong>{item.peer.name}</strong><time>{formatAgo(normalizeDirectTime(item.lastMessageAt))}</time></span>
+                    <small>{item.clubName}{item.peer.roleName ? ` · ${item.peer.roleName}` : ''}</small>
+                    <span className="hosted-conversation-preview">{item.lastMessageType === 'image' ? '[图片]' : item.lastMessageType === 'voice' ? '[语音]' : (item.lastMessage || '暂无消息')}</span>
+                  </span>
                   {item.unread > 0 && <b className="hosted-unread">{item.unread > 99 ? '99+' : item.unread}</b>}
                 </button>))}
               </div>
             })}
           </section>
-        })}</div> : <div className="conversation-list">{conversations.length === 0 ? <EmptyState icon="聊" title="暂无会话" text={scope === 'queue' ? '当前没有玩家等待接入' : '新的玩家咨询会显示在这里'} /> : conversations.map((item) => <ConversationCard key={item.id} item={item} selected={selectedID === item.id} onClick={() => selectConversation(item.id)} />)}</div>}
+        })}</div> : <div className="conversation-list">{conversations.length === 0 ? <EmptyState icon="聊" title="暂无会话" text={scope === 'queue' ? '当前没有玩家等待接入' : '新的玩家咨询会显示在这里'} /> : conversations.map((item) => <ConversationCard key={item.id} item={item} selected={selectedID === item.id} onClick={() => selectConversation(item)} />)}</div>}
       </aside>
       <section className="agent-chat-panel">
         {scope === 'hosted' ? (selectedHostedConversation ? <HostedChatPanel conversation={selectedHostedConversation} owner={selectedHostedOwner} messages={hostedMessages} text={hostedText} sending={hostedSending} error={error} balance={hostedBalance} onText={setHostedText} onSend={sendHostedMessage} onDismissError={() => setError('')} onImage={setPreviewImage} onGold={setGoldAction} /> : <EmptyState icon="托" title="选择托管会话" text="左侧按联盟或俱乐部展开托管账号，选择会话后即可查看记录并代其回复" />) : !detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
-          <header className="chat-header"><button className="mobile-back" onClick={() => setDetailOpen(false)} aria-label="返回会话列表">‹</button><Avatar name={detail.nickname} url={detail.avatarUrl} /><div className="chat-person"><strong>{detail.nickname}<small>ID {detail.playerId} · {detail.category}</small></strong><span><i className={detail.status === 'active' ? 'active' : ''} />{detail.status === 'active' ? '接待中' : detail.status === 'queued' ? '等待接入' : '已结束'}</span></div><div className="chat-actions">{detail.status === 'queued' && <button className="primary-small" onClick={() => void claim()}>立即接入</button>}{detail.status !== 'queued' && <button className="danger-light" disabled={clearing} onClick={() => void clearHistory()}>{clearing ? '清空中…' : '清空记录'}</button>}{detail.status === 'active' && <><button onClick={() => setShowTransfer(true)}>转接</button><button className="danger-light" onClick={() => void close()}>结束会话</button></>}</div></header>
-          <div className="agent-message-list">{detail.status === 'queued' && agent.role !== 'supervisor' ? <div className="claim-prompt"><span>待</span><h3>玩家正在等待客服</h3><p>接入后可查看完整聊天记录并开始回复。</p><button onClick={() => void claim()}>接入此会话</button></div> : <>{messages.map((message) => <MessageBubble key={message.id} message={message} own={(message.senderType === 'agent' || message.senderType === 'note') && message.senderId === String(agent.id)} onImage={setPreviewImage} />)}{playerTyping && <div className="agent-typing">玩家正在输入 <i /><i /><i /></div>}<div ref={listEnd} /></>}</div>
+          <header className="chat-header"><button className="mobile-back" onClick={() => setDetailOpen(false)} aria-label="返回会话列表">‹</button><Avatar name={detail.nickname} url={detail.avatarUrl} /><div className="chat-person"><strong>{detail.nickname}<small>ID {detail.playerId} · {detail.category}</small></strong><span><i className={detail.status === 'active' ? 'active' : ''} />{detail.status === 'active' ? '接待中' : detail.status === 'queued' ? '等待接入' : '已结束'}</span></div><div className="chat-actions">{detail.status !== 'queued' && <button className="danger-light" disabled={clearing} onClick={() => void clearHistory()}>{clearing ? '清空中…' : '清空记录'}</button>}{detail.status === 'active' && <><button onClick={() => setShowTransfer(true)}>转接</button><button className="danger-light" onClick={() => void close()}>结束会话</button></>}</div></header>
+          <div className="agent-message-list">{messages.map((message) => <MessageBubble key={message.id} message={message} own={(message.senderType === 'agent' || message.senderType === 'note') && message.senderId === String(agent.id)} peerAvatar={detail.avatarUrl} onImage={setPreviewImage} />)}{playerTyping && <div className="agent-typing">玩家正在输入 <i /><i /><i /></div>}<div ref={listEnd} /></div>
           {error && <div className="workspace-error">{error}<button onClick={() => setError('')}>×</button></div>}
           <form className="agent-composer" onSubmit={send}>
             <div className="composer-tools"><label title="发送图片、视频或文件">＋<input type="file" accept="image/*,video/*,.pdf,.txt,.zip" onChange={upload} /></label><button type="button" onClick={() => setShowQuick((value) => !value)}>快捷回复</button><label className="note-switch"><input type="checkbox" checked={internalNote} onChange={(event) => { if (event.target.checked) stopAgentTyping(); setInternalNote(event.target.checked) }} /><span />内部备注</label><small>{uploading ? '正在上传文件…' : internalNote ? '备注仅客服可见' : 'Enter 发送，Shift+Enter 换行'}</small></div>
@@ -583,10 +640,11 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
           </form>
         </>}
       </section>
-      <aside className="player-info-panel">{scope === 'hosted' ? (selectedHostedOwner ? <HostedOwnerInfo owner={selectedHostedOwner} conversation={selectedHostedConversation} /> : <EmptyState icon="托" title="托管账号资料" text="选择托管账号后显示" />) : detail ? <PlayerInfo detail={detail} memoRevision={memoRevision} /> : <EmptyState icon="资" title="玩家资料" text="选择会话后显示" />}</aside>
+      <aside className="player-info-panel">{scope === 'hosted' ? (selectedHostedOwner ? <HostedOwnerInfo owner={selectedHostedOwner} conversation={selectedHostedConversation} canDelete={agent.role === 'supervisor'} deleting={deletingHostedOwner === selectedHostedOwner.guuid} onDelete={() => void deleteHostedOwner(selectedHostedOwner)} /> : <EmptyState icon="托" title="托管账号资料" text="选择托管账号后显示" />) : detail ? <PlayerInfo detail={detail} memoRevision={memoRevision} /> : <EmptyState icon="资" title="玩家资料" text="选择会话后显示" />}</aside>
     </section>
     {showTransfer && detail && <TransferModal team={team} currentAgentID={detail.assignedAgentId} onClose={() => setShowTransfer(false)} onSubmit={async (agentID, reason) => { await api(`/api/agent/conversations/${detail.id}/transfer`, { method: 'POST', body: jsonBody({ agentId: agentID, reason }) }); setShowTransfer(false); await Promise.all([loadSelected(detail.id), loadConversations()]) }} />}
     {goldAction && selectedHostedConversation && <HostedGoldModal conversation={selectedHostedConversation} owner={selectedHostedOwner} action={goldAction} onClose={() => setGoldAction('')} onDone={(warning) => { setGoldAction(''); if (warning) setError(warning); const selection = { guuid: selectedHostedConversation.hostedGuuid, conversationId: selectedHostedConversation.conversationId }; void loadHostedMessages(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedBalance(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedGroups().catch(() => undefined); }} />}
+    {showLedger && <HostingLedgerPage role={agent.role} onClose={() => setShowLedger(false)} />}
     {showTeam && <TeamModal members={team} channels={channels} currentAgentID={agent.id} onClose={() => setShowTeam(false)} onRefresh={loadTeam} />}
     {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
     {previewImage && <div className="image-preview" role="dialog" aria-modal="true" onClick={() => setPreviewImage('')}><button type="button">×</button><img src={previewImage} alt="图片预览" /></div>}
@@ -598,6 +656,7 @@ function ConversationCard({ item, selected, onClick }: { item: Conversation; sel
 }
 
 function HostedChatPanel({ conversation, owner, messages, text, sending, error, balance, onText, onSend, onDismissError, onImage, onGold }: { conversation: HostedConversation; owner: HostedOwner | null; messages: HostedMessage[]; text: string; sending: boolean; error: string; balance: HostedBalance | null; onText: (value: string) => void; onSend: (event: FormEvent) => void; onDismissError: () => void; onImage: (src: string) => void; onGold: (action: 'up' | 'down') => void }) {
+  const readOnly = owner?.enabled === false || !conversation.canSend
   const listEnd = useRef<HTMLDivElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [playingID, setPlayingID] = useState('')
@@ -630,23 +689,23 @@ function HostedChatPanel({ conversation, owner, messages, text, sending, error, 
     void audio.play().catch(stop)
   }
   return <>
-    <header className="chat-header"><Avatar name={conversation.peer.name} url={conversation.peer.avatar} /><div className="chat-person"><strong>{conversation.peer.name}{conversation.peer.roleName && <em className="chat-role">{conversation.peer.roleName}</em>}<small>{conversation.clubName}{conversation.peer.note ? ` · ${conversation.peer.note}` : ''}</small></strong><span><i className="active" />托管账号：{owner?.name || conversation.hostedName}（{owner?.roleName || conversation.hostedRoleName || (conversation.hostedRole === 'union_owner' ? '大盟主' : '盟主')}）</span></div><div className="chat-actions"><span className="hosted-reply-hint">回复将以托管账号发送</span></div></header>
-    <div className="agent-message-list">{messages.length === 0 ? <p className="hosted-hint">正在读取聊天记录…</p> : <>{messages.map((message) => <HostedMessageBubble key={message.id} message={message} hostedGuuid={conversation.hostedGuuid} playing={playingID === message.id} onImage={onImage} onPlayVoice={toggleVoice} />)}<div ref={listEnd} /></>}</div>
+    <header className="chat-header"><Avatar name={conversation.peer.name} url={conversation.peer.avatar} /><div className="chat-person"><strong>{conversation.peer.name}{conversation.peer.roleName && <em className="chat-role">{conversation.peer.roleName}</em>}<small>{conversation.clubName}{conversation.peer.note ? ` · ${conversation.peer.note}` : ''}</small></strong><span><i className="active" />托管账号：{owner?.name || conversation.hostedName}（{owner?.roleName || conversation.hostedRoleName || (conversation.hostedRole === 'union_owner' ? '大盟主' : '盟主')}）</span></div><div className="chat-actions">{readOnly ? <span className="hosted-reply-hint hosted-readonly-hint">托管已取消，仅可查看</span> : <span className="hosted-reply-hint">回复将以托管账号发送</span>}</div></header>
+    <div className="agent-message-list">{messages.length === 0 ? <p className="hosted-hint">正在读取聊天记录…</p> : <>{messages.map((message) => <HostedMessageBubble key={message.id} message={message} hostedGuuid={conversation.hostedGuuid} peerAvatar={conversation.peer.avatar} playing={playingID === message.id} onImage={onImage} onPlayVoice={toggleVoice} />)}<div ref={listEnd} /></>}</div>
     {error && <div className="workspace-error">{error}<button onClick={onDismissError}>×</button></div>}
-    <form className="agent-composer hosted-composer" onSubmit={onSend}>
-      <div className="composer-tools"><button type="button" className="hosted-gold-button" disabled={!conversation.canSend} onClick={() => onGold('up')}>上分</button><button type="button" className="hosted-gold-button" disabled={!conversation.canSend} onClick={() => onGold('down')}>下分</button><span className="hosted-balance" title={`${balance?.peerName || conversation.peer.name} 在当前俱乐部的积分`}>积分：{balance?.clubGold != null ? balance.clubGold : '—'}</span><small>代 {owner?.name || conversation.hostedName} 回复 {conversation.peer.name}，Enter 发送</small></div>
-      <textarea value={text} onChange={(event) => onText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder="输入回复内容…" />
-      <div className="composer-submit"><span>{text.length}/2000</span><button type="submit" disabled={!text.trim() || sending}>{sending ? '发送中…' : '以托管账号发送'}</button></div>
+    <form className={`agent-composer hosted-composer ${readOnly ? 'hosted-composer-readonly' : ''}`} onSubmit={onSend}>
+      <div className="composer-tools"><button type="button" className="hosted-gold-button" disabled={readOnly} onClick={() => onGold('up')}>上分</button><button type="button" className="hosted-gold-button" disabled={readOnly} onClick={() => onGold('down')}>下分</button><span className="hosted-balance" title={`${balance?.peerName || conversation.peer.name} 在当前俱乐部的积分`}>积分：{balance?.clubGold != null ? balance.clubGold : '—'}</span><small>{readOnly ? '托管已取消，仅可查看历史记录' : `代 ${owner?.name || conversation.hostedName} 回复 ${conversation.peer.name}，Enter 发送`}</small></div>
+      <textarea value={text} onChange={(event) => onText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder={readOnly ? '托管已取消，不能继续回复' : '输入回复内容…'} disabled={readOnly} />
+      <div className="composer-submit"><span>{text.length}/2000</span><button type="submit" disabled={readOnly || !text.trim() || sending}>{sending ? '发送中…' : '以托管账号发送'}</button></div>
     </form>
   </>
 }
 
-function HostedMessageBubble({ message, hostedGuuid, playing, onImage, onPlayVoice }: { message: HostedMessage; hostedGuuid: string; playing: boolean; onImage: (src: string) => void; onPlayVoice: (message: HostedMessage) => void }) {
+function HostedMessageBubble({ message, hostedGuuid, peerAvatar, playing, onImage, onPlayVoice }: { message: HostedMessage; hostedGuuid: string; peerAvatar?: string; playing: boolean; onImage: (src: string) => void; onPlayVoice: (message: HostedMessage) => void }) {
   const own = message.senderGuuid === hostedGuuid
   if (message.messageType === 'system') return <div className="system-message"><span>{message.text}</span></div>
   const imageURL = message.attachment?.url || ''
   return <div className={`message-row ${own ? 'message-own' : ''}`}>
-    {!own && <Avatar name={message.senderName} size="small" />}
+    {!own && <Avatar name={message.senderName} url={peerAvatar} size="small" />}
     <div className="message-stack">
       <div className="message-meta">{!own && <span>{message.senderName}</span>}<time>{formatDateTime(normalizeDirectTime(message.createdAt))}</time></div>
       <div className={`message-bubble message-${message.messageType}`}>
@@ -662,6 +721,7 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
   const [amount, setAmount] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  const requestID = useRef(createClientMessageID())
   const verb = action === 'up' ? '上分' : '下分'
   const value = Number(amount)
   const valid = Number.isInteger(value) && value > 0 && value <= 1_000_000_000
@@ -671,12 +731,15 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
     setSending(true)
     setError('')
     try {
-      const result = await api<{ noticeError?: string }>(`/api/agent/hosted/conversations/${conversation.conversationId}/gold`, {
+      const result = await api<{ noticeError?: string; duplicate?: boolean }>(`/api/agent/hosted/conversations/${conversation.conversationId}/gold`, {
         method: 'POST',
-        body: jsonBody({ guuid: conversation.hostedGuuid, action, amount: value }),
+        body: jsonBody({ guuid: conversation.hostedGuuid, action, amount: value, clientRequestId: requestID.current }),
       })
-      onDone(result.noticeError ? `${verb}成功（${value} 积分），但系统消息发送失败：${result.noticeError}` : '')
+      onDone(result.duplicate ? '' : (result.noticeError ? `${verb}成功（${value} 积分），但系统消息发送失败：${result.noticeError}` : ''))
     } catch (reason) {
+      if (reason instanceof ApiError && (reason.code === 'HOSTED_GOLD_RETRY' || reason.code === 'REQUEST_CONFLICT')) {
+        requestID.current = createClientMessageID()
+      }
       setError(reason instanceof ApiError ? reason.message : `${verb}失败，请稍后重试`)
     } finally {
       setSending(false)
@@ -692,7 +755,7 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
   </form></div>
 }
 
-function HostedOwnerInfo({ owner, conversation }: { owner: HostedOwner; conversation: HostedConversation | null }) {  return <div className="player-info"><header><span className="info-avatar"><Avatar name={owner.name} url={owner.avatar} size="large" /></span><h3>{owner.name}</h3><p>{owner.roleName} · {owner.groupName}</p></header><section><h4>托管信息</h4><dl><div><dt>托管账号</dt><dd>{owner.name}</dd></div><div><dt>游戏 ID</dt><dd>{owner.guuid}</dd></div><div><dt>身份</dt><dd>{owner.roleName}</dd></div><div><dt>归属</dt><dd>{owner.groupType === 'union' ? `联盟 · ${owner.groupName}` : `俱乐部 · ${owner.groupName}`}</dd></div><div><dt>托管会话</dt><dd>{owner.conversationCount} 个</dd></div><div><dt>开启时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.enabledAt))}</dd></div></dl></section>{conversation && <section><h4>当前会话</h4><dl><div><dt>对方</dt><dd>{conversation.peer.name}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''}</dd></div><div><dt>俱乐部</dt><dd>{conversation.clubName}</dd></div><div><dt>最后消息</dt><dd>{conversation.lastMessage || '—'}</dd></div></dl></section>}<footer>客服的回复会以该托管账号身份发送，对方收到时与本人回复一致。</footer></div>
+function HostedOwnerInfo({ owner, conversation, canDelete, deleting, onDelete }: { owner: HostedOwner; conversation: HostedConversation | null; canDelete: boolean; deleting: boolean; onDelete: () => void }) {  return <div className="player-info"><header><span className="info-avatar"><Avatar name={owner.name} url={owner.avatar} size="large" /></span><h3>{owner.name}</h3><p>{owner.roleName} · {owner.groupName}</p>{!owner.enabled && <em className="hosted-readonly-badge">已取消托管</em>}</header><section><h4>托管信息</h4><dl><div><dt>托管账号</dt><dd>{owner.name}</dd></div><div><dt>游戏 ID</dt><dd>{owner.guuid}</dd></div><div><dt>身份</dt><dd>{owner.roleName}</dd></div><div><dt>归属</dt><dd>{owner.groupType === 'union' ? `联盟 · ${owner.groupName}` : `俱乐部 · ${owner.groupName}`}</dd></div><div><dt>托管会话</dt><dd>{owner.conversationCount} 个</dd></div><div><dt>开启时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.enabledAt))}</dd></div>{owner.disabledAt && <div><dt>取消时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.disabledAt))}</dd></div>}</dl></section>{conversation && <section><h4>当前会话</h4><dl><div><dt>对方</dt><dd>{conversation.peer.name}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''}</dd></div><div><dt>俱乐部</dt><dd>{conversation.clubName}</dd></div><div><dt>最后消息</dt><dd>{conversation.lastMessage || '—'}</dd></div></dl></section>}<footer>{owner.enabled ? '客服的回复会以该托管账号身份发送，对方收到时与本人回复一致。' : canDelete ? <><p>托管已取消，仅可查看历史记录。</p><button type="button" className="danger-light hosted-delete-button" disabled={deleting} onClick={onDelete}>{deleting ? '删除中…' : '永久删除聊天记录'}</button></> : <p>托管已取消，仅可查看历史记录；如需删除请联系主管。</p>}</footer></div>
 }
 
 function PlayerInfo({ detail, memoRevision }: { detail: ConversationDetail; memoRevision: number }) {

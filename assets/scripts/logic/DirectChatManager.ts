@@ -1375,6 +1375,15 @@ export default class DirectChatManager
         });
     }
 
+    /** 清除自己这一侧的聊天记录：服务端只记录清除时间，对方和客服仍可查看。 */
+    public ClearConversation(conversationId:string):Promise<void>
+    {
+        return this.Request("POST","/conversations/" + encodeURIComponent(conversationId) + "/clear",{}).then(()=>{
+            this.SetMessageCursor(conversationId,"");
+            this.InvalidateConversations();
+        });
+    }
+
     // ================= 附件上传 =================
 
     public CreateImageAttachment(conversationId:string,image:DirectPickedImage):Promise<any>

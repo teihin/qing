@@ -19,6 +19,11 @@ func (s *Server) handleHostedGroups(w http.ResponseWriter, r *http.Request, _ ag
 		writeDirectBizError(w, err)
 		return
 	}
+	for i := range groups {
+		for j := range groups[i].Items {
+			groups[i].Items[j].Avatar = s.avatarURLFromIndex(groups[i].Items[j].Avatar)
+		}
+	}
 	writeData(w, http.StatusOK, map[string]any{"items": groups})
 }
 
@@ -33,6 +38,9 @@ func (s *Server) handleHostedConversations(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		writeDirectBizError(w, err)
 		return
+	}
+	for i := range items {
+		items[i].Peer.Avatar = s.avatarURLFromIndex(items[i].Peer.Avatar)
 	}
 	writeData(w, http.StatusOK, map[string]any{"items": items})
 }
@@ -50,6 +58,22 @@ func (s *Server) handleHostedBalance(w http.ResponseWriter, r *http.Request, _ a
 		return
 	}
 	writeData(w, http.StatusOK, view)
+}
+
+func (s *Server) handleHostedDeleteOwner(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	guuid := strings.TrimSpace(r.PathValue("guuid"))
+	if guuid == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少托管账号")
+		return
+	}
+	if err := s.direct.DeleteHostedOwner(r.Context(), guuid); err != nil {
+		writeDirectBizError(w, err)
+		return
+	}
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "direct.hosted.delete_owner",
+		"hosted", guuid, map[string]any{"hostedGuuid": guuid}, clientIP(r))
+	s.hub.publish("hosted", liveEvent{Type: "hosted.deleted", Payload: map[string]any{"hostedGuuid": guuid}})
+	writeData(w, http.StatusOK, map[string]any{"deleted": true})
 }
 
 func (s *Server) handleHostedMessages(w http.ResponseWriter, r *http.Request, _ agentPrincipal) {

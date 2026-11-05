@@ -1080,3 +1080,65 @@ func TestUnionOwnerConversationsStaySeparatePerClub(t *testing.T) {
 		t.Fatalf("union owner must see one conversation per club, got %d: %+v", count, page.Items)
 	}
 }
+
+func TestClearChatIsPerUserAndKeepsMessages(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	player := env.session(t, "100001")
+	agent := env.session(t, "100002")
+	conv, err := env.service.CreateConversation(ctx, player, "111111", "100002")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		session Session
+		client  string
+		text    string
+	}{{player, "c-1", "第一条"}, {agent, "c-2", "第二条"}, {player, "c-3", "第三条"}} {
+		if _, _, err := env.service.SendMessage(ctx, item.session, conv.ConversationID, SendRequest{
+			MessageType: MessageText, ClientMessageID: item.client, Text: item.text}); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	page, err := env.service.Messages(ctx, player, conv.ConversationID, "", "", 30)
+	if err != nil || len(page.Items) != 3 {
+		t.Fatalf("before clear, player must see 3 messages: %v %d", err, len(page.Items))
+	}
+	if err := env.service.Clear(ctx, player, conv.ConversationID); err != nil {
+		t.Fatal(err)
+	}
+	page, err = env.service.Messages(ctx, player, conv.ConversationID, "", "", 30)
+	if err != nil || len(page.Items) != 0 {
+		t.Fatalf("after clear, player must see nothing: %v %d", err, len(page.Items))
+	}
+	// 对方/客服侧仍保留完整记录。
+	page, err = env.service.Messages(ctx, agent, conv.ConversationID, "", "", 30)
+	if err != nil || len(page.Items) != 3 {
+		t.Fatalf("agent must still see the history: %v %d", err, len(page.Items))
+	}
+	// 列表预览和未读也要跟着清掉。
+	list, err := env.service.AllConversations(ctx, player, 1, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range list.Items {
+		if item.ConversationID != conv.ConversationID {
+			continue
+		}
+		if item.LastMessage != "" || item.Unread != 0 {
+			t.Fatalf("cleared conversation must not keep preview/unread: %+v", item)
+		}
+	}
+	// 清除之后的新消息仍然要能看到。
+	time.Sleep(2 * time.Millisecond)
+	if _, _, err := env.service.SendMessage(ctx, agent, conv.ConversationID, SendRequest{
+		MessageType: MessageText, ClientMessageID: "c-4", Text: "清除后的新消息"}); err != nil {
+		t.Fatal(err)
+	}
+	page, err = env.service.Messages(ctx, player, conv.ConversationID, "", "", 30)
+	if err != nil || len(page.Items) != 1 || page.Items[0].Text != "清除后的新消息" {
+		t.Fatalf("new message after clear must be visible: %v %+v", err, page.Items)
+	}
+}

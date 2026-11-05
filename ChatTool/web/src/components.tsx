@@ -12,7 +12,7 @@ export function StatusDot({ status }: { status: string }) {
   return <span className={`status-dot status-${status}`} aria-label={status === 'online' ? '在线' : status === 'away' ? '离开' : '离线'} />
 }
 
-export function MessageBubble({ message, own, onImage }: { message: Message; own: boolean; onImage?: (src: string) => void }) {
+export function MessageBubble({ message, own, peerAvatar, onImage }: { message: Message; own: boolean; peerAvatar?: string; onImage?: (src: string) => void }) {
   const time = formatTime(message.createdAt)
   const [mediaSrc, setMediaSrc] = useState(
     message.mediaId && !hasPlayerEmbeddedToken() ? mediaURL(message.mediaId) : '',
@@ -30,7 +30,7 @@ export function MessageBubble({ message, own, onImage }: { message: Message; own
   }
   return (
     <div className={`message-row ${own ? 'message-own' : ''} ${message.senderType === 'note' ? 'message-note-row' : ''}`}>
-      {!own && <Avatar name={message.senderName} size="small" />}
+      {!own && <Avatar name={message.senderName} url={peerAvatar} size="small" />}
       <div className="message-stack">
         <div className="message-meta">
           {!own && <span>{message.senderName}</span>}

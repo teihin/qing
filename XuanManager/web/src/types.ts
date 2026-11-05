@@ -984,7 +984,11 @@ export interface AgentContributionNode {
   playerId: string;
   name: string;
   role: "owner" | "agent" | "member" | string;
+  /** 该行所属俱乐部；盟主虚拟行是盟主自己的俱乐部，不等于父俱乐部。 */
+  clubId: string;
+  clubName: string;
   isAgent: boolean;
+  isLeader: boolean;
   level: number;
   upperId: string;
   upperName: string;
@@ -992,12 +996,50 @@ export interface AgentContributionNode {
   todayScore: string;
   yesterdayScore: string;
   totalScore: string;
+  todayScoreDisplay?: string;
+  yesterdayScoreDisplay?: string;
+  totalScoreDisplay?: string;
   todayContribFen: string;
   yesterdayContribFen: string;
   totalContribFen: string;
+  todayContribDisplayFen?: string;
+  yesterdayContribDisplayFen?: string;
+  totalContribDisplayFen?: string;
+  clubGold: string;
+  gold: string;
+  quota: string;
+  status: string;
+  note: string;
+  darkPercent: string;
   percent: string;
+  /** 该代理自己的展示比例；null 表示未设置（按 100 处理）。 */
+  showPercent: number | null;
+  /** 该代理自己设置的比例；null 表示没有单独设置。 */
+  ownShowPercent?: number | null;
+  /** self=自己设置；inherit=继承上级；default=未设置；空=游戏服未返回。 */
+  showPercentSource?: "self" | "inherit" | "default" | "";
   contribRule: AgentDisplayRule;
   scoreRule: AgentDisplayRule;
+}
+
+/** 查询_代理_展示数据：self/team 的原始值与展示值。 */
+export interface AgentContributionDisplayData {
+  agentId: string;
+  clubId: string;
+  metric: string;
+  agentIncomeShowPercent?: number | string;
+  selfRaw: Record<string, string>;
+  selfDisplay: Record<string, string>;
+  teamRaw: Record<string, string>;
+  teamDisplay: Record<string, string>;
+  available: boolean;
+  message: string;
+}
+
+export interface AgentContributionDisplayBatchResponse {
+  clubId: string;
+  items: Record<string, AgentContributionDisplayData>;
+  message: string;
 }
 
 export interface AgentContributionMembersResponse {
@@ -1026,6 +1068,8 @@ export interface AgentContributionRuleQueryResponse {
   agentId: string;
   metric: "contrib" | "score";
   available: boolean;
+  agentIncomeShowPercent?: number | null;
+  effectiveShowPercent?: number | null;
   rule: AgentDisplayRule;
   message: string;
 }

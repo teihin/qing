@@ -21,6 +21,7 @@ func NewSQLStore(db *sql.DB) *SQLStore { return &SQLStore{db: db} }
 type ConversationItem struct {
 	Conversation Conversation
 	HiddenAt     time.Time
+	ClearedAt    time.Time
 	PeerGuuid    string
 	Peer         Member
 	LastText     string
@@ -59,6 +60,7 @@ JOIN chat_direct_conversation c ON c.id = m.conversation_id AND c.status = 'acti
 JOIN chat_direct_participant p ON p.conversation_id = c.id AND p.guuid = ? AND p.hidden_at IS NULL
 LEFT JOIN chat_direct_message r ON r.id = p.last_read_message_id
 WHERE m.sender_guuid <> ?
+  AND (p.cleared_at IS NULL OR m.created_at > p.cleared_at)
   AND (r.id IS NULL OR m.created_at > r.created_at OR (m.created_at = r.created_at AND m.id > r.id))
 GROUP BY c.club_id`, guuid, guuid)
 	if err != nil {
@@ -152,9 +154,10 @@ func (s *SQLStore) GetParticipant(ctx context.Context, conversationID, guuid str
 	var p Participant
 	var lastRead sql.NullString
 	var hidden sql.NullTime
-	err := s.db.QueryRowContext(ctx, `SELECT conversation_id, guuid, first_joined_at, last_read_message_id, hidden_at
+	var cleared sql.NullTime
+	err := s.db.QueryRowContext(ctx, `SELECT conversation_id, guuid, first_joined_at, last_read_message_id, hidden_at, cleared_at
 FROM chat_direct_participant WHERE conversation_id = ? AND guuid = ?`, conversationID, guuid).
-		Scan(&p.ConversationID, &p.Guuid, &p.FirstJoinedAt, &lastRead, &hidden)
+		Scan(&p.ConversationID, &p.Guuid, &p.FirstJoinedAt, &lastRead, &hidden, &cleared)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Participant{}, false, nil
 	}
@@ -166,6 +169,9 @@ FROM chat_direct_participant WHERE conversation_id = ? AND guuid = ?`, conversat
 	}
 	if hidden.Valid {
 		p.HiddenAt = hidden.Time
+	}
+	if cleared.Valid {
+		p.ClearedAt = cleared.Time
 	}
 	return p, true, nil
 }
@@ -182,6 +188,26 @@ func (s *SQLStore) HideConversation(ctx context.Context, conversationID, guuid s
 	now := time.Now()
 	result, err := s.db.ExecContext(ctx, `UPDATE chat_direct_participant SET hidden_at = ?, updated_at = ?
 WHERE conversation_id = ? AND guuid = ?`, now, now, conversationID, guuid)
+	if err != nil {
+		return err
+	}
+	if affected, _ := result.RowsAffected(); affected == 0 {
+		return errConvForbidden
+	}
+	return nil
+}
+
+// ClearConversation 只记录当前参与者「清除聊天」的时间，不删除消息行；
+// 之后该参与者拉取消息时会跳过 cleared_at 之前的内容，对方和客服侧不受影响。
+func (s *SQLStore) ClearConversation(ctx context.Context, conversationID, guuid string) error {
+	now := time.Now()
+	result, err := s.db.ExecContext(ctx, `UPDATE chat_direct_participant p
+SET p.cleared_at = ?, p.updated_at = ?,
+  p.last_read_message_id = COALESCE(
+    (SELECT m.id FROM chat_direct_message m WHERE m.conversation_id = p.conversation_id
+     ORDER BY m.created_at DESC, m.id DESC LIMIT 1),
+    p.last_read_message_id)
+WHERE p.conversation_id = ? AND p.guuid = ?`, now, now, conversationID, guuid)
 	if err != nil {
 		return err
 	}
@@ -233,7 +259,7 @@ WHERE `+where, args...).Scan(&total); err != nil {
 	}
 	queryArgs := append([]any{}, args...)
 	queryArgs = append(queryArgs, limit, offset)
-	rows, err := s.db.QueryContext(ctx, `SELECT `+conversationColumns+`, p.hidden_at
+	rows, err := s.db.QueryContext(ctx, `SELECT `+conversationColumns+`, p.hidden_at, p.cleared_at
 FROM chat_direct_conversation c
 JOIN chat_direct_participant p ON p.conversation_id = c.id AND p.guuid = ? AND p.hidden_at IS NULL
 WHERE `+where+`
@@ -250,9 +276,10 @@ ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, queryArgs...)
 		var lastID sql.NullString
 		var lastAt sql.NullTime
 		var hidden sql.NullTime
+		var cleared sql.NullTime
 		if err := rows.Scan(&item.Conversation.ID, &item.Conversation.ClubID, &item.Conversation.PairKey,
 			&item.Conversation.LowGuuid, &item.Conversation.HighGuuid, &item.Conversation.Status,
-			&lastID, &lastAt, &item.Conversation.CreatedAt, &item.Conversation.UpdatedAt, &hidden); err != nil {
+			&lastID, &lastAt, &item.Conversation.CreatedAt, &item.Conversation.UpdatedAt, &hidden, &cleared); err != nil {
 			return nil, 0, err
 		}
 		if lastID.Valid {
@@ -264,6 +291,9 @@ ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, queryArgs...)
 		}
 		if hidden.Valid {
 			item.HiddenAt = hidden.Time
+		}
+		if cleared.Valid {
+			item.ClearedAt = cleared.Time
 		}
 		item.PeerGuuid = item.Conversation.PeerGuuid(guuid)
 		ids = append(ids, item.Conversation.ID)
@@ -284,6 +314,13 @@ ORDER BY c.last_message_at DESC, c.id DESC LIMIT ? OFFSET ?`, queryArgs...)
 		return nil, 0, err
 	}
 	for i := range items {
+		// 清除过聊天的用户，如果最后一条消息也被清掉了，列表不再显示预览和未读。
+		if !items[i].ClearedAt.IsZero() && !items[i].Conversation.LastMessageAt.After(items[i].ClearedAt) {
+			items[i].LastText = ""
+			items[i].LastType = ""
+			items[i].Unread = 0
+			continue
+		}
 		if msg, ok := preview[items[i].Conversation.LastMessageID]; ok {
 			items[i].LastType = msg.MessageType
 			items[i].LastText = previewText(msg)
@@ -327,6 +364,7 @@ FROM chat_direct_message m
 JOIN chat_direct_participant p ON p.conversation_id = m.conversation_id AND p.guuid = ?
 LEFT JOIN chat_direct_message r ON r.id = p.last_read_message_id
 WHERE m.conversation_id IN (`+placeholders(len(ids))+`) AND m.sender_guuid <> ?
+  AND (p.cleared_at IS NULL OR m.created_at > p.cleared_at)
   AND (r.id IS NULL OR m.created_at > r.created_at OR (m.created_at = r.created_at AND m.id > r.id))
 GROUP BY m.conversation_id`, args...)
 	if err != nil {
@@ -436,17 +474,21 @@ SET hidden_at = NULL, updated_at = ? WHERE conversation_id = ? AND guuid = ?`,
 }
 
 // MessagesBefore 返回游标之前的上一页，按时间正序输出。
-func (s *SQLStore) MessagesBefore(ctx context.Context, conversationID string, cur *Cursor, limit int) ([]Message, error) {
-	var rows *sql.Rows
-	var err error
-	if cur == nil {
-		rows, err = s.db.QueryContext(ctx, `SELECT `+messageColumns+` FROM chat_direct_message
-WHERE conversation_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`, conversationID, limit)
-	} else {
-		rows, err = s.db.QueryContext(ctx, `SELECT `+messageColumns+` FROM chat_direct_message
-WHERE conversation_id = ? AND (created_at < ? OR (created_at = ? AND id < ?))
-ORDER BY created_at DESC, id DESC LIMIT ?`, conversationID, cur.At, cur.At, cur.ID, limit)
+// notBefore 是当前参与者的清除时间，非零时只返回它之后的消息（消息行仍然保留）。
+func (s *SQLStore) MessagesBefore(ctx context.Context, conversationID string, cur *Cursor, notBefore time.Time, limit int) ([]Message, error) {
+	where := "conversation_id = ?"
+	args := []any{conversationID}
+	if !notBefore.IsZero() {
+		where += " AND created_at > ?"
+		args = append(args, notBefore)
 	}
+	if cur != nil {
+		where += " AND (created_at < ? OR (created_at = ? AND id < ?))"
+		args = append(args, cur.At, cur.At, cur.ID)
+	}
+	args = append(args, limit)
+	rows, err := s.db.QueryContext(ctx, `SELECT `+messageColumns+` FROM chat_direct_message
+WHERE `+where+` ORDER BY created_at DESC, id DESC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -470,10 +512,16 @@ ORDER BY created_at DESC, id DESC LIMIT ?`, conversationID, cur.At, cur.At, cur.
 }
 
 // MessagesAfter 返回游标之后的新消息（长连接事件后的增量补偿），按时间正序输出。
-func (s *SQLStore) MessagesAfter(ctx context.Context, conversationID string, cur Cursor, limit int) ([]Message, error) {
+func (s *SQLStore) MessagesAfter(ctx context.Context, conversationID string, cur Cursor, notBefore time.Time, limit int) ([]Message, error) {
+	where := "conversation_id = ? AND (created_at > ? OR (created_at = ? AND id > ?))"
+	args := []any{conversationID, cur.At, cur.At, cur.ID}
+	if !notBefore.IsZero() {
+		where += " AND created_at > ?"
+		args = append(args, notBefore)
+	}
+	args = append(args, limit)
 	rows, err := s.db.QueryContext(ctx, `SELECT `+messageColumns+` FROM chat_direct_message
-WHERE conversation_id = ? AND (created_at > ? OR (created_at = ? AND id > ?))
-ORDER BY created_at ASC, id ASC LIMIT ?`, conversationID, cur.At, cur.At, cur.ID, limit)
+WHERE `+where+` ORDER BY created_at ASC, id ASC LIMIT ?`, args...)
 	if err != nil {
 		return nil, err
 	}

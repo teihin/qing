@@ -997,8 +997,9 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "联系客服")
         {
-            // 牌桌内打开客服保留透明背景，可以透出牌桌；其他入口按游戏外使用不透明底。
-            UIManager.getInstance().showPanel("panelKefu",ShowPanelMode.Cover,"",["游戏内"]);
+            // 与大厅「客服」同一个消息页：可直接找直属代理/群主直聊回复。
+            // 传「游戏内」让消息页改用半透明底，保持能看见牌桌进程。
+            UIManager.getInstance().showPanel("panelMessage",ShowPanelMode.Cover,"",["游戏内"]);
         }
         else if(button.node.name === "兑换钻石")
         {

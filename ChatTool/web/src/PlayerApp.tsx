@@ -35,7 +35,8 @@ export default function PlayerApp() {
   const normalViewportHeight = useRef(0)
   const normalViewportWidth = useRef(window.innerWidth)
   const conversationID = state?.conversation.id
-	const canSend = Boolean(state && state.conversation.status !== 'closed' && state.onlineAgents > 0)
+	// 客服不在线也允许先留言，会话保持排队，客服上线后自动接入。
+	const canSend = Boolean(state && state.conversation.status !== 'closed')
   const lastMessageID = messages.length ? messages[messages.length - 1].id : null
 
   useLayoutEffect(() => {
@@ -295,8 +296,8 @@ export default function PlayerApp() {
       <section className={`service-banner banner-${conversation.status} ${unavailable ? 'banner-unavailable' : ''}`}>
         <span className="service-avatar"><Avatar name={conversation.agentName || '客'} size="large" /><i /></span>
         <div>
-		  <strong>{conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : conversation.status === 'active' ? `${conversation.agentName} 正在为您服务` : hasPlayerMessage ? '正在为您分配客服' : '请先发送您的问题'}</strong>
-		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '暂时无法发送消息，请等待客服上线后再咨询' : conversation.status === 'active' ? (embedded ? '您可以发送文字、图片或视频' : '您可以发送文字、图片、视频或文件') : hasPlayerMessage ? '请稍候，正在为您接入在线客服' : '发送第一条文字、图片或视频后，将自动接入在线客服'}</p>
+		  <strong>{conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '客服暂时不在线' : conversation.status === 'active' ? `${conversation.agentName} 正在为您服务` : hasPlayerMessage ? '正在为您分配客服' : '请先发送您的问题'}</strong>
+		  <p>{conversation.status === 'closed' ? '如有其他问题，请返回游戏重新进入客服' : unavailable ? '可以先留言，客服上线后会回复' : conversation.status === 'active' ? (embedded ? '您可以发送文字、图片或视频' : '您可以发送文字、图片、视频或文件') : hasPlayerMessage ? '请稍候，正在为您接入在线客服' : '发送第一条文字、图片或视频后，将自动接入在线客服'}</p>
         </div>
       </section>
       <section className="player-messages" aria-live="polite" ref={messageList}>
@@ -316,10 +317,10 @@ export default function PlayerApp() {
 		</div>}
 		<div className="composer-row">
 		  <button className={`add-button ${showActions ? 'add-button-open' : ''}`} type="button" aria-label="添加图片或视频" onClick={() => setShowActions((value) => !value)} disabled={!canSend}>＋</button>
-		  <textarea value={text} onChange={(event) => onTextChange(event.target.value)} onFocus={() => { window.clearTimeout(keyboardBlurTimer.current); setShowActions(false); setKeyboardEditing(true) }} onBlur={() => { keyboardBlurTimer.current = window.setTimeout(() => setKeyboardEditing(false), 180); stopPlayerTyping() }} rows={1} maxLength={2000} placeholder={conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '当前没有客服在线' : '请输入您要咨询的问题…'} disabled={!canSend} />
+		  <textarea value={text} onChange={(event) => onTextChange(event.target.value)} onFocus={() => { window.clearTimeout(keyboardBlurTimer.current); setShowActions(false); setKeyboardEditing(true) }} onBlur={() => { keyboardBlurTimer.current = window.setTimeout(() => setKeyboardEditing(false), 180); stopPlayerTyping() }} rows={1} maxLength={2000} placeholder={conversation.status === 'closed' ? '本次咨询已结束' : unavailable ? '客服暂时不在线，可先留言…' : '请输入您要咨询的问题…'} disabled={!canSend} />
 		  <button className="send-button" type="submit" disabled={!text.trim() || sending || !canSend}>{sending ? '发送中' : '发送'}</button>
 		</div>
-		<small className={`safe-tip ${unavailable ? 'offline-tip' : ''}`}>{unavailable ? '客服上线后将自动恢复发送功能' : '请勿发送密码、验证码、银行卡等敏感信息'}</small>
+		<small className={`safe-tip ${unavailable ? 'offline-tip' : ''}`}>{unavailable ? '客服上线后会回复留言' : '请勿发送密码、验证码、银行卡等敏感信息'}</small>
       </form>
       {previewImage && <div className="image-preview" role="dialog" aria-modal="true" onClick={() => setPreviewImage('')}><button type="button" aria-label="关闭图片">×</button><img src={previewImage} alt="图片预览" /></div>}
       {showRating && <RatingModal onClose={() => setShowRating(false)} onSubmit={async (score, tags, comment) => { await api('/api/player/satisfaction', { method: 'POST', body: jsonBody({ score, tags, comment }) }); setShowRating(false) }} />}

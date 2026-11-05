@@ -43,6 +43,8 @@ type Store interface {
 	GetParticipant(ctx context.Context, conversationID, guuid string) (Participant, bool, error)
 	RevealConversation(ctx context.Context, conversationID, guuid string) error
 	HideConversation(ctx context.Context, conversationID, guuid string) error
+	/** 单方清除：只记录清除时间，不删除消息行。 */
+	ClearConversation(ctx context.Context, conversationID, guuid string) error
 	SetLastRead(ctx context.Context, conversationID, guuid, messageID string) error
 	ListConversations(ctx context.Context, clubID, guuid string, offset, limit int) ([]ConversationItem, int, error)
 	/** 跨俱乐部：当前用户参与的全部会话（联盟总群主的跨俱乐部私聊在这里出现）。 */
@@ -51,8 +53,8 @@ type Store interface {
 	GetMessage(ctx context.Context, conversationID, messageID string) (Message, bool, error)
 	FindMessageByClientID(ctx context.Context, conversationID, senderGuuid, clientID string) (Message, bool, error)
 	InsertMessage(ctx context.Context, msg Message, receiverGuuid string) (Message, bool, error)
-	MessagesBefore(ctx context.Context, conversationID string, cur *Cursor, limit int) ([]Message, error)
-	MessagesAfter(ctx context.Context, conversationID string, cur Cursor, limit int) ([]Message, error)
+	MessagesBefore(ctx context.Context, conversationID string, cur *Cursor, notBefore time.Time, limit int) ([]Message, error)
+	MessagesAfter(ctx context.Context, conversationID string, cur Cursor, notBefore time.Time, limit int) ([]Message, error)
 
 	CreateAttachment(ctx context.Context, a Attachment) error
 	GetAttachment(ctx context.Context, id string) (Attachment, bool, error)
@@ -530,7 +532,7 @@ func (s *Service) fixedConversationView(ctx context.Context, session Session, cl
 	if existing, ok, err := s.store.FindConversation(ctx, club.ClubID, pairKey); err == nil && ok {
 		view.ConversationID = existing.ID
 		view.ID = existing.ID
-		view.LastMessage, view.LastMessageType = s.lastPreview(ctx, existing)
+		view.LastMessage, view.LastMessageType = s.lastPreview(ctx, existing, session.Guuid)
 		view.LastMessageAt = fmtMilliTime(existing.LastMessageAt)
 	}
 	return view
@@ -573,8 +575,12 @@ func (s *Service) buildConversationViews(ctx context.Context, session Session, c
 	return views
 }
 
-func (s *Service) lastPreview(ctx context.Context, conv Conversation) (string, string) {
+func (s *Service) lastPreview(ctx context.Context, conv Conversation, guuid string) (string, string) {
 	if conv.LastMessageID == "" {
+		return "", ""
+	}
+	participant, ok, err := s.store.GetParticipant(ctx, conv.ID, guuid)
+	if err != nil || (ok && !participant.ClearedAt.IsZero() && !conv.LastMessageAt.After(participant.ClearedAt)) {
 		return "", ""
 	}
 	msg, ok, err := s.store.GetMessage(ctx, conv.ID, conv.LastMessageID)
@@ -741,7 +747,7 @@ func (s *Service) CreateConversation(ctx context.Context, session Session, clubI
 	if err := s.store.RevealConversation(ctx, conv.ID, session.Guuid); err != nil {
 		return ConversationView{}, err
 	}
-	lastText, lastType := s.lastPreview(ctx, conv)
+	lastText, lastType := s.lastPreview(ctx, conv, session.Guuid)
 	unread := 0
 	items, _, err := s.store.ListConversations(ctx, clubID, session.Guuid, 0, MaxPageSize)
 	if err == nil {
@@ -789,6 +795,11 @@ func (s *Service) Messages(ctx context.Context, session Session, conversationID,
 	if err != nil {
 		return MessagePage{}, err
 	}
+	participant, _, err := s.store.GetParticipant(ctx, conv.ID, session.Guuid)
+	if err != nil {
+		return MessagePage{}, err
+	}
+	clearedAt := participant.ClearedAt
 	if limit <= 0 {
 		limit = DefaultPageSize
 	}
@@ -823,7 +834,7 @@ func (s *Service) Messages(ctx context.Context, session Session, conversationID,
 		if !ok {
 			return MessagePage{}, errCursorInvalid
 		}
-		items, err := s.store.MessagesAfter(ctx, conv.ID, Cursor{At: cursorMsg.CreatedAt, ID: cursorMsg.ID}, limit)
+		items, err := s.store.MessagesAfter(ctx, conv.ID, Cursor{At: cursorMsg.CreatedAt, ID: cursorMsg.ID}, clearedAt, limit)
 		if err != nil {
 			return MessagePage{}, err
 		}
@@ -858,7 +869,7 @@ func (s *Service) Messages(ctx context.Context, session Session, conversationID,
 		cursor = &decoded
 	}
 	// 多取一条用于判断是否还有更早的消息。
-	items, err := s.store.MessagesBefore(ctx, conv.ID, cursor, limit+1)
+	items, err := s.store.MessagesBefore(ctx, conv.ID, cursor, clearedAt, limit+1)
 	if err != nil {
 		return MessagePage{}, err
 	}
@@ -1057,6 +1068,17 @@ func (s *Service) Hide(ctx context.Context, session Session, conversationID stri
 	}
 	// 只更新当前参与者的隐藏状态，不删除消息、不影响对方。
 	return s.store.HideConversation(ctx, conv.ID, session.Guuid)
+}
+
+// Clear 清除当前用户这一侧的聊天记录：只记录清除时间，消息行保留，
+// 对方和客服侧仍能看到；之后本人拉取消息和会话预览都会跳过清除前的内容。
+// 所有角色都可以清除自己这一侧，不受删除权限限制。
+func (s *Service) Clear(ctx context.Context, session Session, conversationID string) error {
+	conv, _, _, err := s.requireConversation(ctx, session, conversationID)
+	if err != nil {
+		return err
+	}
+	return s.store.ClearConversation(ctx, conv.ID, session.Guuid)
 }
 
 // ---------------- 附件 ----------------

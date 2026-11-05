@@ -10,6 +10,7 @@ import DirectChatManager, {
     DirectImageSource
 } from "../logic/DirectChatManager";
 import DirectChatTime from "../common/DirectChatTime";
+import OfficialKefuManager, { OfficialKefuState } from "../logic/OfficialKefuManager";
 
 const KBEngine = require("kbengine");
 
@@ -46,10 +47,20 @@ interface BubbleUnit
 @ccclass
 export default class panelMessageChat extends UIPanelViewBase {
 
+    /** 官方客服入口专用：聊天记录来自 /chattool/api/player，不走俱乐部直聊。 */
+    @property(cc.SpriteFrame)
+    officialAvatar:cc.SpriteFrame = null;
+
     private manager:DirectChatManager = null;
     private clubId:string = "";
     private conversationId:string = "";
     private peer:DirectPeer = null;
+    private officialMode:boolean = false;
+    private official:OfficialKefuManager = null;
+    private officialState:OfficialKefuState = null;
+    private officialPolling:boolean = false;
+    private officialPollBusy:boolean = false;
+    private officialStateTicks:number = 0;
 
     private scroll:cc.ScrollView = null;
     private content:cc.Node = null;
@@ -94,6 +105,7 @@ export default class panelMessageChat extends UIPanelViewBase {
     private previewMask:cc.Node = null;
     private clubGoldButton:cc.Node = null;
     private clubGiveButton:cc.Node = null;
+    private clearButton:cc.Node = null;
     private photoButton:cc.Node = null;
     private imageButton:cc.Node = null;
     /** 额度回包是否已到；没到之前不猜，两个入口都先不显示。 */
@@ -111,10 +123,20 @@ export default class panelMessageChat extends UIPanelViewBase {
     private scrollLayoutReady:boolean = false;
     private lastViewHeight:number = 0;
 
+    /** 牌桌内打开时隐藏实心背景，改用半透明遮罩，保持能看见牌桌进程。 */
+    private ingameOverlay:boolean = false;
+    private backgroundNode:cc.Node = null;
+    private overlayMaskNode:cc.Node = null;
+    /** 牌桌内进入会话时列表会被隐藏，关闭会话后需要在同一层级把它放回来。 */
+    private overlayRoot:cc.Node = null;
+
     onLoad()
     {
         super.onLoad();
         this.manager = DirectChatManager.GetInstance();
+        this.overlayRoot = this.node.parent;
+        this.backgroundNode = Tool.GetChild(this.node,"背景");
+        this.overlayMaskNode = Tool.GetChild(this.node,"游戏内遮罩");
 
         let scrollNode = Tool.GetChild(this.node,"列表");
         this.scroll = scrollNode == null ? null : scrollNode.getComponent(cc.ScrollView);
@@ -162,6 +184,8 @@ export default class panelMessageChat extends UIPanelViewBase {
         this.photoButton = Tool.GetChild(this.node,"拍照上传");
         this.imageButton = Tool.GetChild(this.node,"发送图片");
         this.clubGiveButton = Tool.GetChild(this.node,"赠送积分");
+        // 清除聊天对所有会话都可用，不受角色和客服模式限制。
+        this.clearButton = Tool.GetChild(this.node,"清除聊天");
         // 先按预制体里的可见状态排一次，避免俱乐部信息回来前按钮位置是错的。
         this.LayoutBottomEntries();
         if(this.clubGiveButton != null)
@@ -204,16 +228,179 @@ export default class panelMessageChat extends UIPanelViewBase {
 
     start()
     {
+        if(this.overlayRoot == null)
+            this.overlayRoot = this.node.parent;
+        this.ApplyEntryStyle();
+        this.HideIngameList();
         // UIManager 在 instantiate 之后才注入 strUserData；onLoad 时读取会拿到空字符串，
         // 导致后续请求拼成 /conversations//messages。
         this.ParseParam();
         this.RefreshHeader();
+        if(this.officialMode)
+        {
+            this.SetupOfficialMode();
+            return;
+        }
         this.LoadLatest();
+    }
+
+    /** 官方客服只保留文字聊天；上下分、赠送、删除和媒体入口不适用于客服会话。 */
+    private SetupOfficialMode():void
+    {
+        this.official = OfficialKefuManager.GetInstance();
+        this.conversationId = "";
+        this.canSend = false;
+        this.canDelete = false;
+        this.role = "member";
+        this.messages = [];
+        this.lastRenderedId = "";
+        for(let node of [this.voiceButton,this.clubGoldButton,this.clubGiveButton,this.deleteButton])
+        {
+            if(node != null)
+                node.active = false;
+        }
+        // 官方客服保留拍照和发图，和俱乐部直聊一样走图片消息。
+        for(let node of [this.photoButton,this.imageButton])
+        {
+            if(node != null)
+                node.active = true;
+        }
+        this.LayoutBottomEntries();
+        // 隐藏语音按钮后把输入框左侧补满，避免留下空槽。
+        let inputWidget = this.inputBox == null ? null : this.inputBox.node.getComponent(cc.Widget);
+        if(inputWidget != null)
+        {
+            inputWidget.left = 16;
+            inputWidget.updateAlignment();
+        }
+        this.SetTopTip("加载中…");
+        this.initialLoading = true;
+        this.official.Open().then((state)=>{
+            if(this.disposed)
+                return;
+            this.ApplyOfficialState(state);
+            return this.official.LoadMessages();
+        }).then((items)=>{
+            if(this.disposed)
+                return;
+            this.initialLoading = false;
+            this.messages = items == null ? [] : items;
+            this.Render(true,false);
+            this.ScrollToBottom(true);
+            this.MarkLatestRead();
+            this.RefreshOfficialTip();
+            this.StartOfficialPolling();
+        }).catch((error:any)=>{
+            if(this.disposed)
+                return;
+            this.initialLoading = false;
+            this.SetTopTip("加载失败，点击重试");
+            this.ShowErrorToast(error);
+        });
+    }
+
+    private ApplyOfficialState(state:OfficialKefuState):void
+    {
+        this.officialState = state;
+        if(state == null)
+            return;
+        this.canSend = state.canSend;
+        this.readOnlyReason = state.readOnlyReason;
+        if(this.inputBox != null)
+            this.inputBox.enabled = state.canSend;
+        this.RefreshOfficialTip();
+    }
+
+    private RefreshOfficialTip():void
+    {
+        if(!this.officialMode || this.topTip == null)
+            return;
+        if(this.initialLoading)
+            return;
+        if(this.officialState == null)
+        {
+            this.topTip.string = "";
+            return;
+        }
+        if(this.officialState.status === "closed")
+            this.topTip.string = "本次咨询已结束，重新进入官方客服可再次咨询";
+        else if(this.officialState.onlineAgents <= 0)
+            this.topTip.string = "客服暂时不在线，可先留言，上线后会回复";
+        else
+            this.topTip.string = this.messages.length === 0 ? "请描述您遇到的问题" : "没有更多消息";
+    }
+
+    private StartOfficialPolling():void
+    {
+        if(this.officialPolling)
+            return;
+        this.officialPolling = true;
+        this.schedule(this.PollOfficial,2.5);
+    }
+
+    private StopOfficialPolling():void
+    {
+        if(!this.officialPolling)
+            return;
+        this.officialPolling = false;
+        this.unschedule(this.PollOfficial);
+    }
+
+    private PollOfficial():void
+    {
+        if(this.disposed || !this.officialMode || this.initialLoading || this.official == null || this.officialPollBusy)
+            return;
+        this.officialPollBusy = true;
+        this.official.LoadMessages().then((items)=>{
+            if(this.disposed || !this.officialMode)
+                return;
+            this.AppendToTail(items);
+            this.officialStateTicks++;
+            if(this.officialStateTicks % 6 === 0)
+                return this.official.RefreshState().then((state)=>{
+                    if(!this.disposed)
+                        this.ApplyOfficialState(state);
+                });
+        }).catch(()=>{}).then(()=>{
+            this.officialPollBusy = false;
+        });
+    }
+
+    /** 大厅入口保持实心背景；牌桌内由消息列表透传「游戏内」，改为半透明浮层。 */
+    private ApplyEntryStyle():void
+    {
+        this.ingameOverlay = this.arrayEx != null && this.arrayEx.length > 0 && this.arrayEx[0] == "游戏内";
+        if(this.backgroundNode != null)
+            this.backgroundNode.active = !this.ingameOverlay;
+        if(this.overlayMaskNode != null)
+            this.overlayMaskNode.active = this.ingameOverlay;
+    }
+
+    /** 牌桌内进入会话时隐藏同一层的消息列表，避免两层遮罩重叠挡住牌桌。 */
+    private HideIngameList():void
+    {
+        if(!this.ingameOverlay || this.overlayRoot == null || !cc.isValid(this.overlayRoot))
+            return;
+        let list = this.overlayRoot.getChildByName("panelMessage");
+        if(list != null && cc.isValid(list) && list.active)
+            list.active = false;
+    }
+
+    /** 牌桌内进入会话时列表被隐藏，关闭会话后把同一层的列表重新显示出来。 */
+    private RestoreIngameList():void
+    {
+        if(!this.ingameOverlay || this.overlayRoot == null || !cc.isValid(this.overlayRoot))
+            return;
+        let list = this.overlayRoot.getChildByName("panelMessage");
+        if(list != null && cc.isValid(list) && !list.active)
+            list.active = true;
     }
 
     onDestroy()
     {
+        this.RestoreIngameList();
         this.disposed = true;
+        this.StopOfficialPolling();
         this.StopRecordTimer();
         this.manager.Off("realtimeMessage",this.realtimeHandler);
         this.manager.Off("realtimeState",this.realtimeStateHandler);
@@ -232,9 +419,20 @@ export default class panelMessageChat extends UIPanelViewBase {
         }
         if(data != null && typeof data === "object")
         {
+            this.officialMode = String(data.service || "") === "official";
             this.clubId = String(data.clubId || "");
             this.conversationId = String(data.conversationId || "");
-            if(data.peer != null)
+            if(this.officialMode)
+            {
+                this.peer = {
+                    guuid:"kefu:official",
+                    name:"BF",
+                    note:"",
+                    avatar:"",
+                    role:"official"
+                };
+            }
+            if(data.peer != null && !this.officialMode)
             {
                 this.peer = {
                     guuid:String(data.peer.guuid || ""),
@@ -262,7 +460,8 @@ export default class panelMessageChat extends UIPanelViewBase {
             if(label != null)
             {
                 let name = this.peer == null ? "" : this.peer.name;
-                let role = this.peer == null ? "" : DirectChatManager.RoleName(this.peer.role);
+                let role = this.officialMode ? "官方客服" :
+                    (this.peer == null ? "" : DirectChatManager.RoleName(this.peer.role));
                 label.string = name === "" ? "聊天" : name + " · " + role;
             }
         }
@@ -340,6 +539,8 @@ export default class panelMessageChat extends UIPanelViewBase {
 
     private LoadBefore():void
     {
+        if(this.officialMode)
+            return;
         if(this.loadingBefore || !this.hasMoreBefore || this.beforeCursor === "")
             return;
         this.loadingBefore = true;
@@ -511,7 +712,10 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(last == null || last.id === "" || last.id === this.lastRenderedId)
             return;
         this.lastRenderedId = last.id;
-        this.manager.MarkRead(this.conversationId,last.id).catch(()=>{});
+        if(this.officialMode)
+            this.official.MarkRead().catch(()=>{});
+        else
+            this.manager.MarkRead(this.conversationId,last.id).catch(()=>{});
         this.pendingNewCount = 0;
         if(this.newTipNode != null)
             this.newTipNode.active = false;
@@ -749,8 +953,9 @@ export default class panelMessageChat extends UIPanelViewBase {
                     unit.systemTime.string = message.systemTime || DirectChatTime.FormatFull(message.createdAt);
                 if(unit.systemText != null)
                     unit.systemText.string = message.text || "";
-                // 模板高度固定，这里只在排布时上下各留 7px 间距，不拉伸节点。
-                let height = Math.max(96,unit.node.height) + 14;
+                // 模板高度固定，这里只按上下文留出段间距，不拉伸节点。
+                let gap = cursor === 0 ? 0 : 20;
+                let height = Math.max(96,unit.node.height) + gap;
                 unit.height = height;
                 unit.node.y = -(cursor + height / 2);
                 cursor += height;
@@ -765,7 +970,8 @@ export default class panelMessageChat extends UIPanelViewBase {
             unit.node.active = true;
             unit.messageId = message.id;
             unit.node.width = Math.max(320,this.content.width);
-            let height = this.ApplyBubble(unit,message);
+            let gap = cursor === 0 ? 0 : 22;
+            let height = this.ApplyBubble(unit,message) + gap;
             unit.height = height;
             unit.node.height = height;
             unit.node.y = -(cursor + height / 2);
@@ -859,6 +1065,11 @@ export default class panelMessageChat extends UIPanelViewBase {
     {
         if(this.topTip == null)
             return;
+        if(this.officialMode)
+        {
+            this.RefreshOfficialTip();
+            return;
+        }
         if(this.loadingBefore)
             this.topTip.string = "加载更早消息…";
         else if(!this.hasMoreBefore && this.messages.length > 0)
@@ -876,12 +1087,13 @@ export default class panelMessageChat extends UIPanelViewBase {
         let hasImage = message.messageType === "image" && message.attachment != null;
         let hasVoice = message.messageType === "voice" && message.attachment != null;
         let rowWidth = this.content == null ? 750 : Math.max(320,this.content.width);
-        let avatarSize = unit.avatar == null ? 76 : Math.max(64,unit.avatar.node.width);
-        let sidePadding = Math.max(18,Math.min(32,rowWidth * 0.04));
-        let avatarGap = 16;
-        let maxBubbleWidth = Math.max(180,Math.min(520,
+        let avatarSize = unit.avatar == null ? 64 : Math.max(64,unit.avatar.node.width);
+        // 与效果图对齐：左右留白 26、头像与气泡间距 14。
+        let sidePadding = Math.max(20,Math.min(28,rowWidth * 0.035));
+        let avatarGap = 14;
+        let maxBubbleWidth = Math.max(180,Math.min(500,
             rowWidth - avatarSize - avatarGap - sidePadding * 2));
-        let height = avatarSize + 18;
+        let height = 0;
         let bubbleWidth = 0;
         let bubbleHeight = 0;
 
@@ -891,7 +1103,7 @@ export default class panelMessageChat extends UIPanelViewBase {
             if(hasText)
             {
                 let text = message.text == null ? "" : message.text;
-                let maxTextWidth = maxBubbleWidth - 36;
+                let maxTextWidth = maxBubbleWidth - 40;
                 let measuredWidth = this.EstimateTextWidth(text,unit.text.fontSize);
                 let oneLine = text.indexOf("\n") < 0 && measuredWidth <= maxTextWidth;
                 let textWidth = Math.min(maxTextWidth,Math.max(56,measuredWidth));
@@ -900,9 +1112,9 @@ export default class panelMessageChat extends UIPanelViewBase {
                 let textHeight = oneLine ?
                     Math.max(36,unit.text.lineHeight > 0 ? unit.text.lineHeight : unit.text.fontSize + 8) :
                     this.EstimateTextHeight(text,textWidth,unit.text.fontSize,unit.text.lineHeight);
-                bubbleWidth = Math.max(78,textWidth + 36);
-                bubbleHeight = oneLine ? 72 : Math.max(72,textHeight + 28);
-                unit.text.node.width = bubbleWidth - 36;
+                bubbleWidth = Math.max(78,textWidth + 40);
+                bubbleHeight = oneLine ? 68 : Math.max(68,textHeight + 30);
+                unit.text.node.width = bubbleWidth - 40;
                 unit.text.node.height = textHeight;
                 unit.text.overflow = cc.Label.Overflow.CLAMP;
                 unit.text.enableWrapText = true;
@@ -937,9 +1149,9 @@ export default class panelMessageChat extends UIPanelViewBase {
                 let ms = message.attachment.durationMs;
                 unit.voice.string = (this.playingVoiceId !== "" && this.playingVoiceId === message.attachment.id ?
                     "◀))  " : "◖))  ") + DirectChatTime.FormatDuration(ms).replace("'","″");
-                bubbleWidth = Math.min(maxBubbleWidth,150 + 36);
+                bubbleWidth = Math.min(maxBubbleWidth,150 + 40);
                 bubbleHeight = 64;
-                unit.voice.node.width = bubbleWidth - 36;
+                unit.voice.node.width = bubbleWidth - 40;
                 unit.voice.node.height = 36;
                 height = Math.max(height,bubbleHeight);
             }
@@ -961,10 +1173,18 @@ export default class panelMessageChat extends UIPanelViewBase {
             unit.avatar.node.active = true;
             unit.avatar.node.width = avatarSize;
             unit.avatar.node.height = avatarSize;
-            ImageManager.getInstance().SetLocalAvatar(unit.avatar,
-                message.senderGuuid === this.manager.CurrentGuuid() ?
-                    this.manager.Me().avatar : (this.peer == null ? "" : this.peer.avatar),
-                message.senderGuuid);
+            if(this.officialMode && !isSelf)
+            {
+                // 官方客服固定使用大厅房间列表同款盾牌，不按客服账号头像显示。
+                unit.avatar.spriteFrame = this.officialAvatar;
+            }
+            else
+            {
+                ImageManager.getInstance().SetLocalAvatar(unit.avatar,
+                    message.senderGuuid === this.manager.CurrentGuuid() ?
+                        this.manager.Me().avatar : (this.peer == null ? "" : this.peer.avatar),
+                    message.senderGuuid);
+            }
         }
 
         // 消息行在内容宽度变化时重新计算：对方头像和气泡在左侧，自己的头像和气泡在右侧。
@@ -982,13 +1202,13 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(unit.text != null)
         {
             unit.text.node.anchorX = isSelf ? 1 : 0;
-            unit.text.node.setPosition(isSelf ? bubbleEdge - 18 : bubbleEdge + 18,0);
+            unit.text.node.setPosition(isSelf ? bubbleEdge - 20 : bubbleEdge + 20,0);
             unit.text.horizontalAlign = isSelf ? cc.Label.HorizontalAlign.RIGHT : cc.Label.HorizontalAlign.LEFT;
         }
         if(unit.voice != null)
         {
             unit.voice.node.anchorX = isSelf ? 1 : 0;
-            unit.voice.node.setPosition(isSelf ? bubbleEdge - 18 : bubbleEdge + 18,0);
+            unit.voice.node.setPosition(isSelf ? bubbleEdge - 20 : bubbleEdge + 20,0);
             unit.voice.horizontalAlign = isSelf ? cc.Label.HorizontalAlign.RIGHT : cc.Label.HorizontalAlign.LEFT;
         }
         if(unit.image != null)
@@ -1153,10 +1373,12 @@ export default class panelMessageChat extends UIPanelViewBase {
         message.failed = false;
         message.pending = true;
         this.Render(false,true);
-        let resend:Promise<DirectMessage> = message.messageType === "text" ?
-            this.manager.SendText(this.conversationId,message.text,message.clientMessageId) :
-            this.manager.SendAttachmentMessage(this.conversationId,message.messageType,
-                message.attachment == null ? "" : message.attachment.id,message.clientMessageId);
+        let resend:Promise<DirectMessage> = this.officialMode ?
+            this.official.SendText(message.text,message.clientMessageId) :
+            (message.messageType === "text" ?
+                this.manager.SendText(this.conversationId,message.text,message.clientMessageId) :
+                this.manager.SendAttachmentMessage(this.conversationId,message.messageType,
+                    message.attachment == null ? "" : message.attachment.id,message.clientMessageId));
         resend.then((stored:DirectMessage)=>{
                 this.ReplaceLocalMessage(message,stored);
             }).catch(()=>{
@@ -1171,7 +1393,7 @@ export default class panelMessageChat extends UIPanelViewBase {
         let index = this.messages.indexOf(local);
         if(index >= 0 && raw != null)
         {
-            let stored = this.manager.NormalizeMessageForPanel(raw);
+            let stored = this.officialMode ? raw : this.manager.NormalizeMessageForPanel(raw);
             this.messages[index] = stored;
         }
         this.Render(false,true);
@@ -1204,6 +1426,10 @@ export default class panelMessageChat extends UIPanelViewBase {
         {
             this.ConfirmDelete();
         }
+        else if(name === "清除聊天")
+        {
+            this.ConfirmClearChat();
+        }
         else if(name === "上下分")
         {
             this.OpenClubGoldPad("updown");
@@ -1221,6 +1447,12 @@ export default class panelMessageChat extends UIPanelViewBase {
         }
         else if(name === "顶部提示" || name === "重试历史")
         {
+            if(this.officialMode)
+            {
+                if(this.messages.length === 0 && !this.initialLoading)
+                    this.SetupOfficialMode();
+                return;
+            }
             if(!this.hasMoreBefore)
                 return;
             this.LoadBefore();
@@ -1271,7 +1503,7 @@ export default class panelMessageChat extends UIPanelViewBase {
      */
     private LayoutBottomEntries():void
     {
-        const entries:cc.Node[] = [this.photoButton,this.imageButton,this.clubGiveButton,this.clubGoldButton];
+        const entries:cc.Node[] = [this.photoButton,this.imageButton,this.clubGiveButton,this.clubGoldButton,this.clearButton];
         const visible:cc.Node[] = [];
         for(let node of entries)
         {
@@ -1281,7 +1513,8 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(visible.length === 0)
             return;
         const width = 108;
-        const gap = 63;
+        // 五个入口时收窄间距，保证 750 设计宽度下左右各留 21px。
+        const gap = visible.length >= 5 ? 42 : 63;
         const total = visible.length * width + (visible.length - 1) * gap;
         let x = -total / 2 + width / 2;
         for(let node of visible)
@@ -1310,7 +1543,7 @@ export default class panelMessageChat extends UIPanelViewBase {
 
     private SendText():void
     {
-        if(this.conversationId === "")
+        if(!this.officialMode && this.conversationId === "")
         {
             this.ShowErrorToast(new DirectChatError("会话尚未建立，请返回消息列表重新打开","CONVERSATION_NOT_FOUND"));
             return;
@@ -1331,13 +1564,14 @@ export default class panelMessageChat extends UIPanelViewBase {
             return;
         }
         let clientMessageId = this.manager.NewClientMessageId();
+        let me = this.manager.Me();
         let local:DirectMessage = {
             id:"local-" + (++this.localSeq).toString(),
             messageType:"text",
             text:text,
             attachment:null,
             senderGuuid:this.manager.CurrentGuuid(),
-            senderName:this.manager.Me().name,
+            senderName:this.officialMode ? (me.name === "" ? "我" : me.name) : me.name,
             senderRole:this.role,
             clientMessageId:clientMessageId,
             createdAt:"",
@@ -1350,21 +1584,51 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(this.inputBox != null)
             this.inputBox.string = "";
 
-        this.manager.SendText(this.conversationId,text,clientMessageId).then((stored)=>{
+        let sending:Promise<DirectMessage> = this.officialMode ?
+            this.official.SendText(text,clientMessageId) :
+            this.manager.SendText(this.conversationId,text,clientMessageId);
+        sending.then((stored)=>{
             let index = this.messages.indexOf(local);
             if(index >= 0)
                 this.messages[index] = stored;
             this.Render(false,true);
-            this.manager.SetMessageCursor(this.conversationId,stored.id);
+            if(!this.officialMode)
+                this.manager.SetMessageCursor(this.conversationId,stored.id);
         }).catch((error:any)=>{
             // 失败保留气泡和原文，重试复用同一个 clientMessageId。
             local.pending = false;
             local.failed = true;
             if(this.inputBox != null && String(this.inputBox.string || "") === "")
                 this.inputBox.string = text;
+            this.HandleOfficialSendError(error);
             this.Render(false,true);
             this.ShowErrorToast(error);
         });
+    }
+
+    private HandleOfficialSendError(error:any):void
+    {
+        if(!this.officialMode || !(error instanceof DirectChatError))
+            return;
+        if(error.code === "CONVERSATION_CLOSED")
+        {
+            this.ApplyOfficialState(this.MakeOfficialState(this.officialState,"closed",
+                this.officialState == null ? 0 : this.officialState.onlineAgents));
+        }
+    }
+
+    private MakeOfficialState(base:OfficialKefuState,status:string,onlineAgents:number):OfficialKefuState
+    {
+        let state:OfficialKefuState = {
+            conversationId:base == null ? "" : base.conversationId,
+            status:status,
+            category:base == null ? "官方客服" : base.category,
+            agentName:base == null ? "" : base.agentName,
+            onlineAgents:onlineAgents,
+            canSend:status !== "closed",
+            readOnlyReason:status === "closed" ? "本次咨询已结束，请重新进入官方客服" : ""
+        };
+        return state;
     }
 
     private SendImage(source:DirectImageSource = "library"):void
@@ -1387,16 +1651,21 @@ export default class panelMessageChat extends UIPanelViewBase {
                 return;
             this.uploading = true;
             this.SetTopTip("图片上传中…");
-            return this.manager.SendImageMessage(this.conversationId,image).then((stored)=>{
+            let send:Promise<DirectMessage> = this.officialMode ?
+                this.official.SendImage(image) :
+                this.manager.SendImageMessage(this.conversationId,image);
+            return send.then((stored)=>{
                 this.uploading = false;
                 this.SetTopTip("");
                 this.messages.push(stored);
                 this.Render(false,true);
                 this.ScrollToBottom(true);
-                this.manager.SetMessageCursor(this.conversationId,stored.id);
+                if(!this.officialMode)
+                    this.manager.SetMessageCursor(this.conversationId,stored.id);
             },(error:any)=>{
                 this.uploading = false;
                 this.SetTopTip("");
+                this.HandleOfficialSendError(error);
                 this.ShowErrorToast(error);
             });
         },(error:any)=>{
@@ -1574,6 +1843,52 @@ export default class panelMessageChat extends UIPanelViewBase {
         }).catch((error:any)=>{
             // 删除失败留在当前页，不能先把本地会话永久移除。
             this.ShowErrorToast(error);
+        });
+    }
+
+    // ================= 清除聊天 =================
+
+    private ConfirmClearChat():void
+    {
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Top,
+            "仅清除你这一侧的聊天记录，对方和客服仍可查看。确定清除？",
+            [(confirmed:boolean)=>{
+                if(!confirmed)
+                    return;
+                this.DoClearChat();
+            }]);
+    }
+
+    /** 只清自己这一侧：服务端记录清除时间，之后不再下发清除前的消息。 */
+    private DoClearChat():void
+    {
+        let task:Promise<any> = null;
+        if(this.officialMode)
+        {
+            if(this.official == null)
+                return;
+            task = this.official.Clear();
+        }
+        else
+        {
+            if(this.conversationId === "")
+                return;
+            task = this.manager.ClearConversation(this.conversationId);
+        }
+        task.then(()=>{
+            if(this.disposed)
+                return;
+            this.messages = [];
+            this.beforeCursor = "";
+            this.hasMoreBefore = false;
+            this.lastRenderedId = "";
+            this.pendingNewCount = 0;
+            this.Render(true,false);
+            this.SetTopTip("聊天记录已清除");
+            this.ScrollToBottom(false);
+        }).catch((error:any)=>{
+            if(!this.disposed)
+                this.ShowErrorToast(error);
         });
     }
 

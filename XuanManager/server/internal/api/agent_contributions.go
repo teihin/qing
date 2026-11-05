@@ -19,10 +19,10 @@ import (
 // 决定返回真实值还是展示值。后台以管理员身份调用，拿到的是真实值；展示规则
 // 只通过后台规则命令下发，不在后台重算折扣。
 const (
-	agentContributionMembersCommand = "查询_俱乐部_成员"
-	agentContributionRuleGetCommand = "查询_代理_展示规则"
-	agentContributionRuleSetCommand = "设置_代理_展示规则"
-	agentContributionRuleDelCommand = "取消_代理_展示规则"
+	agentContributionMembersCommand     = "异步_查询_俱乐部_成员"
+	agentContributionDisplayDataCommand = "异步_查询_代理_展示数据"
+	agentContributionRuleGetCommand     = "查询_代理_展示规则"
+	agentContributionRuleSetCommand     = "设置_代理_展示规则"
 )
 
 type agentDisplayRule struct {
@@ -36,23 +36,41 @@ type agentDisplayRule struct {
 }
 
 type agentContributionNode struct {
-	PlayerID            string           `json:"playerId"`
-	Name                string           `json:"name"`
-	Role                string           `json:"role"` // owner / agent / member
-	IsAgent             bool             `json:"isAgent"`
-	Level               int64            `json:"level"`
-	UpperID             string           `json:"upperId"`
-	UpperName           string           `json:"upperName"`
-	TeamCount           string           `json:"teamCount"`
-	TodayScore          string           `json:"todayScore"`
-	YesterdayScore      string           `json:"yesterdayScore"`
-	TotalScore          string           `json:"totalScore"`
-	TodayContribFen     string           `json:"todayContribFen"`
-	YesterdayContribFen string           `json:"yesterdayContribFen"`
-	TotalContribFen     string           `json:"totalContribFen"`
-	Percent             string           `json:"percent"`
-	ContribRule         agentDisplayRule `json:"contribRule"`
-	ScoreRule           agentDisplayRule `json:"scoreRule"`
+	PlayerID                   string           `json:"playerId"`
+	Name                       string           `json:"name"`
+	Role                       string           `json:"role"` // owner / agent / member
+	ClubID                     string           `json:"clubId"`
+	ClubName                   string           `json:"clubName"`
+	IsAgent                    bool             `json:"isAgent"`
+	IsLeader                   bool             `json:"isLeader"`
+	Level                      int64            `json:"level"`
+	UpperID                    string           `json:"upperId"`
+	UpperName                  string           `json:"upperName"`
+	TeamCount                  string           `json:"teamCount"`
+	TodayScore                 string           `json:"todayScore"`
+	YesterdayScore             string           `json:"yesterdayScore"`
+	TotalScore                 string           `json:"totalScore"`
+	TodayScoreDisplay          string           `json:"todayScoreDisplay"`
+	YesterdayScoreDisplay      string           `json:"yesterdayScoreDisplay"`
+	TotalScoreDisplay          string           `json:"totalScoreDisplay"`
+	TodayContribFen            string           `json:"todayContribFen"`
+	YesterdayContribFen        string           `json:"yesterdayContribFen"`
+	TotalContribFen            string           `json:"totalContribFen"`
+	TodayContribDisplayFen     string           `json:"todayContribDisplayFen"`
+	YesterdayContribDisplayFen string           `json:"yesterdayContribDisplayFen"`
+	TotalContribDisplayFen     string           `json:"totalContribDisplayFen"`
+	ClubGold                   string           `json:"clubGold"`
+	Gold                       string           `json:"gold"`
+	Quota                      string           `json:"quota"`
+	Status                     string           `json:"status"`
+	Note                       string           `json:"note"`
+	DarkPercent                string           `json:"darkPercent"`
+	Percent                    string           `json:"percent"`
+	ShowPercent                *int64           `json:"showPercent"`
+	OwnShowPercent             *int64           `json:"ownShowPercent"`
+	ShowPercentSource          string           `json:"showPercentSource"`
+	ContribRule                agentDisplayRule `json:"contribRule"`
+	ScoreRule                  agentDisplayRule `json:"scoreRule"`
 }
 
 type agentContributionMembersResponse struct {
@@ -71,7 +89,6 @@ type agentContributionRuleRequest struct {
 	Metric  string `json:"metric"`
 	Mode    string `json:"mode"`
 	Percent *int64 `json:"percent"`
-	Delta   *int64 `json:"delta"`
 	Note    string `json:"note"`
 }
 
@@ -85,12 +102,43 @@ type agentContributionRuleResponse struct {
 }
 
 type agentContributionRuleQueryResponse struct {
-	ClubID    string           `json:"clubId"`
-	AgentID   string           `json:"agentId"`
-	Metric    string           `json:"metric"`
-	Available bool             `json:"available"`
-	Rule      agentDisplayRule `json:"rule"`
-	Message   string           `json:"message"`
+	ClubID                 string           `json:"clubId"`
+	AgentID                string           `json:"agentId"`
+	Metric                 string           `json:"metric"`
+	Available              bool             `json:"available"`
+	AgentIncomeShowPercent *int64           `json:"agentIncomeShowPercent,omitempty"`
+	EffectiveShowPercent   *int64           `json:"effectiveShowPercent,omitempty"`
+	Rule                   agentDisplayRule `json:"rule"`
+	Message                string           `json:"message"`
+}
+
+type agentContributionDisplayData struct {
+	AgentID                string            `json:"agentId"`
+	ClubID                 string            `json:"clubId"`
+	Metric                 string            `json:"metric"`
+	AgentIncomeShowPercent any               `json:"agentIncomeShowPercent,omitempty"`
+	SelfRaw                map[string]string `json:"selfRaw"`
+	SelfDisplay            map[string]string `json:"selfDisplay"`
+	TeamRaw                map[string]string `json:"teamRaw"`
+	TeamDisplay            map[string]string `json:"teamDisplay"`
+	Available              bool              `json:"available"`
+	Message                string            `json:"message"`
+}
+
+type agentContributionDisplayTarget struct {
+	AgentID string `json:"agentId"`
+	ClubID  string `json:"clubId"`
+}
+
+type agentContributionDisplayBatchRequest struct {
+	AgentIDs []string                         `json:"agentIds"`
+	Items    []agentContributionDisplayTarget `json:"items"`
+}
+
+type agentContributionDisplayBatchResponse struct {
+	ClubID  string                                  `json:"clubId"`
+	Items   map[string]agentContributionDisplayData `json:"items"`
+	Message string                                  `json:"message"`
 }
 
 func (s *Server) handleAgentContributionMembers(w http.ResponseWriter, r *http.Request, _ principal) {
@@ -104,13 +152,21 @@ func (s *Server) handleAgentContributionMembers(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 不正确")
 		return
 	}
+	showType := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("showType")))
+	if showType == "" {
+		showType = "all"
+	}
+	if showType != "all" && showType != "union" && showType != "member" {
+		writeError(w, http.StatusBadRequest, "INVALID_SHOW_TYPE", "showType 只能是 all、union 或 member")
+		return
+	}
 	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	size, _ := strconv.Atoi(r.URL.Query().Get("pageSize"))
 	if page < 1 {
 		page = 1
 	}
-	if size < 1 || size > 200 {
-		size = 200
+	if size < 1 || size > 500 {
+		size = 500
 	}
 
 	rootID := agentID
@@ -127,7 +183,12 @@ func (s *Server) handleAgentContributionMembers(w http.ResponseWriter, r *http.R
 		}
 	}
 
-	response, gameErr := s.queryAgentContributionMembers(r, clubID, rootID, page, size)
+	selfOnly := r.URL.Query().Get("selfOnly") == "1"
+	userID := "ALL"
+	if selfOnly {
+		userID = rootID
+	}
+	response, gameErr := s.queryAgentContributionMembers(r, clubID, rootID, showType, userID, page, size)
 	if gameErr != nil {
 		s.logger.Warn("query agent contribution members from game server", "error", gameErr, "clubId", clubID, "agentId", rootID)
 	}
@@ -140,6 +201,9 @@ func (s *Server) handleAgentContributionMembers(w http.ResponseWriter, r *http.R
 			writeError(w, http.StatusBadGateway, "GAME_DATA_UNAVAILABLE", "读取游戏服成员数据失败")
 			return
 		}
+		if selfOnly && len(fallback) > 1 {
+			fallback = fallback[:1]
+		}
 		response.Items = fallback
 		response.Total = int64(len(fallback))
 		if gameErr != nil {
@@ -149,28 +213,147 @@ func (s *Server) handleAgentContributionMembers(w http.ResponseWriter, r *http.R
 			response.Message = "游戏服成员数据暂不可用，仅显示俱乐部关系"
 		}
 	}
+	s.enrichClubNames(r, response.Items, response.AgentID)
+	s.enrichAgentShowPercents(r, response.Items)
 	writeData(w, http.StatusOK, response)
 }
 
-func (s *Server) queryAgentContributionMembers(r *http.Request, clubID, agentID string, page, size int) (agentContributionMembersResponse, error) {
+func (s *Server) handleAgentContributionDisplayData(w http.ResponseWriter, r *http.Request, _ principal) {
+	clubID, err := normalizeClubID(r.PathValue("clubId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_CLUB_ID", err.Error())
+		return
+	}
+	var input agentContributionDisplayBatchRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "请求内容格式不正确")
+		return
+	}
+	targets := make([]agentContributionDisplayTarget, 0, len(input.Items)+len(input.AgentIDs))
+	if len(input.Items) > 0 {
+		targets = append(targets, input.Items...)
+	} else {
+		for _, agentID := range input.AgentIDs {
+			targets = append(targets, agentContributionDisplayTarget{AgentID: agentID, ClubID: clubID})
+		}
+	}
+	seen := map[string]bool{}
+	validTargets := make([]agentContributionDisplayTarget, 0, len(targets))
+	for _, target := range targets {
+		agentID := strings.TrimSpace(target.AgentID)
+		if agentID == "" {
+			continue
+		}
+		if !validAgentID(agentID) {
+			writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 不正确")
+			return
+		}
+		rowClubID := strings.TrimSpace(target.ClubID)
+		if rowClubID == "" {
+			rowClubID = clubID
+		}
+		rowClubID, err = normalizeClubID(rowClubID)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_CLUB_ID", err.Error())
+			return
+		}
+		key := rowClubID + ":" + agentID
+		if seen[key] {
+			continue
+		}
+		seen[key] = true
+		validTargets = append(validTargets, agentContributionDisplayTarget{AgentID: agentID, ClubID: rowClubID})
+	}
+	if len(validTargets) == 0 {
+		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "请提供要查询的代理 ID")
+		return
+	}
+	if len(validTargets) > 50 {
+		writeError(w, http.StatusBadRequest, "TOO_MANY_AGENTS", "一次最多查询 50 个代理的展示数据")
+		return
+	}
+	response := agentContributionDisplayBatchResponse{
+		ClubID: clubID,
+		Items:  make(map[string]agentContributionDisplayData, len(validTargets)),
+	}
+	for _, target := range validTargets {
+		item := s.queryAgentContributionDisplayData(r, target.ClubID, target.AgentID)
+		response.Items[target.AgentID] = item
+		if !item.Available && response.Message == "" {
+			response.Message = item.Message
+		}
+	}
+	writeData(w, http.StatusOK, response)
+}
+
+func (s *Server) queryAgentContributionDisplayData(r *http.Request, clubID, agentID string) agentContributionDisplayData {
+	data := agentContributionDisplayData{
+		AgentID: agentID, ClubID: clubID, Metric: "contrib",
+		SelfRaw: map[string]string{}, SelfDisplay: map[string]string{},
+		TeamRaw: map[string]string{}, TeamDisplay: map[string]string{},
+	}
+	params := map[string]any{
+		"club_id": clubID, "agent_id": agentID, "metric": "contrib",
+		"context": gameOperationContext("agent-contribution-display"),
+	}
+	result, err := s.callGameCommand(r.Context(), agentContributionDisplayDataCommand, params)
+	if err != nil {
+		data.Message = "游戏服展示数据暂不可用：" + err.Error()
+		return data
+	}
+	if result.RetCode != 512 {
+		data.Message = describeGameFailure(agentContributionDisplayDataCommand, result.RetCode, result.RetResult)
+		return data
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(result.RetResult, &payload); err != nil {
+		data.Message = "游戏服展示数据格式不正确"
+		return data
+	}
+	if value, ok := payload["metric"].(string); ok && strings.TrimSpace(value) != "" {
+		data.Metric = strings.TrimSpace(value)
+	}
+	data.AgentIncomeShowPercent = payload["agent_income_show_percent"]
+	data.SelfRaw = anyStringMap(payload["self_raw"])
+	data.SelfDisplay = anyStringMap(payload["self_display"])
+	data.TeamRaw = anyStringMap(payload["team_raw"])
+	data.TeamDisplay = anyStringMap(payload["team_display"])
+	data.Available = true
+	return data
+}
+
+func anyStringMap(value any) map[string]string {
+	result := map[string]string{}
+	mapping, ok := value.(map[string]any)
+	if !ok {
+		return result
+	}
+	for key, raw := range mapping {
+		result[key] = textField(map[string]any{"value": raw}, "value")
+	}
+	return result
+}
+
+func (s *Server) queryAgentContributionMembers(r *http.Request, clubID, agentID, showType, userID string, page, size int) (agentContributionMembersResponse, error) {
 	result := agentContributionMembersResponse{
 		ClubID: clubID, AgentID: agentID, Page: page, PageSize: size,
 		Items: []agentContributionNode{},
 	}
 	params := map[string]any{
-		"club_id":  clubID,
-		"agent_id": agentID,
-		"user_id":  "ALL",
-		"page":     strconv.Itoa(page),
-		"count":    strconv.Itoa(size),
-		"context":  gameOperationContext("agent-contribution"),
+		"club_id":   clubID,
+		"agent_id":  agentID,
+		"user_id":   userID,
+		"show_type": showType,
+		"page":      strconv.Itoa(page),
+		"count":     strconv.Itoa(size),
+		"context":   gameOperationContext("agent-contribution"),
 	}
 	gameResult, err := s.callGameCommand(r.Context(), agentContributionMembersCommand, params)
 	if err != nil {
 		return result, err
 	}
 	if gameResult.RetCode != 512 {
-		return result, fmt.Errorf("游戏服返回 %s", gameResult.RetResult)
+		return result, fmt.Errorf("%s", describeGameFailure(agentContributionMembersCommand, gameResult.RetCode, gameResult.RetResult))
 	}
 	rows := extractGameRows(gameResult.RetResult)
 	if len(rows) == 0 {
@@ -223,21 +406,154 @@ func (s *Server) fallbackAgentContributionMembers(r *http.Request, clubID, agent
 		return nil, sql.ErrNoRows
 	}
 	result := make([]agentContributionNode, 0, len(node.Children)+1)
-	result = append(result, fallbackContributionNode(node.clubMemberNode))
+	clubName := detail.Club.Name
+	result = append(result, fallbackContributionNode(node.clubMemberNode, clubID, clubName))
 	for _, child := range node.Children {
-		result = append(result, fallbackContributionNode(child.clubMemberNode))
+		result = append(result, fallbackContributionNode(child.clubMemberNode, clubID, clubName))
 	}
 	return result, nil
 }
 
-func fallbackContributionNode(member clubMemberNode) agentContributionNode {
+func fallbackContributionNode(member clubMemberNode, clubID, clubName string) agentContributionNode {
 	return agentContributionNode{
 		PlayerID: member.PlayerID, Name: member.Name,
+		ClubID: clubID, ClubName: clubName,
 		Role: clubMemberRole(member), IsAgent: member.IsAgent,
 		UpperID:     member.UpperID,
 		ContribRule: agentDisplayRule{Mode: "none", Source: "none"},
 		ScoreRule:   agentDisplayRule{Mode: "none", Source: "none"},
 	}
+}
+
+func (s *Server) enrichClubNames(r *http.Request, items []agentContributionNode, fallbackClubID string) {
+	if len(items) == 0 {
+		return
+	}
+	missing := map[string]bool{}
+	for index := range items {
+		if items[index].ClubID == "" {
+			items[index].ClubID = fallbackClubID
+		}
+		if items[index].ClubName == "" && items[index].ClubID != "" {
+			missing[items[index].ClubID] = true
+		}
+	}
+	if len(missing) == 0 || s.db == nil {
+		return
+	}
+	ids := make([]string, 0, len(missing))
+	args := make([]any, 0, len(missing))
+	for clubID := range missing {
+		ids = append(ids, clubID)
+		args = append(args, clubID)
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	rows, err := s.db.QueryContext(r.Context(),
+		`SELECT club_guuid, COALESCE(club_name, '') FROM kbedm.club_guuid_info WHERE club_guuid IN (`+placeholders+`) ORDER BY id`,
+		args...)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("query club names for contribution rows", "error", err)
+		}
+		return
+	}
+	defer rows.Close()
+	names := map[string]string{}
+	for rows.Next() {
+		var clubID, clubName string
+		if err := rows.Scan(&clubID, &clubName); err != nil {
+			continue
+		}
+		if names[clubID] == "" && strings.TrimSpace(clubName) != "" {
+			names[clubID] = strings.TrimSpace(clubName)
+		}
+	}
+	for index := range items {
+		if items[index].ClubName == "" {
+			items[index].ClubName = names[items[index].ClubID]
+		}
+	}
+}
+
+// enrichAgentShowPercents 从 club_agent_info.show_percent 批量补每行代理自己的展示比例。
+// 游戏服成员行目前不带 show_percent；后台直接读同一份存储，避免逐行调游戏命令。
+func (s *Server) enrichAgentShowPercents(r *http.Request, items []agentContributionNode) {
+	if len(items) == 0 || s.db == nil {
+		return
+	}
+	clubs := map[string]bool{}
+	agents := map[string]bool{}
+	for index := range items {
+		if items[index].ClubID != "" && items[index].PlayerID != "" {
+			clubs[items[index].ClubID] = true
+			agents[items[index].PlayerID] = true
+		}
+	}
+	if len(clubs) == 0 || len(agents) == 0 {
+		return
+	}
+	clubIDs := make([]string, 0, len(clubs))
+	clubArgs := make([]any, 0, len(clubs))
+	for clubID := range clubs {
+		clubIDs = append(clubIDs, clubID)
+		clubArgs = append(clubArgs, clubID)
+	}
+	agentIDs := make([]string, 0, len(agents))
+	for agentID := range agents {
+		agentIDs = append(agentIDs, agentID)
+		clubArgs = append(clubArgs, agentID)
+	}
+	clubPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(clubIDs)), ",")
+	agentPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(agentIDs)), ",")
+	rows, err := s.db.QueryContext(r.Context(), `SELECT club_guuid, user_guuid, show_percent
+FROM kbedm.club_agent_info
+WHERE status = 'used' AND club_guuid IN (`+clubPlaceholders+`) AND user_guuid IN (`+agentPlaceholders+`)`, clubArgs...)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("query agent show percent for contribution rows", "error", err)
+		}
+		return
+	}
+	defer rows.Close()
+	values := map[string]*int64{}
+	for rows.Next() {
+		var clubID, agentID string
+		var percent sql.NullInt64
+		if err := rows.Scan(&clubID, &agentID, &percent); err != nil {
+			continue
+		}
+		var value *int64
+		if percent.Valid {
+			number := percent.Int64
+			value = &number
+		}
+		values[clubID+":"+agentID] = value
+	}
+	for index := range items {
+		if value, ok := values[items[index].ClubID+":"+items[index].PlayerID]; ok {
+			items[index].OwnShowPercent = value
+		}
+		if items[index].ShowPercent == nil {
+			if value, ok := values[items[index].ClubID+":"+items[index].PlayerID]; ok {
+				items[index].ShowPercent = value
+			}
+		}
+		items[index].ShowPercentSource = showPercentSource(items[index].ShowPercent, items[index].OwnShowPercent)
+	}
+}
+
+// showPercentSource 区分这一行是代理自己设置、继承上级还是未设置（默认 100）。
+func showPercentSource(showPercent, ownShowPercent *int64) string {
+	if showPercent == nil {
+		return ""
+	}
+	if ownShowPercent != nil {
+		return "self"
+	}
+	if *showPercent == 100 {
+		return "default"
+	}
+	return "inherit"
 }
 
 func clubMemberRole(member clubMemberNode) string {
@@ -270,13 +586,30 @@ func (s *Server) handleAgentContributionRuleGet(w http.ResponseWriter, r *http.R
 	if result.RetCode != 512 {
 		writeData(w, http.StatusOK, agentContributionRuleQueryResponse{
 			ClubID: clubID, AgentID: agentID, Metric: metric, Available: false,
-			Rule: agentDisplayRule{Mode: "none", Source: "none"}, Message: gameResultMessage(result.RetResult),
+			Rule:    agentDisplayRule{Mode: "none", Source: "none"},
+			Message: describeGameFailure(agentContributionRuleGetCommand, result.RetCode, result.RetResult),
 		})
 		return
 	}
-	rule := parseRulePayload(result.RetResult, metric)
+	var payload map[string]any
+	_ = json.Unmarshal(result.RetResult, &payload)
+	percent := intPointerField(payload, "agent_income_show_percent", "agentIncomeShowPercent")
+	if percent == nil {
+		hundred := int64(100)
+		percent = &hundred
+	}
+	effective := intPointerField(payload, "effective_show_percent", "effectiveShowPercent")
+	if effective == nil {
+		effective = percent
+	}
+	source := "self"
+	if *effective != *percent {
+		source = "inherit"
+	}
+	rule := agentDisplayRule{Mode: "percent", Percent: percent, Source: source, Sim: *effective != 100}
 	writeData(w, http.StatusOK, agentContributionRuleQueryResponse{
-		ClubID: clubID, AgentID: agentID, Metric: metric, Available: true, Rule: rule,
+		ClubID: clubID, AgentID: agentID, Metric: metric, Available: true,
+		AgentIncomeShowPercent: percent, EffectiveShowPercent: effective, Rule: rule,
 	})
 }
 
@@ -292,27 +625,14 @@ func (s *Server) handleAgentContributionRuleSet(w http.ResponseWriter, r *http.R
 	}
 	input.Mode = strings.ToLower(strings.TrimSpace(input.Mode))
 	input.Note = strings.TrimSpace(input.Note)
-	if input.Mode != "percent" && input.Mode != "fixed" {
-		writeError(w, http.StatusBadRequest, "INVALID_MODE", "展示方式只能是按比例或按固定差额")
+	if input.Mode != "" && input.Mode != "percent" {
+		writeError(w, http.StatusBadRequest, "INVALID_MODE", "展示方式仅支持按比例（percent）")
 		return
 	}
-	if input.Mode == "percent" {
-		if input.Percent == nil || *input.Percent < 0 || *input.Percent > 100 {
-			writeError(w, http.StatusBadRequest, "INVALID_PERCENT", "比例必须是 0 到 100 的整数")
-			return
-		}
-		input.Delta = nil
-	}
-	if input.Mode == "fixed" {
-		if input.Delta == nil || *input.Delta == 0 {
-			writeError(w, http.StatusBadRequest, "INVALID_DELTA", "固定差额不能为 0")
-			return
-		}
-		if math.Abs(float64(*input.Delta)) > 1_000_000_000 {
-			writeError(w, http.StatusBadRequest, "INVALID_DELTA", "固定差额超出允许范围")
-			return
-		}
-		input.Percent = nil
+	input.Mode = "percent"
+	if input.Percent == nil || *input.Percent < 0 || *input.Percent > 100 {
+		writeError(w, http.StatusBadRequest, "INVALID_PERCENT", "展示比例必须是 0 到 100 的整数")
+		return
 	}
 	if count := utf8.RuneCountInString(input.Note); count < 2 || count > 200 {
 		writeError(w, http.StatusBadRequest, "INVALID_NOTE", "调整原因需要 2 到 200 个字")
@@ -321,44 +641,29 @@ func (s *Server) handleAgentContributionRuleSet(w http.ResponseWriter, r *http.R
 
 	params := map[string]any{
 		"club_id": clubID, "agent_id": agentID, "metric": metric,
-		"mode": input.Mode, "note": input.Note,
+		"mode": input.Mode, "percent": *input.Percent, "note": input.Note,
 		"operator": p.Username,
 		"context":  gameOperationContext("agent-contribution-rule-set"),
 	}
-	if input.Percent != nil {
-		params["percent"] = *input.Percent
-	}
-	if input.Delta != nil {
-		params["delta"] = *input.Delta
-	}
+	requestAudit := map[string]any{"clubId": clubID, "metric": metric, "mode": input.Mode, "percent": input.Percent, "note": input.Note}
 	result, err := s.callGameCommand(r.Context(), agentContributionRuleSetCommand, params)
 	if err != nil {
 		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
-			map[string]any{"clubId": clubID, "metric": metric, "mode": input.Mode, "percent": input.Percent, "delta": input.Delta, "note": input.Note},
-			nil, nil, 502, "游戏服设置失败", clientIP(r))
+			requestAudit, nil, nil, 502, "游戏服设置失败", clientIP(r))
 		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", "游戏服设置失败："+err.Error())
 		return
 	}
 	if result.RetCode != 512 {
-		message := gameResultMessage(result.RetResult)
+		message := describeGameFailure(agentContributionRuleSetCommand, result.RetCode, result.RetResult)
 		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
-			map[string]any{"clubId": clubID, "metric": metric, "mode": input.Mode, "percent": input.Percent, "delta": input.Delta, "note": input.Note},
-			nil, result.RetResult, result.RetCode, message, clientIP(r))
+			requestAudit, nil, result.RetResult, result.RetCode, message, clientIP(r))
 		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", message)
 		return
 	}
-	rule := parseRulePayload(result.RetResult, metric)
-	if rule.Mode == "none" || rule.Mode == "unknown" {
-		sim := (input.Mode == "percent" && input.Percent != nil && *input.Percent != 100) ||
-			(input.Mode == "fixed" && input.Delta != nil && *input.Delta != 0)
-		rule = agentDisplayRule{Mode: input.Mode, Percent: input.Percent, Delta: input.Delta, Source: "self", Sim: sim}
-	}
-	if rule.Source == "" {
-		rule.Source = "self"
-	}
+	sim := *input.Percent != 100
+	rule := agentDisplayRule{Mode: "percent", Percent: input.Percent, Source: "self", Sim: sim}
 	s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
-		map[string]any{"clubId": clubID, "metric": metric, "mode": input.Mode, "percent": input.Percent, "delta": input.Delta, "note": input.Note},
-		nil, map[string]any{"rule": rule}, 0, "设置成功", clientIP(r))
+		requestAudit, nil, map[string]any{"rule": rule}, 0, "设置成功", clientIP(r))
 	writeData(w, http.StatusOK, agentContributionRuleResponse{
 		ClubID: clubID, AgentID: agentID, Metric: metric, Rule: rule, Verified: true, Message: "设置成功",
 	})
@@ -369,33 +674,34 @@ func (s *Server) handleAgentContributionRuleReset(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
+	percent := int64(100)
 	params := map[string]any{
-		"club_id": clubID, "agent_id": agentID, "metric": metric,
+		"club_id": clubID, "agent_id": agentID,
+		"mode": "percent", "percent": percent, "note": "恢复真实值",
 		"operator": p.Username,
 		"context":  gameOperationContext("agent-contribution-rule-reset"),
 	}
-	result, err := s.callGameCommand(r.Context(), agentContributionRuleDelCommand, params)
+	requestAudit := map[string]any{"clubId": clubID, "metric": metric, "action": "reset", "percent": percent}
+	result, err := s.callGameCommand(r.Context(), agentContributionRuleSetCommand, params)
 	if err != nil {
 		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
-			map[string]any{"clubId": clubID, "metric": metric, "action": "reset"},
-			nil, nil, 502, "游戏服取消失败", clientIP(r))
-		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", "游戏服取消失败："+err.Error())
+			requestAudit, nil, nil, 502, "游戏服恢复失败", clientIP(r))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", "游戏服恢复失败："+err.Error())
 		return
 	}
 	if result.RetCode != 512 {
-		message := gameResultMessage(result.RetResult)
+		message := describeGameFailure(agentContributionRuleSetCommand, result.RetCode, result.RetResult)
 		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
-			map[string]any{"clubId": clubID, "metric": metric, "action": "reset"},
-			nil, result.RetResult, result.RetCode, message, clientIP(r))
+			requestAudit, nil, result.RetResult, result.RetCode, message, clientIP(r))
 		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", message)
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
-		map[string]any{"clubId": clubID, "metric": metric, "action": "reset"},
-		nil, map[string]any{"mode": "none", "source": "inherit"}, 0, "已恢复上级规则", clientIP(r))
+		requestAudit, nil, map[string]any{"mode": "percent", "percent": percent}, 0, "已恢复真实值", clientIP(r))
 	writeData(w, http.StatusOK, agentContributionRuleResponse{
 		ClubID: clubID, AgentID: agentID, Metric: metric,
-		Rule: agentDisplayRule{Mode: "none", Source: "inherit"}, Verified: true, Message: "已恢复上级规则",
+		Rule:     agentDisplayRule{Mode: "percent", Percent: &percent, Source: "self", Sim: false},
+		Verified: true, Message: "已恢复真实值",
 	})
 }
 
@@ -492,23 +798,39 @@ func mapAgentContributionNode(row map[string]any) agentContributionNode {
 		role = "agent"
 	}
 	return agentContributionNode{
-		PlayerID:            textField(row, "user_id", "guuid", "playerId", "id"),
-		Name:                textField(row, "name", "user_name", "nickname"),
-		Role:                role,
-		IsAgent:             role == "owner" || role == "agent",
-		Level:               intField(row, "level", "sm_level"),
-		UpperID:             textField(row, "upper_guuid", "upper_id", "upperId", "parent_id", "parentId", "agent_id"),
-		UpperName:           textField(row, "upper_name", "upperName", "parent_name", "parentName"),
-		TeamCount:           textField(row, "team_count", "teamCount"),
-		TodayScore:          textField(row, "today_score", "todayScore"),
-		YesterdayScore:      textField(row, "yesterday_score", "yesterdayScore"),
-		TotalScore:          textField(row, "total_score", "totalScore"),
-		TodayContribFen:     textField(row, "today_contrib_fen", "todayContribFen"),
-		YesterdayContribFen: textField(row, "yesterday_contrib_fen", "yesterdayContribFen"),
-		TotalContribFen:     textField(row, "total_contrib_fen", "totalContribFen"),
-		Percent:             textField(row, "percent", "agent_percent", "agentPercent"),
-		ContribRule:         parseDisplayRuleFromRow(row, "contrib"),
-		ScoreRule:           parseDisplayRuleFromRow(row, "score"),
+		PlayerID:                   textField(row, "user_id", "guuid", "playerId", "id"),
+		Name:                       textField(row, "name", "user_name", "nickname"),
+		Role:                       role,
+		ClubID:                     textField(row, "club_id", "clubId"),
+		ClubName:                   textField(row, "club_name", "clubName"),
+		IsAgent:                    role == "owner" || role == "agent",
+		IsLeader:                   boolField(row, "is_leader", "isLeader"),
+		Level:                      intField(row, "level", "sm_level"),
+		UpperID:                    textField(row, "upper_guuid", "upper_id", "upperId", "parent_id", "parentId", "agent_id"),
+		UpperName:                  textField(row, "upper_name", "upperName", "parent_name", "parentName"),
+		TeamCount:                  textField(row, "team_count", "teamCount"),
+		TodayScore:                 textField(row, "today_score", "todayScore"),
+		YesterdayScore:             textField(row, "yesterday_score", "yesterdayScore"),
+		TotalScore:                 textField(row, "total_score", "totalScore"),
+		TodayScoreDisplay:          textField(row, "today_score_display", "todayScoreDisplay"),
+		YesterdayScoreDisplay:      textField(row, "yesterday_score_display", "yesterdayScoreDisplay"),
+		TotalScoreDisplay:          textField(row, "total_score_display", "totalScoreDisplay"),
+		TodayContribFen:            textField(row, "today_contrib_fen", "todayContribFen"),
+		YesterdayContribFen:        textField(row, "yesterday_contrib_fen", "yesterdayContribFen"),
+		TotalContribFen:            textField(row, "total_contrib_fen", "totalContribFen"),
+		TodayContribDisplayFen:     textField(row, "today_contrib_display_fen", "todayContribDisplayFen"),
+		YesterdayContribDisplayFen: textField(row, "yesterday_contrib_display_fen", "yesterdayContribDisplayFen"),
+		TotalContribDisplayFen:     textField(row, "total_contrib_display_fen", "totalContribDisplayFen"),
+		ClubGold:                   textField(row, "club_gold", "clubGold"),
+		Gold:                       textField(row, "gold"),
+		Quota:                      textField(row, "quota"),
+		Status:                     textField(row, "status"),
+		Note:                       textField(row, "note"),
+		DarkPercent:                textField(row, "dark_percent", "darkPercent"),
+		Percent:                    textField(row, "percent", "agent_percent", "agentPercent"),
+		ShowPercent:                intPointerField(row, "show_percent", "showPercent", "agent_income_show_percent"),
+		ContribRule:                parseDisplayRuleFromRow(row, "contrib"),
+		ScoreRule:                  parseDisplayRuleFromRow(row, "score"),
 	}
 }
 

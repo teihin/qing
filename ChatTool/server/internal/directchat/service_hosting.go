@@ -42,7 +42,9 @@ type HostedOwnerView struct {
 	GroupName         string `json:"groupName"`
 	ClubID            string `json:"clubId"`
 	ClubName          string `json:"clubName"`
+	Enabled           bool   `json:"enabled"`
 	EnabledAt         string `json:"enabledAt"`
+	DisabledAt        string `json:"disabledAt"`
 	ConversationCount int    `json:"conversationCount"`
 	Unread            int    `json:"unread"`
 	LastMessageAt     string `json:"lastMessageAt"`
@@ -82,11 +84,16 @@ func (s *Service) HostingStatus(ctx context.Context, session Session) (HostingIn
 	if !ok {
 		return info, nil
 	}
-	// 身份或归属已变化时自动失效，避免客服继续看到已失去权限的账号。
+	// 身份或归属已变化时保留历史记录，只置为停用；客服后台仍可只读查看并手动删除。
 	if !info.Eligible || record.GroupType != info.GroupType || record.GroupID != info.GroupID {
-		if err := store.DeleteHosting(ctx, session.Guuid); err != nil && s.logger != nil {
-			s.logger.Warn("清理失效聊天托管失败", "guuid", session.Guuid, "error", err)
+		if record.Enabled {
+			if err := store.DisableHosting(ctx, session.Guuid); err != nil && s.logger != nil {
+				s.logger.Warn("停用失效聊天托管失败", "guuid", session.Guuid, "error", err)
+			}
 		}
+		info.Enabled = false
+		info.GroupName = record.GroupName
+		info.EnabledAt = fmtTime(record.EnabledAt)
 		return info, nil
 	}
 	if record.GroupName != info.GroupName {
@@ -96,7 +103,7 @@ func (s *Service) HostingStatus(ctx context.Context, session Session) (HostingIn
 			s.logger.Warn("更新聊天托管分组名称失败", "guuid", session.Guuid, "error", err)
 		}
 	}
-	info.Enabled = true
+	info.Enabled = record.Enabled
 	info.GroupName = record.GroupName
 	info.EnabledAt = fmtTime(record.EnabledAt)
 	return info, nil
@@ -109,13 +116,14 @@ func (s *Service) SetHosting(ctx context.Context, session Session, enabled bool)
 		return HostingInfo{}, err
 	}
 	if !enabled {
-		if err := store.DeleteHosting(ctx, session.Guuid); err != nil {
+		if err := store.DisableHosting(ctx, session.Guuid); err != nil {
 			return HostingInfo{}, err
 		}
 		info, err := s.hostingEligibility(ctx, session.Guuid)
 		if err != nil {
 			return HostingInfo{}, err
 		}
+		info.Enabled = false
 		return info, nil
 	}
 	info, err := s.hostingEligibility(ctx, session.Guuid)
@@ -129,7 +137,7 @@ func (s *Service) SetHosting(ctx context.Context, session Session, enabled bool)
 	if err := store.UpsertHosting(ctx, Hosting{
 		Guuid: session.Guuid, GroupType: info.GroupType, GroupID: info.GroupID,
 		GroupName: info.GroupName, ClubID: info.ClubID, Role: info.Role,
-		EnabledAt: now, UpdatedAt: now,
+		Enabled: true, EnabledAt: now, UpdatedAt: now,
 	}); err != nil {
 		return HostingInfo{}, err
 	}
@@ -155,11 +163,25 @@ func (s *Service) HostedGroups(ctx context.Context) ([]HostedGroupView, error) {
 		if eligibleErr != nil {
 			return nil, relationUnavailable(eligibleErr)
 		}
-		if !info.Eligible || info.GroupType != record.GroupType || info.GroupID != record.GroupID {
-			if err := store.DeleteHosting(ctx, record.Guuid); err != nil && s.logger != nil {
-				s.logger.Warn("清理失效聊天托管失败", "guuid", record.Guuid, "error", err)
+		eligible := info.Eligible && info.GroupType == record.GroupType && info.GroupID == record.GroupID
+		// 取消托管或失去身份后保留记录，只停用；客服仍可只读查看并手动删除。
+		if !eligible && record.Enabled {
+			if err := store.DisableHosting(ctx, record.Guuid); err != nil && s.logger != nil {
+				s.logger.Warn("停用失效聊天托管失败", "guuid", record.Guuid, "error", err)
 			}
-			continue
+			record.Enabled = false
+			record.DisabledAt = time.Now()
+		}
+		if eligible && record.Enabled && record.GroupName != info.GroupName {
+			record.GroupName = info.GroupName
+			record.UpdatedAt = time.Now()
+			if err := store.UpsertHosting(ctx, record); err != nil && s.logger != nil {
+				s.logger.Warn("更新聊天托管分组名称失败", "guuid", record.Guuid, "error", err)
+			}
+		}
+		roleName := info.RoleName
+		if !eligible || roleName == "" {
+			roleName = hostingRoleName(record.Role)
 		}
 		session := s.hostedSession(ctx, record.Guuid)
 		views, listErr := s.hostedConversationViews(ctx, session)
@@ -175,9 +197,10 @@ func (s *Service) HostedGroups(ctx context.Context) ([]HostedGroupView, error) {
 		}
 		owner := HostedOwnerView{
 			Guuid: record.Guuid, Name: session.Name, Avatar: session.Avatar,
-			Role: record.Role, RoleName: info.RoleName,
+			Role: record.Role, RoleName: roleName,
 			GroupType: record.GroupType, GroupID: record.GroupID, GroupName: record.GroupName,
-			ClubID: record.ClubID, EnabledAt: fmtTime(record.EnabledAt),
+			ClubID: record.ClubID, Enabled: record.Enabled && eligible,
+			EnabledAt: fmtTime(record.EnabledAt), DisabledAt: fmtTime(record.DisabledAt),
 			ConversationCount: len(views),
 		}
 		for _, view := range views {
@@ -192,6 +215,9 @@ func (s *Service) HostedGroups(ctx context.Context) ([]HostedGroupView, error) {
 	for _, key := range order {
 		group := groups[key]
 		sort.SliceStable(group.Items, func(i, j int) bool {
+			if group.Items[i].Enabled != group.Items[j].Enabled {
+				return group.Items[i].Enabled
+			}
 			if group.Items[i].Unread != group.Items[j].Unread {
 				return group.Items[i].Unread > group.Items[j].Unread
 			}
@@ -269,16 +295,21 @@ func (s *Service) HostedBalance(ctx context.Context, hostedGuuid, conversationID
 	return view, nil
 }
 
-// HostedGoldTarget 是客服上下分要操作的对象（会话对方）。
+// HostedGoldTarget 是客服上下分要操作的对象（会话对方），同时带回账本需要的托管归属。
 type HostedGoldTarget struct {
-	ClubID    string
-	PeerGuuid string
-	PeerName  string
+	ClubID     string
+	PeerGuuid  string
+	PeerName   string
+	HostedName string
+	GroupType  string
+	GroupID    string
+	GroupName  string
+	HostedRole string
 }
 
 // HostedGoldTarget 校验托管状态与会话归属，返回上下分目标。
 func (s *Service) HostedGoldTarget(ctx context.Context, hostedGuuid, conversationID string) (HostedGoldTarget, error) {
-	record, err := s.requireHosted(ctx, hostedGuuid)
+	record, err := s.requireHostedEnabled(ctx, hostedGuuid)
 	if err != nil {
 		return HostedGoldTarget{}, err
 	}
@@ -302,7 +333,11 @@ func (s *Service) HostedGoldTarget(ctx context.Context, hostedGuuid, conversatio
 	if name == "" {
 		name = peerGuuid
 	}
-	return HostedGoldTarget{ClubID: conv.ClubID, PeerGuuid: peerGuuid, PeerName: name}, nil
+	return HostedGoldTarget{
+		ClubID: conv.ClubID, PeerGuuid: peerGuuid, PeerName: name,
+		HostedName: session.Name, GroupType: record.GroupType, GroupID: record.GroupID,
+		GroupName: record.GroupName, HostedRole: record.Role,
+	}, nil
 }
 
 // HostedConversations 返回某个托管账号的真实会话摘要（按最后消息倒序）。
@@ -316,11 +351,15 @@ func (s *Service) HostedConversations(ctx context.Context, hostedGuuid string) (
 		return nil, relationUnavailable(err)
 	}
 	result := make([]HostedConversationView, 0, len(views))
-	roleName := ""
-	if info, infoErr := s.hostingEligibility(ctx, record.Guuid); infoErr == nil {
+	roleName := hostingRoleName(record.Role)
+	if info, infoErr := s.hostingEligibility(ctx, record.Guuid); infoErr == nil && info.Eligible &&
+		info.GroupType == record.GroupType && info.GroupID == record.GroupID && info.RoleName != "" {
 		roleName = info.RoleName
 	}
 	for _, view := range views {
+		if !record.Enabled {
+			view.CanSend = false
+		}
 		result = append(result, HostedConversationView{
 			ConversationView: view, HostedGuuid: record.Guuid,
 			HostedName: s.hostedSession(ctx, record.Guuid).Name, HostedRole: record.Role,
@@ -360,7 +399,7 @@ func (s *Service) HostedMessages(ctx context.Context, hostedGuuid, conversationI
 
 // SendHostedMessage 以托管账号身份发送消息，返回对方和俱乐部，供调用方推送实时事件。
 func (s *Service) SendHostedMessage(ctx context.Context, hostedGuuid, conversationID string, request SendRequest) (MessageView, bool, string, string, error) {
-	record, err := s.requireHosted(ctx, hostedGuuid)
+	record, err := s.requireHostedEnabled(ctx, hostedGuuid)
 	if err != nil {
 		return MessageView{}, false, "", "", err
 	}
@@ -446,6 +485,7 @@ func (s *Service) hostingEligibility(ctx context.Context, guuid string) (Hosting
 	return HostingInfo{Message: "只有俱乐部群主、盟主或大盟主可以开启聊天托管"}, nil
 }
 
+// requireHosted 只要求托管记录存在，允许已取消/失去身份的历史记录被客服只读查看。
 func (s *Service) requireHosted(ctx context.Context, guuid string) (Hosting, error) {
 	guuid = strings.TrimSpace(guuid)
 	if guuid == "" {
@@ -462,17 +502,85 @@ func (s *Service) requireHosted(ctx context.Context, guuid string) (Hosting, err
 	if !ok {
 		return Hosting{}, errHostingInactive
 	}
+	return record, nil
+}
+
+// requireHostedEnabled 用于写操作：必须处于开启状态且当前身份/归属仍有效。
+func (s *Service) requireHostedEnabled(ctx context.Context, guuid string) (Hosting, error) {
+	record, err := s.requireHosted(ctx, guuid)
+	if err != nil {
+		return Hosting{}, err
+	}
+	if !record.Enabled {
+		return Hosting{}, errHostingInactive
+	}
 	info, err := s.hostingEligibility(ctx, guuid)
 	if err != nil {
 		return Hosting{}, err
 	}
 	if !info.Eligible || info.GroupType != record.GroupType || info.GroupID != record.GroupID {
-		if err := store.DeleteHosting(ctx, guuid); err != nil && s.logger != nil {
-			s.logger.Warn("清理失效聊天托管失败", "guuid", guuid, "error", err)
+		if store, storeErr := s.hostingStore(); storeErr == nil {
+			if disableErr := store.DisableHosting(ctx, guuid); disableErr != nil && s.logger != nil {
+				s.logger.Warn("停用失效聊天托管失败", "guuid", guuid, "error", disableErr)
+			}
 		}
 		return Hosting{}, errHostingInactive
 	}
 	return record, nil
+}
+
+func hostingRoleName(role string) string {
+	switch role {
+	case RoleUnionOwner:
+		return "大盟主"
+	case RoleOwner:
+		return "盟主"
+	case RoleLeader, RoleAgent:
+		return "合伙人"
+	case RoleManager:
+		return "管理员"
+	default:
+		return "托管"
+	}
+}
+
+// DeleteHostedOwner 永久删除一个已取消/失效托管的会话、消息和媒体；开启中的托管需先在游戏内关闭。
+func (s *Service) DeleteHostedOwner(ctx context.Context, guuid string) error {
+	guuid = strings.TrimSpace(guuid)
+	if guuid == "" {
+		return newError(400, "INVALID_REQUEST", "缺少托管账号")
+	}
+	store, err := s.hostingStore()
+	if err != nil {
+		return err
+	}
+	record, ok, err := store.GetHosting(ctx, guuid)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return newError(404, "HOSTING_NOT_FOUND", "托管记录不存在")
+	}
+	if record.Enabled {
+		info, infoErr := s.hostingEligibility(ctx, guuid)
+		if infoErr != nil {
+			return relationUnavailable(infoErr)
+		}
+		if info.Eligible && info.GroupType == record.GroupType && info.GroupID == record.GroupID {
+			return newError(409, "HOSTING_ACTIVE", "请先在游戏内关闭聊天托管后再删除")
+		}
+		if err := store.DisableHosting(ctx, guuid); err != nil {
+			return err
+		}
+	}
+	keys, _, err := store.DeleteHostedOwnerData(ctx, guuid)
+	if err != nil {
+		return err
+	}
+	if s.media != nil && len(keys) > 0 {
+		s.media.Remove(keys...)
+	}
+	return nil
 }
 
 func (s *Service) hostedSession(ctx context.Context, guuid string) Session {

@@ -270,3 +270,59 @@ func TestHostedGoldTargetAndNotice(t *testing.T) {
 		t.Fatalf("系统通报内容不正确: %+v", view)
 	}
 }
+
+// 取消托管后记录和会话保留为只读，可手动删除；删除前不能继续代发。
+func TestHostingDisabledKeepsHistoryAndCanDelete(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	env.store.addUnion("111111", Union{ID: "union-1", Name: "测试联盟", OwnerGuuid: "100004", OwnerClub: "111111"})
+
+	host := env.session(t, "100004")
+	if _, err := env.service.SetHosting(ctx, host, true); err != nil {
+		t.Fatalf("enable hosting failed: %v", err)
+	}
+	conversation, err := env.service.CreateConversation(ctx, host, "111111", "100001")
+	if err != nil {
+		t.Fatalf("create conversation failed: %v", err)
+	}
+	if _, _, err := env.service.SendMessage(ctx, host, conversation.ConversationID, SendRequest{
+		MessageType: MessageText, Text: "托管前消息", ClientMessageID: "host-disabled-msg-1",
+	}); err != nil {
+		t.Fatalf("send host message failed: %v", err)
+	}
+
+	if _, err := env.service.SetHosting(ctx, host, false); err != nil {
+		t.Fatalf("disable hosting failed: %v", err)
+	}
+	record, ok, err := env.store.GetHosting(ctx, "100004")
+	if err != nil || !ok {
+		t.Fatalf("取消托管后记录应保留: ok=%v err=%v", ok, err)
+	}
+	if record.Enabled {
+		t.Fatalf("取消托管后应为停用: %+v", record)
+	}
+
+	groups, err := env.service.HostedGroups(ctx)
+	if err != nil || len(groups) != 1 || len(groups[0].Items) != 1 {
+		t.Fatalf("取消托管后仍应显示托管账号: groups=%+v err=%v", groups, err)
+	}
+	if groups[0].Items[0].Enabled {
+		t.Fatalf("取消托管后账号应标记只读: %+v", groups[0].Items[0])
+	}
+	list, err := env.service.HostedConversations(ctx, "100004")
+	if err != nil || len(list) != 1 || list[0].CanSend {
+		t.Fatalf("取消托管后会话应保留且只读: list=%+v err=%v", list, err)
+	}
+	if _, _, _, _, err := env.service.SendHostedMessage(ctx, "100004", conversation.ConversationID, SendRequest{
+		MessageType: MessageText, Text: "不应发送", ClientMessageID: "host-disabled-reply-1",
+	}); err == nil {
+		t.Fatal("取消托管后不应允许继续代发")
+	}
+
+	if err := env.service.DeleteHostedOwner(ctx, "100004"); err != nil {
+		t.Fatalf("删除托管记录失败: %v", err)
+	}
+	if _, ok, _ := env.store.GetHosting(ctx, "100004"); ok {
+		t.Fatal("手动删除后托管记录应不存在")
+	}
+}

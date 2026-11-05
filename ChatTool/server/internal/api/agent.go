@@ -137,6 +137,16 @@ WHERE ` + where + ` ORDER BY FIELD(c.status,'queued','active','closed'), c.last_
 		}
 		items = append(items, item)
 	}
+	playerIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		playerIDs = append(playerIDs, item.PlayerID)
+	}
+	avatars := s.playerAvatarURLs(r.Context(), playerIDs)
+	for i := range items {
+		if url, ok := avatars[items[i].PlayerID]; ok {
+			items[i].AvatarURL = url
+		}
+	}
 	writeData(w, http.StatusOK, map[string]any{"items": items})
 }
 
@@ -192,6 +202,7 @@ LEFT JOIN chat_satisfaction satisfaction ON satisfaction.conversation_id=c.id WH
 	var metadataValue any = map[string]any{}
 	_ = json.Unmarshal([]byte(metadata), &metadataValue)
 	result.Metadata = metadataValue
+	result.AvatarURL = s.playerAvatarURL(r.Context(), result.PlayerID, result.AvatarURL)
 	writeData(w, http.StatusOK, result)
 }
 

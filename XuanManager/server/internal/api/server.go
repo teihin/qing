@@ -93,6 +93,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/unions/{unionId}", s.authorized("game.union.view", false, s.handleGetUnion))
 	s.mux.Handle("POST /api/game/unions/{unionId}/quota-adjustments", s.authorized("game.union.quota_adjust", true, s.handleAdjustUnionQuota))
 	s.mux.Handle("GET /api/game/agent-contributions/clubs/{clubId}/members", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionMembers))
+	s.mux.Handle("POST /api/game/agent-contributions/clubs/{clubId}/display-data", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionDisplayData))
 	s.mux.Handle("GET /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/rule", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionRuleGet))
 	s.mux.Handle("PUT /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/rule", s.authorized("game.agent_contribution.adjust", true, s.handleAgentContributionRuleSet))
 	s.mux.Handle("DELETE /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/rule", s.authorized("game.agent_contribution.adjust", true, s.handleAgentContributionRuleReset))

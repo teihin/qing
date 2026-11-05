@@ -36,7 +36,14 @@ type messageItem struct {
 }
 
 func (s *Server) handlePlayerMessages(w http.ResponseWriter, r *http.Request, p playerPrincipal) {
-	messages, err := s.listMessages(r, p.ConversationID, false)
+	// 玩家清除过聊天后，只返回清除时间之后的消息；客服工作台仍读取完整记录。
+	var cleared sql.NullTime
+	if err := s.db.QueryRowContext(r.Context(), `SELECT player_cleared_at FROM chat_conversation WHERE id = ? AND player_id = ?`,
+		p.ConversationID, p.PlayerID).Scan(&cleared); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法读取聊天记录")
+		return
+	}
+	messages, err := s.listMessages(r, p.ConversationID, false, cleared.Time)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法读取聊天记录")
 		return
@@ -50,7 +57,7 @@ func (s *Server) handleAgentMessages(w http.ResponseWriter, r *http.Request, p a
 		writeError(w, http.StatusNotFound, "CONVERSATION_NOT_FOUND", "会话不存在或不属于当前客服")
 		return
 	}
-	messages, err := s.listMessages(r, conversationID, true)
+	messages, err := s.listMessages(r, conversationID, true, time.Time{})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法读取聊天记录")
 		return
@@ -58,7 +65,7 @@ func (s *Server) handleAgentMessages(w http.ResponseWriter, r *http.Request, p a
 	writeData(w, http.StatusOK, map[string]any{"items": messages})
 }
 
-func (s *Server) listMessages(r *http.Request, conversationID string, includeNotes bool) ([]messageItem, error) {
+func (s *Server) listMessages(r *http.Request, conversationID string, includeNotes bool, clearedAfter time.Time) ([]messageItem, error) {
 	query := `SELECT m.id, m.conversation_id, m.sender_type, m.sender_id, m.sender_name, m.message_type,
 m.text_content, m.media_id, media.original_name, media.mime_type, media.size_bytes, m.created_at, m.recalled_at
 FROM chat_message m LEFT JOIN chat_media media ON media.id = m.media_id
@@ -66,8 +73,13 @@ WHERE m.conversation_id = ?`
 	if !includeNotes {
 		query += " AND m.sender_type <> 'note'"
 	}
+	args := []any{conversationID}
+	if !clearedAfter.IsZero() {
+		query += " AND m.created_at > ?"
+		args = append(args, clearedAfter)
+	}
 	query += " ORDER BY m.created_at ASC, m.id ASC LIMIT 500"
-	rows, err := s.db.QueryContext(r.Context(), query, conversationID)
+	rows, err := s.db.QueryContext(r.Context(), query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -123,10 +135,6 @@ func (s *Server) handlePlayerSendMessage(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	item, err := s.insertMessage(r, p.ConversationID, "player", p.PlayerID, p.Nickname, "text", text, "", req.ClientMessageID)
-	if errors.Is(err, errNoOnlineAgent) {
-		writeError(w, http.StatusConflict, "NO_AGENT_ONLINE", "当前没有客服在线，暂时无法发送消息")
-		return
-	}
 	if errors.Is(err, errConversationClosed) {
 		writeError(w, http.StatusConflict, "CONVERSATION_CLOSED", "本次咨询已经结束，请返回游戏重新进入客服")
 		return
@@ -175,10 +183,7 @@ func (s *Server) handleAgentSendMessage(w http.ResponseWriter, r *http.Request, 
 	writeData(w, http.StatusCreated, item)
 }
 
-var (
-	errConversationClosed = errors.New("conversation closed")
-	errNoOnlineAgent      = errors.New("no agent online")
-)
+var errConversationClosed = errors.New("conversation closed")
 
 func (s *Server) insertMessage(r *http.Request, conversationID, senderType, senderID, senderName, messageType, text, mediaID, clientMessageID string) (messageItem, error) {
 	deduplicateByClientID := clientMessageID != "" && len(clientMessageID) <= 64
@@ -203,11 +208,6 @@ func (s *Server) insertMessage(r *http.Request, conversationID, senderType, send
 	}
 	if status == "closed" {
 		return messageItem{}, errConversationClosed
-	}
-	if senderType == "player" {
-		if err = s.lockOnlineAgent(r.Context(), tx, channelCode); err != nil {
-			return messageItem{}, err
-		}
 	}
 	var media any
 	if mediaID != "" {
@@ -330,18 +330,6 @@ func (s *Server) saveUpload(w http.ResponseWriter, r *http.Request, conversation
 	if status == "closed" {
 		return messageItem{}, uploadError{http.StatusConflict, "CONVERSATION_CLOSED", "会话已经结束"}
 	}
-	if uploaderType == "player" {
-		var online int
-		cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
-		if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_agent
-WHERE channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?
-AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=chat_agent.id AND sess.expires_at>NOW())`, channelCode, cutoff).Scan(&online); err != nil {
-			return messageItem{}, err
-		}
-		if online == 0 {
-			return messageItem{}, uploadError{http.StatusConflict, "NO_AGENT_ONLINE", "当前没有客服在线，暂时无法发送文件"}
-		}
-	}
 	maxRequest := s.cfg.MaxVideoBytes
 	if s.cfg.MaxImageBytes > maxRequest {
 		maxRequest = s.cfg.MaxImageBytes
@@ -438,13 +426,6 @@ AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=chat_agent
 	if status == "closed" {
 		return messageItem{}, uploadError{http.StatusConflict, "CONVERSATION_CLOSED", "会话已经结束"}
 	}
-	if uploaderType == "player" {
-		if err = s.lockOnlineAgent(r.Context(), tx, channelCode); errors.Is(err, errNoOnlineAgent) {
-			return messageItem{}, uploadError{http.StatusConflict, "NO_AGENT_ONLINE", "当前没有客服在线，暂时无法发送文件"}
-		} else if err != nil {
-			return messageItem{}, err
-		}
-	}
 	_, err = tx.ExecContext(r.Context(), `INSERT INTO chat_media
 (id, conversation_id, uploader_type, uploader_id, original_name, storage_key, mime_type, size_bytes, sha256, media_kind, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`, mediaID, conversationID, uploaderType, uploaderID, originalName, storageKey,
@@ -470,19 +451,6 @@ VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, NOW())`, messageID, conversationID, uploader
 	return messageItem{ID: messageID, ConversationID: conversationID, SenderType: uploaderType, SenderID: uploaderID,
 		SenderName: uploaderName, MessageType: kind, MediaID: &mediaID, MediaName: &originalName, MediaMIME: &mimeType,
 		MediaSize: &written, CreatedAt: time.Now()}, nil
-}
-
-func (s *Server) lockOnlineAgent(ctx context.Context, tx *sql.Tx, channelCode string) error {
-	var agentID int64
-	cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
-	err := tx.QueryRowContext(ctx, `SELECT a.id FROM chat_agent a
-JOIN chat_agent_session sess ON sess.agent_id=a.id AND sess.expires_at>NOW()
-WHERE a.channel_code=? AND a.enabled=1 AND a.presence='online' AND a.last_seen_at>=?
-ORDER BY a.id LIMIT 1 FOR UPDATE`, channelCode, cutoff).Scan(&agentID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return errNoOnlineAgent
-	}
-	return err
 }
 
 func classifyUpload(mimeType string) (kind string, maxBytes int64, extension string, ok bool) {

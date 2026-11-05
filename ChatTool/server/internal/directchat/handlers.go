@@ -91,6 +91,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/direct/conversations/{conversationId}/attachments/{attachmentId}/upload", h.authorized(h.handleUploadAttachment))
 	mux.HandleFunc("POST /api/direct/conversations/{conversationId}/attachments/{attachmentId}/complete", h.authorized(h.handleCompleteAttachment))
 	mux.HandleFunc("POST /api/direct/conversations/{conversationId}/read", h.authorized(h.handleRead))
+	mux.HandleFunc("POST /api/direct/conversations/{conversationId}/clear", h.authorized(h.handleClear))
 	mux.HandleFunc("DELETE /api/direct/conversations/{conversationId}", h.authorized(h.handleHide))
 	mux.HandleFunc("GET /api/direct/media/{attachmentId}", h.handleMedia)
 }
@@ -442,6 +443,15 @@ func (h *Handler) handleRead(w http.ResponseWriter, r *http.Request, session Ses
 		return
 	}
 	if err := h.service.MarkRead(r.Context(), session, r.PathValue("conversationId"), body.LastReadMessageID); err != nil {
+		writeDirectError(w, err)
+		return
+	}
+	writeDirectData(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleClear 只清除当前用户这一侧的聊天记录，消息行仍保留给客服和对方。
+func (h *Handler) handleClear(w http.ResponseWriter, r *http.Request, session Session) {
+	if err := h.service.Clear(r.Context(), session, r.PathValue("conversationId")); err != nil {
 		writeDirectError(w, err)
 		return
 	}

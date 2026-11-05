@@ -100,6 +100,13 @@ VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), p.ID, secu
 }
 
 func (s *Server) handleAgentMe(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	// 后台已取消上下线切换：登录中的客服始终在线，同时恢复旧版遗留的离线状态。
+	if p.Presence != "online" {
+		_, _ = s.db.ExecContext(r.Context(), `UPDATE chat_agent SET presence='online', last_seen_at=NOW() WHERE id=?`, p.ID)
+		p.Presence = "online"
+		s.tryAssignQueued(r.Context(), "agent_me_online")
+		s.tryRebalanceLiveConversations(r.Context(), "agent_me_online")
+	}
 	csrf := ""
 	if cookie, err := r.Cookie(agentCSRFCookie); err == nil {
 		csrf = cookie.Value
@@ -171,31 +178,16 @@ func (s *Server) handleAgentLogout(w http.ResponseWriter, r *http.Request, p age
 	w.WriteHeader(http.StatusNoContent)
 }
 
-type presenceRequest struct {
-	Presence string `json:"presence"`
-}
-
 func (s *Server) handleAgentPresence(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
-	var req presenceRequest
-	if !decodeJSON(w, r, &req, 8<<10) {
-		return
-	}
-	if req.Presence != "online" && req.Presence != "away" && req.Presence != "offline" {
-		writeError(w, http.StatusBadRequest, "INVALID_PRESENCE", "在线状态不正确")
-		return
-	}
-	if _, err := s.db.ExecContext(r.Context(), `UPDATE chat_agent SET presence = ?, last_seen_at = NOW() WHERE id = ?`, req.Presence, p.ID); err != nil {
+	// 后台已取消上下线切换；保留接口兼容旧页面，登录中的客服一律保持在线。
+	if _, err := s.db.ExecContext(r.Context(), `UPDATE chat_agent SET presence='online', last_seen_at=NOW() WHERE id=?`, p.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法更新在线状态")
 		return
 	}
-	if req.Presence == "offline" {
-		_ = s.requeueAgentConversations(r.Context(), p.ID, "客服切换为离线")
-	} else if req.Presence == "online" {
-		s.tryAssignQueued(r.Context(), "agent_presence_online")
-		s.tryRebalanceLiveConversations(r.Context(), "agent_presence_online")
-	}
+	s.tryAssignQueued(r.Context(), "agent_presence_online")
+	s.tryRebalanceLiveConversations(r.Context(), "agent_presence_online")
 	s.hub.publish("team", liveEvent{Type: "team.changed"})
-	writeData(w, http.StatusOK, map[string]any{"presence": req.Presence})
+	writeData(w, http.StatusOK, map[string]any{"presence": "online"})
 }
 
 func (s *Server) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request, p agentPrincipal) {

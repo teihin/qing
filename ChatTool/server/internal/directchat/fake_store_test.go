@@ -163,6 +163,9 @@ func (f *fakeStore) unreadOf(ctx context.Context, convID, guuid string) (int, er
 		if msg.ConversationID != convID || msg.SenderGuuid == guuid {
 			continue
 		}
+		if !participant.ClearedAt.IsZero() && !msg.CreatedAt.After(participant.ClearedAt) {
+			continue
+		}
 		if cutoff == nil || messageAfter(msg, *cutoff) {
 			count++
 		}
@@ -227,6 +230,28 @@ func (f *fakeStore) HideConversation(_ context.Context, convID, guuid string) er
 	return nil
 }
 
+func (f *fakeStore) ClearConversation(_ context.Context, convID, guuid string) error {
+	participant, ok := f.participants[convID][guuid]
+	if !ok {
+		return errConvForbidden
+	}
+	participant.ClearedAt = time.Now()
+	var latest Message
+	for _, msg := range f.messages {
+		if msg.ConversationID != convID {
+			continue
+		}
+		if latest.ID == "" || messageAfter(msg, latest) {
+			latest = msg
+		}
+	}
+	if latest.ID != "" {
+		participant.LastReadMessageID = latest.ID
+	}
+	f.participants[convID][guuid] = participant
+	return nil
+}
+
 func (f *fakeStore) SetLastRead(_ context.Context, convID, guuid, messageID string) error {
 	participant := f.participants[convID][guuid]
 	newer, ok := f.messages[messageID]
@@ -259,9 +284,10 @@ func (f *fakeStore) listConversations(ctx context.Context, clubID, guuid string,
 		if !ok || participant.IsHidden() {
 			continue
 		}
-		item := ConversationItem{Conversation: conv, HiddenAt: participant.HiddenAt, PeerGuuid: conv.PeerGuuid(guuid)}
+		item := ConversationItem{Conversation: conv, HiddenAt: participant.HiddenAt,
+			ClearedAt: participant.ClearedAt, PeerGuuid: conv.PeerGuuid(guuid)}
 		item.Peer = f.members[conv.ClubID][item.PeerGuuid]
-		if conv.LastMessageID != "" {
+		if conv.LastMessageID != "" && (participant.ClearedAt.IsZero() || conv.LastMessageAt.After(participant.ClearedAt)) {
 			if msg, ok := f.messages[conv.LastMessageID]; ok {
 				item.LastType = msg.MessageType
 				item.LastText = previewText(msg)
@@ -336,10 +362,13 @@ func (f *fakeStore) InsertMessage(_ context.Context, msg Message, receiverGuuid 
 	return msg, false, nil
 }
 
-func (f *fakeStore) MessagesBefore(_ context.Context, convID string, cur *Cursor, limit int) ([]Message, error) {
+func (f *fakeStore) MessagesBefore(_ context.Context, convID string, cur *Cursor, notBefore time.Time, limit int) ([]Message, error) {
 	var items []Message
 	for _, msg := range f.messages {
 		if msg.ConversationID != convID {
+			continue
+		}
+		if !notBefore.IsZero() && !msg.CreatedAt.After(notBefore) {
 			continue
 		}
 		if cur != nil && !messageBefore(msg, *cur) {
@@ -354,10 +383,13 @@ func (f *fakeStore) MessagesBefore(_ context.Context, convID string, cur *Cursor
 	return items, nil
 }
 
-func (f *fakeStore) MessagesAfter(_ context.Context, convID string, cur Cursor, limit int) ([]Message, error) {
+func (f *fakeStore) MessagesAfter(_ context.Context, convID string, cur Cursor, notBefore time.Time, limit int) ([]Message, error) {
 	var items []Message
 	for _, msg := range f.messages {
 		if msg.ConversationID != convID {
+			continue
+		}
+		if !notBefore.IsZero() && !msg.CreatedAt.After(notBefore) {
 			continue
 		}
 		if !messageAfter(msg, Message{ID: cur.ID, CreatedAt: cur.At}) {
@@ -491,9 +523,23 @@ func (f *fakeStore) UpsertHosting(_ context.Context, item Hosting) error {
 	return nil
 }
 
+func (f *fakeStore) DisableHosting(_ context.Context, guuid string) error {
+	if item, ok := f.hostings[guuid]; ok {
+		item.Enabled = false
+		item.DisabledAt = time.Now()
+		f.hostings[guuid] = item
+	}
+	return nil
+}
+
 func (f *fakeStore) DeleteHosting(_ context.Context, guuid string) error {
 	delete(f.hostings, guuid)
 	return nil
+}
+
+func (f *fakeStore) DeleteHostedOwnerData(_ context.Context, guuid string) ([]string, int, error) {
+	delete(f.hostings, guuid)
+	return nil, 0, nil
 }
 
 func (f *fakeStore) ListHostings(_ context.Context) ([]Hosting, error) {

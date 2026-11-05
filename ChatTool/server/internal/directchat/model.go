@@ -197,6 +197,9 @@ type Participant struct {
 	FirstJoinedAt     time.Time
 	LastReadMessageID string
 	HiddenAt          time.Time
+	// ClearedAt 是当前参与者最后一次「清除聊天」的时间；早于等于它的消息不再返回，
+	// 但消息行仍然保留，对方和客服侧照常可见。
+	ClearedAt time.Time
 }
 
 // IsHidden 判断该参与者是否已隐藏（删除入口）。

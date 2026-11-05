@@ -160,20 +160,21 @@ func (s *Server) routesDirect() {
 }
 
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.recoverPanic(s.securityHeaders(s.directCORS(s.mux))).ServeHTTP(w, r)
+	s.recoverPanic(s.securityHeaders(s.browserCORS(s.mux))).ServeHTTP(w, r)
 }
 
-// directCORS 只为俱乐部直聊接口处理浏览器跨域请求。
-// 客服接口和其他 API 不增加跨域能力；原生客户端没有 Origin 时保持原有行为。
-func (s *Server) directCORS(next http.Handler) http.Handler {
+// browserCORS 为浏览器里的游戏客户端放行直聊、官方客服玩家接口和聊天图片。
+// 客服工作台（/api/agent/*）不增加跨域能力；原生客户端没有 Origin 时保持原有行为。
+func (s *Server) browserCORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isDirectAPIPath(r.URL.Path) {
+		kind := corsPathKind(r.URL.Path)
+		if kind == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
 
 		origin := strings.TrimSpace(r.Header.Get("Origin"))
-		if origin == "" || !s.directCORSOriginAllowed(origin) {
+		if origin == "" || !s.corsOriginAllowed(origin) {
 			if r.Method == http.MethodOptions && origin != "" {
 				writeError(w, http.StatusForbidden, "CORS_ORIGIN_DENIED", "网页来源未被允许")
 				return
@@ -192,26 +193,36 @@ func (s *Server) directCORS(next http.Handler) http.Handler {
 		w.Header().Add("Vary", "Access-Control-Request-Method")
 		w.Header().Add("Vary", "Access-Control-Request-Headers")
 		requestedMethod := strings.ToUpper(strings.TrimSpace(r.Header.Get("Access-Control-Request-Method")))
-		if requestedMethod != "" && !directCORSMethodAllowed(requestedMethod) {
+		if requestedMethod != "" && !corsMethodAllowed(kind, requestedMethod) {
 			writeError(w, http.StatusMethodNotAllowed, "CORS_METHOD_DENIED", "网页请求方法未被允许")
 			return
 		}
-		if !directCORSHeadersAllowed(r.Header.Get("Access-Control-Request-Headers")) {
+		if !corsHeadersAllowed(kind, r.Header.Get("Access-Control-Request-Headers")) {
 			writeError(w, http.StatusForbidden, "CORS_HEADER_DENIED", "网页请求头未被允许")
 			return
 		}
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-Direct-Token, X-Game-Ticket, Authorization, Accept")
+		w.Header().Set("Access-Control-Allow-Methods", corsAllowedMethods(kind))
+		w.Header().Set("Access-Control-Allow-Headers", corsAllowedHeaders(kind))
 		w.Header().Set("Access-Control-Max-Age", "600")
 		w.WriteHeader(http.StatusNoContent)
 	})
 }
 
-func isDirectAPIPath(path string) bool {
-	return path == "/api/direct" || strings.HasPrefix(path, "/api/direct/")
+// corsPathKind 只区分需要浏览器跨域放行的两组接口；客服工作台接口不在此列。
+func corsPathKind(path string) string {
+	if path == "/api/direct" || strings.HasPrefix(path, "/api/direct/") {
+		return "direct"
+	}
+	if path == "/api/player" || strings.HasPrefix(path, "/api/player/") {
+		return "player"
+	}
+	if path == "/api/media" || strings.HasPrefix(path, "/api/media/") {
+		return "media"
+	}
+	return ""
 }
 
-func (s *Server) directCORSOriginAllowed(origin string) bool {
+func (s *Server) corsOriginAllowed(origin string) bool {
 	for _, allowed := range s.cfg.DirectCORSOrigins {
 		if origin == allowed {
 			return true
@@ -220,23 +231,57 @@ func (s *Server) directCORSOriginAllowed(origin string) bool {
 	return false
 }
 
-func directCORSMethodAllowed(method string) bool {
+func corsMethodAllowed(kind string, method string) bool {
 	switch method {
-	case http.MethodGet, http.MethodPost, http.MethodDelete, http.MethodOptions:
+	case http.MethodGet, http.MethodOptions:
 		return true
+	case http.MethodPost:
+		return kind != "media"
+	case http.MethodDelete:
+		return kind == "direct"
 	default:
 		return false
 	}
 }
 
-func directCORSHeadersAllowed(value string) bool {
+func corsAllowedMethods(kind string) string {
+	switch kind {
+	case "direct":
+		return "GET, POST, DELETE, OPTIONS"
+	case "media":
+		return "GET, OPTIONS"
+	default:
+		return "GET, POST, OPTIONS"
+	}
+}
+
+func corsAllowedHeaders(kind string) string {
+	switch kind {
+	case "direct":
+		return "Content-Type, X-Direct-Token, X-Game-Ticket, Authorization, Accept"
+	case "media":
+		return "Content-Type, Authorization, Accept"
+	default:
+		return "Content-Type, X-Player-Embedded-Token, X-Player-Session-Ref, Authorization, Accept"
+	}
+}
+
+func corsHeadersAllowed(kind string, value string) bool {
 	for _, item := range strings.Split(value, ",") {
 		header := strings.ToLower(strings.TrimSpace(item))
 		if header == "" {
 			continue
 		}
 		switch header {
-		case "content-type", "x-direct-token", "x-game-ticket", "authorization", "accept":
+		case "content-type", "authorization", "accept":
+		case "x-direct-token", "x-game-ticket":
+			if kind != "direct" {
+				return false
+			}
+		case "x-player-embedded-token", "x-player-session-ref":
+			if kind != "player" {
+				return false
+			}
 		default:
 			return false
 		}
@@ -263,6 +308,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/player/media/{id}/ticket", s.playerAuthorized(false, s.handlePlayerMediaTicket))
 	s.mux.Handle("POST /api/player/typing", s.playerAuthorized(true, s.handlePlayerTyping))
 	s.mux.Handle("POST /api/player/read", s.playerAuthorized(true, s.handlePlayerRead))
+	s.mux.Handle("POST /api/player/clear", s.playerAuthorized(true, s.handlePlayerClear))
 	s.mux.Handle("POST /api/player/end", s.playerAuthorized(true, s.handlePlayerEnd))
 	s.mux.Handle("POST /api/player/satisfaction", s.playerAuthorized(true, s.handlePlayerSatisfaction))
 
@@ -281,6 +327,10 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/agent/hosted/conversations/{id}/messages", s.agentAuthorized(false, false, s.handleHostedMessages))
 	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/messages", s.agentAuthorized(true, false, s.handleHostedSendMessage))
 	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/gold", s.agentAuthorized(true, false, s.handleHostedGold))
+	s.mux.Handle("DELETE /api/agent/hosted/owners/{guuid}", s.agentAuthorized(true, true, s.handleHostedDeleteOwner))
+	s.mux.Handle("GET /api/agent/hosting/ledger", s.agentAuthorized(false, false, s.handleHostingLedger))
+	s.mux.Handle("GET /api/agent/hosting/ledger/owners", s.agentAuthorized(false, false, s.handleHostingLedgerOwners))
+	s.mux.Handle("GET /api/agent/hosting/ledger/agents", s.agentAuthorized(false, false, s.handleHostingLedgerAgents))
 	s.mux.Handle("GET /api/agent/conversations/{id}", s.agentAuthorized(false, false, s.handleAgentConversation))
 	s.mux.Handle("GET /api/agent/conversations/{id}/messages", s.agentAuthorized(false, false, s.handleAgentMessages))
 	s.mux.Handle("POST /api/agent/conversations/{id}/messages", s.agentAuthorized(true, false, s.handleAgentSendMessage))
