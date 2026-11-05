@@ -2542,3 +2542,78 @@ td strong { color: #294149; }
   .club-room-filter__actions { justify-content: flex-end; }
   .room-list-filter__actions { margin-left: 0; }
 }
+
+/* 代理贡献管理：联盟/俱乐部 + 代理树 */
+.contribution-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; align-items: start; }
+.contribution-sidebar { position: sticky; top: 18px; max-height: calc(100vh - 120px); overflow: auto; padding: 14px; }
+.contribution-sidebar__head { display: grid; gap: 4px; padding: 2px 4px 12px; border-bottom: 1px solid var(--line); }
+.contribution-sidebar__head strong { color: #1d3d45; font-size: 15px; }
+.contribution-sidebar__head small { color: var(--muted); font-size: 12px; }
+.contribution-union-list { display: grid; gap: 8px; padding-top: 10px; }
+.contribution-union { display: grid; gap: 4px; }
+.contribution-union__button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid transparent; border-radius: 9px; background: transparent; text-align: left; }
+.contribution-union__button:hover { background: #f2faf8; }
+.contribution-union__button.is-active { border-color: #c9e8e3; background: #eaf8f5; }
+.contribution-union__button > span { width: 28px; height: 28px; flex: 0 0 28px; display: grid; place-items: center; border-radius: 8px; color: #0c7a71; background: #dff4f0; font-size: 13px; font-weight: 800; }
+.contribution-union__button strong, .contribution-union__button small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.contribution-union__button strong { color: #21444b; font-size: 14px; }
+.contribution-union__button small { margin-top: 2px; color: #7b9296; font-size: 11px; }
+.contribution-club-list { display: grid; gap: 3px; padding: 2px 0 8px 14px; border-left: 1px solid #d9ebe7; margin-left: 24px; }
+.contribution-club { width: 100%; display: grid; gap: 2px; padding: 7px 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; text-align: left; }
+.contribution-club:hover { background: #f5fbfa; }
+.contribution-club.is-active { border-color: #c9e8e3; background: #f0fbf8; }
+.contribution-club strong { color: #2b4a51; font-size: 13px; }
+.contribution-club small { overflow: hidden; color: #7f9498; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.contribution-loading-text { padding: 7px 9px; color: #8aa0a4; font-size: 11px; }
+.contribution-main { min-width: 0; padding: 16px; }
+.contribution-refresh { padding: 6px 12px; border: 1px solid #cfe4e1; border-radius: 7px; color: #1b7f75; background: #f4fbf9; font-size: 12px; font-weight: 700; }
+.contribution-note { margin: 2px 0 12px; padding: 9px 11px; border: 1px dashed #cfe5e1; border-radius: 8px; color: #4d7973; background: #f6fcfa; font-size: 12px; line-height: 1.6; }
+.contribution-table-wrap { overflow: auto; }
+.contribution-table { min-width: 1260px; }
+.contribution-table th { white-space: nowrap; }
+.contribution-tree-name { display: flex; align-items: center; gap: 7px; min-width: 180px; }
+.contribution-tree-name strong, .contribution-tree-name small { display: block; }
+.contribution-tree-name strong { color: #25444b; font-size: 13px; }
+.contribution-tree-name small { margin-top: 2px; color: #80969a; font-size: 10px; }
+.contribution-tree-toggle { width: 22px; height: 22px; flex: 0 0 22px; display: grid; place-items: center; padding: 0; border: 1px solid #cfe3df; border-radius: 6px; color: #1a7c72; background: #f1faf8; font-size: 15px; font-weight: 800; line-height: 1; transition: transform .16s ease; }
+.contribution-tree-toggle.is-open { transform: rotate(90deg); }
+.contribution-tree-toggle.is-placeholder { border-color: transparent; background: transparent; }
+.contribution-role { display: inline-flex; padding: 3px 7px; border-radius: 999px; color: #4b7077; background: #eef5f4; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.contribution-role--owner { color: #8a6213; background: #fbf3dd; }
+.contribution-role--agent { color: #0b7a71; background: #e5f7f3; }
+.contribution-rules { display: grid; gap: 4px; min-width: 220px; }
+.contribution-rule-chip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; width: fit-content; padding: 3px 7px; border-radius: 6px; color: #466a70; background: #f0f6f5; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.contribution-rule-chip em { color: #7e9296; font-size: 9px; font-style: normal; font-weight: 500; }
+.contribution-rule-chip.is-sim { color: #8a5b08; background: #fdf3dc; }
+.contribution-rule-button { padding: 5px 10px; border: 1px solid #cfe5e1; border-radius: 7px; color: #166f67; background: #f4fbf9; font-size: 11px; font-weight: 700; white-space: nowrap; }
+.contribution-rule-button:hover { background: #e8f7f3; }
+.contribution-empty-child { padding: 10px 16px 10px 40px; color: #8ba0a4; font-size: 11px; }
+.contribution-modal { display: grid; gap: 14px; }
+.contribution-modal__summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.contribution-modal__summary > div { padding: 11px 13px; border: 1px solid #e2eded; border-radius: 9px; background: #f8fbfb; }
+.contribution-modal__summary span, .contribution-modal__summary strong { display: block; }
+.contribution-modal__summary span { color: #7c9297; font-size: 11px; }
+.contribution-modal__summary strong { margin-top: 4px; color: #1e4149; font-size: 15px; }
+.contribution-scope-note { padding: 9px 11px; border: 1px solid #f0dfb9; border-radius: 8px; color: #8a6416; background: #fdf8e9; font-size: 12px; line-height: 1.6; }
+.contribution-metric-card { display: grid; gap: 11px; padding: 14px; border: 1px solid #dfebeb; border-radius: 10px; background: #fff; }
+.contribution-metric-card__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.contribution-metric-card__head h3 { color: #1b3e46; font-size: 15px; }
+.contribution-metric-card__head p { margin-top: 4px; color: #7a9095; font-size: 11px; }
+.contribution-preview-value { color: #0b7a71; font-size: 15px; white-space: nowrap; }
+.contribution-mode-switch button { min-width: 110px; }
+.contribution-mode-fields { max-width: 320px; }
+.contribution-metric-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.contribution-mode-hint { color: #8ca0a4; font-size: 11px; }
+
+@media (max-width: 1100px) {
+  .contribution-layout { grid-template-columns: 1fr; }
+  .contribution-sidebar { position: static; max-height: none; }
+  .contribution-union-list { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+}
+@media (max-width: 640px) {
+  .contribution-modal__summary { grid-template-columns: 1fr; }
+  .contribution-metric-card__head { flex-direction: column; }
+  .contribution-mode-switch { width: 100%; }
+  .contribution-mode-switch button { min-width: 0; flex: 1; }
+}
+.contribution-display-value { display: block; margin-top: 3px; color: #9a6a12; font-size: 10px; font-weight: 700; white-space: nowrap; }

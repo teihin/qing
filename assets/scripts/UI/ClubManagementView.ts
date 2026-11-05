@@ -34,6 +34,8 @@ export interface ClubPlayer {
     teamCount?:string; points?:string; online?:boolean;
     todayWin?:string; yesterdayWin?:string; totalWin?:string;
     todayContribution?:string; yesterdayContribution?:string; totalContribution?:string;
+    /** KBE 返回的展示值标记；* 表示该指标是模拟展示，不代表真实账目。 */
+    contribSim?:boolean; scoreSim?:boolean;
     /** NumberList.quota：V2 给大盟主/盟主行下发的俱乐部额度（分）；代理/玩家不显示。 */
     clubQuotaFen?:number;
     /** 服务端若在成员行下发暗扣值则优先展示；当前文档没有该字段。 */
@@ -110,6 +112,8 @@ export default class ClubManagementView {
     private recordToken:number = 0;
     /** 当前这一页的成员数据；赠送/上下分成功后用它就地刷新玩家设置卡。 */
     private items:ClubPlayer[] = [];
+    private simNoticeShown:boolean = false;
+    private hasSimData:boolean = false;
     /** 卡片加高显示联盟行时子节点要整体上移，避免卡片顶部留出大空白。 */
     private cardBaseY:{[name:string]:number} = {};
     private goldRefreshTimer:any = null;
@@ -801,7 +805,8 @@ export default class ClubManagementView {
             this.render(result.items);
             if(kind === "members") {
                 const extra = Math.max(0,result.items.length - this.total);
-                this.text("统计","直属 " + this.total + " 人" + (extra ? " · 盟主 " + extra : ""),this.panel());
+                this.text("统计","直属 " + this.total + " 人" + (extra ? " · 盟主 " + extra : "") +
+                    (this.hasSimData ? " · 含模拟*" : ""),this.panel());
             } else {
                 this.text("统计","待审批 " + this.total + " 人",this.panel());
             }
@@ -1384,14 +1389,19 @@ export default class ClubManagementView {
             if(this.at(name,row)) { this.text(name,value,row); return; }
         }
     }
-    private metricText(row:cc.Node,name:string,value:any):void {
+    /** 模拟展示值只加标记，不在这里换算；真实值与比例都归服务端。 */
+    private displayValue(value:any,sim:boolean):string {
+        const text = this.value(value);
+        return sim && text !== "—" ? text + "*" : text;
+    }
+    private metricText(row:cc.Node,name:string,value:any,sim:boolean = false):void {
         const valueNode = this.at(name + "值",row);
         if(valueNode) {
             this.text(name,name,row);
-            this.text(name + "值",this.value(value),row);
+            this.text(name + "值",this.displayValue(value,sim),row);
             return;
         }
-        this.rowText(row,name === "积分" ? ["积分","余额"] : [name],name + "：" + this.value(value));
+        this.rowText(row,name === "积分" ? ["积分","余额"] : [name],name + "：" + this.displayValue(value,sim));
     }
     /**
      * 输赢配色：赢（正数）红、输（负数）绿，0 与空值/「—」保持 Prefab 原色。
@@ -1405,8 +1415,9 @@ export default class ClubManagementView {
         // 与钱包记录的收支配色保持一致：红 255,92,80 / 绿 151,211,57。
         return number > 0 ? new cc.Color(255,92,80) : new cc.Color(151,211,57);
     }
-    private winText(row:cc.Node,name:string,value:any):void {
-        this.metricText(row,name,value);
+    private winText(row:cc.Node,name:string,value:any,sim:boolean = false):void {
+        this.metricText(row,name,value,sim);
+        // 颜色按未加 * 的原始值判断，避免后缀影响正负色。
         const color = this.winColor(value);
         const node = color ? this.at(name + "值",row) : null;
         if(node) node.color = color;
@@ -1464,10 +1475,10 @@ export default class ClubManagementView {
         this.fillMemberQuota(row,item,identity);
         this.winText(row,"今日输赢",item.todayWin);
         this.winText(row,"昨日输赢",item.yesterdayWin);
-        this.winText(row,"总输赢",item.totalWin);
+        this.winText(row,"总输赢",item.totalWin,item.scoreSim);
         this.metricText(row,"今日贡献",item.todayContribution);
         this.metricText(row,"昨日贡献",item.yesterdayContribution);
-        this.metricText(row,"总贡献",item.totalContribution);
+        this.metricText(row,"总贡献",item.totalContribution,item.contribSim);
         this.rowText(row,["状态"],this.status(item));
         // Member cards are intentionally read-only. Keep old serialized
         // nodes hidden for prefab compatibility; avatar is the only entry
@@ -1549,6 +1560,13 @@ export default class ClubManagementView {
     }
     private render(items:ClubPlayer[]):void {
         this.items = items;
+        const hasSim = items.some(item => item.contribSim === true || item.scoreSim === true);
+        this.hasSimData = hasSim;
+        if(hasSim && !this.simNoticeShown) {
+            this.simNoticeShown = true;
+            this.message("带 * 的数据为模拟展示，不代表真实账目");
+        }
+        if(!hasSim) this.simNoticeShown = false;
         const content = this.at("列表/view/content",this.panel());
         if(!content) return;
         const template = content.getChildByName("行模板");

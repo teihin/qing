@@ -968,6 +968,68 @@ export interface ClubDetailResponse {
   warnings: string[];
 }
 
+/** 代理贡献管理：某一指标的展示规则。 */
+export interface AgentDisplayRule {
+  mode: "none" | "percent" | "fixed" | "unknown" | string;
+  percent?: number | null;
+  delta?: number | null;
+  source?: string;
+  sourceAgentId?: string;
+  sourceAgentName?: string;
+  sim?: boolean;
+}
+
+/** 代理贡献管理：成员行。金额字段为字符串，贡献单位分、输赢单位积分。 */
+export interface AgentContributionNode {
+  playerId: string;
+  name: string;
+  role: "owner" | "agent" | "member" | string;
+  isAgent: boolean;
+  level: number;
+  upperId: string;
+  upperName: string;
+  teamCount: string;
+  todayScore: string;
+  yesterdayScore: string;
+  totalScore: string;
+  todayContribFen: string;
+  yesterdayContribFen: string;
+  totalContribFen: string;
+  percent: string;
+  contribRule: AgentDisplayRule;
+  scoreRule: AgentDisplayRule;
+}
+
+export interface AgentContributionMembersResponse {
+  clubId: string;
+  agentId: string;
+  items: AgentContributionNode[];
+  total: number;
+  page: number;
+  pageSize: number;
+  rawAvailable: boolean;
+  truncated: boolean;
+  message: string;
+}
+
+export interface AgentContributionRuleResponse {
+  clubId: string;
+  agentId: string;
+  metric: "contrib" | "score";
+  rule: AgentDisplayRule;
+  verified: boolean;
+  message: string;
+}
+
+export interface AgentContributionRuleQueryResponse {
+  clubId: string;
+  agentId: string;
+  metric: "contrib" | "score";
+  available: boolean;
+  rule: AgentDisplayRule;
+  message: string;
+}
+
 /** 联盟管理（V2）：联盟池与关联俱乐部。 */
 export interface UnionListItem {
   unionId: string;

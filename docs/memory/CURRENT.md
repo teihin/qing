@@ -4,6 +4,13 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-05 代理贡献管理（后台已部署，客户端未构建）
+
+- 后台新增「代理贡献管理」：联盟→俱乐部→代理/玩家逐层展开，展示真实总贡献/总输赢；可按指标设比例或固定差额、覆盖与恢复继承；规则走 KBE，写审计。
+- 客户端按 KBE 标记给总贡献/总输赢加 `*`，统计栏显示「含模拟*」；不做换算。
+- 已部署正式 8891：二进制 `72d598…`、前端 `index-BvClN7Hq.js`；迁移 045 已执行；健康 200、新路由未登录 401；回滚 `backups/xuanmanager.20261105-2037-rollback`、`web.previous-agent-contributions-20261105`。
+- **KBE 接口未就绪**：实测 8890 成员查询仍 0x500 只推送，规则命令 0x301 未注册；页面回退只显示关系树、统计为 `—`，保存规则会失败，客户端不变值。登录态点击、Creator/真机待验。详见[交接](handoffs/2026-11-05-agent-contributions.md)。
+
 ## 2026-11-05 搓牌（未构建、未真机）
 
 - 搓开前用 `pk2np/` 没点牌面；遮罩水平/垂直超过牌面一半时只把牌面换成有点真实牌，搓牌不结束，仍以松手触发原揭开流程。`DrhPlayerLogic.ts`、`panelGameView.ts`，新增 `tools/import_pk2_nopoint.py`；Creator/网页/真机待验证。详见[交接](handoffs/2026-11-05-cuo-card-nopoint.md)。
@@ -27,13 +34,9 @@
 
 ## 2026-11-05 玩家信息弹窗：页签换装 + 额度记录（未构建、未真机）
 
-- 「成员设置 / 下级成员」改为游戏设置同款金色/深蓝胶囊页签，新增第三个「额度记录」页签；旧下划线/菱形隐藏。
-- 额度记录内含「上下分流水」「牌局流水」：上下分仍用 `查询_俱乐部_积分流水`（`only_add=1`，`ClubGoldWater`）；牌局改用 `查询_俱乐部_额度流水` 的 `agent_id`（传目标成员 ID；代理返回其当前子树），保留 `额度占用/额度回补` 或带 `room_id` 的行，走 `ClubQuotaWater`，人员取 `actor_guuid/opter_name`、金额分→元；20 条/页、可滚动，记录行改为两行大字号。
-- 我的成员列表搜索框 `EditBox._N$inputMode` 由 NUMERIC(2) 改为 SINGLE_LINE(6)，支持中英文昵称查询（`search_name_id` 逻辑不变）。
-- 改 `ClubManagementView.ts`、`ClubManagementApi.ts`、`panelMain.prefab`，新增 `tools/apply_player_quota_records.py`；Prefab/引用/离屏预览与定向 TS 检查通过，Creator 导入、构建、真机与真实回包待验证。详见[交接](handoffs/2026-11-05-player-record-tabs.md)。
-- 页签选中态、间距与记录翻页的追加修正见[交接](handoffs/2026-11-05-player-record-tabs.md)。
-- 盟主下级为空：查下属统一带「目标人 ID（`agent_id`）+ 俱乐部 ID」，盟主不再特殊处理；下级列表按服务端 `NumberList` 原样渲染，不再过滤首行本人。身份判定改为创建者优先于 `is_agent`，跨俱乐部创建者显示「盟主」。真实回包待验证。
-- 额度记录末列改显示 `name`（增加对象），牌局流水不再按类型过滤。
+- 「成员设置/下级成员」改金色胶囊页签并新增「额度记录」（上下分/牌局流水）；搜索框改 SINGLE_LINE 支持中英文昵称；改 `ClubManagementView.ts`、`ClubManagementApi.ts`、`panelMain.prefab`，新增 `tools/apply_player_quota_records.py`。
+- 额度记录口径、末列显示 `name`、盟主下级查询带 `agent_id+club_id`、身份判定创建者优先等细节见[交接](handoffs/2026-11-05-player-record-tabs.md)。
+- Prefab/引用/离屏预览与定向 TS 检查通过；Creator 导入、构建、真机、真实回包待验证。
 
 ## 2026-11-04 消息列表：滚动、下拉刷新与分页（已归档）
 

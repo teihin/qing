@@ -58,6 +58,84 @@ function optionalFlag(row:any,names:string[]):boolean|undefined {
     if(["0","false","no","off","否"].indexOf(normalized)>=0)return false;
     return undefined;
 }
+/**
+ * KBE 对客户端返回的是展示值，并可能用不同字段名标记“这是模拟/展示数据”。
+ * 这里只做标记识别，不做任何比例或金额换算；真实值仍只在后台/服务端。
+ */
+function optionalSimFlags(row:any):{contrib:boolean;score:boolean} {
+    const truthy=(value:any):boolean=>{
+        if(value === undefined || value === null)return false;
+        if(typeof value === "boolean")return value;
+        if(typeof value === "number")return value !== 0;
+        const text=String(value).trim().toLowerCase();
+        return ["1","true","yes","on","是","sim","display","adjusted","模拟","展示"].indexOf(text)>=0;
+    };
+    let contrib=false,score=false;
+    const general=field(row,["display_adjusted","display_sim","is_display_adjusted","show_adjusted","sim","display_type","display_flag","is_simulated","simulated","is_show_adjusted"]);
+    if(typeof general === "string") {
+        const text=general.toLowerCase();
+        if(text.indexOf("contrib")>=0 || text.indexOf("贡献")>=0)contrib=true;
+        if(text.indexOf("score")>=0 || text.indexOf("输赢")>=0)score=true;
+        if(!contrib && !score && truthy(general)) { contrib=true;score=true; }
+    } else if(truthy(general)) {
+        contrib=true;score=true;
+    }
+    if(truthy(field(row,["contrib_display_sim","contrib_sim","display_contrib_adjusted","contrib_display_adjusted","total_contrib_sim","total_contrib_simulated","total_contrib_is_sim"])))contrib=true;
+    if(truthy(field(row,["score_display_sim","score_sim","display_score_adjusted","score_display_adjusted","total_score_sim","total_score_simulated","total_score_is_sim"])))score=true;
+    const contribPercent=Number(field(row,["contrib_display_percent","total_contrib_percent"]));
+    if(Number.isFinite(contribPercent) && contribPercent !== 100)contrib=true;
+    const scorePercent=Number(field(row,["score_display_percent","total_score_percent"]));
+    if(Number.isFinite(scorePercent) && scorePercent !== 100)score=true;
+    const contribDelta=Number(field(row,["contrib_display_delta","total_contrib_delta"]));
+    if(Number.isFinite(contribDelta) && contribDelta !== 0)contrib=true;
+    const scoreDelta=Number(field(row,["score_display_delta","total_score_delta"]));
+    if(Number.isFinite(scoreDelta) && scoreDelta !== 0)score=true;
+    const nested=(value:any,metric:"contrib"|"score"):boolean=>{
+        if(!value || typeof value !== "object")return false;
+        const candidate=(value as any)[metric] || (value as any)[metric === "contrib" ? "贡献" : "输赢"];
+        if(!candidate || typeof candidate !== "object")return false;
+        if(truthy(candidate["sim"]) || truthy(candidate["adjusted"]) || truthy(candidate["display_sim"]))return true;
+        const mode=String(candidate["mode"] || "").trim().toLowerCase();
+        if(mode === "percent" || mode === "ratio" || mode === "percentage") {
+            const percent=Number(candidate["percent"]);
+            return Number.isFinite(percent) && percent !== 100;
+        }
+        if(mode === "fixed" || mode === "amount" || mode === "delta") {
+            const delta=Number(candidate["delta"] !== undefined ? candidate["delta"] : candidate["fixed_delta"]);
+            return Number.isFinite(delta) && delta !== 0;
+        }
+        return false;
+    };
+    const direct=(value:any):boolean=>{
+        if(!value || typeof value !== "object")return false;
+        if(truthy(value["sim"]) || truthy(value["adjusted"]) || truthy(value["display_sim"]))return true;
+        const mode=String(value["mode"] || "").trim().toLowerCase();
+        if(mode === "percent" || mode === "ratio" || mode === "percentage") {
+            const percent=Number(value["percent"]);
+            return Number.isFinite(percent) && percent !== 100;
+        }
+        if(mode === "fixed" || mode === "amount" || mode === "delta") {
+            const delta=Number(value["delta"] !== undefined ? value["delta"] : value["fixed_delta"]);
+            return Number.isFinite(delta) && delta !== 0;
+        }
+        return false;
+    };
+    const rule=field(row,["display_rule","display_rules","agent_display_rule"]);
+    if(nested(rule,"contrib"))contrib=true;
+    if(nested(rule,"score"))score=true;
+    if(direct(rule)) { contrib=true;score=true; }
+    if(direct(field(row,["contrib_display_rule","contrib_rule","total_contrib_rule"])))contrib=true;
+    if(direct(field(row,["score_display_rule","score_rule","total_score_rule"])))score=true;
+    const mode=String(field(row,["display_mode","display_rule_mode","display_type"]) || "").trim().toLowerCase();
+    if(mode === "percent" || mode === "ratio" || mode === "percentage") {
+        const percent=Number(field(row,["display_percent"]));
+        if(Number.isFinite(percent) && percent !== 100) { contrib=true;score=true; }
+    } else if(mode === "fixed" || mode === "amount" || mode === "delta") {
+        const delta=Number(field(row,["display_delta","display_fixed_delta"]));
+        if(Number.isFinite(delta) && delta !== 0) { contrib=true;score=true; }
+    }
+    return {contrib,score};
+}
 function optionalOnline(row:any):boolean|undefined {
     const value=field(row,["status","online","is_online","online_status","onlineState"]);
     if(value === undefined)return undefined;
@@ -823,6 +901,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
             const balance = gold !== null && gold !== undefined && String(gold).trim() !== "" && Number.isFinite(Number(gold)) ? Number(gold).toFixed(2) : undefined;
             const roleValue = optionalText(row,["role","club_role"]);
             const role = roleValue || undefined;
+            const sim = optionalSimFlags(row);
             items.push({
                 id,
                 name:String(row.name || row.user_name || row.nickname || "玩家 "+id),
@@ -848,7 +927,9 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 totalWin:optionalText(row,["total_score"]),
                 todayContribution:optionalFen(row,["today_contrib_fen"]),
                 yesterdayContribution:optionalFen(row,["yesterday_contrib_fen"]),
-                totalContribution:optionalFen(row,["total_contrib_fen"])
+                totalContribution:optionalFen(row,["total_contrib_fen"]),
+                contribSim:sim.contrib,
+                scoreSim:sim.score
             });
         }
         const total=data.count != null ? data.count : body && body.count != null ? body.count : first && first.count;
