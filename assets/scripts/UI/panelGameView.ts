@@ -51,6 +51,8 @@ export default class panelGameView extends UIPanelViewBase {
     private bBeginCuo:boolean = false;
     private bBeginDa:boolean = false;
     private transCmd2Cover:cc.Node = null;
+    private vcCuoStartPos:cc.Vec2 = null;
+    private bCuoRealShown:boolean = false;
 
 
     private transShow:cc.Node; //当前下分选择
@@ -295,6 +297,8 @@ export default class panelGameView extends UIPanelViewBase {
             this.transCmd2Cover = Tool.GetChild(this.node,"搓牌窗口/遮罩");
             this.transCmd2Cover.on(cc.Node.EventType.TOUCH_START,(event:cc.Event.EventTouch)=>{
             this.bBeginCuo = true;
+            this.bCuoRealShown = false;
+            this.vcCuoStartPos = cc.v2(this.transCmd2Cover.x, this.transCmd2Cover.y);
         },this);
         this.transCmd2Cover.on(cc.Node.EventType.TOUCH_END,(event:cc.Event.EventTouch)=>{
             if (this.bBeginCuo)
@@ -310,6 +314,15 @@ export default class panelGameView extends UIPanelViewBase {
 
                 this.transCmd2Cover.x+=delta.x;
                 this.transCmd2Cover.y+=delta.y;
+
+                //过半只露出真实牌面，搓牌继续，松手才结束
+                if(!this.bCuoRealShown && this.IsCuoCoverPastHalf())
+                {
+                    this.bCuoRealShown = true;
+                    let player = this.gameLogic == null ? null : this.gameLogic.GetPlayerCtlByID(0);
+                    if(player != null)
+                        player.ShowCuoRealFace();
+                }
             }
         },this);
 
@@ -544,8 +557,25 @@ export default class panelGameView extends UIPanelViewBase {
     }
 
 
+    private IsCuoCoverPastHalf():boolean
+    {
+        if(this.transCmd2Cover == null || this.vcCuoStartPos == null)
+            return false;
+        let transCard = Tool.GetChild(this.node,"搓牌窗口/牌");
+        if(transCard == null)
+            return false;
+        let size = transCard.getContentSize();
+        let dx = Math.abs(this.transCmd2Cover.x - this.vcCuoStartPos.x);
+        let dy = Math.abs(this.transCmd2Cover.y - this.vcCuoStartPos.y);
+        return dx >= size.width * 0.5 || dy >= size.height * 0.5;
+    }
+
     public DelayShowCuoInfo()
     {
+        //揭开前先换回有点牌面，遮罩撤走后显示真实牌点
+        let player = this.gameLogic == null ? null : this.gameLogic.GetPlayerCtlByID(0);
+        if(player != null)
+            player.ShowCuoRealFace();
 
         this.scheduleOnce(()=>{
             Tool.GetChild(this.node,"搓牌窗口/遮罩").active = false;

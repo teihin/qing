@@ -4,6 +4,10 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-05 搓牌（未构建、未真机）
+
+- 搓开前用 `pk2np/` 没点牌面；遮罩水平/垂直超过牌面一半时只把牌面换成有点真实牌，搓牌不结束，仍以松手触发原揭开流程。`DrhPlayerLogic.ts`、`panelGameView.ts`，新增 `tools/import_pk2_nopoint.py`；Creator/网页/真机待验证。详见[交接](handoffs/2026-11-05-cuo-card-nopoint.md)。
+
 ## 2026-11-05 游戏内俱乐部角色称谓统一（未构建、未真机）
 
 - 统一显示口径：联盟创始人=大盟主，已入盟俱乐部创始人=盟主，俱乐部代理=合伙人；未入盟创始人显示群主。只改文案，不改服务端命令、`role` 内部值、节点名和权限。

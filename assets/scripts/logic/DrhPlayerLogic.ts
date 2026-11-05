@@ -3036,6 +3036,50 @@ export default class DrhPlayerLogic extends cc.Component {
             Tool.GetChild(this.gameLogic.node,"ExShow/芒池/几芒").getComponent(cc.Label).string = "";            
         }
     }
+    //搓牌窗口的牌面：搓开前用没点图，揭开后切回有点图
+    private GetCuoCardResPath(nPos:number, bRealFace:boolean):string
+    {
+        if(this.info == null || !Array.isArray(this.info.handCardEx) || nPos < 0 || nPos >= this.info.handCardEx.length)
+            return "";
+        let card = this.info.handCardEx[nPos];
+        if(card == null)
+            return "";
+        return (bRealFace ? "pk2/" : "pk2np/") + card.nType + "_" + card.nNum + "d";
+    }
+
+    private PrepareCuoCardFace(nPos:number, onReady:Function)
+    {
+        let transCard = Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌");
+        let img = transCard == null ? null : transCard.getComponent(cc.Sprite);
+        let strNoPoint = this.GetCuoCardResPath(nPos, false);
+        let strReal = this.GetCuoCardResPath(nPos, true);
+        if(strNoPoint == "" || img == null)
+        {
+            onReady();
+            return;
+        }
+        //提前缓存有点牌面，拖过一半时立即切换，不再等松手
+        if(strReal != "")
+            cc.loader.loadRes(strReal,cc.SpriteFrame,()=>{});
+        cc.loader.loadRes(strNoPoint,cc.SpriteFrame,(err,obj)=>{
+            if(err == null && obj != null && cc.isValid(img.node))
+                img.spriteFrame = obj;
+            onReady();
+        });
+    }
+
+    public ShowCuoRealFace()
+    {
+        let strReal = this.GetCuoCardResPath(3, true);
+        if(strReal == "")
+            return;
+        let transCard = Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌");
+        let img = transCard == null ? null : transCard.getComponent(cc.Sprite);
+        if(img == null)
+            return;
+        Tool.LoadImg(img,strReal);
+    }
+
     //延迟显示搓牌
     public DelayShowCuo(nTime:number)
     {
@@ -3055,11 +3099,8 @@ export default class DrhPlayerLogic extends cc.Component {
                 return;
             }
 
-            //设置牌
-            let strPath = "pk2/"+this.info.handCardEx[3].nType+"_"+this.info.handCardEx[3].nNum+"d";
-
             //Debug.Error("开始加载图片");
-            Tool.LoadImg(Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌").getComponent(cc.Sprite),strPath,()=>{
+            this.PrepareCuoCardFace(3,()=>{
                 //Debug.Error("加载完成");
                 Tool.GetChild(this.gameLogic.node,"搓牌窗口/遮罩").position = cc.Vec2.ZERO;
                 Tool.GetChild(this.gameLogic.node,"搓牌窗口/遮罩").active = true;
@@ -3166,9 +3207,7 @@ export default class DrhPlayerLogic extends cc.Component {
             if(this.playerPos == PlayerPos.self  && this.info.strUserID == GameDataManager.getAccount().guuid)
             {
                 //设置最后一张牌到搓牌界面
-                let strPath = "pk2/"+this.info.handCardEx[nPos].nType+"_"+this.info.handCardEx[nPos].nNum+"d";    
-                //Tool.LoadImg(Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌").getComponent(cc.Sprite),strPath);
-                Tool.LoadImg(Tool.GetChild(this.gameLogic.node,"搓牌窗口/牌").getComponent(cc.Sprite),strPath,()=>{
+                this.PrepareCuoCardFace(nPos,()=>{
                     if(!this.CanRunRoomAnimation())
                         return;
                     const transMask = Tool.GetChild(this.gameLogic.node,"搓牌窗口/遮罩");
