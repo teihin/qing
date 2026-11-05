@@ -54,3 +54,10 @@
 1. Creator 打开消息页确认两个提示节点显示与位置；真机验证下拉刷新和滚到底自动翻页。
 2. 用 >30 个会话的账号验证第 2/3 页追加、没有更多提示与滚动位置。
 3. 双账号连发消息，确认列表不再跳回顶部、当前浏览位置不变。
+
+## 2026-11-05 补：底栏「消息」点击刷新
+
+- 大厅底栏「客服」按钮就是消息入口；每次点击都调用 `panelMessage.RefreshFromTop()`，与下拉松手同一入口，重取第一页并回到顶部。
+- 首次实例化时如果 `onLoad` 还没完成，`RefreshFromTop` 的 `manager == null` 保护会直接返回，由 `start()` 原有刷新兜底；页面已存在时点击也会强制刷新（不依赖 `onEnable`）。
+- 改 `assets/scripts/UI/panelMessage.ts`（`RefreshFromTop` 改 public 并加初始化保护）、`assets/scripts/UI/panelMain.ts`（`OpenDirectChatPage` 三条分支后统一触发，新增 `RefreshDirectChatPage`）。
+- 未做：Creator 导入/构建/真机；未验证连续点击时请求合并与滚动回顶的实际表现。

@@ -6,7 +6,7 @@ import DirectChatManager from "../logic/DirectChatManager";
 export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications" | "union" | "allies";
 export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" | "promote" |
-    "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent" | "setNote" |
+    "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent" | "setNote" | "setAgentDark" |
     "grantQuota" | "increaseQuota" | "decreaseQuota" | "unionApprove" | "unionReject" | "setUnionPercent";
 export interface ClubContext {
     accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; isLeader?:boolean;
@@ -36,13 +36,18 @@ export interface ClubPlayer {
     todayContribution?:string; yesterdayContribution?:string; totalContribution?:string;
     /** NumberList.quota：V2 给大盟主/盟主行下发的俱乐部额度（分）；代理/玩家不显示。 */
     clubQuotaFen?:number;
+    /** 服务端若在成员行下发暗扣值则优先展示；当前文档没有该字段。 */
+    darkPercent?:string;
 }
 /** give = 玩家之间赠送（扣自己积分）；updown = 代理按授信额度给成员上下分。 */
 export type ClubGiftMode = "give" | "updown";
 export interface ClubPeoplePage { items:ClubPlayer[]; total:number; }
 /** updown = 上下分流水；game = 牌局流水（带入/结算）。 */
 export type ClubRecordKind = "updown" | "game";
-/** 查询_俱乐部_积分流水 的 ClubGoldWater 行；balance 取 remark（变动后余额）。 */
+/**
+ * 额度记录行：上下分来自 ClubGoldWater（gold/元），牌局来自 ClubQuotaWater
+ * （quota/分已换算成元，人员取 actor_guuid/opter_name）；balance 取 remark。
+ */
 export interface ClubRecord {
     date:string; type:string; amount:number; balance:string; roomId:string; opterName:string;
     /** 增加对象（被加分人）：guuid/name 是流水归属的玩家。 */
@@ -65,7 +70,7 @@ export interface ClubManagementApi {
     unionAct(clubId:string,targetClubId:string,approve:boolean):Promise<{message?:string}>;
     unionMembers():Promise<ClubUnionMemberPage>;
     unionQuotaAdjust(targetClubId:string,quotaFen:number):Promise<{message?:string}>;
-    /** 按俱乐部 + 玩家查积分流水；上下分（only_add=1）与牌局（带入/结算）共用该接口。 */
+    /** 上下分查积分流水；牌局查查询_俱乐部_额度流水（agent_id=目标成员 ID，代理返回其当前子树）。 */
     records(clubId:string,userId:string,kind:ClubRecordKind,page:number,count:number):Promise<ClubRecordPage>;
 }
 
@@ -108,7 +113,9 @@ export default class ClubManagementView {
     /** 卡片加高显示联盟行时子节点要整体上移，避免卡片顶部留出大空白。 */
     private cardBaseY:{[name:string]:number} = {};
     private goldRefreshTimer:any = null;
-    private inputMode:"ratio"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"|null = null;
+    private inputMode:"ratio"|"dark"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"|null = null;
+    /** 服务端暂无暗扣只读接口；本次会话设置成功后先记下来，重开弹窗时补显示。 */
+    private darkOverrides:{[key:string]:number} = {};
     /** 盟友管理里的额度/盟主比例调整走同一个输入弹窗，单独记录目标俱乐部和方向。 */
     private selectedUnionMember:ClubUnionMember = null;
     private unionQuotaMode:"increase"|"decrease"|"percent"|null = null;
@@ -567,7 +574,7 @@ export default class ClubManagementView {
             "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置上下分","玩家设置调整分数","玩家设置踢出俱乐部",
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
             "玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏","玩家设置禁止账号",
-            "玩家设置调整盟主比例",
+            "玩家设置调整盟主比例","玩家设置调整暗扣",
             "成员设置","成员设置非激活","下级成员","下级成员激活",
             "额度记录","额度记录激活","记录_上下分","记录_上下分激活","记录_牌局","记录_牌局激活",
             "记录第一页","记录上一页","记录下一页","记录最后一页",
@@ -603,6 +610,9 @@ export default class ClubManagementView {
             if(this.selectedPlayer && this.isAgentPlayer(this.selectedPlayer)) this.openPlayerInput("ratio");
         } else if(name === "玩家设置调整盟主比例") {
             this.openPlayerInput("unionPercent");
+        } else if(name === "玩家设置调整暗扣") {
+            if(this.selectedPlayer && this.canSetDark() && this.isDarkTarget(this.selectedPlayer))
+                this.openPlayerInput("dark");
         } else if(name === "玩家设置代理开关") {
             if(this.selectedPlayer && this.isAgentPlayer(this.selectedPlayer))
                 this.confirm("cancelAgent",this.selectedPlayer.id,this.selectedPlayer.name);
@@ -1158,6 +1168,60 @@ export default class ClubManagementView {
     private unionPercentRowNodes():string[] {
         return ["盟主比例底","盟主比例","盟主比例值","玩家设置调整盟主比例"];
     }
+    /**
+     * 暗扣（设置_俱乐部_代理_暗抽）只给联盟大盟主、或未加入联盟的俱乐部创建者看。
+     */
+    private canSetDark():boolean {
+        const c = this.context;
+        if(!c || !c.id || c.role !== "owner") return false;
+        const inUnion = !!String(c.unionId || "").trim() || c.hasUnion === true;
+        if(!inUnion) return c.unionKnown === true;
+        return this.canReviewUnion(c);
+    }
+    /** 下级里除普通玩家外的身份（盟主/合伙人/管理员等）都允许设置暗扣。 */
+    private isDarkTarget(player:ClubPlayer):boolean {
+        if(!player) return false;
+        const identity = this.memberIdentity(player,this.context);
+        return this.isAgentPlayer(player) ||
+            ["大盟主","盟主","群主","管理员","合伙人"].indexOf(identity) >= 0;
+    }
+    private darkRowNodes():string[] {
+        return ["暗扣底","暗扣","暗扣值","玩家设置调整暗扣"];
+    }
+    private darkKey(player:ClubPlayer):string {
+        const account = this.context && this.context.accountId || "";
+        const club = this.resolvePlayerClubId(player) || (this.context && this.context.id) || "";
+        return account + ":" + club + ":" + String(player && player.id || "");
+    }
+    /** 优先用成员行下发的值；没有只读接口时退回本次会话刚设置过的值。 */
+    private darkText(player:ClubPlayer):string {
+        if(!player) return "—";
+        const raw = player.darkPercent === undefined || player.darkPercent === null ?
+            "" : String(player.darkPercent).trim();
+        const value = raw !== "" ? Number(raw) : this.darkOverrides[this.darkKey(player)];
+        if(value === undefined || value === null || !Number.isFinite(Number(value))) return "—";
+        const number = Number(value);
+        return number < 0 ? "—" : String(number) + "%";
+    }
+    private darkInputValue(player:ClubPlayer):string {
+        const text = this.darkText(player);
+        return text === "—" ? "" : text.replace("%","");
+    }
+    /** 普通玩家不显示；自己/创建者行与跨级查看也不显示。 */
+    private syncDarkRow():void {
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel || !this.context) return;
+        const player = this.selectedPlayer;
+        const isSelf = !!player && String(player.id) === String(this.context.accountId || "");
+        const isOwner = !!player && (String(player.id) === String(this.context.ownerId || "") ||
+            (isSelf && this.context.role === "owner"));
+        // 暗扣是跨级只读里唯一放行的操作：大盟主沿下级链可以继续改。
+        const show = !!player && this.settingsTab === "member" &&
+            this.isDarkTarget(player) && !isSelf && !isOwner && this.canSetDark();
+        for(const name of this.darkRowNodes()) this.active(name,show,panel);
+        this.button("玩家设置调整暗扣",show,panel);
+        this.text("暗扣值",this.darkText(player),panel);
+    }
     /** 联盟成员列表（owner_guuid → club_id），用于盟主行缺 club_id 时定位其真实俱乐部。 */
     private unionMemberClubs:{[ownerId:string]:string} = {};
     private cacheUnionMemberClubs(items:ClubUnionMember[]):void {
@@ -1176,6 +1240,34 @@ export default class ClubManagementView {
         if(/^\d{6}$/.test(own)) return own;
         const cached = this.unionMemberClubs[String(player && player.id || "")] || "";
         return /^\d{6}$/.test(cached) ? cached : "";
+    }
+    /**
+     * 「成员设置」行自动向上堆叠：按当前可见的备注/比例/代理/盟主比例/暗扣依次排，
+     * 隐藏的行不占位，避免盟主行在中间留出一格空白。
+     */
+    private layoutMemberSettingRows():void {
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel) return;
+        // 每组第一个节点是该行的底板，用它的 active 判断这一行是否显示。
+        const rows:string[][] = [
+            ["备注底","备注","备注值","玩家设置备注"],
+            ["比例底","比例","比例值","玩家设置调整比例"],
+            ["代理底","代理","代理开关文字","玩家设置代理开关"],
+            ["盟主比例底","盟主比例","盟主比例值","玩家设置调整盟主比例"],
+            ["暗扣底","暗扣","暗扣值","玩家设置调整暗扣"],
+            ["开通额度底","开通额度","玩家设置开通额度"],
+            ["额度底","额度","额度值","玩家设置增加额度","玩家设置减少额度"],
+        ];
+        let y = 120;
+        for(const row of rows) {
+            const anchor = this.at(row[0],panel);
+            if(!anchor || !anchor.active) continue;
+            for(const name of row) {
+                const node = this.at(name,panel);
+                if(node) node.y = y;
+            }
+            y -= 120;
+        }
     }
     /**
      * 盟主行：收起代理比例、开通代理和赠送，改为显示独立的「盟主比例」行，
@@ -1262,6 +1354,7 @@ export default class ClubManagementView {
         const freshIdentity = this.memberIdentity(fresh,this.context);
         this.text("比例值",(this.isAgentPlayer(fresh) || freshIdentity === "盟主" || freshIdentity === "大盟主") ? this.percentText(fresh) : "未开通",panel);
         this.text("盟主比例值",this.percentText(fresh),panel);
+        this.text("暗扣值",this.darkText(fresh),panel);
     }
     /** 有备注时统一显示「名字(备注)」，成员列表、下级列表与玩家信息抬头共用。 */
     private displayName(item:ClubPlayer):string {
@@ -1526,6 +1619,8 @@ export default class ClubManagementView {
         ++this.downlineToken;
         ++this.recordToken;
         this.active("俱乐部玩家设置弹窗",true);
+        this.text("玩家设置只读提示",readOnly && this.canSetDark() && this.isDarkTarget(item) ?
+            "跨级查看，仅暗扣可改" : "跨级查看，不能修改",panel);
         this.active("玩家设置只读提示",readOnly,panel);
         this.text("玩家姓名",this.displayName(item),panel);
         this.text("玩家ID","ID: "+item.id,panel);
@@ -1623,6 +1718,10 @@ export default class ClubManagementView {
         this.syncSelfActions();
         // 盟主行的代理开关与赠送同样要在页签切换后重新收起。
         this.syncUnionLeaderActions();
+        // 暗扣只有成员页签、非普通玩家目标且操作者够权限时才显示。
+        this.syncDarkRow();
+        // 所有显隐都确定后再统一排位，隐藏行不占空位。
+        this.layoutMemberSettingRows();
         this.active("玩家设置下级列表",downline,panel);
         this.active("玩家设置额度记录",records,panel);
         this.active("成员设置",member,panel);
@@ -1706,6 +1805,9 @@ export default class ClubManagementView {
             if(token !== this.downlineToken || !this.valid(version,context) ||
                 !this.selectedPlayer || this.selectedPlayer.id !== playerId) return;
             const rows = result && Array.isArray(result.items) ? result.items : [];
+            // 下级行的俱乐部就是本次查询的俱乐部；回来缺 club_id 时补上，
+            // 深层暗扣和继续下钻才不会误用大盟主当前俱乐部。
+            for(const item of rows) if(item && !String(item.clubId || "").trim()) item.clubId = queryClubId;
             // 直接展示服务端回包（直属口径首行是被查节点本人，也照常显示，不再过滤）。
             this.selectedDownline = rows;
             this.downlineTotal = Math.max(0,Number(result && result.total) || 0);
@@ -1752,7 +1854,7 @@ export default class ClubManagementView {
         }
         const pitch = list.height / this.downlinePageSize;
         const context = this.context ? {...this.context} : null;
-        // 本列表属于当前弹窗玩家：点开的下一层必然再跨一级，只能查看。
+        // 本列表属于当前弹窗玩家：点开的下一层再跨一级，除暗扣外只能查看。
         const depth = this.settingsDepth;
         rows.slice(0,this.downlinePageSize).forEach((item,index)=>{
             const row = cc.instantiate(template);
@@ -1826,7 +1928,7 @@ export default class ClubManagementView {
         this.active("玩家设置额度记录/记录_上下分激活",updown,panel);
         this.active("玩家设置额度记录/记录_牌局",updown,panel);
         this.active("玩家设置额度记录/记录_牌局激活",!updown,panel);
-        this.text("玩家设置额度记录/记录表头/表头_说明",updown ? "增加对象" : "房间",panel);
+        this.text("玩家设置额度记录/记录表头/表头_说明","名字",panel);
 
         const view = this.at("view",list);
         const content = this.at("view/content",list);
@@ -1843,7 +1945,8 @@ export default class ClubManagementView {
             if(label) label.string = this.recordLoading ? "加载中…" : this.recordError || "暂无记录";
         }
         const viewHeight = view ? view.height : 450;
-        const pitch = 86;
+        // 记录行改成两行大字号，行高 104，行距留 6。
+        const pitch = 110;
         content.height = Math.max(viewHeight,rows.length * pitch);
         content.setPosition(0,viewHeight / 2);
         rows.forEach((item,index)=>{
@@ -1852,7 +1955,7 @@ export default class ClubManagementView {
             row.parent = content;
             row.active = true;
             row.setPosition(0,-pitch / 2 - index * pitch);
-            this.fillRecordRow(row,item,updown);
+            this.fillRecordRow(row,item);
         });
         const scroll = list.getComponent(cc.ScrollView);
         if(scroll) scroll.scrollToTop(0);
@@ -1867,7 +1970,7 @@ export default class ClubManagementView {
         this.button("记录下一页",!busy && hasNext,pager);
         this.button("记录最后一页",!busy && hasNext,pager);
     }
-    private fillRecordRow(row:cc.Node,item:ClubRecord,updown:boolean):void {
+    private fillRecordRow(row:cc.Node,item:ClubRecord):void {
         const date = item.date || "";
         this.text("时间",date.length > 16 ? date.slice(5,16) : date,row);
         this.text("类型",item.type || "—",row);
@@ -1879,10 +1982,15 @@ export default class ClubManagementView {
             new cc.Color(237,141,113) : valid && amount > 0 ?
                 new cc.Color(129,232,177) : new cc.Color(231,240,246);
         this.text("余额",item.balance === "" || item.balance === undefined ? "—" : item.balance,row);
-        // 增加对象 = 流水归属玩家（guuid/name）；牌局无房间号时同样显示对象名。
-        const target = item.userName || item.userId || "—";
-        const note = updown ? target : (item.roomId ? "房间 " + item.roomId : target);
-        this.text("说明",note,row);
+        // 第一行名字：上下分是增加对象；牌局用 actor_guuid/opter_name（实际带入/结算玩家）。
+        this.text("说明",item.userName || item.userId || "—",row);
+        // 第二行名字下面显示牌局房间号；没有房间号（如上下分）时隐藏。
+        const roomId = String(item.roomId || "").trim();
+        const roomNode = this.at("房间",row);
+        if(roomNode) {
+            roomNode.active = roomId !== "";
+            if(roomId) this.text("房间","房间号:" + roomId,row);
+        }
     }
     /** 盟友管理 → 指定俱乐部额度调整：输入元，发送授信_联盟_额度（正数划拨、负数收回）。 */
     private openUnionQuotaInput(member:ClubUnionMember,mode:"increase"|"decrease"):void {
@@ -1997,16 +2105,18 @@ export default class ClubManagementView {
             this.message(error && error.message || "盟主比例调整失败，请稍后重试");
         }
     }
-    private openPlayerInput(mode:"ratio"|"unionPercent"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"):void {
+    private openPlayerInput(mode:"ratio"|"dark"|"unionPercent"|"remark"|"quota"|"quotaIncrease"|"quotaDecrease"):void {
         this.unionQuotaMode = null;
         this.selectedUnionMember = null;
         // 比例与备注权限一致：创建者或该成员的直属上级代理。
         const quotaMode = ["quota","quotaIncrease","quotaDecrease"].indexOf(mode) >= 0;
+        const darkMode = mode === "dark";
         const allowed = mode === "ratio" ? this.canManageAgent() :
             mode === "unionPercent" ? this.isUnionLeaderPlayer() && this.canReviewUnion() :
+            darkMode ? this.canSetDark() && !!this.selectedPlayer && this.isDarkTarget(this.selectedPlayer) :
             quotaMode ? this.canGrantQuota() : this.canRemarkPlayer();
         if(!this.selectedPlayer || !allowed) return;
-        if(this.blockReadOnlyPlayer()) return;
+        if(mode !== "dark" && this.blockReadOnlyPlayer()) return;
         const modal = this.at("玩家设置输入弹窗");
         const panel = this.at("面板",modal);
         const input = this.at("玩家设置输入框",panel);
@@ -2017,28 +2127,33 @@ export default class ClubManagementView {
         // Prefab 里存的是 NUMERIC，不按用途切回来备注就只能打数字。
         edit.inputMode = mode === "remark" ? cc.EditBox.InputMode.SINGLE_LINE :
             quotaMode ? cc.EditBox.InputMode.DECIMAL : cc.EditBox.InputMode.NUMERIC;
-        const title = mode === "ratio" ? "调整比例" : mode === "unionPercent" ? "调整盟主比例" :
+        const title = mode === "ratio" ? "调整比例" : mode === "dark" ? "调整暗扣" :
+            mode === "unionPercent" ? "调整盟主比例" :
             mode === "quota" ? "开通额度" :
             mode === "quotaIncrease" ? "增加额度" : mode === "quotaDecrease" ? "减少额度" : "设置备注";
         const prompt = mode === "ratio" ? "请输入 0-100 的整数比例" :
+            mode === "dark" ? "请输入 0-20 的整数比例（0=不扣）" :
             mode === "unionPercent" ? "请输入 0-100 的整数比例（100=不抽）" : quotaMode ?
             (mode === "quotaDecrease" ? "请输入减少额度（元），支持两位小数" : "请输入增加额度（元），支持两位小数") :
             "请输入备注（最多 " + ClubManagementView.NOTE_MAX + " 字，留空可清空）";
         this.text("玩家设置输入标题",title,panel);
         this.text("玩家设置输入提示",prompt,panel);
         // EditBox 会把框内标签强制成单行 CLAMP，长句会被截断；完整说明留在上方提示，框内只放短占位。
-        this.text("提示",mode === "ratio" ? prompt : mode === "unionPercent" ? "0-100" : quotaMode ? "请输入额度" : "请输入备注",input);
+        this.text("提示",mode === "ratio" ? prompt : mode === "dark" ? "0-20" :
+            mode === "unionPercent" ? "0-100" : quotaMode ? "请输入额度" : "请输入备注",input);
         // 备注上限按文档 §4.11，超长服务端直接报错；这里先在输入层拦住，提示文案同源。
-        edit.maxLength = mode === "remark" ? ClubManagementView.NOTE_MAX : quotaMode ? 18 : mode === "unionPercent" ? 3 : 120;
+        edit.maxLength = mode === "remark" ? ClubManagementView.NOTE_MAX : quotaMode ? 18 :
+            mode === "unionPercent" ? 3 : mode === "dark" ? 2 : 120;
         edit.string = mode === "ratio" || mode === "unionPercent" ?
             (this.selectedPlayer.agentPercent !== undefined ? String(this.selectedPlayer.agentPercent) : "0") :
+            mode === "dark" ? this.darkInputValue(this.selectedPlayer) :
             quotaMode ? "0" :
             (this.selectedPlayer.note || "");
         this.active("玩家设置输入弹窗",true);
     }
     private finishPlayerInput():void {
         if(!this.inputMode || !this.selectedPlayer) return;
-        if(this.blockReadOnlyPlayer()) return;
+        if(this.inputMode !== "dark" && this.blockReadOnlyPlayer()) return;
         const mode = this.inputMode;
         const input = this.at("玩家设置输入框",this.at("面板",this.at("玩家设置输入弹窗")));
         const edit = input && input.getComponent(cc.EditBox);
@@ -2055,6 +2170,18 @@ export default class ClubManagementView {
             this.inputMode = null;
             this.active("玩家设置输入弹窗",false);
             this.submitUnionPercent(player,clubId,number);
+            return;
+        }
+        if(mode === "dark") {
+            const number = Number(value);
+            if(!/^\d+$/.test(value) || !Number.isInteger(number) || number < 0 || number > 20) {
+                this.message("暗扣比例必须是 0-20 的整数");
+                return;
+            }
+            const player = this.selectedPlayer;
+            this.inputMode = null;
+            this.active("玩家设置输入弹窗",false);
+            this.submitDark(player,number);
             return;
         }
         if(mode === "ratio") {
@@ -2154,6 +2281,45 @@ export default class ClubManagementView {
             this.reloadPlayerCard(player.id);
         } catch(error) {
             if(this.valid(this.version,club)) this.message(error && error.message || "盟主比例调整失败，请稍后重试");
+        } finally {
+            if(cc.isValid(this.root)) this.busy = false;
+        }
+    }
+    /**
+     * 设置_俱乐部_代理_暗抽：club_id + user_id 定位，dark_percent 0-20（0=不扣），
+     * 只影响后续结算；服务端没有只读接口，界面不展示历史值。
+     */
+    private async submitDark(player:ClubPlayer,percent:number):Promise<void> {
+        if(!this.api) { this.message("该功能暂未开放");return; }
+        if(this.busy) { this.message("操作进行中，请稍后再试");return; }
+        const club = {...this.context};
+        if(!this.sameContext(club,this.getContext())) { this.Refresh();return; }
+        if(!player || !this.canSetDark() || !this.isDarkTarget(player)) {
+            this.message("只有联盟大盟主或未入盟的俱乐部创建者可以设置暗扣");
+            return;
+        }
+        // 盟主/深层下级属于别的俱乐部，命令要按目标所在俱乐部发；定位不到时不回退当前俱乐部。
+        const resolvedClub = this.resolvePlayerClubId(player);
+        if(!resolvedClub && (this.settingsDepth > 0 ||
+            this.memberIdentity(player,this.context) === "盟主")) {
+            this.message("未获取到目标俱乐部，请刷新后重试");
+            return;
+        }
+        const targetClub = resolvedClub || club.id;
+        this.busy = true;
+        try {
+            const result = await this.api.act(targetClub,"setAgentDark",player.id,String(percent));
+            if(!this.valid(this.version,club)) return;
+            // 没有只读接口，先把本次结果记在本地，重开弹窗时也能显示。
+            this.darkOverrides[this.darkKey(player)] = percent;
+            player.darkPercent = String(percent);
+            if(this.selectedPlayer && String(this.selectedPlayer.id) === String(player.id)) {
+                this.selectedPlayer.darkPercent = String(percent);
+                this.text("暗扣值",this.darkText(this.selectedPlayer),this.at("面板",this.at("俱乐部玩家设置弹窗")));
+            }
+            this.message(result && result.message || ("暗扣比例已调整为 " + percent + "%"));
+        } catch(error) {
+            if(this.valid(this.version,club)) this.message(error && error.message || "暗扣比例调整失败，请稍后重试");
         } finally {
             if(cc.isValid(this.root)) this.busy = false;
         }

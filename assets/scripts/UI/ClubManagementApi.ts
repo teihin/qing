@@ -105,8 +105,9 @@ export default class HallClubManagementApi implements ClubManagementApi {
         KBEngine.Event.register("ClubReqInfo",this,"OnBadge");
         KBEngine.Event.register("ClubUnionApply",this,"OnUnionApply");
         KBEngine.Event.register("ClubMyUnion",this,"OnUnionMembers");
-        // 查询_俱乐部_积分流水 的列表统一走 ClubGoldWater；玩家设置里的额度记录也用它。
+        // 上下分流水走 ClubGoldWater；牌局流水走 ClubQuotaWater（查询_俱乐部_额度流水）。
         KBEngine.Event.register("ClubGoldWater",this,"OnClubGoldWater");
+        KBEngine.Event.register("ClubQuotaWater",this,"OnClubQuotaWater");
     }
     public Dispose():void {
         this.disposed = true;
@@ -217,6 +218,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
             reject:"删除_俱乐部_加入申请",remove:"删除_俱乐部_玩家",promote:"添加_俱乐部_管理员",
             adjustScore:"修改_俱乐部_成员_积分",setAgent:"设置_俱乐部_代理",
             changeAgentRatio:"修改_俱乐部_代理_比例",cancelAgent:"取消_俱乐部_代理",
+            setAgentDark:"设置_俱乐部_代理_暗抽",
             setNote:"设置_俱乐部_成员_备注",grantQuota:"授信_俱乐部_额度",
             increaseQuota:"授信_俱乐部_额度",decreaseQuota:"授信_俱乐部_额度",
             setUnionPercent:"设置_联盟_盟主_比例"
@@ -224,6 +226,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         const extra:any = user ? {user_id:user} : {};
         if(action === "adjustScore") extra.user_modify_gold = Number(value);
         if(action === "setAgent" || action === "changeAgentRatio") extra.percent = Number(value);
+        if(action === "setAgentDark") extra.dark_percent = Number(value);
         if(action === "setUnionPercent") extra.percent = Number(value);
         if(action === "grantQuota") extra.quota_fen = Number(value);
         if(action === "increaseQuota") extra.quota_fen = Math.abs(Number(value));
@@ -237,6 +240,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(action === "setAgent") return {message:"已开通合伙人，请刷新确认比例"};
         if(action === "changeAgentRatio") return {message:"合伙人比例已调整"};
         if(action === "cancelAgent") return {message:"已取消合伙人"};
+        if(action === "setAgentDark") return {message:"暗扣比例已调整为 " + Number(value) + "%"};
         if(action === "grantQuota") return {message:"额度已设置"};
         if(action === "increaseQuota") return {message:"额度已增加"};
         if(action === "decreaseQuota") return {message:"额度已减少"};
@@ -327,10 +331,12 @@ export default class HallClubManagementApi implements ClubManagementApi {
         });
     }
     /**
-     * 玩家额度记录：同一接口按 kind 切换口径。
-     * - updown：only_add=1，只看服务端命名的上分/下分；
-     * - game：only_add=0，不做类型过滤，回包原样展示。
-     * 列表走 ClubGoldWater 异步推送（样例不带 context），因此同一时间只允许一条在途。
+     * 玩家额度记录：按 kind 走不同流水。
+     * - updown：查询_俱乐部_积分流水 + only_add=1，只看上分/下分（ClubGoldWater）；
+     * - game：查询_俱乐部_额度流水 + agent_id（传目标成员 ID；服务端实际接受任意当前成员，
+     *   代理返回“本人 + 当前 used 下级”的子树，普通成员返回本人流水；目前没有只按
+     *   opter_guuid 过滤的 actor_id/member_id 参数），只看牌局相关行（ClubQuotaWater）。
+     * 两类推送样例都不带 context，因此共用一条串行车道，同一时间只允许一条在途。
      */
     public records(clubId:string,userId:string,kind:ClubRecordKind,page:number,count:number):Promise<ClubRecordPage> {
         if(this.disposed) return Promise.reject(new Error("页面已关闭"));
@@ -361,15 +367,24 @@ export default class HallClubManagementApi implements ClubManagementApi {
         this.recordsPending = {key:context,account:this.account(),club:job.club,user:job.user,
             kind:job.kind,resolve:job.resolve,reject:job.reject,timer};
         try {
-            GameDataManager.getAccount().reqHallCommand(JSON.stringify({
-                header:"查询_俱乐部_积分流水",
+            // 牌局流水用 agent_id 传目标成员 ID（命名叫 agent，但服务端接受任意成员），不传 user_id。
+            const payload:any = job.kind === "game" ? {
+                header:"查询_俱乐部_额度流水",
                 club_id:job.club,
-                user_id:job.user,
-                only_add:job.kind === "updown" ? 1 : 0,
+                agent_id:job.user,
                 count:job.count,
                 page:job.page,
                 context
-            }),"p@" + context);
+            } : {
+                header:"查询_俱乐部_积分流水",
+                club_id:job.club,
+                user_id:job.user,
+                only_add:1,
+                count:job.count,
+                page:job.page,
+                context
+            };
+            GameDataManager.getAccount().reqHallCommand(JSON.stringify(payload),"p@" + context);
         } catch(error) {
             clearTimeout(timer);
             this.recordsPending = null;
@@ -390,7 +405,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
     public OnClubGoldWater(raw:any,secondaryRaw?:any):void {
         if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean")) raw = secondaryRaw;
         const pending = this.recordsPending;
-        if(!pending) return;
+        if(!pending || pending.kind !== "updown") return;
         const data = this.parse(raw);
         if(!data) return;
         // 少数回包会带 context；对不上说明不是这次记录查询，交给其它页面处理。
@@ -437,6 +452,76 @@ export default class HallClubManagementApi implements ClubManagementApi {
             total:Number.isFinite(total) ? Math.max(0,total) : rows.length,
             page:Number.isFinite(page) ? page : 0
         });
+    }
+    /**
+     * ClubQuotaWater：查询_俱乐部_额度流水（agent_id 传目标成员 ID，返回其当前子树触发的流水；
+     * 代理含本人 + 当前 used 下级，普通成员只有本人）。
+     * 只保留牌局相关行：额度占用/额度回补（实际回包可能是带入/结算），或带 room_id 的行。
+     * quota/remark 单位是分，展示前换算成元；人员取 actor_guuid/opter_name，不能用 guuid/name
+     * （guuid/name 是额度归属人，通常是俱乐部创建者）。
+     */
+    public OnClubQuotaWater(raw:any,secondaryRaw?:any):void {
+        if(secondaryRaw !== undefined && (typeof raw === "number" || typeof raw === "boolean")) raw = secondaryRaw;
+        const pending = this.recordsPending;
+        if(!pending || pending.kind !== "game") return;
+        const data = this.parse(raw);
+        if(!data) return;
+        const pushedContext = this.context(data);
+        if(pushedContext && pushedContext !== pending.key) return;
+        let body:any = data;
+        if(!Array.isArray(body.ClubQuotaWater) && data.result !== undefined) {
+            const parsed = this.parse(data.result);
+            body = parsed !== null ? parsed : data.result;
+            if(body && body.ClubQuotaWater !== undefined) body = body;
+        }
+        const rows:any[] = body && Array.isArray(body.ClubQuotaWater) ? body.ClubQuotaWater :
+            Array.isArray(body) ? body : [];
+        if(!rows.length && !(body && Array.isArray(body.ClubQuotaWater))) return;
+        const items:ClubRecord[] = [];
+        for(const row of rows) {
+            if(!row || typeof row !== "object") continue;
+            const type = String(row.type || "");
+            const roomId = String(row.room_id || "");
+            // 牌局口径：额度占用/额度回补，或服务端实际使用的带入/结算，或任何带房间号的流水。
+            const gameType = ["额度占用","额度回补","带入","结算"].indexOf(type) >= 0 ||
+                /带入|结算/.test(type);
+            if(!gameType && roomId === "") continue;
+            const actorId = String(row.actor_guuid || "");
+            const actorName = String(row.opter_name || "");
+            items.push({
+                date:String(row.date || ""),
+                type,
+                amount:this.quotaYuan(row.quota),
+                balance:this.quotaBalance(row.remark),
+                roomId,
+                opterName:actorName,
+                userId:actorId,
+                userName:actorName || actorId
+            });
+        }
+        const first:any = rows[0] || {};
+        const total = Number(first.count);
+        const page = Number(first.number);
+        this.finishRecords({
+            items,
+            total:Number.isFinite(total) ? Math.max(0,total) : rows.length,
+            page:Number.isFinite(page) ? page : 0
+        });
+    }
+    /** 额度流水的 quota 是分；换算成元，最多两位小数。 */
+    private quotaYuan(value:any):number {
+        const fen = Number(value);
+        if(!Number.isFinite(fen)) return 0;
+        return Math.round(fen) / 100;
+    }
+    /** 额度流水的 remark 是变动后余额（分）；非数字备注原样保留。 */
+    private quotaBalance(value:any):string {
+        if(value === undefined || value === null) return "";
+        const raw = String(value).trim();
+        if(raw === "") return "";
+        const fen = Number(raw);
+        if(!Number.isFinite(fen)) return raw;
+        return String(Math.round(fen) / 100);
     }
     public RefreshBadges():void {
         const a=GameDataManager.getAccount();
@@ -507,7 +592,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
             },1500);
             return;
         }
-        // 额度记录：同步回包通常只有空壳，列表走 ClubGoldWater 推送。
+        // 额度记录：同步回包通常只有空壳，列表走 ClubGoldWater / ClubQuotaWater 推送。
         const recordsReply = !!this.recordsPending &&
             (key === this.recordsPending.key || (!key && Object.keys(this.pending).length === 0));
         if(recordsReply) {
@@ -522,6 +607,10 @@ export default class HallClubManagementApi implements ClubManagementApi {
             }
             let body:any=data.result;
             if(typeof body === "string") body=this.parse(body);
+            if(data.ClubQuotaWater || (body && Array.isArray(body.ClubQuotaWater))) {
+                this.OnClubQuotaWater(raw);
+                return;
+            }
             if(data.ClubGoldWater || (body && Array.isArray(body.ClubGoldWater))) {
                 this.OnClubGoldWater(raw);
                 return;
@@ -745,6 +834,8 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 isLeader:optionalFlag(row,["is_leader"]),
                 clubQuotaFen:(()=>{const q=Number(field(row,["quota"]));return Number.isFinite(q)?q:undefined;})(),
                 agentPercent:displayNumber(field(row,["percent","agent_percent"])),
+                // 暗扣目前没有单独查询接口；服务端一旦在成员行补字段就直接展示。
+                darkPercent:displayNumber(field(row,["dark_percent","dark","agent_dark_percent","agentDarkPercent","darkPercent"])),
                 // note 为 2026-10-30 新增的成员备注，服务端恒下发（无值为空串）。
                 note:optionalText(row,["note"]),
                 status:optionalText(row,["status"]),

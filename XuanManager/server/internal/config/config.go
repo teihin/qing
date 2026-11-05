@@ -31,6 +31,7 @@ type Config struct {
 	GameDBUser                 string
 	GameDBPassword             string
 	GameAdminURL               string
+	ServiceToken               string
 	GameMode                   string
 	GameExchangeSign           string
 	CredentialKey              string
@@ -72,6 +73,7 @@ func Load() (Config, error) {
 		GameDBUser:                 strings.TrimSpace(os.Getenv("XUAN_GAME_DB_USER")),
 		GameDBPassword:             os.Getenv("XUAN_GAME_DB_PASSWORD"),
 		GameAdminURL:               env("XUAN_GAME_ADMIN_URL", "http://127.0.0.1:8890"),
+		ServiceToken:               strings.TrimSpace(os.Getenv("XUAN_SERVICE_TOKEN")),
 		GameMode:                   strings.ToLower(env("XUAN_GAME_MODE", "club")),
 		GameExchangeSign:           strings.TrimSpace(os.Getenv("XUAN_GAME_EXCHANGE_SIGN")),
 		CredentialKey:              strings.TrimSpace(os.Getenv("XUAN_CREDENTIAL_KEY")),
@@ -104,6 +106,9 @@ func Load() (Config, error) {
 	}
 	if err := validateGameMode(cfg.GameMode); err != nil {
 		return Config{}, err
+	}
+	if cfg.ServiceToken != "" && len(cfg.ServiceToken) < 32 {
+		return Config{}, fmt.Errorf("XUAN_SERVICE_TOKEN 至少需要 32 个字符")
 	}
 	// 机器人登录密码的落库密钥：优先 XUAN_CREDENTIAL_KEY，没配就退到数据库口令。
 	// 退到数据库口令是为了让已有部署不额外加环境变量也能用；更换任一来源都会让旧密文解不开。

@@ -69,6 +69,7 @@ func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) h
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	s.mux.Handle("POST /api/service/clubs/{clubId}/members/{userId}/gold", s.serviceAuthorized(s.handleServiceClubMemberGold))
 	s.mux.HandleFunc("OPTIONS /api/game/registrations", s.handleRegistrationOptions)
 	s.mux.HandleFunc("POST /api/game/registrations", s.handleCreateGameRegistration)
 	s.mux.HandleFunc("OPTIONS /api/game/change-login-password", s.handleChangePasswordOptions)
@@ -172,6 +173,40 @@ func (s *Server) routes() {
 
 func (s *Server) authorized(permission string, mutate bool, next handlerFunc) http.Handler {
 	return s.authorizedAny([]string{permission}, mutate, next)
+}
+
+// serviceAuthorized 只接受本机直连（不经过 Caddy）的服务间请求，避免管理命令
+// 通过公网 /xuanmanager/api/service 暴露。
+func (s *Server) serviceAuthorized(next http.HandlerFunc) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.cfg.ServiceToken == "" {
+			writeError(w, http.StatusServiceUnavailable, "SERVICE_DISABLED", "后台服务通道未启用")
+			return
+		}
+		if strings.TrimSpace(r.Header.Get("X-Forwarded-For")) != "" || !loopbackRemote(r.RemoteAddr) {
+			writeError(w, http.StatusForbidden, "SERVICE_FORBIDDEN", "后台服务通道只允许本机直连")
+			return
+		}
+		auth := strings.TrimSpace(r.Header.Get("Authorization"))
+		token := ""
+		if len(auth) > 7 && strings.EqualFold(auth[:7], "bearer ") {
+			token = strings.TrimSpace(auth[7:])
+		}
+		if !security.EqualToken(token, s.cfg.ServiceToken) {
+			writeError(w, http.StatusUnauthorized, "SERVICE_UNAUTHORIZED", "后台服务令牌不正确")
+			return
+		}
+		next(w, r)
+	})
+}
+
+func loopbackRemote(remoteAddr string) bool {
+	host, _, err := net.SplitHostPort(remoteAddr)
+	if err != nil {
+		host = remoteAddr
+	}
+	ip := net.ParseIP(strings.TrimSpace(host))
+	return ip != nil && ip.IsLoopback()
 }
 
 func (s *Server) authorizedAny(permissions []string, mutate bool, next handlerFunc) http.Handler {

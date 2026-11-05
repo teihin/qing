@@ -18,6 +18,9 @@ type fakeStore struct {
 	messages     map[string]Message
 	attachments  map[string]Attachment
 	sessions     map[string]Session
+	hostings     map[string]Hosting
+	hostingReads map[string]string
+	clubGold     map[string]int64
 	seq          int
 }
 
@@ -32,6 +35,9 @@ func newFakeStore() *fakeStore {
 		messages:     map[string]Message{},
 		attachments:  map[string]Attachment{},
 		sessions:     map[string]Session{},
+		hostings:     map[string]Hosting{},
+		hostingReads: map[string]string{},
+		clubGold:     map[string]int64{},
 	}
 }
 
@@ -471,4 +477,69 @@ func itoa(value int) string {
 		value /= 10
 	}
 	return digits
+}
+
+// ---------------- 聊天托管（HostingStore） ----------------
+
+func (f *fakeStore) GetHosting(_ context.Context, guuid string) (Hosting, bool, error) {
+	item, ok := f.hostings[guuid]
+	return item, ok, nil
+}
+
+func (f *fakeStore) UpsertHosting(_ context.Context, item Hosting) error {
+	f.hostings[item.Guuid] = item
+	return nil
+}
+
+func (f *fakeStore) DeleteHosting(_ context.Context, guuid string) error {
+	delete(f.hostings, guuid)
+	return nil
+}
+
+func (f *fakeStore) ListHostings(_ context.Context) ([]Hosting, error) {
+	items := make([]Hosting, 0, len(f.hostings))
+	for _, item := range f.hostings {
+		items = append(items, item)
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Guuid < items[j].Guuid })
+	return items, nil
+}
+
+func (f *fakeStore) SetHostingRead(_ context.Context, conversationID, messageID string) error {
+	f.hostingReads[conversationID] = messageID
+	return nil
+}
+
+func (f *fakeStore) HostingUnreadCounts(_ context.Context, conversationIDs []string, hostedGuuid string) (map[string]int, error) {
+	result := map[string]int{}
+	wanted := map[string]bool{}
+	for _, id := range conversationIDs {
+		wanted[id] = true
+	}
+	for _, message := range f.messages {
+		if !wanted[message.ConversationID] || message.SenderGuuid == hostedGuuid {
+			continue
+		}
+		cursor := f.messages[f.hostingReads[message.ConversationID]]
+		if cursor.ID != "" {
+			if message.CreatedAt.Before(cursor.CreatedAt) {
+				continue
+			}
+			if message.CreatedAt.Equal(cursor.CreatedAt) && message.ID <= cursor.ID {
+				continue
+			}
+		}
+		result[message.ConversationID]++
+	}
+	return result, nil
+}
+
+// setClubGold 设置 fake 目录里的俱乐部积分；直接用于托管余额测试。
+func (f *fakeStore) setClubGold(clubID, guuid string, value int64) {
+	f.clubGold[clubID+"|"+guuid] = value
+}
+
+func (f *fakeStore) GetClubGold(_ context.Context, clubID, guuid string) (int64, bool, error) {
+	value, ok := f.clubGold[clubID+"|"+guuid]
+	return value, ok, nil
 }

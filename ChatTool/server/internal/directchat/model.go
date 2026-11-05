@@ -33,6 +33,8 @@ const (
 	CodeRateLimited         = "MESSAGE_RATE_LIMITED"
 	CodeMessageDuplicate    = "MESSAGE_DUPLICATE"
 	CodeRelationUnavailable = "DIRECT_RELATION_UNAVAILABLE"
+	CodeHostingForbidden    = "DIRECT_HOSTING_FORBIDDEN"
+	CodeHostingInactive     = "DIRECT_HOSTING_INACTIVE"
 )
 
 // Error 是可直接映射为 HTTP 响应的业务错误。
@@ -64,6 +66,8 @@ var (
 	errMediaTooLarge     = newError(http.StatusRequestEntityTooLarge, CodeMediaTooLarge, "媒体超过大小限制")
 	errRateLimited       = newError(http.StatusTooManyRequests, CodeRateLimited, "发送过于频繁，请稍后再试")
 	errRelationUnavail   = newError(http.StatusServiceUnavailable, CodeRelationUnavailable, "俱乐部关系服务暂时不可用")
+	errHostingForbidden  = newError(http.StatusForbidden, CodeHostingForbidden, "只有俱乐部群主、盟主或大盟主可以开启聊天托管")
+	errHostingInactive   = newError(http.StatusForbidden, CodeHostingInactive, "该账号未开启聊天托管")
 )
 
 // AsError 把任意错误转换为带错误码的业务错误；未知错误一律视为服务内部错误。
@@ -99,7 +103,7 @@ func CanCreateFromMemberList(role string) bool {
 // CanSendSystemNotice 表示该角色能否发系统通报（上下分/下分成功）。
 // 只有俱乐部管理角色能发，并且文案还要过 systemNoticePattern 的格式校验。
 func CanSendSystemNotice(role string) bool {
-	return role == RoleOwner || role == RoleLeader || role == RoleAgent
+	return role == RoleOwner || role == RoleLeader || role == RoleAgent || role == RoleUnionOwner
 }
 
 // NormalizeRole 把未知角色归一化为 member，避免脏数据影响权限判断。
@@ -139,6 +143,7 @@ type Club struct {
 	Unread     int    `json:"unread"`
 	OwnerGuuid string `json:"-"`
 	UnionID    string `json:"-"`
+	Mode       string `json:"-"`
 }
 
 // Union 是联盟模式 V2 的联盟实体（club_union_info）。
@@ -279,11 +284,12 @@ type ConversationView struct {
 
 // PeerView 是会话对方资料。
 type PeerView struct {
-	Guuid  string `json:"guuid"`
-	Name   string `json:"name"`
-	Note   string `json:"note,omitempty"`
-	Avatar string `json:"avatar"`
-	Role   string `json:"role"`
+	Guuid    string `json:"guuid"`
+	Name     string `json:"name"`
+	Note     string `json:"note,omitempty"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	RoleName string `json:"roleName,omitempty"`
 }
 
 // AttachmentView 是消息里的附件视图。客户端只能拿到临时地址，不暴露 storage_key。

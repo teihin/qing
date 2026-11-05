@@ -54,6 +54,10 @@ type Config struct {
 	DirectAllowDevLogin  bool
 	DirectMediaTicketTTL time.Duration
 	DirectCORSOrigins    []string
+
+	// 后台服务通道：客服托管上下分只调用 XuanManager，不直接访问游戏管理通道。
+	XuanManagerURL   string
+	XuanServiceToken string
 }
 
 func Load() (Config, error) {
@@ -156,6 +160,8 @@ func Load() (Config, error) {
 		DirectAllowDevLogin:  directDevLogin,
 		DirectMediaTicketTTL: directMediaTTL,
 		DirectCORSOrigins:    directCORSOrigins,
+		XuanManagerURL:       env("CHAT_XUAN_MANAGER_URL", "http://127.0.0.1:8891"),
+		XuanServiceToken:     strings.TrimSpace(os.Getenv("CHAT_XUAN_SERVICE_TOKEN")),
 	}
 	if cfg.DBUser == "" || cfg.DBPassword == "" {
 		return Config{}, fmt.Errorf("必须通过运行环境提供 CHAT_DB_USER 和 CHAT_DB_PASSWORD")
@@ -189,7 +195,28 @@ func Load() (Config, error) {
 	if cfg.DirectMaxVoiceMS <= cfg.DirectMinVoiceMS {
 		return Config{}, fmt.Errorf("CHAT_DIRECT_MAX_VOICE_MS 必须大于 CHAT_DIRECT_MIN_VOICE_MS")
 	}
+	if err := validateXuanManagerURL(cfg.XuanManagerURL); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+// validateXuanManagerURL 只允许本机后台服务，ChatTool 不直接访问游戏管理通道。
+func validateXuanManagerURL(raw string) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme != "http" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("CHAT_XUAN_MANAGER_URL 必须是完整的本机 HTTP 地址")
+	}
+	if parsed.Hostname() != "127.0.0.1" && parsed.Hostname() != "localhost" {
+		return fmt.Errorf("CHAT_XUAN_MANAGER_URL 只允许 127.0.0.1 或 localhost")
+	}
+	if parsed.Port() != "8891" {
+		return fmt.Errorf("CHAT_XUAN_MANAGER_URL 必须使用本机 8891 端口")
+	}
+	if parsed.Path != "" && parsed.Path != "/" {
+		return fmt.Errorf("CHAT_XUAN_MANAGER_URL 不能包含路径")
+	}
+	return nil
 }
 
 func publicPath(value string) string {

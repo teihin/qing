@@ -13,8 +13,9 @@ import (
 )
 
 // systemNoticePattern 是客户端唯一允许发出的系统通报格式：
-// 「玩家 名字 上分/下分/赠送 金额 成功」，可选带「，积分 A → B」。
-var systemNoticePattern = regexp.MustCompile(`^玩家 .{1,40} (上分|下分|赠送) [1-9]\d{0,11} 成功(，积分 \d{1,15} → \d{1,15})?$`)
+// 「玩家 名字 上分/下分/赠送 金额 成功」，可选带「，积分 A → B」；
+// 客服托管代发的通报末尾带「（客服托管）」。
+var systemNoticePattern = regexp.MustCompile(`^玩家 .{1,40} (上分|下分|赠送) [1-9]\d{0,11} 成功(，积分 \d{1,15} → \d{1,15})?(（客服托管）)?$`)
 
 // Directory 是游戏俱乐部目录查询接口。生产实现直接读取游戏库，
 // 测试使用内存实现。它不允许直聊服务写入游戏库。
@@ -27,6 +28,8 @@ type Directory interface {
 	GetUnionByClub(ctx context.Context, clubID string) (Union, bool, error)
 	/** 跨俱乐部展示昵称/头像（联盟总群主不是对方俱乐部成员）。 */
 	GetAccount(ctx context.Context, guuid string) (GameUser, bool, error)
+	/** 账号在指定俱乐部的当前积分（元）。 */
+	GetClubGold(ctx context.Context, clubID, guuid string) (int64, bool, error)
 }
 
 // Store 是直聊自身数据访问接口。SQLStore 是生产实现；测试使用内存实现。
@@ -647,7 +650,31 @@ func (s *Service) peerView(ctx context.Context, session Session, viewer Member, 
 	if s.canSeeMemberNote(ctx, clubID, viewer, member) {
 		note = member.Note
 	}
-	return PeerView{Guuid: member.Guuid, Name: member.Name, Note: note, Avatar: member.Avatar, Role: member.Role}
+	return PeerView{Guuid: member.Guuid, Name: member.Name, Note: note, Avatar: member.Avatar,
+		Role: member.Role, RoleName: s.roleDisplayName(ctx, clubID, member)}
+}
+
+// roleDisplayName 与游戏内统一：联盟创始人=大盟主，已入盟俱乐部创始人=盟主，
+// 未入盟创始人=群主，代理/上级代理=合伙人。
+func (s *Service) roleDisplayName(ctx context.Context, clubID string, member Member) string {
+	switch member.Role {
+	case RoleUnionOwner:
+		return "大盟主"
+	case RoleOwner:
+		if member.IsUnionOwner {
+			return "大盟主"
+		}
+		if _, ok, err := s.directory.GetUnionByClub(ctx, clubID); err == nil && ok {
+			return "盟主"
+		}
+		return "群主"
+	case RoleLeader, RoleAgent:
+		return "合伙人"
+	case RoleManager:
+		return "管理员"
+	default:
+		return "玩家"
+	}
 }
 
 // canSeeMemberNote 只允许目标成员的俱乐部上级链查看备注；下级、同级和无关系成员不返回。

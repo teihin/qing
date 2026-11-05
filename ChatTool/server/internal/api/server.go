@@ -79,9 +79,10 @@ type Server struct {
 	mediaTicketMu  sync.Mutex
 	mediaTickets   map[string]mediaAccessTicket
 	// 俱乐部 1 对 1 私聊：独立路由、独立数据表，与客服共用进程和配置。
-	direct      *directchat.Service
-	directStore *directchat.SQLStore
-	directMedia *directchat.MediaStorage
+	direct        *directchat.Service
+	directHandler *directchat.Handler
+	directStore   *directchat.SQLStore
+	directMedia   *directchat.MediaStorage
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, agentPrincipal)
@@ -138,8 +139,22 @@ func (s *Server) routesDirect() {
 		LinkKey: s.cfg.PlayerLinkKey,
 		LinkTTL: s.cfg.PlayerLinkTTL,
 	}, s.logger)
-	directchat.NewHandler(service, s.logger, s.cfg.DirectCORSOrigins).Register(s.mux)
+	handler := directchat.NewHandler(service, s.logger, s.cfg.DirectCORSOrigins)
+	handler.SetHostedMessageNotifier(func(notice directchat.HostedMessageNotice) {
+		// 托管账号收到的消息实时推给全部客服工作台，用于声音提示和红点。
+		if s.logger != nil {
+			s.logger.Info("推送托管消息到客服", "hosted_guuid", notice.HostedGuuid,
+				"conversation_id", notice.ConversationID, "incoming", notice.Incoming)
+		}
+		s.hub.publish("hosted", liveEvent{Type: "hosted.message", ConversationID: notice.ConversationID, Payload: map[string]any{
+			"hostedGuuid": notice.HostedGuuid, "messageId": notice.MessageID, "clubId": notice.ClubID,
+			"senderName": notice.SenderName, "messageType": notice.MessageType, "preview": notice.Preview,
+			"incoming": notice.Incoming,
+		}})
+	})
+	handler.Register(s.mux)
 	s.direct = service
+	s.directHandler = handler
 	s.directStore = store
 	s.directMedia = media
 }
@@ -260,6 +275,12 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/agent/events", s.agentAuthorized(false, false, s.handleAgentEvents))
 	s.mux.Handle("GET /api/agent/dashboard", s.agentAuthorized(false, false, s.handleAgentDashboard))
 	s.mux.Handle("GET /api/agent/conversations", s.agentAuthorized(false, false, s.handleAgentConversations))
+	s.mux.Handle("GET /api/agent/hosted/groups", s.agentAuthorized(false, false, s.handleHostedGroups))
+	s.mux.Handle("GET /api/agent/hosted/conversations", s.agentAuthorized(false, false, s.handleHostedConversations))
+	s.mux.Handle("GET /api/agent/hosted/conversations/{id}/balance", s.agentAuthorized(false, false, s.handleHostedBalance))
+	s.mux.Handle("GET /api/agent/hosted/conversations/{id}/messages", s.agentAuthorized(false, false, s.handleHostedMessages))
+	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/messages", s.agentAuthorized(true, false, s.handleHostedSendMessage))
+	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/gold", s.agentAuthorized(true, false, s.handleHostedGold))
 	s.mux.Handle("GET /api/agent/conversations/{id}", s.agentAuthorized(false, false, s.handleAgentConversation))
 	s.mux.Handle("GET /api/agent/conversations/{id}/messages", s.agentAuthorized(false, false, s.handleAgentMessages))
 	s.mux.Handle("POST /api/agent/conversations/{id}/messages", s.agentAuthorized(true, false, s.handleAgentSendMessage))

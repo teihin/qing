@@ -619,3 +619,54 @@ textarea { resize: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* 聊天托管：按联盟/俱乐部折叠的托管账号与会话列表 */
+.conversation-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.conversation-tabs button { font-size: 13px; }
+.hosted-list { height: calc(100% - 122px); padding: 8px 9px 20px; }
+.hosted-group { margin-bottom: 8px; }
+.hosted-group-head { width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px; color: #2f4a45; border: 0; border-radius: 10px; background: #eef5f2; text-align: left; }
+.hosted-group-head strong { font-size: 15px; }
+.hosted-group-head small { color: #758a86; font-size: 12px; }
+.hosted-group-head i { margin-left: auto; color: #758a86; font-style: normal; }
+.hosted-group-badge { padding: 2px 7px; color: #fff; border-radius: 8px; background: #159c78; font-size: 11px; }
+.hosted-group-badge.hosted-union { background: #3f6fae; }
+.hosted-owner-row { width: 100%; display: flex; align-items: center; gap: 9px; padding: 9px 10px; color: inherit; border: 0; border-radius: 9px; background: transparent; text-align: left; }
+.hosted-owner-row:hover { background: #f3f8f6; }
+.hosted-owner-row.selected { background: #e9f6f1; }
+.hosted-owner-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.hosted-owner-copy strong { font-size: 14px; }
+.hosted-owner-copy small { color: #7b8f8b; font-size: 11px; }
+.hosted-owner-meta { color: #7b8f8b; font-size: 11px; white-space: nowrap; }
+.hosted-owner-row i { color: #8ba09b; font-style: normal; }
+.hosted-conversation-row { position: relative; width: calc(100% - 18px); margin-left: 18px; display: flex; flex-direction: column; gap: 2px; padding: 8px 34px 8px 10px; color: inherit; border: 0; border-left: 2px solid #d8e7e1; background: transparent; text-align: left; }
+.hosted-conversation-row:hover { background: #f3f8f6; }
+.hosted-conversation-row.selected { background: #e9f6f1; border-left-color: #159c78; }
+.hosted-conversation-title { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.hosted-conversation-title time { color: #8ba09b; font-size: 11px; }
+.hosted-conversation-row small { color: #7b8f8b; font-size: 11px; }
+.hosted-conversation-preview { overflow: hidden; color: #5d716d; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.hosted-unread { position: absolute; right: 10px; bottom: 10px; min-width: 20px; height: 20px; padding: 0 5px; color: #fff; border-radius: 10px; background: #e15f57; font-size: 11px; line-height: 20px; text-align: center; }
+.hosted-hint { margin: 10px; color: #8ba09b; font-size: 12px; }
+.hosted-reply-hint { color: #7b8f8b; font-size: 12px; }
+.hosted-composer { min-height: 170px; }
+.hosted-image-button { display: block; padding: 0; border: 0; background: transparent; cursor: zoom-in; }
+.hosted-image-button img { display: block; max-width: min(320px, 100%); max-height: 320px; border-radius: 8px; object-fit: cover; }
+.hosted-voice { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; color: #2f4a45; border: 1px solid #cfe0da; border-radius: 18px; background: #f4faf7; font-size: 14px; }
+.hosted-voice.playing { color: #08765c; border-color: #159c78; background: #e3f4ec; }
+.hosted-voice:disabled { color: #9aaba7; cursor: not-allowed; }
+.chat-role { margin-left: 6px; padding: 1px 6px; color: #4d7468; border-radius: 8px; background: #e9f6f1; font-size: 11px; font-style: normal; font-weight: 500; vertical-align: 2px; }
+.hosted-count-badge { flex: 0 0 auto; min-width: 20px; height: 20px; padding: 0 6px; color: #fff; border-radius: 10px; background: #e15f57; font-size: 11px; font-weight: 600; line-height: 20px; text-align: center; }
+.hosted-group-head .hosted-count-badge { margin-left: auto; }
+.hosted-group-head .hosted-count-badge + i { margin-left: 6px; }
+.hosted-owner-row .hosted-count-badge { margin-right: 4px; }
+.hosted-conversation-row.unread .hosted-conversation-title strong { color: #c24a42; }
+.hosted-conversation-row.unread .hosted-conversation-preview { color: #8a4a45; font-weight: 600; }
+.hosted-gold-button { padding: 4px 12px !important; color: #7a5a12 !important; border: 1px solid #e3c98f !important; border-radius: 13px; background: #fff7e6 !important; font-size: 13px !important; }
+.hosted-gold-button:hover { background: #ffefc9 !important; }
+.hosted-gold-button:disabled { opacity: .45; }
+.hosted-gold-modal { width: min(440px, 100%); }
+.hosted-gold-modal input { width: calc(100% - 44px); height: 44px; margin: 0 22px; padding: 0 12px; outline: 0; border: 1px solid #d6e2df; border-radius: 9px; color: var(--ink); background: #f8faf9; font-size: 17px; }
+.hosted-gold-target { margin: 14px 22px 0; color: #5f7671; font-size: 12px; line-height: 1.7; }
+.hosted-gold-modal label { padding-top: 12px; }
+.hosted-balance { padding: 3px 10px; color: #2f4a45; border-radius: 12px; background: #eef6f2; font-size: 13px; font-weight: 600; white-space: nowrap; }

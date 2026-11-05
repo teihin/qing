@@ -2555,6 +2555,7 @@ export default class panelMain extends UIPanelViewBase {
         if(page != null)
         {
             this.switchTabSel("消息");
+            this.RefreshDirectChatPage(page);
             return;
         }
         if(this.directChatLoading)
@@ -2567,9 +2568,11 @@ export default class panelMain extends UIPanelViewBase {
                 cc.error(err && err.message ? err.message : err);
                 return;
             }
-            if(this.node.getChildByName("Main").getChildByName("消息") != null)
+            let existing = this.node.getChildByName("Main").getChildByName("消息");
+            if(existing != null)
             {
                 this.switchTabSel("消息");
+                this.RefreshDirectChatPage(existing);
                 return;
             }
             let node = cc.instantiate(prefab);
@@ -2578,7 +2581,18 @@ export default class panelMain extends UIPanelViewBase {
             node.active = true;
             this.directChatPage = node;
             this.switchTabSel("消息");
+            this.RefreshDirectChatPage(node);
         });
+    }
+
+    /** 点击底栏「消息」时与下拉刷新同一入口；已在消息页也重新拉第一页。 */
+    private RefreshDirectChatPage(page:cc.Node):void
+    {
+        if(page == null || !cc.isValid(page))
+            return;
+        let view:any = page.getComponent("panelMessage");
+        if(view != null && typeof view.RefreshFromTop === "function")
+            view.RefreshFromTop();
     }
 
     switchTabSel(strName:string)

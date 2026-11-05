@@ -53,6 +53,23 @@ function getMessageAudioContext(): AudioContext | null {
   }
 }
 
+// 浏览器只允许在用户交互后播放声音。登录后首次点击/按键时解锁，
+// 避免之后 SSE 推送的新消息因 AudioContext 处于 suspended 而没有声音。
+function unlockMessageAudio() {
+  const context = getMessageAudioContext()
+  if (context && context.state === 'suspended') void context.resume().catch(() => undefined)
+}
+
+if (typeof window !== 'undefined') {
+  const unlockOnce = () => {
+    unlockMessageAudio()
+    window.removeEventListener('pointerdown', unlockOnce)
+    window.removeEventListener('keydown', unlockOnce)
+  }
+  window.addEventListener('pointerdown', unlockOnce, { passive: true })
+  window.addEventListener('keydown', unlockOnce)
+}
+
 export async function playIncomingMessageSound(): Promise<void> {
   const context = getMessageAudioContext()
   if (!context) return

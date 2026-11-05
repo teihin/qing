@@ -218,6 +218,8 @@ func (s *Server) handleAgentEvents(w http.ResponseWriter, r *http.Request, p age
 	defer cancelChannel()
 	team, cancelTeam := s.hub.subscribe("team")
 	defer cancelTeam()
+	hosted, cancelHosted := s.hub.subscribe("hosted")
+	defer cancelHosted()
 	merged := make(chan liveEvent, 32)
 	go func() {
 		for {
@@ -235,6 +237,12 @@ func (s *Server) handleAgentEvents(w http.ResponseWriter, r *http.Request, p age
 					return
 				}
 			case event := <-team:
+				select {
+				case merged <- event:
+				case <-r.Context().Done():
+					return
+				}
+			case event := <-hosted:
 				select {
 				case merged <- event:
 				case <-r.Context().Done():

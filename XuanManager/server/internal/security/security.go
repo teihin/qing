@@ -78,3 +78,11 @@ func EqualTokenHash(value, expectedHash string) bool {
 	}
 	return subtle.ConstantTimeCompare([]byte(actual), []byte(expectedHash)) == 1
 }
+
+// EqualToken 比较服务间共享口令；两端都必须非空。
+func EqualToken(value, expected string) bool {
+	if value == "" || expected == "" || len(value) != len(expected) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(value), []byte(expected)) == 1
+}

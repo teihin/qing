@@ -27,6 +27,21 @@ type Handler struct {
 	allowedOrigins []string
 	wsTicketMu     sync.Mutex
 	wsTickets      map[string]wsTicket
+	// hostedNotifier 由客服进程注入：托管账号收到消息时推送到客服工作台。
+	hostedNotifier func(HostedMessageNotice)
+}
+
+// HostedMessageNotice 是托管账号收到或发出新消息时的客服通知内容。
+type HostedMessageNotice struct {
+	HostedGuuid    string
+	ConversationID string
+	MessageID      string
+	ClubID         string
+	SenderName     string
+	MessageType    string
+	Preview        string
+	/** true=客户发给托管账号；false=托管账号自己发出。 */
+	Incoming bool
 }
 
 type wsTicket struct {
@@ -64,6 +79,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/direct/me", h.authorized(h.handleMe))
 	mux.HandleFunc("GET /api/direct/clubs", h.authorized(h.handleClubs))
 	mux.HandleFunc("GET /api/direct/unread", h.authorized(h.handleUnread))
+	mux.HandleFunc("GET /api/direct/hosting", h.authorized(h.handleHostingStatus))
+	mux.HandleFunc("POST /api/direct/hosting", h.authorized(h.handleSetHosting))
 	mux.HandleFunc("GET /api/direct/clubs/{clubId}/members", h.authorized(h.handleMembers))
 	mux.HandleFunc("GET /api/direct/clubs/{clubId}/conversations", h.authorized(h.handleConversations))
 	mux.HandleFunc("POST /api/direct/clubs/{clubId}/conversations", h.authorized(h.handleCreateConversation))
@@ -228,6 +245,61 @@ func (h *Handler) handleUnread(w http.ResponseWriter, r *http.Request, session S
 	writeDirectData(w, http.StatusOK, view)
 }
 
+// ---------------- 聊天托管 ----------------
+
+func (h *Handler) handleHostingStatus(w http.ResponseWriter, r *http.Request, session Session) {
+	view, err := h.service.HostingStatus(r.Context(), session)
+	if err != nil {
+		writeDirectError(w, err)
+		return
+	}
+	writeDirectData(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleSetHosting(w http.ResponseWriter, r *http.Request, session Session) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if !decodeDirectJSON(w, r, &body, 4<<10) {
+		return
+	}
+	view, err := h.service.SetHosting(r.Context(), session, body.Enabled)
+	if err != nil {
+		writeDirectError(w, err)
+		return
+	}
+	writeDirectData(w, http.StatusOK, view)
+}
+
+// SetHostedMessageNotifier 注册托管新消息通知；回调只做内存事件转发，不阻塞发送。
+func (h *Handler) SetHostedMessageNotifier(notifier func(HostedMessageNotice)) {
+	h.hostedNotifier = notifier
+}
+
+// PublishMessageNew 通知指定账号有新消息。托管代发时同时通知对方和托管账号本人，
+// 让代发内容在游戏客户端和客服工作台都能及时刷新。
+func (h *Handler) PublishMessageNew(recipients []string, conversationID, messageID, clubID string) {
+	if h.realtime == nil || strings.TrimSpace(conversationID) == "" {
+		return
+	}
+	seen := map[string]bool{}
+	for _, guuid := range recipients {
+		guuid = strings.TrimSpace(guuid)
+		if guuid == "" || seen[guuid] {
+			continue
+		}
+		seen[guuid] = true
+		h.realtime.publish(guuid, RealtimeEvent{
+			Type: "message.new",
+			Data: map[string]any{
+				"conversationId": conversationID,
+				"messageId":      messageID,
+				"clubId":         clubID,
+			},
+		})
+	}
+}
+
 func (h *Handler) handleMembers(w http.ResponseWriter, r *http.Request, session Session) {
 	query := r.URL.Query()
 	page, _ := strconv.Atoi(query.Get("page"))
@@ -333,6 +405,31 @@ func (h *Handler) sendMessageAndPublish(ctx context.Context, session Session, co
 				"clubId":         clubID,
 			},
 		})
+	}
+	// 托管账号收到消息、或托管账号自己从客户端发出消息，都实时推给客服工作台；
+	// 否则客服只能等轮询，表现为「客户端发的消息很慢」。
+	if !duplicate && h.hostedNotifier != nil {
+		notified := map[string]bool{}
+		notice := func(hostedGuuid string, incoming bool) {
+			hostedGuuid = strings.TrimSpace(hostedGuuid)
+			if hostedGuuid == "" || notified[hostedGuuid] {
+				return
+			}
+			notified[hostedGuuid] = true
+			h.hostedNotifier(HostedMessageNotice{
+				HostedGuuid: hostedGuuid, ConversationID: conversationID, MessageID: view.ID,
+				ClubID: clubID, SenderName: view.SenderName, MessageType: view.MessageType,
+				Preview: view.Text, Incoming: incoming,
+			})
+		}
+		if _, hosted, err := h.service.HostingRecord(ctx, session.Guuid); err == nil && hosted {
+			notice(session.Guuid, false)
+		}
+		if recipient != "" {
+			if _, hosted, err := h.service.HostingRecord(ctx, recipient); err == nil && hosted {
+				notice(recipient, true)
+			}
+		}
 	}
 	return view, duplicate, nil
 }

@@ -126,6 +126,22 @@ export interface DirectUnread
     byClub:{[clubId:string]:number};
 }
 
+/** 聊天托管状态：俱乐部群主、盟主和大盟主可开启。 */
+export interface DirectHostingInfo
+{
+    eligible:boolean;
+    enabled:boolean;
+    role:string;
+    roleName:string;
+    groupType:string;
+    groupId:string;
+    groupName:string;
+    clubId:string;
+    clubName:string;
+    enabledAt:string;
+    message:string;
+}
+
 /** 图片来源：相册/文件选择，或调用相机现拍。 */
 export type DirectImageSource = "library" | "camera";
 
@@ -209,6 +225,7 @@ export default class DirectChatManager
     private allConversationCache:DirectConversationPage = null;
     private memberCache:{[clubId:string]:DirectMemberPage} = {};
     private pendingClientIds:{[key:string]:string} = {};
+    private hostingInfo:DirectHostingInfo = null;
 
     // ---------------- 长连接与断线补偿 ----------------
 
@@ -367,6 +384,7 @@ export default class DirectChatManager
         this.allConversationCache = null;
         this.memberCache = {};
         this.pendingClientIds = {};
+        this.hostingInfo = null;
         this.Fire("accountChanged",guuid);
         this.Fire("unread",0,{});
     }
@@ -788,6 +806,50 @@ export default class DirectChatManager
             this.ApplyUnread(unread);
             return unread;
         });
+    }
+
+    // ================= 聊天托管 =================
+
+    /** 查询托管资格与开关状态。force 为 false 时复用本次登录内的结果。 */
+    public HostingStatus(force:boolean = false):Promise<DirectHostingInfo>
+    {
+        if(!force && this.hostingInfo != null)
+            return Promise.resolve(this.hostingInfo);
+        return this.Request("GET","/hosting").then((data:any)=>{
+            let info = this.NormalizeHostingInfo(data);
+            this.hostingInfo = info;
+            this.Fire("hosting",info);
+            return info;
+        });
+    }
+
+    /** 开启/关闭当前账号的聊天托管；服务端会再次校验大群主/盟主身份。 */
+    public SetHosting(enabled:boolean):Promise<DirectHostingInfo>
+    {
+        return this.Request("POST","/hosting",{enabled:enabled}).then((data:any)=>{
+            let info = this.NormalizeHostingInfo(data);
+            this.hostingInfo = info;
+            this.Fire("hosting",info);
+            return info;
+        });
+    }
+
+    private NormalizeHostingInfo(data:any):DirectHostingInfo
+    {
+        let source = data == null ? {} : data;
+        return {
+            eligible:source.eligible === true,
+            enabled:source.enabled === true,
+            role:String(source.role || ""),
+            roleName:String(source.roleName || ""),
+            groupType:String(source.groupType || ""),
+            groupId:String(source.groupId || ""),
+            groupName:String(source.groupName || ""),
+            clubId:String(source.clubId || ""),
+            clubName:String(source.clubName || ""),
+            enabledAt:String(source.enabledAt || ""),
+            message:String(source.message || "")
+        };
     }
 
     /**

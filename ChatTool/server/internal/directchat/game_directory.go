@@ -3,8 +3,11 @@ package directchat
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -92,10 +95,10 @@ func (d *GameDirectory) getClubUncached(ctx context.Context, clubID string) (Clu
 		return Club{}, errClubNotFound
 	}
 	var club Club
-	err := d.db.QueryRowContext(ctx, `SELECT club_guuid, COALESCE(club_name, ''), COALESCE(union_id, '')
+	err := d.db.QueryRowContext(ctx, `SELECT club_guuid, COALESCE(club_name, ''), COALESCE(union_id, ''), COALESCE(club_mode, '')
 FROM club_guuid_info
 WHERE club_guuid = ? AND COALESCE(club_status, '') NOT IN ('init', 'del')
-LIMIT 1`, clubID).Scan(&club.ClubID, &club.ClubName, &club.UnionID)
+LIMIT 1`, clubID).Scan(&club.ClubID, &club.ClubName, &club.UnionID, &club.Mode)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Club{}, errClubNotFound
 	}
@@ -142,6 +145,107 @@ LIMIT 1`, clubID).Scan(&union.ID, &union.Name, &union.OwnerGuuid, &union.OwnerCl
 		return Union{}, false, err
 	}
 	return union, true, nil
+}
+
+// GetClubGold 读取账号在指定俱乐部的当前积分（元）。只读游戏库，
+// 按俱乐部模式优先取 sm_club_gold2（茶楼/带分），否则取 sm_club_gold。
+func (d *GameDirectory) GetClubGold(ctx context.Context, clubID, guuid string) (int64, bool, error) {
+	clubID = strings.TrimSpace(clubID)
+	guuid = strings.TrimSpace(guuid)
+	if clubID == "" || guuid == "" {
+		return 0, false, nil
+	}
+	club, err := d.GetClub(ctx, clubID)
+	if err != nil {
+		if errors.Is(err, errClubNotFound) {
+			return 0, false, nil
+		}
+		return 0, false, err
+	}
+	var gold, gold2 any
+	err = d.db.QueryRowContext(ctx, `SELECT sm_club_gold, sm_club_gold2 FROM tbl_Account WHERE sm_guuid = ? LIMIT 1`, guuid).Scan(&gold, &gold2)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	if isSecondaryClubMode(club.Mode) {
+		if value, ok := clubGoldFrom(gold2, clubID); ok {
+			return value, true, nil
+		}
+		value, ok := clubGoldFrom(gold, clubID)
+		return value, ok, nil
+	}
+	if value, ok := clubGoldFrom(gold, clubID); ok {
+		return value, true, nil
+	}
+	value, ok := clubGoldFrom(gold2, clubID)
+	return value, ok, nil
+}
+
+func isSecondaryClubMode(mode string) bool {
+	mode = strings.TrimSpace(mode)
+	return mode == "2" || mode == "3"
+}
+
+// clubGoldFrom 兼容数字和 {"俱乐部ID": 积分} 两种历史形态；-99 表示无数据。
+func clubGoldFrom(raw any, clubID string) (int64, bool) {
+	text := strings.TrimSpace(stringOrEmpty(raw))
+	if text == "" {
+		return 0, false
+	}
+	if value, err := strconv.ParseInt(text, 10, 64); err == nil {
+		if value == -99 {
+			return 0, false
+		}
+		return value, true
+	}
+	var mapping map[string]any
+	if err := json.Unmarshal([]byte(text), &mapping); err != nil {
+		return 0, false
+	}
+	value, ok := mapping[clubID]
+	if !ok {
+		return 0, false
+	}
+	number, err := toInt64(value)
+	if err != nil || number == -99 {
+		return 0, false
+	}
+	return number, true
+}
+
+func stringOrEmpty(value any) string {
+	switch item := value.(type) {
+	case nil:
+		return ""
+	case []byte:
+		return string(item)
+	case string:
+		return item
+	default:
+		return fmt.Sprint(item)
+	}
+}
+
+func toInt64(value any) (int64, error) {
+	switch item := value.(type) {
+	case float64:
+		return int64(item), nil
+	case json.Number:
+		return item.Int64()
+	case int64:
+		return item, nil
+	case int:
+		return int64(item), nil
+	case string:
+		return strconv.ParseInt(strings.TrimSpace(item), 10, 64)
+	case []byte:
+		return strconv.ParseInt(strings.TrimSpace(string(item)), 10, 64)
+	default:
+		return 0, fmt.Errorf("unsupported number %T", value)
+	}
 }
 
 // GetAccount 按 guuid 读取跨俱乐部展示所需的昵称和头像。

@@ -3,7 +3,7 @@ import Tool from "../common/Tool";
 import UIManager from "../common/UIManager";
 import { ShowPanelMode } from "../common/GameDef";
 import ImageManager from "../logic/ImageManager";
-import DirectChatManager, { DirectChatError, DirectConversation } from "../logic/DirectChatManager";
+import DirectChatManager, { DirectChatError, DirectConversation, DirectHostingInfo } from "../logic/DirectChatManager";
 import DirectChatTime from "../common/DirectChatTime";
 import Debug from "../common/Debug";
 
@@ -46,6 +46,12 @@ export default class panelMessage extends UIPanelViewBase {
     private bottomTipNode:cc.Node = null;
     private bottomTipLabel:cc.Label = null;
 
+    /** 右上角聊天托管开关：只对服务端判定符合身份的大群主/盟主显示。 */
+    private hostingButton:cc.Node = null;
+    private hostingLabel:cc.Label = null;
+    private hostingInfo:DirectHostingInfo = null;
+    private hostingBusy:boolean = false;
+
     private list:DirectConversation[] = [];
     private page:number = 0;
     private pageSize:number = PAGE_SIZE;
@@ -85,6 +91,11 @@ export default class panelMessage extends UIPanelViewBase {
         this.pullTipLabel = this.pullTipNode == null ? null : this.pullTipNode.getComponent(cc.Label);
         this.bottomTipNode = this.NodeOf("底部提示");
         this.bottomTipLabel = this.bottomTipNode == null ? null : this.bottomTipNode.getComponent(cc.Label);
+        this.hostingButton = this.NodeOf("聊天托管");
+        let hostingText = this.hostingButton == null ? null : Tool.GetChild(this.hostingButton,"文字");
+        this.hostingLabel = hostingText == null ? null : hostingText.getComponent(cc.Label);
+        if(this.hostingButton != null)
+            this.hostingButton.active = false;
         if(this.pullTipNode != null)
             this.pullTipNode.active = false;
         if(this.bottomTipNode != null)
@@ -104,6 +115,7 @@ export default class panelMessage extends UIPanelViewBase {
     {
         this.started = true;
         this.Refresh(true);
+        this.LoadHostingStatus(false);
     }
 
     onEnable()
@@ -111,6 +123,8 @@ export default class panelMessage extends UIPanelViewBase {
         // 常驻在 Main 下，切页回来时只刷新第一页并合并，保留已加载的后续页和滚动位置。
         if(!this.started || !this.node.activeInHierarchy)
             return;
+        // 身份或托管状态可能在别处变化（入盟、换俱乐部、客服关闭），切回消息页时重查一次。
+        this.LoadHostingStatus(true);
         if(this.list.length === 0)
         {
             let restored = this.RestoreManagerCache() || this.RestoreCachedList();
@@ -552,9 +566,10 @@ export default class panelMessage extends UIPanelViewBase {
         this.HidePullTip();
     }
 
-    private RefreshFromTop():void
+    /** 与下拉松手共用：大厅底栏「消息」按钮每次点击也走这里，重取第一页并回到顶部。 */
+    public RefreshFromTop():void
     {
-        if(this.refreshing || this.loadingFirst || this.manager.CurrentGuuid() === "")
+        if(this.manager == null || this.refreshing || this.loadingFirst || this.manager.CurrentGuuid() === "")
             return;
         this.refreshing = true;
         this.ShowPullTip("刷新中…");
@@ -953,9 +968,69 @@ export default class panelMessage extends UIPanelViewBase {
         {
             this.Refresh(true);
         }
+        else if(name === "聊天托管")
+        {
+            this.ToggleHosting();
+        }
         else
         {
             super.onButtonClick(button);
         }
+    }
+
+    // ================= 聊天托管 =================
+
+    private LoadHostingStatus(force:boolean):void
+    {
+        if(this.manager.CurrentGuuid() === "")
+        {
+            if(this.hostingButton != null)
+                this.hostingButton.active = false;
+            return;
+        }
+        this.manager.HostingStatus(force).then((info)=>{
+            this.ApplyHostingInfo(info);
+        }).catch(()=>{
+            // 服务端未更新或网络异常时不显示入口，避免给出无法使用的开关。
+            if(this.hostingButton != null)
+                this.hostingButton.active = false;
+        });
+    }
+
+    private ApplyHostingInfo(info:DirectHostingInfo):void
+    {
+        this.hostingInfo = info;
+        if(this.hostingButton != null)
+            this.hostingButton.active = info != null && info.eligible;
+        if(this.hostingLabel != null)
+            this.hostingLabel.string = info != null && info.enabled ? "聊天托管：已开启" : "聊天托管：未开启";
+    }
+
+    private ToggleHosting():void
+    {
+        if(this.hostingBusy)
+            return;
+        if(this.hostingInfo == null || !this.hostingInfo.eligible)
+        {
+            this.ShowToast("只有俱乐部群主、盟主或大盟主可以开启聊天托管");
+            return;
+        }
+        let enabled = !this.hostingInfo.enabled;
+        let message = enabled ?
+            "开启后，客服可以查看你收到的私聊消息并代你回复，确定开启吗？" :
+            "关闭后客服将立即无法查看和回复你的私聊，确定关闭吗？";
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message,[(confirmed:boolean)=>{
+            if(!confirmed || this.hostingBusy)
+                return;
+            this.hostingBusy = true;
+            this.manager.SetHosting(enabled).then((info)=>{
+                this.hostingBusy = false;
+                this.ApplyHostingInfo(info);
+                this.ShowToast(info != null && info.enabled ? "聊天托管已开启" : "聊天托管已关闭");
+            }).catch((error:any)=>{
+                this.hostingBusy = false;
+                this.ShowToast(this.ErrorText(error));
+            });
+        }]);
     }
 }
