@@ -93,17 +93,12 @@
 
 - 原文见[归档](archive/2026-11-05/current-nov04-room-jackpot.md)，奖池配置细节见[交接](handoffs/2026-11-04-game-settings-jackpot.md)。
 
-## 2026-11-04 我的页：联盟红利按钮与面板（未构建、未真机）
+## 2026-11-04～11-06 我的红利：V2 统计 / 联盟红利 / 合伙人入口（未构建、未真机）
 
-- 当前俱乐部卡片联盟区新增「联盟红利」，仅联盟创建者可见；复用「我的红利」新增 `panelUnionHongli`，`panelMyHongli` 加 `mode=union`。
-- 联盟统计/明细/提取走 `ClubUnionBonusStats`、`ClubUnionBonusList`、`提取_联盟_红利`；累计=未提取+累计提取，明细“类型”列显示来源俱乐部。
-- 卡片高度总群主 320→410；tsc 无新增错误、Prefab 引用/UUID 检查通过；Creator 导入/构建/真机和真实回包待验证。详见[交接](handoffs/2026-11-04-union-hongli-panel.md)。
-
-## 2026-11-04 我的红利：改为俱乐部 V2 统计与明细（未构建、未真机）
-
-- 顶部改用 `查询_俱乐部_红利_统计`/`ClubBonusStats`：今日/昨日新增、未提取余额、累计提取；累计红利=未提取+累计提取。明细改用 `查询_俱乐部_红利_明细`/`ClubBonusList`；提取改用 `提取_俱乐部_红利`（按全部整数元）。
-- 删除账号 `hongli`/`all_hongli`、旧 `查询_俱乐部_代理_收益`、`异步_查询_红利_信息` 和 `HongliList` 回退；无 `club_id` 只提示无俱乐部。`panelHongli` 打开时补传当前俱乐部 ID。
-- tsc 无新增类型错误；00:57 正式机 KBE/8890 不在线，真实回包、Creator/构建/真机待验证。详见[交接](handoffs/2026-11-04-my-hongli-club-stats.md)。
+- 「我的」→ 当前俱乐部卡片的「我的收益」（打开 `panelMyHongli` 我的红利）原只给创建者，11-06 起创建者 + 合伙人（V2 权限表该接口为「代理自己 / 群主」）。`ClubContext` 补 `isAgent`（`role` 会被管理员占用），并重排「操作」行 Layout（合伙人 2 个按钮时居中）。详见[交接](handoffs/2026-11-06-agent-my-hongli-entry.md)。
+- 面板口径全部换俱乐部 V2：`ClubBonusStats`（今日/昨日新增、未提取、累计提取，累计=未提取+累计提取）、`ClubBonusList`、`提取_俱乐部_红利`（全部整数元）；删除账号 `hongli`/`all_hongli`、旧 `查询_俱乐部_代理_收益` 与 `HongliList` 回退，无 `club_id` 只提示无俱乐部。详见[交接](handoffs/2026-11-04-my-hongli-club-stats.md)。
+- 联盟区「联盟红利」仅联盟创建者可见，`panelMyHongli` 加 `mode=union` 走 `ClubUnionBonusStats`/`ClubUnionBonusList`/`提取_联盟_红利`，卡片高度 320→410。详见[交接](handoffs/2026-11-04-union-hongli-panel.md)。
+- 各阶段只做 tsc/Prefab 引用检查；Creator 导入、构建、真机与真实回包待验证（曾遇 0x200 先到清 pending 把随后推送丢弃，已修）。
 
 ## 2026-11-04 后台玩家管理：移除加减钻石（已部署）
 

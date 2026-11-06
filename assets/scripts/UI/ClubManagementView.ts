@@ -10,6 +10,8 @@ export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" 
     "grantQuota" | "increaseQuota" | "decreaseQuota" | "unionApprove" | "unionReject" | "setUnionPercent";
 export interface ClubContext {
     accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; isLeader?:boolean;
+    /** 是否代理（合伙人）。role 会被「管理员」优先占用，这里保留原始代理标记，用于分红入口等按代理判断的地方。 */
+    isAgent?:boolean;
     /** V2 联盟状态：未确认时不显示创建/加入入口，避免把网络未知当成无联盟。 */
     unionKnown?:boolean; hasUnion?:boolean; unionId?:string; unionName?:string; unionApplyId?:string;
     /** 联盟额度：总群主是联盟池（isPool=true），盟主是自己俱乐部额度。 */
@@ -464,7 +466,14 @@ export default class ClubManagementView {
         this.active("操作/管理解散",!!next.id && next.role === "owner",card);
         // 目前不允许成员退出俱乐部，按钮保留但不显示。
         this.active("操作/管理退出",false,card);
-        this.active("操作/管理收益",!!next.id && next.role === "owner",card);
+        // 「我的收益」= 我的红利（panelMyHongli）：服务端 查询_俱乐部_红利_统计 / 提取_俱乐部_红利
+        // 的权限是「代理自己 / 群主」，合伙人点开查的是自己的分红，所以创建者和合伙人都要有入口。
+        // 判据用 isAgent 而不是 role：代理同时被设为管理员时 role 是 manager，红利入口不能跟着消失。
+        const canSeeBonus = !!next.id && (next.role === "owner" || next.isAgent === true);
+        this.active("操作/管理收益",canSeeBonus,card);
+        // 可见按钮数随身份变化（合伙人 2 个、创建者 3 个），必须重排横向 Layout，
+        // 否则会沿用上一次的槽位，按钮整体偏左。
+        this.syncOperationLayout(card);
         const canCreateJoin = this.canCreateJoin(next);
         const showUnionSection = this.unionSectionVisible(next);
         this.active("联盟信息",showUnionSection,card);
@@ -525,6 +534,30 @@ export default class ClubManagementView {
         this.syncDialogText(clubTitle + inviteText);
         this.syncProfileScroll(!!next.id,showUnionSection);
     }
+    /**
+     * 「操作」行是横向 cc.Layout（608 宽，3 个 192 按钮刚好铺满）。
+     * 可见按钮数会随身份变化：创建者 3 个、合伙人 2 个、其它 1 个，
+     * 切换身份后不重排就会沿用上一轮槽位，按钮整体偏左。
+     * 先让 Layout 按当前可见子节点重排，再按实际宽度手动居中一次兜底
+     * （部分 2.x 版本 CONTAINER 模式不会把行宽收到内容宽）。
+     */
+    private syncOperationLayout(card:cc.Node):void {
+        const row = this.at("操作",card);
+        if(!row) return;
+        const layout = row.getComponent(cc.Layout);
+        if(layout) layout.updateLayout();
+        const buttons = row.children.filter(child => child.active);
+        if(buttons.length === 0) return;
+        const spacing = layout ? layout.spacingX : 16;
+        let total = spacing * (buttons.length - 1);
+        for(const button of buttons) total += button.width;
+        let cursor = -total / 2;
+        for(const button of buttons) {
+            button.setPosition(cursor + button.width / 2, button.y);
+            cursor += button.width + spacing;
+        }
+    }
+
     /**
      * 「我的」滚动区内容高度。
      *
@@ -704,7 +737,8 @@ export default class ClubManagementView {
         else if(name === "管理退出") this.confirm("leave", "", "");
         else if(name === "管理收益") {
             // panelMyHongli 按俱乐部口径查红利统计和明细，必须带 club_id。
-            if(this.context.id && this.context.role === "owner")
+            // 创建者看俱乐部汇总口径，合伙人看自己的分红（服务端按 user_id 空 = 查自己）。
+            if(this.context.id && (this.context.role === "owner" || this.context.isAgent === true))
                 UIManager.getInstance().showPanel("panelMyHongli",ShowPanelMode.Cover,
                     JSON.stringify({club_id:this.context.id,club_name:this.context.name || ""}));
         }
