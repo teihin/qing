@@ -82,6 +82,8 @@
 - **别把新增节点的 `_prefab` 值当成坏数据**：Cocos 2.4 给 prefab 里新增的节点保存时可能写成
   `{"__id__": <已有 cc.PrefabInfo 的 id>, "fileId": "…"}`（没有 `__type__`），HEAD 里没有先例也不等于损坏；
   判据是 `library/imports/<前2位>/<uuid>.json` 有本次导入产物且 mtime 对得上（2026-11-02 panelMain 的两个「玩家热区」即此，21:29 保存 → 21:30 导入成功）。
+- **改 `cc.Label` 文案必须改两个字段**：`_string`（网页/编辑器读）和 `_N$string`（**原生端渲染读它**）。
+  只改前者 → 手机仍显示旧字（2026-11-06 聊天页「清除聊天」真机显示「上下分」即此因，全仓仅此一处不一致）。
 - 改完 Prefab/贴图后 `library/` 需 Creator 重新导入；`assets/resources/project.manifest` 是构建产物，跑 `1生成热更新包.command` 重建，**不要手改**。
 - **Creator 开着时覆盖 PNG，`.meta` 会被自动改写**（`trimType:"auto"` 重算 trim，使 `_sizeMode=0` 元素放大约 5%）。
   根治：按原 trim 矩形给新图四边补 `alpha=2` 边界像素；收尾 `git checkout HEAD -- <每个 .meta>`。判断是否在跑：`pgrep -fl CocosCreator`。
