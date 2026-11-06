@@ -1162,8 +1162,8 @@ export default class panelGameView extends UIPanelViewBase {
         {
             this.node.getChildByName("系统设置").active = true;
             button.node.parent.active = false;
-            //桌面
-            let strName = Tool.GetConfigString("桌面","4");
+            //桌面（默认桌布已改为第 1 张：深蓝，与 UpdateTableImg 的默认值保持一致）
+            let strName = Tool.GetConfigString("桌面","1");
             let arrayToggle = Tool.GetChild(this.node,"系统设置/设置/桌面").getComponentsInChildren(cc.Toggle);
             for(let one of arrayToggle)
             {
