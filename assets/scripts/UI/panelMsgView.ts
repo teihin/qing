@@ -10,7 +10,17 @@ const {ccclass, property} = cc._decorator;
 export default class panelMsgView extends UIPanelViewBase {
 
 
-    // onLoad () {}
+    /**
+     * 提示框必须永远压在最上面。
+     * 数据统计(基准 0/牌桌 1)/战绩(+2)/俱乐部资料(+1) 这些面板为了让自己的按钮压过牌桌，
+     * 都在 Tool.PanelBaseZ 的基础上抬了层级；提示框留在默认 0 就会被它们盖住——
+     * 表现是只看到遮罩变暗、框体被面板吃掉（2026-11-06 分组加人后的「温馨提示」即此因）。
+     * 这里留一个远高于业务层级的大数，新加弹窗只要低于它就不会再吃掉提示框。
+     */
+    onLoad () {
+        super.onLoad();
+        this.node.zIndex = 900;
+    }
 
     start () {
         super.start();

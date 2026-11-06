@@ -5,7 +5,8 @@ import Tool from "../common/Tool";
 import GameDataManager from "../GameDataManager";
 import ImageManager from "../logic/ImageManager";
 import panelClubPlayerInfo from "./panelClubPlayerInfo";
-import { normalizeRoomClubId, resolveMyRoomClubId, resolveRoomSettingClubId } from "../logic/RoomClubContext";
+import panelPlayerRecord from "./panelPlayerRecord";
+import { normalizeRoomClubId, resolveMyRoomClubId, resolveRoomClubId, resolveRoomSettingClubId } from "../logic/RoomClubContext";
 var KBEngine = require("kbengine");
 
 const {ccclass, property} = cc._decorator;
@@ -39,6 +40,57 @@ interface BossChainGroup {
     clubId:string;
     clubName:string;
     rows:BossChainRow[];
+}
+
+/**
+ * 分组管理页签的一行：对应《俱乐部玩家分组-客户端与后台接口文档》§3.1 的 groups[]。
+ * 全部数值接口下发的是字符串，积分可负，贡献/红利单位是分（展示 ÷100）。
+ */
+interface ClubGroupRow {
+    id:string;
+    name:string;
+    memberCount:number;
+    today:string;
+    yesterday:string;
+    total:string;
+    todayContribFen:string;
+    yesterdayContribFen:string;
+    contribFen:string;
+    todayBonusFen:string;
+    yesterdayBonusFen:string;
+    bonusFen:string;
+    warnEnabled:string;
+    warnMin:string;
+    warnMax:string;
+    warnStatus:string;
+    remark:string;
+}
+
+/**
+ * 组内成员一行：对应接口文档 §3.2 `ClubPlayerGroupMembers.members[]`。
+ * `self_*` 是该成员**本人**在管理域内的 9 项统计（输赢/贡献/红利各 3 项），
+ * 各行相加 = 分组总计，**不含下线**；成员列表 `NumberList` 是「本人 + 整条下线」，两者不要互相对账。
+ */
+interface ClubGroupMember {
+    id:string;
+    name:string;
+    role:string;
+    isAgent:boolean;
+    status:string;
+    /** 归属俱乐部：优先 home_club_id，没有就取 club_ids 的第一段。 */
+    club:string;
+    todayScore:string;
+    yesterdayScore:string;
+    totalScore:string;
+    todayContribFen:string;
+    yesterdayContribFen:string;
+    totalContribFen:string;
+    todayBonusFen:string;
+    yesterdayBonusFen:string;
+    totalBonusFen:string;
+    /** 预警提示（区间 / 越界值 / 未设置），空串表示这一行不显示。 */
+    warnText:string;
+    warnStatus:string;
 }
 
 /**
@@ -99,17 +151,63 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     private searchKey:string = "";
     private static searchSerial:number = 0;
 
+    // ---- 分组管理（《俱乐部玩家分组》接口文档 2.x/3.x/4.x）----
+    /** 当前管理域的全部分组。 */
+    private groups:ClubGroupRow[] = [];
+    private groupsLoaded:boolean = false;
+    private groupContext:string = "";
+    /** 写命令（创建/删除/设成员）在途标记：成功后数据走推送，不许重复提交。 */
+    private groupBusy:boolean = false;
+    /** 0x200 已到但推送未到时的兜底刷新标记。 */
+    private groupWaitPush:boolean = false;
+    private groupTimer:any = null;
+    private static groupSerial:number = 0;
+    /** 上次拉列表的时间戳：来回切页签时 2 秒内不重复请求。 */
+    private groupStamp:number = 0;
+    /** 弹窗模式：create 建组 / addMember 按 ID 加人 / pick 选组加人 / confirm 二次确认。 */
+    private dialogMode:string = "";
+    private dialogGroupId:string = "";
+    private dialogUserId:string = "";
+    private pickedGroupId:string = "";
+
+    // ---- 组内成员（接口文档 3.2 / 4.2）----
+    private members:ClubGroupMember[] = [];
+    private memberTotal:number = 0;
+    private memberGroupId:string = "";
+    private memberGroupName:string = "";
+    private memberContext:string = "";
+    private memberTimer:any = null;
+    private memberLoaded:boolean = false;
+    /** 推送顶层 stats_ok："0" 时 self_* 全是 0，界面要如实显示「统计未就绪」。 */
+    private memberStatsOk:boolean = true;
+    private static memberSerial:number = 0;
+
     // 本面板只发 `查询_俱乐部_成员_代理链路` 一条命令，不额外调用 `查询_俱乐部_成员`：
     // 团队人数/今日昨日等列若接口没下发就是“—”，由服务端在链路接口里补齐。
     onLoad () {
         super.onLoad();
         // 牌桌按钮在 panelGameView.onLoad 时就注册了触摸，晚创建的全屏面板必须靠 zIndex
         // 稳定压在牌桌之上，否则点头像后仍可能被下层按钮抢走（参见 cocos-touch-passthrough-fix）。
-        this.node.zIndex = 200;
+        // 但**不能写死 200**：Normal 里的弹窗都是兄弟节点，抬到 200 会把结算/兑换/客服/
+        // 俱乐部设置这些按需弹窗全压到它下面。大厅里走正常层级（0），只有牌桌里才抬到 1。
+        this.node.zIndex = Tool.PanelBaseZ(this.node);
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("ClubMemberAgentChain", this, "OnAgentChain");
         // 按昵称搜索先查成员列表拿 guuid，回包走 NumberList。
         KBEngine.Event.register("NumberList", this, "OnMemberList");
+        // 分组管理：列表走 ClubPlayerGroupList，写操作结果走 ClubPlayerGroupResult。
+        KBEngine.Event.register("ClubPlayerGroupList", this, "OnGroupList");
+        KBEngine.Event.register("ClubPlayerGroupResult", this, "OnGroupResult");
+        // 组内成员列表走 ClubPlayerGroupMembers（查询_俱乐部_分组_成员）。
+        KBEngine.Event.register("ClubPlayerGroupMembers", this, "OnGroupMembers");
+        // 弹窗遮罩：点空白处关掉（遮罩吞点击但自身仍能收到触摸）。
+        const mask = this.At("分组弹窗/遮罩");
+        if(mask) {
+            mask.on(cc.Node.EventType.TOUCH_END, ()=>{
+                if(this.dialogMode !== "")
+                    this.CloseDialog();
+            }, this);
+        }
     }
 
     start () {
@@ -127,6 +225,11 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             clearTimeout(this.timeoutTimer);
             this.timeoutTimer = null;
         }
+        if(this.groupTimer != null) {
+            clearTimeout(this.groupTimer);
+            this.groupTimer = null;
+        }
+        this.ClearMemberTimer();
         super.onDestroy();
     }
 
@@ -387,6 +490,20 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
                 }, this);
             }
         }
+
+        // 「添加到分组」：把这个玩家加进某个分组（先选组、再确定）。
+        const groupBtn = row.getChildByName("添加到分组");
+        if(groupBtn != null) {
+            groupBtn.active = /^\d+$/.test(id);
+            if(groupBtn.active) {
+                this.BindTap(groupBtn, ()=>{
+                    this.OpenPickDialog(id, t(data.name));
+                });
+            }
+        }
+
+        // 「战绩」：打开这个玩家的战绩面板（独立 Prefab，版式照「我的战绩」）。
+        this.BindRecordButton(row, id, t(data.name));
     }
 
     /**
@@ -653,6 +770,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     }
 
     public onHallCommand(nCode:number, param:string):void {
+        // 分组命令的回执先认掉：它跟代理链不是同一个请求车道。
+        if(this.HandleGroupReply(nCode, param))
+            return;
         if(!this.pending)
             return;
         const text = param == null ? "" : String(param);
@@ -731,7 +851,29 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             }
             return body;
         }
+        // 分组回包同样是「按路由名包一层」，两种结构都拆。
+        if(data.groups === undefined && data.ClubPlayerGroupList !== undefined)
+            return this.UnwrapInner(data.ClubPlayerGroupList);
+        if(data.action === undefined && data.ClubPlayerGroupResult !== undefined)
+            return this.UnwrapInner(data.ClubPlayerGroupResult);
+        if(data.members === undefined && data.ClubPlayerGroupMembers !== undefined)
+            return this.UnwrapInner(data.ClubPlayerGroupMembers);
         return data;
+    }
+
+    private UnwrapInner(body:any):any {
+        if(typeof body === "string") {
+            try { return JSON.parse(body); }
+            catch(error) { return null; }
+        }
+        if(body == null || typeof body !== "object" || Array.isArray(body))
+            return null;
+        if(body.result !== undefined && body.result !== null) {
+            const inner = typeof body.result === "string" ? this.UnwrapInner(body.result) : body.result;
+            if(inner != null && typeof inner === "object")
+                return inner;
+        }
+        return body;
     }
 
     private ErrorText(param:string):string {
@@ -891,6 +1033,17 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
                 node.active = false;
         }
         this.BindViewButton(row, item, clubId);
+
+        // 代理链行同样可以一键加进分组。
+        const groupBtn = row.getChildByName("添加到分组");
+        if(groupBtn != null) {
+            groupBtn.active = /^\d+$/.test(item.guuid);
+            if(groupBtn.active)
+                this.BindTap(groupBtn, ()=>this.OpenPickDialog(item.guuid, item.name));
+        }
+
+        // 代理链行也能直接看这个人的战绩。
+        this.BindRecordButton(row, item.guuid, item.name);
     }
 
     /**
@@ -1045,22 +1198,30 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
 
     private ShowTab(tab:string, first:boolean):void {
         this.currentTab = tab;
-        // 两个列表页签共用同一个 content，切换时把另一边的行清掉。
-        if(tab === "chain")
+        // 三个页签共用同一个 content，切换时把另一边的行清掉。
+        if(tab === "chain") {
             this.ClearRows("玩家_");
+            this.ClearRows("分组_");
+        }
         else if(tab === "info") {
             this.ClearRows("链路_");
             this.ClearRows("链标题_");
             this.ClearRows("链空_");
+            this.ClearRows("分组_");
         }
-        const listMode = tab === "chain" || tab === "info";
+        else {
+            this.ClearRows("玩家_");
+            this.ClearRows("链路_");
+            this.ClearRows("链标题_");
+            this.ClearRows("链空_");
+        }
+        const listMode = tab === "chain" || tab === "info" || tab === "group";
         // 注意：页签都在「页签」容器下面，路径必须带前缀，否则 At() 全部取不到，
         // 表现为高亮永远停在 prefab 默认态、切了页签内容却不变。
         const tabs:{key:string,node:string}[] = [
             {key:"info", node:"页签/页签_玩家信息"},
             {key:"chain", node:"页签/页签_代理链"},
-            {key:"win", node:"页签/页签_输赢详情"},
-            {key:"record", node:"页签/页签_牌局详情"}
+            {key:"group", node:"页签/页签_分组管理"}
         ];
         for(const one of tabs) {
             const node = this.At(one.node);
@@ -1077,18 +1238,35 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             }
         }
 
+        // 分组管理页签不需要玩家搜索框，顶栏换成「新建分组」。
+        this.Active("搜索区", tab !== "group");
+        this.Active("新建分组", tab === "group");
         this.Active("列表面板", listMode);
         this.Active("列表", listMode);
         this.Active("说明", listMode);
-        this.Text("说明", tab === "info" ?
-            "按玩家本人统计（不含下线）；联盟内每个俱乐部一行" :
-            "代理/群主行按当前俱乐部统计，总群主行按全联盟统计");
+        if(tab === "info")
+            this.Text("说明", "按玩家本人统计（不含下线）；联盟内每个俱乐部一行");
+        else if(tab === "group")
+            this.Text("说明", "分组统计为组内成员真实值（不套展示折扣）；一人只能属于一个分组");
+        else
+            this.Text("说明", "代理/群主行按当前俱乐部统计，总群主行按全联盟统计");
 
         if(!listMode) {
             this.Active("加载", false);
             this.Active("错误", false);
             this.Text("空状态", "该页签正在开发中");
             this.Active("空状态", true);
+            return;
+        }
+        if(tab === "group") {
+            this.Active("加载", false);
+            this.Active("错误", false);
+            if(this.groupsLoaded)
+                this.RenderGroups();
+            else
+                this.Active("空状态", false);
+            // 每次进来都刷新一次（2 秒内不重复）：别的端新建的分组也能看到。
+            this.QueryGroups();
             return;
         }
         if(tab === "info") {
@@ -1151,8 +1329,981 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     }
 
     // ------------------------------------------------------------------
+    // 分组管理（《俱乐部玩家分组-客户端与后台接口文档》2.x / 3.x / 4.x）
+    // ------------------------------------------------------------------
+    /** 分组命令用的 club_id：优先本房间实际结算俱乐部，其次被查玩家所属俱乐部，最后账号自己的俱乐部。 */
+    private GroupClubId():string {
+        const account:any = GameDataManager.getAccount();
+        let id = resolveMyRoomClubId(account, this.userClubId);
+        if(id === "")
+            id = this.userClubId;
+        if(id === "")
+            id = this.roomClubId;
+        // 从大厅「我的→数据统计」进来时可能没有房间上下文，用账号自己的俱乐部兜底。
+        if(id === "")
+            id = resolveRoomClubId(account);
+        return id;
+    }
+
+    /** 查询_俱乐部_分组列表：无分页，一次返回该管理域全部 used 分组。 */
+    private QueryGroups(force:boolean = false):void {
+        if(this.groupBusy)
+            return;
+        if(!force && Date.now() - this.groupStamp < 2000)
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(account == null) {
+            this.ShowGroupError("网络未就绪，请稍后重试");
+            return;
+        }
+        const clubId = this.GroupClubId();
+        if(clubId === "") {
+            this.ShowGroupError("缺少俱乐部信息，无法管理分组");
+            return;
+        }
+        this.groupStamp = Date.now();
+        this.groupContext = "bossgrp:" + Date.now() + ":" + (++panelBossPlayerInfo.groupSerial);
+        this.ClearGroupTimer();
+        this.groupTimer = setTimeout(()=>{
+            if(this.groupContext === "")
+                return;
+            this.groupContext = "";
+            this.ShowGroupError("分组数据加载超时，请稍后重试");
+        }, 10000);
+        if(this.currentTab === "group" && !this.groupsLoaded)
+            this.ShowLoading();
+        try {
+            account.reqHallCommand(JSON.stringify({
+                header:"查询_俱乐部_分组列表",
+                club_id:clubId,
+                context:this.groupContext
+            }), "P@" + this.groupContext);
+        }
+        catch(error) {
+            this.ShowGroupError("请求发送失败，请稍后重试");
+        }
+    }
+
+    /** 写命令：创建/删除分组、设置分组成员。成功时数据走推送，回执只带 context。 */
+    private SendGroup(header:string, extra:any):void {
+        if(this.groupBusy)
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(account == null) {
+            this.Toast("网络未就绪，请稍后重试");
+            return;
+        }
+        const clubId = this.GroupClubId();
+        if(clubId === "") {
+            this.Toast("缺少俱乐部信息，无法管理分组");
+            return;
+        }
+        this.groupBusy = true;
+        this.groupContext = "bossgrp:" + Date.now() + ":" + (++panelBossPlayerInfo.groupSerial);
+        this.ClearGroupTimer();
+        this.groupTimer = setTimeout(()=>{
+            if(this.groupContext === "")
+                return;
+            this.FinishGroup();
+            this.Toast("操作超时，请刷新后确认结果");
+            this.QueryGroups(true);
+        }, 12000);
+        const param:any = {header:header, club_id:clubId, context:this.groupContext};
+        if(extra != null) {
+            for(const key in extra)
+                param[key] = extra[key];
+        }
+        try {
+            account.reqHallCommand(JSON.stringify(param), "P@" + this.groupContext);
+        }
+        catch(error) {
+            this.FinishGroup();
+            this.Toast("请求发送失败，请稍后重试");
+        }
+    }
+
+    /** 分组命令回执：按 context 认领，不落到代理链那条逻辑里。 */
+    private HandleGroupReply(nCode:number, param:string):boolean {
+        const body = param == null ? "" : String(param);
+        // 组内成员查询是只读命令，用它自己的 context，别把分组列表的状态搅乱。
+        if(this.memberContext !== "" && body.indexOf(this.memberContext) >= 0) {
+            this.ClearMemberTimer();
+            this.memberContext = "";
+            if(nCode === 0x200 || nCode === 0x500)
+                return true;   // 数据在推送里
+            this.MemberHint(this.ErrorText(body));
+            return true;
+        }
+        if(this.groupContext === "")
+            return false;
+        const text = param == null ? "" : String(param);
+        if(text.indexOf(this.groupContext) < 0)
+            return false;
+        this.ClearGroupTimer();
+        if(nCode === 0x200 || nCode === 0x500) {
+            // 命令已受理：立刻放开写锁，否则后面的刷新会被 groupBusy 挡掉。
+            // 成功数据在推送里；推送迟到时给 1.2s，还没到就自己重查一次。
+            this.groupContext = "";
+            this.groupBusy = false;
+            this.groupWaitPush = true;
+            setTimeout(()=>{
+                if(!cc.isValid(this.node))
+                    return;
+                if(this.groupWaitPush) {
+                    this.groupWaitPush = false;
+                    this.QueryGroups(true);
+                }
+            }, 1200);
+            return true;
+        }
+        this.FinishGroup();
+        this.ShowGroupError(this.ErrorText(text));
+        return true;
+    }
+
+    private FinishGroup():void {
+        this.ClearGroupTimer();
+        this.groupContext = "";
+        this.groupBusy = false;
+        this.groupWaitPush = false;
+    }
+
+    private ClearGroupTimer():void {
+        if(this.groupTimer != null) {
+            clearTimeout(this.groupTimer);
+            this.groupTimer = null;
+        }
+    }
+
+    /** 分组失败：分组页签里就地显示，其它页签弹提示。 */
+    private ShowGroupError(text:string):void {
+        this.ClearGroupTimer();
+        this.groupBusy = false;
+        if(this.currentTab === "group") {
+            this.Active("加载", false);
+            this.Active("错误", false);
+            this.Active("列表面板", true);
+            this.Active("列表", true);
+            this.Text("空状态", text);
+            this.Active("空状态", true);
+            return;
+        }
+        this.Toast(text);
+    }
+
+    private Toast(text:string):void {
+        UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, text);
+    }
+
+    // ---- 组内成员：查询 / 列表 / 移出（接口文档 3.2、4.2）----
+
+    /** 查询_俱乐部_分组_成员：只读命令，单独一套 context/计时器，不占用 groupBusy。 */
+    private QueryMembers(groupId:string):void {
+        const account:any = GameDataManager.getAccount();
+        if(account == null) {
+            this.MemberHint("网络未就绪，请稍后重试");
+            return;
+        }
+        const clubId = this.GroupClubId();
+        if(clubId === "") {
+            this.MemberHint("缺少俱乐部信息，无法查看成员");
+            return;
+        }
+        this.memberGroupId = groupId;
+        this.memberLoaded = false;
+        this.MemberHint("正在加载成员…");
+        this.memberContext = "bossmem:" + Date.now() + ":" + (++panelBossPlayerInfo.memberSerial);
+        this.ClearMemberTimer();
+        const ctx = this.memberContext;
+        this.memberTimer = setTimeout(()=>{
+            if(this.memberContext !== ctx)
+                return;
+            this.memberContext = "";
+            this.MemberHint("成员列表加载超时，关闭后重试");
+        }, 10000);
+        try {
+            account.reqHallCommand(JSON.stringify({
+                header:"查询_俱乐部_分组_成员",
+                club_id:clubId,
+                group_id:groupId,
+                page:0,
+                count:100,
+                context:ctx
+            }), "P@" + ctx);
+        }
+        catch(error) {
+            this.ClearMemberTimer();
+            this.memberContext = "";
+            this.MemberHint("请求发送失败，请稍后重试");
+        }
+    }
+
+    private ClearMemberTimer():void {
+        if(this.memberTimer != null) {
+            clearTimeout(this.memberTimer);
+            this.memberTimer = null;
+        }
+    }
+
+    /** 成员弹窗的提示行（标题下面那行）。 */
+    private MemberHint(text:string):void {
+        if(this.dialogMode !== "members" && this.dialogMode !== "kick")
+            return;
+        this.Text("分组弹窗/面板/提示", text);
+    }
+
+    /** 推送 ClubPlayerGroupMembers：{group_id,group_name,count,members:[...]}。 */
+    public OnGroupMembers(raw:any):void {
+        const data = this.Unwrap(raw);
+        if(data == null || !Array.isArray(data.members))
+            return;
+        const ctx = String(data.context == null ? "" : data.context);
+        if(this.memberContext !== "" && ctx !== "" && ctx !== this.memberContext)
+            return;
+        this.ClearMemberTimer();
+        this.memberContext = "";
+        this.memberLoaded = true;
+        this.memberGroupId = String(data.group_id == null ? this.memberGroupId : data.group_id);
+        this.memberGroupName = String(data.group_name == null ? this.memberGroupName : data.group_name);
+        const total = Number(data.count);
+        this.members = data.members.map((item:any)=>this.ParseMember(item));
+        // stats_ok="0" 时服务端把 self_* 全填 0，要如实显示「—」而不是一排 0。
+        this.memberStatsOk = String(data.stats_ok == null ? "1" : data.stats_ok) !== "0";
+        this.memberTotal = isFinite(total) ? total : this.members.length;
+        if(this.dialogMode === "members")
+            this.RenderMembers();
+        else if(this.dialogMode === "kick")
+            this.Text("分组弹窗/面板/提示", "共 " + this.memberTotal + " 人");
+    }
+
+    private ParseMember(raw:any):ClubGroupMember {
+        const text = (value:any):string => String(value == null ? "" : value).trim();
+        const warnStatus = text(raw && raw.warn_status);
+        const clubIds = text(raw && raw.club_ids);
+        const firstClub = clubIds !== "" ? clubIds.split(",")[0].trim() : "";
+        let warnText = "";
+        if(text(raw && raw.warn_enabled) === "1") {
+            // 越界时只留「越界 -1200」：区间那串 13 个字 206 宽放不下，会被 SHRINK 压成 12 号。
+            warnText = warnStatus === "1" ?
+                ("越界 " + text(raw && raw.warn_value)) :
+                ("预警 " + text(raw && raw.warn_min) + "~" + text(raw && raw.warn_max));
+        }
+        else if(warnStatus === "1")
+            warnText = "越界 " + text(raw && raw.warn_value);
+        else if(warnStatus === "0")
+            warnText = "预警 未设置";
+        return {
+            id:text(raw && raw.guuid) || text(raw && raw.user_id),
+            name:text(raw && raw.name),
+            role:text(raw && raw.role),
+            isAgent:text(raw && raw.is_agent) === "1",
+            status:text(raw && raw.status),
+            club:text(raw && raw.home_club_id) || firstClub,
+            todayScore:text(raw && raw.self_today_score),
+            yesterdayScore:text(raw && raw.self_yesterday_score),
+            totalScore:text(raw && raw.self_total_score),
+            todayContribFen:text(raw && raw.self_today_contrib_fen),
+            yesterdayContribFen:text(raw && raw.self_yesterday_contrib_fen),
+            totalContribFen:text(raw && raw.self_total_contrib_fen),
+            todayBonusFen:text(raw && raw.self_today_bonus_fen),
+            yesterdayBonusFen:text(raw && raw.self_yesterday_bonus_fen),
+            totalBonusFen:text(raw && raw.self_total_bonus_fen),
+            warnText:warnText,
+            warnStatus:warnStatus
+        };
+    }
+
+    /**
+     * 成员列表：一行一个玩家，直接克隆「玩家信息」页签的 `行模板`（表对象），
+     * 字段、9 项统计、按钮位置和玩家信息完全一致；只把最左边那颗
+     * 「添加到分组」换成「移出成员」（他们本来就在组里，不需要再加一次）。
+     */
+    private RenderMembers():void {
+        const list = this.At("分组弹窗/面板/选项列表");
+        const view = this.At("分组弹窗/面板/选项列表/view");
+        const content = this.At("分组弹窗/面板/选项列表/view/content");
+        // 表行模板挂在玩家信息页签的列表里，两个页签共用一份，不另外复制。
+        const template = this.At("列表/view/content/行模板");
+        if(content == null || template == null) {
+            this.MemberHint("界面资源缺失，请重新打开");
+            return;
+        }
+        for(const child of content.children.slice()) {
+            if(child.name.indexOf("成员_") === 0 || child.name.indexOf("选项_") === 0)
+                child.destroy();
+        }
+        // 选组用的那一行要收起来，否则会顶着第一行成员。
+        const option = content.getChildByName("选项模板");
+        if(option != null)
+            option.active = false;
+        this.Text("分组弹窗/面板/标题", "组内成员");
+
+        if(!this.memberLoaded) {
+            if(view != null) {
+                content.height = view.height;
+                content.setPosition(0, view.height / 2);
+            }
+            return;
+        }
+        const groupName = this.memberGroupName !== "" ? this.memberGroupName : ("分组 " + this.memberGroupId);
+        if(this.members.length === 0) {
+            this.MemberHint("「" + groupName + "」还没有成员，点分组卡片上的「加人」添加");
+            if(view != null) {
+                content.height = view.height;
+                content.setPosition(0, view.height / 2);
+            }
+            return;
+        }
+        let hint = "「" + groupName + "」共 " + this.memberTotal + " 人";
+        if(this.members.length < this.memberTotal)
+            hint += "（当前显示前 " + this.members.length + " 人）";
+        hint += "，点「移出成员」可移出";
+        this.MemberHint(hint);
+
+        const rowHeight = template.height;
+        const pitch = rowHeight + 8;
+        let y = 0;
+        for(const member of this.members) {
+            const row = cc.instantiate(template);
+            row.name = "成员_" + member.id;
+            row.parent = content;
+            row.active = true;
+            row.setPosition(0, y - rowHeight / 2);
+            this.FillMemberRow(row, member);
+            y -= pitch;
+        }
+        if(view != null) {
+            content.height = Math.max(view.height, -y + 4);
+            content.setPosition(0, view.height / 2);
+        }
+        const scrollView = list ? list.getComponent(cc.ScrollView) : null;
+        if(scrollView != null)
+            scrollView.scrollToTop(0);
+    }
+
+    /** 成员行：字段和「玩家信息」页签的 FillInfoRow 一一对应，只是数据来源和左下角按钮不同。 */
+    private FillMemberRow(row:cc.Node, member:ClubGroupMember):void {
+        const id = member.id;
+        this.Text("姓名", member.name !== "" ? member.name : ("玩家 " + id), row);
+        this.Text("玩家ID", "ID: " + id, row);
+        this.Text("身份", member.role !== "" ? member.role : "成员", row);
+        this.Text("俱乐部", member.club !== "" ? member.club : "—", row);
+        // 成员接口没有俱乐部积分，这一行改放状态（和代理链的颜色一致）。
+        this.Text("积分", member.status !== "" ? member.status : "—", row);
+        const statusNode = this.At("积分", row);
+        if(statusNode != null) {
+            statusNode.color = member.status === "游戏中" ? new cc.Color(255,231,112) :
+                (member.status === "在线" ? new cc.Color(151,211,57) : new cc.Color(150,168,186));
+        }
+        // 预警：分组规则或按 home 俱乐部代理线回退的结果，越界标红。
+        const warnNode = this.At("附加信息", row);
+        if(warnNode != null) {
+            warnNode.active = member.warnText !== "";
+            this.Text("附加信息", member.warnText, row);
+            warnNode.color = member.warnStatus === "1" ?
+                new cc.Color(255,92,80) : new cc.Color(150,168,186);
+        }
+        // 口径：成员列表下发的 self_* 全是本人数据，和玩家信息页签的「个人」一致。
+        this.Text("统计口径/文字", "个人", row);
+
+        // 9 项统计。stats_ok=0 时服务端把 self_* 全填 0，要显示成「—」而不是 0。
+        const score = (name:string, value:string):void=>{
+            if(this.memberStatsOk)
+                this.SetScore(name, value, row);
+            else
+                this.Text(name, "—", row);
+        };
+        const fen = (value:string):string => this.memberStatsOk ? this.FenText(value) : "—";
+        score("今日输赢值", member.todayScore);
+        score("昨日输赢值", member.yesterdayScore);
+        score("总输赢值", member.totalScore);
+        this.Text("今日贡献值", fen(member.todayContribFen), row);
+        this.Text("昨日贡献值", fen(member.yesterdayContribFen), row);
+        this.Text("总贡献值", fen(member.totalContribFen), row);
+        this.Text("今日红利值", fen(member.todayBonusFen), row);
+        this.Text("昨日红利值", fen(member.yesterdayBonusFen), row);
+        this.Text("总红利值", fen(member.totalBonusFen), row);
+
+        const avatar = this.At("头像", row);
+        const sprite = avatar ? avatar.getComponent(cc.Sprite) : null;
+        if(sprite != null && id !== "")
+            ImageManager.getInstance().BindPlayerListAvatar(id, sprite);
+
+        // 左下角：原本的「添加到分组」改成「移出成员」（人已经在组里了）。
+        // 底图是蓝色九宫格，只把字染红，别去乘节点颜色（蓝色×红色会发黑）。
+        const kickBtn = row.getChildByName("添加到分组");
+        if(kickBtn != null) {
+            kickBtn.active = true;
+            this.Text("文字", "移出成员", kickBtn);
+            const kickLabel = this.At("文字", kickBtn);
+            if(kickLabel != null)
+                kickLabel.color = new cc.Color(255,138,128);
+            this.BindTap(kickBtn, ()=>{
+                this.OpenKickDialog(member);
+            });
+        }
+
+        // 「查看」：打开这个玩家的详情面板（和玩家信息页签同一个入口）。
+        const viewBtn = row.getChildByName("查看");
+        if(viewBtn != null) {
+            viewBtn.active = id !== "";
+            if(viewBtn.active) {
+                this.BindTap(viewBtn, ()=>{
+                    UIManager.getInstance().showPanel("panelClubPlayerInfo", ShowPanelMode.Cover,
+                        JSON.stringify({userId:id, clubId:member.club || this.GroupClubId()}));
+                });
+            }
+        }
+
+        // 「代理链」：关掉弹窗跳到代理链页签，直接查这个人。
+        const chainBtn = row.getChildByName("代理链");
+        if(chainBtn != null) {
+            chainBtn.active = id !== "";
+            if(chainBtn.active) {
+                this.BindTap(chainBtn, ()=>{
+                    this.CloseDialog();
+                    this.ShowTab("chain", false);
+                    this.ApplyTarget(id, member.name);
+                });
+            }
+        }
+
+        // 「战绩」：打开这个玩家的战绩面板。
+        this.BindRecordButton(row, id, member.name);
+    }
+
+    /** 行「成员」：打开组内成员列表。 */
+    private OpenMemberDialog(group:ClubGroupRow):void {
+        this.memberGroupId = group.id;
+        this.memberGroupName = group.name;
+        this.memberTotal = group.memberCount;
+        this.members = [];
+        this.memberLoaded = false;
+        this.memberStatsOk = true;
+        this.OpenDialog("members", group.id, "", "组内成员", "正在加载成员…");
+        this.QueryMembers(group.id);
+    }
+
+    /** 列表里点一行：二次确认移出。取消则回到列表，不用重新查。 */
+    private OpenKickDialog(member:ClubGroupMember):void {
+        const who = member.name !== "" ? member.name : ("玩家 " + member.id);
+        const groupName = this.memberGroupName !== "" ? this.memberGroupName : ("分组 " + this.memberGroupId);
+        this.OpenDialog("kick", this.memberGroupId, member.id, "移出成员",
+            "把「" + who + "」移出「" + groupName + "」？移出后不再计入该分组统计");
+    }
+
+    private BackToMemberList():void {
+        // OpenDialog("members") 自己会重新渲染名单（memberLoaded 还是 true）。
+        this.OpenDialog("members", this.memberGroupId, "", "组内成员", "正在加载成员…");
+    }
+
+    /** 推送 ClubPlayerGroupList：{count,stats_ok,groups:[...]}。 */
+    public OnGroupList(raw:any):void {
+        const data = this.Unwrap(raw);
+        if(data == null || !Array.isArray(data.groups))
+            return;
+        const ctx = String(data.context == null ? "" : data.context);
+        if(this.groupContext !== "" && ctx !== "" && ctx !== this.groupContext)
+            return;
+        this.FinishGroup();
+        this.groups = data.groups.map((item:any)=>this.ParseGroupRow(item));
+        this.groupsLoaded = true;
+        if(this.currentTab === "group")
+            this.RenderGroups();
+        const modal = this.At("分组弹窗");
+        if(modal != null && modal.active && this.dialogMode === "pick")
+            this.RenderPickList();
+    }
+
+    /** 推送 ClubPlayerGroupResult：{action:create/update/delete/set_member/remove_member,...}。 */
+    public OnGroupResult(raw:any):void {
+        const data = this.Unwrap(raw);
+        if(data == null)
+            return;
+        const action = String(data.action == null ? "" : data.action);
+        if(action === "")
+            return;
+        const ctx = String(data.context == null ? "" : data.context);
+        if(this.groupContext !== "" && ctx !== "" && ctx !== this.groupContext)
+            return;
+        this.FinishGroup();
+        const groupName = String(data.group_name == null ? "" : data.group_name);
+        if(action === "create")
+            this.Toast("已创建分组「" + groupName + "」");
+        else if(action === "delete")
+            this.Toast("已删除分组「" + groupName + "」");
+        else if(action === "set_member") {
+            const who = String(data.user_name || data.user_id || "玩家");
+            this.Toast("已把「" + who + "」加入「" + groupName + "」");
+        }
+        else if(action === "remove_member") {
+            const who = String(data.user_name || data.user_id || "玩家");
+            const groupName = String(data.group_name == null ? "" : data.group_name);
+            this.Toast(groupName !== "" ? ("已把「" + who + "」移出「" + groupName + "」")
+                                        : ("已把「" + who + "」移出分组"));
+        }
+        // 文档：创建/改名/删除、加人/移人之后都要自己刷新列表。
+        this.groupsLoaded = false;
+        this.QueryGroups(true);
+        // 成员弹窗还开着就地刷新名单，不用让用户关掉重开。
+        if(this.dialogMode === "members" && this.memberGroupId !== "")
+            this.QueryMembers(this.memberGroupId);
+    }
+
+    private ParseGroupRow(raw:any):ClubGroupRow {
+        const text = (value:any):string => String(value == null ? "" : value).trim();
+        const count = Number(text(raw && raw.member_count));
+        return {
+            id:text(raw && raw.group_id),
+            name:text(raw && raw.group_name),
+            memberCount:isFinite(count) ? count : 0,
+            today:text(raw && raw.today_score),
+            yesterday:text(raw && raw.yesterday_score),
+            total:text(raw && raw.total_score),
+            todayContribFen:text(raw && raw.today_contrib_fen),
+            yesterdayContribFen:text(raw && raw.yesterday_contrib_fen),
+            contribFen:text(raw && raw.total_contrib_fen),
+            todayBonusFen:text(raw && raw.today_bonus_fen),
+            yesterdayBonusFen:text(raw && raw.yesterday_bonus_fen),
+            bonusFen:text(raw && raw.total_bonus_fen),
+            warnEnabled:text(raw && raw.warn_enabled),
+            warnMin:text(raw && raw.warn_min),
+            warnMax:text(raw && raw.warn_max),
+            warnStatus:text(raw && raw.warn_status),
+            remark:text(raw && raw.remark)
+        };
+    }
+
+    private RenderGroups():void {
+        const list = this.At("列表");
+        const content = this.At("列表/view/content");
+        const view = list ? list.getChildByName("view") : null;
+        if(content == null) {
+            this.ShowGroupError("界面资源缺失，请重新打开");
+            return;
+        }
+        const template = content.getChildByName("分组模板");
+        if(template == null) {
+            this.ShowGroupError("界面资源缺失，请重新打开");
+            return;
+        }
+        for(const child of content.children.slice()) {
+            if(child.name.indexOf("分组_") === 0)
+                child.destroy();
+        }
+        template.active = false;
+        this.Active("加载", false);
+        this.Active("错误", false);
+        this.Active("列表面板", true);
+        this.Active("列表", true);
+        this.Active("说明", true);
+
+        if(this.groups.length === 0) {
+            this.Text("空状态", "还没有分组，点「＋ 新建分组」创建");
+            this.Active("空状态", true);
+            if(view) {
+                content.height = view.height;
+                content.setPosition(0, view.height / 2);
+            }
+            return;
+        }
+        this.Active("空状态", false);
+
+        const rowHeight = template.height;
+        const pitch = rowHeight + 10;
+        let y = 0;
+        for(const group of this.groups) {
+            const row = cc.instantiate(template);
+            row.name = "分组_" + group.id;
+            row.parent = content;
+            row.active = true;
+            row.setPosition(0, y - rowHeight / 2);
+            this.FillGroupRow(row, group);
+            y -= pitch;
+        }
+        if(view) {
+            content.height = Math.max(view.height, -y + 4);
+            content.setPosition(0, view.height / 2);
+        }
+        const scrollView = list ? list.getComponent(cc.ScrollView) : null;
+        if(scrollView)
+            scrollView.scrollToTop(0);
+    }
+
+    /**
+     * 分组行（卡片式）：左栏 分组名 / 预警 / 备注 / 成员数，
+     * 右栏 3 列（输赢 / 贡献 / 红利）× 3 行（今日 / 昨日 / 累计）共 9 项统计，
+     * 底部一排按钮（成员 / 加人 / 删除分组）。
+     */
+    private FillGroupRow(row:cc.Node, group:ClubGroupRow):void {
+        this.Text("分组名", group.name !== "" ? group.name : ("分组 " + group.id), row);
+        this.Text("备注", this.SubText(group), row);
+        this.Text("成员数值", "成员 " + group.memberCount + " 人", row);
+        // 9 项统计：输赢是积分（红涨绿跌），贡献/红利是分（÷100，金色）。
+        this.SetScore("今日输赢值", group.today, row);
+        this.SetScore("昨日输赢值", group.yesterday, row);
+        this.SetScore("累计输赢值", group.total, row);
+        this.Text("今日贡献值", this.FenText(group.todayContribFen), row);
+        this.Text("昨日贡献值", this.FenText(group.yesterdayContribFen), row);
+        this.Text("累计贡献值", this.FenText(group.contribFen), row);
+        this.Text("今日红利值", this.FenText(group.todayBonusFen), row);
+        this.Text("昨日红利值", this.FenText(group.yesterdayBonusFen), row);
+        this.Text("累计红利值", this.FenText(group.bonusFen), row);
+
+        this.Text("预警", this.WarnText(group), row);
+        const warnNode = this.At("预警", row);
+        if(warnNode) {
+            // 预警越界用红色，开启且正常用绿色，未设置/关闭用灰蓝。
+            warnNode.color = group.warnStatus === "1" ? new cc.Color(255,92,80) :
+                (group.warnEnabled === "1" ? new cc.Color(151,211,57) : new cc.Color(150,168,186));
+        }
+
+        const memberBtn = row.getChildByName("成员");
+        if(memberBtn != null) {
+            this.BindTap(memberBtn, ()=>{
+                this.OpenMemberDialog(group);
+            });
+        }
+        const addBtn = row.getChildByName("加人");
+        if(addBtn != null) {
+            this.BindTap(addBtn, ()=>{
+                this.OpenAddMemberDialog(group.id, group.name);
+            });
+        }
+        const delBtn = row.getChildByName("删除分组");
+        if(delBtn != null) {
+            this.BindTap(delBtn, ()=>{
+                this.OpenDeleteDialog(group.id, group.name);
+            });
+        }
+    }
+
+    /**
+     * 预警状态一行：越界（红）/ 正常（绿）/ 关闭、未设置（灰）。
+     * 区间不塞这一行——13 个字放在 210 宽里会被压成 16 号，改到副标题行。
+     */
+    private WarnText(group:ClubGroupRow):string {
+        if(group.warnEnabled === "1")
+            return group.warnStatus === "1" ? "预警 越界" : "预警 正常";
+        return group.warnEnabled === "0" ? "预警 关闭" : "预警 未设置";
+    }
+
+    /** 副标题行：预警区间 + 备注，两者都有时用「·」连接。 */
+    private SubText(group:ClubGroupRow):string {
+        const parts:string[] = [];
+        if(group.warnEnabled === "1" && group.warnMin !== "" && group.warnMax !== "")
+            parts.push("区间 " + this.FenText(group.warnMin) + "~" + this.FenText(group.warnMax));
+        if(group.remark !== "")
+            parts.push(group.remark);
+        return parts.length > 0 ? parts.join(" · ") : "—";
+    }
+
+    // ---- 弹窗：选分组 / 输入 / 二次确认 ----
+    private OpenCreateDialog():void {
+        this.OpenDialog("create", "", "", "新建分组",
+            "输入分组名称（最多20字，同管理域内不能重名）");
+    }
+
+    private OpenAddMemberDialog(groupId:string, groupName:string):void {
+        this.OpenDialog("addMember", groupId, "", "添加玩家",
+            "输入玩家ID，加入「" + groupName + "」");
+    }
+
+    private OpenDeleteDialog(groupId:string, groupName:string):void {
+        this.OpenDialog("confirm", groupId, "", "删除分组",
+            "删除「" + groupName + "」后，组内成员会变为未分组，且不可恢复");
+    }
+
+    /** 行内「添加到分组」：先选分组，再确定。 */
+    private OpenPickDialog(userId:string, userName:string):void {
+        if(userId === "")
+            return;
+        const who = userName !== "" ? userName + "（" + userId + "）" : "玩家 " + userId;
+        this.OpenDialog("pick", "", userId, "添加到分组", who + "：选择要加入的分组");
+        if(!this.groupsLoaded && !this.groupBusy)
+            this.QueryGroups(true);
+    }
+
+    /**
+     * 分组弹窗一个骨架两套版式：
+     *   members（组内成员）走大版式 —— 740x1180，列表 690x872，一行就是玩家信息的表行；
+     *   其余（新建 / 加人 / 选组 / 删除确认）还是原来那套 740x800 的小版式。
+     * 预制体里存的是大版式的坐标，这里按模式把面板和各块缩回去。
+     */
+    private LayoutDialog(mode:string):void {
+        const tall = mode === "members";
+        const panel = this.At("分组弹窗/面板");
+        if(panel != null)
+            panel.height = tall ? 1180 : 800;
+        const title = this.At("分组弹窗/面板/标题");
+        if(title != null)
+            title.y = tall ? 540 : 340;
+        const hint = this.At("分组弹窗/面板/提示");
+        if(hint != null) {
+            hint.y = tall ? 482 : 286;
+            hint.height = tall ? 64 : 66;
+        }
+        const list = this.At("分组弹窗/面板/选项列表");
+        if(list != null) {
+            list.y = tall ? -6 : 20;
+            list.height = tall ? 872 : 430;
+        }
+        const view = this.At("分组弹窗/面板/选项列表/view");
+        if(view != null)
+            view.height = tall ? 872 : 430;
+        const content = this.At("分组弹窗/面板/选项列表/view/content");
+        if(content != null) {
+            const height = view != null ? view.height : (tall ? 872 : 430);
+            content.height = height;
+            content.setPosition(0, height / 2);
+        }
+        const by = tall ? -524 : -330;
+        const cancel = this.At("分组弹窗/面板/取消");
+        if(cancel != null)
+            cancel.y = by;
+        const ok = this.At("分组弹窗/面板/确定");
+        if(ok != null)
+            ok.y = by;
+    }
+
+    private OpenDialog(mode:string, groupId:string, userId:string, title:string, hint:string):void {
+        const modal = this.At("分组弹窗");
+        if(modal == null) {
+            this.Toast("界面资源缺失，请重新打开");
+            return;
+        }
+        this.dialogMode = mode;
+        this.dialogGroupId = groupId;
+        this.dialogUserId = userId;
+        this.pickedGroupId = "";
+        this.Text("分组弹窗/面板/标题", title);
+        this.Text("分组弹窗/面板/提示", hint);
+        const isInput = mode === "create" || mode === "addMember";
+        const showList = mode === "pick" || mode === "members";
+        this.Active("分组弹窗/面板/选项列表", showList);
+        this.Active("分组弹窗/面板/输入框", isInput);
+        // 成员列表只要一个「关闭」；确定键收起来，取消键挪到正中。
+        this.Active("分组弹窗/面板/确定", mode !== "members");
+        this.Text("分组弹窗/面板/取消/文字", mode === "members" ? "关闭" : "取消");
+        const cancelBtn = this.At("分组弹窗/面板/取消");
+        if(cancelBtn)
+            cancelBtn.x = mode === "members" ? 0 : -170;
+        // 先显示弹窗：EditBox 在 onEnable 里才把 textLabel/placeholder 绑到节点上，
+        // 节点还是 inactive 时去写 string/inputMode 会拿到空引用。
+        modal.active = true;
+        modal.zIndex = 20;
+        // 版式要在渲染行之前定下来：RenderMembers 会按 view.height 算 content 高度。
+        this.LayoutDialog(mode);
+        if(isInput) {
+            const input = this.At("分组弹窗/面板/输入框");
+            const box = input ? input.getComponent(cc.EditBox) : null;
+            if(box) {
+                box.string = "";
+                box.inputMode = mode === "addMember" ?
+                    cc.EditBox.InputMode.NUMERIC : cc.EditBox.InputMode.ANY;
+                box.maxLength = mode === "create" ? 20 : 12;
+            }
+            this.Text("分组弹窗/面板/输入框/提示",
+                mode === "create" ? "分组名称" : "玩家ID");
+        }
+        if(mode === "pick")
+            this.RenderPickList();
+        else if(mode === "members")
+            this.RenderMembers();
+    }
+
+    private CloseDialog():void {
+        const modal = this.At("分组弹窗");
+        if(modal)
+            modal.active = false;
+        this.dialogMode = "";
+        this.dialogGroupId = "";
+        this.dialogUserId = "";
+        this.pickedGroupId = "";
+        this.memberLoaded = false;
+    }
+
+    private DialogInput():string {
+        const input = this.At("分组弹窗/面板/输入框");
+        const box = input ? input.getComponent(cc.EditBox) : null;
+        return box ? String(box.string || "").trim() : "";
+    }
+
+    private SubmitDialog():void {
+        const mode = this.dialogMode;
+        if(mode === "create") {
+            const name = this.DialogInput();
+            if(name === "") {
+                this.Toast("请输入分组名称");
+                return;
+            }
+            this.CloseDialog();
+            this.SendGroup("创建_俱乐部_分组", {group_name:name});
+            return;
+        }
+        if(mode === "addMember") {
+            const userId = this.DialogInput();
+            if(!/^\d+$/.test(userId)) {
+                this.Toast("请输入正确的玩家ID");
+                return;
+            }
+            const groupId = this.dialogGroupId;
+            this.CloseDialog();
+            this.SendGroup("设置_俱乐部_分组_成员", {group_id:groupId, user_id:userId});
+            return;
+        }
+        if(mode === "pick") {
+            if(this.pickedGroupId === "") {
+                this.Toast("请选择要加入的分组");
+                return;
+            }
+            const groupId = this.pickedGroupId;
+            const userId = this.dialogUserId;
+            this.CloseDialog();
+            this.SendGroup("设置_俱乐部_分组_成员", {group_id:groupId, user_id:userId});
+            return;
+        }
+        if(mode === "confirm") {
+            const groupId = this.dialogGroupId;
+            if(groupId === "") {
+                this.CloseDialog();
+                return;
+            }
+            this.CloseDialog();
+            this.SendGroup("删除_俱乐部_分组", {group_id:groupId});
+            return;
+        }
+        if(mode === "members") {
+            // 成员列表没有「确定」，这里只是兜底（比如点到空白）。
+            this.CloseDialog();
+            return;
+        }
+        if(mode === "kick") {
+            const userId = this.dialogUserId;
+            if(userId === "") {
+                this.CloseDialog();
+                return;
+            }
+            // 弹窗留在成员列表上，等推送回来再刷一遍，不打断连续移人。
+            this.BackToMemberList();
+            // 文档 §4.2：只传 user_id，一个人在一个管理域最多属于一个分组。
+            this.SendGroup("移除_俱乐部_分组_成员", {user_id:userId});
+        }
+    }
+
+    private RenderPickList():void {
+        const list = this.At("分组弹窗/面板/选项列表");
+        const view = this.At("分组弹窗/面板/选项列表/view");
+        const content = this.At("分组弹窗/面板/选项列表/view/content");
+        if(content == null)
+            return;
+        const template = content.getChildByName("选项模板");
+        if(template == null)
+            return;
+        for(const child of content.children.slice()) {
+            if(child.name.indexOf("选项_") === 0)
+                child.destroy();
+        }
+        template.active = false;
+
+        if(this.groups.length === 0) {
+            this.Text("分组弹窗/面板/提示", this.groupsLoaded ?
+                "还没有分组，请先到「分组管理」新建" : "正在加载分组…");
+            if(view) {
+                content.height = view.height;
+                content.setPosition(0, view.height / 2);
+            }
+            return;
+        }
+
+        const rowHeight = template.height;
+        const pitch = rowHeight + 8;
+        let y = 0;
+        for(const group of this.groups) {
+            const option = cc.instantiate(template);
+            option.name = "选项_" + group.id;
+            option.parent = content;
+            option.active = true;
+            option.setPosition(0, y - rowHeight / 2);
+            this.Text("文字", group.name + "（" + group.memberCount + " 人）", option);
+            this.BindTap(option, ()=>{
+                this.pickedGroupId = group.id;
+                this.RefreshPickHighlight();
+            });
+            y -= pitch;
+        }
+        if(view) {
+            content.height = Math.max(view.height, -y + 4);
+            content.setPosition(0, view.height / 2);
+        }
+        const scrollView = list ? list.getComponent(cc.ScrollView) : null;
+        if(scrollView)
+            scrollView.scrollToTop(0);
+        this.RefreshPickHighlight();
+    }
+
+    private RefreshPickHighlight():void {
+        const content = this.At("分组弹窗/面板/选项列表/view/content");
+        if(content == null)
+            return;
+        for(const child of content.children) {
+            if(child.name.indexOf("选项_") !== 0)
+                continue;
+            const id = child.name.substring("选项_".length);
+            const picked = id === this.pickedGroupId;
+            child.opacity = picked ? 255 : 150;
+            const label = Tool.GetChild(child, "文字");
+            if(label)
+                label.color = picked ? new cc.Color(255,231,112) : new cc.Color(200,214,228);
+        }
+    }
+
+    // ------------------------------------------------------------------
     // 基础工具
     // ------------------------------------------------------------------
+    /**
+     * 给运行时克隆出来的节点挂点击（模板行里的按钮不在 onLoad 的按钮扫描范围内）。
+     * 滑动超过阈值不算点击，避免列表滚动时误触。
+     */
+    /**
+     * 行内「战绩」：打开玩家的战绩面板。
+     * 行是运行时克隆的，基类 onLoad 那次扫不到按钮，所以用 BindTap 自己挂触摸。
+     */
+    private BindRecordButton(row:cc.Node, userId:string, userName:string):void {
+        const btn = row.getChildByName("战绩");
+        if(btn == null)
+            return;
+        btn.active = userId !== "";
+        if(!btn.active)
+            return;
+        this.BindTap(btn, ()=>{
+            panelPlayerRecord.Open(userId, userName, this.userClubId || this.roomClubId);
+        });
+    }
+
+    private BindTap(node:cc.Node, action:()=>void):void {
+        let downX = 0;
+        let downY = 0;
+        let moved = false;
+        node.targetOff(this);
+        node.on(cc.Node.EventType.TOUCH_START, (event:cc.Event.EventTouch)=>{
+            const point = event.getLocation();
+            downX = point.x;
+            downY = point.y;
+            moved = false;
+        }, this);
+        node.on(cc.Node.EventType.TOUCH_MOVE, (event:cc.Event.EventTouch)=>{
+            const point = event.getLocation();
+            if(Math.abs(point.x - downX) > 20 || Math.abs(point.y - downY) > 20)
+                moved = true;
+        }, this);
+        node.on(cc.Node.EventType.TOUCH_END, ()=>{
+            if(moved)
+                return;
+            action();
+        }, this);
+    }
+
     private At(path:string, root:cc.Node = null):cc.Node {
         let node:cc.Node = root || this.node;
         for(const name of path.split("/")) {
@@ -1209,12 +2360,25 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
                 this.ShowGuide();
             return;
         }
-        if(name === "页签_输赢详情") {
-            this.ShowTab("win", false);
+        if(name === "页签_分组管理") {
+            this.ShowTab("group", false);
             return;
         }
-        if(name === "页签_牌局详情") {
-            this.ShowTab("record", false);
+        if(name === "新建分组") {
+            this.OpenCreateDialog();
+            return;
+        }
+        if(name === "取消") {
+            // 移出确认的「取消」退回名单，别把整个弹窗关掉。
+            if(this.dialogMode === "kick") {
+                this.BackToMemberList();
+                return;
+            }
+            this.CloseDialog();
+            return;
+        }
+        if(name === "确定") {
+            this.SubmitDialog();
             return;
         }
     }

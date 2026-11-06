@@ -10,6 +10,8 @@ interface PlayerResponse {
   total: number;
   page: number;
   pageSize: number;
+  /** 后端按登录身份判定：管理员（super_admin 角色）为 true，此时 items 里才会带 loginPassword。 */
+  canViewPassword?: boolean;
 }
 
 interface PlayerFilters {
@@ -61,6 +63,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
   const [selected, setSelected] = useState<PlayerItem | null>(null);
   const [resettingPassword, setResettingPassword] = useState<PlayerItem | null>(null);
   const [queryRevision, refreshQuery] = useQueryRefresh();
+  const canViewPassword = Boolean(data?.canViewPassword);
 
   const queryString = useMemo(() => {
     const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
@@ -153,11 +156,12 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <>
             <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
               <table className="player-table">
-                <thead><tr><th>玩家</th><th>登录账号</th><th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
+                <thead><tr><th>玩家</th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
                   <tr key={player.id}>
                     <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small></div></div></td>
                     <td><code>{player.loginName || "—"}</code>{player.accountName && player.accountName !== player.loginName && <small className="cell-subtitle">KBE：{player.accountName}</small>}</td>
+                    {canViewPassword && <td><PlayerPasswordCell player={player} /></td>}
                     <td><strong className="stone-value">{player.stone.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">钻石</small></td>
                     <td>{player.clubs.length > 0 ? <div className="club-chip-list">{player.clubs.map((club) => <span className="club-chip" key={club.clubId} title={`俱乐部ID：${club.clubId}`}>{club.name || club.clubId}</span>)}</div> : <span className="muted">未加入俱乐部</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
@@ -185,6 +189,13 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
     </div>
   );
+}
+
+function PlayerPasswordCell({ player }: { player: PlayerItem }) {
+  if (!player.passwordRecorded || !player.loginPassword) {
+    return <span className="player-password is-missing" title="游戏端只保存 MD5 摘要，无法还原；本后台只收录过它亲历的注册/重置/自助改密，历史密码需要玩家重置一次后才有">未收录</span>;
+  }
+  return <code className="player-password" title="玩家登录密码明文">{player.loginPassword}</code>;
 }
 
 function ResetPlayerPasswordModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (result: PlayerPasswordResetResult) => void }) {

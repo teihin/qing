@@ -60,6 +60,11 @@ export default class panelRecordInfo extends UIPanelViewBase {
     onLoad () {
         super.onLoad();
 
+        // 这个详情页会被多个面板打开（我的战绩 / 数据统计 / 玩家资料 / 玩家战绩）。
+        // 默认 zIndex 是 0，从高层级面板点进来会被压在下层「点了没反应」。
+        // 按 Tool.PanelBaseZ 的基准 +3（它是第三级子页，不能写死 300 这类大数）。
+        this.node.zIndex = Tool.PanelBaseZ(this.node) + 3;
+
         this.scrollRecordList = Tool.GetChild(this.node,"战绩列表").getComponent(ScrollViewEx);
         this.scrollRecordPlays = Tool.GetChild(this.node,"牌局回顾/回顾列表").getComponent(ScrollViewEx);
         this.queueButton = Tool.GetChild(this.node,"排行/排队");
@@ -72,10 +77,13 @@ export default class panelRecordInfo extends UIPanelViewBase {
     }
 
     start () {
-        this.strRoomID = this.strUserData;
+        const entry = this.ReadEntryData();
+        this.strRoomID = entry.roomId;
         // 牌桌结算弹窗自身也携带房间号。作为第四层上下文来源立即写入
         // 常驻缓存，避免旧结算代码提前清空Account.roomID影响退房和排队。
-        if(cc.director.getScene().name == "drh8")
+        // **浏览态（数据统计里查别人的历史局）不是"我进的房"，绝不能写进去**，
+        // 否则排队/退房会拿这间别人的房间号做基准。
+        if(!entry.browse && cc.director.getScene().name == "drh8")
             QueueMatchManager.getInstance().rememberEnteredRoom(this.strRoomID);
 
         this.RefreshFlipButton();
@@ -90,10 +98,49 @@ export default class panelRecordInfo extends UIPanelViewBase {
 
     // update (dt) {}
 
+    /**
+     * 入口参数：可能是一个纯房间号（牌桌结算 / 大厅历史战绩 / 我的战绩），
+     * 也可能是 `{roomId, browse:true}`（数据统计 → 玩家信息/代理链 → 战绩 查到的历史局）。
+     *
+     * 每次现解而不是缓存在成员变量里：UIManager 遇到同名面板已存在时会复用实例、
+     * 只替换 strUserData，不会再走一遍 start()，缓存会串味。
+     */
+    private ReadEntryData():{roomId:string, browse:boolean} {
+        const raw = String(this.strUserData == null ? "" : this.strUserData).trim();
+        if(raw.charAt(0) === "{") {
+            try {
+                const data = JSON.parse(raw);
+                if(data != null) {
+                    const roomId = String(data.roomId == null ? "" : data.roomId);
+                    return {roomId:roomId, browse:data.browse === true};
+                }
+            }
+            catch(error) {
+                // 不是合法 JSON 就当纯房间号往下走。
+            }
+        }
+        return {roomId:raw, browse:false};
+    }
+
+    /**
+     * 浏览态：从「数据统计 → 玩家信息/代理链 → 战绩」点进来的历史局。
+     * 这不是真实结算，关闭/返回只关这个窗口，**不能退房也不能回大厅**。
+     */
+    private IsBrowseEntry():boolean {
+        return this.ReadEntryData().browse;
+    }
+
     public onButtonClick(button:cc.Button)
     {
         if(button.node.name === "关闭" || button.node.name === "关闭上上层")
         {
+            // 浏览别人的历史局：这里没有"当前房间"可退，关掉自己就完事。
+            // （牌局回顾子页用的是同一个关闭键，一起走这条分支。）
+            if(this.IsBrowseEntry())
+            {
+                UIManager.getInstance().closePanelByName(this.node.name);
+                return;
+            }
             if(cc.director.getScene().name == "drh8")
             {
                 let gameView = this.GetActiveGameView();
@@ -179,6 +226,12 @@ export default class panelRecordInfo extends UIPanelViewBase {
     {
         if(this.queueButton == null || !cc.isValid(this.queueButton))
             return;
+        // 浏览态是只读的历史局，别把「排队」摆在这里——点了会真去申请排队。
+        if(this.IsBrowseEntry())
+        {
+            this.queueButton.active = false;
+            return;
+        }
         let gameView = this.GetActiveGameView();
         this.queueButton.active = gameView != null && gameView.CanOpenQueuePanelFromRecordInfo();
     }

@@ -145,10 +145,11 @@ export default class panelStoneWater extends UIPanelViewBase
                 icon.active = key === iconType;
         }
 
+        // 客户口径（2026-11-07 测试反馈）：红色 = 加分，绿色 = 减分，与旧实现相反。
         if(change > 0)
-            countNode.color = new cc.Color(167,231,29,255);
-        else if(change < 0)
             countNode.color = new cc.Color(255,65,52,255);
+        else if(change < 0)
+            countNode.color = new cc.Color(167,231,29,255);
         else
             countNode.color = new cc.Color(239,225,194,255);
     }

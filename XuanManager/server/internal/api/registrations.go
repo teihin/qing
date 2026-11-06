@@ -241,6 +241,10 @@ VALUES (CURDATE(), CURTIME(), ?, ?, ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1
 		writeError(w, http.StatusInternalServerError, "REGISTRATION_FAILED", "注册已写入但返回结果异常，请勿重复提交")
 		return
 	}
+	// 注册是少数能拿到明文密码的入口，加密存一份给后台管理员查看；失败只记日志，不影响注册结果。
+	if err := s.savePlayerLoginPassword(r.Context(), registration.LoginName, registration.Password, playerPasswordSourceRegistration); err != nil {
+		s.logger.Error("save registration login password", "error", err, "loginName", registration.LoginName)
+	}
 
 	upperIDs := upperChain.IDs()
 	lowerCountsRefreshed := true

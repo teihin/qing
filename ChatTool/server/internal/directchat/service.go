@@ -427,7 +427,7 @@ func (s *Service) AllConversations(ctx context.Context, session Session, page, p
 			break
 		}
 	}
-	// 固定入口按俱乐部补齐：本俱乐部老板、直属上级代理、联盟大群主。
+	// 固定入口按俱乐部补齐：本俱乐部老板（盟主/群主）与联盟大盟主。
 	clubs, err := s.directory.ListMyClubs(ctx, session.Guuid)
 	if err != nil {
 		return AllConversationPage{}, err
@@ -590,10 +590,11 @@ func (s *Service) lastPreview(ctx context.Context, conv Conversation, guuid stri
 	return previewText(msg), msg.MessageType
 }
 
-// defaultTargets 返回固定联系人：直属上级代理、本俱乐部老板、联盟大群主。
-// 三代关系重合时按顺序去重；对方已退出俱乐部或不存在时跳过。
+// defaultTargets 返回默认对话入口：本俱乐部老板（盟主/群主）与联盟大盟主。
+// 玩家和合伙人只保留这两级，代理链条上的其他层级（含直属上级合伙人）不再生成默认入口；
+// 他们已有的真实会话仍按普通会话显示。两人为同一人时去重，对方已退出或不存在时跳过。
 func (s *Service) defaultTargets(ctx context.Context, club Club, me Member) []Member {
-	result := make([]Member, 0, 3)
+	result := make([]Member, 0, 2)
 	// 大群主在联盟内没有需要固定置顶的上级/老板入口，直接用成员列表找人。
 	if me.IsUnionOwner || me.Role == RoleUnionOwner {
 		return result
@@ -606,14 +607,6 @@ func (s *Service) defaultTargets(ctx context.Context, club Club, me Member) []Me
 		}
 		seen[guuid] = true
 		result = append(result, member)
-	}
-	if strings.TrimSpace(me.SuperiorAgentGuuid) != "" {
-		if member, ok, err := s.directory.GetMember(ctx, club.ClubID, me.SuperiorAgentGuuid); err == nil && ok {
-			// upper_guuid 必须仍指向本俱乐部的代理链节点；创建者作为根代理也是合法直属上级。
-			if member.Role == RoleAgent || member.Role == RoleLeader || member.Role == RoleOwner || member.Role == RoleUnionOwner {
-				add(member)
-			}
-		}
 	}
 	if strings.TrimSpace(club.OwnerGuuid) != "" {
 		if member, ok, err := s.directory.GetMember(ctx, club.ClubID, club.OwnerGuuid); err == nil && ok {
@@ -628,18 +621,15 @@ func (s *Service) defaultTargets(ctx context.Context, club Club, me Member) []Me
 	return result
 }
 
-func isFixedSuperiorTarget(superiorGuuid, peerGuuid string) bool {
-	return strings.TrimSpace(superiorGuuid) != "" && strings.TrimSpace(superiorGuuid) == strings.TrimSpace(peerGuuid)
-}
-
-// isFixedTarget 判断会话是否是不能删除的固定入口：直属上级代理、本俱乐部老板、联盟大群主。
+// isFixedTarget 判断会话是否属于默认入口（不可隐藏）：本俱乐部老板（盟主/群主）与联盟大盟主。
+// 口径必须与 defaultTargets 一致；与直属上级合伙人的会话改按普通会话处理。
 func (s *Service) isFixedTarget(ctx context.Context, club Club, me Member, peerGuuid string) bool {
 	peerGuuid = strings.TrimSpace(peerGuuid)
-	if peerGuuid == "" {
+	if peerGuuid == "" || peerGuuid == strings.TrimSpace(me.Guuid) {
 		return false
 	}
-	if isFixedSuperiorTarget(me.SuperiorAgentGuuid, peerGuuid) {
-		return true
+	if me.IsUnionOwner || me.Role == RoleUnionOwner {
+		return false
 	}
 	if strings.TrimSpace(club.OwnerGuuid) == peerGuuid {
 		return true

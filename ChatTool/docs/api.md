@@ -55,7 +55,7 @@
 - `POST /api/direct/ws-ticket`：为当前直聊会话签发一次性 WebSocket 票据；`GET /api/direct/ws?ticket=...`：建立长连接。消息落库成功后推送 `message.new`，发送方收到 `message.sent`；事件只携带游标，客户端按 `after` 补拉完整消息。
 - WebSocket 不可用、超时或回包丢失时，客户端使用同一 `clientMessageId` 回退 HTTP，服务端按该 ID 幂等，避免重复消息。断线重连使用指数退避，恢复后按游标补偿。
 - 会话中的 `peer.role` 使用 `owner`、`leader`、`agent`、`manager`、`member`，联盟总群主在其它俱乐部会话里为 `union_owner`；客户端将 `owner` 显示为“老板”、`union_owner` 显示为“大群主”、代理统一显示“代理”。`peer.note` 只在当前玩家位于目标成员的俱乐部上级链时返回。
-- 固定联系人：直属上级代理、本俱乐部创建者、俱乐部所在联盟总群主（按 guuid 去重）；固定会话服务端返回 `canDelete=false`，删除请求返回 `DIRECT_DELETE_FORBIDDEN`。
+- 固定联系人（默认对话）：本俱乐部创建者（盟主，未入盟显示群主）、俱乐部所在联盟总群主（大盟主），按 guuid 去重；直属上级合伙人等代理链条上的其他层级不生成固定入口，与他们的会话按普通会话处理。固定会话服务端返回 `canDelete=false`，删除请求返回 `DIRECT_DELETE_FORBIDDEN`。
 
 ## 媒体
 

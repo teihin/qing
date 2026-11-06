@@ -244,6 +244,9 @@ td strong { color: #294149; }
 .max-cell { max-width: 270px; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #a2b0b3; }
 .player-table { min-width: 1220px; }
+/* 玩家登录密码列：显示后台加密收录的明文；历史账号显示「未收录」。该列只有管理员角色能看到。 */
+.player-password { display: inline-block; max-width: 168px; color: #176e68; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; letter-spacing: .02em; overflow-wrap: anywhere; white-space: normal; }
+.player-password.is-missing { color: #a2b0b3; font-family: inherit; font-size: 12px; }
 .money-value, .stone-value { color: #117b72; font-family: Georgia, "Songti SC", serif; font-size: 16px; }
 .club-chip-list { display: flex; flex-wrap: wrap; gap: 5px; max-width: 230px; }
 .club-chip { display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; padding: 4px 9px; border: 1px solid #cfe7e3; border-radius: 999px; color: #176f67; background: #f0f9f7; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }

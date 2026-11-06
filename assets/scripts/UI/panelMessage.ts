@@ -13,7 +13,8 @@ const {ccclass} = cc._decorator;
 const PAGE_SIZE = 30;
 /** 本地缓存只保留第一页，进页面时先出列表；多页数据仍由服务端分页保证。 */
 const LIST_CACHE_MAX = 30;
-const LIST_CACHE_VERSION = 1;
+/** v2：默认对话改为只保留盟主/大盟主，旧缓存里的上级合伙人入口行必须作废。 */
+const LIST_CACHE_VERSION = 2;
 /** 距离底部小于该高度时自动请求下一页。 */
 const LOAD_MORE_DISTANCE = 260;
 /** 顶部负向回弹超过该距离（设计像素）后松手触发刷新。 */
@@ -1075,7 +1076,7 @@ export default class panelMessage extends UIPanelViewBase {
         if(clubId === "")
             return;
         this.busy = true;
-        // 默认上级入口可能对应一条已被当前用户隐藏的历史会话，必须先走幂等恢复接口；
+        // 默认入口（盟主/大盟主）可能对应一条已被当前用户隐藏的历史会话，必须先走幂等恢复接口；
         // 普通列表项则直接进入已有会话。
         if(item.conversationId !== "" && !item.isDefaultTarget)
         {

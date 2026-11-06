@@ -204,10 +204,11 @@ export default class panelStonePoolCost extends UIPanelViewBase
                 icon.active = key === "stone";
         }
 
+        // 客户口径（2026-11-07 测试反馈）：红色 = 加分，绿色 = 减分。消耗是减，得到钻石是加。
         countNode.color = validCost && cost > 0 ?
-            new cc.Color(255,65,52,255) : new cc.Color(239,225,194,255);
-        nowNode.color = validStone && stone > 0 ?
             new cc.Color(167,231,29,255) : new cc.Color(239,225,194,255);
+        nowNode.color = validStone && stone > 0 ?
+            new cc.Color(255,65,52,255) : new cc.Color(239,225,194,255);
     }
 
     //--------------------------------------------------------------------------

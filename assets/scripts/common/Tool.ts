@@ -185,6 +185,31 @@ export default class Tool extends cc.Component{
     {
         return decodeURIComponent(atob(str));
     }
+    /**
+     * 全屏弹窗挂到 Canvas/Normal 后该用的基准 zIndex。
+     *
+     * 大厅里返回 0：和所有普通弹窗一样按创建顺序排，后开的自然压住先开的；
+     * 牌桌里返回 1：panelGameView 的按钮在 onLoad 就注册了触摸，晚创建的弹窗光靠
+     * 创建顺序抢不到触摸，必须靠 zIndex 压过牌桌（见 cocos-touch-passthrough-fix）。
+     *
+     * **不要在这里用 200 这类大数**：Normal 里所有弹窗是同一层兄弟，基准抬到 200 就等于
+     * 把该面板顶到结算/兑换/客服/俱乐部设置等所有按需弹窗之上，表现是「很多弹窗跑到它下面」
+     * （2026-11-06 数据统计面板即此因）。子页按 基准+1、+2 递增即可。
+     */
+    public static PanelBaseZ(node:cc.Node):number
+    {
+        let parent = node != null ? node.parent : null;
+        if(parent == null)
+            return 0;
+        // 大厅的 panelMain 和牌桌的 panelGameView 互斥：两者都走 showPanel(CloseOther) 销毁对方。
+        // 没有牌桌、或还留在大厅时一律走正常层级。
+        if(parent.getChildByName("panelGameView") == null)
+            return 0;
+        if(parent.getChildByName("panelMain") != null)
+            return 0;
+        return 1;
+    }
+
     /** 公告等多行纯文本统一使用 LF，保留空行、缩进和连续空格。 */
     public static NormalizeMultilineText(str:string):string
     {

@@ -19,6 +19,8 @@
 - 改完 Cocos 脚本想快速自检：本机无 `tsc`，用 managed node 调
   `~/.workbuddy/binaries/node/workspace/node_modules/typescript` 的
   `ts.transpileModule(src,{reportDiagnostics:true})` 只查语法（0 诊断即通过），别指望完整类型检查。
+- **记录类列表的金额配色一律「红加绿减」**（客户 2026-11-07 测试反馈明确：红色 = ➕，绿色 = −）。
+  新增流水/记录页不要按「绿加红减」写；现存实现是 `cc.Color(255,65,52)` 表示加、`cc.Color(167,231,29)` 表示减。
 
 ## 服务器 154.37.155.17
 - **该机没有 `ss`、没有 systemd**：`ss | grep 端口` 永远回 "NOT LISTENING"，会误判服务挂了；查端口用

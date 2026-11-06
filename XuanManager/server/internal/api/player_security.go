@@ -105,6 +105,10 @@ func (s *Server) handleResetPlayerPassword(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	after := map[string]any{"passwordChanged": true, "registrationSynced": true, "registrationRows": registrationRows}
+	if err := s.savePlayerLoginPassword(ctx, identity.LoginName, input.Password, playerPasswordSourceAdminReset); err != nil {
+		// 明文副本只服务后台展示，写入失败不能把已经生效的密码重置判为失败。
+		s.logger.Error("save reset player login password", "error", err, "playerId", playerID)
+	}
 	s.audit(ctx, &p, "game.player.password.reset", "game_player", playerID, auditRequest, identity, after, 0, "游戏玩家登录密码已重置", clientIP(r))
 	writeData(w, http.StatusOK, map[string]any{
 		"playerId": playerID,

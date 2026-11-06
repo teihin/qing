@@ -1,8 +1,20 @@
 # qing 当前状态
 
-更新时间：2026-11-06
+更新时间：2026-11-07
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-07 后台玩家管理「用户密码」列显示明文（已部署）
+
+- 列仅管理员（`super_admin` 角色，含 admin999 与普通管理员 admin）可见。游戏端只有 MD5、不能解密，因此新增 `mgr_player_login_password`（migration 046）用 AES-GCM 存明文副本，在注册/后台重置/玩家自助改密三处收录；无记录显示「未收录」，不回退摘要。
+- 存量字典回填命中 62/63（`source='recovered'`，未命中 `37022268`）；游戏端内部改密不经后台时副本会过期。
+- 00:40 部署（`285c62b3…` + `index-DoJnkJZt.js`）：health 200、未登录 401、公网指向新 js、进程密钥与 `runtime.env` 同哈希；回滚 `bin/xuanmanager.previous-pwdplain-20261107`、`web.previous-pwdplain-20261107`。登录态目视待验，详见[交接](handoffs/2026-11-07-admin-player-password-column.md)。
+
+
+## 2026-11-06 默认对话只留盟主 / 大盟主（已部署）
+
+- 玩家、合伙人的消息首页默认对话只剩 BF客服、盟主（未入盟为群主）、大盟主；直属上级合伙人等代理层级不再生成入口，历史会话降为普通会话。
+- 22:28 部署 ChatTool `bce3b475…`（回滚 `bin/chattool.previous-defaultchat-20261106-2228`，旧 `c7f6cd15…`），健康 200、未登录 401；客户端缓存版本 1→2 待构建。详见[交接](handoffs/2026-11-06-default-chat-targets.md)。
 
 ## 2026-11-06 后台俱乐部列表新增「俱乐部总积分」（已部署）
 
@@ -58,13 +70,9 @@
 - 已部署正式 8891（2026-11-06 01:11）：二进制 `b8dad60e…`、前端 `index-vIOviZTr.js` / `index-Dq24wEA0.css`（build .21）；规则按代理一份 `show_percent` 0~100，自己设置优先、未设置沿直属上级继承（`查询_代理_展示规则` 同时返回自身值和 `effective_show_percent`）；成员行新增 `ownShowPercent` / `showPercentSource`，规则列自设显示黄色「（设置）」、继承显示灰色；贡献与输赢都按生效比例缩放；弹窗打开时回读自身值/生效值，保存成功后关闭；玩家行不再显示设置规则按钮；首末列固定；联盟/俱乐部搜索、普通俱乐部、show_type/selfOnly、逐行 club_id、可读日志保留；迁移 045 已执行；健康/公网 200、回滚 `backups/xuanmanager.20261106-0107-rollback`、`web.previous-rule-style-20261106-0111`。
 - 最新方案不支持固定差额、整线一键覆盖/取消继承；客户端模拟标记仍缺字段；登录态点击、Creator/真机待验。详见[交接](handoffs/2026-11-05-agent-contributions.md)。
 
-## 2026-11-05 搓牌（未构建、未真机）
+## 2026-11-05 搓牌 / 玩家设置代理暗扣比例（未构建、未真机，已归档）
 
-- 搓开前用 `pk2np/` 没点牌面；遮罩水平/垂直超过牌面一半时只把牌面换成有点真实牌，搓牌不结束，仍以松手触发原揭开流程。`DrhPlayerLogic.ts`、`panelGameView.ts`，新增 `tools/import_pk2_nopoint.py`；Creator/网页/真机待验证。详见[交接](handoffs/2026-11-05-cuo-card-nopoint.md)。
-
-## 2026-11-05 玩家设置：代理暗扣比例
-
-- 代理行下方新增「暗扣」行，输入 0-20 后发 `设置_俱乐部_代理_暗抽`（0=不扣）；下级中除普通玩家外（盟主/合伙人等）都显示，跨级只读仅暗扣可改，仅大盟主/未入盟创建者可见，无查询接口时显示本次设置值。Prefab 检查通过，构建/真机/回包待验证。详见[交接](handoffs/2026-11-05-agent-dark-percent.md)。
+- 原文与交接链接见[归档](archive/2026-11-07/current-nov05-client-items.md)。
 
 ## 2026-11-05 聊天托管（服务端/客服站已部署，客户端未构建）
 
@@ -90,13 +98,9 @@
 - 消息列表滚动/下拉刷新/分页：原文见[归档](archive/2026-11-05/current-nov04-message-list.md)，细节见[交接](handoffs/2026-11-04-message-list-scroll-paging.md)；11-05 点击底栏「消息」也触发同一套下拉刷新。
 - 盟友管理盟主比例：原文见[归档](archive/2026-11-05/current-nov04-ally-management.md)。
 
-## 2026-11-04 游戏设置：奖池设置 / 游戏规则（已归档）
+## 2026-11-04 游戏设置 / 房间内奖池（已归档）
 
-- 原文见[归档](archive/2026-11-06/current-nov04-game-settings.md)，细节见[奖池交接](handoffs/2026-11-04-game-settings-jackpot.md)与[规则交接](handoffs/2026-11-04-game-settings-rules.md)。
-
-## 2026-11-04 房间内奖池按开关隐藏（已归档）
-
-- 原文见[归档](archive/2026-11-05/current-nov04-room-jackpot.md)，奖池配置细节见[交接](handoffs/2026-11-04-game-settings-jackpot.md)。
+- 奖池设置与规则原文见[归档](archive/2026-11-06/current-nov04-game-settings.md)，细节见[奖池交接](handoffs/2026-11-04-game-settings-jackpot.md)、[规则交接](handoffs/2026-11-04-game-settings-rules.md)；房间内奖池见[归档](archive/2026-11-05/current-nov04-room-jackpot.md)。
 
 ## 2026-11-04～11-06 我的红利：V2 统计 / 联盟红利 / 合伙人入口（未构建、未真机）
 
@@ -110,17 +114,9 @@
 - 后台玩家管理移除「加减钻石」并删旧接口：已部署，详见[交接](handoffs/2026-11-04-admin-remove-player-diamonds.md)。
 - 后台俱乐部管理与钻石池、我的页钻石池消耗/上下分记录/入盟审批/联盟归属、创建与加入联盟、按联盟层级的直聊权限：原文见[归档](archive/2026-11-05/current-nov03-club.md)。
 
-## 2026-11-02～11-03 后台玩家钻石与联盟管理（已归档）
+## 2026-10-31～11-03 阶段归档（链接）
 
-- 玩家钻石与赠送/上下分、联盟额度管理、房间战绩俱乐部信息与房间维护只读改造：原文见[归档](archive/2026-11-05/current-nov03-admin.md)。
-
-## 2026-11-01 资金明细 / 牌桌金币 / 私聊上下分（已归档）
-
-- 原文与交接链接见[归档](archive/2026-11-04/current-nov01-nov03-chat.md)。
-
-## 2026-10-31～11-01（已归档）
-
-- 俱乐部成员额度、赠送金币路由、后台俱乐部管理模块与 1 对 1 私聊的原文与交接链接见[归档](archive/2026-11-04/current-oct31-nov01-links.md)。
+- 玩家钻石与联盟管理见[归档](archive/2026-11-05/current-nov03-admin.md)；资金明细/牌桌金币/私聊上下分见[归档](archive/2026-11-04/current-nov01-nov03-chat.md)；俱乐部成员额度与 1 对 1 私聊见[归档](archive/2026-11-04/current-oct31-nov01-links.md)。
 
 ## 2026-10-29～10-30（阶段归档）
 

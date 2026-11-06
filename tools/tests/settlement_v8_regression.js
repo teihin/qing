@@ -3,8 +3,10 @@ const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),asse
 const ts=require(process.env.TYPESCRIPT_PATH||path.join(require('node:os').homedir(),'.nvm/versions/node/v22.19.0/lib/node_modules/nexe/node_modules/typescript/lib/typescript.js'));
 const root=path.resolve(__dirname,'../..');
 class Label{} class Sprite{} class Toggle{} class Component{}
+let scene={name:'login'};
 const cc={Label,Sprite,Toggle,Component,Color:{RED:{}},color:(r,g,b,a)=>({r,g,b,a}),isValid:n=>!!n,
-  _decorator:{ccclass:c=>c,property:()=>()=>{}},director:{getScene:()=>({name:'login'})}};
+  log:()=>{},warn:()=>{},error:()=>{},
+  _decorator:{ccclass:c=>c,property:()=>()=>{}},director:{getScene:()=>scene}};
 function prefab(file){
  const data=JSON.parse(fs.readFileSync(path.join(root,file)));const nodes=new Map();
  data.forEach((v,i)=>{if(v.__type__==='cc.Node')nodes.set(i,{name:v._name,active:v._active,color:v._color,children:[],comps:{},getChildByName(n){return this.children.find(c=>c.name===n)},getComponent(t){return this.comps[t.name||t]}})});
@@ -12,7 +14,7 @@ function prefab(file){
  return nodes.get(data.findIndex(v=>v.__type__==='cc.Node'&&!v._parent));
 }
 const child=(n,p)=>p.split('/').reduce((n,k)=>n.getChildByName(k),n);
-let snapshot={queueActive:false},closed=[],opened=[],requests=[];
+let snapshot={queueActive:false},closed=[],opened=[],requests=[],remembered=[];
 const source=fs.readFileSync(path.join(root,'assets/scripts/UI/panelRecordInfo.ts'),'utf8');
 const compiled=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2017,module:ts.ModuleKind.CommonJS,experimentalDecorators:true},reportDiagnostics:true});
 assert.equal(compiled.diagnostics.filter(d=>d.category===ts.DiagnosticCategory.Error).length,0);
@@ -20,10 +22,10 @@ const moduleObject={exports:{}};
 vm.runInNewContext(compiled.outputText,{cc,module:moduleObject,exports:moduleObject.exports,console,require(name){
  if(name.endsWith('/Tool'))return {default:{GetChild:child}};
  if(name.endsWith('/GameDef'))return {ShowPanelMode:{Cover:1,Top:2}};
- if(name.endsWith('/QueueMatchManager'))return {default:{getInstance:()=>({getSnapshot:()=>snapshot})}};
+ if(name.endsWith('/QueueMatchManager'))return {default:{getInstance:()=>({getSnapshot:()=>snapshot,rememberEnteredRoom:id=>{remembered.push(id)}})}};
  if(name.endsWith('/UIManager'))return {default:{getInstance:()=>({showPanel:(...a)=>opened.push(a),closePanelByName:n=>closed.push(n)})}};
  if(name.endsWith('/ImageManager'))return {default:{getInstance:()=>({GetImageByName:()=>true})}};
- if(name.endsWith('/GameDataManager'))return {default:{getAccount:()=>({reqAccountCommand:(...a)=>requests.push(a)})}};
+ if(name.endsWith('/GameDataManager'))return {default:{getAccount:()=>({reqAccountCommand:(...a)=>requests.push(a),reqHallCommand:(...a)=>requests.push(a)})}};
  return {default:class {}};
 }});
 const Panel=moduleObject.exports.default,p=new Panel();p.node=prefab('assets/resources/UI/panelRecordInfo.prefab');
@@ -57,4 +59,29 @@ p.onButtonClick({node:child(p.node,'title/牌局回顾')});assert.equal(child(p.
 p.onButtonClick({node:child(p.node,'牌局回顾/title/关闭上上层')});assert.equal(child(p.node,'牌局回顾').active,false);cases++;
 // Top-level return in history still closes this panel through UIManager.
 p.onButtonClick({node:child(p.node,'关闭')});assert.equal(closed.at(-1),'panelRecordInfo');cases++;
-console.log(`PASS ${cases} settlement queue, awards, live fields, review and return cases.`);
+// ---- 浏览态：数据统计 → 玩家信息/代理链 → 战绩 → 某一局 ----
+// 这不是真实结算，关闭/返回只能关这个窗口，绝不能退房回大厅。
+let exitCalls=0;
+game={HandleRecordInfoClose:()=>{exitCalls++;return true;},CanOpenQueuePanelFromRecordInfo:()=>true};
+scene={name:'drh8'};
+p.strUserData=JSON.stringify({roomId:'594740',browse:true});
+assert.equal(p.ReadEntryData().roomId,'594740');
+assert.equal(p.IsBrowseEntry(),true);cases++;
+// 只读的历史局不该出现「排队」，点了会真去申请排队。
+p.RefreshQueueButtonVisibility();assert.equal(p.queueButton.active,false);cases++;
+closed.length=0;
+p.onButtonClick({node:child(p.node,'关闭')});
+assert.equal(exitCalls,0,'浏览态关闭不能触发退房');
+assert.equal(closed.at(-1),'panelRecordInfo');cases++;
+// 牌局回顾子页的返回键走同一个关闭分支。
+p.onButtonClick({node:child(p.node,'牌局回顾/title/关闭上上层')});
+assert.equal(exitCalls,0,'浏览态牌局回顾返回也不能退房');cases++;
+// 浏览态进 start() 也不许把这间别人的房间写进常驻排队缓存。
+remembered.length=0;p.start();
+assert.deepEqual(remembered,[],'浏览态不能污染 rememberEnteredRoom');cases++;
+// 真实结算（纯房间号入口）仍然照原样退房。
+p.strUserData='594741';
+assert.equal(p.IsBrowseEntry(),false);
+p.onButtonClick({node:child(p.node,'关闭')});
+assert.equal(exitCalls,1,'真实结算仍然退房');cases++;
+console.log(`PASS ${cases} settlement queue, awards, live fields, review, browse-only and return cases.`);

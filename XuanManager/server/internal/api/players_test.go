@@ -1,11 +1,60 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestCanViewPlayerLoginPasswordOnlyForSuperAdmin(t *testing.T) {
+	if canViewPlayerLoginPassword(principal{}) {
+		t.Fatal("普通角色不应看到玩家登录密码")
+	}
+	if !canViewPlayerLoginPassword(principal{IsSuper: true}) {
+		t.Fatal("超级管理员应当可以看到玩家登录密码")
+	}
+}
+
+func TestPlayerItemLoginPasswordOmittedUnlessPopulated(t *testing.T) {
+	payload, err := json.Marshal(playerItem{PlayerID: "565923"})
+	if err != nil {
+		t.Fatalf("marshal player item: %v", err)
+	}
+	if strings.Contains(string(payload), "loginPassword") {
+		t.Fatalf("未收录密码时不应出现密码字段: %s", payload)
+	}
+	if !strings.Contains(string(payload), `"passwordRecorded":false`) {
+		t.Fatalf("未收录密码时应明确标记 passwordRecorded=false: %s", payload)
+	}
+	payload, err = json.Marshal(playerItem{PlayerID: "565923", LoginPassword: "111111", PasswordRecorded: true})
+	if err != nil {
+		t.Fatalf("marshal player item: %v", err)
+	}
+	if !strings.Contains(string(payload), `"loginPassword":"111111"`) || !strings.Contains(string(payload), `"passwordRecorded":true`) {
+		t.Fatalf("管理员应拿到明文密码并标记已收录: %s", payload)
+	}
+}
+
+func TestSavePlayerLoginPasswordSkipsEmptyInput(t *testing.T) {
+	server := &Server{}
+	if err := server.savePlayerLoginPassword(context.Background(), "", "111111", playerPasswordSourceRegistration); err != nil {
+		t.Fatalf("空登录账号不应写库: %v", err)
+	}
+	if err := server.savePlayerLoginPassword(context.Background(), "a000005", "", playerPasswordSourceRegistration); err != nil {
+		t.Fatalf("空密码不应写库: %v", err)
+	}
+}
+
+func TestNormalizeLoginNameKey(t *testing.T) {
+	if got := normalizeLoginNameKey("  A000005 "); got != "a000005" {
+		t.Fatalf("登录账号应统一小写去空格: %q", got)
+	}
+	if got := normalizeLoginNameKey(""); got != "" {
+		t.Fatalf("空登录账号应返回空: %q", got)
+	}
+}
 
 func TestParsePlayerFilters(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/game/players?playerId=292989&name=test&agentId=648425&agentName=agent&level=98&roomId=0&minBalance=-10.5&maxBalance=200&registeredFrom=2026-08-01&registeredTo=2026-08-09&loginFrom=2026-09-01&loginTo=2026-09-19", nil)

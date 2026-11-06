@@ -21,6 +21,7 @@ import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
 import panelExchangeStone from "./panelExchangeStone";
+import panelBossPlayerInfo from "./panelBossPlayerInfo";
 import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 import DirectChatManager from "../logic/DirectChatManager";
 
@@ -415,6 +416,10 @@ export default class panelMain extends UIPanelViewBase {
         {
             Tool.GetChild(this.node,"Main/我的/信息/测试").active = false;
         }
+
+        // 「我的」右上角的数据统计入口：仅 BOSS 账号可见（prefab 里默认隐藏）。
+        // 口径与牌局里的一致：level>=99 或 董事长/总裁；服务端仍会按 boss 名单鉴权。
+        Tool.GetChild(this.node,"Main/我的/数据统计").active = GameDataManager.IsBossAccount();
 
         if(GameDataManager.instance.nShowNotify)
         {
@@ -1146,7 +1151,9 @@ export default class panelMain extends UIPanelViewBase {
             "Main/我的/滚动区/view/content/操作/赠送",
             "Main/我的/滚动区/view/content/操作/兑换钻石",
             "Main/我的/滚动区/view/content/操作/上下分记录",
-            "Main/我的/滚动区/view/content/操作/钻石池消耗"
+            "Main/我的/滚动区/view/content/操作/钻石池消耗",
+            // 「额度授权记录」：大盟主查看给各盟主的额度授信流水，与钻石池消耗同属俱乐部专属入口。
+            "Main/我的/滚动区/view/content/操作/额度授权记录"
         ];
         for(const path of paths)
         {
@@ -1180,6 +1187,18 @@ export default class panelMain extends UIPanelViewBase {
     {
         if(this.clubManagement && this.clubManagement.HandleButton(button))
             return;
+        // 「我的」右上角的数据统计：打开 BOSS 数据面板（代理链/玩家信息）。
+        // 按钮只对 BOSS 显示，这里再挡一道防止热更后节点状态残留被误点。
+        if(button.node.name === "数据统计")
+        {
+            if(GameDataManager.IsBossAccount())
+            {
+                // 从大厅进来必须带当前俱乐部：面板的「玩家信息」「代理链路」两条查询都用它当
+                // club_id，不带的话服务端会退回账号默认俱乐部，和当前在看的那家对不上。
+                panelBossPlayerInfo.Open("", this.ResolveRoomClub());
+            }
+            return;
+        }
         // 「我的」底部的兑换入口：和牌局菜单里那个是同一个弹窗。
         if(button.node.name === "兑换钻石")
         {
@@ -1545,6 +1564,16 @@ export default class panelMain extends UIPanelViewBase {
                 return;
             }
             UIManager.getInstance().showPanel("panelStonePoolCost",ShowPanelMode.Cover);
+        }
+        else if(button.node.name === "额度授权记录")
+        {
+            // 大盟主（联盟总群主）查看自己给盟主的额度授信记录，数据见「我的」页同款入口。
+            if(this.ResolveRoomClub() === "")
+            {
+                this.RefreshClubFinanceMenuVisibility();
+                return;
+            }
+            UIManager.getInstance().showPanel("panelQuotaGrantRecord",ShowPanelMode.Cover);
         }
         else if(button.node.name === "金币充值")
         {
@@ -3565,7 +3594,8 @@ export default class panelMain extends UIPanelViewBase {
         // type 列只有两个字宽：积分流水的「添加积分 / 积分赠送 / 积分受赠」要缩成短标签，
         // 旧添加记录原样给的是「添加 / 赠送」。都没有时按金额正负兜底。
         const rawType = String(this.ReadClubGiftRecordValue(objOne,["type","record_type"],""));
-        const amountNumber = Number(amount);
+        // 服务端偶有千分位，去掉逗号再解析，否则金额会被当成 0 而丢掉正负判断。
+        const amountNumber = Number(String(amount).replace(/,/g,""));
         const isMinus = isFinite(amountNumber) && amountNumber < 0;
         let typeText = rawType;
         if(typeText === "添加积分")
@@ -3584,8 +3614,19 @@ export default class panelMain extends UIPanelViewBase {
         node.getChildByName("id").getComponent(cc.Label).string = hasTarget
             ? targetName + "\r\nID:" + targetId
             : (opterName !== "" ? opterName : "—");
-        // 金额保留原符号：负数是扣减（下分/送出），不要写成「赠送 -111」那种含糊说法。
-        node.getChildByName("count").getComponent(cc.Label).string = String(amount);
+        // 金额保留原符号：负数是扣减（下分/送出），正数补「+」与其它记录页一致。
+        const countNode = node.getChildByName("count");
+        const hasAmount = isFinite(amountNumber) && String(amount) !== "";
+        countNode.getComponent(cc.Label).string = hasAmount
+            ? (amountNumber > 0 ? "+" + String(amount) : String(amount))
+            : String(amount);
+        // 客户口径（2026-11-07 测试反馈）：红色 = 加分，绿色 = 减分。
+        if(hasAmount && amountNumber > 0)
+            countNode.color = new cc.Color(255,65,52,255);
+        else if(hasAmount && amountNumber < 0)
+            countNode.color = new cc.Color(167,231,29,255);
+        else
+            countNode.color = new cc.Color(239,225,194,255);
         node.getChildByName("time").getComponent(cc.Label).string = strDate;
 
         const avatarRoot = node.getChildByName("头像");
@@ -5513,10 +5554,11 @@ export default class panelMain extends UIPanelViewBase {
             if(icon != null) icon.active = key === iconType;
         }
 
+        // 客户口径（2026-11-07 测试反馈）：红色 = 加分，绿色 = 减分，与旧实现相反。
         if(amount > 0)
-            countNode.color = new cc.Color(167,231,29,255);
-        else if(amount < 0)
             countNode.color = new cc.Color(255,65,52,255);
+        else if(amount < 0)
+            countNode.color = new cc.Color(167,231,29,255);
         else
             countNode.color = new cc.Color(239,225,194,255);
     }
@@ -5552,13 +5594,14 @@ export default class panelMain extends UIPanelViewBase {
             if(icon != null) icon.active = key === iconType;
         }
 
+        // 客户口径（2026-11-07 测试反馈）：红色 = 加分，绿色 = 减分，与旧实现相反。
         if(change > 0)
         {
-            countNode.color = new cc.Color(167,231,29,255);
+            countNode.color = new cc.Color(255,65,52,255);
         }
         else if(change < 0)
         {
-            countNode.color = new cc.Color(255,65,52,255);
+            countNode.color = new cc.Color(167,231,29,255);
         }
         else
             countNode.color = new cc.Color(239,225,194,255);

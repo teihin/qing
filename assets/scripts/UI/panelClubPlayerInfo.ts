@@ -52,7 +52,9 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
 
     onLoad () {
         super.onLoad();
-        this.node.zIndex = 210;
+        // 从数据统计（基准 0 或牌桌里的 1）点开，比它高一层就够；不要再写死 210，
+        // 那会把大厅里后开的弹窗全压到它下面（同 panelBossPlayerInfo 的说明）。
+        this.node.zIndex = Tool.PanelBaseZ(this.node) + 1;
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("NumberList", this, "OnMemberList");
     }

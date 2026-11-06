@@ -35,6 +35,11 @@ type playerItem struct {
 	PlayerID         string              `json:"playerId"`
 	LoginName        string              `json:"loginName"`
 	AccountName      string              `json:"accountName"`
+	// LoginPassword 是玩家登录密码的明文副本（mgr_player_login_password，AES-GCM 密文解密后）。
+	// 游戏端只存 MD5、无法还原，所以只有 XuanManager 亲历过改密（注册/后台重置/自助改密）的账号才有值；
+	// PasswordRecorded 为 false 表示历史密码未收录。只在管理员查询时填充。
+	LoginPassword    string              `json:"loginPassword,omitempty"`
+	PasswordRecorded bool                `json:"passwordRecorded"`
 	Name             string              `json:"name"`
 	Photo            string              `json:"photo"`
 	Sex              string              `json:"sex"`
@@ -68,8 +73,16 @@ type playerItem struct {
 	clubManage string
 }
 
-func (s *Server) handleListPlayers(w http.ResponseWriter, r *http.Request, _ principal) {
+// 玩家登录密码只对管理员返回。管理员 = `super_admin` 角色（含 admin999 超级管理员
+// 和同角色的普通管理员 admin，也兼容旧 is_super 标记），由 isEffectiveSuper 统一判定；
+// 客服等其他角色即使有 game.player.view 也拿不到该字段。
+func canViewPlayerLoginPassword(p principal) bool {
+	return p.IsSuper
+}
+
+func (s *Server) handleListPlayers(w http.ResponseWriter, r *http.Request, p principal) {
 	page, size := pageParams(r)
+	canViewPassword := canViewPlayerLoginPassword(p)
 	filters, err := parsePlayerFilters(r)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
@@ -143,6 +156,12 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")
 		return
 	}
+	if canViewPassword {
+		if err := s.attachPlayerLoginPasswords(r.Context(), items); err != nil {
+			// 密码副本读取失败不能拖垮整个玩家列表；字段留空，前端显示「未收录」。
+			s.logger.Error("attach player login passwords", "error", err)
+		}
+	}
 	if err := s.attachPlayerClubs(r.Context(), items); err != nil {
 		s.logger.Error("attach player clubs", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家所在俱乐部失败")
@@ -151,6 +170,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "page": page, "pageSize": size, "total": total,
+		"canViewPassword": canViewPassword,
 	})
 }
 

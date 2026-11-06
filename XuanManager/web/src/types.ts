@@ -481,6 +481,9 @@ export interface PlayerItem {
   playerId: string;
   loginName: string;
   accountName: string;
+  /** 玩家登录密码明文（后台加密收录后解密返回）；passwordRecorded=false 表示历史密码未收录。 */
+  loginPassword?: string;
+  passwordRecorded?: boolean;
   name: string;
   photo: string;
   sex: string;

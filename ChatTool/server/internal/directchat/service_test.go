@@ -207,8 +207,16 @@ func TestAllConversationsAcrossClubs(t *testing.T) {
 	if len(page.Items) != 4 {
 		t.Fatalf("expected two real conversations and two fixed club-owner entries, got %d: %+v", len(page.Items), page.Items)
 	}
-	if page.Items[0].ClubID != "222222" || page.Items[0].ClubName != "测试俱乐部二" || page.Items[0].LastMessage != "俱乐部二" {
-		t.Fatalf("newest cross-club conversation must be first: %+v", page.Items[0])
+	// 固定入口无消息时会排在真实会话之前，跨俱乐部时间序只在真实会话之间比较。
+	firstReal := ConversationView{}
+	for _, item := range page.Items {
+		if item.ConversationID != "" {
+			firstReal = item
+			break
+		}
+	}
+	if firstReal.ClubID != "222222" || firstReal.ClubName != "测试俱乐部二" || firstReal.LastMessage != "俱乐部二" {
+		t.Fatalf("newest cross-club conversation must be first among real conversations: %+v", page.Items)
 	}
 	seen := map[string]int{}
 	for _, item := range page.Items {
@@ -225,7 +233,9 @@ func TestAllConversationsAcrossClubs(t *testing.T) {
 	}
 }
 
-func TestAllConversationsIncludesClubSuperiorsWithoutHistory(t *testing.T) {
+// 玩家没有历史会话时，默认对话只有每个俱乐部的老板（盟主/群主）入口，
+// 直属上级合伙人不再生成默认入口。
+func TestAllConversationsDefaultTargetsSkipSuperiorAgent(t *testing.T) {
 	env := newDevEnv(t)
 	ctx := context.Background()
 	player := env.session(t, "100001")
@@ -234,8 +244,8 @@ func TestAllConversationsIncludesClubSuperiorsWithoutHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 4 {
-		t.Fatalf("global message list must include superior and club-owner entries per club, got %d: %+v", len(page.Items), page.Items)
+	if len(page.Items) != 2 {
+		t.Fatalf("global message list must only carry one club-owner entry per club, got %d: %+v", len(page.Items), page.Items)
 	}
 	peers := map[string]bool{}
 	for _, item := range page.Items {
@@ -244,8 +254,11 @@ func TestAllConversationsIncludesClubSuperiorsWithoutHistory(t *testing.T) {
 		}
 		peers[item.Peer.Guuid] = true
 	}
-	if !peers["100002"] || !peers["100004"] {
-		t.Fatalf("fixed entries must cover superior agent and club owner: %#v", peers)
+	if !peers["100004"] {
+		t.Fatalf("fixed entries must cover club owner: %#v", peers)
+	}
+	if peers["100002"] {
+		t.Fatalf("superior agent must not be a default entry: %#v", peers)
 	}
 }
 
@@ -525,10 +538,11 @@ func TestDefaultTargetsForMember(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 2 {
-		t.Fatalf("player must see fixed superior-agent and club-owner targets, got %d: %+v", len(page.Items), page.Items)
+	// 玩家只有俱乐部老板（本环境未入盟，称号为群主）一个默认入口，直属上级代理不显示。
+	if len(page.Items) != 1 {
+		t.Fatalf("player must only see the club-owner fixed target, got %d: %+v", len(page.Items), page.Items)
 	}
-	want := []string{"100002", "100004"} // 直属上级代理 + 俱乐部老板
+	want := []string{"100004"} // 俱乐部老板
 	for i, guuid := range want {
 		item := page.Items[i]
 		if !item.IsDefaultTarget || item.ConversationID != "" {
@@ -547,7 +561,7 @@ func TestDefaultTargetsForMember(t *testing.T) {
 	if len(ownerPage.Items) != 0 {
 		t.Fatalf("owner must see only real conversations, got %d", len(ownerPage.Items))
 	}
-	// 上级代理退出俱乐部后，固定入口不再返回。
+	// 上级代理退出俱乐部后也不会有入口残留。
 	env.store.removeMember("111111", "100002")
 	page, err = env.service.Conversations(ctx, a, "111111", 1, 30)
 	if err != nil {
@@ -560,7 +574,8 @@ func TestDefaultTargetsForMember(t *testing.T) {
 	}
 }
 
-func TestExistingSuperiorAgentConversationStaysFixed(t *testing.T) {
+// 与直属上级合伙人的历史会话保留，但不再是固定入口，按普通会话排序、可删除。
+func TestExistingSuperiorAgentConversationIsNotFixed(t *testing.T) {
 	env := newDevEnv(t)
 	ctx := context.Background()
 	player := env.session(t, "100001")
@@ -576,20 +591,23 @@ func TestExistingSuperiorAgentConversationStaysFixed(t *testing.T) {
 	for _, item := range page.Items {
 		if item.ConversationID == conversation.ConversationID {
 			found = true
-			if !item.IsDefaultTarget || item.Peer.Guuid != "100002" {
-				t.Fatalf("existing superior-agent conversation must remain fixed: %+v", item)
+			if item.IsDefaultTarget {
+				t.Fatalf("superior-agent conversation must no longer be fixed: %+v", item)
 			}
 		}
 	}
 	if !found {
 		t.Fatalf("existing superior-agent conversation missing from list: %+v", page.Items)
 	}
+	// 玩家本身没有删除权限，这一限制与固定入口无关。
 	if err := env.service.Hide(ctx, player, conversation.ConversationID); AsError(err).Code != CodeDeleteForbidden {
-		t.Fatal("ordinary player must not delete the fixed superior-agent conversation")
+		t.Fatal("ordinary player must not delete any conversation")
 	}
 }
 
-func TestAgentAlsoGetsClubSuperiorAsFixedConversation(t *testing.T) {
+// 合伙人（代理）的默认对话也只保留俱乐部老板与大盟主：上级合伙人不再生成固定入口，
+// 与上级的历史会话按普通会话处理，可以隐藏。
+func TestAgentDefaultTargetsSkipSuperiorAgent(t *testing.T) {
 	env := newDevEnv(t)
 	ctx := context.Background()
 	agentMember := env.store.members["111111"]["100002"]
@@ -601,20 +619,11 @@ func TestAgentAlsoGetsClubSuperiorAsFixedConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(page.Items) != 2 {
-		t.Fatalf("agent must see superior and club-owner fixed entries, got %+v", page.Items)
+	if len(page.Items) != 1 {
+		t.Fatalf("agent must only see the club-owner fixed entry, got %+v", page.Items)
 	}
-	foundSuperior := false
-	for _, item := range page.Items {
-		if !item.IsDefaultTarget {
-			t.Fatalf("agent fixed entries must be default: %+v", item)
-		}
-		if item.Peer.Guuid == "100003" {
-			foundSuperior = true
-		}
-	}
-	if !foundSuperior {
-		t.Fatalf("agent must see club superior fixed entry: %+v", page.Items)
+	if !page.Items[0].IsDefaultTarget || page.Items[0].Peer.Guuid != "100004" {
+		t.Fatalf("agent default entry must be club owner: %+v", page.Items[0])
 	}
 
 	conversation, err := env.service.CreateConversation(ctx, agent, "111111", "100003")
@@ -625,11 +634,11 @@ func TestAgentAlsoGetsClubSuperiorAsFixedConversation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if messagePage.CanDelete {
-		t.Fatal("fixed superior conversation must not expose delete permission")
+	if !messagePage.CanDelete {
+		t.Fatal("superior-agent conversation must allow hiding for agent")
 	}
-	if err := env.service.Hide(ctx, agent, conversation.ConversationID); AsError(err).Code != CodeDeleteForbidden {
-		t.Fatal("agent must not delete the fixed superior conversation")
+	if err := env.service.Hide(ctx, agent, conversation.ConversationID); err != nil {
+		t.Fatalf("agent must be able to hide superior-agent conversation: %v", err)
 	}
 }
 
@@ -849,8 +858,16 @@ func TestConversationsAllAggregatesClubs(t *testing.T) {
 	if real["111111"].ClubName != "测试俱乐部一" || real["222222"].ClubName != "测试俱乐部二" {
 		t.Fatalf("clubName 不正确：%+v", real)
 	}
-	if page.Items[0].ClubID != "222222" {
-		t.Fatalf("应按最后消息时间倒序，首条应是俱乐部二：%+v", page.Items[0])
+	// 固定入口（无消息）排在真实会话前，这里只校验真实会话之间的时间序。
+	firstReal := ConversationView{}
+	for _, item := range page.Items {
+		if item.ConversationID != "" {
+			firstReal = item
+			break
+		}
+	}
+	if firstReal.ClubID != "222222" {
+		t.Fatalf("应按最后消息时间倒序，首条真实会话应是俱乐部二：%+v", page.Items)
 	}
 }
 
@@ -953,9 +970,10 @@ func TestUnionOwnerAndClubOwnerAreFixedTargets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"100002", "100004", "100009"}
+	// 联盟内玩家的默认对话只有盟主与大盟主，直属上级合伙人不再出现。
+	want := []string{"100004", "100009"}
 	if len(page.Items) != len(want) {
-		t.Fatalf("player must see superior, club owner and union owner fixed entries, got %d: %+v", len(page.Items), page.Items)
+		t.Fatalf("player must see club owner and union owner fixed entries, got %d: %+v", len(page.Items), page.Items)
 	}
 	for i, guuid := range want {
 		item := page.Items[i]
@@ -966,8 +984,11 @@ func TestUnionOwnerAndClubOwnerAreFixedTargets(t *testing.T) {
 			t.Fatalf("fixed target order mismatch at %d: got %s want %s", i, item.Peer.Guuid, guuid)
 		}
 	}
-	if page.Items[2].Peer.Role != RoleUnionOwner {
-		t.Fatalf("union owner must expose union_owner role: %+v", page.Items[2].Peer)
+	if page.Items[0].Peer.RoleName != "盟主" {
+		t.Fatalf("club owner in union must display 盟主: %+v", page.Items[0].Peer)
+	}
+	if page.Items[1].Peer.Role != RoleUnionOwner {
+		t.Fatalf("union owner must expose union_owner role: %+v", page.Items[1].Peer)
 	}
 
 	conversation, err := env.service.CreateConversation(ctx, player, "111111", "100009")

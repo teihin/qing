@@ -249,6 +249,10 @@ WHERE player_wxid = ?`, newPwd, account)
 	}
 
 	s.passwordAccountLimiter.succeed(accountKey)
+	// 玩家自助改密同样能拿到明文，加密存一份供后台管理员查看；失败只记日志。
+	if err := s.savePlayerLoginPassword(r.Context(), account, newPwd, playerPasswordSourceSelfService); err != nil {
+		s.logger.Error("save self-service login password", "error", err, "account", account)
+	}
 	s.logger.Info("change-login-password ok", "account", account, "ip", ip)
 	s.auditPlayerPasswordChange(r.Context(), account, playerGUID, codePasswordOK, "修改成功", ip)
 	writePlayerCode(w, http.StatusOK, codePasswordOK, "ok")
