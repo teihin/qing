@@ -4,6 +4,23 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-06 后台俱乐部列表新增「俱乐部总积分」（已部署）
+
+- 俱乐部管理列表在「钻石池」后新增「俱乐部总积分」列，单位元；详情接口同字段一并返回。
+- 游戏服 `查询_俱乐部_成员_总分` 的同步回包是空对象（数据只推玩家端 `AllPlayerGold`），后台拿不到；改为聚合 `tbl_Account.sm_club_gold/sm_club_gold2` 的 `{"俱乐部ID": 积分}` 映射，mode 2/3 优先 `*_2` 列，`-99` 不计入。
+- 部署 19:14：二进制 `e9fd5d74…` + 前端 `index-6HAkVMKQ.js`（CSS 未变），回滚 `bin/xuanmanager.previous-clubtotalgold-20261106`、`web.previous-clubtotalgold-20261106`；health 200、未登录 clubs 接口 401。真实登录态目视待验。详见[交接](handoffs/2026-11-06-admin-club-total-gold.md)。
+
+## 2026-11-06 聊天托管：备注 / 置顶 / 快捷话术 / 删除单条会话（已部署）
+
+- 「聊天托管」四项上线：玩家备注名（全团队共享，显示「原名（备注）」，原名保留）、三级置顶（俱乐部/联盟、盟主/群主、会话）、快捷话术一键以托管账号发送、永久删除单条会话。
+- 部署 19:19 服务端 `c7f6cd15…` + 前端 19:32 `index-BSPwxQGC.js`：migration 011+012 已执行，health 200，7 条新路由未登录均 401，回滚 `*.previous-pins3-20261106-191813` / `web.previous-pinconv-20261106-193223`。三级「置顶」按钮统一在每行右侧（分组/账号/会话），同版修：已取消徽标改实心橙底、话术按钮不再随只读会话置灰、工具栏按钮不被压窄。真实账号交互与玩家端表现待验，详见[交接](handoffs/2026-11-06-hosted-chat-prefs.md)。
+
+## 2026-11-06 赢家留座限时 + 局中预约退房（未构建、未真机）
+
+- 「留座离桌」：局中未结算判不出输赢，一律弹「限时3分钟、超时按逃跑结算」；局间只给赢家弹，输家直接留座。倒计时读服务端 `site_countdown`。
+- 「退出房间」不再拦「已经开局不能退出」：赢家先确认「离开或站起扣30%盈利」，确认后与输家一样提示「当前牌局结束后，下手将退出房间」，只挂预约标记，本手结算完自动退房；不在局中则直接退。
+- 只改 `panelGameView.ts`；**3 分钟时长、超时逃跑结算、局间允许退房三项需服务端实现**。tsc 无新增诊断，Creator/真机待验。详见[交接](handoffs/2026-11-06-win-seat-limit-exit.md)。
+
 ## 2026-11-06 私聊详情 V2 + 单方清除聊天（服务端已部署，客户端未构建）
 
 - 按效果图重做聊天皮肤（蓝/金气泡、金色发送、圆形返回/删除），底部新增「清除聊天」；只清自己这一侧，消息与对方/客服视图保留。
@@ -52,7 +69,7 @@
 ## 2026-11-05 聊天托管（服务端/客服站已部署，客户端未构建）
 
 - 消息首页右上角新增「聊天托管」开关，俱乐部群主/盟主/大盟主均可开；客服工作台「聊天托管」为第一个页签并默认进入，按联盟/俱乐部折叠查看私聊，以其身份代发文字。
-- 托管账号收、发消息都经 `hosted.message` SSE 双向实时同步（来消息才响声音），客服列表先本地更新再对账；声音首次点击/按键解锁 AudioContext，另有轮询未读兜底。托管上下分经 XuanManager 后台执行（不直连游戏 8890），成功后发「（客服托管）」系统通报；上下分按钮旁显示对方俱乐部积分（只读 kbedm）。会话对方角色由服务端 `roleName` 统一为游戏内称谓（大盟主/盟主/群主/合伙人）。页签红点用客服共享已读游标（migration 008，任一客服打开即清零），并在联盟/俱乐部、托管账号、会话三级显示未读徽标，多客服可同时处理。图片点击放大、语音可播放；已修正 `scope=hosted` 误请求普通会话导致的「会话筛选条件不正确」。
+- 托管账号收发经 `hosted.message` SSE 双向实时同步，三级未读徽标走共享已读游标（migration 008）；上下分经 XuanManager（不直连 8890），成功后发「（客服托管）」系统通报；对方角色由服务端 `roleName` 统一。另有语音播放、图片放大、AudioContext 首次交互解锁、多客服并发处理。细节见[交接](handoffs/2026-11-05-chat-hosting.md)。
 - 服务端新增 `GET/POST /api/direct/hosting`、`/api/agent/hosted/*`；代发以托管账号落库并向双方推送 `message.new`；客服查看不改游戏内已读。详见[交接](handoffs/2026-11-05-chat-hosting.md)。
 - 已部署 14:01：ChatTool `9c6f9554…`、客服站 `index-BI2MvCs1.js`（备份 `…hosted-balance-…`）；XuanManager 仍为 `6ec67c80…`；上下分经 XuanManager，公网 service 403。客户端未构建。
 
@@ -68,26 +85,14 @@
 - 额度记录口径、末列显示 `name`、盟主下级查询带 `agent_id+club_id`、身份判定创建者优先等细节见[交接](handoffs/2026-11-05-player-record-tabs.md)。
 - Prefab/引用/离屏预览与定向 TS 检查通过；Creator 导入、构建、真机、真实回包待验证。
 
-## 2026-11-04 消息列表：滚动、下拉刷新与分页（已归档）
+## 2026-11-04 消息列表与盟友管理（已归档）
 
-- 原文见[归档](archive/2026-11-05/current-nov04-message-list.md)，细节见[交接](handoffs/2026-11-04-message-list-scroll-paging.md)。
-- 2026-11-05：点击底栏「消息」也触发同一套下拉刷新。
+- 消息列表滚动/下拉刷新/分页：原文见[归档](archive/2026-11-05/current-nov04-message-list.md)，细节见[交接](handoffs/2026-11-04-message-list-scroll-paging.md)；11-05 点击底栏「消息」也触发同一套下拉刷新。
+- 盟友管理盟主比例：原文见[归档](archive/2026-11-05/current-nov04-ally-management.md)。
 
-## 2026-11-04 盟友管理：盟主比例（已归档）
+## 2026-11-04 游戏设置：奖池设置 / 游戏规则（已归档）
 
-- 原文见[归档](archive/2026-11-05/current-nov04-ally-management.md)。
-
-## 2026-11-04 游戏设置 · 奖池设置（未构建、未真机）
-
-- 大厅右上角新增「游戏设置」文字按钮（`发现` 页；仅联盟盟主、或未入盟的俱乐部老板可见），打开 `panelGameSettings`。
-- 首个 Tab「奖池设置」：顶部「奖池总开关」对应 `reward_on`（默认关，关=列表置灰不可改、不进池/不派奖，值保留），下方 5 档牌型比例；底皮提留不在客户端展示。用按池命令 `获取/设置_俱乐部_奖池_配置`（只读写 `reward_card_bili` 与 `reward_on`）；获取带池键、回包回填；第 5 档键「丁二皇」/界面「单独丁儿皇」。
-- 切图在 `assets/V8/game_settings/`；Prefab/布局/脚本/UUID 检查通过，Creator 导入、构建、真机与真实回包待验证。详见[交接](handoffs/2026-11-04-game-settings-jackpot.md)。
-
-## 2026-11-04 游戏设置 · 游戏规则（未构建、未真机）
-
-- 首个 Tab「游戏规则」：查询/创建/删除俱乐部玩法，以 `ClubPlayList` 推送为准；列表显示底皮/地九王/准入/抽水/暗抽/房间数；创建默认地九王开、抽水 5%、暗抽 0，底皮只开放 1/3~20/40 五档，同一底皮可建多条；创建/删除后延迟 1.5s 刷新房间列表。
-- 服务端文档仍写 `(club_id,dipi_key,dijiuwang)` 唯一，需服务端放开；暗抽仅群主可见；无修改接口只能删除重建。重绘行底板/胶囊/页签/金按钮，规则头部顶部锚定，创建/删除面板加居中 Widget。
-- 改 `panelGameSettings.prefab/.ts`、设置生成/预览工具、`regen_settings_frame_assets.py`；Prefab/TS/离屏预览通过，Creator/构建/真机/真实回包待验证。详见[交接](handoffs/2026-11-04-game-settings-rules.md)。
+- 原文见[归档](archive/2026-11-06/current-nov04-game-settings.md)，细节见[奖池交接](handoffs/2026-11-04-game-settings-jackpot.md)与[规则交接](handoffs/2026-11-04-game-settings-rules.md)。
 
 ## 2026-11-04 房间内奖池按开关隐藏（已归档）
 
@@ -100,23 +105,14 @@
 - 联盟区「联盟红利」仅联盟创建者可见，`panelMyHongli` 加 `mode=union` 走 `ClubUnionBonusStats`/`ClubUnionBonusList`/`提取_联盟_红利`，卡片高度 320→410。详见[交接](handoffs/2026-11-04-union-hongli-panel.md)。
 - 各阶段只做 tsc/Prefab 引用检查；Creator 导入、构建、真机与真实回包待验证（曾遇 0x200 先到清 pending 把随后推送丢弃，已修）。
 
-## 2026-11-04 后台玩家管理：移除加减钻石（已部署）
+## 2026-11-03～11-04（已归档）
 
-- 玩家管理列表去掉「加减钻石」按钮与弹窗，页头说明同步；后端删除 `POST /api/game/players/{playerId}/stone-adjustments` 及处理文件，`stone_adjust` 审计不再产生。
-- 玩家列表/详情仍只读展示钻石余额；`game.player.balance_adjust` 权限与旧金币接口未动，俱乐部群主钻石池加减保留。
-- 前端 `index-Cy3VHBNX.js`、后端二进制 `e055e98a…` 已部署（回滚 `backups/xuanmanager.20261104-0016-rollback`）；健康 200，旧接口返回 404，线上 JS 不含「加减钻石」。详见[交接](handoffs/2026-11-04-admin-remove-player-diamonds.md)。
-
-## 2026-11-03 俱乐部管理 / 我的页 / 直聊（已归档）
-
+- 后台玩家管理移除「加减钻石」并删旧接口：已部署，详见[交接](handoffs/2026-11-04-admin-remove-player-diamonds.md)。
 - 后台俱乐部管理与钻石池、我的页钻石池消耗/上下分记录/入盟审批/联盟归属、创建与加入联盟、按联盟层级的直聊权限：原文见[归档](archive/2026-11-05/current-nov03-club.md)。
 
-## 2026-11-02～11-03 后台玩家钻石与赠送/上下分（已归档）
+## 2026-11-02～11-03 后台玩家钻石与联盟管理（已归档）
 
-- 原文见[归档](archive/2026-11-05/current-nov03-admin.md)。
-
-## 2026-11-03 后台联盟管理与房间战绩（已归档）
-
-- 联盟额度管理、房间战绩俱乐部信息与房间维护只读改造的原文见[归档](archive/2026-11-05/current-nov03-admin.md)。
+- 玩家钻石与赠送/上下分、联盟额度管理、房间战绩俱乐部信息与房间维护只读改造：原文见[归档](archive/2026-11-05/current-nov03-admin.md)。
 
 ## 2026-11-01 资金明细 / 牌桌金币 / 私聊上下分（已归档）
 
@@ -136,16 +132,12 @@
 
 ## 本轮实时核对：记忆整理
 
-目录 `/Volumes/SSD/qing`，Creator 2.4.13。见[整理交接](handoffs/2026-09-05-memory-migration.md)。
+- 2026-09 整理记录见[整理交接](handoffs/2026-09-05-memory-migration.md)。
 
 ## 最近报告的 UI 状态
 
-见[全套进度](handoffs/2026-09-11-v8-all-pages.md)与[逐页归档](archive/2026-09-15/ui-status-table.md)。
+- 见[全套进度](handoffs/2026-09-11-v8-all-pages.md)与[逐页归档](archive/2026-09-15/ui-status-table.md)。
 
 ## 待核实项与工作边界
 
-1. `panelQianBao.ts` “确认充值”仍显示“暂未开通”并提前返回；本轮只修选择和美术，不代表充值业务恢复。
-2. V7 只覆盖有实施记录的页面；牌桌、动画等未列入范围的设计不得因归档自动判废。
-3. 待验证项不构成执行授权；动手前重新核实未提交差异。
-
-来源：[原文归档](archive/2026-09-05/AGENTS.original.md)；目录 `/Volumes/SSD/qing`，Creator 2.4.13，`build` 与 `runtime-src.zip` 保留。
+- 2026-09 原文见[归档](archive/2026-11-06/current-sep-consolidation.md)；待验证项不构成执行授权，动手前重新核实未提交差异。

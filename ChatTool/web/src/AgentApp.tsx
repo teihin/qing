@@ -9,9 +9,9 @@ type Dashboard = { queued: number; active: number; myActive: number; myUnread: n
 type QuickReply = { id: number; title: string; content: string; category: string }
 type PlayerMemo = { id: number; playerId: string; content: string; createdBy: number; createdByName: string; createdAt: string }
 type HostedPeer = { guuid: string; name: string; note?: string; avatar: string; role: string; roleName?: string }
-type HostedOwner = { guuid: string; name: string; avatar: string; role: string; roleName: string; groupType: string; groupId: string; groupName: string; clubId: string; clubName: string; enabled: boolean; enabledAt: string; disabledAt: string; conversationCount: number; unread: number; lastMessageAt: string }
-type HostedGroup = { key: string; type: string; name: string; items: HostedOwner[] }
-type HostedConversation = { conversationId: string; clubId: string; clubName: string; peer: HostedPeer; lastMessage: string; lastMessageType: string; lastMessageAt: string; unread: number; canSend: boolean; hostedGuuid: string; hostedName: string; hostedRole: string; hostedRoleName?: string }
+type HostedOwner = { guuid: string; name: string; avatar: string; role: string; roleName: string; groupType: string; groupId: string; groupName: string; clubId: string; clubName: string; enabled: boolean; enabledAt: string; disabledAt: string; conversationCount: number; unread: number; lastMessageAt: string; pinned?: boolean; pinnedAt?: string }
+type HostedGroup = { key: string; type: string; name: string; items: HostedOwner[]; pinned?: boolean; pinnedAt?: string }
+type HostedConversation = { conversationId: string; clubId: string; clubName: string; peer: HostedPeer; lastMessage: string; lastMessageType: string; lastMessageAt: string; unread: number; canSend: boolean; hostedGuuid: string; hostedName: string; hostedRole: string; hostedRoleName?: string; remark?: string; pinned?: boolean; pinnedAt?: string }
 type HostedMessage = { id: string; messageType: 'text' | 'image' | 'voice' | 'system'; text: string; senderGuuid: string; senderName: string; senderRole: string; attachment?: { url?: string; thumbnailUrl?: string; durationMs?: number } | null; createdAt: string }
 type HostedBalance = { clubId: string; clubName: string; peerGuuid: string; peerName: string; clubGold: number | null }
 const agentIdentityStorageKey = 'chattool.agentIdentityChanged'
@@ -19,6 +19,40 @@ const agentIdentityStorageKey = 'chattool.agentIdentityChanged'
 /** 直聊时间格式为 “YYYY-MM-DD HH:mm:ss[.SSS]”，部分 Safari 只认 ISO 的 T 分隔。 */
 function normalizeDirectTime(value: string): string {
   return /^\d{4}-\d{2}-\d{2} /.test(value) ? value.replace(' ', 'T') : value
+}
+
+/** 托管会话排序与服务端一致：置顶在前，其次按最后一条消息时间倒序。 */
+function sortHostedConversations(items: HostedConversation[]): HostedConversation[] {
+  return [...items].sort((a, b) => {
+    if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1
+    if (a.pinned && b.pinned && (a.pinnedAt || '') !== (b.pinnedAt || '')) return (a.pinnedAt || '') < (b.pinnedAt || '') ? 1 : -1
+    if (a.lastMessageAt !== b.lastMessageAt) return a.lastMessageAt < b.lastMessageAt ? 1 : -1
+    return a.peer.name.localeCompare(b.peer.name)
+  })
+}
+
+/** 一级分组（联盟/俱乐部）排序：置顶最前，其余保持服务端顺序（联盟在前）。 */
+function sortHostedGroups(groups: HostedGroup[]): HostedGroup[] {
+  return [...groups].sort((a, b) => {
+    if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1
+    if (a.pinned && b.pinned && (a.pinnedAt || '') !== (b.pinnedAt || '')) return (a.pinnedAt || '') < (b.pinnedAt || '') ? 1 : -1
+    return 0
+  })
+}
+
+/** 二级托管账号（盟主/群主）排序：置顶最前，其余保持服务端顺序。 */
+function sortHostedOwners(items: HostedOwner[]): HostedOwner[] {
+  return [...items].sort((a, b) => {
+    if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1
+    if (a.pinned && b.pinned && (a.pinnedAt || '') !== (b.pinnedAt || '')) return (a.pinnedAt || '') < (b.pinnedAt || '') ? 1 : -1
+    return 0
+  })
+}
+
+/** 备注与原名的显示口径：设了备注就显示「原名（备注）」，原名始终保留。 */
+function hostedDisplayName(name: string, remark?: string): string {
+  const trimmed = (remark || '').trim()
+  return trimmed ? `${name}（${trimmed}）` : name
 }
 
 function announceAgentIdentity(agentID: number) {
@@ -140,6 +174,14 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   const [goldAction, setGoldAction] = useState<'' | 'up' | 'down'>('')
   const [showLedger, setShowLedger] = useState(false)
   const [deletingHostedOwner, setDeletingHostedOwner] = useState('')
+  /** 备注弹窗：非 null 表示正在给这个会话的玩家改备注。 */
+  const [remarkTarget, setRemarkTarget] = useState<HostedConversation | null>(null)
+  const [remarkSaving, setRemarkSaving] = useState(false)
+  const [remarkError, setRemarkError] = useState('')
+  const [pinBusyID, setPinBusyID] = useState('')
+  const [deleteBusyID, setDeleteBusyID] = useState('')
+  const [hostedQuickOpen, setHostedQuickOpen] = useState(false)
+  const [showQuickManager, setShowQuickManager] = useState(false)
   const hostedLoadSerial = useRef(0)
   const lastHostedSoundID = useRef('')
   const lastHostedSoundAt = useRef(0)
@@ -366,6 +408,32 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
 	    } catch { /* ignore malformed realtime event */ }
 	  })
 	  source.addEventListener('hosted.read', () => void loadHostedGroups().catch(() => undefined))
+	  source.addEventListener('hosted.preference', (event) => {
+		// 备注/置顶是全团队共享的，其他客服改完后这里要同步刷新列表与头部。
+		try {
+		  const data = JSON.parse((event as MessageEvent).data) as { payload?: { hostedGuuid?: string } }
+		  const hostedGuuid = data.payload?.hostedGuuid || ''
+		  if (hostedGuuid && expandedOwnersRef.current[hostedGuuid]) {
+			void loadHostedConversations(hostedGuuid).catch(() => undefined)
+		  }
+		} catch { /* 忽略无效事件 */ }
+		void loadHostedGroups().catch(() => undefined)
+	  })
+	  source.addEventListener('hosted.conversation.deleted', (event) => {
+		try {
+		  const data = JSON.parse((event as MessageEvent).data) as { conversationId?: string; payload?: { hostedGuuid?: string } }
+		  if (hostedSelectionRef.current?.conversationId === data.conversationId) {
+			setHostedSelection(null)
+			setHostedMessages([])
+			setHostedBalance(null)
+		  }
+		  const hostedGuuid = data.payload?.hostedGuuid || ''
+		  if (hostedGuuid && expandedOwnersRef.current[hostedGuuid]) {
+			void loadHostedConversations(hostedGuuid).catch(() => undefined)
+		  }
+		} catch { /* 忽略无效事件 */ }
+		void loadHostedGroups().catch(() => undefined)
+	  })
 	  source.addEventListener('hosted.deleted', (event) => {
 		try {
 		  const data = JSON.parse((event as MessageEvent).data) as { hostedGuuid?: string }
@@ -502,6 +570,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     setHostedSelection({ guuid: item.hostedGuuid, conversationId: item.conversationId })
     setHostedText('')
     setHostedBalance(null)
+    setHostedQuickOpen(false)
     void loadHostedMessages(item.hostedGuuid, item.conversationId)
       .then(() => loadHostedGroups().catch(() => undefined))
       .catch((reason) => setError(reason instanceof ApiError ? reason.message : '托管消息加载失败'))
@@ -534,19 +603,117 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
       setDeletingHostedOwner('')
     }
   }
-  const sendHostedMessage = async (event: FormEvent) => {
-    event.preventDefault()
-    const content = hostedText.trim()
-    if (!hostedSelection || !content || hostedSending) return
+  const loadQuickReplies = useCallback(async () => {
+    const result = await api<{ items: QuickReply[] }>('/api/agent/quick-replies')
+    setQuickReplies(Array.isArray(result.items) ? result.items : [])
+  }, [])
+
+  /** 备注、置顶修改后统一刷新：托管分组负责排序摘要，展开的账号要重取会话列表。 */
+  const refreshHostedState = useCallback(async (guuid: string) => {
+    await Promise.all([loadHostedGroups().catch(() => undefined), loadHostedConversations(guuid).catch(() => undefined)])
+  }, [loadHostedConversations, loadHostedGroups])
+
+  const saveHostedRemark = useCallback(async (target: HostedConversation, remark: string) => {
+    if (remarkSaving) return
+    setRemarkSaving(true)
+    setRemarkError('')
+    try {
+      const result = await api<{ remark: string }>(`/api/agent/hosted/conversations/${target.conversationId}/remark`, {
+        method: 'PUT',
+        body: jsonBody({ guuid: target.hostedGuuid, remark }),
+      })
+      // 备注属于玩家本身：同一托管账号下的其他会话（同一玩家）也要一起更新。
+      setHostedConversations((current) => {
+        const next = { ...current }
+        for (const key of Object.keys(next)) {
+          next[key] = next[key].map((item) => item.peer.guuid === target.peer.guuid ? { ...item, remark: result.remark } : item)
+        }
+        return next
+      })
+      setRemarkTarget(null)
+      void refreshHostedState(target.hostedGuuid)
+    } catch (reason) {
+      setRemarkError(reason instanceof ApiError ? reason.message : '备注保存失败，请稍后重试')
+    } finally {
+      setRemarkSaving(false)
+    }
+  }, [refreshHostedState, remarkSaving])
+
+  /** 三级置顶统一入口：group（联盟/俱乐部）、owner（盟主/群主）、conversation（会话）。 */
+  const toggleHostedTargetPin = useCallback(async (targetType: 'group' | 'owner' | 'conversation', targetID: string, pinned: boolean, opts?: { guuid?: string; grouped?: string }) => {
+    const busyKey = `${targetType}:${targetID}`
+    if (pinBusyID) return
+    setPinBusyID(busyKey)
+    setError('')
+    const stamp = pinned ? new Date().toISOString().replace('T', ' ').slice(0, 19) : undefined
+    try {
+      await api('/api/agent/hosted/pin', {
+        method: 'POST',
+        body: jsonBody({ type: targetType, id: targetID, guuid: opts?.guuid || '', pinned }),
+      })
+      if (targetType === 'conversation' && opts?.guuid) {
+        const guuid = opts.guuid
+        // 本地先排好序，避免等接口回来时列表闪一下。
+        setHostedConversations((current) => {
+          const items = current[guuid]
+          if (!items) return current
+          return { ...current, [guuid]: sortHostedConversations(items.map((item) => item.conversationId === targetID ? { ...item, pinned, pinnedAt: stamp } : item)) }
+        })
+        void refreshHostedState(guuid)
+      } else if (targetType === 'owner') {
+        setHostedGroups((current) => current.map((group) => ({ ...group, items: sortHostedOwners(group.items.map((owner) => owner.guuid === targetID ? { ...owner, pinned, pinnedAt: stamp } : owner)) })))
+        void loadHostedGroups().catch(() => undefined)
+      } else {
+        setHostedGroups((current) => sortHostedGroups(current.map((group) => group.key === targetID ? { ...group, pinned, pinnedAt: stamp } : group)))
+        void loadHostedGroups().catch(() => undefined)
+      }
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : pinned ? '置顶失败' : '取消置顶失败')
+    } finally {
+      setPinBusyID('')
+    }
+  }, [loadHostedGroups, pinBusyID, refreshHostedState])
+
+  const toggleHostedPin = useCallback(async (target: HostedConversation, pinned: boolean) => {
+    await toggleHostedTargetPin('conversation', target.conversationId, pinned, { guuid: target.hostedGuuid })
+  }, [toggleHostedTargetPin])
+
+  const deleteHostedConversation = useCallback(async (target: HostedConversation) => {
+    if (deleteBusyID) return
+    const name = hostedDisplayName(target.peer.name, target.remark)
+    if (!confirm(`确认永久删除与「${name}」的这一条会话吗？\n会话里的文字、图片和语音会一起删除，玩家端也会消失，且无法恢复。`)) return
+    setDeleteBusyID(target.conversationId)
+    setError('')
+    try {
+      await api(`/api/agent/hosted/conversations/${target.conversationId}?guuid=${encodeURIComponent(target.hostedGuuid)}`, { method: 'DELETE' })
+      setHostedSelection((current) => current?.conversationId === target.conversationId ? null : current)
+      setHostedMessages([])
+      setHostedBalance(null)
+      setHostedConversations((current) => {
+        const items = current[target.hostedGuuid]
+        if (!items) return current
+        return { ...current, [target.hostedGuuid]: items.filter((item) => item.conversationId !== target.conversationId) }
+      })
+      await loadHostedGroups().catch(() => undefined)
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : '删除会话失败')
+    } finally {
+      setDeleteBusyID('')
+    }
+  }, [deleteBusyID, loadHostedGroups])
+
+  const sendHostedText = async (content: string) => {
+    const value = content.trim()
+    if (!hostedSelection || !value || hostedSending) return
     setHostedSending(true)
     setError('')
     try {
       const result = await api<{ message: HostedMessage }>(`/api/agent/hosted/conversations/${hostedSelection.conversationId}/messages`, {
         method: 'POST',
-        body: jsonBody({ guuid: hostedSelection.guuid, text: content, clientMessageId: createClientMessageID() }),
+        body: jsonBody({ guuid: hostedSelection.guuid, text: value, clientMessageId: createClientMessageID() }),
       })
       setHostedMessages((current) => current.some((item) => item.id === result.message.id) ? current : [...current, result.message])
-      setHostedText('')
+      if (hostedText.trim() === value) setHostedText('')
       void loadHostedConversations(hostedSelection.guuid).catch(() => undefined)
       void loadHostedGroups().catch(() => undefined)
     } catch (reason) {
@@ -554,6 +721,10 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     } finally {
       setHostedSending(false)
     }
+  }
+  const sendHostedMessage = async (event: FormEvent) => {
+    event.preventDefault()
+    await sendHostedText(hostedText)
   }
   const selectedHostedOwner = useMemo(() => {
     if (!hostedSelection) return null
@@ -590,51 +761,63 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
         <div className="sidebar-heading"><div><h2>{scope === 'hosted' ? '聊天托管' : '客服消息'}</h2><span>{scope === 'hosted' ? hostedGroups.reduce((sum, group) => sum + group.items.length, 0) : conversations.length}</span></div><button type="button" onClick={() => void (scope === 'hosted' ? loadHostedGroups() : loadConversations())} aria-label="刷新列表">↻</button></div>
         <div className="conversation-tabs">{filteredTabs.map((tab) => <button key={tab.value} className={scope === tab.value ? 'active' : ''} onClick={() => { stopAgentTyping(); updatePlayerTyping(false); selectedLoadSerial.current += 1; setScope(tab.value); setSelectedID(''); setDetail(null); setMessages([]); setConversations([]); setHostedSelection(null); setHostedMessages([]); setHostedText(''); setDetailOpen(false) }}>{tab.label}{tab.count > 0 && <b>{tab.count}</b>}</button>)}</div>
         {scope !== 'hosted' && <label className="search-box"><span>⌕</span><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="搜索玩家昵称或ID" /></label>}
-        {scope === 'hosted' ? <div className="conversation-list hosted-list">{hostedGroups.length === 0 ? <EmptyState icon="托" title="暂无托管账号" text={hostedLoading ? '正在读取托管账号…' : '群主、盟主或大盟主在游戏内开启聊天托管后会显示在这里'} /> : hostedGroups.map((group) => {
+        {scope === 'hosted' ? <div className="conversation-list hosted-list">{hostedGroups.length === 0 ? <EmptyState icon="托" title="暂无托管账号" text={hostedLoading ? '正在读取托管账号…' : '群主、盟主或大盟主在游戏内开启聊天托管后会显示在这里'} /> : sortHostedGroups(hostedGroups).map((group) => {
           const collapsed = collapsedGroups[group.key] === true
           const groupUnread = group.items.reduce((sum, owner) => sum + owner.unread, 0)
-          return <section className="hosted-group" key={group.key}>
-            <button type="button" className="hosted-group-head" onClick={() => toggleHostedGroup(group.key)}>
-              <span className={`hosted-group-badge hosted-${group.type}`}>{group.type === 'union' ? '联盟' : '俱乐部'}</span>
-              <strong>{group.name}</strong>
-              <small>{group.items.length} 个托管</small>
-              {groupUnread > 0 && <b className="hosted-count-badge">{groupUnread > 99 ? '99+' : groupUnread}</b>}
-              <i>{collapsed ? '▸' : '▾'}</i>
-            </button>
-            {!collapsed && group.items.map((owner) => {
+          return <section className={`hosted-group ${group.pinned ? 'pinned' : ''}`} key={group.key}>
+            <div className={`hosted-group-head ${group.pinned ? 'pinned' : ''}`}>
+              <button type="button" className="hosted-row-main" onClick={() => toggleHostedGroup(group.key)}>
+                <span className={`hosted-group-badge hosted-${group.type}`}>{group.type === 'union' ? '联盟' : '俱乐部'}</span>
+                <strong>{group.name}</strong>
+                <small>{group.items.length} 个托管</small>
+                {groupUnread > 0 && <b className="hosted-count-badge">{groupUnread > 99 ? '99+' : groupUnread}</b>}
+                <i>{collapsed ? '▸' : '▾'}</i>
+              </button>
+              <button type="button" className={`hosted-pin-button ${group.pinned ? 'active' : ''}`} disabled={pinBusyID === `group:${group.key}`} title={group.pinned ? '取消置顶该俱乐部/联盟' : '置顶该俱乐部/联盟'} aria-pressed={group.pinned} onClick={() => void toggleHostedTargetPin('group', group.key, !group.pinned)}>置顶</button>
+            </div>
+            {!collapsed && sortHostedOwners(group.items).map((owner) => {
               const expanded = expandedOwners[owner.guuid] === true
               const items = hostedConversations[owner.guuid]
-              return <div className="hosted-owner" key={owner.guuid}>
-                <button type="button" className={`hosted-owner-row ${hostedSelection?.guuid === owner.guuid ? 'selected' : ''}`} onClick={() => toggleHostedOwner(owner)}>
-                  <Avatar name={owner.name} url={owner.avatar} size="small" />
-                  <span className="hosted-owner-copy"><strong>{owner.name}</strong><small>{owner.roleName} · {owner.groupName}</small></span>
-                  {!owner.enabled && <b className="hosted-readonly-badge">已取消</b>}
-                  <span className="hosted-owner-meta">{owner.conversationCount} 个会话</span>
-                  {owner.unread > 0 && <b className="hosted-count-badge">{owner.unread > 99 ? '99+' : owner.unread}</b>}
-                  <i>{expanded ? '▾' : '▸'}</i>
-                </button>
-                {expanded && (items == null ? <p className="hosted-hint">正在读取会话…</p> : items.length === 0 ? <p className="hosted-hint">暂无会话</p> : items.map((item) => <button type="button" key={item.conversationId} className={`hosted-conversation-row ${item.unread > 0 ? 'unread' : ''} ${hostedSelection?.conversationId === item.conversationId ? 'selected' : ''}`} onClick={() => selectHostedConversation(item)}>
-                  <Avatar name={item.peer.name} url={item.peer.avatar} size="small" />
-                  <span className="hosted-conversation-copy">
-                    <span className="hosted-conversation-title"><strong>{item.peer.name}</strong><time>{formatAgo(normalizeDirectTime(item.lastMessageAt))}</time></span>
-                    <small>{item.clubName}{item.peer.roleName ? ` · ${item.peer.roleName}` : ''}</small>
-                    <span className="hosted-conversation-preview">{item.lastMessageType === 'image' ? '[图片]' : item.lastMessageType === 'voice' ? '[语音]' : (item.lastMessage || '暂无消息')}</span>
-                  </span>
-                  {item.unread > 0 && <b className="hosted-unread">{item.unread > 99 ? '99+' : item.unread}</b>}
-                </button>))}
+              return <div className={`hosted-owner ${owner.pinned ? 'pinned' : ''}`} key={owner.guuid}>
+                <div className={`hosted-owner-row ${hostedSelection?.guuid === owner.guuid ? 'selected' : ''} ${owner.pinned ? 'pinned' : ''}`}>
+                  <button type="button" className="hosted-row-main" onClick={() => toggleHostedOwner(owner)}>
+                    <Avatar name={owner.name} url={owner.avatar} size="small" />
+                    <span className="hosted-owner-copy"><strong>{owner.name}</strong><small>{owner.roleName} · {owner.groupName}</small></span>
+                    {!owner.enabled && <b className="hosted-readonly-badge" title="该账号已取消托管，只能查看历史记录">已取消</b>}
+                    <span className="hosted-owner-meta">{owner.conversationCount} 个会话</span>
+                    {owner.unread > 0 && <b className="hosted-count-badge">{owner.unread > 99 ? '99+' : owner.unread}</b>}
+                    <i>{expanded ? '▾' : '▸'}</i>
+                  </button>
+                  <button type="button" className={`hosted-pin-button ${owner.pinned ? 'active' : ''}`} disabled={pinBusyID === `owner:${owner.guuid}`} title={owner.pinned ? '取消置顶该托管账号' : '置顶该托管账号'} aria-pressed={owner.pinned} onClick={() => void toggleHostedTargetPin('owner', owner.guuid, !owner.pinned)}>置顶</button>
+                </div>
+                {expanded && (items == null ? <p className="hosted-hint">正在读取会话…</p> : items.length === 0 ? <p className="hosted-hint">暂无会话</p> : sortHostedConversations(items).map((item) => <div key={item.conversationId} className={`hosted-conversation-row ${item.unread > 0 ? 'unread' : ''} ${item.pinned ? 'pinned' : ''} ${hostedSelection?.conversationId === item.conversationId ? 'selected' : ''}`}>
+                  <button type="button" className="hosted-row-main" onClick={() => selectHostedConversation(item)}>
+                    <Avatar name={item.peer.name} url={item.peer.avatar} size="small" />
+                    <span className="hosted-conversation-copy">
+                      <span className="hosted-conversation-title">
+                        <strong>{hostedDisplayName(item.peer.name, item.remark)}</strong>
+                        <time>{formatAgo(normalizeDirectTime(item.lastMessageAt))}</time>
+                      </span>
+                      <small>{item.clubName}{item.peer.roleName ? ` · ${item.peer.roleName}` : ''}</small>
+                      <span className="hosted-conversation-preview">{item.lastMessageType === 'image' ? '[图片]' : item.lastMessageType === 'voice' ? '[语音]' : (item.lastMessage || '暂无消息')}</span>
+                    </span>
+                    {item.unread > 0 && <b className="hosted-unread">{item.unread > 99 ? '99+' : item.unread}</b>}
+                  </button>
+                  <button type="button" className={`hosted-pin-button ${item.pinned ? 'active' : ''}`} disabled={pinBusyID === `conversation:${item.conversationId}`} title={item.pinned ? '取消置顶该会话' : '置顶该会话'} aria-pressed={Boolean(item.pinned)} onClick={() => void toggleHostedTargetPin('conversation', item.conversationId, !item.pinned, { guuid: item.hostedGuuid })}>置顶</button>
+                </div>))}
               </div>
             })}
           </section>
         })}</div> : <div className="conversation-list">{conversations.length === 0 ? <EmptyState icon="聊" title="暂无会话" text={scope === 'queue' ? '当前没有玩家等待接入' : '新的玩家咨询会显示在这里'} /> : conversations.map((item) => <ConversationCard key={item.id} item={item} selected={selectedID === item.id} onClick={() => selectConversation(item)} />)}</div>}
       </aside>
       <section className="agent-chat-panel">
-        {scope === 'hosted' ? (selectedHostedConversation ? <HostedChatPanel conversation={selectedHostedConversation} owner={selectedHostedOwner} messages={hostedMessages} text={hostedText} sending={hostedSending} error={error} balance={hostedBalance} onText={setHostedText} onSend={sendHostedMessage} onDismissError={() => setError('')} onImage={setPreviewImage} onGold={setGoldAction} /> : <EmptyState icon="托" title="选择托管会话" text="左侧按联盟或俱乐部展开托管账号，选择会话后即可查看记录并代其回复" />) : !detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
+        {scope === 'hosted' ? (selectedHostedConversation ? <HostedChatPanel conversation={selectedHostedConversation} owner={selectedHostedOwner} messages={hostedMessages} text={hostedText} sending={hostedSending} error={error} balance={hostedBalance} quickReplies={quickReplies} quickOpen={hostedQuickOpen} pinBusy={pinBusyID === `conversation:${selectedHostedConversation.conversationId}`} deleteBusy={deleteBusyID === selectedHostedConversation.conversationId} onText={setHostedText} onSend={sendHostedMessage} onQuickOpen={setHostedQuickOpen} onQuickSend={(content) => { setHostedQuickOpen(false); void sendHostedText(content) }} onManageQuick={() => { setHostedQuickOpen(false); setShowQuickManager(true) }} onRemark={() => { setRemarkError(''); setRemarkTarget(selectedHostedConversation) }} onTogglePin={(pinned) => void toggleHostedPin(selectedHostedConversation, pinned)} onDelete={() => void deleteHostedConversation(selectedHostedConversation)} onDismissError={() => setError('')} onImage={setPreviewImage} onGold={setGoldAction} /> : <EmptyState icon="托" title="选择托管会话" text="左侧按联盟或俱乐部展开托管账号，选择会话后即可查看记录并代其回复" />) : !detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
           <header className="chat-header"><button className="mobile-back" onClick={() => setDetailOpen(false)} aria-label="返回会话列表">‹</button><Avatar name={detail.nickname} url={detail.avatarUrl} /><div className="chat-person"><strong>{detail.nickname}<small>ID {detail.playerId} · {detail.category}</small></strong><span><i className={detail.status === 'active' ? 'active' : ''} />{detail.status === 'active' ? '接待中' : detail.status === 'queued' ? '等待接入' : '已结束'}</span></div><div className="chat-actions">{detail.status !== 'queued' && <button className="danger-light" disabled={clearing} onClick={() => void clearHistory()}>{clearing ? '清空中…' : '清空记录'}</button>}{detail.status === 'active' && <><button onClick={() => setShowTransfer(true)}>转接</button><button className="danger-light" onClick={() => void close()}>结束会话</button></>}</div></header>
           <div className="agent-message-list">{messages.map((message) => <MessageBubble key={message.id} message={message} own={(message.senderType === 'agent' || message.senderType === 'note') && message.senderId === String(agent.id)} peerAvatar={detail.avatarUrl} onImage={setPreviewImage} />)}{playerTyping && <div className="agent-typing">玩家正在输入 <i /><i /><i /></div>}<div ref={listEnd} /></div>
           {error && <div className="workspace-error">{error}<button onClick={() => setError('')}>×</button></div>}
           <form className="agent-composer" onSubmit={send}>
             <div className="composer-tools"><label title="发送图片、视频或文件">＋<input type="file" accept="image/*,video/*,.pdf,.txt,.zip" onChange={upload} /></label><button type="button" onClick={() => setShowQuick((value) => !value)}>快捷回复</button><label className="note-switch"><input type="checkbox" checked={internalNote} onChange={(event) => { if (event.target.checked) stopAgentTyping(); setInternalNote(event.target.checked) }} /><span />内部备注</label><small>{uploading ? '正在上传文件…' : internalNote ? '备注仅客服可见' : 'Enter 发送，Shift+Enter 换行'}</small></div>
-            {showQuick && <div className="quick-replies"><header><strong>快捷回复</strong><button type="button" onClick={() => setShowQuick(false)}>×</button></header>{quickReplies.map((item) => <button key={item.id} type="button" onClick={() => { setText(item.content); setShowQuick(false) }}><b>{item.title}</b><span>{item.content}</span></button>)}</div>}
+            {showQuick && <div className="quick-replies"><header><strong>快捷回复</strong><span className="quick-reply-tip">点击填入输入框</span><button type="button" className="quick-reply-manage" onClick={() => { setShowQuick(false); setShowQuickManager(true) }}>管理话术</button><button type="button" onClick={() => setShowQuick(false)}>×</button></header>{quickReplies.map((item) => <button key={item.id} type="button" onClick={() => { setText(item.content); setShowQuick(false) }}><b>{item.title}</b><span>{item.content}</span></button>)}</div>}
             <textarea value={text} onChange={(event) => onText(event.target.value)} onBlur={stopAgentTyping} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder={detail.status === 'active' ? internalNote ? '输入仅客服团队可见的内部备注…' : '输入回复内容…' : '接入会话后即可回复'} disabled={detail.status !== 'active'} />
             <div className="composer-submit"><span>{text.length}/2000</span><button type="submit" disabled={!text.trim() || sending || detail.status !== 'active'}>{sending ? '发送中…' : internalNote ? '保存备注' : '发送消息'}</button></div>
           </form>
@@ -644,6 +827,8 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     </section>
     {showTransfer && detail && <TransferModal team={team} currentAgentID={detail.assignedAgentId} onClose={() => setShowTransfer(false)} onSubmit={async (agentID, reason) => { await api(`/api/agent/conversations/${detail.id}/transfer`, { method: 'POST', body: jsonBody({ agentId: agentID, reason }) }); setShowTransfer(false); await Promise.all([loadSelected(detail.id), loadConversations()]) }} />}
     {goldAction && selectedHostedConversation && <HostedGoldModal conversation={selectedHostedConversation} owner={selectedHostedOwner} action={goldAction} onClose={() => setGoldAction('')} onDone={(warning) => { setGoldAction(''); if (warning) setError(warning); const selection = { guuid: selectedHostedConversation.hostedGuuid, conversationId: selectedHostedConversation.conversationId }; void loadHostedMessages(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedBalance(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedGroups().catch(() => undefined); }} />}
+    {remarkTarget && <HostedRemarkModal target={remarkTarget} saving={remarkSaving} error={remarkError} onClose={() => { if (!remarkSaving) setRemarkTarget(null) }} onSubmit={(value) => void saveHostedRemark(remarkTarget, value)} />}
+    {showQuickManager && <QuickReplyManager items={quickReplies} onClose={() => setShowQuickManager(false)} onChanged={() => void loadQuickReplies().catch(() => undefined)} />}
     {showLedger && <HostingLedgerPage role={agent.role} onClose={() => setShowLedger(false)} />}
     {showTeam && <TeamModal members={team} channels={channels} currentAgentID={agent.id} onClose={() => setShowTeam(false)} onRefresh={loadTeam} />}
     {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
@@ -655,7 +840,7 @@ function ConversationCard({ item, selected, onClick }: { item: Conversation; sel
   return <button className={`conversation-card ${selected ? 'selected' : ''}`} onClick={onClick}><span className="conversation-avatar"><Avatar name={item.nickname} url={item.avatarUrl} />{item.status === 'active' && <i />}</span><span className="conversation-copy"><span className="conversation-title"><strong>{item.nickname}</strong>{item.vip && <em>{item.vip}</em>}<time>{formatAgo(item.lastMessageAt)}</time></span><small>ID {item.playerId} · {item.category}</small><span className="conversation-preview">{item.lastMessage || '暂时没有消息'}</span></span>{item.unread > 0 && <b className="unread-badge">{item.unread > 99 ? '99+' : item.unread}</b>}{item.status === 'queued' && <b className="queue-badge">待接入</b>}</button>
 }
 
-function HostedChatPanel({ conversation, owner, messages, text, sending, error, balance, onText, onSend, onDismissError, onImage, onGold }: { conversation: HostedConversation; owner: HostedOwner | null; messages: HostedMessage[]; text: string; sending: boolean; error: string; balance: HostedBalance | null; onText: (value: string) => void; onSend: (event: FormEvent) => void; onDismissError: () => void; onImage: (src: string) => void; onGold: (action: 'up' | 'down') => void }) {
+function HostedChatPanel({ conversation, owner, messages, text, sending, error, balance, quickReplies, quickOpen, pinBusy, deleteBusy, onText, onSend, onQuickOpen, onQuickSend, onManageQuick, onRemark, onTogglePin, onDelete, onDismissError, onImage, onGold }: { conversation: HostedConversation; owner: HostedOwner | null; messages: HostedMessage[]; text: string; sending: boolean; error: string; balance: HostedBalance | null; quickReplies: QuickReply[]; quickOpen: boolean; pinBusy: boolean; deleteBusy: boolean; onText: (value: string) => void; onSend: (event: FormEvent) => void; onQuickOpen: (open: boolean) => void; onQuickSend: (content: string) => void; onManageQuick: () => void; onRemark: () => void; onTogglePin: (pinned: boolean) => void; onDelete: () => void; onDismissError: () => void; onImage: (src: string) => void; onGold: (action: 'up' | 'down') => void }) {
   const readOnly = owner?.enabled === false || !conversation.canSend
   const listEnd = useRef<HTMLDivElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -688,12 +873,36 @@ function HostedChatPanel({ conversation, owner, messages, text, sending, error, 
     audio.onerror = stop
     void audio.play().catch(stop)
   }
+  const displayName = hostedDisplayName(conversation.peer.name, conversation.remark)
   return <>
-    <header className="chat-header"><Avatar name={conversation.peer.name} url={conversation.peer.avatar} /><div className="chat-person"><strong>{conversation.peer.name}{conversation.peer.roleName && <em className="chat-role">{conversation.peer.roleName}</em>}<small>{conversation.clubName}{conversation.peer.note ? ` · ${conversation.peer.note}` : ''}</small></strong><span><i className="active" />托管账号：{owner?.name || conversation.hostedName}（{owner?.roleName || conversation.hostedRoleName || (conversation.hostedRole === 'union_owner' ? '大盟主' : '盟主')}）</span></div><div className="chat-actions">{readOnly ? <span className="hosted-reply-hint hosted-readonly-hint">托管已取消，仅可查看</span> : <span className="hosted-reply-hint">回复将以托管账号发送</span>}</div></header>
+    <header className="chat-header">
+      <Avatar name={conversation.peer.name} url={conversation.peer.avatar} />
+      <div className="chat-person">
+        <strong>{displayName}{conversation.peer.roleName && <em className="chat-role">{conversation.peer.roleName}</em>}<small>{conversation.clubName}{conversation.peer.note ? ` · ${conversation.peer.note}` : ''}</small></strong>
+        <span><i className="active" />托管账号：{owner?.name || conversation.hostedName}（{owner?.roleName || conversation.hostedRoleName || (conversation.hostedRole === 'union_owner' ? '大盟主' : '盟主')}）</span>
+      </div>
+      <div className="chat-actions">
+        <button type="button" onClick={onRemark}>备注</button>
+        <button type="button" disabled={pinBusy} onClick={() => onTogglePin(!conversation.pinned)}>{pinBusy ? '处理中…' : conversation.pinned ? '取消置顶' : '置顶'}</button>
+        <button type="button" className="danger-light" disabled={deleteBusy} onClick={onDelete}>{deleteBusy ? '删除中…' : '删除会话'}</button>
+      </div>
+    </header>
     <div className="agent-message-list">{messages.length === 0 ? <p className="hosted-hint">正在读取聊天记录…</p> : <>{messages.map((message) => <HostedMessageBubble key={message.id} message={message} hostedGuuid={conversation.hostedGuuid} peerAvatar={conversation.peer.avatar} playing={playingID === message.id} onImage={onImage} onPlayVoice={toggleVoice} />)}<div ref={listEnd} /></>}</div>
     {error && <div className="workspace-error">{error}<button onClick={onDismissError}>×</button></div>}
     <form className={`agent-composer hosted-composer ${readOnly ? 'hosted-composer-readonly' : ''}`} onSubmit={onSend}>
-      <div className="composer-tools"><button type="button" className="hosted-gold-button" disabled={readOnly} onClick={() => onGold('up')}>上分</button><button type="button" className="hosted-gold-button" disabled={readOnly} onClick={() => onGold('down')}>下分</button><span className="hosted-balance" title={`${balance?.peerName || conversation.peer.name} 在当前俱乐部的积分`}>积分：{balance?.clubGold != null ? balance.clubGold : '—'}</span><small>{readOnly ? '托管已取消，仅可查看历史记录' : `代 ${owner?.name || conversation.hostedName} 回复 ${conversation.peer.name}，Enter 发送`}</small></div>
+      <div className="composer-tools">
+        <button type="button" className="hosted-gold-button" disabled={readOnly} onClick={() => onGold('up')}>上分</button>
+        <button type="button" className="hosted-gold-button" disabled={readOnly} onClick={() => onGold('down')}>下分</button>
+        <span className="hosted-balance" title={`${balance?.peerName || conversation.peer.name} 在当前俱乐部的积分`}>积分：{balance?.clubGold != null ? balance.clubGold : '—'}</span>
+        {/* 话术是团队级配置，不受单条会话只读状态限制；只读时点击会提示不能代发。 */}
+        <button type="button" className="hosted-quick-toggle" onClick={() => onQuickOpen(!quickOpen)}>快捷回复</button>
+        <button type="button" className="hosted-quick-manage" onClick={onManageQuick}>管理话术</button>
+        <small>{readOnly ? '托管已取消，仅可查看历史记录' : `代 ${owner?.name || conversation.hostedName} 回复 ${displayName}，Enter 发送`}</small>
+      </div>
+      {quickOpen && <div className="quick-replies hosted-quick-replies">
+        <header><strong>快捷回复</strong><span className="quick-reply-tip">{readOnly ? '该会话已不能代发，仅可查看' : '点击直接发送'}</span><button type="button" onClick={() => onQuickOpen(false)}>×</button></header>
+        {quickReplies.length === 0 ? <p className="hosted-hint">还没有常用话术，点「管理话术」添加</p> : quickReplies.map((item) => <button key={item.id} type="button" disabled={readOnly || sending} title={readOnly ? '该会话已不能代发' : item.content} onClick={() => onQuickSend(item.content)}><b>{item.title}</b><span>{item.content}</span></button>)}
+      </div>}
       <textarea value={text} onChange={(event) => onText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder={readOnly ? '托管已取消，不能继续回复' : '输入回复内容…'} disabled={readOnly} />
       <div className="composer-submit"><span>{text.length}/2000</span><button type="submit" disabled={readOnly || !text.trim() || sending}>{sending ? '发送中…' : '以托管账号发送'}</button></div>
     </form>
@@ -755,7 +964,91 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
   </form></div>
 }
 
-function HostedOwnerInfo({ owner, conversation, canDelete, deleting, onDelete }: { owner: HostedOwner; conversation: HostedConversation | null; canDelete: boolean; deleting: boolean; onDelete: () => void }) {  return <div className="player-info"><header><span className="info-avatar"><Avatar name={owner.name} url={owner.avatar} size="large" /></span><h3>{owner.name}</h3><p>{owner.roleName} · {owner.groupName}</p>{!owner.enabled && <em className="hosted-readonly-badge">已取消托管</em>}</header><section><h4>托管信息</h4><dl><div><dt>托管账号</dt><dd>{owner.name}</dd></div><div><dt>游戏 ID</dt><dd>{owner.guuid}</dd></div><div><dt>身份</dt><dd>{owner.roleName}</dd></div><div><dt>归属</dt><dd>{owner.groupType === 'union' ? `联盟 · ${owner.groupName}` : `俱乐部 · ${owner.groupName}`}</dd></div><div><dt>托管会话</dt><dd>{owner.conversationCount} 个</dd></div><div><dt>开启时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.enabledAt))}</dd></div>{owner.disabledAt && <div><dt>取消时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.disabledAt))}</dd></div>}</dl></section>{conversation && <section><h4>当前会话</h4><dl><div><dt>对方</dt><dd>{conversation.peer.name}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''}</dd></div><div><dt>俱乐部</dt><dd>{conversation.clubName}</dd></div><div><dt>最后消息</dt><dd>{conversation.lastMessage || '—'}</dd></div></dl></section>}<footer>{owner.enabled ? '客服的回复会以该托管账号身份发送，对方收到时与本人回复一致。' : canDelete ? <><p>托管已取消，仅可查看历史记录。</p><button type="button" className="danger-light hosted-delete-button" disabled={deleting} onClick={onDelete}>{deleting ? '删除中…' : '永久删除聊天记录'}</button></> : <p>托管已取消，仅可查看历史记录；如需删除请联系主管。</p>}</footer></div>
+/** 玩家备注：全团队共享，留空保存即清除，列表与聊天头部优先显示备注。 */
+function HostedRemarkModal({ target, saving, error, onClose, onSubmit }: { target: HostedConversation; saving: boolean; error: string; onClose: () => void; onSubmit: (remark: string) => void }) {
+  const [value, setValue] = useState(target.remark || '')
+  const submit = (event: FormEvent) => {
+    event.preventDefault()
+    if (saving) return
+    onSubmit(value.trim())
+  }
+  return <div className="modal-backdrop"><form className="modal-card remark-modal" onSubmit={submit}>
+    <header><div><small>PLAYER REMARK</small><h3>备注名称</h3></div><button type="button" onClick={onClose}>×</button></header>
+    <p className="remark-target">玩家：{target.peer.name}{target.peer.roleName ? `（${target.peer.roleName}）` : ''} · {target.clubName}</p>
+    <label><span>备注名称</span><input value={value} onChange={(event) => setValue(event.target.value)} maxLength={20} placeholder="例如：老客户张三" autoFocus /></label>
+    <p className="remark-hint">备注全团队共享，保存后在托管列表和聊天头部优先显示；留空保存即恢复显示玩家昵称。</p>
+    {error && <div className="form-error">{error}</div>}
+    <footer><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={saving}>{saving ? '保存中…' : value.trim() ? '保存备注' : '清除备注'}</button></footer>
+  </form></div>
+}
+
+/** 快捷话术管理：全团队共享，托管与普通客服会话共用同一套话术。 */
+function QuickReplyManager({ items, onClose, onChanged }: { items: QuickReply[]; onClose: () => void; onChanged: () => void }) {
+  const empty = { id: 0, title: '', content: '', category: '常用回复' }
+  const [draft, setDraft] = useState(empty)
+  const [saving, setSaving] = useState(false)
+  const [deletingID, setDeletingID] = useState(0)
+  const [error, setError] = useState('')
+  const editing = draft.id > 0
+  const submit = async (event: FormEvent) => {
+    event.preventDefault()
+    const title = draft.title.trim()
+    const content = draft.content.trim()
+    if (!title || !content || saving) return
+    setSaving(true)
+    setError('')
+    try {
+      const body = jsonBody({ title, content, category: draft.category.trim() || '常用回复' })
+      if (editing) await api(`/api/agent/quick-replies/${draft.id}`, { method: 'PUT', body })
+      else await api('/api/agent/quick-replies', { method: 'POST', body })
+      setDraft(empty)
+      onChanged()
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : '话术保存失败')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const remove = async (item: QuickReply) => {
+    if (!confirm(`确认删除话术「${item.title}」吗？`)) return
+    setDeletingID(item.id)
+    setError('')
+    try {
+      await api(`/api/agent/quick-replies/${item.id}`, { method: 'DELETE' })
+      if (draft.id === item.id) setDraft(empty)
+      onChanged()
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : '话术删除失败')
+    } finally {
+      setDeletingID(0)
+    }
+  }
+  return <div className="modal-backdrop"><div className="modal-card quick-manager-modal">
+    <header><div><small>QUICK REPLIES</small><h3>快捷话术</h3></div><button type="button" onClick={onClose}>×</button></header>
+    <div className="quick-manager-body">
+      <p className="remark-hint">全团队共享。托管会话里点击话术会直接以托管账号发送；普通客服会话里点击是填入输入框。</p>
+      <div className="quick-manager-list">
+        {items.length === 0 ? <p className="memo-empty">还没有话术，先在下面新增一条</p> : items.map((item) => <article key={item.id} className={draft.id === item.id ? 'editing' : ''}>
+          <div><strong>{item.title}</strong><small>{item.category}</small><p>{item.content}</p></div>
+          <footer>
+            <button type="button" onClick={() => setDraft({ id: item.id, title: item.title, content: item.content, category: item.category || '常用回复' })}>修改</button>
+            <button type="button" disabled={deletingID === item.id} onClick={() => void remove(item)}>{deletingID === item.id ? '删除中' : '删除'}</button>
+          </footer>
+        </article>)}
+      </div>
+      <form className="quick-manager-form" onSubmit={submit}>
+        <header><strong>{editing ? '修改话术' : '新增话术'}</strong>{editing && <button type="button" onClick={() => setDraft(empty)}>取消修改</button>}</header>
+        <label><span>标题</span><input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} maxLength={80} placeholder="例如：欢迎语" required /></label>
+        <label><span>内容</span><textarea value={draft.content} onChange={(event) => setDraft({ ...draft, content: event.target.value })} maxLength={1000} rows={4} placeholder="客服点击后发送的话术内容" required /></label>
+        <label><span>分类</span><input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} maxLength={64} placeholder="常用回复" /></label>
+        {error && <div className="form-error">{error}</div>}
+        <footer><span>{draft.content.length}/1000</span><button className="primary" type="submit" disabled={saving || !draft.title.trim() || !draft.content.trim()}>{saving ? '保存中…' : editing ? '保存修改' : '新增话术'}</button></footer>
+      </form>
+    </div>
+  </div></div>
+}
+
+function HostedOwnerInfo({ owner, conversation, canDelete, deleting, onDelete }: { owner: HostedOwner; conversation: HostedConversation | null; canDelete: boolean; deleting: boolean; onDelete: () => void }) {  return <div className="player-info"><header><span className="info-avatar"><Avatar name={owner.name} url={owner.avatar} size="large" /></span><h3>{owner.name}</h3><p>{owner.roleName} · {owner.groupName}</p>{!owner.enabled && <em className="hosted-readonly-badge">已取消托管</em>}</header><section><h4>托管信息</h4><dl><div><dt>托管账号</dt><dd>{owner.name}</dd></div><div><dt>游戏 ID</dt><dd>{owner.guuid}</dd></div><div><dt>身份</dt><dd>{owner.roleName}</dd></div><div><dt>归属</dt><dd>{owner.groupType === 'union' ? `联盟 · ${owner.groupName}` : `俱乐部 · ${owner.groupName}`}</dd></div><div><dt>托管会话</dt><dd>{owner.conversationCount} 个</dd></div><div><dt>开启时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.enabledAt))}</dd></div>{owner.disabledAt && <div><dt>取消时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.disabledAt))}</dd></div>}</dl></section>{conversation && <section><h4>当前会话</h4><dl><div><dt>对方</dt><dd>{hostedDisplayName(conversation.peer.name, conversation.remark)}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''}</dd></div><div><dt>备注名称</dt><dd>{conversation.remark || '未设置'}</dd></div><div><dt>置顶</dt><dd>{conversation.pinned ? '已置顶' : '未置顶'}</dd></div><div><dt>俱乐部</dt><dd>{conversation.clubName}</dd></div><div><dt>最后消息</dt><dd>{conversation.lastMessage || '—'}</dd></div></dl></section>}<footer>{owner.enabled ? '客服的回复会以该托管账号身份发送，对方收到时与本人回复一致。' : canDelete ? <><p>托管已取消，仅可查看历史记录。</p><button type="button" className="danger-light hosted-delete-button" disabled={deleting} onClick={onDelete}>{deleting ? '删除中…' : '永久删除聊天记录'}</button></> : <p>托管已取消，仅可查看历史记录；如需删除请联系主管。</p>}</footer></div>
 }
 
 function PlayerInfo({ detail, memoRevision }: { detail: ConversationDetail; memoRevision: number }) {

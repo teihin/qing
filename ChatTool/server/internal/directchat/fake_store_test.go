@@ -9,35 +9,39 @@ import (
 // fakeStore 是 Store 的内存实现，用于在没有 MySQL 的环境里验证业务规则。
 // 它的行为与 SQLStore 对齐：唯一约束、幂等、隐藏、已读、分页顺序。
 type fakeStore struct {
-	clubs        map[string]Club
-	members      map[string]map[string]Member // clubID -> guuid -> member
-	unions       map[string]Union             // clubID -> union
-	accounts     map[string]GameUser
-	convs        map[string]Conversation
-	participants map[string]map[string]Participant // convID -> guuid -> participant
-	messages     map[string]Message
-	attachments  map[string]Attachment
-	sessions     map[string]Session
-	hostings     map[string]Hosting
-	hostingReads map[string]string
-	clubGold     map[string]int64
-	seq          int
+	clubs         map[string]Club
+	members       map[string]map[string]Member // clubID -> guuid -> member
+	unions        map[string]Union             // clubID -> union
+	accounts      map[string]GameUser
+	convs         map[string]Conversation
+	participants  map[string]map[string]Participant // convID -> guuid -> participant
+	messages      map[string]Message
+	attachments   map[string]Attachment
+	sessions      map[string]Session
+	hostings      map[string]Hosting
+	hostingReads  map[string]string
+	playerRemarks map[string]string
+	hostedPins    map[string]time.Time
+	clubGold      map[string]int64
+	seq           int
 }
 
 func newFakeStore() *fakeStore {
 	return &fakeStore{
-		clubs:        map[string]Club{},
-		members:      map[string]map[string]Member{},
-		unions:       map[string]Union{},
-		accounts:     map[string]GameUser{},
-		convs:        map[string]Conversation{},
-		participants: map[string]map[string]Participant{},
-		messages:     map[string]Message{},
-		attachments:  map[string]Attachment{},
-		sessions:     map[string]Session{},
-		hostings:     map[string]Hosting{},
-		hostingReads: map[string]string{},
-		clubGold:     map[string]int64{},
+		clubs:         map[string]Club{},
+		members:       map[string]map[string]Member{},
+		unions:        map[string]Union{},
+		accounts:      map[string]GameUser{},
+		convs:         map[string]Conversation{},
+		participants:  map[string]map[string]Participant{},
+		messages:      map[string]Message{},
+		attachments:   map[string]Attachment{},
+		sessions:      map[string]Session{},
+		hostings:      map[string]Hosting{},
+		hostingReads:  map[string]string{},
+		playerRemarks: map[string]string{},
+		hostedPins:    map[string]time.Time{},
+		clubGold:      map[string]int64{},
 	}
 }
 
@@ -540,6 +544,69 @@ func (f *fakeStore) DeleteHosting(_ context.Context, guuid string) error {
 func (f *fakeStore) DeleteHostedOwnerData(_ context.Context, guuid string) ([]string, int, error) {
 	delete(f.hostings, guuid)
 	return nil, 0, nil
+}
+
+func (f *fakeStore) PlayerRemarks(_ context.Context, playerIDs []string) (map[string]string, error) {
+	result := map[string]string{}
+	for _, id := range playerIDs {
+		if remark := f.playerRemarks[id]; remark != "" {
+			result[id] = remark
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeStore) SetPlayerRemark(_ context.Context, playerID, remark string, _ int64, _ string) error {
+	if remark == "" {
+		delete(f.playerRemarks, playerID)
+		return nil
+	}
+	f.playerRemarks[playerID] = remark
+	return nil
+}
+
+func (f *fakeStore) HostedPins(_ context.Context, targetType string, targetIDs []string) (map[string]time.Time, error) {
+	result := map[string]time.Time{}
+	for _, id := range targetIDs {
+		if pinnedAt, ok := f.hostedPins[targetType+"|"+id]; ok {
+			result[id] = pinnedAt
+		}
+	}
+	return result, nil
+}
+
+func (f *fakeStore) SetHostedPin(_ context.Context, targetType, targetID string, pinned bool, _ int64, _ string) error {
+	key := targetType + "|" + targetID
+	if !pinned {
+		delete(f.hostedPins, key)
+		return nil
+	}
+	if _, ok := f.hostedPins[key]; !ok {
+		f.hostedPins[key] = time.Now()
+	}
+	return nil
+}
+
+func (f *fakeStore) DeleteHostedConversation(_ context.Context, hostedGuuid, conversationID string) ([]string, error) {
+	conv, ok := f.convs[conversationID]
+	if !ok || (conv.LowGuuid != hostedGuuid && conv.HighGuuid != hostedGuuid) {
+		return nil, newError(404, "CONVERSATION_NOT_FOUND", "会话不存在或不属于该托管账号")
+	}
+	delete(f.convs, conversationID)
+	delete(f.participants, conversationID)
+	delete(f.hostingReads, conversationID)
+	delete(f.hostedPins, HostedPinConversation+"|"+conversationID)
+	for id, message := range f.messages {
+		if message.ConversationID == conversationID {
+			delete(f.messages, id)
+		}
+	}
+	for id, attachment := range f.attachments {
+		if attachment.ConversationID == conversationID {
+			delete(f.attachments, id)
+		}
+	}
+	return nil, nil
 }
 
 func (f *fakeStore) ListHostings(_ context.Context) ([]Hosting, error) {

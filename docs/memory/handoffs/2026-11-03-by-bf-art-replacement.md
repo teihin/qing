@@ -26,3 +26,10 @@
 
 - `assets/V7/游戏内/游戏就绪_434x145.png` 上一版把 `BF` 直接叠到原 `BY` 图层上，造成旧字母和底部装饰重影；已重新生成干净的单层透明 PNG。
 - 尺寸仍为 434×145，`.meta`、UUID、Prefab/Scene 引用未改；静态与放大预览已检查，Creator 导入、构建、真机和线上发布仍未验证。
+
+## D-01 补漏：牌桌红色筹码（2026-11-06）
+
+- 用户反馈游戏内红色筹码仍是 `BY`；原 33 项清单漏了 `assets/ImagesLuck/游戏内/pai_1.png`（100×100 RGBA，`pai_1` 节点 35×35，spriteFrame `a0014597-2780-460f-b62a-f26c6665bc37`，被 `panelGameView.prefab`、`drh8.fire`、`Prefabs/drh/coin.prefab`、`panelTalk.prefab` 引用）。
+- 做法沿用路线 D：`git show HEAD:` 导原图 → 抠字重建白圈底色 → AI 生成的新 `BF` 缩到原字 bbox 贴回。红盘、8 个白方块、白圈全部保留原始像素。
+- 验收：尺寸不变；alpha 逐字节一致；RGB 改动仅落在 x29–72 / y36–63；体积 17.2 KB → 16.0 KB；`.meta` 内容与 UUID 未改；Creator 已重新导入。
+- 未验证：网页构建产物（`build/`、`hot-update-output/`）未更新，需重新构建；真机与线上发布未验证。

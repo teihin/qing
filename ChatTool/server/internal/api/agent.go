@@ -412,6 +412,128 @@ func (s *Server) handleQuickReplies(w http.ResponseWriter, r *http.Request, p ag
 	writeData(w, 200, map[string]any{"items": items})
 }
 
+// quickReplyItem 是快捷话术的完整字段，供新增/修改后前端直接回填。
+type quickReplyItem struct {
+	ID        int64  `json:"id"`
+	Title     string `json:"title"`
+	Content   string `json:"content"`
+	Category  string `json:"category"`
+	SortOrder int    `json:"sortOrder"`
+}
+
+// 快捷话术是全团队共享的常用语库：任一客服都可以新增、修改和删除，
+// 托管会话与普通客服会话共用同一套话术。
+func (s *Server) handleQuickReplyCreate(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	var req struct {
+		Title    string `json:"title"`
+		Content  string `json:"content"`
+		Category string `json:"category"`
+	}
+	if !decodeJSON(w, r, &req, 16<<10) {
+		return
+	}
+	title, err := requireText(req.Title, 80)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_QUICK_REPLY", "话术标题不能为空且不能超过80个字符")
+		return
+	}
+	content, err := requireText(req.Content, 1000)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_QUICK_REPLY", "话术内容不能为空且不能超过1000个字符")
+		return
+	}
+	category := strings.TrimSpace(req.Category)
+	if category == "" {
+		category = "常用回复"
+	}
+	if len([]rune(category)) > 64 {
+		writeError(w, http.StatusBadRequest, "INVALID_QUICK_REPLY", "话术分类不能超过64个字符")
+		return
+	}
+	var maxOrder int
+	if err := s.db.QueryRowContext(r.Context(), `SELECT COALESCE(MAX(sort_order),0) FROM chat_quick_reply WHERE category=?`, category).Scan(&maxOrder); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法保存快捷话术")
+		return
+	}
+	result, err := s.db.ExecContext(r.Context(), `INSERT INTO chat_quick_reply
+(title,content,category,enabled,sort_order,created_by,created_at,updated_at)
+VALUES (?,?,?,1,?,?,NOW(),NOW())`, title, content, category, maxOrder+10, p.ID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法保存快捷话术")
+		return
+	}
+	id, _ := result.LastInsertId()
+	item := quickReplyItem{ID: id, Title: title, Content: content, Category: category, SortOrder: maxOrder + 10}
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "quick_reply.create", "quick_reply",
+		strconv.FormatInt(id, 10), map[string]any{"title": title, "category": category}, clientIP(r))
+	writeData(w, http.StatusCreated, item)
+}
+
+func (s *Server) handleQuickReplyUpdate(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	id, ok := parseInt64Path(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	var req struct {
+		Title    string `json:"title"`
+		Content  string `json:"content"`
+		Category string `json:"category"`
+	}
+	if !decodeJSON(w, r, &req, 16<<10) {
+		return
+	}
+	title, err := requireText(req.Title, 80)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_QUICK_REPLY", "话术标题不能为空且不能超过80个字符")
+		return
+	}
+	content, err := requireText(req.Content, 1000)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_QUICK_REPLY", "话术内容不能为空且不能超过1000个字符")
+		return
+	}
+	category := strings.TrimSpace(req.Category)
+	if category == "" {
+		category = "常用回复"
+	}
+	if len([]rune(category)) > 64 {
+		writeError(w, http.StatusBadRequest, "INVALID_QUICK_REPLY", "话术分类不能超过64个字符")
+		return
+	}
+	result, err := s.db.ExecContext(r.Context(), `UPDATE chat_quick_reply
+SET title=?, content=?, category=?, updated_at=NOW() WHERE id=?`, title, content, category, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法保存快捷话术")
+		return
+	}
+	if changed, _ := result.RowsAffected(); changed == 0 {
+		writeError(w, http.StatusNotFound, "QUICK_REPLY_NOT_FOUND", "快捷话术不存在或已经删除")
+		return
+	}
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "quick_reply.update", "quick_reply",
+		strconv.FormatInt(id, 10), map[string]any{"title": title, "category": category}, clientIP(r))
+	writeData(w, http.StatusOK, quickReplyItem{ID: id, Title: title, Content: content, Category: category})
+}
+
+func (s *Server) handleQuickReplyDelete(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	id, ok := parseInt64Path(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	result, err := s.db.ExecContext(r.Context(), `DELETE FROM chat_quick_reply WHERE id=?`, id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "无法删除快捷话术")
+		return
+	}
+	if changed, _ := result.RowsAffected(); changed == 0 {
+		writeError(w, http.StatusNotFound, "QUICK_REPLY_NOT_FOUND", "快捷话术不存在或已经删除")
+		return
+	}
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "quick_reply.delete", "quick_reply",
+		strconv.FormatInt(id, 10), map[string]any{}, clientIP(r))
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleTeamOptions(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
 	rows, err := s.db.QueryContext(r.Context(), `SELECT a.id,a.display_name,a.role,a.channel_code,channel.display_name,a.presence,a.max_conversations,a.last_seen_at,
 (SELECT COUNT(*) FROM chat_conversation c WHERE c.assigned_agent_id=a.id AND c.status='active'

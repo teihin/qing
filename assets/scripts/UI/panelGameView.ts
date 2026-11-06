@@ -123,6 +123,8 @@ export default class panelGameView extends UIPanelViewBase {
     private queueMemberRows:cc.Node[] = [];
     private readonly queueListRefreshSeconds:number = 5;
     private pendingQueueApplyAfterLeave:boolean = false;
+    /** 局中点「退出房间」后先挂起，等本手牌结算完再真正发退房协议。 */
+    private pendingExitAfterRound:boolean = false;
     private queueReferenceRoomID:number = 0;
     private queueReturnLobbyAfterLeave:boolean = false;
     private queueRoomLeaveConfirmed:boolean = false;
@@ -1009,19 +1011,7 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "退出房间")
         {
-            let strUserID = GameDataManager.getAccount().guuid;
-            let strSet:string = GameDataManager.getAccount().roomSetting;
-
-            if (this.gameLogic.round_count == "0" || this.gameLogic.round_count == ""  || this.gameLogic.GetPlayerCtlByID(0).info.strUserID != strUserID || this.gameLogic.strGameState == "end" || (strSet.indexOf("带分") >= 0 && this.gameLogic.GetPlayerCtlByID(0).info.emState != PlayerState.running && this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID))
-            {                
-                this.ConfirmLeaveWhileWinning(()=>this.DoExitRoom());
-            }
-            else
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"已经开局不能退出！");                
-            }
-
-            
+            this.RequestExitRoom();
         }
         else if(button.node.name.indexOf("坐下")>=0)
         {
@@ -1115,8 +1105,14 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if (button.node.name == "留座离桌")
         {
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"为玩家留座5分钟，牌局结束后开始留坐!");
-            
+            // 局中本手还没结算：total_score 里含已下注扣分，判不出真实输赢，
+            // 服务端也要等这手打完才开始留座，所以统一提示留座限时规则。
+            // 局间已结算，只给赢家提示，输家直接留座、不打断。
+            if(this.IsSelfInRound() || this.IsSelfWinning())
+            {
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    "留座限时3分钟，超时未回坐\n将按逃跑结算；牌局结束后开始留坐！");
+            }
             GameDataManager.getAccount().reqRoomCommand("{\"header\":\"留座_事件\"}", "留座_事件");
             button.node.parent.active = false;
         }
@@ -1349,7 +1345,11 @@ export default class panelGameView extends UIPanelViewBase {
             // }
             // else
             // {
-                UIManager.getInstance().showPanel("panelUserInfo",ShowPanelMode.Cover,"",arrayParam)
+                // BOSS 账号看全屏玩家数据（首个页签是代理链）；普通账号仍是原来的资料卡。
+                if(GameDataManager.IsBossAccount())
+                    UIManager.getInstance().showPanel("panelBossPlayerInfo",ShowPanelMode.Cover,"",arrayParam)
+                else
+                    UIManager.getInstance().showPanel("panelUserInfo",ShowPanelMode.Cover,"",arrayParam)
             //}
 
             let strParam = "{\"header\":\"提交_玩家_信息\",\"action\":\"点击头像\",\"content\":\""+player.info.strUserID+"\"}";
@@ -3565,6 +3565,8 @@ export default class panelGameView extends UIPanelViewBase {
         let strUserID = GameDataManager.getAccount().guuid;
         let isSelfSeated = this.gameLogic.GetPlayerCtlByID(0).info.strUserID == strUserID;
         this.RefreshQueueEntryVisibility(isSelfSeated);
+        // 预约退房的玩家在局中点过「退出房间」，本手牌一结束就真正退房。
+        this.CheckPendingExitAfterRound();
         this.RefreshRoomInviteEntry();
         RoomInviteManager.getInstance().onRoomAudienceStateChanged();
         // 留座到期、主动站起或被服务端清座后自己已经不在座位上，带入窗口留着也提交不了。
@@ -3938,6 +3940,9 @@ export default class panelGameView extends UIPanelViewBase {
 
     private DoExitRoom():void
     {
+        // 已经真正退房，预约标记与等待中的延迟调用都不能再生效。
+        this.pendingExitAfterRound = false;
+        this.unschedule(this.DoPendingExit);
         this.gameLogic.PrepareLeaveRoom();
         GameDataManager.getAccount().roomID = "";
         GameDataManager.getAccount().reqStopGame();
@@ -3948,7 +3953,83 @@ export default class panelGameView extends UIPanelViewBase {
     }
 
     /**
-     * 本人赢分时站起或退出房间会先确认：离开会扣除 30% 赢分。
+     * 「退出房间」入口：
+     * - 不在本手牌中：赢家先确认扣 30% 盈利，输家直接退。
+     * - 本手牌进行中：赢家先确认扣 30% 盈利，输家不确认；确认后只挂预约标记，
+     *   提示「当前牌局结束后，下手将退出房间」，等这一手结算完再发退房协议，
+     *   避免局中退房打断牌局。
+     */
+    private RequestExitRoom():void
+    {
+        if(this.pendingExitAfterRound)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                "已预约在本手牌结束后退出房间。");
+            return;
+        }
+
+        if(!this.IsSelfInRound())
+        {
+            this.ConfirmLeaveWhileWinning(()=>this.DoExitRoom());
+            return;
+        }
+
+        if(this.IsSelfWinning())
+        {
+            // panelMsgView 传入函数即切双按钮版，确定回调 true、取消回调 false。
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                "赢家离开或站起将扣除30%盈利，\n是否继续？",
+                [(confirmed:boolean)=>{
+                    if(confirmed)
+                        this.ScheduleExitAfterRound();
+                }]);
+            return;
+        }
+
+        this.ScheduleExitAfterRound();
+    }
+
+    private ScheduleExitAfterRound():void
+    {
+        this.pendingExitAfterRound = true;
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+            "当前牌局结束后，下手将退出房间。");
+    }
+
+    /** 本手牌是否还在进行中；局间准备、结算完、房间结束都算不在局中。 */
+    private IsSelfInRound():boolean
+    {
+        if(this.gameLogic == null || this.gameLogic.strGameState != "running")
+            return false;
+        return this.IsSelfActuallySeated();
+    }
+
+    /** 每次 PlayerList 刷新后调用：本手牌一结束就执行预约好的退房。 */
+    private CheckPendingExitAfterRound():void
+    {
+        if(!this.pendingExitAfterRound || this.IsSelfInRound())
+            return;
+        this.pendingExitAfterRound = false;
+        // 留一点时间让玩家看到这一手的结算结果，再走正常退房流程。
+        this.unschedule(this.DoPendingExit);
+        this.scheduleOnce(this.DoPendingExit,0.8);
+    }
+
+    private DoPendingExit():void
+    {
+        if(!cc.isValid(this.node) || this.gameLogic == null || this.gameLogic.IsLeavingRoom())
+            return;
+        // 等待期间下一手已经开始，继续挂起，等这手牌打完再退。
+        if(this.IsSelfInRound())
+        {
+            this.pendingExitAfterRound = true;
+            return;
+        }
+        this.DoExitRoom();
+    }
+
+    /**
+     * 本人赢分时站起或退出房间会先确认：离开会扣除 30% 盈利。
      * 输分或没有盈亏数据时保持原来的直接执行。
      */
     private ConfirmLeaveWhileWinning(action:()=>void):void
@@ -3960,7 +4041,7 @@ export default class panelGameView extends UIPanelViewBase {
         }
         // panelMsgView 传入函数即切双按钮版，确定回调 true、取消回调 false。
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-            "赢分离开或站起会扣除\n30%赢分，是否继续？",
+            "赢家离开或站起将扣除30%盈利，\n是否继续？",
             [(confirmed:boolean)=>{
                 if(confirmed)
                     action();
@@ -3981,11 +4062,12 @@ export default class panelGameView extends UIPanelViewBase {
 
         let strTotal = selfPlayer.info.total_score;
         let nTotal = Number(strTotal);
-        if(strTotal !== undefined && strTotal !== null && strTotal !== "" && isFinite(nTotal))
+        // total_score 为 0 常见于刚开局或字段未下发，这时再用带入分和当前分兜底。
+        if(strTotal !== undefined && strTotal !== null && strTotal !== "" && isFinite(nTotal) && nTotal !== 0)
             return nTotal > 0;
 
         let nBegin = Number(selfPlayer.info.begin_score);
-        return isFinite(nBegin) && selfPlayer.info.nGoldNum - nBegin > 0;
+        return isFinite(nBegin) && nBegin > 0 && selfPlayer.info.nGoldNum - nBegin > 0;
     }
 
     private IsSelfActuallySeated():boolean

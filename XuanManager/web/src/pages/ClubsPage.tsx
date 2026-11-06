@@ -383,6 +383,7 @@ export default function ClubsPage({
                     <th>代理</th>
                     <th>群主额度</th>
                     <th>钻石池</th>
+                    <th>俱乐部总积分</th>
                     <th>抽成</th>
                     <th className="align-right">操作</th>
                   </tr>
@@ -441,6 +442,15 @@ export default function ClubsPage({
                           <span className="club-quota-missing" title="没有找到俱乐部创建者">未找到群主</span>
                         ) : (
                           <strong className="club-quota-value">{integerFormatter.format(club.stonePool)} 钻</strong>
+                        )}
+                      </td>
+                      <td>
+                        {club.totalClubGold === null || club.totalClubGold === undefined ? (
+                          <span className="club-quota-missing" title="后台读取俱乐部积分失败，请刷新重试">未确认</span>
+                        ) : (
+                          <strong className="club-quota-value">
+                            {integerFormatter.format(club.totalClubGold)} 元
+                          </strong>
                         )}
                       </td>
                       <td>{club.tax || "—"}</td>

@@ -29,9 +29,14 @@
 - `POST /claim`、`POST /transfer`、`POST /close`。
 - `DELETE /api/agent/conversations/{id}/messages`：请求 `{confirm:true}` 后永久清空双方聊天与媒体，保留玩家备忘。
 - `GET/POST /api/agent/players/{playerId}/memos`、`DELETE /api/agent/players/{playerId}/memos/{memoId}`：仅客服可见的玩家备忘。
-- `GET /api/agent/quick-replies`。
+- `GET /api/agent/quick-replies`；`POST /api/agent/quick-replies`（`{title,content,category}`）、`PUT/DELETE /api/agent/quick-replies/{id}`：全团队共享的常用话术，托管会话与普通客服会话共用；托管页点击话术直接发送，普通会话点击填入输入框。
 - 主管：`GET/POST /api/agent/team`、`PUT /api/agent/team/{id}`；创建/更新客服包含 `channelCode`。
 - 聊天托管：`GET /api/agent/hosted/groups`、`GET /api/agent/hosted/conversations`、`GET/POST /api/agent/hosted/conversations/{id}/messages`、`GET .../balance`、`POST .../gold`。取消托管只把记录置为停用并保留历史，群组项带 `enabled`；停用账号只能只读，代发/上下分返回不可用。
+- 托管列表三级都带置顶：分组项（`GET /hosted/groups` 的 `items[].pinned`/`pinnedAt`，一级联盟/俱乐部）、托管账号项（`items[].items[].pinned`/`pinnedAt`，二级盟主/群主）、会话项（`pinned`/`pinnedAt`）。置顶对象固定排最前；全团队共享，存在 `chat_direct_player_remark` / `chat_direct_hosted_pin_target`（`target_type` = `group`/`owner`/`conversation`）。
+- `PUT /api/agent/hosted/conversations/{id}/remark`：请求 `{guuid,remark}`，备注按玩家（会话对方）保存，留空即清除，最长 20 字；返回 `{remark,peerGuuid}`。工作台显示口径为「原名（备注）」，原名始终保留。
+- `POST /api/agent/hosted/pin`：统一置顶入口，请求 `{type,id,guuid,pinned}`；`type` 取 `group`（`id` 为 `club:<id>` / `union:<id>`）、`owner`（`id` 为托管账号 guuid）、`conversation`（`id` 为会话 ID，`guuid` 为托管账号用于归属校验）。返回 `{pinned,peerGuuid}`。
+- `POST /api/agent/hosted/conversations/{id}/pin`：请求 `{guuid,pinned}`，等价于上一接口的 `type=conversation`，保留兼容。
+- `DELETE /api/agent/hosted/conversations/{id}?guuid=<托管账号>`：永久删除单条托管会话及消息、图片、语音，托管记录保留；重复删除返回 `CONVERSATION_NOT_FOUND`。
 - `DELETE /api/agent/hosted/owners/{guuid}`（仅主管）：永久删除该托管账号的直聊会话、消息和媒体，托管记录一并删除；开启中的托管需先在游戏内关闭。
 - `GET /api/agent/hosting/ledger?date=YYYY-MM-DD&owner=&agentId=&player=&page=&pageSize=`：托管上下分账本；返回当日/所选日期汇总（up/down/give/received/count）和逐笔记录（含 `agentId`/`agentName`）。主管返回全部并按 `agentId` 筛选，普通客服只返回 `agent_id` 为自己的记录。
 - `GET /api/agent/hosting/ledger/owners?date=YYYY-MM-DD`：当前可见范围内的盟主选项。

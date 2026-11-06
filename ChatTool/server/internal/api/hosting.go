@@ -76,6 +76,133 @@ func (s *Server) handleHostedDeleteOwner(w http.ResponseWriter, r *http.Request,
 	writeData(w, http.StatusOK, map[string]any{"deleted": true})
 }
 
+// handleHostedRemark 给托管会话的玩家设置备注名称（全团队共享，传空串即清除）。
+func (s *Server) handleHostedRemark(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	var body struct {
+		Guuid  string `json:"guuid"`
+		Remark string `json:"remark"`
+	}
+	if !decodeJSON(w, r, &body, 8<<10) {
+		return
+	}
+	hostedGuuid := strings.TrimSpace(body.Guuid)
+	if hostedGuuid == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少托管账号")
+		return
+	}
+	ctx := directchat.WithRequestCache(r.Context())
+	conversationID := r.PathValue("id")
+	remark, peerGuuid, err := s.direct.SetHostedRemark(ctx, hostedGuuid, conversationID, body.Remark, p.ID, p.DisplayName)
+	if err != nil {
+		writeDirectBizError(w, err)
+		return
+	}
+	s.hub.publish("hosted", liveEvent{Type: "hosted.preference", ConversationID: conversationID, Payload: map[string]any{
+		"hostedGuuid": hostedGuuid, "peerGuuid": peerGuuid, "remark": remark,
+	}})
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "direct.hosted.remark",
+		"conversation", conversationID, map[string]any{
+			"hostedGuuid": hostedGuuid, "peerGuuid": peerGuuid, "remarkLength": len([]rune(remark)),
+			"cleared": remark == "",
+		}, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"remark": remark, "peerGuuid": peerGuuid})
+}
+
+// handleHostedPin 置顶/取消置顶一条托管会话。
+func (s *Server) handleHostedPin(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	var body struct {
+		Guuid  string `json:"guuid"`
+		Pinned *bool  `json:"pinned"`
+	}
+	if !decodeJSON(w, r, &body, 8<<10) {
+		return
+	}
+	hostedGuuid := strings.TrimSpace(body.Guuid)
+	if hostedGuuid == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少托管账号")
+		return
+	}
+	if body.Pinned == nil {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少置顶状态")
+		return
+	}
+	ctx := directchat.WithRequestCache(r.Context())
+	conversationID := r.PathValue("id")
+	peerGuuid, err := s.direct.SetHostedPin(ctx, hostedGuuid, conversationID, *body.Pinned, p.ID, p.DisplayName)
+	if err != nil {
+		writeDirectBizError(w, err)
+		return
+	}
+	s.hub.publish("hosted", liveEvent{Type: "hosted.preference", ConversationID: conversationID, Payload: map[string]any{
+		"hostedGuuid": hostedGuuid, "peerGuuid": peerGuuid, "pinned": *body.Pinned,
+	}})
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "direct.hosted.pin",
+		"conversation", conversationID, map[string]any{
+			"hostedGuuid": hostedGuuid, "peerGuuid": peerGuuid, "pinned": *body.Pinned,
+		}, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"pinned": *body.Pinned, "peerGuuid": peerGuuid})
+}
+
+// handleHostedTargetPin 统一置顶入口，支持三级：分组（联盟/俱乐部）、托管账号（盟主/群主）、会话。
+func (s *Server) handleHostedTargetPin(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	var body struct {
+		Type   string `json:"type"`
+		ID     string `json:"id"`
+		Guuid  string `json:"guuid"`
+		Pinned *bool  `json:"pinned"`
+	}
+	if !decodeJSON(w, r, &body, 8<<10) {
+		return
+	}
+	if body.Pinned == nil {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少置顶状态")
+		return
+	}
+	targetType := strings.TrimSpace(body.Type)
+	targetID := strings.TrimSpace(body.ID)
+	if targetID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少置顶对象")
+		return
+	}
+	ctx := directchat.WithRequestCache(r.Context())
+	hostedGuuid, peerGuuid, err := s.direct.SetHostedTargetPin(ctx, targetType, targetID, body.Guuid, *body.Pinned, p.ID, p.DisplayName)
+	if err != nil {
+		writeDirectBizError(w, err)
+		return
+	}
+	s.hub.publish("hosted", liveEvent{Type: "hosted.preference", Payload: map[string]any{
+		"targetType": targetType, "targetId": targetID, "hostedGuuid": hostedGuuid,
+		"peerGuuid": peerGuuid, "pinned": *body.Pinned,
+	}})
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "direct.hosted.pin",
+		targetType, targetID, map[string]any{
+			"hostedGuuid": hostedGuuid, "peerGuuid": peerGuuid, "pinned": *body.Pinned,
+		}, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"pinned": *body.Pinned, "peerGuuid": peerGuuid})
+}
+
+// handleHostedDeleteConversation 永久删除一条托管会话（消息与媒体一并清理）。
+func (s *Server) handleHostedDeleteConversation(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	hostedGuuid := strings.TrimSpace(r.URL.Query().Get("guuid"))
+	if hostedGuuid == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少托管账号")
+		return
+	}
+	ctx := directchat.WithRequestCache(r.Context())
+	conversationID := r.PathValue("id")
+	peerGuuid, err := s.direct.DeleteHostedConversation(ctx, hostedGuuid, conversationID)
+	if err != nil {
+		writeDirectBizError(w, err)
+		return
+	}
+	s.hub.publish("hosted", liveEvent{Type: "hosted.conversation.deleted", ConversationID: conversationID, Payload: map[string]any{
+		"hostedGuuid": hostedGuuid, "peerGuuid": peerGuuid,
+	}})
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "direct.hosted.delete_conversation",
+		"conversation", conversationID, map[string]any{"hostedGuuid": hostedGuuid, "peerGuuid": peerGuuid}, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"deleted": true})
+}
+
 func (s *Server) handleHostedMessages(w http.ResponseWriter, r *http.Request, _ agentPrincipal) {
 	query := r.URL.Query()
 	guuid := strings.TrimSpace(query.Get("guuid"))

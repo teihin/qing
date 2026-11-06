@@ -326,3 +326,169 @@ func TestHostingDisabledKeepsHistoryAndCanDelete(t *testing.T) {
 		t.Fatal("手动删除后托管记录应不存在")
 	}
 }
+
+// 托管展示偏好：备注名称按玩家共享、置顶排最前、单条会话可永久删除。
+func TestHostedRemarkPinAndDeleteConversation(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	host := env.session(t, "100004")
+	if _, err := env.service.SetHosting(ctx, host, true); err != nil {
+		t.Fatalf("enable hosting failed: %v", err)
+	}
+	first, err := env.service.CreateConversation(ctx, host, "111111", "100001")
+	if err != nil {
+		t.Fatalf("create conversation failed: %v", err)
+	}
+	second, err := env.service.CreateConversation(ctx, host, "111111", "100002")
+	if err != nil {
+		t.Fatalf("create second conversation failed: %v", err)
+	}
+	for _, item := range []struct{ id, text, clientID string }{
+		{first.ConversationID, "玩家一消息", "prefs-1"},
+		{second.ConversationID, "玩家二消息", "prefs-2"},
+	} {
+		if _, _, err := env.service.SendMessage(ctx, host, item.id, SendRequest{
+			MessageType: MessageText, Text: item.text, ClientMessageID: item.clientID,
+		}); err != nil {
+			t.Fatalf("seed message failed: %v", err)
+		}
+	}
+
+	// 备注会去掉换行与多余空白，并按玩家共享（换会话仍能看到）。
+	remark, peerGuuid, err := env.service.SetHostedRemark(ctx, "100004", first.ConversationID,
+		" 老客户\n张三 ", 1, "客服甲")
+	if err != nil {
+		t.Fatalf("set remark failed: %v", err)
+	}
+	if remark != "老客户 张三" || peerGuuid != "100001" {
+		t.Fatalf("备注归一化或玩家归属不正确: remark=%q peer=%q", remark, peerGuuid)
+	}
+	if _, _, err := env.service.SetHostedRemark(ctx, "100004", first.ConversationID,
+		"一二三四五六七八九十一二三四五六七八九十一", 1, "客服甲"); err == nil {
+		t.Fatal("超过20个字的备注应被拒绝")
+	}
+
+	list, err := env.service.HostedConversations(ctx, "100004")
+	if err != nil || len(list) != 2 {
+		t.Fatalf("hosted conversations failed: %+v err=%v", list, err)
+	}
+	// 置顶玩家一，即使玩家二的消息更新，也必须排在最前。
+	if _, err := env.service.SetHostedPin(ctx, "100004", first.ConversationID, true, 1, "客服甲"); err != nil {
+		t.Fatalf("pin failed: %v", err)
+	}
+	if _, _, err := env.service.SendMessage(ctx, host, second.ConversationID, SendRequest{
+		MessageType: MessageText, Text: "更新的消息", ClientMessageID: "prefs-3",
+	}); err != nil {
+		t.Fatalf("send newer message failed: %v", err)
+	}
+	list, err = env.service.HostedConversations(ctx, "100004")
+	if err != nil || len(list) != 2 {
+		t.Fatalf("hosted conversations after pin failed: %+v err=%v", list, err)
+	}
+	if !list[0].Pinned || list[0].ConversationID != first.ConversationID || list[0].Remark != "老客户 张三" {
+		t.Fatalf("置顶会话应排最前并带备注: %+v", list)
+	}
+	if list[1].Pinned || list[1].Remark != "" {
+		t.Fatalf("未置顶会话不应带置顶/备注: %+v", list[1])
+	}
+
+	// 取消置顶后恢复按最后消息时间倒序。
+	if _, err := env.service.SetHostedPin(ctx, "100004", first.ConversationID, false, 1, "客服甲"); err != nil {
+		t.Fatalf("unpin failed: %v", err)
+	}
+	list, err = env.service.HostedConversations(ctx, "100004")
+	if err != nil || len(list) != 2 || list[0].ConversationID != second.ConversationID {
+		t.Fatalf("取消置顶后应按最新消息排序: %+v err=%v", list, err)
+	}
+
+	// 删除单条会话：消息与对面入口一起消失，重复删除返回不存在。
+	if _, err := env.service.DeleteHostedConversation(ctx, "100004", first.ConversationID); err != nil {
+		t.Fatalf("delete hosted conversation failed: %v", err)
+	}
+	list, err = env.service.HostedConversations(ctx, "100004")
+	if err != nil || len(list) != 1 || list[0].ConversationID != second.ConversationID {
+		t.Fatalf("删除后列表应只剩一条: %+v err=%v", list, err)
+	}
+	if _, err := env.service.DeleteHostedConversation(ctx, "100004", first.ConversationID); AsError(err).Code != "CONVERSATION_NOT_FOUND" {
+		t.Fatalf("重复删除应返回会话不存在: %v", err)
+	}
+	// 别的托管账号不能删除不属于自己的会话。
+	if _, err := env.service.DeleteHostedConversation(ctx, "100004", "not-mine"); err == nil {
+		t.Fatal("不存在/不属于该托管账号的会话应被拒绝")
+	}
+}
+
+// 置顶支持三级：分组（联盟/俱乐部）、托管账号（盟主/群主）、会话。
+// 分组置顶把整个俱乐部顶到列表最前，账号置顶把该盟主顶到组内最前。
+func TestHostedTargetPins(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	env.store.addUnion("111111", Union{ID: "union-1", Name: "测试联盟", OwnerGuuid: "100004", OwnerClub: "111111"})
+	env.store.addClub("333333", "盟主俱乐部", "100003", Member{Guuid: "100001", Name: "玩家一", Role: RoleMember})
+	env.store.addUnion("333333", Union{ID: "union-1", Name: "测试联盟", OwnerGuuid: "100004", OwnerClub: "111111"})
+	env.store.addClub("444444", "普通俱乐部", "100005")
+
+	for _, guuid := range []string{"100004", "100003", "100005"} {
+		if _, err := env.service.SetHosting(ctx, env.session(t, guuid), true); err != nil {
+			t.Fatalf("enable hosting %s failed: %v", guuid, err)
+		}
+	}
+
+	groups, err := env.service.HostedGroups(ctx)
+	if err != nil {
+		t.Fatalf("hosted groups failed: %v", err)
+	}
+	if len(groups) != 3 || groups[0].Type != HostingGroupUnion {
+		t.Fatalf("初始应为联盟在前的三个分组: %+v", groups)
+	}
+
+	// 置顶最后一个分组，应顶到最前。
+	lastKey := groups[len(groups)-1].Key
+	if _, _, err := env.service.SetHostedTargetPin(ctx, HostedPinGroup, lastKey, "", true, 1, "客服甲"); err != nil {
+		t.Fatalf("置顶分组失败: %v", err)
+	}
+	groups, err = env.service.HostedGroups(ctx)
+	if err != nil {
+		t.Fatalf("hosted groups after group pin failed: %v", err)
+	}
+	if groups[0].Key != lastKey || !groups[0].Pinned {
+		t.Fatalf("置顶分组应排最前: key=%s first=%s pinned=%v", lastKey, groups[0].Key, groups[0].Pinned)
+	}
+
+	// 同一分组内把后面的托管账号顶上来。
+	group := groups[0]
+	if len(group.Items) < 1 {
+		t.Fatalf("分组内应有托管账号: %+v", group)
+	}
+	target := group.Items[len(group.Items)-1].Guuid
+	if _, _, err := env.service.SetHostedTargetPin(ctx, HostedPinOwner, target, "", true, 1, "客服甲"); err != nil {
+		t.Fatalf("置顶托管账号失败: %v", err)
+	}
+	groups, err = env.service.HostedGroups(ctx)
+	if err != nil {
+		t.Fatalf("hosted groups after owner pin failed: %v", err)
+	}
+	if groups[0].Key != lastKey {
+		t.Fatalf("分组置顶应保持: %+v", groups)
+	}
+	if groups[0].Items[0].Guuid != target || !groups[0].Items[0].Pinned {
+		t.Fatalf("置顶的托管账号应排组内最前: target=%s first=%s", target, groups[0].Items[0].Guuid)
+	}
+
+	// 取消分组置顶后恢复联盟在前。
+	if _, _, err := env.service.SetHostedTargetPin(ctx, HostedPinGroup, lastKey, "", false, 1, "客服甲"); err != nil {
+		t.Fatalf("取消置顶分组失败: %v", err)
+	}
+	groups, err = env.service.HostedGroups(ctx)
+	if err != nil {
+		t.Fatalf("hosted groups after unpin failed: %v", err)
+	}
+	if groups[0].Type != HostingGroupUnion || groups[0].Pinned {
+		t.Fatalf("取消置顶后应恢复联盟在前: %+v", groups[0])
+	}
+
+	// 不存在的分组要被拒绝。
+	if _, _, err := env.service.SetHostedTargetPin(ctx, HostedPinGroup, "club:999999", "", true, 1, "客服甲"); err == nil {
+		t.Fatal("不存在的分组应拒绝置顶")
+	}
+}

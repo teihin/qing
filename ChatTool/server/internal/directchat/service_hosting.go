@@ -48,6 +48,9 @@ type HostedOwnerView struct {
 	ConversationCount int    `json:"conversationCount"`
 	Unread            int    `json:"unread"`
 	LastMessageAt     string `json:"lastMessageAt"`
+	/** 是否置顶；置顶的托管账号排在同组最前（全团队共享）。 */
+	Pinned   bool   `json:"pinned"`
+	PinnedAt string `json:"pinnedAt,omitempty"`
 }
 
 // HostedGroupView 是客服工作台的一级分组（联盟或俱乐部）。
@@ -56,15 +59,24 @@ type HostedGroupView struct {
 	Type  string            `json:"type"`
 	Name  string            `json:"name"`
 	Items []HostedOwnerView `json:"items"`
+	/** 是否置顶；置顶的分组排在托管列表最前（全团队共享）。 */
+	Pinned   bool   `json:"pinned"`
+	PinnedAt string `json:"pinnedAt,omitempty"`
 }
 
 // HostedConversationView 是托管账号的一条会话摘要。
+// Remark/Pinned 只属于客服工作台（全团队共享），不会下发给游戏客户端。
 type HostedConversationView struct {
 	ConversationView
 	HostedGuuid    string `json:"hostedGuuid"`
 	HostedName     string `json:"hostedName"`
 	HostedRole     string `json:"hostedRole"`
 	HostedRoleName string `json:"hostedRoleName"`
+	/** 客服给该玩家设置的备注名称，空表示未设置。 */
+	Remark string `json:"remark,omitempty"`
+	/** 是否置顶；置顶会话排在托管列表最前。 */
+	Pinned   bool   `json:"pinned"`
+	PinnedAt string `json:"pinnedAt,omitempty"`
 }
 
 // HostingStatus 返回当前账号是否可以开启托管，以及是否已开启。
@@ -215,6 +227,13 @@ func (s *Service) HostedGroups(ctx context.Context) ([]HostedGroupView, error) {
 	for _, key := range order {
 		group := groups[key]
 		sort.SliceStable(group.Items, func(i, j int) bool {
+			// 置顶的托管账号（盟主/群主）优先，其次才是可发送、未读和最近消息。
+			if group.Items[i].Pinned != group.Items[j].Pinned {
+				return group.Items[i].Pinned
+			}
+			if group.Items[i].Pinned && group.Items[j].Pinned && group.Items[i].PinnedAt != group.Items[j].PinnedAt {
+				return group.Items[i].PinnedAt > group.Items[j].PinnedAt
+			}
 			if group.Items[i].Enabled != group.Items[j].Enabled {
 				return group.Items[i].Enabled
 			}
@@ -228,8 +247,15 @@ func (s *Service) HostedGroups(ctx context.Context) ([]HostedGroupView, error) {
 		})
 		result = append(result, *group)
 	}
-	// 联盟分组排在俱乐部前面，方便客服先看跨俱乐部托管。
+	s.attachHostedTargetPrefs(ctx, result)
+	// 置顶的分组最前；其余仍是联盟在俱乐部前，方便客服先看跨俱乐部托管。
 	sort.SliceStable(result, func(i, j int) bool {
+		if result[i].Pinned != result[j].Pinned {
+			return result[i].Pinned
+		}
+		if result[i].Pinned && result[j].Pinned && result[i].PinnedAt != result[j].PinnedAt {
+			return result[i].PinnedAt > result[j].PinnedAt
+		}
 		if result[i].Type != result[j].Type {
 			return result[i].Type == HostingGroupUnion
 		}
@@ -366,7 +392,15 @@ func (s *Service) HostedConversations(ctx context.Context, hostedGuuid string) (
 			HostedRoleName: roleName,
 		})
 	}
+	s.attachHostedPrefs(ctx, result)
 	sort.SliceStable(result, func(i, j int) bool {
+		// 置顶的重要玩家始终排在最前，其次是按最后一条消息时间倒序。
+		if result[i].Pinned != result[j].Pinned {
+			return result[i].Pinned
+		}
+		if result[i].Pinned && result[j].Pinned && result[i].PinnedAt != result[j].PinnedAt {
+			return result[i].PinnedAt > result[j].PinnedAt
+		}
 		if result[i].LastMessageAt != result[j].LastMessageAt {
 			return result[i].LastMessageAt > result[j].LastMessageAt
 		}

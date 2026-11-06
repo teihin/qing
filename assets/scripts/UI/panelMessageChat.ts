@@ -325,7 +325,8 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(this.officialState.status === "closed")
             this.topTip.string = "本次咨询已结束，重新进入官方客服可再次咨询";
         else if(this.officialState.onlineAgents <= 0)
-            this.topTip.string = "客服暂时不在线，可先留言，上线后会回复";
+            // 无客服在线时不再提示「客服暂时不在线，可先留言」，顶部留空即可。
+            this.topTip.string = "";
         else
             this.topTip.string = this.messages.length === 0 ? "请描述您遇到的问题" : "没有更多消息";
     }
@@ -460,9 +461,16 @@ export default class panelMessageChat extends UIPanelViewBase {
             if(label != null)
             {
                 let name = this.peer == null ? "" : this.peer.name;
-                let role = this.officialMode ? "官方客服" :
-                    (this.peer == null ? "" : DirectChatManager.RoleName(this.peer.role));
-                label.string = name === "" ? "聊天" : name + " · " + role;
+                if(this.officialMode)
+                {
+                    // 官方客服标题只显示名字（BF），不再缀「· 官方客服」。
+                    label.string = name === "" ? "官方客服" : name;
+                }
+                else
+                {
+                    let role = this.peer == null ? "" : DirectChatManager.RoleName(this.peer.role);
+                    label.string = name === "" ? "聊天" : name + " · " + role;
+                }
             }
         }
         let avatarNode = Tool.GetChild(this.node,"头像");

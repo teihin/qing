@@ -48,6 +48,11 @@ type clubListItem struct {
 	// StonePool 是群主钻石池：club_agent_info 中该俱乐部创建者那一行的 stone（单位：钻）。
 	// 玩家兑换钻石会从这个池子扣；找不到群主时为 nil。
 	StonePool *int64 `json:"stonePool"`
+	// TotalClubGold 是俱乐部总积分（单位：元）：全体成员在该俱乐部积分之和。
+	// 游戏服「查询_俱乐部_成员_总分」只在客户端推送 AllPlayerGold，后台拿不到回包，
+	// 这里按同一份落库数据（tbl_Account.sm_club_gold / sm_club_gold2）聚合。
+	// nil 表示读取失败，与「0 分」不是一回事。
+	TotalClubGold *int64 `json:"totalClubGold"`
 }
 
 type clubMemberNode struct {
@@ -350,6 +355,14 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	} else {
 		s.logger.Error("read club stone pools", "error", poolErr)
 	}
+	if totalGolds, goldErr := s.clubTotalGolds(r.Context(), items); goldErr == nil {
+		for index := range items {
+			value := totalGolds[items[index].ClubID]
+			items[index].TotalClubGold = &value
+		}
+	} else {
+		s.logger.Error("read club total golds", "error", goldErr)
+	}
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "total": total, "page": page, "pageSize": size,
 		"mode": filters.Mode,
@@ -484,6 +497,97 @@ WHERE status = 'used' AND (`+strings.Join(parts, " OR ")+`)`, args...)
 	return result, rows.Err()
 }
 
+// clubTotalGolds 批量计算每个俱乐部的总积分（单位：元）。
+//
+// 口径：tbl_Account.sm_club_gold / sm_club_gold2 里以该俱乐部 ID 为键的积分求和；
+// 茶楼/带分模式（club_mode 2/3）优先取 *_2 列，与成员列表 readClubMembers 保持一致。
+// -99 是「无该俱乐部数据」哨兵，不参与求和。
+//
+// 这里用 LIKE '%"俱乐部ID"%' 命中 JSON 键，Key 是纯数字不会误伤；代价是全表扫，
+// 但只回传有积分记录的行，且只算当前页的俱乐部。
+func (s *Server) clubTotalGolds(ctx context.Context, items []clubListItem) (map[string]int64, error) {
+	result := map[string]int64{}
+	modes := map[string]string{}
+	conditions := make([]string, 0, len(items))
+	args := make([]any, 0, len(items)*2)
+	for _, item := range items {
+		if item.ClubID == "" {
+			continue
+		}
+		// 有成员但一条积分记录都没有时按 0 展示。
+		result[item.ClubID] = 0
+		modes[item.ClubID] = item.Mode
+		like := "%\"" + escapeLike(item.ClubID) + "\"%"
+		conditions = append(conditions,
+			"(sm_club_gold LIKE ? OR sm_club_gold2 LIKE ?)")
+		args = append(args, like, like)
+	}
+	if len(conditions) == 0 {
+		return result, nil
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT COALESCE(sm_club_gold, ''), COALESCE(sm_club_gold2, '')
+FROM kbedm.tbl_Account WHERE `+strings.Join(conditions, " OR "), args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var gold, gold2 string
+		if err := rows.Scan(&gold, &gold2); err != nil {
+			return nil, err
+		}
+		primary := parseClubGoldMap(gold)
+		secondary := parseClubGoldMap(gold2)
+		if len(primary) == 0 && len(secondary) == 0 {
+			continue
+		}
+		for clubID, mode := range modes {
+			value, ok := int64(0), false
+			if isSecondaryClubMode(mode) {
+				value, ok = secondary[clubID]
+				if !ok {
+					value, ok = primary[clubID]
+				}
+			} else {
+				value, ok = primary[clubID]
+				if !ok {
+					value, ok = secondary[clubID]
+				}
+			}
+			if ok {
+				result[clubID] += value
+			}
+		}
+	}
+	return result, rows.Err()
+}
+
+// parseClubGoldMap 把 {"俱乐部ID": 积分} 解析成俱乐部 → 积分。
+// 解析失败（含历史裸数字形态，无法判断归属）一律返回空，不猜。
+func parseClubGoldMap(raw string) map[string]int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return nil
+	}
+	var mapping map[string]any
+	if err := json.Unmarshal([]byte(raw), &mapping); err != nil {
+		return nil
+	}
+	result := make(map[string]int64, len(mapping))
+	for key, value := range mapping {
+		clubID := strings.TrimSpace(key)
+		if clubID == "" {
+			continue
+		}
+		number, err := toInt64(value)
+		if err != nil || number == -99 {
+			continue
+		}
+		result[clubID] = number
+	}
+	return result
+}
+
 func (s *Server) playerNames(ctx context.Context, ids []string) (map[string]string, error) {
 	result := map[string]string{}
 	if len(ids) == 0 {
@@ -571,6 +675,13 @@ WHERE c.club_guuid = ? LIMIT 1`, clubID).Scan(
 		} else {
 			s.logger.Error("read club stone pool", "error", poolErr, "clubId", clubID)
 		}
+	}
+	// 俱乐部总积分与列表同一口径，详情页顶部要能看到同一数字。
+	if totalGolds, goldErr := s.clubTotalGolds(ctx, []clubListItem{detail.Club}); goldErr == nil {
+		value := totalGolds[detail.Club.ClubID]
+		detail.Club.TotalClubGold = &value
+	} else {
+		s.logger.Error("read club total gold", "error", goldErr, "clubId", clubID)
 	}
 	// V2 的额度挂在俱乐部（union_quota），代理不再有独立额度：
 	// 成员树里只给群主显示俱乐部额度，其他节点的旧 club_agent_info.quota 不再展示。

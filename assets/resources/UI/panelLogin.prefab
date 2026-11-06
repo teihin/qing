@@ -24217,6 +24217,9 @@
     "_components": [
       {
         "__id__": 631
+      },
+      {
+        "__id__": 745
       }
     ],
     "_prefab": {
@@ -24225,9 +24228,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 255,
-      "g": 255,
-      "b": 255,
+      "r": 239,
+      "g": 106,
+      "b": 89,
       "a": 255
     },
     "_contentSize": {
@@ -24276,7 +24279,7 @@
     "node": {
       "__id__": 630
     },
-    "_enabled": true,
+    "_enabled": false,
     "_materials": [
       {
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
@@ -24837,9 +24840,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 191,
-      "g": 203,
-      "b": 209,
+      "r": 236,
+      "g": 241,
+      "b": 245,
       "a": 255
     },
     "_contentSize": {
@@ -24888,7 +24891,7 @@
     "node": {
       "__id__": 645
     },
-    "_enabled": false,
+    "_enabled": true,
     "_materials": [
       {
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
@@ -24896,8 +24899,8 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "",
-    "_N$string": "",
+    "_string": "中文、英文或数字",
+    "_N$string": "中文、英文或数字",
     "_fontSize": 26,
     "_lineHeight": 32,
     "_enableWrapText": false,
@@ -25586,9 +25589,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 191,
-      "g": 203,
-      "b": 209,
+      "r": 236,
+      "g": 103,
+      "b": 88,
       "a": 255
     },
     "_contentSize": {
@@ -25637,7 +25640,7 @@
     "node": {
       "__id__": 666
     },
-    "_enabled": false,
+    "_enabled": true,
     "_materials": [
       {
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
@@ -25645,10 +25648,10 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "",
-    "_N$string": "",
-    "_fontSize": 17,
-    "_lineHeight": 24,
+    "_string": "请勿使用与其他平台相同密码!!!",
+    "_N$string": "请勿使用与其他平台相同密码!!!",
+    "_fontSize": 15,
+    "_lineHeight": 19,
     "_enableWrapText": false,
     "_N$file": null,
     "_isSystemFontUsed": true,
@@ -26335,9 +26338,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 191,
-      "g": 203,
-      "b": 209,
+      "r": 236,
+      "g": 241,
+      "b": 245,
       "a": 255
     },
     "_contentSize": {
@@ -26386,7 +26389,7 @@
     "node": {
       "__id__": 687
     },
-    "_enabled": false,
+    "_enabled": true,
     "_materials": [
       {
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
@@ -26394,8 +26397,8 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "",
-    "_N$string": "",
+    "_string": "请再次输入新密码",
+    "_N$string": "请再次输入新密码",
     "_fontSize": 26,
     "_lineHeight": 32,
     "_enableWrapText": false,
@@ -27084,9 +27087,9 @@
     "_opacity": 255,
     "_color": {
       "__type__": "cc.Color",
-      "r": 191,
-      "g": 203,
-      "b": 209,
+      "r": 236,
+      "g": 241,
+      "b": 245,
       "a": 255
     },
     "_contentSize": {
@@ -27135,7 +27138,7 @@
     "node": {
       "__id__": 708
     },
-    "_enabled": false,
+    "_enabled": true,
     "_materials": [
       {
         "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
@@ -27143,8 +27146,8 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "",
-    "_N$string": "",
+    "_string": "请输入交易密码",
+    "_N$string": "请输入交易密码",
     "_fontSize": 26,
     "_lineHeight": 32,
     "_enableWrapText": false,
@@ -28238,5 +28241,38 @@
     },
     "fileId": "",
     "sync": false
+  },
+  {
+    "__type__": "cc.Label",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 630
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "安全提醒：请勿使用与其他平台相同密码，\n可降低账号被盗风险！",
+    "_N$string": "安全提醒：请勿使用与其他平台相同密码，\n可降低账号被盗风险！",
+    "_fontSize": 27,
+    "_lineHeight": 37,
+    "_enableWrapText": false,
+    "_N$file": null,
+    "_isSystemFontUsed": true,
+    "_spacingX": 0,
+    "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 0,
+    "_N$horizontalAlign": 1,
+    "_N$verticalAlign": 1,
+    "_N$fontFamily": "Arial",
+    "_N$overflow": 0,
+    "_N$cacheMode": 0,
+    "_id": ""
   }
 ]

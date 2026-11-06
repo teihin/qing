@@ -239,3 +239,37 @@ func TestClubUnionFilterBindsExactUnionID(t *testing.T) {
 		t.Fatalf("union id not bound as an argument: %v", args)
 	}
 }
+
+func TestParseClubGoldMapKeepsNumbersAndDropsSentinels(t *testing.T) {
+	// 线上真实形态：{"俱乐部ID": 积分}；-99 是「无该俱乐部数据」的哨兵。
+	cases := []struct {
+		raw    string
+		want   map[string]int64
+		absent []string
+	}{
+		{raw: `{"885399": 20326}`, want: map[string]int64{"885399": 20326}},
+		{raw: `{"775447": -2327}`, want: map[string]int64{"775447": -2327}},
+		{raw: `{"575399": -99}`, absent: []string{"575399"}},
+		{raw: `{"615555": "800"}`, want: map[string]int64{"615555": 800}},
+		{raw: `{}`},
+		{raw: ``},
+		{raw: `618`},
+		{raw: `not-json`},
+	}
+	for _, item := range cases {
+		got := parseClubGoldMap(item.raw)
+		if len(item.want) == 0 && len(item.absent) == 0 && len(got) != 0 {
+			t.Fatalf("expected empty map for %q, got %v", item.raw, got)
+		}
+		for clubID, value := range item.want {
+			if got[clubID] != value {
+				t.Fatalf("club %s: want %d, got %v (raw %q)", clubID, value, got[clubID], item.raw)
+			}
+		}
+		for _, clubID := range item.absent {
+			if _, ok := got[clubID]; ok {
+				t.Fatalf("sentinel value must be dropped for %q, got %v", item.raw, got)
+			}
+		}
+	}
+}

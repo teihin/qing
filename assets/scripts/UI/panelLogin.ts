@@ -69,6 +69,8 @@ export default class panelLogin extends UIPanelViewBase {
     private _resetColoredPlaceholders:{[key:string]:cc.Color} = {};
     private _resetSubmitting:boolean = false;
     private _resetRequest:XMLHttpRequest = null;
+    // 踢线原因判定中的等待回调，面板销毁时必须摘掉，避免回调打到已销毁的界面。
+    private _forcedLogoutListener:(message:string)=>void = null;
     onLoad(){
         super.onLoad();
 
@@ -110,13 +112,24 @@ export default class panelLogin extends UIPanelViewBase {
 
         this.initResetUI();
 
-        let forcedLogoutMessage = GameDataManager.getInstance().consumeForcedLogoutMessage();
+        let dataManager = GameDataManager.getInstance();
+        let forcedLogoutMessage = dataManager.consumeForcedLogoutMessage();
         if(forcedLogoutMessage != "")
         {
             // 等登录面板完成挂载后再显示，避免被更新页到登录页的切换覆盖。
             this.scheduleOnce(()=>{
                 UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,forcedLogoutMessage);
             },0);
+        }
+        else if(dataManager.IsForcedLogoutReasonPending())
+        {
+            // 踢线原因还在判定（探测登录服是否在线），结果稍后推过来再弹：
+            // 顶号显示“该账号已被其他设备登录”，服务器重启仍用中性失效提示。
+            this._forcedLogoutListener = (message:string)=>{
+                this._forcedLogoutListener = null;
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+            };
+            dataManager.AddForcedLogoutListener(this._forcedLogoutListener);
         }
 
 
@@ -307,6 +320,16 @@ export default class panelLogin extends UIPanelViewBase {
             this._resetInputs[key] = editBox;
             this._resetInputEditing[key] = false;
             this.bindResetPlaceholder(key,editBox);
+            // 占位提示由 EditBox 自身按内容隐藏，这里再兜一层，避免编辑中或已有内容时提示文字残留。
+            editBox.node.on("text-changed",()=>this.refreshResetPlaceholder(key),this);
+            editBox.node.on("editing-did-began",()=>{
+                this._resetInputEditing[key] = true;
+                this.refreshResetPlaceholder(key);
+            },this);
+            editBox.node.on("editing-did-ended",()=>{
+                this._resetInputEditing[key] = false;
+                this.refreshResetPlaceholder(key);
+            },this);
         }
         this._resetPanel.active = false;
     }
@@ -317,11 +340,25 @@ export default class panelLogin extends UIPanelViewBase {
         let label = editBox.placeholderLabel;
         if(label == null)
             return;
-        let color = label.node.color.clone();
-        this._resetColoredPlaceholders[key] = color;
+        if(this._resetColoredPlaceholders[key] == null)
+            this._resetColoredPlaceholders[key] = label.node.color.clone();
         editBox.placeholder = label.string;
         editBox.placeholderFontSize = label.fontSize;
-        label.node.color = color;
+        this.refreshResetPlaceholder(key);
+    }
+
+    // 输入框已经有内容或在编辑中时一律不显示占位提示，只有空着且未编辑时才显示。
+    private refreshResetPlaceholder(key:string)
+    {
+        let editBox = this._resetInputs[key];
+        if(editBox == null || editBox.placeholderLabel == null)
+            return;
+        let label = editBox.placeholderLabel;
+        let color = this._resetColoredPlaceholders[key];
+        if(color != null)
+            label.node.color = color;
+        label.enabled = true;
+        label.node.active = !this._resetInputEditing[key] && editBox.string.length == 0;
     }
 
     private openResetPanel()
@@ -329,6 +366,7 @@ export default class panelLogin extends UIPanelViewBase {
         this._resetSubmitting = false;
         for(let key in this._resetInputs)
         {
+            this._resetInputEditing[key] = false;
             this._resetInputs[key].string = "";
             this.bindResetPlaceholder(key,this._resetInputs[key]);
         }
@@ -678,6 +716,20 @@ export default class panelLogin extends UIPanelViewBase {
     }
 
 
+
+    onDestroy()
+    {
+        if(this._forcedLogoutListener != null)
+        {
+            // 用静态 instance 而不是 getInstance()：场景销毁期间可能已被置空，
+            // 走 getInstance() 会重新创建一个常驻管理器。
+            if(GameDataManager.instance != null)
+                GameDataManager.instance.RemoveForcedLogoutListener(this._forcedLogoutListener);
+            this._forcedLogoutListener = null;
+        }
+        // 基类负责注销 KBEngine 事件和定时器，覆盖生命周期时必须调用。
+        super.onDestroy();
+    }
 
     //登陆成功！
     onLoginSuccessfully()

@@ -8,7 +8,7 @@ export type ClubListKind = "members" | "applications" | "union" | "allies";
 export type ClubAction = "leave" | "dissolve" | "approve" | "reject" | "remove" | "promote" |
     "adjustScore" | "setAgent" | "changeAgentRatio" | "cancelAgent" | "setNote" | "setAgentDark" |
     "grantQuota" | "increaseQuota" | "decreaseQuota" | "unionApprove" | "unionReject" | "setUnionPercent";
-export interface ClubContext {
+export export interface ClubContext {
     accountId:string; id:string; name:string; role:ClubRole; ownerId?:string; inviteCode?:string; isLeader?:boolean;
     /** 是否代理（合伙人）。role 会被「管理员」优先占用，这里保留原始代理标记，用于分红入口等按代理判断的地方。 */
     isAgent?:boolean;
@@ -25,7 +25,7 @@ export interface ClubContext {
     /** 只有联盟总群主能看入盟申请；is_owner 来自 查询_联盟_额度。 */
     unionIsOwner?:boolean;
 }
-export interface ClubPlayer {
+export export interface ClubPlayer {
     id:string; name:string; role?:string; balance?:string;
     /** 该成员所属俱乐部；V2 大盟主成员列表里的盟主虚拟行会带自己俱乐部的 ID。 */
     clubId?:string;
@@ -163,6 +163,16 @@ export default class ClubManagementView {
             const node = this.at(layer.name);
             if(node && node.zIndex !== layer.z) node.zIndex = layer.z;
         }
+    }
+
+    /**
+     * 独立面板复用入口：拿外部给的玩家数据 + 俱乐部上下文直接开「玩家信息」弹窗，
+     * 不依赖成员列表。平台 boss 在牌桌查看代理资料走这条。
+     */
+    public OpenPlayerCard(item:ClubPlayer, context:ClubContext):void {
+        if(!item || !context) return;
+        this.context = context;
+        this.openPlayerSettings(item, 0);
     }
 
     public SetApi(api:ClubManagementApi):void {

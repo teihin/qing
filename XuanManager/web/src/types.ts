@@ -927,6 +927,8 @@ export interface ClubListItem {
   ownerQuotaFen: number | null;
   /** 群主钻石池：俱乐部创建者账号 sm_stone（钻）；找不到群主时为 null。 */
   stonePool: number | null;
+  /** 俱乐部总积分（元）：全体成员在该俱乐部积分之和；后端读取失败时为 null。 */
+  totalClubGold: number | null;
 }
 
 export interface ClubListResponse {
