@@ -2,7 +2,6 @@ import UIPanelViewBase from "../common/UIPanelViewBase";
 import UIManager from "../common/UIManager";
 import GameDataManager from "../GameDataManager";
 import Tool from "../common/Tool";
-import RoomInviteManager from "../logic/RoomInviteManager";
 import { ClosePanelMode } from "../common/GameDef";
 
 const {ccclass, property} = cc._decorator;
@@ -103,11 +102,8 @@ export default class panelMsgView extends UIPanelViewBase {
         }
         else if(button.node.name === "切换账号")
         {
-            RoomInviteManager.getInstance().clearCurrentAccountSession();
-            cc.sys.localStorage.setItem("unionid","");
-            cc.sys.localStorage.setItem("pass","");
-            GameDataManager.getInstance().bLoginSuccess = false;
-            cc.game.restart();
+            // 登录状态异常弹窗的“切换账号”与设置页入口共用同一实现：只清密码，保留账号。
+            GameDataManager.getInstance().logoutToLogin();
         }
     }
 }

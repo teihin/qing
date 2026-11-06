@@ -341,6 +341,9 @@ export default class panelMain extends UIPanelViewBase {
                 (union && union.isOwner !== true && union.quotaFen !== undefined ? union.quotaFen : undefined);
             return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),
                 id,name:info && info.club_name || "俱乐部 " + id,inviteCode,role,isLeader,
+                // role 会先判 owner/manager，代理兼管理员时就看不到「是不是代理」了；
+                // 单独的 isAgent 只按服务端 is_agent 判，用于「我的红利」这类只跟代理关系有关的入口。
+                isAgent:!owns && this.IsClubAgent(agent),
                 unionKnown:!!info || (!!union && union.known),hasUnion:unionId !== "",
                 unionId:unionId || undefined,unionName:unionName || undefined,
                 unionApplyId:infoApplyId || undefined,
@@ -1449,11 +1452,8 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "切换账号")
         {
-            RoomInviteManager.getInstance().clearCurrentAccountSession();
-            cc.sys.localStorage.setItem("unionid","");
-            cc.sys.localStorage.setItem("pass","");
-            GameDataManager.getInstance().bLoginSuccess = false;
-            cc.game.restart();
+            // 退出登录/切换账号统一走 GameDataManager：只清密码，保留账号。
+            GameDataManager.getInstance().logoutToLogin();
             //Tool.RestartGame();
         }
         else if(button.node.name === "修改密码")

@@ -73,6 +73,10 @@ export default class GameDataManager extends cc.Component {
     //返回account对象
     static getAccount():any
     {
+        // 切换账号/热更重启前会调用 KBEngine.destroy()，那段窗口里 app 是 undefined，
+        // 场景销毁期间的遗留回调可能走到这里；返回 null 让调用方的判空生效。
+        if(KBEngine.app == null || typeof KBEngine.app.player !== "function")
+            return null;
         return KBEngine.app.player();
     }
 
@@ -370,6 +374,40 @@ export default class GameDataManager extends cc.Component {
         let message = this._pendingForcedLogoutMessage;
         this._pendingForcedLogoutMessage = "";
         return message;
+    }
+
+    /**
+     * 退出登录 / 切换账号的统一入口。
+     * 本地只清空密码（pass），账号（unionid）等其它信息全部保留，
+     * 登录页仍会回填上次的账号，玩家只需重新输入密码。
+     * 设置页的“切换账号”和登录状态异常弹窗的“切换账号”必须都走这里，
+     * 否则两条入口的行为会分叉。
+     */
+    public logoutToLogin()
+    {
+        // 先按当前账号清房间邀请等会话数据：这一步要用 unionid 解析账号，
+        // 必须排在清密码之前，这样保留账号后也能命中同一份本地记录。
+        RoomInviteManager.getInstance().clearCurrentAccountSession();
+        // 仅清空密码字段；unionid 等账号信息保留。
+        cc.sys.localStorage.setItem("pass","");
+        this.strLastPass = "";
+        this.bLoginSuccess = false;
+        // cc.game.restart() 只重跑场景、不重置模块，KBEngine.app 是模块级单例，
+        // 旧实例不清掉会在新场景 initKBE() 时命中
+        // “Assertion of KBEngine.app not is null”，并且旧实例的 update 定时器和
+        // login/logout 事件处理器会留到新场景，导致登录包和心跳被发两遍。
+        // KBEngine.destroy() 会清定时器、卸事件、关掉旧 socket 后置空，是干净拆卸，
+        // 不会像 app.logout() 那样在消息表已清理时抛异常。
+        try
+        {
+            if(typeof KBEngine.destroy === "function")
+                KBEngine.destroy();
+        }
+        catch(error)
+        {
+            Debug.Error("切换账号时注销 KBEngine 失败:" + error);
+        }
+        cc.game.restart();
     }
 
     private hasServerErrorDefinition(failedcode:number):boolean
