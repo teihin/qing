@@ -17,7 +17,11 @@ import (
 //
 // 客户端和后台调用同一个成员数据接口（查询_俱乐部_成员），由 KBE 按调用者身份
 // 决定返回真实值还是展示值。后台以管理员身份调用，拿到的是真实值；展示规则
-// 只通过后台规则命令下发，不在后台重算折扣。
+// 只通过后台规则命令下发，不在后台重算。
+//
+// 2026-11-07 起展示口径拆成两项：输赢按 score_percent 调少（0~100），
+// 贡献按 contrib_add 调增（单位分），两字段各自向上就近继承；
+// show_percent 只保留给红利/抽水/业绩等其他收益，不再用于输赢与贡献。
 const (
 	agentContributionMembersCommand     = "异步_查询_俱乐部_成员"
 	agentContributionDisplayDataCommand = "异步_查询_代理_展示数据"
@@ -25,56 +29,61 @@ const (
 	agentContributionRuleSetCommand     = "设置_代理_展示规则"
 	// 红利暗抽：同一个命令兼做读取（不带比例）和设置（带比例）。
 	agentContributionBonusDarkCommand = "设置_俱乐部_代理_红利暗抽"
+	// maxContribAddFen 是贡献增加额上限（单位分，即 100 万元）。
+	maxContribAddFen = int64(100000000)
 )
 
+// agentDisplayRule 是一个代理当前的展示口径：输赢按比例调少、贡献按金额调增。
+// 两个字段各自继承，来源可能不同，所以来源也分开给。
 type agentDisplayRule struct {
-	Mode            string `json:"mode"` // none / percent / fixed / unknown
-	Percent         *int64 `json:"percent,omitempty"`
-	Delta           *int64 `json:"delta,omitempty"`
-	Source          string `json:"source"` // none / self / inherit / global / unknown
-	SourceAgentID   string `json:"sourceAgentId,omitempty"`
-	SourceAgentName string `json:"sourceAgentName,omitempty"`
-	Sim             bool   `json:"sim"`
+	ScorePercent  *int64 `json:"scorePercent,omitempty"`
+	ContribAdd    *int64 `json:"contribAdd,omitempty"`
+	ScoreSource   string `json:"scoreSource,omitempty"`   // self / inherit / default
+	ContribSource string `json:"contribSource,omitempty"` // self / inherit / default
+	Sim           bool   `json:"sim"`
 }
 
 type agentContributionNode struct {
-	PlayerID                   string           `json:"playerId"`
-	Name                       string           `json:"name"`
-	Role                       string           `json:"role"` // owner / agent / member
-	ClubID                     string           `json:"clubId"`
-	ClubName                   string           `json:"clubName"`
-	IsAgent                    bool             `json:"isAgent"`
-	IsLeader                   bool             `json:"isLeader"`
-	Level                      int64            `json:"level"`
-	UpperID                    string           `json:"upperId"`
-	UpperName                  string           `json:"upperName"`
-	TeamCount                  string           `json:"teamCount"`
-	TodayScore                 string           `json:"todayScore"`
-	YesterdayScore             string           `json:"yesterdayScore"`
-	TotalScore                 string           `json:"totalScore"`
-	TodayScoreDisplay          string           `json:"todayScoreDisplay"`
-	YesterdayScoreDisplay      string           `json:"yesterdayScoreDisplay"`
-	TotalScoreDisplay          string           `json:"totalScoreDisplay"`
-	TodayContribFen            string           `json:"todayContribFen"`
-	YesterdayContribFen        string           `json:"yesterdayContribFen"`
-	TotalContribFen            string           `json:"totalContribFen"`
-	TodayContribDisplayFen     string           `json:"todayContribDisplayFen"`
-	YesterdayContribDisplayFen string           `json:"yesterdayContribDisplayFen"`
-	TotalContribDisplayFen     string           `json:"totalContribDisplayFen"`
-	ClubGold                   string           `json:"clubGold"`
-	Gold                       string           `json:"gold"`
-	Quota                      string           `json:"quota"`
-	Status                     string           `json:"status"`
-	Note                       string           `json:"note"`
-	DarkPercent                string           `json:"darkPercent"`
+	PlayerID                   string `json:"playerId"`
+	Name                       string `json:"name"`
+	Role                       string `json:"role"` // owner / agent / member
+	ClubID                     string `json:"clubId"`
+	ClubName                   string `json:"clubName"`
+	IsAgent                    bool   `json:"isAgent"`
+	IsLeader                   bool   `json:"isLeader"`
+	Level                      int64  `json:"level"`
+	UpperID                    string `json:"upperId"`
+	UpperName                  string `json:"upperName"`
+	TeamCount                  string `json:"teamCount"`
+	TodayScore                 string `json:"todayScore"`
+	YesterdayScore             string `json:"yesterdayScore"`
+	TotalScore                 string `json:"totalScore"`
+	TodayScoreDisplay          string `json:"todayScoreDisplay"`
+	YesterdayScoreDisplay      string `json:"yesterdayScoreDisplay"`
+	TotalScoreDisplay          string `json:"totalScoreDisplay"`
+	TodayContribFen            string `json:"todayContribFen"`
+	YesterdayContribFen        string `json:"yesterdayContribFen"`
+	TotalContribFen            string `json:"totalContribFen"`
+	TodayContribDisplayFen     string `json:"todayContribDisplayFen"`
+	YesterdayContribDisplayFen string `json:"yesterdayContribDisplayFen"`
+	TotalContribDisplayFen     string `json:"totalContribDisplayFen"`
+	ClubGold                   string `json:"clubGold"`
+	Gold                       string `json:"gold"`
+	Quota                      string `json:"quota"`
+	Status                     string `json:"status"`
+	Note                       string `json:"note"`
+	DarkPercent                string `json:"darkPercent"`
 	// BonusDarkPercent 是红利暗抽比例（int，0~100；-1=代理树未加载）。
-	BonusDarkPercent           string           `json:"bonusDarkPercent"`
-	Percent                    string           `json:"percent"`
-	ShowPercent                *int64           `json:"showPercent"`
-	OwnShowPercent             *int64           `json:"ownShowPercent"`
-	ShowPercentSource          string           `json:"showPercentSource"`
-	ContribRule                agentDisplayRule `json:"contribRule"`
-	ScoreRule                  agentDisplayRule `json:"scoreRule"`
+	BonusDarkPercent string `json:"bonusDarkPercent"`
+	Percent          string `json:"percent"`
+	// ScorePercent 是该行输赢的生效展示比例（0~100，自己优先、上级就近继承）。
+	ScorePercent *int64 `json:"scorePercent"`
+	// ContribAdd 是该行贡献的生效增加额（单位分，自己优先、上级就近继承）。
+	ContribAdd         *int64 `json:"contribAdd"`
+	OwnScorePercent    *int64 `json:"ownScorePercent"`
+	OwnContribAdd      *int64 `json:"ownContribAdd"`
+	ScorePercentSource string `json:"scorePercentSource"` // self / inherit / default / ""
+	ContribAddSource   string `json:"contribAddSource"`   // self / inherit / default / ""
 }
 
 type agentContributionMembersResponse struct {
@@ -89,11 +98,12 @@ type agentContributionMembersResponse struct {
 	Message      string                  `json:"message"`
 }
 
+// 设置规则：两个参数都可单独传，-1 表示清空（回到上级继承）。
+// 输赢只允许 0~100，贡献增加额单位分，允许 0~100000000。
 type agentContributionRuleRequest struct {
-	Metric  string `json:"metric"`
-	Mode    string `json:"mode"`
-	Percent *int64 `json:"percent"`
-	Note    string `json:"note"`
+	ScorePercent *int64 `json:"scorePercent"`
+	ContribAdd   *int64 `json:"contribAdd"`
+	Note         string `json:"note"`
 }
 
 type agentContributionRuleResponse struct {
@@ -106,29 +116,35 @@ type agentContributionRuleResponse struct {
 }
 
 type agentContributionRuleQueryResponse struct {
-	ClubID                 string           `json:"clubId"`
-	AgentID                string           `json:"agentId"`
-	Metric                 string           `json:"metric"`
-	Available              bool             `json:"available"`
-	AgentIncomeShowPercent *int64           `json:"agentIncomeShowPercent,omitempty"`
-	EffectiveShowPercent   *int64           `json:"effectiveShowPercent,omitempty"`
-	Rule                   agentDisplayRule `json:"rule"`
-	Message                string           `json:"message"`
+	ClubID                string           `json:"clubId"`
+	AgentID               string           `json:"agentId"`
+	Metric                string           `json:"metric"`
+	Available             bool             `json:"available"`
+	ScorePercent          *int64           `json:"scorePercent,omitempty"`
+	ContribAdd            *int64           `json:"contribAdd,omitempty"`
+	EffectiveScorePercent *int64           `json:"effectiveScorePercent,omitempty"`
+	EffectiveContribAdd   *int64           `json:"effectiveContribAdd,omitempty"`
+	Rule                  agentDisplayRule `json:"rule"`
+	Message               string           `json:"message"`
 }
 
 type agentContributionDisplayData struct {
-	AgentID                string            `json:"agentId"`
-	ClubID                 string            `json:"clubId"`
-	Metric                 string            `json:"metric"`
-	AgentIncomeShowPercent any               `json:"agentIncomeShowPercent,omitempty"`
-	// BonusDarkPercent 是该代理自己的红利暗抽比例（int，0~100；未设置=0），不参与 show_percent 缩放。
-	BonusDarkPercent       *int64            `json:"bonusDarkPercent,omitempty"`
-	SelfRaw                map[string]string `json:"selfRaw"`
-	SelfDisplay            map[string]string `json:"selfDisplay"`
-	TeamRaw                map[string]string `json:"teamRaw"`
-	TeamDisplay            map[string]string `json:"teamDisplay"`
-	Available              bool              `json:"available"`
-	Message                string            `json:"message"`
+	AgentID string `json:"agentId"`
+	ClubID  string `json:"clubId"`
+	Metric  string `json:"metric"`
+	// ScorePercent / ContribAdd 是该代理自己的设置值；Effective* 是继承后的生效值。
+	ScorePercent          *int64 `json:"scorePercent,omitempty"`
+	ContribAdd            *int64 `json:"contribAdd,omitempty"`
+	EffectiveScorePercent *int64 `json:"effectiveScorePercent,omitempty"`
+	EffectiveContribAdd   *int64 `json:"effectiveContribAdd,omitempty"`
+	// BonusDarkPercent 是该代理自己的红利暗抽比例（int，0~100；未设置=0），不参与展示缩放。
+	BonusDarkPercent *int64            `json:"bonusDarkPercent,omitempty"`
+	SelfRaw          map[string]string `json:"selfRaw"`
+	SelfDisplay      map[string]string `json:"selfDisplay"`
+	TeamRaw          map[string]string `json:"teamRaw"`
+	TeamDisplay      map[string]string `json:"teamDisplay"`
+	Available        bool              `json:"available"`
+	Message          string            `json:"message"`
 }
 
 type agentContributionDisplayTarget struct {
@@ -234,7 +250,7 @@ func (s *Server) handleAgentContributionMembers(w http.ResponseWriter, r *http.R
 		}
 	}
 	s.enrichClubNames(r, response.Items, response.AgentID)
-	s.enrichAgentShowPercents(r, response.Items)
+	s.enrichAgentDisplayRules(r, response.Items)
 	writeData(w, http.StatusOK, response)
 }
 
@@ -333,7 +349,9 @@ func (s *Server) queryAgentContributionDisplayData(r *http.Request, clubID, agen
 	if value, ok := payload["metric"].(string); ok && strings.TrimSpace(value) != "" {
 		data.Metric = strings.TrimSpace(value)
 	}
-	data.AgentIncomeShowPercent = payload["agent_income_show_percent"]
+	score, add, effectiveScore, effectiveAdd := displayRuleValues(payload)
+	data.ScorePercent, data.ContribAdd = score, add
+	data.EffectiveScorePercent, data.EffectiveContribAdd = effectiveScore, effectiveAdd
 	data.BonusDarkPercent = intPointerField(payload, "bonus_dark_percent", "bonusDarkPercent")
 	data.SelfRaw = anyStringMap(payload["self_raw"])
 	data.SelfDisplay = anyStringMap(payload["self_display"])
@@ -341,6 +359,32 @@ func (s *Server) queryAgentContributionDisplayData(r *http.Request, clubID, agen
 	data.TeamDisplay = anyStringMap(payload["team_display"])
 	data.Available = true
 	return data
+}
+
+// displayRuleValues 解析展示口径：自己的 score_percent / contrib_add 与继承后的生效值。
+// 未设置时按 100 / 0 兜底，生效值缺失时退回自有值。
+func displayRuleValues(payload map[string]any) (score, add, effectiveScore, effectiveAdd *int64) {
+	score = intPointerField(payload, "score_percent", "scorePercent")
+	if score == nil {
+		score = int64Pointer(100)
+	}
+	add = intPointerField(payload, "contrib_add", "contribAdd")
+	if add == nil {
+		add = int64Pointer(0)
+	}
+	effectiveScore = intPointerField(payload, "effective_score_percent", "effectiveScorePercent")
+	if effectiveScore == nil {
+		effectiveScore = score
+	}
+	effectiveAdd = intPointerField(payload, "effective_contrib_add", "effectiveContribAdd")
+	if effectiveAdd == nil {
+		effectiveAdd = add
+	}
+	return score, add, effectiveScore, effectiveAdd
+}
+
+func int64Pointer(value int64) *int64 {
+	return &value
 }
 
 func anyStringMap(value any) map[string]string {
@@ -440,9 +484,7 @@ func fallbackContributionNode(member clubMemberNode, clubID, clubName string) ag
 		PlayerID: member.PlayerID, Name: member.Name,
 		ClubID: clubID, ClubName: clubName,
 		Role: clubMemberRole(member), IsAgent: member.IsAgent,
-		UpperID:     member.UpperID,
-		ContribRule: agentDisplayRule{Mode: "none", Source: "none"},
-		ScoreRule:   agentDisplayRule{Mode: "none", Source: "none"},
+		UpperID: member.UpperID,
 	}
 }
 
@@ -496,9 +538,10 @@ func (s *Server) enrichClubNames(r *http.Request, items []agentContributionNode,
 	}
 }
 
-// enrichAgentShowPercents 从 club_agent_info.show_percent 批量补每行代理自己的展示比例。
-// 游戏服成员行目前不带 show_percent；后台直接读同一份存储，避免逐行调游戏命令。
-func (s *Server) enrichAgentShowPercents(r *http.Request, items []agentContributionNode) {
+// enrichAgentDisplayRules 从 club_agent_info 批量补每行代理自己的展示口径
+// （score_percent / contrib_add），用来区分“自己设置”还是“继承上级”。
+// 行级生效值由游戏服成员接口直接返回，这里只补自有值和来源；DB 不可用时静默降级。
+func (s *Server) enrichAgentDisplayRules(r *http.Request, items []agentContributionNode) {
 	if len(items) == 0 || s.db == nil {
 		return
 	}
@@ -526,52 +569,68 @@ func (s *Server) enrichAgentShowPercents(r *http.Request, items []agentContribut
 	}
 	clubPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(clubIDs)), ",")
 	agentPlaceholders := strings.TrimSuffix(strings.Repeat("?,", len(agentIDs)), ",")
-	rows, err := s.db.QueryContext(r.Context(), `SELECT club_guuid, user_guuid, show_percent
+	rows, err := s.db.QueryContext(r.Context(), `SELECT club_guuid, user_guuid, score_percent, contrib_add
 FROM kbedm.club_agent_info
 WHERE status = 'used' AND club_guuid IN (`+clubPlaceholders+`) AND user_guuid IN (`+agentPlaceholders+`)`, clubArgs...)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Warn("query agent show percent for contribution rows", "error", err)
+			s.logger.Warn("query agent display rule for contribution rows", "error", err)
 		}
 		return
 	}
 	defer rows.Close()
-	values := map[string]*int64{}
+	type ownRule struct {
+		scorePercent *int64
+		contribAdd   *int64
+	}
+	values := map[string]ownRule{}
 	for rows.Next() {
 		var clubID, agentID string
-		var percent sql.NullInt64
-		if err := rows.Scan(&clubID, &agentID, &percent); err != nil {
+		var scorePercent, contribAdd sql.NullInt64
+		if err := rows.Scan(&clubID, &agentID, &scorePercent, &contribAdd); err != nil {
 			continue
 		}
-		var value *int64
-		if percent.Valid {
-			number := percent.Int64
-			value = &number
+		var value ownRule
+		if scorePercent.Valid {
+			value.scorePercent = int64Pointer(scorePercent.Int64)
+		}
+		if contribAdd.Valid {
+			value.contribAdd = int64Pointer(contribAdd.Int64)
 		}
 		values[clubID+":"+agentID] = value
 	}
 	for index := range items {
-		if value, ok := values[items[index].ClubID+":"+items[index].PlayerID]; ok {
-			items[index].OwnShowPercent = value
+		item := &items[index]
+		if value, ok := values[item.ClubID+":"+item.PlayerID]; ok {
+			item.OwnScorePercent = value.scorePercent
+			item.OwnContribAdd = value.contribAdd
 		}
-		if items[index].ShowPercent == nil {
-			if value, ok := values[items[index].ClubID+":"+items[index].PlayerID]; ok {
-				items[index].ShowPercent = value
-			}
+		if item.ScorePercent == nil {
+			item.ScorePercent = item.OwnScorePercent
 		}
-		items[index].ShowPercentSource = showPercentSource(items[index].ShowPercent, items[index].OwnShowPercent)
+		if item.ScorePercent == nil {
+			item.ScorePercent = int64Pointer(100)
+		}
+		if item.ContribAdd == nil {
+			item.ContribAdd = item.OwnContribAdd
+		}
+		if item.ContribAdd == nil {
+			item.ContribAdd = int64Pointer(0)
+		}
+		item.ScorePercentSource = displayRuleSource(item.ScorePercent, item.OwnScorePercent, 100)
+		item.ContribAddSource = displayRuleSource(item.ContribAdd, item.OwnContribAdd, 0)
 	}
 }
 
-// showPercentSource 区分这一行是代理自己设置、继承上级还是未设置（默认 100）。
-func showPercentSource(showPercent, ownShowPercent *int64) string {
-	if showPercent == nil {
+// displayRuleSource 区分这一行的生效值是代理自己设置、继承上级还是默认值。
+func displayRuleSource(effective, own *int64, defaultValue int64) string {
+	if effective == nil {
 		return ""
 	}
-	if ownShowPercent != nil {
+	if own != nil {
 		return "self"
 	}
-	if *showPercent == 100 {
+	if *effective == defaultValue {
 		return "default"
 	}
 	return "inherit"
@@ -592,46 +651,65 @@ func (s *Server) handleAgentContributionRuleGet(w http.ResponseWriter, r *http.R
 	if !ok {
 		return
 	}
+	writeData(w, http.StatusOK, s.queryAgentContributionRule(r, clubID, agentID, metric))
+}
+
+// queryAgentContributionRule 读该代理自己的两项设置与继承后的生效值。
+// 命令同步执行、只读代理树内存，所以不用异步前缀；游戏服不可用时返回 available=false。
+func (s *Server) queryAgentContributionRule(r *http.Request, clubID, agentID, metric string) agentContributionRuleQueryResponse {
+	response := agentContributionRuleQueryResponse{ClubID: clubID, AgentID: agentID, Metric: metric}
 	params := map[string]any{
 		"club_id": clubID, "agent_id": agentID, "metric": metric,
 		"context": gameOperationContext("agent-contribution-rule-get"),
 	}
 	result, err := s.callGameCommand(r.Context(), agentContributionRuleGetCommand, params)
 	if err != nil {
-		writeData(w, http.StatusOK, agentContributionRuleQueryResponse{
-			ClubID: clubID, AgentID: agentID, Metric: metric, Available: false,
-			Rule: agentDisplayRule{Mode: "none", Source: "none"}, Message: "游戏服规则查询暂不可用",
-		})
-		return
+		response.Message = "游戏服规则查询暂不可用"
+		return response
 	}
 	if result.RetCode != 512 {
-		writeData(w, http.StatusOK, agentContributionRuleQueryResponse{
-			ClubID: clubID, AgentID: agentID, Metric: metric, Available: false,
-			Rule:    agentDisplayRule{Mode: "none", Source: "none"},
-			Message: describeGameFailure(agentContributionRuleGetCommand, result.RetCode, result.RetResult),
-		})
-		return
+		response.Message = describeGameFailure(agentContributionRuleGetCommand, result.RetCode, result.RetResult)
+		return response
 	}
 	var payload map[string]any
 	_ = json.Unmarshal(result.RetResult, &payload)
-	percent := intPointerField(payload, "agent_income_show_percent", "agentIncomeShowPercent")
-	if percent == nil {
-		hundred := int64(100)
-		percent = &hundred
+	score, add, effectiveScore, effectiveAdd := displayRuleValues(payload)
+	response.Available = true
+	response.ScorePercent = score
+	response.ContribAdd = add
+	response.EffectiveScorePercent = effectiveScore
+	response.EffectiveContribAdd = effectiveAdd
+	response.Rule = buildDisplayRule(score, add, effectiveScore, effectiveAdd)
+	return response
+}
+
+// buildEffectiveRule 用于清空自有设置后的回显：展示值取继承后的生效值，
+// own* 传 nil 表示该字段已清空（来源按默认/继承区分）。
+func buildEffectiveRule(score, add, ownScore, ownAdd *int64) agentDisplayRule {
+	rule := agentDisplayRule{ScorePercent: score, ContribAdd: add}
+	rule.ScoreSource = displayRuleSource(score, ownScore, 100)
+	rule.ContribSource = displayRuleSource(add, ownAdd, 0)
+	rule.Sim = (score != nil && *score != 100) || (add != nil && *add != 0)
+	return rule
+}
+
+// buildDisplayRule 组装展示口径：自有值与生效值不同即视为继承上级。
+func buildDisplayRule(score, add, effectiveScore, effectiveAdd *int64) agentDisplayRule {
+	rule := agentDisplayRule{ScorePercent: score, ContribAdd: add}
+	if score != nil && effectiveScore != nil {
+		rule.ScoreSource = "self"
+		if *score != *effectiveScore {
+			rule.ScoreSource = "inherit"
+		}
 	}
-	effective := intPointerField(payload, "effective_show_percent", "effectiveShowPercent")
-	if effective == nil {
-		effective = percent
+	if add != nil && effectiveAdd != nil {
+		rule.ContribSource = "self"
+		if *add != *effectiveAdd {
+			rule.ContribSource = "inherit"
+		}
 	}
-	source := "self"
-	if *effective != *percent {
-		source = "inherit"
-	}
-	rule := agentDisplayRule{Mode: "percent", Percent: percent, Source: source, Sim: *effective != 100}
-	writeData(w, http.StatusOK, agentContributionRuleQueryResponse{
-		ClubID: clubID, AgentID: agentID, Metric: metric, Available: true,
-		AgentIncomeShowPercent: percent, EffectiveShowPercent: effective, Rule: rule,
-	})
+	rule.Sim = (effectiveScore != nil && *effectiveScore != 100) || (effectiveAdd != nil && *effectiveAdd != 0)
+	return rule
 }
 
 func (s *Server) handleAgentContributionRuleSet(w http.ResponseWriter, r *http.Request, p principal) {
@@ -644,15 +722,17 @@ func (s *Server) handleAgentContributionRuleSet(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "INVALID_BODY", "请求内容格式不正确")
 		return
 	}
-	input.Mode = strings.ToLower(strings.TrimSpace(input.Mode))
 	input.Note = strings.TrimSpace(input.Note)
-	if input.Mode != "" && input.Mode != "percent" {
-		writeError(w, http.StatusBadRequest, "INVALID_MODE", "展示方式仅支持按比例（percent）")
+	if input.ScorePercent == nil && input.ContribAdd == nil {
+		writeError(w, http.StatusBadRequest, "INVALID_RULE", "输赢比例和贡献增加额至少填一项")
 		return
 	}
-	input.Mode = "percent"
-	if input.Percent == nil || *input.Percent < 0 || *input.Percent > 100 {
-		writeError(w, http.StatusBadRequest, "INVALID_PERCENT", "展示比例必须是 0 到 100 的整数")
+	if input.ScorePercent != nil && *input.ScorePercent != -1 && (*input.ScorePercent < 0 || *input.ScorePercent > 100) {
+		writeError(w, http.StatusBadRequest, "INVALID_SCORE_PERCENT", "输赢比例必须是 0 到 100 的整数（-1 表示清空）")
+		return
+	}
+	if input.ContribAdd != nil && *input.ContribAdd != -1 && (*input.ContribAdd < 0 || *input.ContribAdd > maxContribAddFen) {
+		writeError(w, http.StatusBadRequest, "INVALID_CONTRIB_ADD", "贡献增加额必须在 0 到 1000000 元之间（-1 表示清空）")
 		return
 	}
 	if count := utf8.RuneCountInString(input.Note); count < 2 || count > 200 {
@@ -662,11 +742,19 @@ func (s *Server) handleAgentContributionRuleSet(w http.ResponseWriter, r *http.R
 
 	params := map[string]any{
 		"club_id": clubID, "agent_id": agentID, "metric": metric,
-		"mode": input.Mode, "percent": *input.Percent, "note": input.Note,
-		"operator": p.Username,
-		"context":  gameOperationContext("agent-contribution-rule-set"),
+		"note": input.Note, "operator": p.Username,
+		"context": gameOperationContext("agent-contribution-rule-set"),
 	}
-	requestAudit := map[string]any{"clubId": clubID, "metric": metric, "mode": input.Mode, "percent": input.Percent, "note": input.Note}
+	if input.ScorePercent != nil {
+		params["score_percent"] = *input.ScorePercent
+	}
+	if input.ContribAdd != nil {
+		params["contrib_add"] = *input.ContribAdd
+	}
+	requestAudit := map[string]any{
+		"clubId": clubID, "agentId": agentID, "metric": metric,
+		"scorePercent": input.ScorePercent, "contribAdd": input.ContribAdd, "note": input.Note,
+	}
 	result, err := s.callGameCommand(r.Context(), agentContributionRuleSetCommand, params)
 	if err != nil {
 		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
@@ -681,8 +769,26 @@ func (s *Server) handleAgentContributionRuleSet(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", message)
 		return
 	}
-	sim := *input.Percent != 100
-	rule := agentDisplayRule{Mode: "percent", Percent: input.Percent, Source: "self", Sim: sim}
+	rule := agentDisplayRule{ScorePercent: input.ScorePercent, ContribAdd: input.ContribAdd}
+	rule.ScoreSource = "self"
+	rule.ContribSource = "self"
+	rule.Sim = (input.ScorePercent != nil && *input.ScorePercent != 100) ||
+		(input.ContribAdd != nil && *input.ContribAdd != 0)
+	cleared := (input.ScorePercent != nil && *input.ScorePercent == -1) ||
+		(input.ContribAdd != nil && *input.ContribAdd == -1)
+	if cleared {
+		// 清空后生效值可能来自上级，回查一次，别把 -1 当成展示值返回。
+		if fresh := s.queryAgentContributionRule(r, clubID, agentID, metric); fresh.Available {
+			ownScore, ownAdd := input.ScorePercent, input.ContribAdd
+			if ownScore != nil && *ownScore == -1 {
+				ownScore = nil
+			}
+			if ownAdd != nil && *ownAdd == -1 {
+				ownAdd = nil
+			}
+			rule = buildEffectiveRule(fresh.EffectiveScorePercent, fresh.EffectiveContribAdd, ownScore, ownAdd)
+		}
+	}
 	s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
 		requestAudit, nil, map[string]any{"rule": rule}, 0, "设置成功", clientIP(r))
 	writeData(w, http.StatusOK, agentContributionRuleResponse{
@@ -695,14 +801,15 @@ func (s *Server) handleAgentContributionRuleReset(w http.ResponseWriter, r *http
 	if !ok {
 		return
 	}
-	percent := int64(100)
+	// -1 = 清空该代理自己的设置，回到上级继承；不能发 100，否则会变成“显式设置 100%”阻断继承。
+	clearValue := int64(-1)
 	params := map[string]any{
 		"club_id": clubID, "agent_id": agentID,
-		"mode": "percent", "percent": percent, "note": "恢复真实值",
-		"operator": p.Username,
-		"context":  gameOperationContext("agent-contribution-rule-reset"),
+		"score_percent": clearValue, "contrib_add": clearValue,
+		"note": "恢复真实值", "operator": p.Username,
+		"context": gameOperationContext("agent-contribution-rule-reset"),
 	}
-	requestAudit := map[string]any{"clubId": clubID, "metric": metric, "action": "reset", "percent": percent}
+	requestAudit := map[string]any{"clubId": clubID, "agentId": agentID, "metric": metric, "action": "reset"}
 	result, err := s.callGameCommand(r.Context(), agentContributionRuleSetCommand, params)
 	if err != nil {
 		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
@@ -717,12 +824,16 @@ func (s *Server) handleAgentContributionRuleReset(w http.ResponseWriter, r *http
 		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", message)
 		return
 	}
+	// 清空后生效值可能来自上级，回查一次再返回，避免前端误显示 100%。
+	rule := buildEffectiveRule(int64Pointer(100), int64Pointer(0), nil, nil)
+	if fresh := s.queryAgentContributionRule(r, clubID, agentID, metric); fresh.Available {
+		rule = buildEffectiveRule(fresh.EffectiveScorePercent, fresh.EffectiveContribAdd, nil, nil)
+	}
 	s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
-		requestAudit, nil, map[string]any{"mode": "percent", "percent": percent}, 0, "已恢复真实值", clientIP(r))
+		requestAudit, nil, map[string]any{"rule": rule}, 0, "已恢复继承", clientIP(r))
 	writeData(w, http.StatusOK, agentContributionRuleResponse{
 		ClubID: clubID, AgentID: agentID, Metric: metric,
-		Rule:     agentDisplayRule{Mode: "percent", Percent: &percent, Source: "self", Sim: false},
-		Verified: true, Message: "已恢复真实值",
+		Rule: rule, Verified: true, Message: "已恢复继承（清空自有设置）",
 	})
 }
 
@@ -957,142 +1068,9 @@ func mapAgentContributionNode(row map[string]any) agentContributionNode {
 		DarkPercent:                textField(row, "dark_percent", "darkPercent"),
 		BonusDarkPercent:           textField(row, "bonus_dark_percent", "bonusDarkPercent"),
 		Percent:                    textField(row, "percent", "agent_percent", "agentPercent"),
-		ShowPercent:                intPointerField(row, "show_percent", "showPercent", "agent_income_show_percent"),
-		ContribRule:                parseDisplayRuleFromRow(row, "contrib"),
-		ScoreRule:                  parseDisplayRuleFromRow(row, "score"),
-	}
-}
-
-func parseDisplayRuleFromRow(row map[string]any, metric string) agentDisplayRule {
-	for _, key := range []string{metric + "_display_rule", metric + "_rule", "display_rule_" + metric} {
-		if value, ok := row[key]; ok {
-			if rule := parseDisplayRuleValue(value); rule.Mode != "" {
-				return rule
-			}
-		}
-	}
-	if value, ok := row["display_rules"]; ok {
-		if mapping, ok := asObject(value); ok {
-			if nested, ok := mapping[metric]; ok {
-				if rule := parseDisplayRuleValue(nested); rule.Mode != "" {
-					return rule
-				}
-			}
-		}
-	}
-	if value, ok := row["display_rule"]; ok {
-		if rule := parseDisplayRuleValue(value); rule.Mode != "" {
-			return rule
-		}
-	}
-	rule := agentDisplayRule{Mode: "none", Source: "none"}
-	prefixes := []string{metric + "_display_", metric + "_", "display_"}
-	for _, prefix := range prefixes {
-		mode := textField(row, prefix+"mode", prefix+"rule_mode")
-		if mode == "" {
-			continue
-		}
-		rule.Mode = normalizeRuleMode(mode)
-		rule.Percent = intPointerField(row, prefix+"percent")
-		rule.Delta = intPointerField(row, prefix+"delta", prefix+"fixed_delta")
-		rule.Source = textField(row, prefix+"source", prefix+"rule_source")
-		rule.SourceAgentID = textField(row, prefix+"source_agent_id", prefix+"sourceAgentId")
-		rule.SourceAgentName = textField(row, prefix+"source_agent_name", prefix+"sourceAgentName")
-		rule.Sim = boolField(row, prefix+"sim", prefix+"adjusted", prefix+"display_sim")
-		if rule.Source == "" {
-			rule.Source = "unknown"
-		}
-		if rule.Mode == "percent" && rule.Percent != nil && *rule.Percent == 100 {
-			rule.Sim = false
-		}
-		if rule.Mode == "fixed" && rule.Delta != nil && *rule.Delta == 0 {
-			rule.Sim = false
-		}
-		if rule.Mode == "percent" || rule.Mode == "fixed" {
-			rule.Sim = rule.Sim || (rule.Mode == "percent" && rule.Percent != nil && *rule.Percent != 100) ||
-				(rule.Mode == "fixed" && rule.Delta != nil && *rule.Delta != 0)
-		}
-		return rule
-	}
-	return rule
-}
-
-func asObject(value any) (map[string]any, bool) {
-	if mapping, ok := value.(map[string]any); ok {
-		return mapping, true
-	}
-	if text, ok := value.(string); ok && strings.TrimSpace(text) != "" {
-		var mapping map[string]any
-		if json.Unmarshal([]byte(text), &mapping) == nil {
-			return mapping, true
-		}
-	}
-	return nil, false
-}
-
-func parseDisplayRuleValue(value any) agentDisplayRule {
-	mapping, ok := asObject(value)
-	if !ok {
-		return agentDisplayRule{}
-	}
-	rule := agentDisplayRule{
-		Mode:            normalizeRuleMode(textField(mapping, "mode")),
-		Percent:         intPointerField(mapping, "percent"),
-		Delta:           intPointerField(mapping, "delta", "fixed_delta"),
-		Source:          textField(mapping, "source"),
-		SourceAgentID:   textField(mapping, "source_agent_id", "sourceAgentId"),
-		SourceAgentName: textField(mapping, "source_agent_name", "sourceAgentName"),
-		Sim:             boolField(mapping, "sim", "adjusted"),
-	}
-	if rule.Source == "" {
-		rule.Source = "unknown"
-	}
-	rule.Sim = rule.Sim || (rule.Mode == "percent" && rule.Percent != nil && *rule.Percent != 100) ||
-		(rule.Mode == "fixed" && rule.Delta != nil && *rule.Delta != 0)
-	return rule
-}
-
-func parseRulePayload(raw json.RawMessage, metric string) agentDisplayRule {
-	if len(raw) == 0 {
-		return agentDisplayRule{Mode: "none", Source: "none"}
-	}
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return agentDisplayRule{Mode: "none", Source: "none"}
-	}
-	if mapping, ok := value.(map[string]any); ok {
-		if nested, ok := mapping["rule"]; ok {
-			if rule := parseDisplayRuleValue(nested); rule.Mode != "" {
-				return rule
-			}
-		}
-		if nested, ok := mapping[metric]; ok {
-			if rule := parseDisplayRuleValue(nested); rule.Mode != "" {
-				return rule
-			}
-		}
-		if rows := findGameRows(mapping, 0); len(rows) > 0 {
-			if row, ok := rows[0].(map[string]any); ok {
-				return parseDisplayRuleFromRow(row, metric)
-			}
-		}
-		if rule := parseDisplayRuleValue(mapping); rule.Mode != "" {
-			return rule
-		}
-	}
-	return agentDisplayRule{Mode: "none", Source: "none"}
-}
-
-func normalizeRuleMode(raw string) string {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "none", "inherit", "default", "real":
-		return "none"
-	case "percent", "ratio", "percentage":
-		return "percent"
-	case "fixed", "amount", "delta":
-		return "fixed"
-	default:
-		return "unknown"
+		// 行级生效值由游戏服成员接口给出（按字段就近继承）；自有值与来源由 enrichAgentDisplayRules 补。
+		ScorePercent: intPointerField(row, "score_percent", "scorePercent"),
+		ContribAdd:   intPointerField(row, "contrib_add", "contribAdd"),
 	}
 }
 

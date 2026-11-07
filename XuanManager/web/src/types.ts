@@ -973,14 +973,13 @@ export interface ClubDetailResponse {
   warnings: string[];
 }
 
-/** 代理贡献管理：某一指标的展示规则。 */
+/** 代理贡献管理：展示口径（输赢按比例调少、贡献按金额调增，各自继承）。 */
 export interface AgentDisplayRule {
-  mode: "none" | "percent" | "fixed" | "unknown" | string;
-  percent?: number | null;
-  delta?: number | null;
-  source?: string;
-  sourceAgentId?: string;
-  sourceAgentName?: string;
+  scorePercent?: number | null;
+  contribAdd?: number | null;
+  /** self=自己设置；inherit=继承上级；default=默认值 */
+  scoreSource?: string;
+  contribSource?: string;
   sim?: boolean;
 }
 
@@ -1019,14 +1018,17 @@ export interface AgentContributionNode {
   /** 红利暗抽比例（0~100；-1=代理树未加载，游戏服未返回时为空）。 */
   bonusDarkPercent?: string;
   percent: string;
-  /** 该代理自己的展示比例；null 表示未设置（按 100 处理）。 */
-  showPercent: number | null;
-  /** 该代理自己设置的比例；null 表示没有单独设置。 */
-  ownShowPercent?: number | null;
-  /** self=自己设置；inherit=继承上级；default=未设置；空=游戏服未返回。 */
-  showPercentSource?: "self" | "inherit" | "default" | "";
-  contribRule: AgentDisplayRule;
-  scoreRule: AgentDisplayRule;
+  /** 该行输赢的生效展示比例（0~100，自己优先、上级就近继承）。 */
+  scorePercent: number | null;
+  /** 该行贡献的生效增加额（单位分，自己优先、上级就近继承）。 */
+  contribAdd: number | null;
+  /** 该代理自己设置的输赢比例；null 表示没有单独设置。 */
+  ownScorePercent?: number | null;
+  /** 该代理自己设置的贡献增加额（分）；null 表示没有单独设置。 */
+  ownContribAdd?: number | null;
+  /** self=自己设置；inherit=继承上级；default=默认值；空=游戏服未返回。 */
+  scorePercentSource?: "self" | "inherit" | "default" | "";
+  contribAddSource?: "self" | "inherit" | "default" | "";
 }
 
 /** 查询_代理_展示数据：self/team 的原始值与展示值。 */
@@ -1034,8 +1036,13 @@ export interface AgentContributionDisplayData {
   agentId: string;
   clubId: string;
   metric: string;
-  agentIncomeShowPercent?: number | string;
-  /** 该代理自己的红利暗抽比例（0~100；未设置=0），不参与 show_percent 缩放。 */
+  /** 该代理自己的设置值（未设置分别是 100 / 0）。 */
+  scorePercent?: number | null;
+  contribAdd?: number | null;
+  /** 继承后的生效值；展示值已按该口径算好。 */
+  effectiveScorePercent?: number | null;
+  effectiveContribAdd?: number | null;
+  /** 该代理自己的红利暗抽比例（0~100；未设置=0），不参与展示缩放。 */
   bonusDarkPercent?: number | null;
   selfRaw: Record<string, string>;
   selfDisplay: Record<string, string>;
@@ -1086,8 +1093,12 @@ export interface AgentContributionRuleQueryResponse {
   agentId: string;
   metric: "contrib" | "score";
   available: boolean;
-  agentIncomeShowPercent?: number | null;
-  effectiveShowPercent?: number | null;
+  /** 该代理自己的输赢比例 / 贡献增加额（分）。 */
+  scorePercent?: number | null;
+  contribAdd?: number | null;
+  /** 继承后的生效值。 */
+  effectiveScorePercent?: number | null;
+  effectiveContribAdd?: number | null;
   rule: AgentDisplayRule;
   message: string;
 }

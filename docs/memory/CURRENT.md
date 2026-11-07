@@ -4,6 +4,10 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-07 后台代理贡献展示规则拆两项（已改代码、未部署）
+
+- 输赢改 `score_percent`（0~100，只调少）、贡献改 `contrib_add`（分，只调增），两项各自继承；`show_percent` 只留红利/抽水/业绩；清空用 `-1`，发 `100` 会阻断继承。后台 Go/Web 已同步（弹窗两个输入、列表输赢 % + 贡献 +¥），go test/tsc/vite build 通过；未部署、未联调。接口文档已更新。
+
 ## 2026-11-07 后台代理贡献管理：暗抽比例列 + 调整入口（已部署）
 
 - 游戏服 `异步_查询_代理_展示数据` 新增顶层 `bonus_dark_percent`（该代理自己的红利暗抽，0~100，不参与 `show_percent` 缩放），成员行也带同名行级值；后台透传为 `bonusDarkPercent`。
@@ -77,12 +81,10 @@
 - `panelMessage`/`panelMessageChat` Prefab 各加默认隐藏的「游戏内遮罩」，列表页另加默认隐藏「返回」；大厅分页与后台进入会话的外观不变。详见[交接](handoffs/2026-11-05-ingame-message-overlay.md)。
 - Prefab JSON/引用检查与定向 tsc 通过；Creator 导入、网页/真机实际点击与真实会话待验证。
 
-## 2026-11-05 代理贡献管理（后台已部署，客户端未构建）
+## 2026-11-05 代理贡献管理（后台已部署）
 
-- 后台新增「代理贡献管理」：联盟→俱乐部→代理/玩家逐层展开；读取 KBE 同步 `NumberList` 的真实值、`*_contrib_display_fen` 和 `*_score_display`，并用 `异步_查询_代理_展示数据` 取 self/team 展示值，表格真实/展示分开。
-- 客户端按 KBE 标记给总贡献/总输赢加 `*`，统计栏显示「含模拟*」；不做换算。
-- 已部署正式 8891（2026-11-06 01:11）：`b8dad60e…`、`index-vIOviZTr.js`；规则按代理一份 `show_percent` 0~100，自设优先、未设置沿直属上级继承（`查询_代理_展示规则` 同时返回自身值与 `effective_show_percent`）；成员行新增 `ownShowPercent`/`showPercentSource`，规则列自设黄色「（设置）」、继承灰色；贡献与输赢按生效比例缩放；弹窗回读自身/生效值；迁移 045 已执行；回滚 `backups/xuanmanager.20261106-0107-rollback`、`web.previous-rule-style-20261106-0111`。
-- 最新方案不支持固定差额、整线一键覆盖/取消继承；客户端模拟标记仍缺字段；登录态点击、Creator/真机待验。详见[交接](handoffs/2026-11-05-agent-contributions.md)。
+- 后台「代理贡献管理」联盟→俱乐部→代理/玩家逐层展开，真实值与展示值分列，展示值走 `异步_查询_代理_展示数据`；部署与回滚记录见[交接](handoffs/2026-11-05-agent-contributions.md)。
+- 当时的 `show_percent` 单口径已被 2026-11-07 拆两项取代；客户端 `*` 模拟标记仍缺字段，Creator/真机待验。
 
 ## 2026-11-05 搓牌 / 玩家设置代理暗扣比例（未构建、未真机，已归档）
 

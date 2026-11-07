@@ -434,6 +434,10 @@ func clientIP(r *http.Request) string {
 }
 
 func (s *Server) audit(ctx context.Context, p *principal, action, targetType, targetID string, request, before, after any, resultCode int, resultMessage, ip string) {
+	if s.db == nil {
+		// 后台库不可用时审计写不进去，但不能让业务请求因为审计失败而崩。
+		return
+	}
 	var operatorID any
 	operatorName := ""
 	if p != nil {

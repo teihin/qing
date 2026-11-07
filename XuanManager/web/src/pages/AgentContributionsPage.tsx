@@ -54,11 +54,28 @@ function roleText(node: Pick<AgentContributionNode, "role" | "isAgent" | "isLead
   return node.level > 0 ? `代理 Lv.${node.level}` : "玩家";
 }
 
-function showPercentSourceTitle(node: Pick<AgentContributionNode, "showPercentSource">): string {
-  if (node.showPercentSource === "self") return "该代理自己设置的比例";
-  if (node.showPercentSource === "inherit") return "自己没有设置，按直属上级继承";
-  if (node.showPercentSource === "default") return "自己及上级都没有设置，默认 100%";
+function ruleSourceTitle(source: string | undefined, kind: "score" | "contrib"): string {
+  if (source === "self") return kind === "score" ? "该代理自己设置的输赢比例" : "该代理自己设置的贡献增加额";
+  if (source === "inherit") return "自己没有设置，按直属上级继承";
+  if (source === "default") {
+    return kind === "score" ? "自己及上级都没有设置，默认 100%" : "自己及上级都没有设置，默认不增加";
+  }
   return "游戏服未返回设置来源";
+}
+
+/** 贡献增加额单位是分，按元展示，正数带 + 号。 */
+function formatContribAdd(raw: number | null | undefined): string {
+  if (raw === undefined || raw === null || !Number.isFinite(Number(raw))) return "—";
+  const value = Number(raw);
+  return `${value > 0 ? "+" : ""}${fenFormatter.format(value / 100)} 元`;
+}
+
+/** 分转成输入框用的元字符串，去掉多余的 0。 */
+function formatYuanInput(fen: number | null | undefined): string {
+  const value = Number(fen ?? 0);
+  if (!Number.isFinite(value)) return "0";
+  const text = (value / 100).toFixed(2);
+  return text.includes(".") ? text.replace(/0+$/, "").replace(/\.$/, "") : text;
 }
 
 function formatClubGold(raw: string | undefined | null): string {
@@ -462,8 +479,15 @@ export default function AgentContributionsPage({
     void loadChildren(node);
   };
 
-  const updateNodeShowPercent = (playerId: string, percent: number) => {
-    const patch = { showPercent: percent, ownShowPercent: percent, showPercentSource: "self" as const };
+  const updateNodeRule = (playerId: string, scorePercent: number, contribAdd: number) => {
+    const patch = {
+      scorePercent,
+      contribAdd,
+      ownScorePercent: scorePercent,
+      ownContribAdd: contribAdd,
+      scorePercentSource: "self" as const,
+      contribAddSource: "self" as const,
+    };
     setRoots((current) => current.map((node) => node.playerId === playerId ? { ...node, ...patch } : node));
     setChildren((current) => Object.fromEntries(
       Object.entries(current).map(([key, nodes]) => [
@@ -535,7 +559,8 @@ export default function AgentContributionsPage({
     const rows: ReactNode[] = [];
     for (const node of nodes) {
       const upperText = node.upperName || node.upperId || (depth > 0 ? parentName : "—");
-      const showPercent = node.showPercent ?? 100;
+      const scorePercent = node.scorePercent ?? 100;
+      const contribAdd = node.contribAdd ?? 0;
       const isExpanded = Boolean(expanded[node.playerId]);
       const childList = children[node.playerId];
       const canExpand = node.isAgent || node.isLeader || node.role === "owner" || node.role === "agent";
@@ -615,11 +640,11 @@ export default function AgentContributionsPage({
           </td>
           <td>
             <div className="contribution-rules">
-              <span className={`contribution-rule-chip ${node.showPercentSource === "self" ? "is-self" : "is-inherited"}`} title={showPercentSourceTitle(node)}>
-                贡献 {showPercent}%{node.showPercentSource === "self" ? "（设置）" : ""}
+              <span className={`contribution-rule-chip ${node.scorePercentSource === "self" ? "is-self" : "is-inherited"}`} title={ruleSourceTitle(node.scorePercentSource, "score")}>
+                输赢 {scorePercent}%{node.scorePercentSource === "self" ? "（设置）" : ""}
               </span>
-              <span className={`contribution-rule-chip ${node.showPercentSource === "self" ? "is-self" : "is-inherited"}`} title={showPercentSourceTitle(node)}>
-                输赢 {showPercent}%{node.showPercentSource === "self" ? "（设置）" : ""}
+              <span className={`contribution-rule-chip ${node.contribAddSource === "self" ? "is-self" : "is-inherited"}`} title={ruleSourceTitle(node.contribAddSource, "contrib")}>
+                贡献 {formatContribAdd(contribAdd)}{node.contribAddSource === "self" ? "（设置）" : ""}
               </span>
             </div>
           </td>
@@ -674,7 +699,7 @@ export default function AgentContributionsPage({
       <PageHeader
         eyebrow="AGENT CONTRIBUTION"
         title="代理贡献管理"
-        description="按联盟、俱乐部逐层查看代理与玩家数据；展示规则按代理一份设置 0~100%，成员列表的贡献和输赢都按比例展示。"
+        description="按联盟、俱乐部逐层查看代理与玩家数据；展示规则按代理拆成输赢比例（只调少）和贡献增加额（只调多），成员列表的输赢与贡献分别按各自口径展示。"
         actions={<span className="readonly-badge"><i />后台读取真实值</span>}
       />
 
@@ -825,7 +850,7 @@ export default function AgentContributionsPage({
           ) : (
             <>
               <div className="contribution-note">
-                后台显示真实值；贡献和输赢的“展示”值来自游戏服（`*_contrib_display_fen` / `*_score_display` / `team_display`）。展示规则按代理一份 0~100%：自己设置优先，未设置时继承直属上级，影响成员列表的贡献和输赢；成员列表以外的玩家输赢不缩放。「暗抽比例」是该代理的红利暗抽（`bonus_dark_percent`，0~100%，不参与展示缩放），可用「暗抽比例调整」逐个设置。默认只查当前节点，展开时才查询下一级。
+                后台显示真实值；贡献和输赢的“展示”值来自游戏服（`*_contrib_display_fen` / `*_score_display` / `team_display`）。展示规则拆两项：输赢按比例调少（`score_percent`，0~100%），贡献按金额调增加（`contrib_add`，单位分），两项各自继承——自己设置优先，未设置时沿直属上级就近继承，默认 100% / 0；只影响成员列表，成员列表以外的玩家输赢不缩放。「暗抽比例」是该代理的红利暗抽（`bonus_dark_percent`，0~100%，不参与展示缩放），可用「暗抽比例调整」逐个设置。默认只查当前节点，展开时才查询下一级。
               </div>
               <div className={`table-wrap contribution-table-wrap ${treeLoading ? "is-loading" : ""}`}>
                 <table className="club-table contribution-table">
@@ -870,7 +895,7 @@ export default function AgentContributionsPage({
           canAdjust={canAdjust}
           notify={notify}
           onClose={() => setSelected(null)}
-          onSaved={(percent) => updateNodeShowPercent(selected.playerId, percent)}
+          onSaved={(scorePercent, contribAdd) => updateNodeRule(selected.playerId, scorePercent, contribAdd)}
         />
       )}
 
@@ -904,10 +929,12 @@ function AgentContributionRuleModal({
   canAdjust: boolean;
   notify: (message: string, kind?: "success" | "error") => void;
   onClose: () => void;
-  onSaved: (percent: number) => void;
+  onSaved: (scorePercent: number, contribAdd: number) => void;
 }) {
-  const [percent, setPercent] = useState(String(node.showPercent ?? 100));
-  const [effective, setEffective] = useState<number>(node.showPercent ?? 100);
+  const [scorePercent, setScorePercent] = useState(String(node.ownScorePercent ?? node.scorePercent ?? 100));
+  const [contribAddYuan, setContribAddYuan] = useState(formatYuanInput(node.ownContribAdd ?? node.contribAdd ?? 0));
+  const [effectiveScore, setEffectiveScore] = useState<number>(node.scorePercent ?? 100);
+  const [effectiveAdd, setEffectiveAdd] = useState<number>(node.contribAdd ?? 0);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -919,36 +946,46 @@ function AgentContributionRuleModal({
     api<AgentContributionRuleQueryResponse>(`${ruleBase}?metric=contrib`)
       .then((result) => {
         if (!active || !result.available) return;
-        if (result.agentIncomeShowPercent !== undefined && result.agentIncomeShowPercent !== null) {
-          setPercent(String(result.agentIncomeShowPercent));
+        if (result.scorePercent !== undefined && result.scorePercent !== null) {
+          setScorePercent(String(result.scorePercent));
         }
-        if (result.effectiveShowPercent !== undefined && result.effectiveShowPercent !== null) {
-          setEffective(result.effectiveShowPercent);
+        if (result.contribAdd !== undefined && result.contribAdd !== null) {
+          setContribAddYuan(formatYuanInput(result.contribAdd));
+        }
+        if (result.effectiveScorePercent !== undefined && result.effectiveScorePercent !== null) {
+          setEffectiveScore(result.effectiveScorePercent);
+        }
+        if (result.effectiveContribAdd !== undefined && result.effectiveContribAdd !== null) {
+          setEffectiveAdd(result.effectiveContribAdd);
         }
       })
       .catch(() => {
-        // 查询失败时保留成员列表里的生效比例
+        // 查询失败时保留成员列表里的生效值
       });
     return () => { active = false; };
   }, [ruleBase]);
 
   const rawContrib = display?.teamRaw?.total_contrib_fen ?? node.totalContribFen;
-  const currentPercent = Number(percent);
-  const previewContrib = isMissing(rawContrib) || !Number.isFinite(currentPercent)
-    ? "—"
-    : formatFen(String(Math.floor(numberValue(rawContrib) * Math.max(0, Math.min(100, currentPercent)) / 100)));
   const rawScore = display?.teamRaw?.total_score ?? node.totalScore;
-  const previewScore = isMissing(rawScore) || !Number.isFinite(currentPercent)
+  const currentScorePercent = Number(scorePercent);
+  const currentAddFen = Math.round((Number(contribAddYuan) || 0) * 100);
+  const previewContrib = isMissing(rawContrib) || !Number.isFinite(currentAddFen)
+    ? "—"
+    : formatFen(String(numberValue(rawContrib) + currentAddFen));
+  const previewScore = isMissing(rawScore) || !Number.isFinite(currentScorePercent)
     ? "—"
     : (() => {
         const raw = numberValue(rawScore);
         const sign = raw < 0 ? -1 : 1;
-        return formatScore(String(sign * Math.floor(Math.abs(raw) * Math.max(0, Math.min(100, currentPercent)) / 100)));
+        return formatScore(String(sign * Math.floor(Math.abs(raw) * Math.max(0, Math.min(100, currentScorePercent)) / 100)));
       })();
 
   const validate = (): string => {
-    const value = Number(percent);
-    if (!Number.isInteger(value) || value < 0 || value > 100) return "展示比例必须是 0 到 100 的整数";
+    const scoreValue = Number(scorePercent);
+    if (!Number.isInteger(scoreValue) || scoreValue < 0 || scoreValue > 100) return "输赢比例必须是 0 到 100 的整数";
+    const addValue = Number(contribAddYuan);
+    if (!Number.isFinite(addValue) || addValue < 0 || addValue > 1000000) return "贡献增加额必须在 0 到 1000000 元之间";
+    if (Math.abs(addValue * 100 - Math.round(addValue * 100)) > 1e-6) return "贡献增加额最多两位小数";
     if (note.trim().length < 2) return "请填写至少 2 个字的调整原因";
     return "";
   };
@@ -960,17 +997,21 @@ function AgentContributionRuleModal({
       setError(message);
       return;
     }
-    const value = Math.trunc(Number(percent));
+    const scoreValue = Math.trunc(Number(scorePercent));
+    const addFen = Math.round(Number(contribAddYuan) * 100);
     setBusy(true);
     setError("");
     try {
-      await api<AgentContributionRuleResponse>(`${ruleBase}?metric=contrib`, {
+      const result = await api<AgentContributionRuleResponse>(`${ruleBase}?metric=contrib`, {
         method: "PUT",
-        ...jsonBody({ mode: "percent", percent: value, note: note.trim() }),
+        ...jsonBody({ scorePercent: scoreValue, contribAdd: addFen, note: note.trim() }),
       });
-      setEffective(value);
-      onSaved(value);
-      notify("展示比例已保存");
+      const appliedScore = result.rule?.scorePercent ?? scoreValue;
+      const appliedAdd = result.rule?.contribAdd ?? addFen;
+      setEffectiveScore(appliedScore);
+      setEffectiveAdd(appliedAdd);
+      onSaved(appliedScore, appliedAdd);
+      notify("展示规则已保存");
       onClose();
     } catch (reason) {
       const message = errorMessage(reason, "保存失败");
@@ -986,13 +1027,18 @@ function AgentContributionRuleModal({
     setBusy(true);
     setError("");
     try {
-      await api<AgentContributionRuleResponse>(`${ruleBase}?metric=contrib`, { method: "DELETE" });
-      setPercent("100");
-      setEffective(100);
-      onSaved(100);
-      notify("已恢复真实值（100%）");
+      const result = await api<AgentContributionRuleResponse>(`${ruleBase}?metric=contrib`, { method: "DELETE" });
+      // 清空自有设置后生效值可能来自上级，按后端回查结果回填。
+      const appliedScore = result.rule?.scorePercent ?? 100;
+      const appliedAdd = result.rule?.contribAdd ?? 0;
+      setScorePercent(String(appliedScore));
+      setContribAddYuan(formatYuanInput(appliedAdd));
+      setEffectiveScore(appliedScore);
+      setEffectiveAdd(appliedAdd);
+      onSaved(appliedScore, appliedAdd);
+      notify("已清空自有设置，回到上级继承");
     } catch (reason) {
-      const message = errorMessage(reason, "恢复真实值失败");
+      const message = errorMessage(reason, "清空自有设置失败");
       setError(message);
       notify(message, "error");
     } finally {
@@ -1021,12 +1067,16 @@ function AgentContributionRuleModal({
             <strong>{formatScore(display?.teamDisplay?.total_score ?? node.totalScoreDisplay)}</strong>
           </div>
           <div>
-            <span>当前生效比例</span>
-            <strong>{effective}%</strong>
+            <span>生效输赢比例</span>
+            <strong>{effectiveScore}%</strong>
+          </div>
+          <div>
+            <span>生效贡献增加</span>
+            <strong>{formatContribAdd(effectiveAdd)}</strong>
           </div>
           <div>
             <span>自身设置</span>
-            <strong>{Number.isFinite(Number(percent)) ? Math.trunc(Number(percent)) : 100}%</strong>
+            <strong>输赢 {Number.isFinite(Number(scorePercent)) ? Math.trunc(Number(scorePercent)) : 100}% · 贡献 {formatContribAdd(currentAddFen)}</strong>
           </div>
           <div>
             <span>身份 / ID</span>
@@ -1038,15 +1088,20 @@ function AgentContributionRuleModal({
           <div className="chain-message chain-message--broken">{display.message || "游戏服展示数据暂不可用"}</div>
         )}
         <div className="contribution-scope-note">
-          代理自己设置的比例优先；自己未设置时沿直属上级就近继承，到根仍无则按 100%。比例影响成员列表的贡献和输赢；成员列表以外的玩家输赢不缩放；100% = 真实值。
+          输赢和贡献是两套独立口径：输赢按比例调少（score_percent），贡献按金额调增加（contrib_add）；两项都自己设置优先、未设置沿直属上级就近继承，默认分别为 100% 和 0。红利、抽水、业绩等其他收益仍按 show_percent，不在这里设置。
         </div>
         {error && <div className="form-error"><span>!</span>{error}</div>}
 
         <div className="form-grid form-grid--single">
-          <Field label="展示比例（%）" hint="0~100；100 = 真实值；保存的是该代理自己的设置">
-            <input inputMode="numeric" value={percent} maxLength={3}
-              onChange={(event) => { setPercent(event.target.value); setError(""); }}
+          <Field label="输赢比例（%）" hint="0~100；100 = 真实值；只影响成员列表的今日/昨日/累计输赢">
+            <input inputMode="numeric" value={scorePercent} maxLength={3}
+              onChange={(event) => { setScorePercent(event.target.value); setError(""); }}
               disabled={!canAdjust} placeholder="100" />
+          </Field>
+          <Field label="贡献增加额（元）" hint="只调多，最多两位小数；0 = 不增加；上限 1000000 元">
+            <input inputMode="decimal" value={contribAddYuan} maxLength={12}
+              onChange={(event) => { setContribAddYuan(event.target.value); setError(""); }}
+              disabled={!canAdjust} placeholder="0" />
           </Field>
           <Field label="调整原因" hint="会写入后台审计，至少 2 个字">
             <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)}
@@ -1065,9 +1120,9 @@ function AgentContributionRuleModal({
             {busy ? "保存中…" : "保存"}
           </Button>
           <Button type="button" variant="secondary" onClick={() => void reset()} disabled={!canAdjust || busy}>
-            恢复真实值（100%）
+            清空自有设置（继承上级）
           </Button>
-          <span className="contribution-mode-hint">保存后该代理按此比例展示；下级未单独设置时继承该值。</span>
+          <span className="contribution-mode-hint">保存后该代理按此口径展示；下级未单独设置时按字段继承。</span>
         </div>
       </div>
     </Modal>
