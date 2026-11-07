@@ -175,12 +175,22 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     private memberTotal:number = 0;
     private memberGroupId:string = "";
     private memberGroupName:string = "";
+    /** 打开成员弹窗时那一行分组数据：弹窗顶部汇总卡直接用它填 9 项统计。 */
+    private memberGroup:ClubGroupRow = null;
     private memberContext:string = "";
     private memberTimer:any = null;
     private memberLoaded:boolean = false;
     /** 推送顶层 stats_ok："0" 时 self_* 全是 0，界面要如实显示「统计未就绪」。 */
     private memberStatsOk:boolean = true;
     private static memberSerial:number = 0;
+
+    /** 成员弹窗整屏版式：分组汇总卡在标题下方，成员列表占住中段，关闭键贴底。 */
+    private static SUMMARY_Y:number = 400;
+    private static SUMMARY_H:number = 200;
+    /** 汇总卡复用「分组模板」：去掉按钮行后整块内容上收 30px，卡片才只包住 9 项统计。 */
+    private static SUMMARY_SHIFT:number = 30;
+    private static LIST_Y:number = -155;
+    private static LIST_H:number = 830;
 
     // 本面板只发 `查询_俱乐部_成员_代理链路` 一条命令，不额外调用 `查询_俱乐部_成员`：
     // 团队人数/今日昨日等列若接口没下发就是“—”，由服务端在链路接口里补齐。
@@ -1628,6 +1638,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.MemberHint("界面资源缺失，请重新打开");
             return;
         }
+        // 顶部汇总卡先立起来：它独立于列表，不跟着成员行滚动。
+        this.RenderMemberSummary();
         for(const child of content.children.slice()) {
             if(child.name.indexOf("成员_") === 0 || child.name.indexOf("选项_") === 0)
                 child.destroy();
@@ -1647,14 +1659,14 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         }
         const groupName = this.memberGroupName !== "" ? this.memberGroupName : ("分组 " + this.memberGroupId);
         if(this.members.length === 0) {
-            this.MemberHint("「" + groupName + "」还没有成员，点分组卡片上的「加人」添加");
+            this.MemberHint("「" + groupName + "」还没有成员，回分组列表点「＋ 加人」添加");
             if(view != null) {
                 content.height = view.height;
                 content.setPosition(0, view.height / 2);
             }
             return;
         }
-        let hint = "「" + groupName + "」共 " + this.memberTotal + " 人";
+        let hint = "共 " + this.memberTotal + " 人";
         if(this.members.length < this.memberTotal)
             hint += "（当前显示前 " + this.members.length + " 人）";
         hint += "，点「移出成员」可移出";
@@ -1679,6 +1691,73 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         const scrollView = list ? list.getComponent(cc.ScrollView) : null;
         if(scrollView != null)
             scrollView.scrollToTop(0);
+    }
+
+    /**
+     * 成员弹窗顶部：当前分组的汇总卡（分组名 / 预警 / 备注 / 成员数 + 9 项统计）。
+     * 卡片本体直接克隆「分组模板」，只把那一排按钮（成员 / 加人 / 删除分组）收起来、
+     * 整块内容上收一点，让高度只包住统计；这样和分组列表的卡片不会长歪两套样式。
+     */
+    private RenderMemberSummary():void {
+        if(this.dialogMode !== "members")
+            return;
+        const panel = this.At("分组弹窗/面板");
+        const template = this.At("列表/view/content/分组模板");
+        if(panel == null || template == null)
+            return;
+        let holder = panel.getChildByName("组统计");
+        if(holder == null) {
+            holder = new cc.Node("组统计");
+            holder.parent = panel;
+            holder.setContentSize(690, panelBossPlayerInfo.SUMMARY_H);
+            holder.setPosition(0, panelBossPlayerInfo.SUMMARY_Y);
+        }
+        holder.active = true;
+        let card = holder.getChildByName("卡片");
+        if(card == null) {
+            card = cc.instantiate(template);
+            card.name = "卡片";
+            card.parent = holder;
+            card.active = true;
+            card.setPosition(0, 0);
+            card.setContentSize(690, panelBossPlayerInfo.SUMMARY_H);
+            for(const name of ["成员", "加人", "删除分组"]) {
+                const btn = card.getChildByName(name);
+                if(btn != null)
+                    btn.active = false;
+            }
+            // 按钮行没了，左栏和 9 项统计整体上收，卡片才不留一条空底。
+            const shift = panelBossPlayerInfo.SUMMARY_SHIFT;
+            for(const child of card.children) {
+                if(child.name === "成员" || child.name === "加人" || child.name === "删除分组")
+                    continue;
+                child.y -= shift;
+            }
+            const divider = card.getChildByName("资料分隔线");
+            if(divider != null) {
+                divider.height = 156;
+                divider.y = 1;
+            }
+        }
+        card.active = true;
+
+        if(this.memberGroup != null)
+            this.FillGroupStats(card, this.memberGroup);
+        else {
+            // 没有分组行数据时只填能确定的部分，9 项统计保持模板里的「—」。
+            this.Text("分组名", this.memberGroupName !== "" ? this.memberGroupName :
+                ("分组 " + this.memberGroupId), card);
+            this.Text("备注", "—", card);
+            this.Text("预警", "预警 未设置", card);
+        }
+        const name = this.memberGroupName !== "" ? this.memberGroupName :
+            (this.memberGroup != null ? this.memberGroup.name : ("分组 " + this.memberGroupId));
+        if(name !== "")
+            this.Text("分组名", name, card);
+        // 成员数用成员接口下发的 count：移出人之后它比分组列表里那份先更新。
+        const total = this.memberLoaded ? this.memberTotal :
+            (this.memberGroup != null ? this.memberGroup.memberCount : 0);
+        this.Text("成员数值", "成员 " + total + " 人", card);
     }
 
     /** 成员行：字段和「玩家信息」页签的 FillInfoRow 一一对应，只是数据来源和左下角按钮不同。 */
@@ -1776,6 +1855,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     private OpenMemberDialog(group:ClubGroupRow):void {
         this.memberGroupId = group.id;
         this.memberGroupName = group.name;
+        this.memberGroup = group;
         this.memberTotal = group.memberCount;
         this.members = [];
         this.memberLoaded = false;
@@ -1813,6 +1893,16 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         const modal = this.At("分组弹窗");
         if(modal != null && modal.active && this.dialogMode === "pick")
             this.RenderPickList();
+        // 成员弹窗开着时（刚移出一个人等），顶部汇总卡跟着最新的分组数据一起刷。
+        if(modal != null && modal.active && this.dialogMode === "members") {
+            for(const group of this.groups) {
+                if(group.id === this.memberGroupId) {
+                    this.memberGroup = group;
+                    break;
+                }
+            }
+            this.RenderMemberSummary();
+        }
     }
 
     /** 推送 ClubPlayerGroupResult：{action:create/update/delete/set_member/remove_member,...}。 */
@@ -1933,30 +2023,10 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     /**
      * 分组行（卡片式）：左栏 分组名 / 预警 / 备注 / 成员数，
      * 右栏 3 列（输赢 / 贡献 / 红利）× 3 行（今日 / 昨日 / 累计）共 9 项统计，
-     * 底部一排按钮（成员 / 加人 / 删除分组）。
+     * 底部一排按钮（成员 / 加人 / 删除分组）。统计部分和成员弹窗顶部汇总卡共用。
      */
     private FillGroupRow(row:cc.Node, group:ClubGroupRow):void {
-        this.Text("分组名", group.name !== "" ? group.name : ("分组 " + group.id), row);
-        this.Text("备注", this.SubText(group), row);
-        this.Text("成员数值", "成员 " + group.memberCount + " 人", row);
-        // 9 项统计：输赢是积分（红涨绿跌），贡献/红利是分（÷100，金色）。
-        this.SetScore("今日输赢值", group.today, row);
-        this.SetScore("昨日输赢值", group.yesterday, row);
-        this.SetScore("累计输赢值", group.total, row);
-        this.Text("今日贡献值", this.FenText(group.todayContribFen), row);
-        this.Text("昨日贡献值", this.FenText(group.yesterdayContribFen), row);
-        this.Text("累计贡献值", this.FenText(group.contribFen), row);
-        this.Text("今日红利值", this.FenText(group.todayBonusFen), row);
-        this.Text("昨日红利值", this.FenText(group.yesterdayBonusFen), row);
-        this.Text("累计红利值", this.FenText(group.bonusFen), row);
-
-        this.Text("预警", this.WarnText(group), row);
-        const warnNode = this.At("预警", row);
-        if(warnNode) {
-            // 预警越界用红色，开启且正常用绿色，未设置/关闭用灰蓝。
-            warnNode.color = group.warnStatus === "1" ? new cc.Color(255,92,80) :
-                (group.warnEnabled === "1" ? new cc.Color(151,211,57) : new cc.Color(150,168,186));
-        }
+        this.FillGroupStats(row, group);
 
         const memberBtn = row.getChildByName("成员");
         if(memberBtn != null) {
@@ -1975,6 +2045,34 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.BindTap(delBtn, ()=>{
                 this.OpenDeleteDialog(group.id, group.name);
             });
+        }
+    }
+
+    /**
+     * 分组卡的左栏 + 9 项统计：分组列表的行和成员弹窗顶部汇总卡都用这一份，
+     * 保证两处数字口径、配色（输赢红涨绿跌、贡献/红利金色）完全一致。
+     */
+    private FillGroupStats(node:cc.Node, group:ClubGroupRow):void {
+        this.Text("分组名", group.name !== "" ? group.name : ("分组 " + group.id), node);
+        this.Text("备注", this.SubText(group), node);
+        this.Text("成员数值", "成员 " + group.memberCount + " 人", node);
+        // 9 项统计：输赢是积分（红涨绿跌），贡献/红利是分（÷100）。
+        this.SetScore("今日输赢值", group.today, node);
+        this.SetScore("昨日输赢值", group.yesterday, node);
+        this.SetScore("累计输赢值", group.total, node);
+        this.Text("今日贡献值", this.FenText(group.todayContribFen), node);
+        this.Text("昨日贡献值", this.FenText(group.yesterdayContribFen), node);
+        this.Text("累计贡献值", this.FenText(group.contribFen), node);
+        this.Text("今日红利值", this.FenText(group.todayBonusFen), node);
+        this.Text("昨日红利值", this.FenText(group.yesterdayBonusFen), node);
+        this.Text("累计红利值", this.FenText(group.bonusFen), node);
+
+        this.Text("预警", this.WarnText(group), node);
+        const warnNode = this.At("预警", node);
+        if(warnNode) {
+            // 预警越界用红色，开启且正常用绿色，未设置/关闭用灰蓝。
+            warnNode.color = group.warnStatus === "1" ? new cc.Color(255,92,80) :
+                (group.warnEnabled === "1" ? new cc.Color(151,211,57) : new cc.Color(150,168,186));
         }
     }
 
@@ -2026,38 +2124,47 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
 
     /**
      * 分组弹窗一个骨架两套版式：
-     *   members（组内成员）走大版式 —— 740x1180，列表 690x872，一行就是玩家信息的表行；
+     *   members（组内成员）拉成整屏 750x1334 —— 顶部标题 + 当前分组汇总卡，下面才是成员列表，
+     *   最底一颗「关闭」；
      *   其余（新建 / 加人 / 选组 / 删除确认）还是原来那套 740x800 的小版式。
      * 预制体里存的是大版式的坐标，这里按模式把面板和各块缩回去。
      */
     private LayoutDialog(mode:string):void {
         const tall = mode === "members";
         const panel = this.At("分组弹窗/面板");
-        if(panel != null)
-            panel.height = tall ? 1180 : 800;
+        if(panel != null) {
+            panel.width = tall ? 750 : 740;
+            panel.height = tall ? 1334 : 800;
+        }
         const title = this.At("分组弹窗/面板/标题");
         if(title != null)
-            title.y = tall ? 540 : 340;
+            title.y = tall ? 600 : 340;
         const hint = this.At("分组弹窗/面板/提示");
         if(hint != null) {
-            hint.y = tall ? 482 : 286;
-            hint.height = tall ? 64 : 66;
+            hint.y = tall ? 548 : 286;
+            hint.height = tall ? 52 : 66;
+        }
+        // 分组汇总卡（运行时挂在面板下的 690x200 容器，卡片本体由「分组模板」克隆）。
+        const holder = panel != null ? panel.getChildByName("组统计") : null;
+        if(holder != null) {
+            holder.active = tall;
+            holder.setPosition(0, panelBossPlayerInfo.SUMMARY_Y);
         }
         const list = this.At("分组弹窗/面板/选项列表");
         if(list != null) {
-            list.y = tall ? -6 : 20;
-            list.height = tall ? 872 : 430;
+            list.y = tall ? panelBossPlayerInfo.LIST_Y : 20;
+            list.height = tall ? panelBossPlayerInfo.LIST_H : 430;
         }
         const view = this.At("分组弹窗/面板/选项列表/view");
         if(view != null)
-            view.height = tall ? 872 : 430;
+            view.height = tall ? panelBossPlayerInfo.LIST_H : 430;
         const content = this.At("分组弹窗/面板/选项列表/view/content");
         if(content != null) {
-            const height = view != null ? view.height : (tall ? 872 : 430);
+            const height = view != null ? view.height : (tall ? panelBossPlayerInfo.LIST_H : 430);
             content.height = height;
             content.setPosition(0, height / 2);
         }
-        const by = tall ? -524 : -330;
+        const by = tall ? -612 : -330;
         const cancel = this.At("分组弹窗/面板/取消");
         if(cancel != null)
             cancel.y = by;

@@ -1406,9 +1406,9 @@ export default class ClubManagementView {
         this.text("暗扣值",this.darkText(fresh),panel);
     }
     /** 有备注时统一显示「名字(备注)」，成员列表、下级列表与玩家信息抬头共用。 */
-    private displayName(item:ClubPlayer):string {
+    private displayName(item:ClubPlayer,includeNote:boolean = true):string {
         const name = item && item.name || (item ? "玩家 " + item.id : "");
-        const note = item && item.note != null ? String(item.note).trim() : "";
+        const note = includeNote && item && item.note != null ? String(item.note).trim() : "";
         return note ? name + "(" + note + ")" : name;
     }
     /**
@@ -1497,7 +1497,9 @@ export default class ClubManagementView {
     /** 成员列表与下级成员列表共用同一套行内容，保证两处显示一致。 */
     private fillMemberRow(row:cc.Node,item:ClubPlayer):void {
         const context = this.context || {accountId:"",id:"",name:"",role:"member" as ClubRole};
-        this.text("姓名",this.displayName(item),row);
+        // 自己那一行不显示备注（备注是上级给自己写的，列表里不重复展示）。
+        const isSelf = String(item.id) === String(context.accountId || "");
+        this.text("姓名",this.displayName(item,!isSelf),row);
         this.text("玩家ID","ID: "+item.id,row);
         const avatar = this.at("头像",row);
         const avatarSprite = avatar && avatar.getComponent(cc.Sprite);

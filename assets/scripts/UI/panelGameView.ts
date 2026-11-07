@@ -2130,6 +2130,10 @@ export default class panelGameView extends UIPanelViewBase {
             Debug.Log("Json 格式异常！");
             return;
         }
+        // §8.4 积分变动推送由常驻的 GameDataManager 统一弹窗（大厅/游戏内都要弹），
+        // 这里不再走牌桌内嵌 Label，也避免它更新坐下失败兜底用的时间戳。
+        if(GameDataManager.IsClubGoldChangePush(json))
+            return;
         let strWord = json["word"];
         if(strWord!=null && strWord != "")
         {
@@ -2196,14 +2200,12 @@ export default class panelGameView extends UIPanelViewBase {
                 {
                     GameDataManager.getAccount().reqRoomCommand("{\"header\":\"回座_事件\"}", "回座_事件");
                 }
-                // else if(strContext == "补分")
-                // {
-                //     this.node.getChildByName("带入窗口").active = true;
-                // }
                 else if(strContext == "弹窗" || strContext == "补分")
                 {
-                    let button = Tool.GetChild(this.node,"ConfigMain/补充钵钵").getComponent(cc.Button);
-                    this.onButtonClick(button);
+                    // 响应服务端「该带入」的提示时只做界面动作，绝不在这里点「补充钵钵」：
+                    // 该按钮在留座倒计时中会再发一次「玩家_补芒_查询」，服务端把 context
+                    // 原样回传 → 又进这里，形成每秒一轮的请求死循环（2026-11-07 线上刷屏）。
+                    this.OpenBuyinWindowFromPrompt();
                     if(strWord.indexOf("已结算")>=0){
                         this.showMsg(strWord)
                     }
@@ -4626,9 +4628,48 @@ export default class panelGameView extends UIPanelViewBase {
     }
 
     //在位置上检查是否补芒
+    private lastBuMangQueryType = "";
+    private lastBuMangQueryTime = 0;
     public checkBuMang(strType:string = "补分"){
+        // 同一类补芒查询 1.5 秒内只发一次。服务端会把 context 原样回传，客户端按 context
+        // 分发；只要有一处响应分支又发起同类查询，就会自激成每秒一轮的死循环（见 11-07）。
+        // 这层节流是兜底，防止以后再有人往响应分支里塞查询。
+        const now = Date.now();
+        if(strType == this.lastBuMangQueryType && now - this.lastBuMangQueryTime < 1500)
+            return;
+        this.lastBuMangQueryType = strType;
+        this.lastBuMangQueryTime = now;
         let strParam = "{\"header\":\"玩家_补芒_查询\",\"context\":\""+strType+"\"}";
             GameDataManager.getAccount().reqGameCommand(strParam, "玩家_补芒_查询");  
+    }
+
+    /**
+     * 服务端提示「该带入」时打开带入窗口。
+     * 这里只改界面状态，不发任何请求——响应分支一旦发起查询就会和回包打成死循环。
+     */
+    private OpenBuyinWindowFromPrompt():void
+    {
+        const account:any = GameDataManager.getAccount();
+        if(account == null || this.gameLogic == null)
+            return;
+        // 没坐在座位上时弹带入窗口没有意义，与「补充钵钵」按钮保持同样的提示。
+        if(this.gameLogic.GetPlayerCtlByID(0).info.strUserID != account.guuid)
+        {
+            this.ShowMsg("请先找位置坐下！");
+            return;
+        }
+        const cfgMain = Tool.GetChild(this.node,"ConfigMain");
+        if(cfgMain != null)
+            cfgMain.active = false;
+        const buyin = Tool.GetChild(this.node,"带入窗口");
+        if(buyin == null)
+            return;
+        buyin.active = true;
+        const sit = Tool.GetChild(this.node,"带入窗口/sit");
+        if(sit != null)
+            sit.getComponent(cc.Label).string = this.gameLogic.nSelfIndex.toString();
+        this.RefreshBuyinBalance();
+        this.bFromTC = false;
     }
     private pospos = 0
     /** 弹窗使用同一份奖池数据：优先俱乐部池 reward_balance（分），旧服务端回退 rewards/all_rewards。 */

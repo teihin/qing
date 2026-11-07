@@ -2572,7 +2572,7 @@ td strong { color: #294149; }
 .contribution-refresh { padding: 6px 12px; border: 1px solid #cfe4e1; border-radius: 7px; color: #1b7f75; background: #f4fbf9; font-size: 12px; font-weight: 700; }
 .contribution-note { margin: 2px 0 12px; padding: 9px 11px; border: 1px dashed #cfe5e1; border-radius: 8px; color: #4d7973; background: #f6fcfa; font-size: 12px; line-height: 1.6; }
 .contribution-table-wrap { overflow: auto; }
-.contribution-table { min-width: 2000px; }
+.contribution-table { min-width: 2100px; }
 .contribution-table th { white-space: nowrap; }
 .contribution-tree-name { display: flex; align-items: center; gap: 7px; min-width: 180px; }
 .contribution-tree-name strong, .contribution-tree-name small { display: block; }
@@ -2591,6 +2591,10 @@ td strong { color: #294149; }
 .contribution-rule-chip.is-inherited { color: #93a3a6; background: #f4f7f7; font-weight: 600; }
 .contribution-rule-button { padding: 5px 10px; border: 1px solid #cfe5e1; border-radius: 7px; color: #166f67; background: #f4fbf9; font-size: 11px; font-weight: 700; white-space: nowrap; }
 .contribution-rule-button:hover { background: #e8f7f3; }
+.contribution-rule-button--dark { border-color: #e6d5c5; color: #8a5b08; background: #fdf7ee; }
+.contribution-rule-button--dark:hover { background: #fbefdd; }
+.contribution-row-actions { display: grid; gap: 5px; justify-items: stretch; }
+.contribution-bonus-dark { display: block; color: #8a5b08; }
 .contribution-rule-empty { display: inline-block; color: #a9b7ba; font-size: 12px; }
 .contribution-empty-child { padding: 10px 16px 10px 40px; color: #8ba0a4; font-size: 11px; }
 .contribution-modal { display: grid; gap: 14px; }
@@ -2667,3 +2671,26 @@ td strong { color: #294149; }
 .contribution-preview { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #e2eded; border-radius: 9px; color: #4b6a70; background: #f8fbfb; font-size: 12px; }
 .contribution-preview strong { color: #0b7a71; font-size: 15px; }
 .contribution-preview small { color: #8a9da1; font-size: 10px; }
+
+/* 游戏接口日志页面 */
+.toolbar--wrap { flex-wrap: wrap; row-gap: 10px; }
+.toolbar__options { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.checkbox { display: inline-flex; align-items: center; gap: 6px; color: #4c6267; font-size: 13px; cursor: pointer; user-select: none; }
+.checkbox input { width: 15px; height: 15px; margin: 0; accent-color: #159a90; cursor: pointer; }
+.log-badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.log-badge--success { color: #1c7a58; background: #e6f5ee; }
+.log-badge--error { color: #b83d4b; background: #fdecee; }
+.log-badge--warn { color: #9a6a11; background: #fdf3e0; }
+.log-badge--info { color: #1a6f9c; background: #e8f2fa; }
+.game-log-table th:nth-child(1) { width: 116px; }
+.game-log-table th:nth-child(2) { width: 84px; }
+.game-log-table th:nth-child(3) { width: 210px; }
+.game-log-table th:nth-child(4) { width: 148px; }
+.game-log-table th:nth-child(5) { width: 84px; }
+.game-log-table tbody tr { cursor: pointer; }
+.game-log-table tbody tr:hover td { background: #f5fbfa; }
+.game-log-table tbody tr.is-open td { background: #f2faf8; }
+.game-log-table__time { color: #5f7679; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.game-log-table__tag { color: #7b9096; font-size: 13px; }
+.game-log-table__detail { color: #3f5559; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; }
+.game-log-table__detail.is-clamped { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

@@ -37,6 +37,8 @@ export default class scrollview2 extends cc.Component {
     public main: UIPanelViewBase = null;
 
     private readonly bufferRows: number = 2;
+    /** 按 room_id 锚定时记下顶部行内的像素偏移，还原后画面不跳动。 */
+    private anchorRemainder: number = 0;
     // ScrollView 在 content 不高于 view 时不会进入稳定的弹性拖动流程。
     // 仅保留 1px 不可察觉的滚动余量，使空列表和短列表也能下拉触发 bounce-top。
     private readonly minScrollableDistance: number = 1;
@@ -145,7 +147,7 @@ export default class scrollview2 extends cc.Component {
         }
     }
 
-    public Init(sourceData: any[], bNew: boolean = true) {
+    public Init(sourceData: any[], bNew: boolean = true, keepScroll: boolean = false) {
         if (!this.view || !this.content || !this.itemPrefab) {
             Debug.Error("虚拟列表缺少 view、content 或 itemPrefab 配置");
             return;
@@ -177,7 +179,7 @@ export default class scrollview2 extends cc.Component {
             : this.paddingTop + this.paddingBottom;
         this.content.height = Math.max(this.view.height + this.minScrollableDistance, logicalHeight);
 
-        if (this.selfViewNoEnd != null) {
+        if (this.selfViewNoEnd != null && !keepScroll) {
             this.selfViewNoEnd.stopAutoScroll();
             if (bNew)
                 this.selfViewNoEnd.scrollToTop();
@@ -185,6 +187,50 @@ export default class scrollview2 extends cc.Component {
                 this.selfViewNoEnd.scrollToOffset(cc.v2(0, Math.min(oldOffsetY, this.selfViewNoEnd.getMaxScrollOffset().y)));
         }
 
+        this.refreshVisibleItems(true);
+    }
+
+    /** 返回当前视口顶部可见行的房间号，供按 room_id 锚定滚动位置。 */
+    public GetTopRoomId(): string {
+        this.anchorRemainder = 0;
+        if (this.selfViewNoEnd == null || this.dataCount <= 0)
+            return "";
+        const stride = this.getRowStride();
+        if (stride <= 0)
+            return "";
+        const offsetY = Math.max(0, this.selfViewNoEnd.getScrollOffset().y);
+        const index = Math.min(this.dataCount - 1,
+            Math.floor(Math.max(0, offsetY - this.paddingTop) / stride));
+        const row = this.data[index];
+        this.anchorRemainder = Math.max(0, offsetY - (this.paddingTop + index * stride));
+        return Array.isArray(row) && row[0] != null ? String(row[0]) : "";
+    }
+
+    /** 数据重排后把滚动偏移还原到同一个房间行，避免插入/删除导致画面跳动。 */
+    public RestoreTopRoom(roomId: string): void {
+        if (!roomId || this.selfViewNoEnd == null)
+            return;
+        const stride = this.getRowStride();
+        if (stride <= 0)
+            return;
+        for (let index = 0; index < this.data.length; index++) {
+            const row = this.data[index];
+            if (!Array.isArray(row) || String(row[0]) !== roomId)
+                continue;
+            const target = Math.max(0, this.paddingTop + index * stride + this.anchorRemainder);
+            const max = Math.max(0, this.selfViewNoEnd.getMaxScrollOffset().y);
+            const offset = Math.min(target, max);
+            const current = Math.max(0, this.selfViewNoEnd.getScrollOffset().y);
+            // 目标没变时不动 ScrollView，避免打断正在进行的惯性滚动。
+            if (Math.abs(offset - current) >= 0.5)
+                this.selfViewNoEnd.scrollToOffset(cc.v2(0, offset));
+            this.refreshVisibleItems(true);
+            return;
+        }
+    }
+
+    /** 只重绘可见行（本地倒计时等），不改动滚动位置。 */
+    public RefreshVisible(): void {
         this.refreshVisibleItems(true);
     }
 

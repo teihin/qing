@@ -4,6 +4,27 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-07 后台代理贡献管理：暗抽比例列 + 调整入口（已部署）
+
+- 游戏服 `异步_查询_代理_展示数据` 新增顶层 `bonus_dark_percent`（该代理自己的红利暗抽，0~100，不参与 `show_percent` 缩放），成员行也带同名行级值；后台透传为 `bonusDarkPercent`。
+- 列表在「贡献」组后新增「暗抽比例」列，操作列在「展示调整」后新增「暗抽比例调整」（弹窗读当前值→保存/设为 0%）；新增 `GET/PUT .../agents/{agentId}/bonus-dark`，底层命令 `设置_俱乐部_代理_红利暗抽`（不传比例=只读回显，写入 `club_agent_info.bonus_dark_percent`）。
+- 19:07 部署二进制 `d8f6677b…` + 前端 `index-Dk2KU1jc.js`/`index-D9kgAfEm.css`（回滚 `backups/xuanmanager.20261107-1907-rollback`、`web.previous-bonus-dark-20261107-1907`）；health 200、新路由未登录 401。真实保存与目视待验，详见[交接](handoffs/2026-11-07-agent-bonus-dark-percent.md)。
+
+## 2026-11-07 局末人数不足时收起桌面牌（未构建、待真机）
+
+- 一局打完但人数不足、下一局不开时，界面会一直停在上一局（摊开的牌留着）。改为本局结束（结算动画播完）5 秒后仍未开局就收起全部桌面牌，`GameStatus` 回 `init` 兜底再排一次；`running`/`ready`、发牌与开局事件、全量恢复都会取消或恢复，避免误藏新一局的牌。
+- 只收容器（`handstop`/`展示牌`/`下一张牌`/`下一张牌1`/`三花`），不动牌节点 `active`。改 `DrhLogicMgr.ts`+`DrhPlayerLogic.ts`，tsc 通过；Creator/真机待验。
+
+## 2026-11-07 客服登录即在线 + 托管跳转游戏后台（已部署）
+
+- 修「接待量已达上限或客服不在线」：实为 `kefuadmin` 被判 offline。心跳旧实现带 `presence<>'offline'`，一旦超时判离线永不恢复；改为心跳无条件回 online，维护任务只在会话过期后踢下线，claim 拆成「不在线」/「接待量 x/y 已满」。
+- 托管「账号资料」加「在游戏后台查看 / 处理」（托管账号 guuid），当前会话「对方」加「对方后台」，与客服侧同一 `gameAdminPlayerURL`。
+- 16:32 部署 `62571121…` + `index-DWH6KahC.js`（回滚 `*.previous-onlinelogin-20261107-1632`，旧 `c7f6cd15…`），health 200，客服 presence 已自动回 online；登录目视待验。详见[交接](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md)。
+
+## 2026-11-07 大厅房间推送（未构建）
+
+- 全量/推送同构 12 位：关闭删行、已有替换、新增按 `[11]` 插入；筛选态防抖全量；`[2]` 收到即校准并本地倒计时。待联调。
+
 ## 2026-11-07 后台玩家管理「用户密码」列显示明文（已部署）
 
 - 列仅管理员（`super_admin` 角色，含 admin999 与普通管理员 admin）可见。游戏端只有 MD5、不能解密，因此新增 `mgr_player_login_password`（migration 046）用 AES-GCM 存明文副本，在注册/后台重置/玩家自助改密三处收录；无记录显示「未收录」，不回退摘要。
@@ -38,16 +59,9 @@
 - 按效果图重做聊天皮肤（蓝/金气泡、金色发送、圆形返回/删除），底部新增「清除聊天」；只清自己这一侧，消息与对方/客服视图保留。
 - ChatTool 已部署（00:08）：migration 009 已执行，`/api/health` 200，clear 路由未登录 401；新二进制 `b163889d…`，回滚 `bin/chattool.previous-clear-chat-20261106-000856`，未替换 `web/`。Prefab/引用、`go test`、定向 tsc 通过；Creator、真机与真实会话联调待验。详见[交接](handoffs/2026-11-06-chat-detail-v2-clear.md)。
 
-## 2026-11-06 托管保留 + 上下分对账（已部署）
+## 2026-11-06 托管保留 + 上下分对账、后台玩家头像（已部署，已归档）
 
-- 取消托管不再删除：记录/会话保留为只读，不能代发；主管右侧可永久删除该托管账号的聊天和媒体。
-- 新增 `chat_hosting_gold_ledger`：托管上下分逐笔入库（时间/玩家/盟主/操作人/数量/余额），`request_id` 幂等；右上角「对账统计」独立页面，按日期/盟主/客服/玩家筛选，主管全部并按客服筛选、普通客服只看自己；赠送/被赠送暂为 0。
-- 余额读取改为操作前后读游戏库并短轮询，已修正首笔测试记录（上分 111→余额 111）。托管列表按组/账号/会话分层底色、缩进和行距整理，已部署客服站 `index-B2umYoXl.js`；服务端 `96754ef8…`（迁移 010）。真实取消托管/账本联调待验证。详见[交接](handoffs/2026-11-06-hosting-ledger.md)。
-
-## 2026-11-06 后台玩家头像（已部署）
-
-- 客服工作台玩家头像改为读游戏库 `tbl_Account.sm_photo`（1~100），映射到客服站内置 `avatars/avatarNN.png`；会话列表/详情、聊天消息、托管账号/会话统一显示与客户端一致的头像。
-- 托管第三层会话行也已加对方头像。已部署服务端 `df2d8f8e…`、客服站 `index-BmpCdndK.js`（含 100 张 128px 头像）；真实登录态目视待验证。
+- 原文见[归档](archive/2026-11-07/current-nov06-kefu-admin.md)。
 
 ## 2026-11-05 消息列表置顶官方客服 BF（未构建、未真机）
 
@@ -67,19 +81,16 @@
 
 - 后台新增「代理贡献管理」：联盟→俱乐部→代理/玩家逐层展开；读取 KBE 同步 `NumberList` 的真实值、`*_contrib_display_fen` 和 `*_score_display`，并用 `异步_查询_代理_展示数据` 取 self/team 展示值，表格真实/展示分开。
 - 客户端按 KBE 标记给总贡献/总输赢加 `*`，统计栏显示「含模拟*」；不做换算。
-- 已部署正式 8891（2026-11-06 01:11）：二进制 `b8dad60e…`、前端 `index-vIOviZTr.js` / `index-Dq24wEA0.css`（build .21）；规则按代理一份 `show_percent` 0~100，自己设置优先、未设置沿直属上级继承（`查询_代理_展示规则` 同时返回自身值和 `effective_show_percent`）；成员行新增 `ownShowPercent` / `showPercentSource`，规则列自设显示黄色「（设置）」、继承显示灰色；贡献与输赢都按生效比例缩放；弹窗打开时回读自身值/生效值，保存成功后关闭；玩家行不再显示设置规则按钮；首末列固定；联盟/俱乐部搜索、普通俱乐部、show_type/selfOnly、逐行 club_id、可读日志保留；迁移 045 已执行；健康/公网 200、回滚 `backups/xuanmanager.20261106-0107-rollback`、`web.previous-rule-style-20261106-0111`。
+- 已部署正式 8891（2026-11-06 01:11）：`b8dad60e…`、`index-vIOviZTr.js`；规则按代理一份 `show_percent` 0~100，自设优先、未设置沿直属上级继承（`查询_代理_展示规则` 同时返回自身值与 `effective_show_percent`）；成员行新增 `ownShowPercent`/`showPercentSource`，规则列自设黄色「（设置）」、继承灰色；贡献与输赢按生效比例缩放；弹窗回读自身/生效值；迁移 045 已执行；回滚 `backups/xuanmanager.20261106-0107-rollback`、`web.previous-rule-style-20261106-0111`。
 - 最新方案不支持固定差额、整线一键覆盖/取消继承；客户端模拟标记仍缺字段；登录态点击、Creator/真机待验。详见[交接](handoffs/2026-11-05-agent-contributions.md)。
 
 ## 2026-11-05 搓牌 / 玩家设置代理暗扣比例（未构建、未真机，已归档）
 
 - 原文与交接链接见[归档](archive/2026-11-07/current-nov05-client-items.md)。
 
-## 2026-11-05 聊天托管（服务端/客服站已部署，客户端未构建）
+## 2026-11-05 聊天托管（服务端/客服站已部署，客户端未构建，已归档）
 
-- 消息首页右上角新增「聊天托管」开关，俱乐部群主/盟主/大盟主均可开；客服工作台「聊天托管」为第一个页签并默认进入，按联盟/俱乐部折叠查看私聊，以其身份代发文字。
-- 托管账号收发经 `hosted.message` SSE 双向实时同步，三级未读徽标走共享已读游标（migration 008）；上下分经 XuanManager（不直连 8890），成功后发「（客服托管）」系统通报；对方角色由服务端 `roleName` 统一。另有语音播放、图片放大、AudioContext 首次交互解锁、多客服并发处理。细节见[交接](handoffs/2026-11-05-chat-hosting.md)。
-- 服务端新增 `GET/POST /api/direct/hosting`、`/api/agent/hosted/*`；代发以托管账号落库并向双方推送 `message.new`；客服查看不改游戏内已读。详见[交接](handoffs/2026-11-05-chat-hosting.md)。
-- 已部署 14:01：ChatTool `9c6f9554…`、客服站 `index-BI2MvCs1.js`（备份 `…hosted-balance-…`）；XuanManager 仍为 `6ec67c80…`；上下分经 XuanManager，公网 service 403。客户端未构建。
+- 原文见[归档](archive/2026-11-07/current-nov05-chat-hosting.md)；后续进展见 `2026-11-06` 两条托管条目。
 
 ## 2026-11-05 游戏内俱乐部角色称谓统一（未构建、未真机）
 
@@ -93,14 +104,9 @@
 - 额度记录口径、末列显示 `name`、盟主下级查询带 `agent_id+club_id`、身份判定创建者优先等细节见[交接](handoffs/2026-11-05-player-record-tabs.md)。
 - Prefab/引用/离屏预览与定向 TS 检查通过；Creator 导入、构建、真机、真实回包待验证。
 
-## 2026-11-04 消息列表与盟友管理（已归档）
+## 2026-11-04 消息列表 / 盟友管理 / 游戏设置 / 房间奖池（已归档）
 
-- 消息列表滚动/下拉刷新/分页：原文见[归档](archive/2026-11-05/current-nov04-message-list.md)，细节见[交接](handoffs/2026-11-04-message-list-scroll-paging.md)；11-05 点击底栏「消息」也触发同一套下拉刷新。
-- 盟友管理盟主比例：原文见[归档](archive/2026-11-05/current-nov04-ally-management.md)。
-
-## 2026-11-04 游戏设置 / 房间内奖池（已归档）
-
-- 奖池设置与规则原文见[归档](archive/2026-11-06/current-nov04-game-settings.md)，细节见[奖池交接](handoffs/2026-11-04-game-settings-jackpot.md)、[规则交接](handoffs/2026-11-04-game-settings-rules.md)；房间内奖池见[归档](archive/2026-11-05/current-nov04-room-jackpot.md)。
+- 原文见[归档](archive/2026-11-05/current-nov04-message-list.md)与[盟友管理](archive/2026-11-05/current-nov04-ally-management.md)、[游戏设置](archive/2026-11-06/current-nov04-game-settings.md)、[房间奖池](archive/2026-11-05/current-nov04-room-jackpot.md)；细节见[滚动分页交接](handoffs/2026-11-04-message-list-scroll-paging.md)、[奖池交接](handoffs/2026-11-04-game-settings-jackpot.md)、[规则交接](handoffs/2026-11-04-game-settings-rules.md)。
 
 ## 2026-11-04～11-06 我的红利：V2 统计 / 联盟红利 / 合伙人入口（未构建、未真机）
 
@@ -118,13 +124,9 @@
 
 - 玩家钻石与联盟管理见[归档](archive/2026-11-05/current-nov03-admin.md)；资金明细/牌桌金币/私聊上下分见[归档](archive/2026-11-04/current-nov01-nov03-chat.md)；俱乐部成员额度与 1 对 1 私聊见[归档](archive/2026-11-04/current-oct31-nov01-links.md)。
 
-## 2026-10-29～10-30（阶段归档）
+## 阶段归档（2026-10-30 及更早）
 
-- 牌局回顾「翻牌」、俱乐部玩家备注、大厅底栏改版、机器人首次登录激活、投放「按周时段」、控制台小步调整、机器人密码密文、Worker 俱乐部模式、牌桌小修与实时战绩：原文与各自交接链接见[归档](archive/2026-11-01/current-oct29-30.md)。
-
-## 2026-10-27 及更早（阶段归档）
-
-- 自动化控制台、我的页滚动、推广下载地址、消费全切钻石与历史 UI 状态见[归档](archive/2026-10-30/current-early-items.md)。
+- 10-29～10-30 牌局回顾翻牌、俱乐部玩家备注、底栏改版、机器人、投放按周时段等：[oct29-30](archive/2026-11-01/current-oct29-30.md)；10-27 及更早：[early-items](archive/2026-10-30/current-early-items.md)。
 
 ## 本轮实时核对：记忆整理
 

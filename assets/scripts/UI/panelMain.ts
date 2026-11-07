@@ -29,6 +29,12 @@ var KBEngine = require("kbengine");
 
 const {ccclass, property} = cc._decorator;
 
+/** ClubRoomInfo 推送行：前 10 位直接作列表行，index 是服务端给的新增下标（-1 非新增）。 */
+interface RoomPushEntry {
+    row:any[];
+    index:number;
+}
+
 @ccclass
 export default class panelMain extends UIPanelViewBase {
 
@@ -56,14 +62,33 @@ export default class panelMain extends UIPanelViewBase {
     private roomListRequestPage:number = -1;
     private roomListRequestFilterKey:string = "";
     private roomListAppliedFilterKey:string = "";
+    /** 最近一次全量回包对应的俱乐部；与当前选中不同时说明订阅正在切换。 */
+    private roomListAppliedClubId:string = "";
     private roomListDesiredFilterKey:string = "";
     private roomListPendingRefresh:boolean = false;
+    /** ClubRoomInfo 单房间推送在列表请求期间先缓存，全量回包后再合并，避免被覆盖。 */
+    private roomListPendingPushes:RoomPushEntry[] = [];
+    private roomListPushRefreshScheduled:boolean = false;
+    /** 筛选态下新房间合并成一次约 1 秒防抖全量查询，回包时按 room_id 保留滚动位置。 */
+    private roomListFilteredRefreshScheduled:boolean = false;
+    private roomListKeepScrollOnFullRefresh:boolean = false;
+    private readonly roomListFilteredRefreshHandler = ()=>{
+        this.roomListFilteredRefreshScheduled = false;
+        this.roomListKeepScrollOnFullRefresh = true;
+        this.getAllRooms(0,true);
+    };
+    /** [2] 备注不随推送下发，按房间首次全量查询到的值本地倒计时。 */
+    private roomRemarkBase:{[roomId:string]:{minutes:number;at:number}} = {};
+    private readonly roomRemarkTickHandler = ()=>{ this.TickRoomRemarks(); };
     private readonly roomListRequestTimeoutHandler = ()=>{
         if(!this.roomListLoading)
             return;
         this.roomListLoading = false;
         this.roomListRequestPage = -1;
         this.roomListRequestFilterKey = "";
+        // 列表请求失败时无法判断推送该落到哪份快照上，直接丢弃等下次全量查询。
+        this.roomListPendingPushes = [];
+        this.roomListKeepScrollOnFullRefresh = false;
         // 超时后不自动连发同一请求；用户切换了筛选时只补发最新筛选。
         if(this.roomListPendingRefresh)
         {
@@ -122,6 +147,14 @@ export default class panelMain extends UIPanelViewBase {
     /** 最近一次俱乐部赠送记录查询，异步推送没有统一带回 club_id 时用它配对。 */
     private clubGiftRecordClubId:string = "";
     private clubGiftRecordPage:number = 0;
+    /** 俱乐部成员名字 → ID：积分流水只下发 opter_name，赠送对象的 ID 靠成员表补。 */
+    private clubGiftMemberIds:{[name:string]:string} = {};
+    private clubGiftMemberClubId:string = "";
+    private clubGiftMemberAccount:string = "";
+    /** 成员表请求在途标记（存 context，空串=空闲）。 */
+    private clubGiftMemberContext:string = "";
+    /** 成员表到达前先记住当前赠送流水，补到 ID 后重放一次。 */
+    private clubGiftPendingPayload:string = "";
     /** 最近一次俱乐部金币流水查询的俱乐部和上下文；推送路由本身不带 club_id。 */
     private clubGoldWaterClubId:string = "";
     private clubGoldWaterRequestContext:string = "";
@@ -256,6 +289,7 @@ export default class panelMain extends UIPanelViewBase {
         
 
         KBEngine.Event.register("AllRoomInfo", this, "OnClubRoomInfo");
+        KBEngine.Event.register("ClubRoomInfo", this, "OnClubRoomPush");
         KBEngine.Event.register("RefreshClubRoomList", this, "OnRefreshClubRoomList");
 
         KBEngine.Event.register("onEnterRoom", this, "onEnterRoom");
@@ -271,6 +305,8 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("查询_俱乐部_成员_积分_添加_记录", this, "OnClubGiftRecordList");
         KBEngine.Event.register("ListPlayerCashWater", this, "ListPlayerCashWater");
         KBEngine.Event.register("ClubGoldWater", this, "OnClubGoldWaterList");
+        // 积分流水只给 opter_name，赠送对象的 ID 靠成员表按名字补。
+        KBEngine.Event.register("NumberList", this, "OnClubGiftMemberList");
         KBEngine.Event.register("ClubStoneWater", this, "OnClubStoneWater");
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("ClubGoldGiftChanged", this, "OnClubGoldGiftChanged");
@@ -390,6 +426,8 @@ export default class panelMain extends UIPanelViewBase {
         this.clubManagement.SetApi(this.clubManagementApi);
         this.clubManagementApi.RefreshBadges();
         this.schedule(()=>this.clubManagementApi.RefreshBadges(),30);
+        // 服务端不随推送下发备注，客户端按房间基准每 30 秒推进一次倒计时。
+        this.schedule(this.roomRemarkTickHandler,30);
         this.getAllRooms();
 
 
@@ -500,6 +538,8 @@ export default class panelMain extends UIPanelViewBase {
             DirectChatManager.GetInstance().Off("realtimeMessage", this.directChatRealtimeMessageHandler);
         if(this.clubManagementApi) this.clubManagementApi.Dispose();
         if(this.defaultClubTimer != null) { clearTimeout(this.defaultClubTimer);this.defaultClubTimer = null; }
+        this.unschedule(this.roomRemarkTickHandler);
+        this.unschedule(this.roomListFilteredRefreshHandler);
         super.onDestroy();
     }
 
@@ -2809,6 +2849,8 @@ export default class panelMain extends UIPanelViewBase {
     {
         this.arrayRoomData = [];
         this.roomListAppliedFilterKey = "";
+        this.roomListPendingPushes = [];
+        this.roomRemarkBase = {};
         if(this.scrollRoom2)
             this.scrollRoom2.Init([],true);
         if(this.scrollRoom)
@@ -2980,6 +3022,9 @@ export default class panelMain extends UIPanelViewBase {
         }
 
         this.FinishRoomListRequest();
+        // 筛选态下新房间触发的防抖全量查询，回包要按 room_id 保留滚动位置。
+        const keepScrollOnFullRefresh = this.roomListKeepScrollOnFullRefresh;
+        this.roomListKeepScrollOnFullRefresh = false;
 
         // 切换筛选期间返回的旧分类数据不再落到当前列表，随后只请求最新分类。
         if(requestFilterKey !== this.roomListDesiredFilterKey)
@@ -2999,10 +3044,18 @@ export default class panelMain extends UIPanelViewBase {
         const temp:any[] = [];
         for(const room of data)
         {
-            if(Array.isArray(room) && room.length >= 9)
-                temp.push(room);
-            else
+            if(!Array.isArray(room) || room.length < 9)
+            {
                 Debug.Error("忽略格式错误的房间列表项");
+                continue;
+            }
+            // 文档：zip 全量与 ClubRoomInfo 推送同构 12 位（[10] club_guuid、[11] 恒 -1）。
+            // 兼容未重启的旧服务端 10 位回包时补齐控制位，保证本地行结构一致。
+            const row:any[] = room.slice(0,12);
+            while(row.length < 12)
+                row.push(row.length === 11 ? -1 : "");
+            row[11] = -1;
+            temp.push(row);
         }
         this.scrollRoom2 = this.scrollRoom.getComponent(scrollview2);
         this.scrollRoom.nCurPage = nCurPage;
@@ -3012,8 +3065,17 @@ export default class panelMain extends UIPanelViewBase {
         if(nCurPage === 0)
         {
             this.arrayRoomData = temp;
+            this.CalibrateRoomRemarks(temp,true);
             this.roomListAppliedFilterKey = requestFilterKey;
-            this.scrollRoom2.Init(this.arrayRoomData,true);
+            this.roomListAppliedClubId = requestFilterKey.split("|")[0];
+            if(keepScrollOnFullRefresh && this.scrollRoom2 != null)
+            {
+                const anchor = this.scrollRoom2.GetTopRoomId();
+                this.scrollRoom2.Init(this.arrayRoomData,false,true);
+                this.scrollRoom2.RestoreTopRoom(anchor);
+            }
+            else
+                this.scrollRoom2.Init(this.arrayRoomData,true);
         }
         else if(temp.length > 0)
         {
@@ -3032,6 +3094,7 @@ export default class panelMain extends UIPanelViewBase {
                     this.arrayRoomData.push(room);
                 }
             }
+            this.CalibrateRoomRemarks(temp,false);
             this.scrollRoom2.Init(this.arrayRoomData,false);
         }
 
@@ -3041,6 +3104,9 @@ export default class panelMain extends UIPanelViewBase {
             this.roomListHasMore = this.arrayRoomData.length < nCount;
         else
             this.roomListHasMore = temp.length >= this.ROOM_PAGE_COUNT;
+
+        if(nCurPage === 0)
+            this.FlushRoomListPushes();
 
         this.RequestLatestRoomFilterIfNeeded();
 
@@ -3174,6 +3240,265 @@ export default class panelMain extends UIPanelViewBase {
 
         // },0.1);
     }
+
+    /**
+     * ClubRoomInfo 单房间增量推送，固定 12 位压缩数组，服务端 1 秒合并、只推状态/人数变化。
+     * [0]room_id [1]状态 [2]备注 [3]人数 [4]上限 [5]底皮 [6]时长 [7]房间名
+     * [8]地九王 [9]union_name [10]club_guuid [11]新增下标（非新增为 -1）。
+     * 前 10 位与 AllRoomInfo 全量查询同值，可直接当列表行用。
+     */
+    public OnClubRoomPush(raw:any)
+    {
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { Debug.Error("解析ClubRoomInfo内容失败："+error); return; }
+        }
+        if(data == null)
+            return;
+        const list:any[] = Array.isArray(data.result) ? data.result
+            : (Array.isArray(data) ? data : null);
+        if(list == null || list.length === 0)
+            return;
+
+        // 服务端只推大厅玩家；这里再兜一层，房内玩家等回大厅后的全量查询。
+        const account = GameDataManager.getAccount();
+        const currentRoom = account == null ? "" : String(account.roomID == null ? "" : account.roomID).trim();
+        if(currentRoom !== "" && currentRoom !== "0")
+            return;
+        const filter = this.GetRoomListFilter();
+        if(!filter.clubId)
+            return;
+
+        const entries:RoomPushEntry[] = [];
+        for(const item of list)
+        {
+            if(!Array.isArray(item) || item.length < 12)
+            {
+                Debug.Error("忽略长度不足 12 位的 ClubRoomInfo 推送行");
+                continue;
+            }
+            const roomId = String(item[0] == null ? "" : item[0]).trim();
+            if(roomId === "" || !this.IsPushedRoomInScope(item,roomId,filter.clubId))
+                continue;
+            // 文档 §4.4-10：推送里的 [2] 也是校准值，收到就跳回服务端剩余时间。
+            if(String(item[1]).trim() !== "关闭")
+                this.CalibrateRoomRemarks([item],false);
+            const row:any[] = item.slice(0,12);
+            row[11] = -1;                  // index 只用于插入，不落进列表
+            row[2] = this.LocalRoomRemark(roomId,row[2]);
+            entries.push({row:row,index:Number(item[11])});
+        }
+        if(entries.length === 0)
+            return;
+
+        if(this.roomListLoading || this.roomListAppliedFilterKey === "" ||
+            this.roomListAppliedFilterKey !== this.roomListDesiredFilterKey)
+        {
+            // 全量回包马上会落盘，期间的推送先记下来，回包后合并。
+            for(const entry of entries)
+                this.roomListPendingPushes.push(entry);
+            return;
+        }
+        this.ApplyRoomPushRows(entries,filter);
+    }
+
+    private FlushRoomListPushes()
+    {
+        const pending = this.roomListPendingPushes;
+        this.roomListPendingPushes = [];
+        if(pending.length === 0)
+            return;
+        this.ApplyRoomPushRows(pending,this.GetRoomListFilter());
+    }
+
+    /** 关闭删除、已有原地替换、新增按 [11] 升序插入；同批新增的插入位置顺延。 */
+    private ApplyRoomPushRows(entries:RoomPushEntry[],
+        filter:{clubId:string;roomType:string;haveFreeSit:number;key:string})
+    {
+        const additions:RoomPushEntry[] = [];
+        let changed = false;
+        for(const entry of entries)
+        {
+            const row = entry.row;
+            const at = this.FindRoomRowIndex(String(row[0]));
+            if(String(row[1]).trim() === "关闭")
+            {
+                if(at >= 0) { this.RemoveRoomRow(at,false); changed = true; }
+                continue;
+            }
+            // 「有空位」筛选下满员房要移出列表。
+            if(filter.haveFreeSit === 1 && this.IsPushedRoomFull(row))
+            {
+                if(at >= 0) { this.RemoveRoomRow(at,false); changed = true; }
+                continue;
+            }
+            if(at >= 0)
+            {
+                this.arrayRoomData[at] = row;   // 状态/人数变化不移动顺序
+                changed = true;
+            }
+            else if(entry.index >= 0)
+                additions.push(entry);
+            // 本地没有且非新增的推送忽略，等全量兜底。
+        }
+
+        const hasFilter = (filter.roomType !== "" && filter.roomType !== "全") || filter.haveFreeSit === 1;
+        if(additions.length > 0)
+        {
+            if(hasFilter)
+            {
+                // 服务端下标按无筛选完整列表算，筛选态下本地无法定位；合并成一次全量查询。
+                this.ScheduleFilteredRoomRefresh();
+                return;
+            }
+            additions.sort((a,b)=>a.index-b.index);
+            let inserted = 0;
+            for(const entry of additions)
+            {
+                const pos = Math.max(0,Math.min(this.arrayRoomData.length,entry.index + inserted));
+                this.arrayRoomData.splice(pos,0,entry.row);
+                inserted++;
+            }
+            if(this.scrollRoom)
+                this.scrollRoom.nCount = Math.max(0,Number(this.scrollRoom.nCount) || 0) + inserted;
+            changed = true;
+        }
+        if(changed)
+            this.ScheduleRoomListRefresh();
+    }
+
+    private RemoveRoomRow(index:number,refresh:boolean = true)
+    {
+        if(index < 0 || index >= this.arrayRoomData.length)
+            return;
+        this.arrayRoomData.splice(index,1);
+        if(this.scrollRoom && Number(this.scrollRoom.nCount) > 0)
+            this.scrollRoom.nCount = Number(this.scrollRoom.nCount) - 1;
+        if(refresh)
+            this.ScheduleRoomListRefresh();
+    }
+
+    private FindRoomRowIndex(roomId:string):number
+    {
+        for(let index=0;index<this.arrayRoomData.length;index++)
+        {
+            const row = this.arrayRoomData[index];
+            if(Array.isArray(row) && String(row[0]) === roomId)
+                return index;
+        }
+        return -1;
+    }
+
+    /** 同一帧内多条推送只重排一次，按 room_id 锚定滚动位置、不打断惯性。 */
+    private ScheduleRoomListRefresh()
+    {
+        if(this.roomListPushRefreshScheduled)
+            return;
+        this.roomListPushRefreshScheduled = true;
+        this.scheduleOnce(()=>{
+            this.roomListPushRefreshScheduled = false;
+            if(!cc.isValid(this.node) || this.scrollRoom2 == null)
+                return;
+            const page = Tool.GetChild(this.node,"Main/发现");
+            if(page != null && !page.activeInHierarchy)
+                return;
+            const anchor = this.scrollRoom2.GetTopRoomId();
+            this.scrollRoom2.Init(this.arrayRoomData,false,true);
+            this.scrollRoom2.RestoreTopRoom(anchor);
+        },0);
+    }
+
+    /** 筛选态下新房间合并成一次约 1 秒防抖全量查询，回包按 room_id 保留滚动。 */
+    private ScheduleFilteredRoomRefresh()
+    {
+        if(this.roomListFilteredRefreshScheduled)
+            return;
+        this.roomListFilteredRefreshScheduled = true;
+        this.scheduleOnce(this.roomListFilteredRefreshHandler,1);
+    }
+
+    /** [10] club_guuid 只用于切换俱乐部/重连期间的残留推送兜底过滤，不展示。 */
+    private IsPushedRoomInScope(item:any[],roomId:string,clubId:string):boolean
+    {
+        // 稳态下服务端已按最近查询的 club_id 订阅，推送范围可信，不要按 [10] 误杀联盟共享房。
+        if(this.roomListAppliedClubId === clubId)
+            return true;
+        const roomClub = String(item[10] == null ? "" : item[10]).trim();
+        if(roomClub === "" || roomClub === clubId)
+            return true;
+        // 订阅切换窗口：本地已有的一定属于当前可见集；联盟共享房归属总群主俱乐部。
+        if(this.FindRoomRowIndex(roomId) >= 0)
+            return true;
+        const unionName = this.ResolveClubUnionName(clubId);
+        const roomUnionName = String(item[9] == null ? "" : item[9]).trim();
+        if(unionName !== "" && roomUnionName !== "" && unionName === roomUnionName)
+            return true;
+        const unionId = this.ResolveClubUnionId(clubId);
+        return unionId !== "" && this.ResolveClubUnionId(roomClub) === unionId;
+    }
+
+    private IsPushedRoomFull(row:any[]):boolean
+    {
+        const maxNumber = Number(row[4]);
+        if(!(maxNumber > 0))
+            return false;
+        return (Number(row[3]) || 0) >= maxNumber;
+    }
+
+    private ParseRoomRemarkMinutes(value:any):number
+    {
+        const match = String(value == null ? "" : value).match(/^(\d+)\s*分钟$/);
+        return match == null ? -1 : Number(match[1]);
+    }
+
+    /** 文档 §4.4-10：收到 AllRoomInfo 全量或 ClubRoomInfo 推送，都以服务端 [2] 值校准。 */
+    private CalibrateRoomRemarks(rows:any[],reset:boolean)
+    {
+        if(reset)
+            this.roomRemarkBase = {};
+        const now = Date.now();
+        for(const row of rows)
+        {
+            if(!Array.isArray(row) || row[0] == null)
+                continue;
+            const minutes = this.ParseRoomRemarkMinutes(row[2]);
+            if(minutes < 0)
+                continue;
+            this.roomRemarkBase[String(row[0])] = {minutes:minutes,at:now};
+        }
+    }
+
+    /** 按房间基准算剩余分钟；无基准或备注格式不符时原样返回。 */
+    private LocalRoomRemark(roomId:string,remark:any):any
+    {
+        const base = this.roomRemarkBase[roomId];
+        if(base == null || this.ParseRoomRemarkMinutes(remark) < 0)
+            return remark;
+        const elapsed = Math.floor((Date.now() - base.at) / 60000);
+        return Math.max(0,base.minutes - elapsed) + "分钟";
+    }
+
+    /** 服务端不推备注变化，客户端每 30 秒按首见基准推进倒计时。 */
+    private TickRoomRemarks()
+    {
+        let changed = false;
+        for(const row of this.arrayRoomData)
+        {
+            if(!Array.isArray(row) || row[0] == null)
+                continue;
+            const local = this.LocalRoomRemark(String(row[0]),row[2]);
+            if(local !== row[2])
+            {
+                row[2] = local;
+                changed = true;
+            }
+        }
+        if(changed && this.scrollRoom2 != null)
+            this.scrollRoom2.RefreshVisible();
+    }
+
     //设置房间信息
     setRoomItemInfo(node:cc.Node,jRoom:any,bToTop:boolean = false)
     {
@@ -3446,6 +3771,8 @@ export default class panelMain extends UIPanelViewBase {
             // 同步回包只有空壳，列表由 ClubGoldWater 异步推送。
             this.clubGoldWaterClubId = clubId;
             this.clubGoldWaterRequestContext = context;
+            // 赠送行要显示「送给谁」，但积分流水只给 opter_name，先补一份成员表把名字换成 ID。
+            this.EnsureClubGiftMemberMap(clubId);
             const strParam = JSON.stringify({
                 header:"查询_俱乐部_积分流水",
                 club_id:clubId,
@@ -3564,17 +3891,167 @@ export default class panelMain extends UIPanelViewBase {
         return fallback;
     }
 
-    /** 「我的 → 赠送」的历史记录行。数据源有两套：积分流水（ClubGoldWater，无对方 ID）和旧的添加记录（AddMemberGoldList）。 */
+    /** 俱乐部成员表 → 名字对 ID。赠送流水只下发 opter_name，靠它补出对方 ID。 */
+    private EnsureClubGiftMemberMap(clubId:string)
+    {
+        const account = GameDataManager.getAccount();
+        if(account == null || clubId === "")
+            return;
+        const accountKey = String((account as any).guuid || "");
+        if(this.clubGiftMemberClubId === clubId && this.clubGiftMemberAccount === accountKey)
+            return;
+        if(this.clubGiftMemberContext !== "")
+            return;
+        this.clubGiftMemberClubId = clubId;
+        this.clubGiftMemberAccount = accountKey;
+        this.clubGiftMemberIds = {};
+        const context = "club:gift-members:" + clubId + ":" + Date.now();
+        this.clubGiftMemberContext = context;
+        const strParam = JSON.stringify({
+            header:"查询_俱乐部_成员",
+            club_id:clubId,
+            user_id:"ALL",
+            count:200,
+            page:0,
+            context
+        });
+        try
+        {
+            account.reqHallCommand(strParam,"P@" + context);
+        }
+        catch(error)
+        {
+            this.clubGiftMemberContext = "";
+        }
+        // 没有权限或服务端不回包时别把空闲标记一直占着，10 秒后放行重试。
+        setTimeout(()=>{
+            if(!cc.isValid(this.node))
+                return;
+            if(this.clubGiftMemberContext !== context)
+                return;
+            this.clubGiftMemberContext = "";
+            // 一条都没拿到（无权限/超时）就清掉俱乐部标记，下次翻页还能再试。
+            if(Object.keys(this.clubGiftMemberIds).length === 0)
+                this.clubGiftMemberClubId = "";
+        },10000);
+    }
+
+    /** NumberList：{NumberList:[{guuid,name,...}]}。只用来给赠送行补对方 ID。 */
+    public OnClubGiftMemberList(strMsg:any)
+    {
+        if(this.clubGiftMemberContext === "")
+            return;
+        let data:any = strMsg;
+        if(typeof strMsg === "string")
+        {
+            try { data = JSON.parse(strMsg); }
+            catch(error) { return; }
+        }
+        if(data == null || typeof data !== "object")
+            return;
+        const rows:any[] = Array.isArray(data["NumberList"]) ? data["NumberList"] :
+            (data["result"] && Array.isArray(data["result"]["NumberList"]) ? data["result"]["NumberList"] : null);
+        if(rows == null)
+            return;
+        for(const row of rows)
+        {
+            if(row == null)
+                continue;
+            const id = String(row["guuid"] || row["user_id"] || "");
+            const name = String(row["name"] || row["user_name"] || "");
+            if(id !== "" && name !== "" && this.clubGiftMemberIds[name] == null)
+                this.clubGiftMemberIds[name] = id;
+        }
+        this.clubGiftMemberContext = "";
+        // 首屏多半是用「未知 ID」渲染的，补到名字后重放一次。
+        if(this.clubGiftPendingPayload !== "" && this.scrollExchangeInfo != null)
+        {
+            const payload = this.clubGiftPendingPayload;
+            this.clubGiftPendingPayload = "";
+            this.scrollExchangeInfo.UpdateList(payload,"ClubGoldWater","赠送记录对象",
+                this.PAGE_PER_COUNT,this.setClubGiftRecordItemInfo.bind(this));
+        }
+    }
+
+    private ClubGiftMemberId(name:string):string
+    {
+        if(name == null || name === "")
+            return "";
+        const id = this.clubGiftMemberIds[name];
+        return id == null ? "" : String(id);
+    }
+
+    private FillGiftRecordAvatar(node:cc.Node,rootName:string,userId:string)
+    {
+        const root = node.getChildByName(rootName);
+        const mask = root ? root.getChildByName("mask") : null;
+        const img = mask ? mask.getChildByName("img") : null;
+        const avatar = img ? img.getComponent(cc.Sprite) : null;
+        if(avatar == null)
+            return;
+        // 不知道 ID 时清空，避免复用行残留上一条的头像。
+        if(userId === "")
+        {
+            avatar.spriteFrame = null;
+            return;
+        }
+        if(!ImageManager.getInstance().GetImageByName(userId,"",avatar))
+            ImageManager.getInstance().AddWaitFreshImage2Catch(userId,avatar);
+    }
+
+    /** 一行「谁 → 谁」：sender 在左、receiver 在右，两边都写名字和 ID。 */
+    private FillGiftRecordRow(node:cc.Node,
+        senderName:string,senderId:string,receiverName:string,receiverId:string,
+        typeText:string,countText:string,amountNumber:number,hasAmount:boolean,timeText:string)
+    {
+        const setLabel = (childName:string,text:string)=>{
+            const child = node.getChildByName(childName);
+            const label = child ? child.getComponent(cc.Label) : null;
+            if(label) label.string = text;
+        };
+        setLabel("type",typeText);
+        setLabel("id",(senderName !== "" ? senderName : "—") + "\r\nID:" + (senderId !== "" ? senderId : "—"));
+        setLabel("id2",(receiverName !== "" ? receiverName : "—") + "\r\nID:" + (receiverId !== "" ? receiverId : "—"));
+        setLabel("time",timeText);
+
+        const countNode = node.getChildByName("count");
+        if(countNode)
+        {
+            const label = countNode.getComponent(cc.Label);
+            if(label) label.string = countText;
+            // 客户口径（2026-11-07 测试反馈）：红色 = 加分，绿色 = 减分。
+            if(hasAmount && amountNumber > 0)
+                countNode.color = new cc.Color(255,65,52,255);
+            else if(hasAmount && amountNumber < 0)
+                countNode.color = new cc.Color(167,231,29,255);
+            else
+                countNode.color = new cc.Color(239,225,194,255);
+        }
+        this.FillGiftRecordAvatar(node,"头像",senderId);
+        this.FillGiftRecordAvatar(node,"头像2",receiverId);
+    }
+
+    /**
+     * 「我的 → 赠送」的历史记录行，显示「谁 → 谁」，两边都给名字 + ID。
+     * 数据源有两套：积分流水（ClubGoldWater）和旧的添加记录（AddMemberGoldList）。
+     * 积分流水的 guuid/name 是流水归属人（查自己时就是自己），opter_name 是交易对方。
+     */
     public setClubGiftRecordItemInfo(node:cc.Node,objOne:any)
     {
         node.active = true;
-        // 旧记录用 guuid/name 指向被操作的人；积分流水只有操作人 opter_name，没有对方 ID。
-        const targetId = String(this.ReadClubGiftRecordValue(objOne,
-            ["target_guuid","target_user_id","to_user_id","member_guuid","member_id","user_id","guuid","user_guuid"],""));
-        const targetName = String(this.ReadClubGiftRecordValue(objOne,
-            ["target_name","target_user_name","to_user_name","member_name","user_name","name"],""));
-        const opterName = String(this.ReadClubGiftRecordValue(objOne,
+        const account:any = GameDataManager.getAccount();
+        const selfId = account == null ? "" : String(account.guuid || "");
+        const selfName = account == null ? "" : String(account.name || account.nickname || "");
+
+        // 流水归属玩家（查自己时就是自己）；旧的添加记录是「被操作的人」。
+        const ownerId = String(this.ReadClubGiftRecordValue(objOne,["guuid","user_guuid","user_id"],""));
+        const ownerName = String(this.ReadClubGiftRecordValue(objOne,["name","user_name","member_name"],""));
+        // 操作人 / 交易对方：积分赠送里是收礼人，积分受赠和上下分里是对方。
+        let opterName = String(this.ReadClubGiftRecordValue(objOne,
             ["opter_name","operator_name","op_name","oper_name"],"")).trim();
+        const opterRawId = String(this.ReadClubGiftRecordValue(objOne,
+            ["opter_guuid","actor_guuid","target_guuid","to_user_id","member_guuid"],""));
+
         const amount = this.ReadClubGiftRecordValue(objOne,
             ["user_add_gold","add_gold","add_gold_num","change_gold","amount","money_value","money","gold","club_gold","score"],"");
         let strDate = String(this.ReadClubGiftRecordValue(objOne,
@@ -3591,56 +4068,56 @@ export default class panelMain extends UIPanelViewBase {
         {
             strDate = strDate.replace(/^\d{4}[-\/]/,"").replace(/:[0-9]{2}(\.[0-9]+)?$/,"");
         }
-        // type 列只有两个字宽：积分流水的「添加积分 / 积分赠送 / 积分受赠」要缩成短标签，
-        // 旧添加记录原样给的是「添加 / 赠送」。都没有时按金额正负兜底。
         const rawType = String(this.ReadClubGiftRecordValue(objOne,["type","record_type"],""));
         // 服务端偶有千分位，去掉逗号再解析，否则金额会被当成 0 而丢掉正负判断。
         const amountNumber = Number(String(amount).replace(/,/g,""));
-        const isMinus = isFinite(amountNumber) && amountNumber < 0;
+        const hasAmount = isFinite(amountNumber) && String(amount) !== "";
+        const isMinus = hasAmount && amountNumber < 0;
+        // type 列只有两个字宽，服务端的长类型名要缩成短标签。
         let typeText = rawType;
         if(typeText === "添加积分")
-            typeText = "添加";
-        else if(typeText === "积分赠送")
+            typeText = isMinus ? "下分" : "上分";
+        else if(typeText === "积分赠送" || typeText === "赠出")
             typeText = "赠送";
-        else if(typeText === "积分受赠")
+        else if(typeText === "积分受赠" || typeText === "赠入")
             typeText = "收到";
         else if(typeText === "修改积分")
             typeText = "修改";
         if(typeText === "")
-            typeText = isMinus ? "扣除" : "赠送";
-        node.getChildByName("type").getComponent(cc.Label).string = typeText;
+            typeText = isMinus ? "下分" : "上分";
 
-        const hasTarget = targetId !== "" || targetName !== "";
-        node.getChildByName("id").getComponent(cc.Label).string = hasTarget
-            ? targetName + "\r\nID:" + targetId
-            : (opterName !== "" ? opterName : "—");
-        // 金额保留原符号：负数是扣减（下分/送出），正数补「+」与其它记录页一致。
-        const countNode = node.getChildByName("count");
-        const hasAmount = isFinite(amountNumber) && String(amount) !== "";
-        countNode.getComponent(cc.Label).string = hasAmount
-            ? (amountNumber > 0 ? "+" + String(amount) : String(amount))
-            : String(amount);
-        // 客户口径（2026-11-07 测试反馈）：红色 = 加分，绿色 = 减分。
-        if(hasAmount && amountNumber > 0)
-            countNode.color = new cc.Color(255,65,52,255);
-        else if(hasAmount && amountNumber < 0)
-            countNode.color = new cc.Color(167,231,29,255);
-        else
-            countNode.color = new cc.Color(239,225,194,255);
-        node.getChildByName("time").getComponent(cc.Label).string = strDate;
+        const isGift = rawType.indexOf("赠送") >= 0 || rawType.indexOf("受赠") >= 0 ||
+            rawType.indexOf("赠出") >= 0 || rawType.indexOf("赠入") >= 0;
+        const ownerIsSelf = ownerId === "" || selfId === "" || ownerId === selfId;
+        const ownerTitle = ownerName !== "" ? ownerName : (ownerIsSelf ? selfName : "");
+        const ownerUid = ownerId !== "" ? ownerId : (ownerIsSelf ? selfId : "");
+        // 2026-11-02 前的旧赠送记录 opter_name 记的是发起人自己，按「对方缺失」处理。
+        if(isGift && opterName !== "" && opterName === ownerTitle)
+            opterName = "";
+        const opterId = opterRawId !== "" ? opterRawId : this.ClubGiftMemberId(opterName);
 
-        const avatarRoot = node.getChildByName("头像");
-        const avatarMask = avatarRoot ? avatarRoot.getChildByName("mask") : null;
-        const avatarNode = avatarMask ? avatarMask.getChildByName("img") : null;
-        const avatar = avatarNode ? avatarNode.getComponent(cc.Sprite) : null;
-        if(avatar)
+        let senderName = "", senderId = "", receiverName = "", receiverId = "";
+        if(isGift && isMinus)
         {
-            // 流水没有对方 ID，不能按名字取头像；清空，避免复用行残留上一条的头像。
-            if(!hasTarget)
-                avatar.spriteFrame = null;
-            else if(!ImageManager.getInstance().GetImageByName(targetId,"",avatar))
-                ImageManager.getInstance().AddWaitFreshImage2Catch(targetId,avatar);
+            // 送出去：我 → 对方
+            senderName = ownerTitle;
+            senderId = ownerUid;
+            receiverName = opterName;
+            receiverId = opterId;
         }
+        else
+        {
+            // 别人给我上分 / 送我：对方 → 我
+            senderName = opterName;
+            senderId = opterId;
+            receiverName = ownerTitle;
+            receiverId = ownerUid;
+        }
+
+        // 金额保留原符号：负数是扣减（下分/送出），正数补「+」与其它记录页一致。
+        const countText = hasAmount ? (amountNumber > 0 ? "+" + String(amount) : String(amount)) : String(amount);
+        this.FillGiftRecordRow(node,senderName,senderId,receiverName,receiverId,
+            typeText,countText,amountNumber,hasAmount,strDate);
     }
     public setExchangeItemInfo(node:cc.Node,objOne:any)
     {
@@ -3667,34 +4144,20 @@ export default class panelMain extends UIPanelViewBase {
         }
         let strStoneNum = objOne["stone_number"];
 
-        //判断是转入还是转出
-        let strUserID = GameDataManager.getAccount().guuid;
-        let strDisplayID = strTarID;
-        let strDisplayName = strTarName;
-
-        if (strUserID == strSrcID) //转出
-        {
-            node.getChildByName("type").getComponent(cc.Label).string = "赠送";
-        }
-        else
-        {
-            strDisplayID = strSrcID;
-            strDisplayName = strSrcName;
-            node.getChildByName("type").getComponent(cc.Label).string = "收到";
-        }
-        node.getChildByName("id").getComponent(cc.Label).string = strDisplayName+"\r\nID:"+strDisplayID;
-        node.getChildByName("count").getComponent(cc.Label).string = strStoneNum;
-        node.getChildByName("time").getComponent(cc.Label).string = strDate;
-
-        // 头像使用项目既有缓存/下载链路；圆形遮罩和金色外环已预制在行 Prefab。
-        let avatarRoot = node.getChildByName("头像");
-        let avatarMask = avatarRoot ? avatarRoot.getChildByName("mask") : null;
-        let avatarNode = avatarMask ? avatarMask.getChildByName("img") : null;
-        let avatar = avatarNode ? avatarNode.getComponent(cc.Sprite) : null;
-        if(avatar && !ImageManager.getInstance().GetImageByName(strDisplayID,"",avatar))
-        {
-            ImageManager.getInstance().AddWaitFreshImage2Catch(strDisplayID,avatar);
-        }
+        // 大厅赠送记录：user_guuid 是发起人、target_guuid 是收礼人，直接按「谁 → 谁」渲染。
+        const account:any = GameDataManager.getAccount();
+        const strUserID = account == null ? "" : String(account.guuid || "");
+        const isOutgoing = String(objOne["user_guuid"] || "") === strUserID;
+        const amountNumber = Number(String(strStoneNum == null ? "" : strStoneNum).replace(/,/g,""));
+        this.FillGiftRecordRow(node,
+            isOutgoing ? String(strSrcName || "") : String(strTarName || ""),
+            isOutgoing ? String(strSrcID || "") : String(strTarID || ""),
+            isOutgoing ? String(strTarName || "") : String(strSrcName || ""),
+            isOutgoing ? String(strTarID || "") : String(strSrcID || ""),
+            isOutgoing ? "赠送" : "收到",
+            strStoneNum == null ? "" : String(strStoneNum),
+            amountNumber,isFinite(amountNumber) && strStoneNum != null && String(strStoneNum) !== "",
+            strDate);
     }
     
     private GetMyClubIds():string[]
@@ -4046,6 +4509,17 @@ export default class panelMain extends UIPanelViewBase {
         if(infoUnionId) return infoUnionId;
         const status = this.clubUnionStatus[clubId];
         return status && status.known && status.hasUnion ? String(status.unionId || "").trim() : "";
+    }
+
+    private ResolveClubUnionName(clubId:string):string
+    {
+        const info = this.clubDetails[clubId];
+        const infoName = String(info && (info.union_name || info.unionName) || "").trim();
+        if(infoName) return infoName;
+        const status = this.clubUnionStatus[clubId];
+        const statusName = String(status && status.unionName || "").trim();
+        if(statusName) return statusName;
+        return this.CachedUnionName(this.ResolveClubUnionId(clubId));
     }
 
     /** 联盟号已知但名称或总群主身份缺失时补查「我的联盟」；盟主无权限时静默退化为只显示联盟号。 */
@@ -5487,6 +5961,9 @@ export default class panelMain extends UIPanelViewBase {
         {
             if(this.scrollExchangeInfo == null)
                 return;
+            // 成员表还没回来时对方 ID 会缺，先记住这份流水，补到名字后重放。
+            if(this.clubGiftMemberContext !== "")
+                this.clubGiftPendingPayload = payload;
             this.scrollExchangeInfo.UpdateList(payload,"ClubGoldWater","赠送记录对象",
                 this.PAGE_PER_COUNT,this.setClubGiftRecordItemInfo.bind(this));
             return;

@@ -52,6 +52,12 @@ export default class DrhLogicMgr extends cc.Component {
     public strEndTime = ""; //结束时间
     public bShowOverAnimate = false;  //结算动画进行中
     public strLastDelayMsg = "";  //动画过程中延迟的消息
+    /** 上一局结束后收起桌面牌的倒计时序号；每次排/取消都自增，旧回调自动作废。 */
+    private roundCardsHideSerial = 0;
+    /** 是否已经排过清桌倒计时；避免等待开局期间反复收到 PlayerList 把计时一直往后推。 */
+    private roundCardsHideArmed = false;
+    /** 上一局结束后多久收起桌面牌（秒）。人数不足时下一局不会开，桌面上不该一直留着上局的牌。 */
+    private readonly roundCardsHideDelay = 5;
     private  nLastPlayerCount = 0; //上一次playlist人数
 
     public  arraySited = new Array<string>(); //已经坐下过的用户
@@ -1006,6 +1012,16 @@ export default class DrhLogicMgr extends cc.Component {
 
 
         //处理房间状态，并做出对应动作
+        //牌局进行中：上一局的清桌状态必须解除，否则新一局的牌会被自己藏起来
+        if (this.strGameState == "running")
+        {
+            this.CancelHideRoundCards();
+            for (let player of this.arrayPlayer)
+            {
+                if (player != null)
+                    player.ShowRoundCardsHandArea();
+            }
+        }
         if (this.strGameState == "init") //还有人没有准备
         {
             //复位游戏标记
@@ -1013,6 +1029,10 @@ export default class DrhLogicMgr extends cc.Component {
             this.ClearCoin();
             
             this.nTimeLeft = nTimeCountDown;
+
+            //回到等待开局说明本局已经结束；人数不足时下一局不会开，
+            //兜底排一次清桌（结算动画那条路没走到时靠这里）
+            this.ScheduleHideRoundCards();
         }
         else if (this.strGameState == "ready") //当前所有人都准备好了
         {
@@ -1119,7 +1139,56 @@ export default class DrhLogicMgr extends cc.Component {
        this.bettingSpotlightActionPlayer = null;
        this.HideBettingSpotlight(true);
        this.ClearCoin();
-       
+
+       //下一局已经开始，取消上一局的清桌倒计时并恢复手牌区
+       this.CancelHideRoundCards();
+       for (let player of this.arrayPlayer)
+       {
+           if (player != null)
+               player.ShowRoundCardsHandArea();
+       }
+   }
+
+   /**
+    * 排一次清桌倒计时：上一局结束后 roundCardsHideDelay 秒内没开下一局，就把桌面上的牌收起。
+    * 人数不足导致下一局不开时，界面不该一直停在上一局摊牌的状态。
+    */
+   public ScheduleHideRoundCards()
+   {
+       if (this.bLeavingRoom || this.roundCardsHideArmed)
+           return;
+       this.roundCardsHideArmed = true;
+       let serial = ++this.roundCardsHideSerial;
+       this.scheduleOnce(()=>{
+           if (serial != this.roundCardsHideSerial)
+               return;
+           this.roundCardsHideArmed = false;
+           if (this.bLeavingRoom)
+               return;
+           //已经开始下一局就不动，牌由新一局自己刷新
+           if (this.strGameState == "running")
+               return;
+           this.HideRoundCardsOnTable();
+       }, this.roundCardsHideDelay);
+   }
+
+   /** 下一局开始时取消清桌，避免新一局的牌被误收。 */
+   public CancelHideRoundCards()
+   {
+       this.roundCardsHideArmed = false;
+       this.roundCardsHideSerial++;
+   }
+
+   /** 把本局留在桌面上的牌全部收起。 */
+   public HideRoundCardsOnTable()
+   {
+       if (this.bLeavingRoom)
+           return;
+       for (let player of this.arrayPlayer)
+       {
+           if (player != null)
+               player.HideRoundCards();
+       }
    }
     //状态机消息处理
     public OnServerPlayEvent(strMsg:string)
@@ -1251,6 +1320,11 @@ export default class DrhLogicMgr extends cc.Component {
                         this.OnUpdatePlayerList(strMsg, true);
                     }
                     this.node.getChildByName("cmd6").active = false;
+
+                    //本局结束（结算动画播完）开始 5 秒清桌倒计时：人数不足时下一局不会开，
+                    //桌面上的牌不能一直留在上一局的状态
+                    this.CancelHideRoundCards();
+                    this.ScheduleHideRoundCards();
 
                 },2);
         
@@ -1384,7 +1458,8 @@ export default class DrhLogicMgr extends cc.Component {
             }
         }
 
-        let fOneTime = 0.08;
+        //每张牌之间的间隔，决定发牌节奏快慢（原 0.08 偏快，客户端反馈看不清落位）
+        let fOneTime = 0.15;
         let arrayAction = Array<cc.ActionInstant>();
         //开始循环发牌(发几轮由服务器控制)
         for (let i=0;i<arrayGet.length;i++)
@@ -1453,8 +1528,8 @@ export default class DrhLogicMgr extends cc.Component {
             this.CompleteBettingSpotlightDealAnimation(spotlightDealSerial);
             return;
         }
-        // 每张牌位移动画为0.2秒，序列最后已有0.08秒间隔；补足尾帧后才允许聚光灯出现。
-        arrayAction.push(cc.delayTime(0.13));
+        // 每张牌位移动画为0.26秒，序列最后已有0.15秒间隔；补足尾帧后才允许聚光灯出现。
+        arrayAction.push(cc.delayTime(0.11));
         arrayAction.push(cc.callFunc(()=>{
             this.CompleteBettingSpotlightDealAnimation(spotlightDealSerial);
         }));

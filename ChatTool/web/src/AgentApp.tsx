@@ -465,7 +465,17 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     const heartbeat = () => void api<void>('/api/agent/heartbeat', { method: 'POST', body: jsonBody({}) }).catch(() => undefined)
     heartbeat()
     const timer = window.setInterval(heartbeat, 30000)
-    return () => window.clearInterval(timer)
+    // 浏览器会节流后台标签页的定时器，回到工作台时立刻补一次心跳，避免刚切回来仍被判离线。
+    const onVisible = () => { if (document.visibilityState === 'visible') heartbeat() }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    window.addEventListener('online', onVisible)
+    return () => {
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+      window.removeEventListener('online', onVisible)
+    }
   }, [])
   useEffect(() => {
     if (scope !== 'hosted') return
@@ -1048,7 +1058,7 @@ function QuickReplyManager({ items, onClose, onChanged }: { items: QuickReply[];
   </div></div>
 }
 
-function HostedOwnerInfo({ owner, conversation, canDelete, deleting, onDelete }: { owner: HostedOwner; conversation: HostedConversation | null; canDelete: boolean; deleting: boolean; onDelete: () => void }) {  return <div className="player-info"><header><span className="info-avatar"><Avatar name={owner.name} url={owner.avatar} size="large" /></span><h3>{owner.name}</h3><p>{owner.roleName} · {owner.groupName}</p>{!owner.enabled && <em className="hosted-readonly-badge">已取消托管</em>}</header><section><h4>托管信息</h4><dl><div><dt>托管账号</dt><dd>{owner.name}</dd></div><div><dt>游戏 ID</dt><dd>{owner.guuid}</dd></div><div><dt>身份</dt><dd>{owner.roleName}</dd></div><div><dt>归属</dt><dd>{owner.groupType === 'union' ? `联盟 · ${owner.groupName}` : `俱乐部 · ${owner.groupName}`}</dd></div><div><dt>托管会话</dt><dd>{owner.conversationCount} 个</dd></div><div><dt>开启时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.enabledAt))}</dd></div>{owner.disabledAt && <div><dt>取消时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.disabledAt))}</dd></div>}</dl></section>{conversation && <section><h4>当前会话</h4><dl><div><dt>对方</dt><dd>{hostedDisplayName(conversation.peer.name, conversation.remark)}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''}</dd></div><div><dt>备注名称</dt><dd>{conversation.remark || '未设置'}</dd></div><div><dt>置顶</dt><dd>{conversation.pinned ? '已置顶' : '未置顶'}</dd></div><div><dt>俱乐部</dt><dd>{conversation.clubName}</dd></div><div><dt>最后消息</dt><dd>{conversation.lastMessage || '—'}</dd></div></dl></section>}<footer>{owner.enabled ? '客服的回复会以该托管账号身份发送，对方收到时与本人回复一致。' : canDelete ? <><p>托管已取消，仅可查看历史记录。</p><button type="button" className="danger-light hosted-delete-button" disabled={deleting} onClick={onDelete}>{deleting ? '删除中…' : '永久删除聊天记录'}</button></> : <p>托管已取消，仅可查看历史记录；如需删除请联系主管。</p>}</footer></div>
+function HostedOwnerInfo({ owner, conversation, canDelete, deleting, onDelete }: { owner: HostedOwner; conversation: HostedConversation | null; canDelete: boolean; deleting: boolean; onDelete: () => void }) {  return <div className="player-info"><header><span className="info-avatar"><Avatar name={owner.name} url={owner.avatar} size="large" /></span><h3>{owner.name}</h3><p>{owner.roleName} · {owner.groupName}</p>{!owner.enabled && <em className="hosted-readonly-badge">已取消托管</em>}<a className="game-admin-link" href={gameAdminPlayerURL(owner.guuid)} target="_blank" rel="noreferrer">在游戏后台查看 / 处理</a></header><section><h4>托管信息</h4><dl><div><dt>托管账号</dt><dd>{owner.name}</dd></div><div><dt>游戏 ID</dt><dd>{owner.guuid}</dd></div><div><dt>身份</dt><dd>{owner.roleName}</dd></div><div><dt>归属</dt><dd>{owner.groupType === 'union' ? `联盟 · ${owner.groupName}` : `俱乐部 · ${owner.groupName}`}</dd></div><div><dt>托管会话</dt><dd>{owner.conversationCount} 个</dd></div><div><dt>开启时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.enabledAt))}</dd></div>{owner.disabledAt && <div><dt>取消时间</dt><dd>{formatDateTime(normalizeDirectTime(owner.disabledAt))}</dd></div>}</dl></section>{conversation && <section><h4>当前会话</h4><dl><div><dt>对方</dt><dd>{hostedDisplayName(conversation.peer.name, conversation.remark)}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''}</dd></div>{conversation.peer.guuid && <div><dt>对方后台</dt><dd><a className="inline-admin-link" href={gameAdminPlayerURL(conversation.peer.guuid)} target="_blank" rel="noreferrer">在游戏后台查看</a></dd></div>}<div><dt>备注名称</dt><dd>{conversation.remark || '未设置'}</dd></div><div><dt>置顶</dt><dd>{conversation.pinned ? '已置顶' : '未置顶'}</dd></div><div><dt>俱乐部</dt><dd>{conversation.clubName}</dd></div><div><dt>最后消息</dt><dd>{conversation.lastMessage || '—'}</dd></div></dl></section>}<footer>{owner.enabled ? '客服的回复会以该托管账号身份发送，对方收到时与本人回复一致。' : canDelete ? <><p>托管已取消，仅可查看历史记录。</p><button type="button" className="danger-light hosted-delete-button" disabled={deleting} onClick={onDelete}>{deleting ? '删除中…' : '永久删除聊天记录'}</button></> : <p>托管已取消，仅可查看历史记录；如需删除请联系主管。</p>}</footer></div>
 }
 
 function PlayerInfo({ detail, memoRevision }: { detail: ConversationDetail; memoRevision: number }) {

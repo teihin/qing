@@ -23,6 +23,8 @@ const (
 	agentContributionDisplayDataCommand = "异步_查询_代理_展示数据"
 	agentContributionRuleGetCommand     = "查询_代理_展示规则"
 	agentContributionRuleSetCommand     = "设置_代理_展示规则"
+	// 红利暗抽：同一个命令兼做读取（不带比例）和设置（带比例）。
+	agentContributionBonusDarkCommand = "设置_俱乐部_代理_红利暗抽"
 )
 
 type agentDisplayRule struct {
@@ -65,6 +67,8 @@ type agentContributionNode struct {
 	Status                     string           `json:"status"`
 	Note                       string           `json:"note"`
 	DarkPercent                string           `json:"darkPercent"`
+	// BonusDarkPercent 是红利暗抽比例（int，0~100；-1=代理树未加载）。
+	BonusDarkPercent           string           `json:"bonusDarkPercent"`
 	Percent                    string           `json:"percent"`
 	ShowPercent                *int64           `json:"showPercent"`
 	OwnShowPercent             *int64           `json:"ownShowPercent"`
@@ -117,6 +121,8 @@ type agentContributionDisplayData struct {
 	ClubID                 string            `json:"clubId"`
 	Metric                 string            `json:"metric"`
 	AgentIncomeShowPercent any               `json:"agentIncomeShowPercent,omitempty"`
+	// BonusDarkPercent 是该代理自己的红利暗抽比例（int，0~100；未设置=0），不参与 show_percent 缩放。
+	BonusDarkPercent       *int64            `json:"bonusDarkPercent,omitempty"`
 	SelfRaw                map[string]string `json:"selfRaw"`
 	SelfDisplay            map[string]string `json:"selfDisplay"`
 	TeamRaw                map[string]string `json:"teamRaw"`
@@ -139,6 +145,20 @@ type agentContributionDisplayBatchResponse struct {
 	ClubID  string                                  `json:"clubId"`
 	Items   map[string]agentContributionDisplayData `json:"items"`
 	Message string                                  `json:"message"`
+}
+
+// 红利暗抽：比例按 club_agent_info.bonus_dark_percent 一代理一份；未设置=0。
+type agentContributionBonusDarkRequest struct {
+	Percent *int   `json:"percent"`
+	Note    string `json:"note"`
+}
+
+type agentContributionBonusDarkResponse struct {
+	ClubID           string `json:"clubId"`
+	AgentID          string `json:"agentId"`
+	BonusDarkPercent *int64 `json:"bonusDarkPercent"`
+	Available        bool   `json:"available"`
+	Message          string `json:"message"`
 }
 
 func (s *Server) handleAgentContributionMembers(w http.ResponseWriter, r *http.Request, _ principal) {
@@ -314,6 +334,7 @@ func (s *Server) queryAgentContributionDisplayData(r *http.Request, clubID, agen
 		data.Metric = strings.TrimSpace(value)
 	}
 	data.AgentIncomeShowPercent = payload["agent_income_show_percent"]
+	data.BonusDarkPercent = intPointerField(payload, "bonus_dark_percent", "bonusDarkPercent")
 	data.SelfRaw = anyStringMap(payload["self_raw"])
 	data.SelfDisplay = anyStringMap(payload["self_display"])
 	data.TeamRaw = anyStringMap(payload["team_raw"])
@@ -705,6 +726,113 @@ func (s *Server) handleAgentContributionRuleReset(w http.ResponseWriter, r *http
 	})
 }
 
+// 红利暗抽查询：游戏服同一个命令不带比例即为读取，只回显当前值，不写库。
+func (s *Server) handleAgentContributionBonusDarkGet(w http.ResponseWriter, r *http.Request, _ principal) {
+	clubID, agentID, ok := parseAgentBonusDarkPath(w, r)
+	if !ok {
+		return
+	}
+	writeData(w, http.StatusOK, s.queryAgentContributionBonusDark(r, clubID, agentID))
+}
+
+func (s *Server) queryAgentContributionBonusDark(r *http.Request, clubID, agentID string) agentContributionBonusDarkResponse {
+	response := agentContributionBonusDarkResponse{ClubID: clubID, AgentID: agentID}
+	params := map[string]any{
+		"club_id": clubID, "user_id": agentID,
+		"context": gameOperationContext("agent-bonus-dark-get"),
+	}
+	result, err := s.callGameCommand(r.Context(), agentContributionBonusDarkCommand, params)
+	if err != nil {
+		response.Message = "游戏服红利暗抽查询暂不可用：" + err.Error()
+		return response
+	}
+	if result.RetCode != 512 {
+		response.Message = describeGameFailure(agentContributionBonusDarkCommand, result.RetCode, result.RetResult)
+		return response
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(result.RetResult, &payload); err != nil {
+		response.Message = "游戏服红利暗抽格式不正确"
+		return response
+	}
+	percent := intPointerField(payload, "bonus_dark_percent", "bonusDarkPercent")
+	if percent == nil {
+		zero := int64(0)
+		percent = &zero
+	}
+	response.BonusDarkPercent = percent
+	response.Available = true
+	return response
+}
+
+// 红利暗抽调整：只下发 0~100 的整数，生效口径由游戏服决定（0 = 不暗抽）。
+func (s *Server) handleAgentContributionBonusDarkSet(w http.ResponseWriter, r *http.Request, p principal) {
+	clubID, agentID, ok := parseAgentBonusDarkPath(w, r)
+	if !ok {
+		return
+	}
+	var input agentContributionBonusDarkRequest
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_BODY", "请求内容格式不正确")
+		return
+	}
+	input.Note = strings.TrimSpace(input.Note)
+	if input.Percent == nil || *input.Percent < 0 || *input.Percent > 100 {
+		writeError(w, http.StatusBadRequest, "INVALID_PERCENT", "暗抽比例必须是 0 到 100 的整数")
+		return
+	}
+	if count := utf8.RuneCountInString(input.Note); count < 2 || count > 200 {
+		writeError(w, http.StatusBadRequest, "INVALID_NOTE", "调整原因需要 2 到 200 个字")
+		return
+	}
+
+	percent := int64(*input.Percent)
+	params := map[string]any{
+		"club_id": clubID, "user_id": agentID, "bonus_dark_percent": percent,
+		"context": gameOperationContext("agent-bonus-dark-set"),
+	}
+	requestAudit := map[string]any{"clubId": clubID, "agentId": agentID, "bonusDarkPercent": percent, "note": input.Note}
+	result, err := s.callGameCommand(r.Context(), agentContributionBonusDarkCommand, params)
+	if err != nil {
+		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
+			requestAudit, nil, nil, 502, "游戏服红利暗抽设置失败", clientIP(r))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", "游戏服红利暗抽设置失败："+err.Error())
+		return
+	}
+	if result.RetCode != 512 {
+		message := describeGameFailure(agentContributionBonusDarkCommand, result.RetCode, result.RetResult)
+		s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
+			requestAudit, nil, result.RetResult, result.RetCode, message, clientIP(r))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", message)
+		return
+	}
+	var payload map[string]any
+	_ = json.Unmarshal(result.RetResult, &payload)
+	effective := intPointerField(payload, "bonus_dark_percent", "bonusDarkPercent")
+	if effective == nil {
+		effective = &percent
+	}
+	s.audit(r.Context(), &p, "game.agent_contribution.adjust", "game_agent", agentID,
+		requestAudit, nil, map[string]any{"bonusDarkPercent": *effective}, 0, "红利暗抽设置成功", clientIP(r))
+	writeData(w, http.StatusOK, agentContributionBonusDarkResponse{
+		ClubID: clubID, AgentID: agentID, BonusDarkPercent: effective, Available: true, Message: "设置成功",
+	})
+}
+
+func parseAgentBonusDarkPath(w http.ResponseWriter, r *http.Request) (string, string, bool) {
+	clubID, err := normalizeClubID(r.PathValue("clubId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_CLUB_ID", err.Error())
+		return "", "", false
+	}
+	agentID := strings.TrimSpace(r.PathValue("agentId"))
+	if !validAgentID(agentID) {
+		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 不正确")
+		return "", "", false
+	}
+	return clubID, agentID, true
+}
+
 func parseAgentContributionRulePath(w http.ResponseWriter, r *http.Request) (string, string, string, bool) {
 	clubID, err := normalizeClubID(r.PathValue("clubId"))
 	if err != nil {
@@ -827,6 +955,7 @@ func mapAgentContributionNode(row map[string]any) agentContributionNode {
 		Status:                     textField(row, "status"),
 		Note:                       textField(row, "note"),
 		DarkPercent:                textField(row, "dark_percent", "darkPercent"),
+		BonusDarkPercent:           textField(row, "bonus_dark_percent", "bonusDarkPercent"),
 		Percent:                    textField(row, "percent", "agent_percent", "agentPercent"),
 		ShowPercent:                intPointerField(row, "show_percent", "showPercent", "agent_income_show_percent"),
 		ContribRule:                parseDisplayRuleFromRow(row, "contrib"),

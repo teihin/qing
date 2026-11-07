@@ -146,7 +146,8 @@ export default class PKCardInfoScript extends cc.Component {
             //this.transBK1.position = this.node.convertToNodeSpaceAR(vcSource);            
             this.ShowHideBK(false);            
 
-            let action = cc.moveTo(0.2,cc.Vec2.ZERO);
+            //单张牌飞行动画时长；与 DrhLogicMgr.ThrowCard2Player 的 fOneTime 配合决定发牌节奏
+            let action = cc.moveTo(0.26,cc.Vec2.ZERO);
             let fun = cc.callFunc(()=>{
                 if(bDelayShowCard)
                 {

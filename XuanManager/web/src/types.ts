@@ -1016,6 +1016,8 @@ export interface AgentContributionNode {
   status: string;
   note: string;
   darkPercent: string;
+  /** 红利暗抽比例（0~100；-1=代理树未加载，游戏服未返回时为空）。 */
+  bonusDarkPercent?: string;
   percent: string;
   /** 该代理自己的展示比例；null 表示未设置（按 100 处理）。 */
   showPercent: number | null;
@@ -1033,10 +1035,21 @@ export interface AgentContributionDisplayData {
   clubId: string;
   metric: string;
   agentIncomeShowPercent?: number | string;
+  /** 该代理自己的红利暗抽比例（0~100；未设置=0），不参与 show_percent 缩放。 */
+  bonusDarkPercent?: number | null;
   selfRaw: Record<string, string>;
   selfDisplay: Record<string, string>;
   teamRaw: Record<string, string>;
   teamDisplay: Record<string, string>;
+  available: boolean;
+  message: string;
+}
+
+/** 红利暗抽比例：查询与设置共用。 */
+export interface AgentContributionBonusDarkResponse {
+  clubId: string;
+  agentId: string;
+  bonusDarkPercent: number | null;
   available: boolean;
   message: string;
 }
@@ -1142,4 +1155,26 @@ export interface ClubStonePoolAdjustmentResponse {
   delta: number;
   verified: boolean;
   message: string;
+}
+
+/** 后台 → 游戏服（8890 /hall/command）的单条调用/回包日志。 */
+export interface GameCallLogEntry {
+  key: string;
+  time: string;
+  level: string;
+  kind: "call" | "result" | "error";
+  tag: string;
+  command: string;
+  params: string;
+  result: string;
+  retCode: string;
+  httpStatus: string;
+  durationMs: string;
+  error: string;
+}
+
+export interface GameCallLogState {
+  entries: GameCallLogEntry[];
+  file: string;
+  updatedAt: string;
 }

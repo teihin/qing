@@ -316,6 +316,8 @@ textarea { resize: none; }
 .game-admin-link { display: block; margin: 15px auto 0; padding: 10px 13px; color: #fff; border-radius: 8px; background: #197961; font-size: 13px; font-weight: 700; text-decoration: none; transition: background .18s ease, transform .18s ease; }
 .game-admin-link:hover { background: #12654f; transform: translateY(-1px); }
 .game-admin-link:focus-visible { outline: 2px solid #73cbb2; outline-offset: 2px; }
+.inline-admin-link { color: #197961; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.inline-admin-link:hover { color: #12654f; }
 .player-info section { padding: 19px; border-bottom: 1px solid #edf1f0; }
 .player-info h4 { margin: 0 0 14px; color: #2f514b; font-size: 15px; }
 .player-info dl, .player-info dl div { margin: 0; }

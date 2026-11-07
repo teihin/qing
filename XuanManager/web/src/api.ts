@@ -1,16 +1,36 @@
 type ApiSuccess<T> = { ok: true; data: T };
 type ApiFailure = { ok: false; error: { code: string; message: string } };
 
-const API_LOG_BUILD = "2026-11-06.22";
-// 默认打印全部请求/返回；排查完可在控制台执行 localStorage.setItem("xuan.api.logAll","0") 关闭。
-const API_LOG_ALL = (() => {
+const API_LOG_BUILD = "2026-11-07.02";
+/**
+ * 控制台日志级别（只影响"请求/返回"这类流水日志，失败/异常日志始终打印）：
+ * - 默认 off：前端调后台自己的接口不打印，控制台只保留真实错误。
+ * - localStorage["xuan.api.logAll"]="mutate"：打印写操作（POST/PUT/PATCH/DELETE）。
+ * - localStorage["xuan.api.logAll"]="1"：打印全部请求（含 GET 查询）。
+ * 想看「后台 → 游戏服」的调用，去后台「系统管理 → 游戏接口日志」页面。
+ */
+type ApiLogMode = "off" | "mutate" | "all";
+const API_LOG_MODE: ApiLogMode = (() => {
   try {
-    return localStorage.getItem("xuan.api.logAll") !== "0";
+    const raw = localStorage.getItem("xuan.api.logAll");
+    if (raw === "1" || raw === "all") return "all";
+    if (raw === "mutate") return "mutate";
+    return "off";
   } catch {
-    return true;
+    return "off";
   }
 })();
-console.info(`[XuanManager API] 请求/错误日志已启用 build=${API_LOG_BUILD}${API_LOG_ALL ? "" : "（全部请求日志已关闭）"}`);
+const API_LOG_MODE_LABEL: Record<ApiLogMode, string> = {
+  off: "仅打印失败日志",
+  mutate: "仅记录写操作",
+  all: "记录全部请求",
+};
+function shouldLogCall(method: string): boolean {
+  if (API_LOG_MODE === "off") return false;
+  if (API_LOG_MODE === "all") return true;
+  return !["GET", "HEAD", "OPTIONS"].includes(method);
+}
+console.info(`[XuanManager API] 日志已启用 build=${API_LOG_BUILD}（${API_LOG_MODE_LABEL[API_LOG_MODE]}）`);
 
 export const SESSION_EXPIRED_EVENT = "xuan:session-expired";
 
@@ -68,7 +88,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   }
   const base = import.meta.env.BASE_URL.replace(/\/$/, "");
   const requestPath = path.startsWith("/api/") ? `${base}${path}` : path;
-  if (API_LOG_ALL) {
+  if (shouldLogCall(method)) {
     console.log(`[XuanManager API] 请求 ${method} ${requestPath}`, {
       method,
       path: requestPath,
@@ -132,7 +152,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(failure.error?.message || "请求失败", failure.error?.code, response.status);
   }
-  if (API_LOG_ALL) {
+  if (shouldLogCall(method)) {
     console.log(`[XuanManager API] 返回 ${method} ${requestPath} HTTP ${response.status}`, {
       method,
       path: requestPath,

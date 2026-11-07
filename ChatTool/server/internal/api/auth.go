@@ -191,15 +191,15 @@ func (s *Server) handleAgentPresence(w http.ResponseWriter, r *http.Request, p a
 }
 
 func (s *Server) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
-	_, err := s.db.ExecContext(r.Context(), `UPDATE chat_agent SET last_seen_at = NOW() WHERE id = ? AND presence <> 'offline'`, p.ID)
-	if err != nil {
+	// 心跳取自有效登录会话，本身就是“客服在线”的证据：这里必须同时把 presence 拉回 online。
+	// 旧实现只更新 last_seen_at 且带 presence <> 'offline' 条件，一旦被超时判定成 offline，
+	// 心跳既不再刷新时间也不能恢复在线，客服必须重新登录才能接入会话。
+	if _, err := s.db.ExecContext(r.Context(), `UPDATE chat_agent SET presence='online', last_seen_at=NOW() WHERE id=?`, p.ID); err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "心跳更新失败")
 		return
 	}
-	if p.Presence == "online" {
-		s.tryAssignQueued(r.Context(), "agent_heartbeat")
-		s.tryRebalanceLiveConversations(r.Context(), "agent_heartbeat")
-	}
+	s.tryAssignQueued(r.Context(), "agent_heartbeat")
+	s.tryRebalanceLiveConversations(r.Context(), "agent_heartbeat")
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -841,7 +841,11 @@ func (s *Server) runMaintenance(ctx context.Context) {
 				_ = s.directStore.CleanupSessions(ctx)
 			}
 			cutoff := time.Now().Add(-s.cfg.AgentOfflineAfter)
-			rows, err := s.db.QueryContext(ctx, `SELECT id FROM chat_agent WHERE presence <> 'offline' AND (last_seen_at IS NULL OR last_seen_at < ?)`, cutoff)
+			// 只有登录会话已失效才判离线：后台已取消上下线切换，仍在登录态（会话未过期）的客服
+			// 即使在后台标签页/短暂休眠，也不应被心跳超时踢下线，否则玩家会看到“客服不在线”。
+			rows, err := s.db.QueryContext(ctx, `SELECT a.id FROM chat_agent a WHERE a.presence <> 'offline'
+AND (a.last_seen_at IS NULL OR a.last_seen_at < ?)
+AND NOT EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=a.id AND sess.expires_at>NOW())`, cutoff)
 			if err == nil {
 				var ids []int64
 				for rows.Next() {

@@ -97,6 +97,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/rule", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionRuleGet))
 	s.mux.Handle("PUT /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/rule", s.authorized("game.agent_contribution.adjust", true, s.handleAgentContributionRuleSet))
 	s.mux.Handle("DELETE /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/rule", s.authorized("game.agent_contribution.adjust", true, s.handleAgentContributionRuleReset))
+	s.mux.Handle("GET /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/bonus-dark", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionBonusDarkGet))
+	s.mux.Handle("PUT /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/bonus-dark", s.authorized("game.agent_contribution.adjust", true, s.handleAgentContributionBonusDarkSet))
 	s.mux.Handle("GET /api/game/player-optimization", s.authorized("game.player_optimization.view", false, s.handleListPlayerOptimizations))
 	s.mux.Handle("GET /api/game/player-optimization/history", s.authorized("game.player_optimization.view", false, s.handleListPlayerOptimizationHistory))
 	s.mux.Handle("GET /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.view", false, s.handleGetPlayerOptimization))
@@ -170,6 +172,7 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/permissions/{id}", s.authorized("permission.update", true, s.handleUpdatePermission))
 
 	s.mux.Handle("GET /api/audit", s.authorized("audit.view", false, s.handleAuditList))
+	s.mux.Handle("GET /api/system/game-logs", s.authorized("system.game_log.view", false, s.handleGameCallLogs))
 
 	s.registerAutomationRoutes()
 

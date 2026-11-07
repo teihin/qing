@@ -146,6 +146,9 @@ export default class GameDataManager extends cc.Component {
 
         KBEngine.Event.register("set_client_status", this, "set_client_status");
         KBEngine.Event.register("SystemInfo", this, "SystemInfo"); //全局通知
+        // §8.4 积分变动推送复用 PromptInfo 路由。牌桌面板只在游戏内存活，大厅会丢消息，
+        // 因此由常驻层统一接收，保证大厅 / 游戏内都能弹提示。
+        KBEngine.Event.register("PromptInfo", this, "onClubGoldChangePrompt");
 
         //初始化游戏配置
 
@@ -764,6 +767,105 @@ export default class GameDataManager extends cc.Component {
     {
         if(this._callAUtoSendNotify != null)
             this.unschedule(this._callAUtoSendNotify);
+    }
+
+    // ------------------------------------------------------------------
+    // §8.4 俱乐部积分变动推送（上分 / 下分 / 改分 / 赠送）
+    // 服务端复用 PromptInfo 路由推给被操作的玩家 B，不新增路由、不改 Account.def。
+    // 这里常驻注册：panelGameView 只在游戏内活着，大厅收到的 PromptInfo 原本会被丢掉。
+    // ------------------------------------------------------------------
+
+    /** 推送里的 type 枚举；老 PromptInfo（坐下失败、留座、结算等）不带这个字段。 */
+    private static readonly ClubGoldPushTypes:string[] = ["上分", "下分", "积分调整", "赠送"];
+
+    private _clubGoldPushSeen:string[] = [];
+    private _clubGoldPushSeenMap:{[key:string]:boolean} = {};
+
+    /** 供牌桌面板复用：命中时它不再走牌桌内嵌 Label，避免同一次通知出现两种提示。 */
+    public static IsClubGoldChangePush(json:any):boolean
+    {
+        if(json == null || typeof json !== "object")
+            return false;
+        const type = json["type"];
+        if(type == null)
+            return false;
+        return GameDataManager.ClubGoldPushTypes.indexOf(String(type)) >= 0;
+    }
+
+    public onClubGoldChangePrompt(strMsg:any):void
+    {
+        if(!strMsg)
+            return;
+        let json:any = null;
+        if(typeof strMsg === "object")
+            json = strMsg;
+        else
+        {
+            try
+            {
+                // 与 panelGameView.ParsePromptInfo 一致：容忍服务端历史消息里的尾逗号。
+                json = JSON.parse(String(strMsg).replace(/,\s*([}\]])/g, "$1"));
+            }
+            catch(error)
+            {
+                return;
+            }
+        }
+        if(!GameDataManager.IsClubGoldChangePush(json))
+            return;
+
+        // word 是服务端拼好的完整文案，客户端不自己拼。
+        const word = json["word"] == null ? "" : String(json["word"]);
+        if(word === "")
+            return;
+
+        const clubId = json["club_id"] == null ? "" : String(json["club_id"]);
+        const balance = json["balance"] == null ? "" : String(json["balance"]);
+        // 服务端可能重发同一条通知：按业务字段 + 服务端时间做幂等，避免重复弹窗。
+        const key = [json["id"], clubId, json["type"], json["gold"], balance,
+                     json["opter_guuid"], json["date"], word].join("|");
+        if(this.IsDuplicateClubGoldPush(key))
+            return;
+
+        this.ApplyClubGoldBalance(clubId, balance);
+        UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, word);
+    }
+
+    private IsDuplicateClubGoldPush(key:string):boolean
+    {
+        if(this._clubGoldPushSeenMap[key] === true)
+            return true;
+        this._clubGoldPushSeenMap[key] = true;
+        this._clubGoldPushSeen.push(key);
+        if(this._clubGoldPushSeen.length > 64)
+        {
+            const oldest = this._clubGoldPushSeen.shift();
+            if(oldest)
+                delete this._clubGoldPushSeenMap[oldest];
+        }
+        return false;
+    }
+
+    /** 用 balance 覆盖本地俱乐部积分，再走现成的 set_club_gold 事件刷新各面板余额显示。 */
+    private ApplyClubGoldBalance(clubId:string, balance:string):void
+    {
+        if(!clubId || balance.trim() === "" || !Number.isFinite(Number(balance)))
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return;
+        let value:any = account.club_gold;
+        const wasString = typeof value === "string";
+        if(wasString)
+        {
+            try { value = JSON.parse(value); }
+            catch(error) { value = {}; }
+        }
+        if(value == null || typeof value !== "object" || Array.isArray(value))
+            value = {};
+        value[clubId] = balance;
+        account.club_gold = wasString ? JSON.stringify(value) : value;
+        KBEngine.Event.fire("set_club_gold", account.club_gold);
     }
 
     public SystemInfo(strMsg:string)

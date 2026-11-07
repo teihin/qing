@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import type {
+  AgentContributionBonusDarkResponse,
   AgentContributionDisplayBatchResponse,
   AgentContributionDisplayData,
   AgentContributionMembersResponse,
@@ -71,6 +72,25 @@ function formatQuota(raw: string | undefined | null): string {
 
 function formatPercent(raw: string | undefined | null): string {
   return isMissing(raw) ? "—" : `${numberFormatter.format(numberValue(raw))}%`;
+}
+
+/**
+ * 红利暗抽比例：优先用展示数据接口的顶层 bonus_dark_percent（按 club_id 一代理一份），
+ * 拿不到时退回成员行里的行级值；-1 表示该俱乐部代理树未加载，显示 “—” 让用户重试。
+ */
+function bonusDarkDisplay(
+  node: AgentContributionNode,
+  display: AgentContributionDisplayData | undefined,
+): { text: string; title: string } {
+  const fromDisplay = display?.available ? display.bonusDarkPercent : undefined;
+  const raw = fromDisplay ?? (isMissing(node.bonusDarkPercent) ? undefined : Number(node.bonusDarkPercent));
+  if (raw === undefined || raw === null || !Number.isFinite(raw)) {
+    return { text: "—", title: "游戏服未返回红利暗抽比例" };
+  }
+  if (raw < 0) {
+    return { text: "—", title: "该俱乐部代理树未加载，刷新后重试" };
+  }
+  return { text: `${numberFormatter.format(raw)}%`, title: raw === 0 ? "红利暗抽 0% = 不暗抽" : "红利暗抽比例" };
 }
 
 /** 与客户端一致：正数红、负数绿、0 保持默认色。 */
@@ -147,6 +167,7 @@ export default function AgentContributionsPage({
   const [children, setChildren] = useState<Record<string, TreeNode[]>>({});
   const [loadingNodes, setLoadingNodes] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<TreeNode | null>(null);
+  const [bonusDarkTarget, setBonusDarkTarget] = useState<TreeNode | null>(null);
   const [displayData, setDisplayData] = useState<Record<string, AgentContributionDisplayData>>({});
   const [treeRevision, setTreeRevision] = useState(0);
   const [keyword, setKeyword] = useState("");
@@ -473,6 +494,22 @@ export default function AgentContributionsPage({
     void loadDisplayData(targetClubId, [{ agentId: playerId, clubId: targetClubId }]);
   };
 
+  const updateNodeBonusDarkPercent = (playerId: string, percent: number) => {
+    const patch = { bonusDarkPercent: String(percent) };
+    setRoots((current) => current.map((node) => node.playerId === playerId ? { ...node, ...patch } : node));
+    setChildren((current) => Object.fromEntries(
+      Object.entries(current).map(([key, nodes]) => [
+        key,
+        nodes.map((node) => node.playerId === playerId ? { ...node, ...patch } : node),
+      ]),
+    ));
+    setSelected((current) => current && current.playerId === playerId ? { ...current, ...patch } : current);
+    setBonusDarkTarget((current) => current && current.playerId === playerId ? { ...current, ...patch } : current);
+    setDisplayData((current) => current[playerId]
+      ? { ...current, [playerId]: { ...current[playerId], bonusDarkPercent: percent } }
+      : current);
+  };
+
   const teamDisplayValue = (node: TreeNode, metric: Metric, field: string): string => {
     const data = displayData[node.playerId];
     if (data?.available) {
@@ -504,6 +541,7 @@ export default function AgentContributionsPage({
       const canExpand = node.isAgent || node.isLeader || node.role === "owner" || node.role === "agent";
       const canRule = canExpand;
       const isOnline = node.status === "在线" || node.status === "online" || node.status === "1";
+      const bonusDark = bonusDarkDisplay(node, displayData[node.playerId]);
       rows.push(
         <tr key={node.playerId}>
           <td className="contribution-sticky-first">
@@ -572,6 +610,10 @@ export default function AgentContributionsPage({
             <small className="contribution-display-value">展示 {teamDisplayValue(node, "contrib", "total_contrib_fen")}</small>
           </td>
           <td>
+            <strong title={bonusDark.title} className="contribution-bonus-dark">{bonusDark.text}</strong>
+            <small className="cell-subtitle">红利暗抽</small>
+          </td>
+          <td>
             <div className="contribution-rules">
               <span className={`contribution-rule-chip ${node.showPercentSource === "self" ? "is-self" : "is-inherited"}`} title={showPercentSourceTitle(node)}>
                 贡献 {showPercent}%{node.showPercentSource === "self" ? "（设置）" : ""}
@@ -583,9 +625,15 @@ export default function AgentContributionsPage({
           </td>
           <td className="contribution-sticky-last">
             {canRule ? (
-              <button type="button" className="contribution-rule-button" onClick={() => setSelected(node)}>
-                {canAdjust ? "展示调整" : "查看调整"}
-              </button>
+              <div className="contribution-row-actions">
+                <button type="button" className="contribution-rule-button" onClick={() => setSelected(node)}>
+                  {canAdjust ? "展示调整" : "查看调整"}
+                </button>
+                <button type="button" className="contribution-rule-button contribution-rule-button--dark"
+                  onClick={() => setBonusDarkTarget(node)}>
+                  {canAdjust ? "暗抽比例调整" : "查看暗抽"}
+                </button>
+              </div>
             ) : <span className="contribution-rule-empty">—</span>}
           </td>
         </tr>,
@@ -596,7 +644,7 @@ export default function AgentContributionsPage({
         } else if (childList) {
           rows.push(
             <tr key={`${node.playerId}-empty`}>
-              <td colSpan={16} className="contribution-empty-child">没有直属下级成员</td>
+              <td colSpan={17} className="contribution-empty-child">没有直属下级成员</td>
             </tr>,
           );
         }
@@ -617,6 +665,9 @@ export default function AgentContributionsPage({
       : "普通俱乐部没有联盟级数据，请选择俱乐部";
   const canRefresh = scope === "club" ? Boolean(clubId) : scope === "union" ? Boolean(unionQueryClubId) : false;
   const selectedRuleClubId = selected ? selected.clubId || selectedClub?.clubId || "" : "";
+  const bonusDarkClubId = bonusDarkTarget
+    ? bonusDarkTarget.clubId || selectedClub?.clubId || clubId || unionQueryClubId
+    : "";
 
   return (
     <div className="page-stack">
@@ -774,7 +825,7 @@ export default function AgentContributionsPage({
           ) : (
             <>
               <div className="contribution-note">
-                后台显示真实值；贡献和输赢的“展示”值来自游戏服（`*_contrib_display_fen` / `*_score_display` / `team_display`）。展示规则按代理一份 0~100%：自己设置优先，未设置时继承直属上级，影响成员列表的贡献和输赢；成员列表以外的玩家输赢不缩放。默认只查当前节点，展开时才查询下一级。
+                后台显示真实值；贡献和输赢的“展示”值来自游戏服（`*_contrib_display_fen` / `*_score_display` / `team_display`）。展示规则按代理一份 0~100%：自己设置优先，未设置时继承直属上级，影响成员列表的贡献和输赢；成员列表以外的玩家输赢不缩放。「暗抽比例」是该代理的红利暗抽（`bonus_dark_percent`，0~100%，不参与展示缩放），可用「暗抽比例调整」逐个设置。默认只查当前节点，展开时才查询下一级。
               </div>
               <div className={`table-wrap contribution-table-wrap ${treeLoading ? "is-loading" : ""}`}>
                 <table className="club-table contribution-table">
@@ -790,6 +841,7 @@ export default function AgentContributionsPage({
                       <th rowSpan={2}>额度（元）</th>
                       <th colSpan={3} className="contribution-group-start contribution-group-end">输赢（真实 / 展示）</th>
                       <th colSpan={3} className="contribution-group-start contribution-group-end">贡献（真实 / 展示）</th>
+                      <th rowSpan={2}>暗抽比例</th>
                       <th rowSpan={2}>展示规则</th>
                       <th rowSpan={2} className="align-right contribution-sticky-last">操作</th>
                     </tr>
@@ -819,6 +871,18 @@ export default function AgentContributionsPage({
           notify={notify}
           onClose={() => setSelected(null)}
           onSaved={(percent) => updateNodeShowPercent(selected.playerId, percent)}
+        />
+      )}
+
+      {bonusDarkTarget && bonusDarkClubId && (
+        <AgentBonusDarkModal
+          node={bonusDarkTarget}
+          clubId={bonusDarkClubId}
+          display={displayData[bonusDarkTarget.playerId]}
+          canAdjust={canAdjust}
+          notify={notify}
+          onClose={() => setBonusDarkTarget(null)}
+          onSaved={(percent) => updateNodeBonusDarkPercent(bonusDarkTarget.playerId, percent)}
         />
       )}
     </div>
@@ -1004,6 +1068,161 @@ function AgentContributionRuleModal({
             恢复真实值（100%）
           </Button>
           <span className="contribution-mode-hint">保存后该代理按此比例展示；下级未单独设置时继承该值。</span>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/**
+ * 红利暗抽比例调整。
+ *
+ * 数据源是游戏服 `设置_俱乐部_代理_红利暗抽`：不带比例时只回显当前值，带比例才写库，
+ * 所以弹窗打开时先读一次，避免用列表里的旧值回填。比例按 club + agent 一份。
+ */
+function AgentBonusDarkModal({
+  node,
+  clubId,
+  display,
+  canAdjust,
+  notify,
+  onClose,
+  onSaved,
+}: {
+  node: TreeNode;
+  clubId: string;
+  display?: AgentContributionDisplayData;
+  canAdjust: boolean;
+  notify: (message: string, kind?: "success" | "error") => void;
+  onClose: () => void;
+  onSaved: (percent: number) => void;
+}) {
+  const listValue = display?.available && typeof display.bonusDarkPercent === "number" && display.bonusDarkPercent >= 0
+    ? display.bonusDarkPercent
+    : (isMissing(node.bonusDarkPercent) ? 0 : Math.max(0, numberValue(node.bonusDarkPercent)));
+  const [current, setCurrent] = useState<number>(listValue);
+  const [percent, setPercent] = useState(String(listValue));
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
+
+  const base = `/api/game/agent-contributions/clubs/${encodeURIComponent(clubId)}/agents/${encodeURIComponent(node.playerId)}/bonus-dark`;
+
+  useEffect(() => {
+    let active = true;
+    api<AgentContributionBonusDarkResponse>(base)
+      .then((result) => {
+        if (!active) return;
+        if (!result.available) {
+          setWarning(result.message || "游戏服红利暗抽查询暂不可用");
+          return;
+        }
+        const value = typeof result.bonusDarkPercent === "number" && result.bonusDarkPercent >= 0
+          ? result.bonusDarkPercent
+          : 0;
+        setCurrent(value);
+        setPercent(String(value));
+      })
+      .catch((reason) => {
+        if (active) setWarning(errorMessage(reason, "读取红利暗抽比例失败"));
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [base]);
+
+  const submit = async (value: number, noteText: string) => {
+    if (!canAdjust) return;
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<AgentContributionBonusDarkResponse>(base, {
+        method: "PUT",
+        ...jsonBody({ percent: value, note: noteText }),
+      });
+      const applied = typeof result.bonusDarkPercent === "number" && result.bonusDarkPercent >= 0
+        ? result.bonusDarkPercent
+        : value;
+      setCurrent(applied);
+      setPercent(String(applied));
+      onSaved(applied);
+      notify(`红利暗抽比例已设为 ${applied}%`);
+      onClose();
+    } catch (reason) {
+      const message = errorMessage(reason, "保存失败");
+      setError(message);
+      notify(message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const save = () => {
+    const value = Number(percent);
+    if (!Number.isInteger(value) || value < 0 || value > 100) {
+      setError("暗抽比例必须是 0 到 100 的整数");
+      return;
+    }
+    const reason = note.trim();
+    if (Array.from(reason).length < 2) {
+      setError("请填写至少 2 个字的调整原因");
+      return;
+    }
+    void submit(value, reason);
+  };
+
+  const clear = () => {
+    const reason = note.trim() || "恢复默认不暗抽";
+    void submit(0, reason);
+  };
+
+  return (
+    <Modal wide title={`${node.name || node.playerId} · 暗抽比例`} eyebrow="AGENT BONUS DARK" onClose={onClose}>
+      <div className="contribution-modal">
+        <div className="contribution-modal__summary">
+          <div>
+            <span>当前暗抽比例</span>
+            <strong>{loading ? "读取中…" : `${current}%`}</strong>
+          </div>
+          <div>
+            <span>身份 / ID</span>
+            <strong>{roleText(node)} · {node.playerId}</strong>
+          </div>
+          <div>
+            <span>所属俱乐部</span>
+            <strong>{node.clubName || clubId}</strong>
+          </div>
+        </div>
+
+        {warning && <div className="chain-message chain-message--broken">{warning}</div>}
+        <div className="contribution-scope-note">
+          红利暗抽按代理一份设置，只影响该代理实际到账的红利，不参与展示比例（show_percent）缩放；0% = 不暗抽，100% = 红利全额被暗抽。成员列表的「暗抽比例」列展示的就是这里的值。
+        </div>
+        {error && <div className="form-error"><span>!</span>{error}</div>}
+
+        <div className="form-grid form-grid--single">
+          <Field label="暗抽比例（%）" hint="0~100 的整数；0 = 明确不暗抽">
+            <input inputMode="numeric" value={percent} maxLength={3}
+              onChange={(event) => { setPercent(event.target.value); setError(""); }}
+              disabled={!canAdjust || loading || busy} placeholder="0" />
+          </Field>
+          <Field label="调整原因" hint="会写入后台审计，至少 2 个字">
+            <input value={note} maxLength={200} onChange={(event) => setNote(event.target.value)}
+              placeholder="例如：下调红利暗抽到 5%" disabled={!canAdjust || busy} />
+          </Field>
+        </div>
+
+        <div className="contribution-metric-actions">
+          <Button type="button" onClick={save} disabled={!canAdjust || busy || loading}>
+            {busy ? "保存中…" : "保存"}
+          </Button>
+          <Button type="button" variant="secondary" onClick={clear} disabled={!canAdjust || busy || loading}>
+            设为不暗抽（0%）
+          </Button>
+          <span className="contribution-mode-hint">保存后对该代理后续结算的红利生效，已结算部分不追溯。</span>
         </div>
       </div>
     </Modal>

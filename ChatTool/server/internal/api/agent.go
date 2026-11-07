@@ -3,6 +3,7 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -254,8 +255,12 @@ FROM chat_conversation c WHERE c.id=? FOR UPDATE`, conversationID).Scan(&status,
 	if err = tx.QueryRowContext(r.Context(), `SELECT (SELECT COUNT(*) FROM chat_conversation active
 WHERE active.assigned_agent_id=? AND active.status='active'
 AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=active.id AND player_message.sender_type='player')), max_conversations
-FROM chat_agent WHERE id=? AND enabled=1 AND presence='online'`, p.ID, p.ID).Scan(&active, &max); err != nil || active >= max {
-		writeError(w, http.StatusConflict, "AGENT_CAPACITY", "当前接待量已达上限或客服不在线")
+FROM chat_agent WHERE id=? AND enabled=1 AND presence='online'`, p.ID, p.ID).Scan(&active, &max); err != nil {
+		writeError(w, http.StatusConflict, "AGENT_OFFLINE", "当前账号不在线，请重新登录后再接入会话")
+		return
+	}
+	if active >= max {
+		writeError(w, http.StatusConflict, "AGENT_CAPACITY", fmt.Sprintf("当前接待量已达上限（%d/%d），请先结束部分会话", active, max))
 		return
 	}
 	_, err = tx.ExecContext(r.Context(), `UPDATE chat_conversation SET status='active', assigned_agent_id=?, assigned_at=NOW(), updated_at=NOW() WHERE id=?`, p.ID, conversationID)

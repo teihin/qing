@@ -3,6 +3,7 @@ import { api, ApiError, jsonBody, SESSION_EXPIRED_EVENT } from "./api";
 import Layout from "./components/Layout";
 import { Field, FormActions, LoadingBlock, Modal, submitGuard, Toast } from "./components/ui";
 import AuditPage from "./pages/AuditPage";
+import GameCallLogsPage from "./pages/GameCallLogsPage";
 import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
@@ -160,6 +161,7 @@ export default function App() {
     if (route === "/roles" && can("role.view")) return <RolesPage {...props} />;
     if (route === "/modules" && can("module.view")) return <ModulesPage {...props} />;
     if (route === "/audit" && can("audit.view")) return <AuditPage notify={notify} />;
+    if (route === "/system/game-logs" && can("system.game_log.view")) return <GameCallLogsPage notify={notify} />;
     if (can("dashboard.view")) return <DashboardPage notify={notify} />;
     return <div className="panel"><LoadingBlock label="当前角色没有可访问的功能模块" /></div>;
   }, [route, can, notify, navigate, session?.user.isSuper, session?.user.isProtectedRoot, session?.user.username]);

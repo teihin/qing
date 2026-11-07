@@ -7,6 +7,7 @@ const iconText: Record<string, string> = {
   roles: "权",
   modules: "模",
   audit: "录",
+  logs: "志",
   system: "◇",
   game: "游",
   players: "玩",

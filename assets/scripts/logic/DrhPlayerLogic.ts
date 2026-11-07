@@ -128,10 +128,13 @@ export default class DrhPlayerLogic extends cc.Component {
        //事件分类处理
        if (strEvent == "开始_发牌_事件")
        {
+           //新一局开始前若桌面还被上一局清桌状态收起，这里恢复手牌区
+           this.ShowRoundCardsHandArea();
            this.gameLogic.BeginBettingSpotlightDealAnimation();
        }
        else if(strEvent == "玩家_开局_事件")
        {
+           this.ShowRoundCardsHandArea();
            this.gameLogic.BeginBettingSpotlightDealAnimation();
            //投钱入芒池
            this.ThrowGold2Mang();
@@ -232,6 +235,8 @@ export default class DrhPlayerLogic extends cc.Component {
            //发出4张手牌
            if (strMsg == "持有_手牌_消息")
            {
+               //全量恢复时手牌区需要重新可见（清桌后切后台回来/断线重连都走这里）
+               this.ShowRoundCardsHandArea();
                if(this.info.handCardEx.length > 0 && strState.indexOf("决策") >= 0 && (strState.indexOf("下注") >= 0 || strState.indexOf("押牌") >= 0))
                    this.gameLogic.ConfirmBettingSpotlightCardsDealtFromFullState();
                if(strState.indexOf("等待_结算_状态")>0)
@@ -2108,6 +2113,35 @@ export default class DrhPlayerLogic extends cc.Component {
                 one.node.active = false;
             }
         },this);
+    }
+    /**
+     * 收起桌面上本局残留的牌：手牌区、摊牌区、展示牌、下一张牌、三花。
+     * 人数不足、下一局迟迟不开时由 DrhLogicMgr 统一调用，避免上一局的牌一直摊在桌上。
+     * 只动容器节点，不逐个改牌节点的 active —— 无动画刷新不会把牌节点重新激活，改了会漏牌。
+     */
+    public HideRoundCards()
+    {
+        if (!cc.isValid(this.node))
+            return;
+        const transHandStop = Tool.GetChild(this.node, "handstop");
+        if (cc.isValid(transHandStop) && transHandStop.active)
+            transHandStop.active = false;
+        const arrayHide = ["展示牌", "下一张牌", "下一张牌1", "三花"];
+        for (let strName of arrayHide)
+        {
+            let transOne = this.node.getChildByName(strName);
+            if (cc.isValid(transOne) && transOne.active)
+                transOne.active = false;
+        }
+    }
+    /** 恢复手牌区显示；下一局发牌、全量恢复时调用。牌本身由 UpdateHandCard 系列按服务端数据刷新。 */
+    public ShowRoundCardsHandArea()
+    {
+        if (!cc.isValid(this.node))
+            return;
+        const transHandStop = Tool.GetChild(this.node, "handstop");
+        if (cc.isValid(transHandStop) && !transHandStop.active)
+            transHandStop.active = true;
     }
     public GetImgCtl():cc.Sprite
     {

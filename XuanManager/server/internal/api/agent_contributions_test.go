@@ -274,3 +274,85 @@ func TestShowPercentSource(t *testing.T) {
 		t.Fatalf("expected self for explicit 100, got %q", got)
 	}
 }
+
+func TestAgentContributionDisplayDataCarriesBonusDarkPercent(t *testing.T) {
+	game := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if header := r.URL.Query().Get("header"); header != agentContributionDisplayDataCommand {
+			t.Errorf("unexpected game command header: %q", header)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ret_code":512,"ret_result":{"metric":"contrib","agent_income_show_percent":80,"bonus_dark_percent":10,"self_raw":{},"self_display":{},"team_raw":{},"team_display":{}}}`))
+	}))
+	defer game.Close()
+	server := &Server{cfg: config.Config{GameAdminURL: game.URL}, gameHTTPClient: game.Client()}
+	request := httptest.NewRequest(http.MethodPost, "/api/game/agent-contributions/clubs/710701/display-data",
+		strings.NewReader(`{"items":[{"agentId":"1001","clubId":"267493"}]}`))
+	request.SetPathValue("clubId", "710701")
+	response := httptest.NewRecorder()
+	server.handleAgentContributionDisplayData(response, request, principal{IsSuper: true})
+	var envelope struct {
+		Data agentContributionDisplayBatchResponse `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	item := envelope.Data.Items["1001"]
+	if item.BonusDarkPercent == nil || *item.BonusDarkPercent != 10 {
+		t.Fatalf("expected bonus dark 10, got %#v", item.BonusDarkPercent)
+	}
+}
+
+func TestAgentContributionBonusDarkGetReadsCurrentValue(t *testing.T) {
+	game := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if header := r.URL.Query().Get("header"); header != agentContributionBonusDarkCommand {
+			t.Errorf("unexpected game command header: %q", header)
+		}
+		var params map[string]any
+		_ = json.Unmarshal([]byte(r.URL.Query().Get("param")), &params)
+		if params["club_id"] != "710701" || params["user_id"] != "1001" {
+			t.Errorf("game command used wrong club/agent: %#v", params)
+		}
+		if _, ok := params["bonus_dark_percent"]; ok {
+			t.Errorf("read request must not carry bonus_dark_percent: %#v", params)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ret_code":512,"ret_result":{"club_id":"710701","agent_id":"1001","user_id":"1001","bonus_dark_percent":"7"}}`))
+	}))
+	defer game.Close()
+	server := &Server{cfg: config.Config{GameAdminURL: game.URL}, gameHTTPClient: game.Client()}
+	request := httptest.NewRequest(http.MethodGet, "/api/game/agent-contributions/clubs/710701/agents/1001/bonus-dark", nil)
+	request.SetPathValue("clubId", "710701")
+	request.SetPathValue("agentId", "1001")
+	response := httptest.NewRecorder()
+	server.handleAgentContributionBonusDarkGet(response, request, principal{IsSuper: true})
+	var envelope struct {
+		Data agentContributionBonusDarkResponse `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !envelope.Data.Available || envelope.Data.BonusDarkPercent == nil || *envelope.Data.BonusDarkPercent != 7 {
+		t.Fatalf("unexpected bonus dark response: %#v", envelope.Data)
+	}
+}
+
+func TestAgentContributionBonusDarkSetRejectsInvalidInput(t *testing.T) {
+	cases := []struct{ name, body string }{
+		{"missing percent", `{"note":"测试原因"}`},
+		{"percent too high", `{"percent":101,"note":"测试原因"}`},
+		{"negative percent", `{"percent":-1,"note":"测试原因"}`},
+		{"short note", `{"percent":10,"note":"a"}`},
+	}
+	for _, test := range cases {
+		request := httptest.NewRequest(http.MethodPut,
+			"/api/game/agent-contributions/clubs/710701/agents/1001/bonus-dark", strings.NewReader(test.body))
+		request.SetPathValue("clubId", "710701")
+		request.SetPathValue("agentId", "1001")
+		response := httptest.NewRecorder()
+		server := &Server{}
+		server.handleAgentContributionBonusDarkSet(response, request, principal{IsSuper: true, Username: "admin"})
+		if response.Code != http.StatusBadRequest {
+			t.Fatalf("%s: expected 400, got %d: %s", test.name, response.Code, response.Body.String())
+		}
+	}
+}

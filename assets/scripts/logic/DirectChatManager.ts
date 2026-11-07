@@ -15,6 +15,16 @@ import {
 
 var KBEngine = require("kbengine");
 
+/**
+ * 网页版聊天图片的规整参数，与安卓/iOS 原生桥保持一致。
+ *
+ * 这一步不是省流量而是保命：原图动辄几 MB，原样上传会占满上行带宽几十秒，
+ * KBEngine 的心跳包排不上队，22 秒收不到回包就判定掉线（发完图转圈重连即此）。
+ */
+const WEB_CHAT_IMAGE_MAX_EDGE:number = 1600;
+const WEB_CHAT_IMAGE_JPEG_QUALITY:number = 0.85;
+const WEB_CHAT_IMAGE_RAW_LIMIT:number = 400 * 1024;
+
 /** 直聊接口返回的业务错误。code 与服务端第 9 章错误码一一对应。 */
 export class DirectChatError extends Error
 {
@@ -1415,8 +1425,16 @@ export default class DirectChatManager
         {
             let begin = Number(data.byteOffset || 0);
             let length = Number(data.byteLength || 0);
-            if(data.buffer != null && typeof data.buffer.slice === "function")
-                return data.buffer.slice(begin,begin + length);
+            if(data.buffer != null)
+            {
+                // 视图正好覆盖整个 buffer 时直接复用，省掉一次整图大小的内存拷贝：
+                // 安卓上 jsb.fileUtils 返回的 Uint8Array 就是这种形态，几 MB 的
+                // 复制在低端机会引发明显的 GC 停顿。
+                if(begin === 0 && Number(data.buffer.byteLength || 0) === length)
+                    return data.buffer;
+                if(typeof data.buffer.slice === "function")
+                    return data.buffer.slice(begin,begin + length);
+            }
         }
         return data;
     }
@@ -2061,38 +2079,137 @@ export default class DirectChatManager
                 this.FinishPickImage(null,new DirectChatError("图片不能超过 10MB","MEDIA_TOO_LARGE"));
                 return;
             }
-            let reader = new FileReader();
-            reader.onload = ()=>{
-                let data:any = reader.result;
-                let url = URL.createObjectURL(file);
-                let image = new Image();
-                image.onload = ()=>{
-                    let width = image.naturalWidth || image.width;
-                    let height = image.naturalHeight || image.height;
-                    URL.revokeObjectURL(url);
-                    cleanup();
-                    if(width > 4096 || height > 4096)
-                    {
-                        this.FinishPickImage(null,new DirectChatError("图片最长边不能超过 4096 像素","MEDIA_INVALID"));
-                        return;
-                    }
-                    this.FinishPickImage({data:data,mime:mime,width:width,height:height,size:Number(file.size)},null);
-                };
-                image.onerror = ()=>{
+            let url = URL.createObjectURL(file);
+            let image = new Image();
+            image.onload = ()=>{
+                let width = image.naturalWidth || image.width;
+                let height = image.naturalHeight || image.height;
+                if(width <= 0 || height <= 0)
+                {
                     URL.revokeObjectURL(url);
                     cleanup();
                     this.FinishPickImage(null,new DirectChatError("图片读取失败","MEDIA_INVALID"));
+                    return;
+                }
+                if(width > 4096 || height > 4096)
+                {
+                    URL.revokeObjectURL(url);
+                    cleanup();
+                    this.FinishPickImage(null,new DirectChatError("图片最长边不能超过 4096 像素","MEDIA_INVALID"));
+                    return;
+                }
+                let finish = (data:any,outMime:string,outWidth:number,outHeight:number,size:number)=>{
+                    URL.revokeObjectURL(url);
+                    cleanup();
+                    this.FinishPickImage({data:data,mime:outMime,width:outWidth,height:outHeight,size:size},null);
                 };
-                image.src = url;
+                // 原图按原字节上传：保留 PNG/WebP 的透明通道，也避免无谓的一次重编码。
+                let readRaw = ()=>{
+                    let reader = new FileReader();
+                    reader.onload = ()=>{
+                        finish(reader.result,mime,width,height,Number(file.size));
+                    };
+                    reader.onerror = ()=>{
+                        URL.revokeObjectURL(url);
+                        cleanup();
+                        this.FinishPickImage(null,new DirectChatError("图片读取失败","MEDIA_INVALID"));
+                    };
+                    reader.readAsArrayBuffer(file);
+                };
+                let longEdge = Math.max(width,height);
+                if(longEdge <= WEB_CHAT_IMAGE_MAX_EDGE && Number(file.size) <= WEB_CHAT_IMAGE_RAW_LIMIT)
+                {
+                    readRaw();
+                    return;
+                }
+                this.CompressBrowserImage(image,width,height,(data:any,outWidth:number,outHeight:number)=>{
+                    if(data == null)
+                    {
+                        readRaw();
+                        return;
+                    }
+                    finish(data,"image/jpeg",outWidth,outHeight,Number(data.byteLength || 0));
+                });
             };
-            reader.onerror = ()=>{
+            image.onerror = ()=>{
+                URL.revokeObjectURL(url);
                 cleanup();
                 this.FinishPickImage(null,new DirectChatError("图片读取失败","MEDIA_INVALID"));
             };
-            reader.readAsArrayBuffer(file);
+            image.src = url;
         };
         document.body.appendChild(input);
         input.click();
+    }
+
+    /**
+     * 浏览器端压缩：缩放并转成 JPEG，回调返回 ArrayBuffer。
+     * 缩放出任何问题都回调 `null`，由调用方退回原图上传。
+     */
+    private CompressBrowserImage(image:any,width:number,height:number,
+        done:(data:any,width:number,height:number)=>void):void
+    {
+        let canvas:any = null;
+        try { canvas = document.createElement("canvas"); } catch(error) { canvas = null; }
+        if(canvas == null || canvas.getContext == null)
+        {
+            done(null,width,height);
+            return;
+        }
+        let longEdge = Math.max(width,height);
+        let ratio = longEdge > WEB_CHAT_IMAGE_MAX_EDGE ? WEB_CHAT_IMAGE_MAX_EDGE / longEdge : 1;
+        let targetWidth = Math.max(1,Math.round(width * ratio));
+        let targetHeight = Math.max(1,Math.round(height * ratio));
+        // 先定尺寸再取 context：改 canvas.width/height 会重置绘图状态。
+        canvas.width = targetWidth;
+        canvas.height = targetHeight;
+        let context:any = null;
+        try { context = canvas.getContext("2d"); } catch(error) { context = null; }
+        if(context == null)
+        {
+            done(null,width,height);
+            return;
+        }
+        // JPEG 不支持透明，先铺白底，避免截图类 PNG 的透明区域变黑。
+        context.fillStyle = "#ffffff";
+        context.fillRect(0,0,targetWidth,targetHeight);
+        context.drawImage(image,0,0,targetWidth,targetHeight);
+        let settle = (blob:any)=>{
+            if(blob == null)
+            {
+                done(null,width,height);
+                return;
+            }
+            let reader = new FileReader();
+            reader.onload = ()=>{ done(reader.result,targetWidth,targetHeight); };
+            reader.onerror = ()=>{ done(null,width,height); };
+            reader.readAsArrayBuffer(blob);
+        };
+        try
+        {
+            if(typeof canvas.toBlob === "function")
+            {
+                canvas.toBlob((blob:any)=>settle(blob),"image/jpeg",WEB_CHAT_IMAGE_JPEG_QUALITY);
+                return;
+            }
+            // 老浏览器没有 toBlob：退回 dataURL 再转二进制。
+            let dataUrl = String(canvas.toDataURL("image/jpeg",WEB_CHAT_IMAGE_JPEG_QUALITY) || "");
+            let comma = dataUrl.indexOf(",");
+            if(comma < 0)
+            {
+                done(null,width,height);
+                return;
+            }
+            let binary = atob(dataUrl.substring(comma + 1));
+            let bytes = new Uint8Array(binary.length);
+            for(let i=0;i<binary.length;i++)
+                bytes[i] = binary.charCodeAt(i);
+            done(bytes.buffer,targetWidth,targetHeight);
+        }
+        catch(error)
+        {
+            done(null,width,height);
+        }
     }
 
     private PickImageNative(source:DirectImageSource):void

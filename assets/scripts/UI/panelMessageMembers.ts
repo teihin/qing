@@ -248,8 +248,13 @@ export default class panelMessageMembers extends UIPanelViewBase {
         {
             let label = nameLabel.getComponent(cc.Label);
             if(label != null)
-                label.string = member.note == null || member.note === "" ? member.name :
+            {
+                // 自己那一行不显示备注（备注是上级给自己写的）。
+                let selfId = this.manager.CurrentGuuid();
+                let isSelf = selfId !== "" && String(member.guuid).trim() === selfId;
+                label.string = isSelf || member.note == null || member.note === "" ? member.name :
                     member.name + "（" + member.note + "）";
+            }
         }
         let idLabel = Tool.GetChild(node,"编号");
         if(idLabel != null)

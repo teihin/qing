@@ -118,7 +118,9 @@ export default class panelMessageChat extends UIPanelViewBase {
     private realtimeStateHandler:(state:any)=>void = null;
     private realtimeCatchupBusy:boolean = false;
     private realtimeCatchupQueued:boolean = false;
-    private imageTextureCache:{[url:string]:cc.SpriteFrame} = {};
+    private imageTextureCache:{[key:string]:cc.SpriteFrame} = {};
+    /** key → 实际下载地址，退出页面时用它在引擎缓存里释放对应纹理。 */
+    private imageUrlByKey:{[key:string]:string} = {};
     private disposed:boolean = false;
     private scrollLayoutReady:boolean = false;
     private lastViewHeight:number = 0;
@@ -406,7 +408,33 @@ export default class panelMessageChat extends UIPanelViewBase {
         this.manager.Off("realtimeMessage",this.realtimeHandler);
         this.manager.Off("realtimeState",this.realtimeStateHandler);
         this.manager.OffAll(this);
+        this.ReleaseImageCache();
         super.onDestroy();
+    }
+
+    /**
+     * 退出聊天页时释放图片纹理。
+     *
+     * 一页二十条图文按 1600 长边算就是 20MB 左右显存，低端安卓很容易崩；
+     * 纹理挂在引擎缓存里，只清 spriteFrame 引用是不够的，要按 url 显式 release。
+     */
+    private ReleaseImageCache():void
+    {
+        for(let key in this.imageUrlByKey)
+        {
+            let url = this.imageUrlByKey[key];
+            if(url == null || url === "")
+                continue;
+            try { cc.loader.release(url); } catch(error) {}
+        }
+        this.imageUrlByKey = {};
+        for(let key in this.imageTextureCache)
+        {
+            let frame = this.imageTextureCache[key];
+            if(frame != null && cc.isValid(frame))
+                frame.destroy();
+        }
+        this.imageTextureCache = {};
     }
 
     private ParseParam():void
@@ -1270,22 +1298,67 @@ export default class panelMessageChat extends UIPanelViewBase {
         return Math.max(line,Math.min(lines,14) * line) + 8;
     }
 
-    private LoadImageInto(sprite:cc.Sprite,url:string):void
+    /**
+     * 图片缓存 key：附件编号 + 变体（thumb/full）。
+     *
+     * 服务端给的是 10 分钟过期的临时签名链接，每次拉消息都会换一串 ticket；
+     * 用整串 URL 当 key 等于永远不命中，同一条消息每渲染一次就重新下载一遍。
+     * 变体必须进 key，否则大图预览会把气泡里的缩略图顶掉。
+     */
+    private ImageCacheKey(url:string,variant:string):string
+    {
+        let match = /\/media\/([^\/?#]+)/.exec(url);
+        return match != null ? "media:" + match[1] + ":" + variant : url;
+    }
+
+    /**
+     * 把网络图片加载进气泡。
+     *
+     * 断线重连（甚至只是切后台再回来）的那一刻下载必然失败，原来只 `return` 不重试，
+     * 气泡就一直空着，用户只能退出重进。这里失败后按 0.8s / 2.4s 补两次。
+     */
+    private LoadImageInto(sprite:cc.Sprite,url:string,variant:string = "thumb",
+        attempt:number = 0):void
     {
         if(sprite == null || url == null || url === "")
             return;
-        let cached = this.imageTextureCache[url];
-        if(cached != null)
+        let node:any = sprite.node;
+        if(node == null)
+            return;
+        let key = this.ImageCacheKey(url,variant);
+        let cached = this.imageTextureCache[key];
+        if(cached != null && cc.isValid(cached))
         {
+            node.__mediaUrl = url;
             sprite.spriteFrame = cached;
             return;
         }
+        // 节点会被池复用：记下它当前要显示哪张图，迟到回调靠这个判断自己是否还有效，
+        // 否则会把这期间被复用给别的消息的 sprite 图覆盖掉。
+        node.__mediaUrl = url;
         cc.loader.load({url:url,type:"image"},(err,texture:cc.Texture2D)=>{
-            if(this.disposed || err != null || texture == null || !cc.isValid(sprite))
+            if(this.disposed || !cc.isValid(sprite) || sprite.node == null)
                 return;
+            let target:any = sprite.node;
+            if(target == null || target.__mediaUrl !== url)
+                return;
+            if(err != null || texture == null)
+            {
+                if(attempt < 2)
+                {
+                    let delay = attempt === 0 ? 800 : 2400;
+                    setTimeout(()=>{
+                        if(!this.disposed && cc.isValid(sprite) && sprite.node != null &&
+                            sprite.node["__mediaUrl"] === url)
+                            this.LoadImageInto(sprite,url,variant,attempt + 1);
+                    },delay);
+                }
+                return;
+            }
             let frame = new cc.SpriteFrame(texture);
-            this.imageTextureCache[url] = frame;
-            if(cc.isValid(sprite))
+            this.imageTextureCache[key] = frame;
+            this.imageUrlByKey[key] = url;
+            if(cc.isValid(sprite) && sprite.node != null && sprite.node["__mediaUrl"] === url)
                 sprite.spriteFrame = frame;
         });
     }
@@ -1343,8 +1416,12 @@ export default class panelMessageChat extends UIPanelViewBase {
             return;
         this.PreparePreviewMask();
         this.previewNode.active = true;
+        // 大图预览是整屏蒙版，必须是面板里最上层：底部的拍照/图片/上下分/赠送/清除
+        // 在 Prefab 里是它的兄弟节点，不置顶会浮在蒙版之上（既看得见也能被点到）。
+        if(this.previewNode.parent != null)
+            this.previewNode.setSiblingIndex(this.previewNode.parent.children.length - 1);
         this.previewSprite.spriteFrame = null;
-        this.LoadImageInto(this.previewSprite,attachment.url);
+        this.LoadImageInto(this.previewSprite,attachment.url,"full");
     }
 
     /** 语音同一时间只播放一条，切换消息时先停上一条。 */
