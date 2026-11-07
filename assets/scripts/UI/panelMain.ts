@@ -232,6 +232,9 @@ export default class panelMain extends UIPanelViewBase {
     private animateSet:dragonBones.ArmatureDisplay = null;
 
     private bNeedInitJYPwd:boolean = false;  //是否需要初始化交易密码
+    // 修改交易密码改为用登录密码核验：走后台 HTTP 接口，不再用游戏服旧密码协议。
+    private payPasswordSubmitting:boolean = false;
+    private payPasswordRequest:XMLHttpRequest = null;
     private scrollCFNotify:ScrollViewEx = null; //惩罚公告列表
 
     private pendingAvatarIndex:string = ""; //等待服务端回写的首次/兼容头像序号
@@ -1186,14 +1189,13 @@ export default class panelMain extends UIPanelViewBase {
 
     private RefreshClubFinanceMenuVisibility():void
     {
-        const hasClub = this.ResolveRoomClub() !== "";
+        const clubId = this.ResolveRoomClub();
+        const hasClub = clubId !== "";
         const paths = [
             "Main/我的/滚动区/view/content/操作/赠送",
             "Main/我的/滚动区/view/content/操作/兑换钻石",
             "Main/我的/滚动区/view/content/操作/上下分记录",
-            "Main/我的/滚动区/view/content/操作/钻石池消耗",
-            // 「额度授权记录」：大盟主查看给各盟主的额度授信流水，与钻石池消耗同属俱乐部专属入口。
-            "Main/我的/滚动区/view/content/操作/额度授权记录"
+            "Main/我的/滚动区/view/content/操作/钻石池消耗"
         ];
         for(const path of paths)
         {
@@ -1201,6 +1203,11 @@ export default class panelMain extends UIPanelViewBase {
             if(node != null)
                 node.active = hasClub;
         }
+        // 「额度授权记录」比上面几个更窄：只有大盟主（联盟总群主）和盟主（已入盟的俱乐部创建者）
+        // 有授信流水，群主 / 管理员 / 合伙人 / 普通成员一律不显示。
+        const grantNode = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作/额度授权记录");
+        if(grantNode != null)
+            grantNode.active = hasClub && this.CanViewQuotaGrantRecord(clubId);
         const operation = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作");
         const layout = operation == null ? null : operation.getComponent(cc.Layout);
         if(layout != null)
@@ -1607,8 +1614,9 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "额度授权记录")
         {
-            // 大盟主（联盟总群主）查看自己给盟主的额度授信记录，数据见「我的」页同款入口。
-            if(this.ResolveRoomClub() === "")
+            // 大盟主（联盟总群主）/ 盟主查看自己给盟主的额度授信记录，数据见「我的」页同款入口。
+            const grantClubId = this.ResolveRoomClub();
+            if(grantClubId === "" || !this.CanViewQuotaGrantRecord(grantClubId))
             {
                 this.RefreshClubFinanceMenuVisibility();
                 return;
@@ -2211,12 +2219,14 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name == "确定修改交易密码")
         {
-            let strOldPwd = Tool.GetChild(this.node,"修改交易密码/列表/原有密码/txt").getComponent(cc.EditBox).string
+            if(this.payPasswordSubmitting)
+                return
+            let strLoginPwd = Tool.GetChild(this.node,"修改交易密码/列表/原有密码/txt").getComponent(cc.EditBox).string
             let strNewPwd1 = Tool.GetChild(this.node,"修改交易密码/列表/新密码1/txt").getComponent(cc.EditBox).string
             let strNewPwd2 = Tool.GetChild(this.node,"修改交易密码/列表/新密码2/txt").getComponent(cc.EditBox).string
-            if(strOldPwd == "")
+            if(strLoginPwd == "")
             {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入旧密码");
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入登录密码");
                 return
             }
             if(strNewPwd1 == "")
@@ -2235,9 +2245,8 @@ export default class panelMain extends UIPanelViewBase {
                 return
             }
 
-            //开始修改
-            let strParam = "{\"header\":\"修改_玩家_交易密码\",\"old_pwd\":\""+strOldPwd+"\",\"new_pwd\":\"" + strNewPwd1 + "\"}";
-            GameDataManager.getAccount().reqHallCommand(strParam, "P@修改_玩家_交易密码");
+            // 改交易密码用登录密码核验：登录密码校验和交易密码落库都在后台完成。
+            this.SubmitPayPasswordChange(strLoginPwd, strNewPwd1);
         }
         else if(button.node.name == "确定初始化交易密码")
         {
@@ -2276,6 +2285,68 @@ export default class panelMain extends UIPanelViewBase {
     private arrayDHN:string[] = ["Animation_MoneyFlow_1","Animation_Give_1","Animation_Record_1","Animation_Agent_1","Animation_Set_1"] //所有动画 逆时针
     private arrayBTNName:string[] = ["资金明细","设置","代理","战绩","赠送"]
     private strLastMMSMask:string = "";
+
+    // 修改交易密码：后台用登录密码核验身份，再调游戏服写入新交易密码。
+    private SubmitPayPasswordChange(strLoginPwd:string, strNewPwd:string)
+    {
+        const account = GameDataManager.getAccount();
+        if(account == null || account.guuid == null || account.guuid.toString() == "")
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"登录状态异常，请重新登录");
+            return;
+        }
+        this.payPasswordSubmitting = true;
+        let request = new XMLHttpRequest();
+        this.payPasswordRequest = request;
+        let completed = false;
+        let finish = (message:string,ok:boolean)=>{
+            if(completed)
+                return;
+            completed = true;
+            this.payPasswordRequest = null;
+            this.payPasswordSubmitting = false;
+            if(ok)
+            {
+                this.ClearTransactionPasswordInputs();
+                let panel = this.node.getChildByName("修改交易密码");
+                if(panel != null)
+                    panel.active = false;
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+                return;
+            }
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+        };
+        request.onreadystatechange = ()=>{
+            if(request.readyState !== 4)
+                return;
+            let payload:any = null;
+            try{ payload = JSON.parse(request.responseText); }catch(e){ payload = null; }
+            if(payload == null)
+            {
+                finish("无法连接服务器，请检查网络后重试",false);
+                return;
+            }
+            // 与后台统一使用 ok/data 信封
+            if(payload.ok === true)
+            {
+                finish("交易密码修改成功！",true);
+                return;
+            }
+            let message:string = payload.error != null && payload.error.message != null ? payload.error.message : "";
+            if(message === "") message = "修改失败，请稍后再试";
+            finish(message,false);
+        };
+        request.onerror = ()=>finish("无法连接服务器，请检查网络后重试",false);
+        request.ontimeout = ()=>finish("请求超时，请稍后再试",false);
+        request.open("POST",ConfigManager.getInstance().changePayPasswordUrl,true);
+        request.timeout = 15000;
+        request.setRequestHeader("Content-Type","application/json");
+        request.send(JSON.stringify({
+            player_id:account.guuid.toString(),
+            login_pwd:strLoginPwd,
+            new_pay_pwd:strNewPwd
+        }));
+    }
 
     private ClearTransactionPasswordInputs()
     {
@@ -5828,6 +5899,23 @@ export default class panelMain extends UIPanelViewBase {
             return true;
         const agent = this.clubAgentInfo[id];
         return !!(agent && Number(agent.is_creator) === 1);
+    }
+
+    /**
+     * 「额度授权记录」入口的可见性：只有当前俱乐部的创建者才有授信流水可看。
+     * 创建者再按联盟归属分身份——联盟总群主=大盟主、已入盟=盟主（两者都放行）；
+     * 未入盟的群主、管理员/合伙人/普通成员一律不放行。
+     * 联盟归属还没查回来时先对创建者放行，等 `查询_联盟_额度` 回包触发刷新后再纠正，
+     * 避免查询失败把盟主的入口永久藏起来。
+     */
+    private CanViewQuotaGrantRecord(clubId:string):boolean
+    {
+        if(!this.IsClubOwner(clubId))
+            return false;
+        if(this.ResolveClubUnionId(clubId) !== "")
+            return true;
+        const status = this.clubUnionStatus[clubId];
+        return !(status && status.known && !status.hasUnion);
     }
 
     /**

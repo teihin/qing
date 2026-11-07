@@ -107,6 +107,12 @@ export default class panelGameView extends UIPanelViewBase {
     /** 服务端 PromptInfo 的序号/时间：坐下失败时等专用提示，避免再弹笼统的“金币不足”。 */
     private promptInfoSerial:number = 0;
     private lastPromptInfoTime:number = 0;
+    /** 本手牌已用加时次数（每手牌重置，见 SyncDelayRoundCounter）。 */
+    private delayUsedCount:number = 0;
+    /** 计数归属的局号：局号变一次就说明上一手结束了。 */
+    private delayRoundKey:string = "";
+    /** 点「延时」后选中的档位（第几次），供「确认延时」弹窗回用。 */
+    private pendingDelayTimes:number = 0;
 
     private queueEntryLabel:cc.Label = null;
     private queueEntryNode:cc.Node = null;
@@ -144,30 +150,55 @@ export default class panelGameView extends UIPanelViewBase {
     }
 
     /**
-     * 本局加时的钻石档位（接口文档 v1.2 §3.7）：
-     * 第 1 次免费 +20 秒 / 第 2 次 200 钻 +15 秒 / 第 3 次 400 钻 +10 秒 / 第 4 次起拒绝。
-     * 服务端下发的是 `round_counttimes_money`：金币口径为 0/2/4/8…（分），
-     * 这里同时兼容它直接下发钻石价（0/200/400）的写法，避免两边口径切换时提示错。
+     * 本手牌加时的档位与价格：每手牌最多 3 次，**第 1 次固定免费** +20 秒；
+     * 第 2 次 +15 秒、第 3 次 +10 秒按后台「钻石消费价格」的
+     * `延时第2次` / `延时第3次` 扣钻（默认 200 / 400）。第 4 次起客户端直接拦。
+     * 次数按**每手牌**算：局号（round_count）变动即重置，不累计整场。
      */
-    private GetDelayTier():{cost:number,secs:number,free:boolean,denied:boolean}
+    private GetDelayTier():{cost:number,secs:number,free:boolean,denied:boolean,times:number}
     {
-        let nRaw = Number(this.gameLogic.GetPlayerCtlByID(0).info.count_times);
-        if(nRaw === 0)
-            return {cost:0,secs:20,free:true,denied:false};
-        if(nRaw === 2 || nRaw === 200)
-            return {cost:200,secs:15,free:false,denied:false};
-        if(nRaw === 4 || nRaw === 400)
-            return {cost:400,secs:10,free:false,denied:false};
-        if(nRaw >= 8)
-            return {cost:0,secs:0,free:false,denied:true};
-        // 异常值（没拿到次数）：按第 2 档提示，最终以服务端判定为准
-        return {cost:200,secs:15,free:false,denied:false};
+        this.SyncDelayRoundCounter();
+        const nTimes = this.delayUsedCount + 1;
+        if(nTimes > ConfigManager.DELAY_MAX_TIMES)
+            return {cost:0,secs:0,free:false,denied:true,times:nTimes};
+
+        const nSecs = nTimes === 1 ? 20 : (nTimes === 2 ? 15 : 10);
+        const nCost = ConfigManager.getInstance().GetDelayStone(nTimes);
+        return {cost:nCost,secs:nSecs,free:nCost <= 0,denied:false,times:nTimes};
     }
 
-    /** 延时统一走这里：`money_type=stone`，价格由服务端档位决定，不传 `money`。 */
-    private SendDelayCommand()
+    /** 换手牌就把加时计数清零；局号拿不到时按 0 处理，不会冒出负数。 */
+    private SyncDelayRoundCounter()
     {
-        GameDataManager.getAccount().reqGameCommand("{\"header\":\"延长时间_命令\",\"money_type\":\"stone\"}", "延长时间_命令");
+        const strRound = this.gameLogic == null ? "" : String(this.gameLogic.round_count);
+        if(strRound !== this.delayRoundKey)
+        {
+            this.delayRoundKey = strRound;
+            this.delayUsedCount = 0;
+        }
+    }
+
+    /** 收到本手牌的「开始_发牌_事件」：加时次数从 0 重新算（服务端每手牌 3 次）。 */
+    private OnSelfRoundDealt()
+    {
+        this.SyncDelayRoundCounter();
+        this.delayUsedCount = 0;
+    }
+
+    /**
+     * 延时统一走这里：先发 `延长时间_命令`（只加时，服务端不再扣钻），
+     * 收费档（第 2、3 次）再发一笔统一扣费 `玩家_消费_命令`，`consume_type` 固定写「延时」。
+     * 第 1 次固定免费，不发扣费命令。
+     */
+    private SendDelayCommand(nTimes:number, nCost:number)
+    {
+        let account = GameDataManager.getAccount();
+        if(account == null)
+            return;
+        account.reqGameCommand("{\"header\":\"延长时间_命令\",\"money_type\":\"stone\"}", "延长时间_命令");
+        if(nCost > 0)
+            account.reqGameCommand(ConfigManager.getInstance().BuildDelayConsumeParam(nTimes), "玩家_消费_命令");
+        this.delayUsedCount++;
     }
 
     /**
@@ -242,6 +273,8 @@ export default class panelGameView extends UIPanelViewBase {
         KBEngine.Event.register("SelfSeatTimeout", this, "OnSelfSeatTimeout");
         // 后台改了钻石消费价格，牌桌价签跟着刷（面板常驻，只注册一次）
         KBEngine.Event.register("ConsumeStonePriceUpdated", this, "RefreshConsumePriceLabels");
+        // 每手牌开始发牌时清零加时计数（延时按手牌算 3 次）
+        KBEngine.Event.register("SelfRoundDealt", this, "OnSelfRoundDealt");
         this.RefreshConsumePriceLabels();
 
         this.scrollGuanZhan = Tool.GetChild(this.node,"实时战绩/围观列表").getComponent(ScrollViewEx);
@@ -1423,16 +1456,12 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(button.node.name === "延时")
         {
-            // 加时改走钻石（接口文档 v1.2 §3.7）：价格由服务端固定档位决定，客户端只负责提示与拦截。
-            //   本局第 1 次：免费 +20 秒
-            //   本局第 2 次：200 钻 +15 秒
-            //   本局第 3 次：400 钻 +10 秒
-            //   第 4 次及以后：服务端直接 0x301，客户端提前拦住
-            // 扣费在服务端 `延长时间_命令` 内完成，客户端不发 `玩家_消费_命令`，避免双扣。
+            // 加时：每手牌 3 次，第 1 次免费 +20 秒；第 2/3 次按后台配置扣钻，第 4 次客户端直接拦。
+            // 扣费走统一扣费接口 `玩家_消费_命令`（consume_type=延时），服务端 `延长时间_命令` 只负责加时。
             let tier = this.GetDelayTier();
             if(tier.denied)
             {
-                this.ShowMsg("本局加时次数已用完！");
+                this.ShowMsg("本手牌加时次数已用完！");
                 return;
             }
             if(!tier.free && Number(GameDataManager.getAccount().stone) < tier.cost)
@@ -1442,17 +1471,20 @@ export default class panelGameView extends UIPanelViewBase {
             }
             if(tier.free)
             {
-                this.SendDelayCommand();
+                this.SendDelayCommand(tier.times, 0);
                 return;
             }
 
+            this.pendingDelayTimes = tier.times;
             this.ShowCostConfirm("确认消耗" + tier.cost + "钻石延时" + tier.secs + "秒吗？", "确认延时");
            
         }
         else if(button.node.name === "确认延时")
         {
             button.node.parent.active = false;
-            this.SendDelayCommand();
+            const nTimes = this.pendingDelayTimes > 0 ? this.pendingDelayTimes : this.delayUsedCount + 1;
+            this.pendingDelayTimes = 0;
+            this.SendDelayCommand(nTimes, ConfigManager.getInstance().GetDelayStone(nTimes));
        
         }
         else if(button.node.name === "翻牌")
@@ -1830,10 +1862,15 @@ export default class panelGameView extends UIPanelViewBase {
     //查询奖池记录
     public GetAllJiangDetal()
     {
-        const strDi = jackpotTier(GameDataManager.getAccount().roomSetting);
+        const account = GameDataManager.getAccount();
+        const strDi = jackpotTier(account.roomSetting);
+        const clubId = resolveRoomSettingClubId(account);
 
-        let strParam = "{\"header\":\"查询_奖池_记录\",\"score_type\":\"" + strDi + "\"}";
-        GameDataManager.getAccount().reqHallCommand(strParam, "P@查询_奖池_记录");
+        // 俱乐部实时房按俱乐部维度查：传 club_id 时服务端推导该俱乐部所在池
+        // （已入盟=联盟池，未入盟=俱乐部池）；大厅房/无俱乐部房不传，保持全服数据。
+        const params:any = { header: "查询_奖池_记录", score_type: strDi };
+        if (clubId !== "") params.club_id = clubId;
+        GameDataManager.getAccount().reqHallCommand(JSON.stringify(params), "P@查询_奖池_记录");
     }
 
     public bFromTC = false; //从弹窗过来的补分不需要再次确认
@@ -3944,6 +3981,7 @@ export default class panelGameView extends UIPanelViewBase {
     {
         // 已经真正退房，预约标记与等待中的延迟调用都不能再生效。
         this.pendingExitAfterRound = false;
+        this.unschedule(this.PollPendingExit);
         this.unschedule(this.DoPendingExit);
         this.gameLogic.PrepareLeaveRoom();
         GameDataManager.getAccount().roomID = "";
@@ -3994,6 +4032,10 @@ export default class panelGameView extends UIPanelViewBase {
     private ScheduleExitAfterRound():void
     {
         this.pendingExitAfterRound = true;
+        // PlayerList 不保证在「局间」推过来（自动准备时下一手可能已经开了），
+        // 单靠消息触发的检查会一直等不到时机，这里加一路定时复查兜底。
+        this.unschedule(this.PollPendingExit);
+        this.schedule(this.PollPendingExit,0.5);
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
             "当前牌局结束后，下手将退出房间。");
     }
@@ -4003,17 +4045,45 @@ export default class panelGameView extends UIPanelViewBase {
     {
         if(this.gameLogic == null || this.gameLogic.strGameState != "running")
             return false;
-        return this.IsSelfActuallySeated();
+        if(!this.IsSelfActuallySeated())
+            return false;
+        // GameStatus=running 在整房进行期间可能跨多手持续存在，局间不一定翻回
+        // init/ready；自己已经进入本手结算就说明这一手已经打完了。
+        let selfPlayer = this.gameLogic.GetPlayerCtlByID(0);
+        if(selfPlayer != null && selfPlayer.info != null)
+        {
+            let strState = String(selfPlayer.info.strServerState || "");
+            if(strState.indexOf("结算") >= 0)
+                return false;
+        }
+        return true;
     }
 
     /** 每次 PlayerList 刷新后调用：本手牌一结束就执行预约好的退房。 */
     private CheckPendingExitAfterRound():void
     {
-        if(!this.pendingExitAfterRound || this.IsSelfInRound())
+        this.TryRunPendingExit();
+    }
+
+    /** 预约期间每 0.5s 复查一次，避免错过短暂的局间窗口。 */
+    private PollPendingExit():void
+    {
+        this.TryRunPendingExit();
+    }
+
+    private TryRunPendingExit():void
+    {
+        if(!this.pendingExitAfterRound)
+        {
+            this.unschedule(this.PollPendingExit);
+            return;
+        }
+        if(this.IsSelfInRound())
             return;
         this.pendingExitAfterRound = false;
-        // 留一点时间让玩家看到这一手的结算结果，再走正常退房流程。
+        this.unschedule(this.PollPendingExit);
         this.unschedule(this.DoPendingExit);
+        // 留一点时间让玩家看到这一手的结算结果，再走正常退房流程。
         this.scheduleOnce(this.DoPendingExit,0.8);
     }
 
@@ -4025,6 +4095,8 @@ export default class panelGameView extends UIPanelViewBase {
         if(this.IsSelfInRound())
         {
             this.pendingExitAfterRound = true;
+            this.unschedule(this.PollPendingExit);
+            this.schedule(this.PollPendingExit,0.5);
             return;
         }
         this.DoExitRoom();

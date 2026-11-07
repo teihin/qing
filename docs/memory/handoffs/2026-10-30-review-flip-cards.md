@@ -56,3 +56,10 @@
   取消/确定两颗药丸和按钮文字**全部画在图上**，`V8文字` 子节点是换肤留下的空壳、必须保持关闭。
   本次一度把它们打开，实机上图上文字与 Label 叠成重影（2026-10-30 用户截图反馈），已恢复关闭；
   `确认翻牌` 的 `V8文字` 同样关掉，确认弹窗文字完全由底图提供。
+
+## 后续变更（2026-11-07）：入口收敛
+
+- 用户要求「只允许牌桌内右上角点出来的牌局回顾显示翻牌」，`panelRecordInfo`（玩家战绩 / 大厅历史战绩 / 结算回顾 / 后台查看战绩共用）从此**不显示**「翻牌」：
+  prefab 里 `牌局回顾/翻牌` 节点 `_active=false`（不是删除节点，`__id__` 不动），脚本删掉 `RefreshFlipButton`/`GetReviewRows`/`ShowFlipReviewConfirm`/`ConsumeAndFlipReviewCards`、点击分支、`flipButton` 字段和 `ConfigManager` import，onLoad 里再兜底 `active=false` 一次。
+- `IsReviewRoundFlipped` / `RevealFaceDownCards` 的共享展示保留：牌桌内付过费的局，详情页重渲染仍按已翻开展示。
+- 收费链路本身没变，牌桌内的 `panelGameView.RefreshReviewFlipButton` 未改动。

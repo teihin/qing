@@ -21,9 +21,18 @@ export default class ConfigManager extends cc.Component {
     public static readonly CONSUME_FORCE_SHOW:string = "强制秀牌";
     public static readonly CONSUME_LOOK_NEXT:string = "看下一张牌";
     public static readonly CONSUME_CUT_CARD:string = "切牌";
-    // 注：`延时` 不进这张价格表——接口文档 v1.2 §3.7 规定加时价格由服务端固定档位决定
-    //     （第 2 次 200 钻 / 第 3 次 400 钻 / 第 1 次免费），客户端只做提示和拦截。
     public static readonly CONSUME_REPORT:string = "举报";
+    /**
+     * 对局加时（延时）：每手牌最多 3 次，**第 1 次固定免费**，第 2/3 次按后台价格扣钻。
+     * 只给第 2、3 次配价（第 1 次没得配，后台也不提供该项）。
+     * 延时的**流水类型**统一写「延时」（见 CONSUME_DELAY_TYPE），这两项只是取价用的 key。
+     */
+    public static readonly CONSUME_DELAY_2:string = "延时第2次";
+    public static readonly CONSUME_DELAY_3:string = "延时第3次";
+    /** 延时扣费写进 `玩家_消费_命令` 的 consume_type。 */
+    public static readonly CONSUME_DELAY_TYPE:string = "延时";
+    /** 每手牌允许的加时次数（第 1 次免费，2/3 次收费）。 */
+    public static readonly DELAY_MAX_TIMES:number = 3;
     /** 牌局回顾一键翻牌，默认 500 钻；只翻本局已发的牌，见 panelGameView.ConsumeAndFlipReviewCards。 */
     public static readonly CONSUME_FLIP:string = "翻牌";
     /** 创建俱乐部收一次费，默认 10000 钻；成功受理后才扣，见 panelMain.CreateClub。 */
@@ -48,6 +57,8 @@ export default class ConfigManager extends cc.Component {
         "看下一张牌":1,
         "切牌":1,
         "举报":50,
+        "延时第2次":200,
+        "延时第3次":400,
         "翻牌":500,
         "创建俱乐部":10000,
         "创建联盟":10000
@@ -65,6 +76,7 @@ export default class ConfigManager extends cc.Component {
     public kefuUrl:string = WEB_CUSTOMER_SERVICE_URL;
     public registrationUrl:string = "http://154.37.155.17/xuanmanager/api/game/registrations";
     public changeLoginPasswordUrl:string = "http://154.37.155.17/xuanmanager/api/game/change-login-password";
+    public changePayPasswordUrl:string = "http://154.37.155.17/xuanmanager/api/game/change-pay-password";
 
     static instance: ConfigManager
     static getInstance() {
@@ -135,6 +147,31 @@ export default class ConfigManager extends cc.Component {
     {
         let nStone = this.GetConsumeStone(strType);
         return "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"" + strType
+            + "\",\"money\":" + nStone + ",\"money_type\":\"stone\"}";
+    }
+
+    /**
+     * 第 nTimes 次加时的钻石单价（nTimes 从 1 起）。0 表示免费。
+     * **第 1 次固定免费**（不读配置、也不发扣费命令）；第 2、3 次取后台
+     * 「钻石消费价格」页的 `延时第2次` / `延时第3次`，运营改价不用发客户端。
+     */
+    public GetDelayStone(nTimes:number):number
+    {
+        if(nTimes <= 1)
+            return 0;
+        if(nTimes === 2)
+            return this.GetConsumeStone(ConfigManager.CONSUME_DELAY_2);
+        return this.GetConsumeStone(ConfigManager.CONSUME_DELAY_3);
+    }
+
+    /**
+     * 延时扣费报文：取价按第几次加时，但 `consume_type` 统一写「延时」（流水类型要求）。
+     * 注意延时是客户端走统一扣费接口扣的，不再由服务端 `延长时间_命令` 扣。
+     */
+    public BuildDelayConsumeParam(nTimes:number):string
+    {
+        let nStone = this.GetDelayStone(nTimes);
+        return "{\"header\":\"玩家_消费_命令\",\"consume_type\":\"" + ConfigManager.CONSUME_DELAY_TYPE
             + "\",\"money\":" + nStone + ",\"money_type\":\"stone\"}";
     }
 

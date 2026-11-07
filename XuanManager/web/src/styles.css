@@ -2694,3 +2694,71 @@ td strong { color: #294149; }
 .game-log-table__tag { color: #7b9096; font-size: 13px; }
 .game-log-table__detail { color: #3f5559; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-all; }
 .game-log-table__detail.is-clamped { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---------- 业绩核心共享 ---------- */
+.reward-tabs{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.reward-tab{height:40px;padding:0 18px;border:1px solid #e0e9ea;border-radius:10px;color:#5b777e;background:#fff;font-size:14px;display:flex;align-items:center;gap:7px;box-shadow:var(--shadow)}
+.reward-tab small{padding:1px 7px;border-radius:20px;color:#72898f;background:#f0f5f5;font-size:11px}
+.reward-tab.is-on{color:#0d7a72;border-color:#bfe3de;background:#eaf8f5;font-weight:600}
+.reward-tab.is-on small{color:#0f7b72;background:#d5efeb}
+.reward-status{display:inline-flex;align-items:center;height:24px;padding:0 10px;border-radius:20px;font-size:12px;color:#5b777e;background:#eef3f4}
+.reward-status--paid{color:#0f7a60;background:#e6f7f0}
+.reward-status--paying{color:#8a6a12;background:#fdf4e0}
+.reward-status--partial{color:#b64350;background:#fdeef0}
+.reward-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.reward-metric{padding:14px 16px;border:1px solid #e0e9ea;border-radius:12px;background:#fff;box-shadow:var(--shadow)}
+.reward-metric > span{display:block;color:#6e858b;font-size:12.5px}
+.reward-metric > strong{display:block;margin-top:5px;color:#16313a;font-family:Georgia,serif;font-size:24px;font-variant-numeric:tabular-nums}
+.reward-metric > input{width:100%;margin-top:5px;padding:4px 9px;border:1px solid #d5e4e5;border-radius:8px;background:#fbfefd;font-family:Georgia,serif;font-size:22px;font-variant-numeric:tabular-nums}
+.reward-metric > input:focus{outline:0;border-color:#63c4bb;background:#fff;box-shadow:0 0 0 3px rgba(35,168,158,.1)}
+.reward-metric > small{display:block;margin-top:6px;color:#809499;font-size:11.5px}
+.reward-metric.is-ok{border-color:#c9e9df;background:#f7fdfb}
+.reward-metric.is-bad{border-color:#f3d3d8;background:#fffafb}
+.reward-warn{padding:11px 14px;border:1px solid #f3e2c4;border-radius:10px;color:#7c5a16;background:#fffaf0;font-size:13px}
+.reward-warn b{display:block;margin-bottom:4px}
+.reward-warn ul{margin:0;padding-left:18px}
+.reward-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.reward-tools input,.reward-tools select{height:34px;padding:0 10px;border:1px solid #dbe7e8;border-radius:8px;background:#fafcfc;font-size:13px;color:#456269}
+.reward-tools input[type="date"]{padding:0 8px}
+.reward-name strong{display:block;color:#17323b;font-weight:600}
+.reward-name small{display:block;margin-top:2px;color:#8b9ea3;font-size:11.5px}
+.reward-num{text-align:right;font-variant-numeric:tabular-nums}
+.reward-muted{color:#95a7ac}
+.reward-self td{background:#f2fbf9}
+.reward-role{display:inline-flex;align-items:center;height:21px;padding:0 8px;border-radius:20px;font-size:11.5px;color:#4b6570;background:#eef3f4}
+.reward-role--boss{color:#8a5a12;background:#fbf1de}
+.reward-role--leader{color:#0d6f86;background:#e6f4f8}
+.reward-role--chief{color:#5b4b8a;background:#f0ecfa}
+.reward-role--partner{color:#7a5a1d;background:#faf2e2}
+.reward-tag{margin-left:5px;padding:1px 6px;border-radius:20px;color:#8b6a2f;background:#fdf4e6;font-size:11px}
+.reward-points{font-family:Georgia,serif;font-weight:600;color:#0e6f67}
+.reward-points.is-zero{color:#a9b8bc;font-weight:400}
+.reward-amount{width:104px;height:31px;padding:0 8px;border:1px solid #d7e5e6;border-radius:7px;background:#fcfefe;text-align:right;font-variant-numeric:tabular-nums;font-size:13.5px}
+.reward-amount:focus{outline:0;border-color:#63c4bb;background:#fff;box-shadow:0 0 0 3px rgba(35,168,158,.1)}
+.reward-ops{display:flex;gap:8px;justify-content:flex-end;white-space:nowrap}
+.reward-link{padding:2px 0;border:0;color:#17877f;background:transparent;font-size:12.5px}
+.reward-link:hover{text-decoration:underline}
+.reward-link--danger{color:#b64350}
+.reward-foot{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:12px 18px;border-top:1px solid #edf2f2;flex-wrap:wrap;font-size:13px;color:#5d7a80}
+.reward-foot > div:first-child{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.reward-foot b{color:#17323b;font-variant-numeric:tabular-nums}
+.reward-foot .is-bad b{color:#c1454f}
+.reward-foot .is-ok b{color:#12826f}
+.reward-hint{margin:8px 0;color:#7d9298;font-size:12.5px;line-height:1.7}
+.reward-hint.is-ok{color:#12826f}
+.reward-hint.is-bad{color:#b64350}
+.reward-modal-foot{display:flex;justify-content:flex-end;gap:9px;margin-top:14px}
+.reward-sub-row{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border:1px solid #eef4f4;border-radius:8px;margin-bottom:6px;font-size:13px}
+.is-pos{color:#c1454f}
+.is-neg{color:#2f7d6c}
+.reward-role--grand{color:#7a3f1d;background:#fbeee2}
+.reward-role--small_leader{color:#2f5f8a;background:#eaf2fa}
+.reward-dim{color:#4f6b73;font-size:12.5px}
+.reward-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:52px 20px;text-align:center}
+.reward-empty strong{color:#17323b;font-size:16px}
+.reward-empty p{max-width:460px;color:#7d9298;font-size:13px;line-height:1.7}
+.reward-empty > button{margin-top:4px}
+.reward-list-save{display:grid;gap:10px}
+.reward-list-save strong{color:#17323b;font-size:14px}
+.reward-list-save .reward-tools input{min-width:180px}
+.reward-confirm{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding:11px 14px;border:1px solid #f3e2c4;border-radius:10px;background:#fffaf0;color:#7c5a16;font-size:13px}

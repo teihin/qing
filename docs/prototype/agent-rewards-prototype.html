@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>业绩核心共享 · 界面原型</title>
+<style>
+:root{
+  --ink:#122b35; --muted:#6d8189; --line:#dce8e9; --surface:#fff;
+  --navy:#071820; --teal:#159b91; --teal-dark:#08776f; --teal-soft:#e7f7f4;
+  --danger:#d85262; --gold:#b78d4f; --gold-soft:#faf3e7;
+  --shadow:0 14px 42px rgba(17,53,61,.08);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:#f3f7f7;color:var(--ink);font:15px/1.5 Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif}
+h1,h2,h3,p{margin:0}
+button{font:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed;opacity:.5}
+input,select{font:inherit;color:inherit}
+
+.app{display:grid;grid-template-columns:228px minmax(0,1fr);min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;padding:22px 14px;color:#d8e5e7;background:linear-gradient(175deg,#0b242c 0%,#07171e 62%,#06131a 100%)}
+.brand{display:flex;align-items:center;gap:11px;padding:0 8px 18px}
+.brand .mark{display:grid;width:38px;height:38px;place-items:center;border:1px solid rgba(91,226,215,.35);border-radius:12px;color:#91fff3;background:linear-gradient(145deg,#15434a,#082129);font:700 17px Georgia,serif}
+.brand strong{display:block;color:#f4fbfb;font:600 17px Georgia,serif}
+.brand small{display:block;margin-top:3px;color:#78979d;font-size:11px;letter-spacing:.1em}
+.side-line{height:1px;margin:0 8px 16px;background:linear-gradient(90deg,rgba(89,214,204,.24),transparent)}
+.nav-group{margin:14px 10px 6px;color:#5f7c83;font-size:11px;letter-spacing:.12em}
+.nav-link{width:100%;display:flex;height:42px;align-items:center;gap:10px;margin-bottom:3px;padding:0 12px;border:0;border-radius:9px;color:#a7bcc0;background:transparent;text-align:left;font-size:14px}
+.nav-link:hover{color:#e5f4f3;background:rgba(98,218,207,.06)}
+.nav-link.on{color:#e9fffc;background:linear-gradient(90deg,rgba(25,155,145,.26),rgba(25,155,145,.08));box-shadow:inset 0 0 0 1px rgba(85,211,201,.12)}
+.nav-link .dot{width:6px;height:6px;border-radius:50%;background:#3c5a61}
+.nav-link.on .dot{background:#6ee6da}
+
+.main{min-width:0;display:flex;flex-direction:column}
+.content{padding:26px 30px 120px;display:grid;gap:18px;max-width:1560px}
+.crumb{color:#7e949a;font-size:12.5px;letter-spacing:.02em}
+.crumb b{color:#3f6068;font-weight:600}
+.page-head{display:flex;justify-content:space-between;align-items:flex-end;gap:22px;flex-wrap:wrap}
+.page-head h1{font:600 26px Georgia,"Songti SC",serif;letter-spacing:-.02em}
+.page-head p{margin-top:7px;color:#6b8187;font-size:13.5px;max-width:720px}
+.head-actions{display:flex;gap:9px;align-items:center}
+
+.btn{height:38px;padding:0 14px;border:1px solid #d8e5e6;border-radius:9px;color:#3d5c64;background:#fff;font-size:13.5px;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:#b9d3d4;background:#fbfdfd}
+.btn.primary{color:#fff;border-color:#109086;background:linear-gradient(180deg,#199f94,#0f837a);box-shadow:0 8px 18px rgba(12,124,115,.2)}
+.btn.primary:hover{background:linear-gradient(180deg,#1aa89c,#0d7b73)}
+.btn.ghost{border-color:transparent;background:transparent;color:#5c7a81}
+.btn.ghost:hover{background:#eef6f6}
+.btn.danger{color:#b64350;border-color:#f0ccd1;background:#fff6f7}
+.btn.sm{height:31px;padding:0 10px;font-size:12.5px;border-radius:7px}
+
+.snapshot{display:flex;gap:12px;align-items:flex-start;padding:12px 15px;border:1px solid #cfe9e4;border-radius:11px;background:#f0fbf9;color:#2c6c66;font-size:13px;line-height:1.65}
+.snapshot b{color:#14675f}
+.snapshot .ico{flex:0 0 auto;display:grid;width:20px;height:20px;margin-top:1px;place-items:center;border-radius:50%;color:#fff;background:#25a99c;font-size:12px;font-weight:800}
+
+.tabs{display:flex;gap:6px;padding:5px;border:1px solid var(--line);border-radius:12px;background:#fff;width:fit-content;box-shadow:var(--shadow)}
+.tab{height:38px;padding:0 20px;border:0;border-radius:8px;color:#5e7a80;background:transparent;font-size:14px;display:flex;align-items:center;gap:7px}
+.tab.on{color:#0d7a72;background:var(--teal-soft);font-weight:600;box-shadow:inset 0 0 0 1px rgba(20,155,145,.16)}
+.tab small{padding:1px 6px;border-radius:20px;background:#eef3f4;color:#6d858b;font-size:11px}
+.tab.on small{background:#d3efeb;color:#0f7b72}
+
+.metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.metric{position:relative;overflow:hidden;padding:16px 18px;border:1px solid #e0e9ea;border-radius:13px;background:#fff;box-shadow:var(--shadow)}
+.metric::after{position:absolute;right:-40px;top:-46px;width:104px;height:104px;content:"";border-radius:50%;background:var(--ms,#e9f7f5)}
+.metric .k{color:#6e858b;font-size:12.5px}
+.metric .v{margin-top:6px;color:#16313a;font:600 26px Georgia,serif;font-variant-numeric:tabular-nums}
+.metric .v input{width:150px;padding:2px 8px;border:1px solid #cfe2e3;border-radius:7px;background:#fbfefd;font:600 24px Georgia,serif;text-align:right}
+.metric .v input:focus{outline:0;border-color:#63c4bb;background:#fff}
+.metric .s{margin-top:7px;color:#809499;font-size:11.5px}
+.metric.ok{--ms:#e6f7f0} .metric.warn{--ms:#fdf1e7} .metric.bad{--ms:#fdeef0}
+
+.panel{border:1px solid #e0e9ea;border-radius:13px;background:#fff;box-shadow:var(--shadow);overflow:hidden}
+.panel-head{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 16px;border-bottom:1px solid #edf2f2;flex-wrap:wrap}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.search{display:flex;height:34px;align-items:center;gap:7px;padding:0 10px;border:1px solid #dbe7e8;border-radius:8px;background:#fafcfc}
+.search input{width:150px;border:0;outline:0;background:transparent;font-size:13px}
+select.mini{height:34px;padding:0 8px;border:1px solid #dbe7e8;border-radius:8px;background:#fafcfc;font-size:13px;color:#456269}
+.tag{display:inline-flex;align-items:center;height:21px;padding:0 8px;border-radius:20px;font-size:11.5px;white-space:nowrap}
+.tag.boss{color:#8a5a12;background:#fbf1de}
+.tag.leader{color:#0d6f86;background:#e6f4f8}
+.tag.agent{color:#4b6570;background:#eef3f4}
+.tag.na{color:#8b6a2f;background:#fdf4e6}
+.tag.ok{color:#0f7a60;background:#e6f7f0}
+.tag.off{color:#8a6a70;background:#fbeeef}
+
+.tbl-wrap{max-height:min(60vh,620px);overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+thead th{position:sticky;top:0;z-index:2;padding:10px 10px;border-bottom:1px solid #e6eef0;background:#f8fbfb;color:#647e85;font-weight:600;text-align:left;white-space:nowrap}
+thead th.r{text-align:right}
+tbody td{padding:9px 10px;border-bottom:1px solid #f1f5f5;vertical-align:middle}
+tbody tr:hover{background:#fbfdfd}
+tbody tr.excluded{opacity:.42}
+td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+.cell-name strong{display:block;color:#17323b;font-weight:600}
+.cell-name small{display:block;margin-top:2px;color:#8b9ea3;font-size:11.5px}
+.num-pos{color:#c1454f}
+.num-neg{color:#2f7d6c}
+.money{width:104px;height:32px;padding:0 8px;border:1px solid #d7e5e6;border-radius:7px;background:#fcfefe;text-align:right;font-variant-numeric:tabular-nums;font-size:13.5px}
+.money:focus{outline:0;border-color:#63c4bb;background:#fff;box-shadow:0 0 0 3px rgba(35,168,158,.1)}
+.money.zero{color:#9aacb1}
+.points{font:600 14px Georgia,serif;font-variant-numeric:tabular-nums;color:#0e6f67}
+.points.zero{color:#a9b8bc;font-weight:400}
+.muted{color:#95a7ac}
+.ops{display:flex;gap:4px;justify-content:flex-end;flex-wrap:nowrap}
+.ops .btn{white-space:nowrap;flex:0 0 auto}
+.checkbox{width:15px;height:15px;accent-color:#159b91}
+.empty{padding:46px 20px;color:#8ba0a5;text-align:center;font-size:13.5px}
+
+.footbar{position:sticky;bottom:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:18px;padding:13px 18px;border-top:1px solid #dfeaeb;background:rgba(255,255,255,.96);backdrop-filter:blur(8px)}
+.foot-stats{display:flex;gap:22px;align-items:center;flex-wrap:wrap;font-size:13px;color:#5d7a80}
+.foot-stats b{color:#17323b;font-variant-numeric:tabular-nums}
+.foot-stats .diff.bad{color:#c1454f;font-weight:700}
+.foot-stats .diff.ok{color:#12826f;font-weight:700}
+
+.modal-mask{position:fixed;inset:0;z-index:50;display:grid;place-items:center;padding:24px;background:rgba(7,24,32,.42);backdrop-filter:blur(2px)}
+.modal{width:min(760px,100%);max-height:86vh;overflow:auto;border-radius:15px;background:#fff;box-shadow:0 30px 80px rgba(6,26,33,.28)}
+.modal.wide{width:min(1000px,100%)}
+.modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:19px 22px 15px;border-bottom:1px solid #edf2f2}
+.modal-head h3{font:600 18px Georgia,serif}
+.modal-head p{margin-top:5px;color:#7d9298;font-size:12.5px}
+.modal-body{padding:18px 22px}
+.modal-foot{display:flex;justify-content:flex-end;gap:9px;padding:14px 22px 19px;border-top:1px solid #f1f5f5}
+.field{margin-bottom:14px}
+.field label{display:block;margin-bottom:6px;color:#5b777e;font-size:12.5px}
+.field input,.field textarea,.field select{width:100%;padding:9px 11px;border:1px solid #d9e5e6;border-radius:8px;background:#fbfdfd;font-size:13.5px}
+.field input:focus,.field textarea:focus{outline:0;border-color:#63c4bb;background:#fff}
+
+.tree-table{width:100%;border-collapse:collapse;font-size:13px}
+.tree-table th{padding:9px 10px;border-bottom:1px solid #e6eef0;background:#f7fafa;color:#647e85;font-size:11.5px;font-weight:600;text-align:left;white-space:nowrap}
+.tree-table th.r,.tree-table td.r{text-align:right}
+.tree-table td{padding:8px 10px;border-bottom:1px solid #f4f8f8;font-variant-numeric:tabular-nums}
+.tree-table tr.self td{background:#f0faf8;box-shadow:inset 0 1px #d3efeb,inset 0 -1px #d3efeb}
+.tree-table .who strong{display:block;font-weight:600;color:#17323b}
+.tree-table .who small{color:#8b9ea3;font-size:11.5px}
+.tree-table .lv{color:#9aacb1;font-size:11px;font-weight:400}
+
+.progress{height:7px;border-radius:20px;background:#e9f1f2;overflow:hidden;margin:14px 0 8px}
+.progress i{display:block;height:100%;width:0;border-radius:20px;background:linear-gradient(90deg,#1ba79b,#0d7f77);transition:width .18s}
+.pay-list{max-height:34vh;overflow:auto;border:1px solid #eef4f4;border-radius:9px}
+.pay-row{display:flex;justify-content:space-between;padding:7px 12px;border-bottom:1px solid #f4f8f8;font-size:12.5px;color:#5c787f}
+.pay-row.done{color:#12826f}
+.pay-row .st{font-size:11.5px}
+
+.ledger-sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:14px}
+.ledger-sum div{padding:13px 15px;border:1px solid #e6eef0;border-radius:10px;background:#fbfdfd}
+.ledger-sum span{display:block;color:#7b9197;font-size:11.5px}
+.ledger-sum b{display:block;margin-top:3px;font:600 19px Georgia,serif;font-variant-numeric:tabular-nums}
+.toast{position:fixed;left:50%;bottom:34px;z-index:99;transform:translateX(-50%);padding:10px 18px;border-radius:10px;color:#fff;background:#0d3b3a;box-shadow:0 12px 30px rgba(6,30,30,.28);font-size:13.5px;opacity:0;transition:.22s}
+.toast.show{opacity:1;bottom:44px}
+.hint{color:#8b9ea3;font-size:12px;margin-top:6px}
+.hr{height:1px;background:#eef4f4;margin:14px 0}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand"><div class="mark">X</div><div><strong>XuanManager</strong><small>运营后台</small></div></div>
+    <div class="side-line"></div>
+    <div class="nav-group">工作台</div>
+    <button class="nav-link"><span class="dot"></span>数据概览</button>
+    <div class="nav-group">玩家与代理</div>
+    <button class="nav-link"><span class="dot"></span>玩家管理</button>
+    <button class="nav-link"><span class="dot"></span>代理管理</button>
+    <button class="nav-link"><span class="dot"></span>代理贡献管理</button>
+    <button class="nav-link"><span class="dot"></span>奖池业绩</button>
+    <div class="nav-group">奖励结算</div>
+    <button class="nav-link on"><span class="dot"></span>业绩核心共享</button>
+    <button class="nav-link" id="navLedger"><span class="dot"></span>发放账单</button>
+    <div class="nav-group">系统</div>
+    <button class="nav-link"><span class="dot"></span>权限与审计</button>
+  </aside>
+
+  <main class="main">
+    <div class="content">
+      <div class="crumb">游戏管理 / <b id="crumbNow">业绩核心共享</b></div>
+
+      <div class="page-head">
+        <div>
+          <h1 id="pageTitle">业绩核心共享</h1>
+          <p id="pageDesc">每天设置三类奖励的发放总额，按代理实际业绩点数或整条线输赢分配，确认后统一发放。</p>
+        </div>
+        <div class="head-actions">
+          <input type="date" id="datePick" class="btn" style="width:150px" value="2026-11-07">
+          <button class="btn" id="btnReload">刷新数据</button>
+          <button class="btn" id="btnLedger">发放账单</button>
+        </div>
+      </div>
+
+      <div class="snapshot">
+        <div class="ico">i</div>
+        <div>
+          <b>当前为线上真实数据快照（2026-11-07 19:40 只读查询，未发放任何金币）。</b>
+          代理名单 16 人取自游戏账号表；业绩报表覆盖 27 个已开通账号，<b>今日业绩点数全部为 0</b>（线上尚未产生奖池提留）；
+          16 人里只有 <b>4 个</b>挂在俱乐部下（分别属 3 个俱乐部），其余拿不到线输赢数据。需要看分摊效果可点右下「载入演示点数」。
+        </div>
+      </div>
+
+      <div class="tabs" id="tabs">
+        <button class="tab on" data-kind="performance">业绩奖励 <small>自动</small></button>
+        <button class="tab" data-kind="core">核心奖励 <small>手填</small></button>
+        <button class="tab" data-kind="pool">奖池共享 <small>手填</small></button>
+      </div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="k">计划发放总额（金币）</div>
+          <div class="v"><input id="planTotal" type="number" min="0" step="100"></div>
+          <div class="s">每天由主管设置</div>
+        </div>
+        <div class="metric ok">
+          <div class="k">已分配</div>
+          <div class="v" id="mAllocated">0</div>
+          <div class="s" id="mAllocatedSub">按点数自动分摊</div>
+        </div>
+        <div class="metric" id="mCardDiff">
+          <div class="k">剩余 / 差额</div>
+          <div class="v" id="mDiff">0</div>
+          <div class="s" id="mDiffSub">必须为 0 才能发放</div>
+        </div>
+        <div class="metric">
+          <div class="k">参与人数</div>
+          <div class="v" id="mCount">0</div>
+          <div class="s" id="mCountSub">名单 16 人 · 已排除 0 人</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div class="tools">
+            <div class="search"><span style="color:#93a8ad">⌕</span><input id="kw" placeholder="代理ID或昵称"></div>
+            <select class="mini" id="roleFilter">
+              <option value="all">全部身份</option>
+              <option value="boss">老板</option>
+              <option value="leader">盟主</option>
+              <option value="agent">代理</option>
+            </select>
+            <select class="mini" id="dataFilter">
+              <option value="all">全部数据</option>
+              <option value="has">有业绩点数</option>
+              <option value="noclub">无线数据</option>
+            </select>
+            <button class="btn sm" id="btnAdd">＋ 按 ID 添加</button>
+            <button class="btn sm danger" id="btnExcludeSel">排除选中</button>
+            <button class="btn sm ghost" id="btnShowExcluded">已排除 0</button>
+          </div>
+          <div class="tools">
+            <button class="btn sm" id="btnAuto">按点数自动分摊</button>
+            <button class="btn sm" id="btnClear">清空金额</button>
+            <button class="btn sm ghost" id="btnDemo">载入演示点数</button>
+          </div>
+        </div>
+
+        <div class="tbl-wrap">
+          <table>
+            <thead id="thead"></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+
+        <div class="footbar">
+          <div class="foot-stats">
+            <span>参与 <b id="fCount">0</b> 人</span>
+            <span>合计 <b id="fSum">0</b> 金币</span>
+            <span class="diff" id="fDiffWrap">差额 <b id="fDiff">0</b></span>
+            <span class="muted" id="fNote">名单 16 人 · 0 点不分配</span>
+          </div>
+          <div class="tools">
+            <button class="btn" id="btnExport">导出名单</button>
+            <button class="btn primary" id="btnPay" disabled>确认并发放</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- 真实数据（2026-11-07 19:40 线上只读快照） ---------- */
+/* line: 来自 异步_查询_代理_展示数据 team_raw（俱乐部口径）；null = 该代理不在任何俱乐部，取不到线数据 */
+/* perf: 来自 异步_查询_奖池业绩_结算报表（单位：点/元，今日全为 0） */
+const MEMBERS = [
+  {id:"648425", name:"匿名",   role:"boss",   roleText:"老板",    level:99, upper:"",       club:"",       authorized:true,  perf:{my:0,granted:0,net:0}, line:null},
+  {id:"237737", name:"jjdkd",  role:"boss",   roleText:"老板",    level:99, upper:"648425", club:"885399", authorized:true,  perf:{my:0,granted:0,net:0}, line:{todayScore:0,totalScore:0,todayContrib:0,totalContrib:0,cnt:0}},
+  {id:"718968", name:"abc11",  role:"boss",   roleText:"老板",    level:99, upper:"648425", club:"775447", authorized:true,  perf:{my:0,granted:0,net:0}, line:{todayScore:-21,totalScore:-2531,todayContrib:439,totalContrib:7502,cnt:1}},
+  {id:"895742", name:"znfkfiv",role:"boss",   roleText:"老板",    level:99, upper:"182605", club:"260673", authorized:true,  perf:{my:0,granted:0,net:0}, line:{todayScore:0,totalScore:-140,todayContrib:0,totalContrib:350,cnt:3}},
+  {id:"182605", name:"第二",   role:"leader", roleText:"大盟主",  level:98, upper:"648425", club:"",       authorized:true,  perf:{my:0,granted:0,net:0}, line:null},
+  {id:"472661", name:"第三1",  role:"leader", roleText:"大盟主",  level:98, upper:"182605", club:"",       authorized:false, perf:null, line:null},
+  {id:"500227", name:"第三3",  role:"agent",  roleText:"代理",    level:98, upper:"182605", club:"",       authorized:false, perf:null, line:null},
+  {id:"440554", name:"第二二", role:"agent",  roleText:"代理",    level:98, upper:"182605", club:"",       authorized:false, perf:null, line:null},
+  {id:"189836", name:"8L",     role:"leader", roleText:"大盟主",  level:98, upper:"648425", club:"",       authorized:true,  perf:{my:0,granted:0,net:0}, line:null},
+  {id:"590326", name:"8LL",    role:"leader", roleText:"大盟主",  level:98, upper:"189836", club:"",       authorized:false, perf:null, line:null},
+  {id:"937006", name:"8LLL",   role:"leader", roleText:"大盟主",  level:98, upper:"590326", club:"",       authorized:false, perf:null, line:null},
+  {id:"238786", name:"111111", role:"leader", roleText:"大盟主",  level:98, upper:"648425", club:"",       authorized:true,  perf:{my:0,granted:0,net:0}, line:null},
+  {id:"819586", name:"2222",   role:"leader", roleText:"大盟主",  level:98, upper:"238786", club:"885399", authorized:true,  perf:{my:0,granted:0,net:0}, line:{todayScore:-100,totalScore:-100,todayContrib:250,totalContrib:250,cnt:0}},
+  {id:"937177", name:"3333",   role:"agent",  roleText:"代理",    level:98, upper:"819586", club:"",       authorized:false, perf:null, line:null},
+  {id:"516306", name:"b001",   role:"agent",  roleText:"代理",    level:98, upper:"237737", club:"",       authorized:true,  perf:{my:0,granted:0,net:0}, line:null},
+  {id:"316795", name:"去我哥家",role:"leader",roleText:"大盟主",  level:98, upper:"895742", club:"",       authorized:false, perf:null, line:null}
+];
+
+const state = {
+  kind: "performance",
+  date: "2026-11-07",
+  members: MEMBERS.map(m => ({...m, amount: 0, lastAmount: 0, subs: []})),
+  excluded: [],
+  plans: { performance:{total:30000}, core:{total:20000}, pool:{total:15000} },
+  ledger: [],
+  demo: false,
+  kw: "", roleFilter: "all", dataFilter: "all"
+};
+
+const KIND_TEXT = { performance:"业绩奖励", core:"核心奖励", pool:"奖池共享" };
+const fmt = n => (n||0).toLocaleString("zh-CN");
+const fmt1 = n => (Math.round((n||0)*10)/10).toLocaleString("zh-CN",{minimumFractionDigits:1,maximumFractionDigits:1});
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); clearTimeout(t._h); t._h=setTimeout(()=>t.classList.remove("show"),2600); }
+
+/* 真实层级：把名单渲染成树，用于「查看线数据」 */
+function childrenOf(id){ return state.members.filter(m => m.upper === id); }
+function chainOf(id){
+  const byId = Object.fromEntries(state.members.map(m => [m.id,m]));
+  const out=[]; let cur = byId[id]; let guard=0;
+  while(cur && guard++<12){ out.unshift(cur); cur = byId[cur.upper]; }
+  return out;
+}
+
+function filtered(){
+  return state.members.filter(m => {
+    if(state.kw && !(m.id.includes(state.kw) || m.name.includes(state.kw))) return false;
+    if(state.roleFilter !== "all" && m.role !== state.roleFilter) return false;
+    if(state.dataFilter === "has"){
+      const p = m.perf ? m.perf.net : 0;
+      const w = state.kind === "pool" ? Math.max(m.line?m.line.todayScore:0,0) : p;
+      if(!(w > 0)) return false;
+    }
+    if(state.dataFilter === "noclub" && m.line) return false;
+    return true;
+  });
+}
+
+function perfOf(m){
+  if(state.demo && !m.perf) return {my:0,granted:0,net:0};
+  return m.perf || {my:0,granted:0,net:0};
+}
+
+function headFor(kind){
+  if(kind === "performance") return `
+    <tr>
+      <th style="width:34px"><input type="checkbox" class="checkbox" id="ckAll"></th>
+      <th>代理</th><th>身份</th>
+      <th class="r">线总输赢</th><th class="r">今日输赢</th>
+      <th class="r">今日业绩（毛）</th><th class="r">已下发</th>
+      <th class="r">实际点数（净）</th>
+      <th class="r" style="width:128px">本次金额</th>
+      <th class="r" style="width:218px">操作</th>
+    </tr>`;
+  if(kind === "core") return `
+    <tr>
+      <th style="width:34px"><input type="checkbox" class="checkbox" id="ckAll"></th>
+      <th>代理</th><th>身份</th><th>代理规模</th>
+      <th class="r">线总输赢</th><th class="r">总贡献</th>
+      <th class="r">上次金额</th>
+      <th class="r" style="width:128px">本次金额</th>
+      <th class="r" style="width:218px">操作</th>
+    </tr>`;
+  return `
+    <tr>
+      <th style="width:34px"><input type="checkbox" class="checkbox" id="ckAll"></th>
+      <th>代理</th><th>身份</th>
+      <th class="r">今日输赢</th><th class="r">线总输赢</th><th class="r">总贡献</th>
+      <th class="r" style="width:128px">本次金额</th>
+      <th class="r" style="width:218px">操作</th>
+    </tr>`;
+}
+
+function cellLine(m, key){
+  if(!m.line) return `<span class="muted" title="该代理未挂任何俱乐部，俱乐部口径取不到线数据">无数据</span>`;
+  const v = m.line[key];
+  const cls = v > 0 ? "num-pos" : v < 0 ? "num-neg" : "muted";
+  return `<span class="${cls}">${v>0?"+":""}${fmt(v)}</span>`;
+}
+
+function rowFor(m, kind){
+  if(kind === "performance"){
+    const p = perfOf(m);
+    return `
+      <td><input type="checkbox" class="checkbox row-ck" data-id="${m.id}"></td>
+      <td class="cell-name"><strong>${esc(m.name)}</strong><small>ID ${m.id}${m.club?` · 俱乐部 ${m.club}`:""}</small></td>
+      <td><span class="tag ${m.role}">${m.roleText}</span>${m.authorized?"":` <span class="tag na" title="未开通业绩，报表里没有这个人的点数">未开通</span>`}</td>
+      <td class="r">${cellLine(m,"totalScore")}</td>
+      <td class="r">${cellLine(m,"todayScore")}</td>
+      <td class="r">${fmt1(p.my)}</td>
+      <td class="r">${fmt1(p.granted)}</td>
+      <td class="r"><span class="points ${p.net>0?"":"zero"}">${fmt1(p.net)}</span></td>
+      <td class="r"><input class="money ${m.amount?"":"zero"}" type="number" min="0" step="1" value="${m.amount||0}" data-id="${m.id}"></td>
+      <td><div class="ops">
+        <button class="btn sm ghost" data-act="line" data-id="${m.id}">线数据</button>
+        <button class="btn sm ghost" data-act="sub" data-id="${m.id}">分账号</button>
+        <button class="btn sm ghost" data-act="exclude" data-id="${m.id}">排除</button>
+      </div></td>`;
+  }
+  if(kind === "core"){
+    return `
+      <td><input type="checkbox" class="checkbox row-ck" data-id="${m.id}"></td>
+      <td class="cell-name"><strong>${esc(m.name)}</strong><small>ID ${m.id}${m.club?` · 俱乐部 ${m.club}`:""}</small></td>
+      <td><span class="tag ${m.role}">${m.roleText}</span></td>
+      <td>${childrenOf(m.id).length} 个直营下级</td>
+      <td class="r">${cellLine(m,"totalScore")}</td>
+      <td class="r">${m.line?fmt1(m.line.totalContrib):`<span class="muted">无数据</span>`}</td>
+      <td class="r">${m.lastAmount?fmt(m.lastAmount):`<span class="muted">-</span>`}</td>
+      <td class="r"><input class="money ${m.amount?"":"zero"}" type="number" min="0" step="1" value="${m.amount||0}" data-id="${m.id}"></td>
+      <td><div class="ops">
+        <button class="btn sm ghost" data-act="line" data-id="${m.id}">线数据</button>
+        <button class="btn sm ghost" data-act="sub" data-id="${m.id}">分账号</button>
+        <button class="btn sm ghost" data-act="exclude" data-id="${m.id}">排除</button>
+      </div></td>`;
+  }
+  return `
+    <td><input type="checkbox" class="checkbox row-ck" data-id="${m.id}"></td>
+    <td class="cell-name"><strong>${esc(m.name)}</strong><small>ID ${m.id}${m.club?` · 俱乐部 ${m.club}`:""}</small></td>
+    <td><span class="tag ${m.role}">${m.roleText}</span></td>
+    <td class="r">${cellLine(m,"todayScore")}</td>
+    <td class="r">${cellLine(m,"totalScore")}</td>
+    <td class="r">${m.line?fmt1(m.line.totalContrib):`<span class="muted">无数据</span>`}</td>
+    <td class="r"><input class="money ${m.amount?"":"zero"}" type="number" min="0" step="1" value="${m.amount||0}" data-id="${m.id}"></td>
+    <td><div class="ops">
+      <button class="btn sm ghost" data-act="line" data-id="${m.id}">线数据</button>
+      <button class="btn sm ghost" data-act="sub" data-id="${m.id}">分账号</button>
+      <button class="btn sm ghost" data-act="exclude" data-id="${m.id}">排除</button>
+    </div></td>`;
+}
+
+function render(){
+  const kind = state.kind;
+  document.getElementById("planTotal").value = state.plans[kind].total;
+  document.getElementById("thead").innerHTML = headFor(kind);
+  const rows = filtered();
+  const tb = document.getElementById("tbody");
+  tb.innerHTML = rows.length
+    ? rows.map(m => `<tr data-row="${m.id}">${rowFor(m,kind)}</tr>`).join("")
+    : `<tr><td colspan="10"><div class="empty">没有符合条件的代理</div></td></tr>`;
+  tb.querySelectorAll("input.money").forEach(inp => {
+    inp.addEventListener("input", e => {
+      const m = state.members.find(x => x.id === e.target.dataset.id);
+      if(!m) return;
+      m.amount = Math.max(0, Math.floor(Number(e.target.value)||0));
+      e.target.classList.toggle("zero", !m.amount);
+      updateFoot();
+    });
+  });
+  tb.querySelectorAll("button[data-act]").forEach(b => {
+    b.addEventListener("click", () => {
+      const m = state.members.find(x => x.id === b.dataset.id);
+      if(!m) return;
+      if(b.dataset.act === "line") openLine(m);
+      if(b.dataset.act === "sub") openSub(m);
+      if(b.dataset.act === "exclude") openExclude(m);
+    });
+  });
+  const ckAll = document.getElementById("ckAll");
+  if(ckAll) ckAll.addEventListener("change", e => {
+    document.querySelectorAll(".row-ck").forEach(c => { c.checked = e.target.checked; });
+  });
+  const autoText = { performance:"按点数自动分摊", core:"按上次金额预填", pool:"按今日输赢预填" }[kind];
+  document.getElementById("btnAuto").textContent = autoText;
+  document.getElementById("btnShowExcluded").textContent = `已排除 ${state.excluded.length}`;
+  updateFoot();
+}
+
+function sumAmount(){ return state.members.reduce((s,m)=>s+(m.amount||0),0); }
+function payCount(){ return state.members.filter(m=>m.amount>0).length; }
+
+function updateFoot(){
+  const kind = state.kind;
+  const total = state.plans[kind].total || 0;
+  const sum = sumAmount();
+  const diff = total - sum;
+  document.getElementById("mAllocated").textContent = fmt(sum);
+  const diffEl = document.getElementById("mDiff");
+  diffEl.textContent = fmt(Math.abs(diff));
+  const card = document.getElementById("mCardDiff");
+  card.classList.remove("ok","warn","bad");
+  if(diff === 0 && sum > 0) card.classList.add("ok");
+  else if(Math.abs(diff) > 0) card.classList.add("bad");
+  document.getElementById("mDiffSub").textContent = diff === 0 ? "已配平，可发放" : (diff > 0 ? `还差 ${fmt(diff)} 未分配` : `超出 ${fmt(-diff)}`);
+  const cnt = payCount();
+  document.getElementById("mCount").textContent = cnt;
+  document.getElementById("mCountSub").textContent = `名单 ${state.members.length} 人 · 已排除 ${state.excluded.length} 人`;
+  document.getElementById("fCount").textContent = cnt;
+  document.getElementById("fSum").textContent = fmt(sum);
+  const fDiff = document.getElementById("fDiff");
+  fDiff.textContent = fmt(Math.abs(diff));
+  const wrap = document.getElementById("fDiffWrap");
+  wrap.className = "diff " + (diff === 0 ? "ok" : "bad");
+  document.getElementById("fNote").textContent = kind === "performance"
+    ? "点数来自业绩报表（毛−下发），0 点不分配"
+    : kind === "pool" ? "按整条线今日输赢人工判断" : "按代理规模与贡献人工填写";
+  const payBtn = document.getElementById("btnPay");
+  payBtn.disabled = !(sum > 0 && diff === 0);
+  payBtn.title = payBtn.disabled ? "合计必须等于计划总额才能发放" : "";
+}
+
+/* ---------- 分摊 ---------- */
+function allocate(kind){
+  const total = state.plans[kind].total || 0;
+  let list = state.members.slice();
+  let weightOf;
+  if(kind === "performance"){
+    weightOf = m => Math.max(perfOf(m).net, 0);
+  } else if(kind === "pool"){
+    weightOf = m => Math.max(m.line ? m.line.todayScore : 0, 0);
+  } else {
+    weightOf = m => m.lastAmount > 0 ? m.lastAmount : 0;
+  }
+  const weighted = list.filter(m => weightOf(m) > 0);
+  const W = weighted.reduce((s,m)=>s+weightOf(m),0);
+  state.members.forEach(m => m.amount = 0);
+  if(W <= 0 || total <= 0){
+    toast(kind === "performance" ? "今日所有人业绩点数为 0，无法分摊（线上尚未产生奖池提留）"
+      : kind === "pool" ? "今日整条线输赢没有正值，无法按输赢分摊"
+      : "没有上次金额可参考，请手动填写");
+    render();
+    return;
+  }
+  let used = 0;
+  const frac = [];
+  weighted.forEach(m => {
+    const exact = total * weightOf(m) / W;
+    const base = Math.floor(exact);
+    m.amount = base; used += base;
+    frac.push({m, r: exact - base});
+  });
+  frac.sort((a,b)=> b.r - a.r || weightOf(b.m) - weightOf(a.m) || a.m.id.localeCompare(b.m.id));
+  let left = total - used;
+  for(let i=0; i<frac.length && left>0; i++){ frac[i].m.amount += 1; left--; }
+  render();
+  const label = {performance:"业绩点数", core:"上次金额", pool:"今日输赢"}[kind];
+  toast(`已按${label}分摊 ${fmt(total)} 金币，合计校验通过`);
+}
+
+/* ---------- 弹窗 ---------- */
+function modal(html, wide){
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `<div class="modal-mask"><div class="modal ${wide?"wide":""}">${html}</div></div>`;
+  root.querySelector(".modal-mask").addEventListener("mousedown", e => {
+    if(e.target.classList.contains("modal-mask")) closeModal();
+  });
+  return root;
+}
+function closeModal(){ document.getElementById("modalRoot").innerHTML = ""; }
+
+function lineRow(m, indent, isSelf){
+  const L = m.line;
+  return `<tr class="${isSelf?"self":""}">
+    <td class="who" style="padding-left:${10+indent*18}px">
+      <strong>${esc(m.name)} <span class="lv">${m.roleText}${isSelf?" · 当前":""}</span></strong>
+      <small>ID ${m.id}${m.club?` · 俱乐部 ${m.club}`:""}</small></td>
+    <td class="r">${L?`<span class="${L.todayScore>0?"num-pos":L.todayScore<0?"num-neg":"muted"}">${L.todayScore>0?"+":""}${fmt(L.todayScore)}</span>`:`<span class="muted">无数据</span>`}</td>
+    <td class="r">${L?`<span class="${L.totalScore>0?"num-pos":L.totalScore<0?"num-neg":"muted"}">${L.totalScore>0?"+":""}${fmt(L.totalScore)}</span>`:`<span class="muted">无数据</span>`}</td>
+    <td class="r">${L?fmt1(L.totalContrib):`<span class="muted">无数据</span>`}</td>
+    <td class="r">${L?L.cnt:`<span class="muted">-</span>`}</td>
+  </tr>`;
+}
+
+function openLine(m){
+  const chain = chainOf(m.id);
+  const ups = chain.filter(x => x.id !== m.id);
+  const kids = childrenOf(m.id);
+  let rows = "";
+  ups.forEach((u,i) => rows += lineRow(u, i, false));
+  rows += lineRow(m, ups.length > 0 ? ups.length : 0, true);
+  kids.forEach(k => rows += lineRow(k, (ups.length > 0 ? ups.length : 0) + 1, false));
+  const p = perfOf(m);
+  modal(`
+    <div class="modal-head">
+      <div><h3>${esc(m.name)} · 整条线数据</h3>
+        <p>${m.roleText} · ID ${m.id}${m.club?` · 数据范围：俱乐部 ${m.club}`:" · 未挂俱乐部，无俱乐部口径数据"}</p></div>
+      <button class="btn sm ghost" onclick="closeModal()">关闭</button>
+    </div>
+    <div class="modal-body">
+      <table class="tree-table">
+        <thead><tr><th>代理（上级 → 当前 → 下级）</th><th class="r">今日输赢</th><th class="r">线总输赢</th><th class="r">总贡献</th><th class="r">下线人数</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <div class="hr"></div>
+      <div class="ledger-sum" style="margin:0">
+        <div><span>今日业绩（毛）</span><b>${fmt1(p.my)}</b></div>
+        <div><span>已下发</span><b>${fmt1(p.granted)}</b></div>
+        <div><span>实际点数（净）</span><b>${fmt1(p.net)}</b></div>
+        <div><span>本次金额</span><b>${fmt(m.amount)}</b></div>
+      </div>
+      <p class="hint">输赢单位是积分，贡献单位是分（÷100 为元）；两者来自不同表，不能直接相加。无数据的节点表示该代理不在任何俱乐部，俱乐部口径取不到。</p>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">知道了</button></div>
+  `, true);
+}
+
+function openSub(m){
+  const subs = m.subs.length ? m.subs : [];
+  const subRows = subs.map((s,i)=>`
+    <div class="field" style="display:flex;gap:8px;align-items:flex-end">
+      <div style="flex:1"><label>子账号 ${i+1}</label><input value="${esc(s.id)}" disabled></div>
+      <div style="width:150px"><label>金额</label><input type="number" min="0" value="${s.amount}" disabled></div>
+    </div>`).join("");
+  modal(`
+    <div class="modal-head">
+      <div><h3>${esc(m.name)} · 发放到多个账号</h3>
+        <p>主账号与子账号金额合计必须等于该代理本次分配金额 ${fmt(m.amount)} 金币</p></div>
+      <button class="btn sm ghost" onclick="closeModal()">关闭</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>主账号 ${m.id}</label><input type="number" value="${m.amount}" disabled></div>
+      ${subRows || `<p class="hint" style="margin-bottom:12px">暂未绑定子账号。线上尚无主子账号绑定关系，正式版本在这里增加「绑定子账号」。</p>`}
+      <div class="field"><label>绑定子账号（输入玩家 ID）</label>
+        <div style="display:flex;gap:8px"><input id="subId" placeholder="例如 725838"><button class="btn" id="btnBindSub">绑定</button></div>
+        <p class="hint">绑定后可从代理本次金额里拆出一部分发到该账号，合计相等才能发放。</p></div>
+      <div class="hr"></div>
+      <p class="hint">当前真实数据里没有主子账号绑定记录，这里只展示交互；正式开发时绑定关系落后台自有表，不改游戏账号。</p>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">关闭</button></div>
+  `);
+  const bind = document.getElementById("btnBindSub");
+  bind.addEventListener("click", () => {
+    const v = document.getElementById("subId").value.trim();
+    if(!v) return;
+    const target = state.members.find(x => x.id === v);
+    m.subs.push({id:v, name: target?target.name:"未知", amount:0});
+    toast(`已绑定子账号 ${v}（原型演示，尚未校验该账号是否为玩家）`);
+    closeModal(); openSub(m);
+  });
+}
+
+function openExclude(m){
+  modal(`
+    <div class="modal-head">
+      <div><h3>排除 ${esc(m.name)}（${m.id}）</h3>
+        <p>排除后该代理从本栏名单移除，不参与分摊、不可发放；历史发放记录保留。</p></div>
+      <button class="btn sm ghost" onclick="closeModal()">关闭</button>
+    </div>
+    <div class="modal-body">
+      <div class="field"><label>排除范围</label>
+        <select id="exScope">
+          <option value="performance">仅业绩奖励</option>
+          <option value="core">仅核心奖励</option>
+          <option value="pool">仅奖池共享</option>
+          <option value="all">三种奖励全部停发</option>
+        </select></div>
+      <div class="field"><label>排除原因（必填，会进审计）</label>
+        <textarea id="exReason" rows="3" placeholder="例如：已离职、封号、串号、代理方要求不发"></textarea></div>
+      <p class="hint">每日名单会自动同步，排除记录会单独保存，同步时不会把人加回来。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn danger" id="btnExOk">确认排除</button>
+    </div>
+  `);
+  document.getElementById("btnExOk").addEventListener("click", () => {
+    const reason = document.getElementById("exReason").value.trim();
+    const scope = document.getElementById("exScope").value;
+    if(reason.length < 2){ toast("请填写排除原因"); return; }
+    if(m.amount > 0){ toast("该代理本次已有金额，请先清零再排除"); return; }
+    state.members = state.members.filter(x => x.id !== m.id);
+    state.excluded.push({...m, reason, scope});
+    closeModal(); render();
+    toast(`已排除 ${m.name}（${scope === "all" ? "三种奖励" : KIND_TEXT[scope]}），可在「已排除」里恢复`);
+  });
+}
+
+function openExcluded(){
+  const rows = state.excluded.length ? state.excluded.map((m,i)=>`
+    <div class="pay-row"><span>${esc(m.name)} · ${m.id} · ${m.roleText}</span>
+      <span>${m.scope === "all" ? "全部停发" : KIND_TEXT[m.scope]} · ${esc(m.reason)} · 2026-11-07 19:40
+      <button class="btn sm ghost" data-restore="${i}">恢复</button></span></div>`).join("")
+    : `<div class="empty">还没有被排除的代理</div>`;
+  modal(`
+    <div class="modal-head">
+      <div><h3>已排除名单</h3><p>这些代理不会出现在发放列表里；恢复后下次同步会重新进入名单。</p></div>
+      <button class="btn sm ghost" onclick="closeModal()">关闭</button>
+    </div>
+    <div class="modal-body"><div class="pay-list">${rows}</div></div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">关闭</button></div>
+  `);
+  document.querySelectorAll("[data-restore]").forEach(b => b.addEventListener("click", () => {
+    const i = Number(b.dataset.restore);
+    const item = state.excluded.splice(i,1)[0];
+    item.deleteReason; delete item.reason; delete item.scope;
+    state.members.push(item);
+    closeModal(); render(); toast(`已恢复 ${item.name}`);
+  }));
+}
+
+function openPay(){
+  const kind = state.kind;
+  const total = state.plans[kind].total;
+  const list = state.members.filter(m => m.amount > 0);
+  const subCount = list.reduce((s,m)=>s+m.subs.length,0);
+  modal(`
+    <div class="modal-head">
+      <div><h3>确认发放 · ${KIND_TEXT[kind]}</h3>
+        <p>${state.date} · 共 ${list.length} 人，合计 ${fmt(total)} 金币${subCount?`，含 ${subCount} 个子账号`:""}</p></div>
+      <button class="btn sm ghost" onclick="closeModal()">关闭</button>
+    </div>
+    <div class="modal-body">
+      <div class="ledger-sum" style="margin-top:0">
+        <div><span>发放人数</span><b>${list.length}</b></div>
+        <div><span>发放总额</span><b>${fmt(total)}</b></div>
+        <div><span>子账号笔数</span><b>${subCount}</b></div>
+        <div><span>计划差额</span><b>0</b></div>
+      </div>
+      <div class="pay-list" id="payList">
+        ${list.map(m=>`<div class="pay-row" data-pay="${m.id}"><span>${esc(m.name)} · ${m.id}</span><span>${fmt(m.amount)} 金币 · <span class="st">待发放</span></span></div>`).join("")}
+      </div>
+      <div class="progress"><i id="payBar"></i></div>
+      <p class="hint">发放走游戏发钱通道，一单一笔、带唯一工单号，到账后回读余额核对。流水类型显示由游戏侧决定（当前只支持「补分/奖励」，需求要的「补发」需游戏端加前缀）。</p>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" id="btnPayGo">确认发放</button>
+    </div>
+  `);
+  document.getElementById("btnPayGo").addEventListener("click", () => runPay(kind, list, total));
+}
+
+function runPay(kind, list, total){
+  const btn = document.getElementById("btnPayGo");
+  btn.disabled = true; btn.textContent = "发放中…";
+  const bar = document.getElementById("payBar");
+  let i = 0;
+  const tick = () => {
+    if(i >= list.length){
+      bar.style.width = "100%";
+      btn.textContent = "已完成";
+      const rows = list.map(m => ({
+        date: state.date, kind, agentId: m.id, agentName: m.name,
+        payee: m.id, payeeType: "主账号", amount: m.amount,
+        order: `JL${state.date.replace(/-/g,"")}${kind.slice(0,2).toUpperCase()}${String(1000+state.ledger.length+1).slice(-4)}`,
+        status: "已到账"
+      }));
+      state.ledger.push(...rows);
+      setTimeout(() => { closeModal(); toast(`已发放 ${list.length} 人 · ${fmt(total)} 金币（原型演示，未真实打款）`); }, 500);
+      return;
+    }
+    const m = list[i];
+    const row = document.querySelector(`[data-pay="${m.id}"]`);
+    if(row){ row.classList.add("done"); row.querySelector(".st").textContent = "已到账"; }
+    i++;
+    bar.style.width = (i/list.length*100).toFixed(1) + "%";
+    setTimeout(tick, 90);
+  };
+  setTimeout(tick, 200);
+}
+
+function openAdd(){
+  modal(`
+    <div class="modal-head"><div><h3>按 ID 添加代理</h3><p>名单默认每天自动同步全量代理；这里用于补加已降级或特殊情况的老代理。</p></div>
+      <button class="btn sm ghost" onclick="closeModal()">关闭</button></div>
+    <div class="modal-body">
+      <div class="field"><label>玩家 / 代理 ID</label><div style="display:flex;gap:8px">
+        <input id="addId" placeholder="输入游戏 ID，例如 725838"><button class="btn" id="btnFind">查询</button></div></div>
+      <div id="addResult" class="hint">输入 ID 后查询昵称与身份，确认无误再加进名单。</div>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">关闭</button></div>
+  `);
+  document.getElementById("btnFind").addEventListener("click", () => {
+    const id = document.getElementById("addId").value.trim();
+    const box = document.getElementById("addResult");
+    if(!id){ box.textContent = "请输入 ID"; return; }
+    const exists = state.members.find(m => m.id === id);
+    const left = state.excluded.find(m => m.id === id);
+    if(exists){ box.innerHTML = `<span style="color:#b64350">${esc(exists.name)}（${id}）已经在名单里</span>`; return; }
+    if(left){ box.innerHTML = `<span style="color:#b64350">该 ID 在「已排除」里，请先去已排除名单恢复</span>`; return; }
+    box.innerHTML = `原型只内置了当前 16 个代理的真实数据，<b>${esc(id)}</b> 不在快照范围内。<br>正式版本这里会调代理列表接口核对昵称/身份后加入，来源标记为手工添加（同步不会删）。`;
+  });
+}
+
+function openLedger(){
+  const rows = state.ledger;
+  const sumAmt = rows.reduce((s,r)=>s+r.amount,0);
+  const kinds = ["performance","core","pool"].map(k => ({k, v: rows.filter(r=>r.kind===k).reduce((s,r)=>s+r.amount,0)}));
+  modal(`
+    <div class="modal-head">
+      <div><h3>发放账单</h3><p>按日期区间查三类奖励的发放明细，可导出 CSV 对账。</p></div>
+      <button class="btn sm ghost" onclick="closeModal()">关闭</button>
+    </div>
+    <div class="modal-body">
+      <div class="tools" style="margin-bottom:14px">
+        <input type="date" class="btn" value="2026-11-01" style="width:150px">
+        <span class="muted">至</span>
+        <input type="date" class="btn" value="2026-11-07" style="width:150px">
+        <button class="btn sm">近 10 天</button><button class="btn sm">近 15 天</button><button class="btn sm">本月</button>
+        <button class="btn sm" style="margin-left:auto">导出 CSV</button>
+      </div>
+      <div class="ledger-sum">
+        <div><span>合计发放</span><b>${fmt(sumAmt)}</b></div>
+        <div><span>业绩奖励</span><b>${fmt(kinds[0].v)}</b></div>
+        <div><span>核心奖励</span><b>${fmt(kinds[1].v)}</b></div>
+        <div><span>奖池共享</span><b>${fmt(kinds[2].v)}</b></div>
+      </div>
+      <div class="tbl-wrap" style="max-height:44vh;border:1px solid #eef4f4;border-radius:9px">
+        <table><thead><tr>
+          <th>日期</th><th>类型</th><th>代理</th><th>收款账号</th><th class="r">金额</th><th>工单号</th><th>状态</th>
+        </tr></thead><tbody>
+        ${rows.length ? rows.map(r=>`<tr>
+          <td>${r.date}</td><td>${KIND_TEXT[r.kind]}</td>
+          <td>${esc(r.agentName)}<br><small class="muted">${r.agentId}</small></td>
+          <td>${r.payee}<br><small class="muted">${r.payeeType}</small></td>
+          <td class="r">${fmt(r.amount)}</td><td>${r.order}</td>
+          <td><span class="tag ok">${r.status}</span></td></tr>`).join("")
+          : `<tr><td colspan="7"><div class="empty">暂无发放记录 —— 线上从未发放过这三类奖励，先在「业绩核心共享」里发放一次即可看到账本</div></td></tr>`}
+        </tbody></table>
+      </div>
+      <p class="hint">汇总按代理去重；主账号与子账号在同一代理下展开显示，不重复计入合计。</p>
+    </div>
+    <div class="modal-foot"><button class="btn" onclick="closeModal()">关闭</button></div>
+  `, true);
+}
+
+/* ---------- 演示点数（仅在真实值全为 0 时用来观察分摊效果） ---------- */
+function loadDemo(){
+  const demoNet = {
+    "648425":136.0,"237737":104.0,"718968":88.0,"895742":72.0,
+    "182605":60.0,"238786":48.0,"189836":40.0,"819586":32.0,
+    "472661":26.0,"590326":22.0,"500227":18.0,"440554":14.0,
+    "937006":10.0,"516306":8.0,"937177":4.0,"316795":2.0
+  };
+  state.members.forEach(m => {
+    const net = demoNet[m.id] || 0;
+    m.perf = { my: Math.round(net*1.4*10)/10, granted: Math.round((net*0.4)*10)/10, net };
+    m.authorized = true;
+    if(!m.line){
+      m.line = {
+        todayScore: Math.round(net*12 - 40),
+        totalScore: Math.round(net*90 - 300),
+        todayContrib: Math.round(net*180),
+        totalContrib: Math.round(net*1200),
+        cnt: Math.max(0, Math.round(net/18))
+      };
+    }
+  });
+  state.demo = true;
+  render();
+  toast("已载入演示点数（仅用于看分摊效果，不是线上数据）");
+}
+
+/* ---------- 事件 ---------- */
+document.getElementById("tabs").addEventListener("click", e => {
+  const b = e.target.closest(".tab"); if(!b) return;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on", t===b));
+  state.kind = b.dataset.kind;
+  state.members.forEach(m => m.amount = 0);
+  state.plans[state.kind].total = state.plans[state.kind].total || 0;
+  const desc = {
+    performance:"按每人实际业绩点数（毛业绩减已下发）自动分摊今日总额，可人工微调，合计必须等于总额。",
+    core:"按代理规模、层级和整条线贡献人工填写，金额相对固定，可参考上次。",
+    pool:"按代理整条线每天的今日输赢人工判断分配，金额由客服填写。"
+  }[state.kind];
+  document.getElementById("pageDesc").textContent = desc;
+  render();
+});
+
+document.getElementById("planTotal").addEventListener("input", e => {
+  state.plans[state.kind].total = Math.max(0, Math.floor(Number(e.target.value)||0));
+  updateFoot();
+});
+document.getElementById("btnAuto").addEventListener("click", () => allocate(state.kind));
+document.getElementById("btnClear").addEventListener("click", () => {
+  state.members.forEach(m => m.amount = 0); render(); toast("已清空本次金额");
+});
+document.getElementById("btnDemo").addEventListener("click", loadDemo);
+document.getElementById("btnExport").addEventListener("click", () => toast("原型不产生文件；正式版本导出 CSV（含点数、金额、主子账号）"));
+document.getElementById("btnAdd").addEventListener("click", openAdd);
+document.getElementById("btnShowExcluded").addEventListener("click", openExcluded);
+document.getElementById("btnExcludeSel").addEventListener("click", () => {
+  const picked = [...document.querySelectorAll(".row-ck:checked")].map(c=>c.dataset.id);
+  if(!picked.length){ toast("先勾选要排除的代理"); return; }
+  const first = state.members.find(m => m.id === picked[0]);
+  if(picked.length === 1 && first){ openExclude(first); return; }
+  if(picked.some(id => (state.members.find(m=>m.id===id)||{}).amount > 0)){ toast("选中的人里有已分配金额，请先清零"); return; }
+  state.members = state.members.filter(m => !picked.includes(m.id));
+  toast(`已批量排除 ${picked.length} 人（原型未记录原因；正式版本要求填原因）`);
+  render();
+});
+document.getElementById("btnPay").addEventListener("click", openPay);
+document.getElementById("btnLedger").addEventListener("click", openLedger);
+document.getElementById("navLedger").addEventListener("click", openLedger);
+document.getElementById("btnReload").addEventListener("click", () => toast("原型为静态快照；正式版本按日期重新拉取报表与线数据"));
+document.getElementById("kw").addEventListener("input", e => { state.kw = e.target.value.trim(); render(); });
+document.getElementById("roleFilter").addEventListener("change", e => { state.roleFilter = e.target.value; render(); });
+document.getElementById("dataFilter").addEventListener("change", e => { state.dataFilter = e.target.value; render(); });
+
+render();
+</script>
+</body>
+</html>

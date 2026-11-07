@@ -46,12 +46,18 @@ var stoneConsumePriceCatalog = []stoneConsumePriceItem{
 	{Code: "创建俱乐部", Name: "创建俱乐部", Scene: "大厅 · 俱乐部 · 创建俱乐部", Default: 10000, LegacyMoney: 0, LegacyUnit: ""},
 	// 创建联盟同样是新增收费点，默认 10000 钻；客户端成功受理联盟创建后才扣。
 	{Code: "创建联盟", Name: "创建联盟", Scene: "大厅 · 我的 · 创建联盟", Default: 10000, LegacyMoney: 0, LegacyUnit: ""},
+	// 对局加时（延时）：每手牌最多 3 次，**第 1 次固定免费**，第 2/3 次按价扣钻。
+	// 客户端扣费走统一接口 `玩家_消费_命令`，流水类型统一记「延时」（不是这两项 code）。
+	{Code: "延时第2次", Name: "对局加时 · 第 2 次", Scene: "牌桌 · 延时（每手牌第 2 次）", Default: 200, LegacyMoney: 200, LegacyUnit: "分"},
+	{Code: "延时第3次", Name: "对局加时 · 第 3 次", Scene: "牌桌 · 延时（每手牌第 3 次）", Default: 400, LegacyMoney: 400, LegacyUnit: "分"},
 }
 
 // stoneConsumePriceRetired 是已停用的消费项：不再出现在后台页面，也不再写入配置。
 //   - VIP 三档没有消费场景（2026-10-26 用户确认）。
-//   - `延时` 曾短暂加入 catalog，但接口文档 v1.2 §3.7 规定加时价格由服务端固定档位决定
-//     （第 2 次 200 钻 / 第 3 次 400 钻 / 第 1 次免费），后台配了也不生效，故一并撤下。
+//   - 旧的单值 `延时` 已由档位键（`延时第2次`/`延时第3次`）取代
+//     （2026-11-08：每手牌 3 次、第 1 次固定免费、第 2/3 次收费，客户端走统一扣费接口）。
+//   - `延时第1次` 一度加过 catalog，用户明确「第一次延时 不扣费」后撤下——首次免费没有可配空间，
+//     留着会让人以为能改价。
 //
 // 配置里若还留着这些旧键，读取时静默忽略；老页面提交上来也不会报「未知消费项」。
 var stoneConsumePriceRetired = map[string]bool{
@@ -59,6 +65,7 @@ var stoneConsumePriceRetired = map[string]bool{
 	"购买VIP半年卡": true,
 	"购买VIP年卡":  true,
 	"延时":       true,
+	"延时第1次":    true,
 }
 
 type stoneConsumePriceItemState struct {

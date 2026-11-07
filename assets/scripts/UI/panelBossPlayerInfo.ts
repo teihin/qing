@@ -24,6 +24,8 @@ interface BossChainRow {
     clubName:string;
     isCreator:boolean;
     isUnionOwner:boolean;
+    /** 该节点已加入的分组名（接口 chain[].groups，一人一组时就是唯一那个）；空串=未分组。 */
+    groupName:string;
     score:string;
     contribFen:string;
     bonusFen:string;
@@ -94,7 +96,43 @@ interface ClubGroupMember {
 }
 
 /**
- * BOSS 玩家数据全屏面板（多页签，当前实现「代理链」）。
+ * 一个排序条件：`key` 就是接口 `sort` 字段的枚举值，`label` 是按钮上的字。
+ * 玩家列表只支持输赢三项；代理列表多三项贡献（接口 §3.1）。
+ */
+interface BossSortChip {
+    key:string;
+    label:string;
+}
+
+/**
+ * 「玩家列表 / 代理列表」一行：对应《俱乐部全量玩家与代理统计-客户端接口文档》
+ * §2.2 `AllClubPlayerList.list[]` 与 §3.2 `AllClubAgentList.list[]`。
+ * 两条接口字段高度重合（代理多 team_count 与三项贡献），统一按一套结构解析。
+ */
+interface BossListRow {
+    id:string;
+    name:string;
+    clubId:string;
+    clubName:string;
+    upperId:string;
+    upperName:string;
+    teamCount:string;
+    todayScore:string;
+    yesterdayScore:string;
+    totalScore:string;
+    todayContribFen:string;
+    yesterdayContribFen:string;
+    totalContribFen:string;
+    /** 红利三项：服务端查询失败时**不下发这三个键**，这里解析成空串 → 界面显示「—」，不能拿 0 冒充。 */
+    todayBonusFen:string;
+    yesterdayBonusFen:string;
+    totalBonusFen:string;
+    /** 已加入的分组名（接口随行下发 `groups[]` / `group_name`，与其他接口同结构）；空串=未分组。 */
+    groupName:string;
+}
+
+/**
+ * BOSS 玩家数据全屏面板（多页签：玩家列表 / 代理列表 / 玩家信息 / 代理链 / 分组管理）。
  *
  * 复用入口：
  *   UIManager.showPanel("panelBossPlayerInfo", ShowPanelMode.Cover, "", [playerLogic]);
@@ -126,6 +164,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     private userName:string = "";
     private userRole:string = "";
     private userPhoto:string = "";
+    /** 从「我的→数据统计」进来默认看玩家列表；牌桌点头像进来默认看玩家信息。 */
+    private defaultTab:string = "players";
     /** 本次链路是否属于联盟；已入盟俱乐部的创建者显示“盟主”而不是“群主”。 */
     private inUnion:boolean = false;
     /** 推送顶层的联盟名：有联盟时分组标题用它，没有才用俱乐部名。 */
@@ -150,6 +190,71 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     private searchContext:string = "";
     private searchKey:string = "";
     private static searchSerial:number = 0;
+
+    // ---- 全量玩家 / 代理列表（《俱乐部全量玩家与代理统计》§2 / §3）----
+    /**
+     * 一页 10 条（服务端默认 20、上限 100，这里只是客户端取少一点：卡片高 240，
+     * 一页 20 条要滚好几屏，10 条更顺手，同时也把每页的头像查询压到 10 条）。
+     */
+    private static readonly PAGE_SIZE:number = 10;
+    /**
+     * 排序条件：输赢 3 + 贡献 3 + 红利 3 = 9 项，与接口文档 §2.1 的 `sort` 枚举一一对应。
+     * 玩家列表与代理列表条件一致，口径差在「本人 vs 本人+整条下线」。
+     * 2026-11-08 服务端已放开红利排序（玩家红利并进主 SQL），这 3 项现在是真排序，不再回落 total_score。
+     */
+    private static readonly PLAYER_SORTS:BossSortChip[] = [
+        {key:"total_score", label:"累计输赢"},
+        {key:"today_score", label:"今日输赢"},
+        {key:"yesterday_score", label:"昨日输赢"},
+        {key:"total_contrib_fen", label:"累计贡献"},
+        {key:"today_contrib_fen", label:"今日贡献"},
+        {key:"yesterday_contrib_fen", label:"昨日贡献"},
+        {key:"total_bonus_fen", label:"累计红利"},
+        {key:"today_bonus_fen", label:"今日红利"},
+        {key:"yesterday_bonus_fen", label:"昨日红利"}
+    ];
+    private static readonly AGENT_SORTS:BossSortChip[] = [
+        {key:"total_score", label:"累计输赢"},
+        {key:"today_score", label:"今日输赢"},
+        {key:"yesterday_score", label:"昨日输赢"},
+        {key:"total_contrib_fen", label:"累计贡献"},
+        {key:"today_contrib_fen", label:"今日贡献"},
+        {key:"yesterday_contrib_fen", label:"昨日贡献"},
+        {key:"total_bonus_fen", label:"累计红利"},
+        {key:"today_bonus_fen", label:"今日红利"},
+        {key:"yesterday_bonus_fen", label:"昨日红利"}
+    ];
+
+    private playerRows:BossListRow[] = [];
+    private playerTotal:number = 0;
+    private playerPage:number = 0;
+    private playerLoaded:boolean = false;
+    private playerSort:string = "total_score";
+    private playerOrder:string = "desc";
+    private playerContext:string = "";
+
+    private agentRows:BossListRow[] = [];
+    private agentTotal:number = 0;
+    private agentPage:number = 0;
+    private agentLoaded:boolean = false;
+    private agentSort:string = "total_score";
+    private agentOrder:string = "desc";
+    private agentContext:string = "";
+
+    private listTimer:any = null;
+    /** 服务端代理树没加载完时允许自动重试，越界即停。 */
+    private listRetry:number = 0;
+    private static listSerial:number = 0;
+
+    /** 一级过滤：俱乐部 ID，空串=全服（对应接口的 `club_id`，只看该俱乐部成员）。 */
+    private clubFilter:string = "";
+
+    /**
+     * 行头像的节流队列：头像要按 ID 单独问 `查询_用户_头像`，一页 20 条同时发会把连接打满，
+     * 所以攒起来每 60ms 放 2 个。
+     */
+    private avatarQueue:{row:cc.Node, id:string}[] = [];
+    private avatarTimer:any = null;
 
     // ---- 分组管理（《俱乐部玩家分组》接口文档 2.x/3.x/4.x）----
     /** 当前管理域的全部分组。 */
@@ -203,6 +308,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         this.node.zIndex = Tool.PanelBaseZ(this.node);
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("ClubMemberAgentChain", this, "OnAgentChain");
+        // 全量列表：查询_俱乐部_所有_玩家 / 查询_俱乐部_所有_代理 的推送。
+        KBEngine.Event.register("AllClubPlayerList", this, "OnAllPlayerList");
+        KBEngine.Event.register("AllClubAgentList", this, "OnAllAgentList");
         // 按昵称搜索先查成员列表拿 guuid，回包走 NumberList。
         KBEngine.Event.register("NumberList", this, "OnMemberList");
         // 分组管理：列表走 ClubPlayerGroupList，写操作结果走 ClubPlayerGroupResult。
@@ -222,12 +330,16 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
 
     start () {
         this.ReadInput();
-        // 点头像进来默认看「玩家信息」，并自动查这个人。
-        this.ShowTab("info", true);
-        if(this.userId === "")
-            this.ShowGuide();
-        else
-            this.QueryInfo(this.userId);
+        // 从「我的→数据统计」进来默认「玩家列表」（只拉全服排行，不查具体某个人）；
+        // 牌桌里点头像进来默认「玩家信息」，并自动查这个人。
+        const tab = this.defaultTab;
+        this.ShowTab(tab, true);
+        if(tab === "info") {
+            if(this.userId === "")
+                this.ShowGuide();
+            else
+                this.QueryInfo(this.userId);
+        }
     }
 
     onDestroy () {
@@ -239,7 +351,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             clearTimeout(this.groupTimer);
             this.groupTimer = null;
         }
+        this.ClearListTimer();
         this.ClearMemberTimer();
+        this.ClearRowAvatarQueue();
         super.onDestroy();
     }
 
@@ -249,6 +363,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     private ReadInput():void {
         const player:any = this.arrayEx && this.arrayEx.length > 0 ? this.arrayEx[0] : null;
         if(player != null && player.info != null) {
+            // 牌桌里点头像：直接看这个人的玩家信息。
+            this.defaultTab = "info";
             this.userId = String(player.info.strUserID || "").trim();
             this.userName = String(player.info.strUserName || "").trim();
             this.userRole = String(player.info.role || "").trim();
@@ -270,6 +386,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.userName = String(data.name || data.userName || "").trim();
             this.userRole = String(data.role || "").trim();
             this.userPhoto = String(data.photo || "").trim();
+            // 带了 userId 就是「查某个人」，仍进玩家信息；只带了俱乐部（我的→数据统计）
+            // 就从全服玩家列表开始看。
+            this.defaultTab = this.userId !== "" ? "info" : "players";
             const account:any = GameDataManager.getAccount();
             this.roomClubId = resolveRoomSettingClubId(account);
             const reqClubId = normalizeRoomClubId(data.clubId || data.club_id);
@@ -501,16 +620,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             }
         }
 
-        // 「添加到分组」：把这个玩家加进某个分组（先选组、再确定）。
-        const groupBtn = row.getChildByName("添加到分组");
-        if(groupBtn != null) {
-            groupBtn.active = /^\d+$/.test(id);
-            if(groupBtn.active) {
-                this.BindTap(groupBtn, ()=>{
-                    this.OpenPickDialog(id, t(data.name));
-                });
-            }
-        }
+        // 分组位：已经在分组里的玩家不再显示「添加到分组」，直接把分组名显示出来。
+        this.ApplyGroupCell(row, id, this.GroupText(data));
 
         // 「战绩」：打开这个玩家的战绩面板（独立 Prefab，版式照「我的战绩」）。
         this.BindRecordButton(row, id, t(data.name));
@@ -521,10 +632,15 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
      * 页签互相切换时靠它重新发起查询（切走会把另一边的行清掉）。
      */
     private CurrentTargetKey():string {
+        const key = this.SearchKey();
+        return key !== "" ? key : this.userId;
+    }
+
+    /** 搜索框里的关键字（去空白）。 */
+    private SearchKey():string {
         const editNode = this.At("搜索区/搜索输入");
         const box = editNode ? editNode.getComponent(cc.EditBox) : null;
-        const key = box ? String(box.string || "").trim() : "";
-        return key !== "" ? key : this.userId;
+        return box ? String(box.string || "").trim() : "";
     }
 
     /** 没有指定玩家时的引导空态：等用户输入 ID 或昵称。 */
@@ -552,9 +668,19 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
      * - 其它先按昵称查成员列表，拿到 guuid 再查链路。
      */
     private OnSearch():void {
-        const editNode = this.At("搜索区/搜索输入");
-        const box = editNode ? editNode.getComponent(cc.EditBox) : null;
-        const key = box ? String(box.string || "").trim() : "";
+        const key = this.SearchKey();
+        // 列表页签的搜索框是「过滤条件」：留空就是看全服，不报错。
+        if(this.currentTab === "players" || this.currentTab === "agents") {
+            if(this.currentTab === "agents") {
+                this.agentPage = 0;
+                this.QueryAllAgents(0);
+            }
+            else {
+                this.playerPage = 0;
+                this.QueryAllPlayers(0);
+            }
+            return;
+        }
         if(key === "") {
             UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "请输入玩家ID或昵称");
             return;
@@ -783,6 +909,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         // 分组命令的回执先认掉：它跟代理链不是同一个请求车道。
         if(this.HandleGroupReply(nCode, param))
             return;
+        // 全量列表命令也是独立车道（自己一套 context）。
+        if(this.HandleListReply(nCode, param))
+            return;
         if(!this.pending)
             return;
         const text = param == null ? "" : String(param);
@@ -861,6 +990,11 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             }
             return body;
         }
+        // 全量玩家 / 代理列表同样可能按路由名包一层。
+        if(data.list === undefined && data.AllClubPlayerList !== undefined)
+            return this.UnwrapInner(data.AllClubPlayerList);
+        if(data.list === undefined && data.AllClubAgentList !== undefined)
+            return this.UnwrapInner(data.AllClubAgentList);
         // 分组回包同样是「按路由名包一层」，两种结构都拆。
         if(data.groups === undefined && data.ClubPlayerGroupList !== undefined)
             return this.UnwrapInner(data.ClubPlayerGroupList);
@@ -1044,13 +1178,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         }
         this.BindViewButton(row, item, clubId);
 
-        // 代理链行同样可以一键加进分组。
-        const groupBtn = row.getChildByName("添加到分组");
-        if(groupBtn != null) {
-            groupBtn.active = /^\d+$/.test(item.guuid);
-            if(groupBtn.active)
-                this.BindTap(groupBtn, ()=>this.OpenPickDialog(item.guuid, item.name));
-        }
+        // 代理链行同样可以一键加进分组；已在分组里的换成显示分组名。
+        this.ApplyGroupCell(row, item.guuid, item.groupName);
 
         // 代理链行也能直接看这个人的战绩。
         this.BindRecordButton(row, item.guuid, item.name);
@@ -1109,6 +1238,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             clubName:String(data.club_name == null ? "" : data.club_name),
             isCreator:String(data.is_creator) === "1",
             isUnionOwner:String(data.is_union_owner) === "1",
+            groupName:this.GroupText(data),
             score:String(data.total_score == null ? "" : data.total_score),
             contribFen:String(data.total_contrib_fen == null ? "" : data.total_contrib_fen),
             bonusFen:String(data.total_bonus_fen == null ? "" : data.total_bonus_fen),
@@ -1119,6 +1249,82 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             todayBonusFen:String(data.today_bonus_fen == null ? "" : data.today_bonus_fen),
             yesterdayBonusFen:String(data.yesterday_bonus_fen == null ? "" : data.yesterday_bonus_fen)
         };
+    }
+
+    /**
+     * 一行数据已加入的分组名。
+     * 优先接口 2026-11-07 新增的 `groups` 数组（`NumberList` 成员行与代理链 `chain[]` 节点同结构，
+     * 一人一组时最多 1 项）；老服务端没下发 `groups` 时退回 `group_id` / `group_name`。
+     */
+    private GroupText(raw:any):string {
+        const data:any = raw || {};
+        const names:string[] = [];
+        if(Array.isArray(data.groups)) {
+            for(const one of data.groups) {
+                if(one == null)
+                    continue;
+                const name = String(one.group_name == null ? "" : one.group_name).trim();
+                const id = String(one.group_id == null ? "" : one.group_id).trim();
+                if(name !== "")
+                    names.push(name);
+                else if(id !== "" && id !== "0")
+                    names.push("分组 " + id);
+            }
+        }
+        if(names.length === 0) {
+            const name = String(data.group_name == null ? "" : data.group_name).trim();
+            const id = String(data.group_id == null ? "" : data.group_id).trim();
+            if(name !== "")
+                names.push(name);
+            else if(id !== "" && id !== "0")
+                names.push("分组 " + id);
+        }
+        return names.join(" / ");
+    }
+
+    /**
+     * 行内分组位：「添加到分组」按钮与「分组名」文字二选一。
+     * 该玩家已经在本管理域的分组里 → 藏掉按钮，直接显示分组名（一人只能属于一个分组，不许重复加）；
+     * 未分组 → 显示按钮。分组页签的成员弹窗把这个按钮当「移出成员」用，不走这里。
+     */
+    private ApplyGroupCell(row:cc.Node, userId:string, groupName:string):void {
+        const inGroup = groupName !== "";
+        const tag = row.getChildByName("分组名");
+        if(tag != null) {
+            tag.active = inGroup;
+            const label = inGroup ? tag.getComponent(cc.Label) : null;
+            if(label != null)
+                label.string = "分组:" + groupName;
+        }
+        const btn = row.getChildByName("添加到分组");
+        if(btn == null)
+            return;
+        const canAdd = !inGroup && /^\d+$/.test(userId);
+        btn.active = canAdd;
+        if(canAdd)
+            this.BindTap(btn, ()=>this.OpenPickDialog(userId, this.RowName(row)));
+    }
+
+    /** 行标题上的昵称：加分组弹窗的提示文案要用。 */
+    private RowName(row:cc.Node):string {
+        const node = this.At("姓名", row);
+        const label = node ? node.getComponent(cc.Label) : null;
+        return label ? String(label.string || "").trim() : "";
+    }
+
+    /** 加人/移人回执后：已渲染的行就地换「分组名 / 添加到分组」，不用整表重查。 */
+    private RefreshRowGroup(userId:string, groupName:string):void {
+        if(userId === "")
+            return;
+        const content = this.At("列表/view/content");
+        if(content == null)
+            return;
+        for(const child of content.children.slice()) {
+            if(child.name !== "玩家_" + userId && child.name !== "链路_" + userId &&
+               child.name !== "全玩家_" + userId && child.name !== "全代理_" + userId)
+                continue;
+            this.ApplyGroupCell(child, userId, groupName);
+        }
     }
 
     private FillRow(row:cc.Node, item:BossChainRow):void {
@@ -1208,27 +1414,27 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
 
     private ShowTab(tab:string, first:boolean):void {
         this.currentTab = tab;
-        // 三个页签共用同一个 content，切换时把另一边的行清掉。
-        if(tab === "chain") {
-            this.ClearRows("玩家_");
-            this.ClearRows("分组_");
+        // 五个页签共用同一个 content，切换时把别的页签的行清掉。
+        const owners:{key:string, prefix:string}[] = [
+            {key:"players", prefix:"全玩家_"},
+            {key:"agents", prefix:"全代理_"},
+            {key:"info", prefix:"玩家_"},
+            {key:"chain", prefix:"链路_"},
+            {key:"group", prefix:"分组_"}
+        ];
+        for(const one of owners) {
+            if(one.key !== tab)
+                this.ClearRows(one.prefix);
         }
-        else if(tab === "info") {
-            this.ClearRows("链路_");
+        if(tab !== "chain") {
             this.ClearRows("链标题_");
             this.ClearRows("链空_");
-            this.ClearRows("分组_");
         }
-        else {
-            this.ClearRows("玩家_");
-            this.ClearRows("链路_");
-            this.ClearRows("链标题_");
-            this.ClearRows("链空_");
-        }
-        const listMode = tab === "chain" || tab === "info" || tab === "group";
         // 注意：页签都在「页签」容器下面，路径必须带前缀，否则 At() 全部取不到，
         // 表现为高亮永远停在 prefab 默认态、切了页签内容却不变。
         const tabs:{key:string,node:string}[] = [
+            {key:"players", node:"页签/页签_玩家列表"},
+            {key:"agents", node:"页签/页签_代理列表"},
             {key:"info", node:"页签/页签_玩家信息"},
             {key:"chain", node:"页签/页签_代理链"},
             {key:"group", node:"页签/页签_分组管理"}
@@ -1248,24 +1454,50 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             }
         }
 
+        const isList = tab === "players" || tab === "agents";
         // 分组管理页签不需要玩家搜索框，顶栏换成「新建分组」。
         this.Active("搜索区", tab !== "group");
+        // 排序栏 / 分页栏只在两个全量列表页签出现。
+        this.Active("排序栏", isList);
+        this.Active("分页", isList);
         this.Active("新建分组", tab === "group");
-        this.Active("列表面板", listMode);
-        this.Active("列表", listMode);
-        this.Active("说明", listMode);
+        // 搜索框在两类页签里含义不同：全量列表是「过滤」，玩家信息/代理链是「查这个人」。
+        this.Text("搜索区/搜索输入/提示",
+            isList ? "输入ID或昵称筛选" : "输入玩家ID或昵称");
+        // 一级过滤：只有两个全量列表页签有俱乐部筛选。
+        this.Active("搜索区/俱乐部筛选", isList);
+        if(isList)
+            this.RenderClubFilter();
+        this.Active("列表面板", true);
+        this.Active("列表", true);
+        this.Active("说明", true);
         if(tab === "info")
             this.Text("说明", "按玩家本人统计（不含下线）；联盟内每个俱乐部一行");
         else if(tab === "group")
             this.Text("说明", "分组统计为组内成员真实值（不套展示折扣）；一人只能属于一个分组");
+        else if(tab === "players")
+            this.Text("说明", "玩家本人值（输赢/贡献/红利）；点已选排序条件可切升/降序");
+        else if(tab === "agents")
+            this.Text("说明", "代理本人+整条下线（输赢/贡献/红利）；点已选排序条件可切升/降序");
         else
             this.Text("说明", "代理/群主行按当前俱乐部统计，总群主行按全联盟统计");
 
-        if(!listMode) {
+        if(isList) {
+            const isAgent = tab === "agents";
+            const loaded = isAgent ? this.agentLoaded : this.playerLoaded;
             this.Active("加载", false);
             this.Active("错误", false);
-            this.Text("空状态", "该页签正在开发中");
-            this.Active("空状态", true);
+            this.RenderSortBar(tab);
+            if(loaded) {
+                this.RenderAllList(tab);
+                return;
+            }
+            this.Active("空状态", false);
+            // 第一次进这个页签才拉数据；之后来回切都用缓存，避免反复打服务端。
+            if(isAgent)
+                this.QueryAllAgents(this.agentPage);
+            else
+                this.QueryAllPlayers(this.playerPage);
             return;
         }
         if(tab === "group") {
@@ -1336,6 +1568,572 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         this.Active("列表", false);
         this.Active("列表面板", false);
         this.Active("说明", false);
+    }
+
+    // ------------------------------------------------------------------
+    // 全量玩家列表 / 全量代理列表（《俱乐部全量玩家与代理统计》§2 / §3）
+    // ------------------------------------------------------------------
+    private ClearListTimer():void {
+        if(this.listTimer != null) {
+            clearTimeout(this.listTimer);
+            this.listTimer = null;
+        }
+    }
+
+    private QueryAllPlayers(page:number):void {
+        this.QueryAll("players", page);
+    }
+
+    private QueryAllAgents(page:number):void {
+        this.QueryAll("agents", page);
+    }
+
+    /**
+     * 两条列表命令的公共实现：只有 header 与 sort 枚举不同。
+     * 默认不带 `club_id`（全服）；选了「一级过滤：俱乐部」才带上，只看该俱乐部成员。
+     */
+    private QueryAll(kind:string, page:number):void {
+        const isAgent = kind === "agents";
+        const account:any = GameDataManager.getAccount();
+        if(account == null) {
+            this.ShowError("网络未就绪，请稍后重试");
+            return;
+        }
+        const target = Math.max(0, Math.floor(page) || 0);
+        if(isAgent)
+            this.agentPage = target;
+        else
+            this.playerPage = target;
+
+        const ctx = "bossall" + (isAgent ? "a" : "p") + ":" + Date.now() + ":" +
+            (++panelBossPlayerInfo.listSerial);
+        if(isAgent)
+            this.agentContext = ctx;
+        else
+            this.playerContext = ctx;
+
+        this.listRetry = 0;
+        this.ClearListTimer();
+        this.ShowLoading();
+        this.listTimer = setTimeout(()=>{
+            if((isAgent ? this.agentContext : this.playerContext) !== ctx)
+                return;
+            if(isAgent)
+                this.agentContext = "";
+            else
+                this.playerContext = "";
+            this.ShowError("查询超时，请稍后重试");
+        }, 12000);
+
+        const param:any = {
+            header:isAgent ? "查询_俱乐部_所有_代理" : "查询_俱乐部_所有_玩家",
+            page:String(target),
+            count:String(panelBossPlayerInfo.PAGE_SIZE),
+            sort:isAgent ? this.agentSort : this.playerSort,
+            order:isAgent ? this.agentOrder : this.playerOrder,
+            context:ctx
+        };
+        const key = this.SearchKey();
+        if(key !== "")
+            param.search = key;
+        // 一级过滤：俱乐部。留空就是全服。
+        if(this.clubFilter !== "")
+            param.club_id = this.clubFilter;
+
+        try {
+            account.reqHallCommand(JSON.stringify(param), "P@" + ctx);
+        }
+        catch(error) {
+            this.ClearListTimer();
+            if(isAgent)
+                this.agentContext = "";
+            else
+                this.playerContext = "";
+            this.ShowError("请求发送失败，请稍后重试");
+        }
+    }
+
+    public OnAllPlayerList(raw:any):void {
+        this.OnAllList(raw, "players");
+    }
+
+    public OnAllAgentList(raw:any):void {
+        this.OnAllList(raw, "agents");
+    }
+
+    /** 推送 AllClubPlayerList / AllClubAgentList：{number,count,context,list[]}。 */
+    private OnAllList(raw:any, kind:string):void {
+        const data = this.Unwrap(raw);
+        if(data == null || !Array.isArray(data.list))
+            return;
+        const isAgent = kind === "agents";
+        const ctx = String(data.context == null ? "" : data.context);
+        const expect = isAgent ? this.agentContext : this.playerContext;
+        if(expect !== "" && ctx !== "" && ctx !== expect)
+            return;
+        this.ClearListTimer();
+        if(isAgent)
+            this.agentContext = "";
+        else
+            this.playerContext = "";
+        this.listRetry = 0;
+
+        const rows:BossListRow[] = data.list.map((one:any)=>this.ParseListRow(one));
+        const total = Number(data.count);
+        const number = Number(data.number);
+        const totalCount = isFinite(total) && total >= 0 ? total : rows.length;
+        if(isAgent) {
+            this.agentRows = rows;
+            this.agentTotal = totalCount;
+            if(isFinite(number) && number >= 0)
+                this.agentPage = number;
+            this.agentLoaded = true;
+        }
+        else {
+            this.playerRows = rows;
+            this.playerTotal = totalCount;
+            if(isFinite(number) && number >= 0)
+                this.playerPage = number;
+            this.playerLoaded = true;
+        }
+        if(this.currentTab === kind)
+            this.RenderAllList(kind);
+    }
+
+    private ParseListRow(raw:any):BossListRow {
+        const text = (v:any):string => String(v == null ? "" : v).trim();
+        return {
+            id:text(raw && raw.guuid) || text(raw && raw.user_id),
+            name:text(raw && raw.name),
+            clubId:text(raw && raw.club_id),
+            clubName:text(raw && raw.club_name),
+            upperId:text(raw && raw.upper_guuid),
+            upperName:text(raw && raw.upper_name),
+            teamCount:text(raw && raw.team_count),
+            todayScore:text(raw && raw.today_score),
+            yesterdayScore:text(raw && raw.yesterday_score),
+            totalScore:text(raw && raw.total_score),
+            todayContribFen:text(raw && raw.today_contrib_fen),
+            yesterdayContribFen:text(raw && raw.yesterday_contrib_fen),
+            totalContribFen:text(raw && raw.total_contrib_fen),
+            todayBonusFen:text(raw && raw.today_bonus_fen),
+            yesterdayBonusFen:text(raw && raw.yesterday_bonus_fen),
+            totalBonusFen:text(raw && raw.total_bonus_fen),
+            groupName:this.GroupText(raw)
+        };
+    }
+
+    /**
+     * 两个列表页签的行：直接克隆「玩家信息」页签那份 `行模板`（与代理链同一张卡片），
+     * 只改数据来源。玩家列表口径是本人、代理列表口径是整条下线。
+     */
+    private RenderAllList(kind:string):void {
+        const isAgent = kind === "agents";
+        const rows = isAgent ? this.agentRows : this.playerRows;
+        const total = isAgent ? this.agentTotal : this.playerTotal;
+        const content = this.At("列表/view/content");
+        const template = content ? content.getChildByName("行模板") : null;
+        if(content == null || template == null) {
+            this.ShowError("界面资源缺失，请重新打开");
+            return;
+        }
+        const prefix = isAgent ? "全代理_" : "全玩家_";
+        this.ClearRowAvatarQueue();
+        for(const child of content.children.slice()) {
+            if(child.name.indexOf(prefix) === 0)
+                child.destroy();
+        }
+        template.active = false;
+        this.Active("加载", false);
+        this.Active("错误", false);
+        this.Active("列表面板", true);
+        this.Active("列表", true);
+        this.Active("说明", true);
+        this.RenderPaging(kind, total);
+
+        const view = this.At("列表/view");
+        if(rows.length === 0) {
+            this.Text("空状态", isAgent ? "没有查到符合条件的代理" : "没有查到符合条件的玩家");
+            this.Active("空状态", true);
+            if(view) {
+                content.height = view.height;
+                content.setPosition(0, view.height / 2);
+            }
+            return;
+        }
+        this.Active("空状态", false);
+
+        const rowHeight = template.height;
+        const pitch = rowHeight + 12;
+        let y = 0;
+        for(const item of rows) {
+            const row = cc.instantiate(template);
+            row.name = prefix + item.id;
+            row.parent = content;
+            row.active = true;
+            row.setPosition(0, y - rowHeight / 2);
+            if(isAgent)
+                this.FillAgentListRow(row, item);
+            else
+                this.FillPlayerListRow(row, item);
+            y -= pitch;
+        }
+        if(view) {
+            content.height = Math.max(view.height, -y + 4);
+            content.setPosition(0, view.height / 2);
+        }
+        const list = this.At("列表");
+        const scrollView = list ? list.getComponent(cc.ScrollView) : null;
+        if(scrollView)
+            scrollView.scrollToTop(0);
+    }
+
+    /** 玩家列表行：玩家本人口径，只有输赢三项有数据，贡献/红利接口未下发。 */
+    private FillPlayerListRow(row:cc.Node, item:BossListRow):void {
+        this.QueueRowAvatar(row, item.id);
+        this.Text("姓名", item.name || ("玩家 " + item.id), row);
+        this.Text("玩家ID", "ID: " + item.id, row);
+        this.Text("身份", "玩家", row);
+        const identityNode = this.At("身份", row);
+        if(identityNode)
+            identityNode.color = new cc.Color(160,220,235);
+        this.Text("俱乐部", item.clubName || item.clubId || "—", row);
+        // 左栏第二行借来放直属上级：全服列表里「这个人归谁」比积分更有用。
+        this.Text("积分", "上级 " + (item.upperName || item.upperId || "无"), row);
+        const upperNode = this.At("积分", row);
+        if(upperNode)
+            upperNode.color = new cc.Color(150,168,186);
+        const extraNode = this.At("附加信息", row);
+        if(extraNode)
+            extraNode.active = false;
+        this.Text("统计口径/文字", "个人", row);
+        this.FillListStats(row, item);
+        this.BindListRowButtons(row, item, item.clubId);
+    }
+
+    /** 代理列表行：整条下线口径，输赢 + 贡献都有，红利接口未下发。 */
+    private FillAgentListRow(row:cc.Node, item:BossListRow):void {
+        this.QueueRowAvatar(row, item.id);
+        this.Text("姓名", item.name || ("代理 " + item.id), row);
+        this.Text("玩家ID", "ID: " + item.id, row);
+        this.Text("身份", "代理", row);
+        const identityNode = this.At("身份", row);
+        if(identityNode)
+            identityNode.color = new cc.Color(255,231,112);
+        this.Text("俱乐部", item.clubName || item.clubId || "—", row);
+        this.Text("积分", "下线 " + (item.teamCount === "" ? "—" : item.teamCount) + " 人", row);
+        const teamNode = this.At("积分", row);
+        if(teamNode)
+            teamNode.color = new cc.Color(150,168,186);
+        const extraNode = this.At("附加信息", row);
+        if(extraNode)
+            extraNode.active = false;
+        this.Text("统计口径/文字", "团队", row);
+        this.FillListStats(row, item);
+        this.BindListRowButtons(row, item, item.clubId);
+    }
+
+    /**
+     * 三列（输赢 / 贡献 / 红利）× 三行（今日 / 昨日 / 累计）。
+     * 玩家列表=本人值、代理列表=本人+整条下线，两边字段同名，统一填。
+     * 缺键一律显示「—」：玩家列表现在红利随主 SQL 返回（失败整条报错，不会缺键），
+     * 代理列表红利失败时仍会少这三个键，所以容错要留着，不能拿 0 冒充。
+     */
+    private FillListStats(row:cc.Node, item:BossListRow):void {
+        this.SetScore("今日输赢值", item.todayScore, row);
+        this.SetScore("昨日输赢值", item.yesterdayScore, row);
+        this.SetScore("总输赢值", item.totalScore, row);
+        this.Text("今日贡献值", this.FenText(item.todayContribFen), row);
+        this.Text("昨日贡献值", this.FenText(item.yesterdayContribFen), row);
+        this.Text("总贡献值", this.FenText(item.totalContribFen), row);
+        this.Text("今日红利值", this.FenText(item.todayBonusFen), row);
+        this.Text("昨日红利值", this.FenText(item.yesterdayBonusFen), row);
+        this.Text("总红利值", this.FenText(item.totalBonusFen), row);
+    }
+
+    /** 行内按钮：查看资料卡 / 跳到代理链 / 看战绩 / 添加到分组。行是运行时克隆的，用 BindTap 自己挂。 */
+    private BindListRowButtons(row:cc.Node, item:BossListRow, clubId:string):void {
+        const id = item.id;
+        // 分组直接取接口带下来的字段；没下发（老服务端）就两块都收起。
+        this.ApplyRowGroup(row, item);
+
+        const viewBtn = row.getChildByName("查看");
+        if(viewBtn != null) {
+            viewBtn.active = id !== "";
+            if(viewBtn.active) {
+                this.BindTap(viewBtn, ()=>{
+                    panelClubPlayerInfo.Open(id, clubId || this.userClubId || this.roomClubId, item.name);
+                });
+            }
+        }
+
+        const chainBtn = row.getChildByName("代理链");
+        if(chainBtn != null) {
+            chainBtn.active = id !== "";
+            if(chainBtn.active) {
+                this.BindTap(chainBtn, ()=>{
+                    this.ShowTab("chain", false);
+                    this.ApplyTarget(id, item.name);
+                });
+            }
+        }
+
+        this.BindRecordButton(row, id, item.name);
+    }
+
+    /** 行内头像：和「玩家信息 / 代理链」同一套，按玩家 ID 取真实头像（经节流队列，避免一页 20 条并发）。 */
+    private QueueRowAvatar(row:cc.Node, id:string):void {
+        if(id === "")
+            return;
+        this.avatarQueue.push({row:row, id:id});
+        if(this.avatarTimer == null)
+            this.avatarTimer = setTimeout(()=>this.DrainRowAvatar(), 0);
+    }
+
+    private DrainRowAvatar():void {
+        this.avatarTimer = null;
+        if(!cc.isValid(this.node)) {
+            this.avatarQueue = [];
+            return;
+        }
+        for(let i = 0; i < 2; i++) {
+            const task = this.avatarQueue.shift();
+            if(task == null)
+                return;
+            if(cc.isValid(task.row))
+                this.BindRowAvatar(task.row, task.id);
+        }
+        if(this.avatarQueue.length > 0)
+            this.avatarTimer = setTimeout(()=>this.DrainRowAvatar(), 60);
+    }
+
+    private ClearRowAvatarQueue():void {
+        if(this.avatarTimer != null) {
+            clearTimeout(this.avatarTimer);
+            this.avatarTimer = null;
+        }
+        this.avatarQueue = [];
+    }
+
+    private BindRowAvatar(row:cc.Node, id:string):void {
+        if(id === "")
+            return;
+        const avatar = this.At("头像", row);
+        const sprite = avatar ? avatar.getComponent(cc.Sprite) : null;
+        if(sprite != null)
+            ImageManager.getInstance().BindPlayerListAvatar(id, sprite);
+    }
+
+    /** 一级过滤按钮文案：全服 / 只看某俱乐部。 */
+    private RenderClubFilter():void {
+        this.Text("搜索区/俱乐部筛选/文字",
+            this.clubFilter === "" ? "全部俱乐部" : ("俱乐部 " + this.clubFilter));
+    }
+
+    /** 选完俱乐部：清掉两边的缓存，按当前页签重查第一页。 */
+    private ApplyClubFilter(clubId:string):void {
+        if(clubId === this.clubFilter)
+            return;
+        this.clubFilter = clubId;
+        this.playerPage = 0;
+        this.agentPage = 0;
+        // 换了过滤条件，上一批行不能再用，两个页签都标成未加载。
+        this.playerLoaded = false;
+        this.agentLoaded = false;
+        this.RenderClubFilter();
+        if(this.currentTab === "players")
+            this.QueryAllPlayers(0);
+        else if(this.currentTab === "agents")
+            this.QueryAllAgents(0);
+    }
+
+    private OpenClubFilterDialog():void {
+        this.OpenDialog("club", "", "", "筛选俱乐部",
+            "输入俱乐部ID，只看这家俱乐部的成员；留空 = 全部俱乐部");
+        // 预填当前筛选，方便改；OpenDialog 会把输入框清空。
+        const input = this.At("分组弹窗/面板/输入框");
+        const box = input ? input.getComponent(cc.EditBox) : null;
+        if(box)
+            box.string = this.clubFilter;
+    }
+
+    /**
+     * 行上的分组归属：和「玩家信息 / 代理链」完全相同的一套——
+     * 直接 `ApplyGroupCell(row, id, 分组名)`：有分组显示「分组:XXX」，没分组显示「添加到分组」。
+     * 分组名由接口随行下发（`groups[]` / `group_name`），客户端不再逐行补查。
+     */
+    private ApplyRowGroup(row:cc.Node, item:BossListRow):void {
+        this.ApplyGroupCell(row, item.id, item.groupName);
+    }
+
+    /** 排序条件按钮行：选中项带 ↑/↓，再点一次切方向。 */
+    private RenderSortBar(kind:string):void {
+        const bar = this.At("排序栏");
+        if(bar == null)
+            return;
+        const template = bar.getChildByName("排序模板");
+        if(template == null)
+            return;
+        for(const child of bar.children.slice()) {
+            if(child.name.indexOf("排序_") === 0)
+                child.destroy();
+        }
+        template.active = false;
+
+        const isAgent = kind === "agents";
+        const chips = isAgent ? panelBossPlayerInfo.AGENT_SORTS : panelBossPlayerInfo.PLAYER_SORTS;
+        const sortKey = isAgent ? this.agentSort : this.playerSort;
+        const order = isAgent ? this.agentOrder : this.playerOrder;
+        const gap = 6;
+        // 9 个条件一行放不下；按 5 + 4 分两行，每个能到 133 宽，字放大到 24 也不挤。
+        const perRow = 5;
+        const rowH = 40;
+        const rowGap = 4;
+        const count = chips.length;
+        const rowCount = Math.max(1, Math.ceil(count / perRow));
+        // 排序栏是 Widget 横向撑开的，按它当前宽度分配，别写死 690。
+        const barWidth = bar.width > 0 ? bar.width : 690;
+        const width = Math.min(160, Math.floor((barWidth - gap * (perRow - 1)) / perRow));
+        const totalH = rowCount * rowH + (rowCount - 1) * rowGap;
+        for(let row = 0; row < rowCount; row++) {
+            const line = chips.slice(row * perRow, row * perRow + perRow);
+            // 每行各自居中：最后一行不满 6 个也不会挤在左边。
+            const lineWidth = width * line.length + gap * (line.length - 1);
+            let x = -lineWidth / 2 + width / 2;
+            const y = totalH / 2 - rowH / 2 - row * (rowH + rowGap);
+            for(const chip of line) {
+                const node = cc.instantiate(template);
+                node.name = "排序_" + chip.key;
+                node.parent = bar;
+                node.active = true;
+                node.setContentSize(width, rowH);
+                node.setPosition(x, y);
+                const picked = chip.key === sortKey;
+                const arrow = picked ? (order === "asc" ? "↑" : "↓") : "";
+                this.Text("文字", chip.label + arrow, node);
+                const labelNode = this.At("文字", node);
+                if(labelNode != null) {
+                    labelNode.width = width - 8;
+                    // 蓝底按钮上选中用金色字，未选用浅灰蓝。
+                    labelNode.color = picked ? new cc.Color(255,231,112) : new cc.Color(197,214,229);
+                    const label = labelNode.getComponent(cc.Label);
+                    if(label != null) {
+                        // 字放大到 24（原来 20 太小），换行仍关掉，超宽只靠 SHRINK 缩。
+                        label.fontSize = 24;
+                        label.lineHeight = 30;
+                        label.enableWrapText = false;
+                    }
+                }
+                node.opacity = picked ? 255 : 190;
+                this.BindTap(node, ()=>{
+                    this.OnSortChip(kind, chip.key);
+                });
+                x += width + gap;
+            }
+        }
+        this.Active("排序栏", true);
+    }
+
+    private OnSortChip(kind:string, key:string):void {
+        if(kind === "agents") {
+            if(this.agentSort === key)
+                this.agentOrder = this.agentOrder === "desc" ? "asc" : "desc";
+            else {
+                this.agentSort = key;
+                this.agentOrder = "desc";
+            }
+            this.agentPage = 0;
+            this.RenderSortBar("agents");
+            this.QueryAllAgents(0);
+            return;
+        }
+        if(this.playerSort === key)
+            this.playerOrder = this.playerOrder === "desc" ? "asc" : "desc";
+        else {
+            this.playerSort = key;
+            this.playerOrder = "desc";
+        }
+        this.playerPage = 0;
+        this.RenderSortBar("players");
+        this.QueryAllPlayers(0);
+    }
+
+    private RenderPaging(kind:string, total:number):void {
+        const isAgent = kind === "agents";
+        const page = isAgent ? this.agentPage : this.playerPage;
+        const pages = Math.max(1, Math.ceil(total / panelBossPlayerInfo.PAGE_SIZE));
+        const unit = isAgent ? "个代理" : "个玩家";
+        this.Text("分页/页码", "第 " + (page + 1) + "/" + pages + " 页 · 共 " + total + " " + unit);
+        this.SetPagingEnabled("分页/上一页", page > 0);
+        this.SetPagingEnabled("分页/下一页", page + 1 < pages);
+        this.Active("分页", true);
+    }
+
+    private SetPagingEnabled(path:string, enabled:boolean):void {
+        const node = this.At(path);
+        if(node == null)
+            return;
+        // 到边界就压暗 + 关掉 interactable，不要只靠 opacity 骗人。
+        node.opacity = enabled ? 255 : 90;
+        const button = node.getComponent(cc.Button);
+        if(button != null)
+            button.interactable = enabled;
+    }
+
+    private TurnPage(delta:number):void {
+        const isAgent = this.currentTab === "agents";
+        if(!isAgent && this.currentTab !== "players")
+            return;
+        const page = isAgent ? this.agentPage : this.playerPage;
+        const total = isAgent ? this.agentTotal : this.playerTotal;
+        const pages = Math.max(1, Math.ceil(total / panelBossPlayerInfo.PAGE_SIZE));
+        const next = page + delta;
+        if(next < 0 || next >= pages)
+            return;
+        if(isAgent)
+            this.QueryAllAgents(next);
+        else
+            this.QueryAllPlayers(next);
+    }
+
+    /**
+     * 列表命令的回执：0x200/0x500 只表示命令受理，数据在推送里。
+     * 出错时按 context 认领，避免落到代理链那条逻辑里干等超时。
+     */
+    private HandleListReply(nCode:number, param:string):boolean {
+        const body = param == null ? "" : String(param);
+        const isAgent = this.agentContext !== "" && body.indexOf(this.agentContext) >= 0;
+        const isPlayer = !isAgent && this.playerContext !== "" && body.indexOf(this.playerContext) >= 0;
+        if(!isAgent && !isPlayer)
+            return false;
+        if(nCode === 0x200 || nCode === 0x500)
+            return true;
+        this.ClearListTimer();
+        // 代理树还在加载时服务端会这么回，文档建议自动重试；最多两次。
+        if(body.indexOf("代理数据加载中") >= 0 && this.listRetry < 2) {
+            this.listRetry++;
+            const page = isAgent ? this.agentPage : this.playerPage;
+            if(isAgent)
+                this.agentContext = "";
+            else
+                this.playerContext = "";
+            this.ShowLoading();
+            setTimeout(()=>{
+                if(!cc.isValid(this.node))
+                    return;
+                if(isAgent)
+                    this.QueryAllAgents(page);
+                else
+                    this.QueryAllPlayers(page);
+            }, 1200);
+            return true;
+        }
+        if(isAgent)
+            this.agentContext = "";
+        else
+            this.playerContext = "";
+        this.ShowError(this.ErrorText(body));
+        return true;
     }
 
     // ------------------------------------------------------------------
@@ -1918,19 +2716,32 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             return;
         this.FinishGroup();
         const groupName = String(data.group_name == null ? "" : data.group_name);
+        const uid = String(data.user_id == null ? "" : data.user_id).trim();
         if(action === "create")
             this.Toast("已创建分组「" + groupName + "」");
-        else if(action === "delete")
+        else if(action === "delete") {
             this.Toast("已删除分组「" + groupName + "」");
+            // 组里所有人一起变回未分组：整页重查一次，让服务端把新分组字段带回来。
+            this.playerLoaded = false;
+            this.agentLoaded = false;
+            if(this.currentTab === "players")
+                this.QueryAllPlayers(this.playerPage);
+            else if(this.currentTab === "agents")
+                this.QueryAllAgents(this.agentPage);
+        }
         else if(action === "set_member") {
             const who = String(data.user_name || data.user_id || "玩家");
             this.Toast("已把「" + who + "」加入「" + groupName + "」");
+            // 行内那颗「添加到分组」立刻换成分组名，别让用户再查一次（纯本地改标签，不发请求）。
+            this.RefreshRowGroup(uid, groupName);
         }
         else if(action === "remove_member") {
             const who = String(data.user_name || data.user_id || "玩家");
             const groupName = String(data.group_name == null ? "" : data.group_name);
             this.Toast(groupName !== "" ? ("已把「" + who + "」移出「" + groupName + "」")
                                         : ("已把「" + who + "」移出分组"));
+            // 移出后这个人变回未分组，按钮要重新出现（纯本地改标签，不发请求）。
+            this.RefreshRowGroup(uid, "");
         }
         // 文档：创建/改名/删除、加人/移人之后都要自己刷新列表。
         this.groupsLoaded = false;
@@ -2185,7 +2996,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         this.pickedGroupId = "";
         this.Text("分组弹窗/面板/标题", title);
         this.Text("分组弹窗/面板/提示", hint);
-        const isInput = mode === "create" || mode === "addMember";
+        const isInput = mode === "create" || mode === "addMember" || mode === "club";
         const showList = mode === "pick" || mode === "members";
         this.Active("分组弹窗/面板/选项列表", showList);
         this.Active("分组弹窗/面板/输入框", isInput);
@@ -2206,12 +3017,12 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             const box = input ? input.getComponent(cc.EditBox) : null;
             if(box) {
                 box.string = "";
-                box.inputMode = mode === "addMember" ?
+                box.inputMode = (mode === "addMember" || mode === "club") ?
                     cc.EditBox.InputMode.NUMERIC : cc.EditBox.InputMode.ANY;
                 box.maxLength = mode === "create" ? 20 : 12;
             }
             this.Text("分组弹窗/面板/输入框/提示",
-                mode === "create" ? "分组名称" : "玩家ID");
+                mode === "create" ? "分组名称" : (mode === "club" ? "俱乐部ID（可留空）" : "玩家ID"));
         }
         if(mode === "pick")
             this.RenderPickList();
@@ -2238,6 +3049,16 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
 
     private SubmitDialog():void {
         const mode = this.dialogMode;
+        if(mode === "club") {
+            const clubId = this.DialogInput();
+            if(clubId !== "" && !/^\d+$/.test(clubId)) {
+                this.Toast("请输入正确的俱乐部ID");
+                return;
+            }
+            this.CloseDialog();
+            this.ApplyClubFilter(clubId);
+            return;
+        }
         if(mode === "create") {
             const name = this.DialogInput();
             if(name === "") {
@@ -2444,8 +3265,34 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.OnSearch();
             return;
         }
+        if(name === "俱乐部筛选") {
+            this.OpenClubFilterDialog();
+            return;
+        }
         if(name === "重试") {
-            this.QueryChain();
+            // 哪个页签出错就重试哪条命令，别一律去查代理链。
+            if(this.currentTab === "players")
+                this.QueryAllPlayers(this.playerPage);
+            else if(this.currentTab === "agents")
+                this.QueryAllAgents(this.agentPage);
+            else
+                this.QueryChain();
+            return;
+        }
+        if(name === "页签_玩家列表") {
+            this.ShowTab("players", false);
+            return;
+        }
+        if(name === "页签_代理列表") {
+            this.ShowTab("agents", false);
+            return;
+        }
+        if(name === "上一页") {
+            this.TurnPage(-1);
+            return;
+        }
+        if(name === "下一页") {
+            this.TurnPage(1);
             return;
         }
         if(name === "页签_玩家信息") {

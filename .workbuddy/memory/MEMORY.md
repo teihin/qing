@@ -69,6 +69,14 @@
   根治是给弹窗父节点设**递增 zIndex**（`ClubManagementView.raisePopups()`），让排序稳定压过大厅；光加遮罩无效。
 
 ## Cocos Prefab / 贴图（硬约束，别忘）
+- **所有客户端 UI 改动都必须按「可变画布」做兼容，新增/挪动的元素一律加 `cc.Widget`**（2026-11-07 主人明确要求）。
+  实机画布高度**不是**设计稿的 750×1334（实测约 750×1624），凡是用画布中心绝对坐标写死的
+  `_trs.y`，在长屏上就会飘到相邻元素上（排序栏压到第一张卡片即此因）。规则：
+  ① 贴顶用 `_top`、贴底用 `_bottom`、要拉伸就 top+bottom 或 left+right；
+  ② **夹在两个 Widget 元素之间的条状区域（排序栏、分页栏这种）也必须自己带 Widget**，
+     靠上下邻居的固定间距定位，别用 center 坐标；
+  ③ 改完至少按 H=1334 / 1624 两档核一遍有没有压叠（可用
+     `tools/render_drh8_scene_preview.PreviewRenderer` 离屏渲染 + 自行按 Widget 语义算矩形断言）。
 - **`panelXxx` 面板一律是 `UIManager.showPanel` 用 `cc.loader.loadRes("UI/" + 名字)` + `cc.instantiate` 动态创建的**
   —— 要改面板外观/尺寸就改 `assets/resources/UI/panelXxx.prefab`（双击进 prefab 编辑模式）。
   改场景 `drh8.fire` 里的同名节点**对运行无效**（那只是编辑器里的残留实例，2026-09-19 提示节点踩过）。

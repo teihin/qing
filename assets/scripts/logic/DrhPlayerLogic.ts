@@ -37,6 +37,8 @@ export default class DrhPlayerLogic extends cc.Component {
     private txtActionTime:cc.Label;
     private bActionUiRecoveryAttempted = false;
     private bActionUiFullStateRequested = false;
+    /** 本槽位上一轮刷新是否处于留座（site_countdown 非 0），用于回座时恢复打牌倒计时。 */
+    private bSeatSitOut = false;
 
     //扯牌倒计时相关
     private transCheTimeBar:cc.ProgressBar;
@@ -131,6 +133,9 @@ export default class DrhPlayerLogic extends cc.Component {
            //新一局开始前若桌面还被上一局清桌状态收起，这里恢复手牌区
            this.ShowRoundCardsHandArea();
            this.gameLogic.BeginBettingSpotlightDealAnimation();
+           //每手牌重新发牌时把加时次数归档清零（加时按手牌计，不跨手累计）
+           if (this.playerPos == PlayerPos.self)
+               KBEngine.Event.fire("SelfRoundDealt");
        }
        else if(strEvent == "玩家_开局_事件")
        {
@@ -1276,11 +1281,20 @@ export default class DrhPlayerLogic extends cc.Component {
                 this.transOverCount.active = false;
 
                 this.node.getChildByName("三花").active = false;
+                this.bSeatSitOut = true;
                 return;
             }
             else
             {
                 this.unschedule(this.showLiuZuoCount);
+
+                //留座回到座位：服务端把 site_countdown 置 0 后不会重推行动状态，
+                //必须在刷新里主动把打牌倒计时重新挂上，否则倒计时停在上次留座的位置。
+                if (this.bSeatSitOut)
+                {
+                    this.bSeatSitOut = false;
+                    this.ResumeActionTimerAfterSitOut();
+                }
 
                 Tool.GetChild(this.node,"PlayerInfo/Head/留坐").active = false;
                 if(this.playerPos === PlayerPos.self)
@@ -2215,6 +2229,23 @@ export default class DrhPlayerLogic extends cc.Component {
     }
 
     
+    /**
+     * 留座结束回到座位后恢复打牌倒计时。
+     * 留座期间 UpdateActionTimmer 只是暂停（不递减），但留座前进度条可能已经走完被 unschedule，
+     * 光靠原计时器活着不够，回座时必须主动重挂一次。
+     */
+    private ResumeActionTimerAfterSitOut()
+    {
+        if (!cc.isValid(this.node) || !this.node.activeInHierarchy)
+            return;
+        if (this.info.emState == PlayerState.init || this.info.emState == PlayerState.leave)
+            return;
+        if (Number(this.info.strCurCountDown) <= 0)
+            return;
+        this.unschedule(this.UpdateActionTimmer);
+        this.schedule(this.UpdateActionTimmer,0.1,cc.macro.REPEAT_FOREVER,0.1);
+    }
+
     UpdateActionTimmer()
     {
         if (this.transLightBKBar == null)
@@ -2238,10 +2269,11 @@ export default class DrhPlayerLogic extends cc.Component {
 
             if (this.info.emState == PlayerState.init || this.info.emState == PlayerState.leave || this.info.site_countdown != "0")
             {
+                // 留座期间只暂停：藏掉进度条和秒数，但不 unschedule，
+                // 否则回座后没有任何地方重新挂计时器，打牌倒计时会停在原地不走。
                 this.transLightBKBar.node.active = false;
                 this.transLigtBKBlackBKBar.node.active = false;
                 this.txtActionTime.node.active = false;
-                this.unschedule(this.UpdateActionTimmer);
                 return;
             }
 

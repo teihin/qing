@@ -571,9 +571,10 @@ export default class ClubManagementView {
     /**
      * 「我的」滚动区内容高度。
      *
-     * 有俱乐部时按钮区多「上下分记录 / 钻石池消耗 / 额度授权记录」三个入口，Grid 从 3 行变 5 行
-     * （314.05 → 421.96 → 529.13）；卡片紧跟在按钮区下面（间距 12），所以卡片、内容高度都要跟着下移。
-     * 无俱乐部时「赠送 / 兑换钻石 / 上下分记录 / 钻石池消耗 / 额度授权记录」都隐藏，按钮区回到 3 行，内容 350。
+     * 「操作」是两列 Grid，行数 = 可见入口数 / 2：
+     * 大盟主/盟主有 9 个入口（赠送 / 兑换钻石 / 上下分记录 / 钻石池消耗 / 额度授权记录 等），5 行 529.13；
+     * 其他成员看不到「额度授权记录」只有 8 个，4 行 421.96；无俱乐部时只剩 4 个固定入口，沿用 314.05。
+     * 卡片紧跟在按钮区下面（间距 12），所以卡片、内容高度都要跟着下移。
      */
     public syncProfileScroll(hasClub?:boolean,hasUnion?:boolean):void {
         const current = this.getContext();
@@ -581,8 +582,10 @@ export default class ClubManagementView {
             hasClub = !!current && !!current.id;
         if(hasUnion === undefined)
             hasUnion = this.unionSectionVisible(current);
-        const opHeight = hasClub ? 529.13 : 314.05;
         const operation = this.at("Main/我的/滚动区/view/content/操作");
+        const opRows = operation == null ? 0 :
+            Math.ceil(operation.children.filter(child => child.active).length / 2);
+        const opHeight = hasClub ? (opRows >= 5 ? 529.13 : 421.96) : 314.05;
         if(operation && Math.abs(operation.height - opHeight) > 0.5)
             operation.height = opHeight;
 

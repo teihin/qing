@@ -8,6 +8,7 @@ import DashboardPage from "./pages/DashboardPage";
 import LoginPage from "./pages/LoginPage";
 import ModulesPage from "./pages/ModulesPage";
 import JackpotPerformancePage from "./pages/JackpotPerformancePage";
+import AgentRewardsPage from "./pages/AgentRewardsPage";
 import AgentsPage from "./pages/AgentsPage";
 import ClubsPage from "./pages/ClubsPage";
 import UnionsPage from "./pages/UnionsPage";
@@ -125,6 +126,7 @@ export default function App() {
     const props = { can, notify };
     if (route === "/game/players" && can("game.player.view")) return <PlayersPage can={can} canViewSensitive={Boolean(session?.user.isProtectedRoot && session.user.username === "admin999")} notify={notify} />;
     if (route === "/game/jackpot" && can("game.jackpot.view")) return <JackpotPerformancePage can={can} notify={notify} />;
+    if (route === "/game/agent-rewards" && can("game.agent_reward.view")) return <AgentRewardsPage can={can} notify={notify} />;
     if (route === "/game/agents" && can("game.agent.view")) return <AgentsPage notify={notify} />;
     if (route === "/game/unions" && can("game.union.view")) return <UnionsPage can={can} notify={notify} onNavigate={navigate} />;
     if (route === "/game/clubs" && can("game.club.view")) return <ClubsPage can={can} notify={notify} />;

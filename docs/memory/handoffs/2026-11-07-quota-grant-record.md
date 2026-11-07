@@ -96,6 +96,23 @@
 4. Creator 2.4.13 未导入：新贴图需 `touch` + 激活窗口才会重导；`panelMain.prefab` 改动需在编辑器里确认第 5 行按钮位置与卡片不重叠。
 5. 真机未验证：长屏滚动、分页手感、金币图标在按钮上的实际清晰度。
 
+## 后续变更：入口收窄到「大盟主 / 盟主」（2026-11-07 21:10）
+
+用户要求「我的 → 额度授权记录」只给**大盟主、盟主**看，其他人不可见。
+
+- `panelMain.RefreshClubFinanceMenuVisibility`：新入口从原来「有俱乐部就显示」的路径表里拆出来单独判定，
+  `active = hasClub && CanViewQuotaGrantRecord(clubId)`。
+- 新增 `panelMain.CanViewQuotaGrantRecord(clubId)`：先要 `IsClubOwner(clubId)`（俱乐部创建者，走
+  `club_make` / `clubAgentInfo.is_creator`），再按联盟归属放行 —— 有 `union_id`（大盟主=联盟总群主，盟主=已入盟）
+  直接放行；联盟归属未查回来时也对创建者放行，等 `查询_联盟_额度` 回包（`OnClubUnionQuota` → 末尾
+  `RefreshClubFinanceMenuVisibility`）再纠正，避免查询失败把盟主入口永久藏住。确认「未入盟」（群主）则收起。
+- `panelMain.onButtonClick` 的 `额度授权记录` 分支加同一道判定，热更残留状态/误点也进不去弹窗。
+- `ClubManagementView.syncProfileScroll`：按钮区高度不再写死 `hasClub ? 529.13 : 314.05`，改成按「操作」
+  下已激活子节点数算行数（两列 Grid）：≥5 行 529.13，4 行 421.96（其他成员看不到额度授权记录时的状态），
+  无俱乐部沿用 314.05。卡片 `_top = opHeight + 12`、内容高度随动，不会因为少一个入口留白或压卡片。
+- 静态验证：`panelMain.ts` / `ClubManagementView.ts` `ts.transpileModule` 0 诊断。
+- 未验证：编辑器与真机没跑；群主（未入盟）在联盟状态未回包前会短暂看到入口，回包后自动收起。
+
 ## 下一步
 
 1. Creator 打开项目，看「我的 → 额度授权记录」按钮与弹窗。
