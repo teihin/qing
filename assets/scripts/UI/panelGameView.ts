@@ -19,6 +19,7 @@ import QueueMatchManager, { QueueMatchSnapshot } from "../logic/QueueMatchManage
 import WebSceneLoader from "../common/WebSceneLoader";
 import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
+import DirectChatManager from "../logic/DirectChatManager";
 import { jackpotAmount, jackpotTier, jackpotTime } from "../common/JackpotDisplay";
 import { getAccountClubGold, isUnionRoom, normalizeRoomClubId, resolveMyRoomClubId, resolveRoomSettingClubId, resolveRoomSettingUnionId, withRoomClubId } from "../logic/RoomClubContext";
 
@@ -131,6 +132,14 @@ export default class panelGameView extends UIPanelViewBase {
     private pendingQueueApplyAfterLeave:boolean = false;
     /** 局中点「退出房间」后先挂起，等本手牌结算完再真正发退房协议。 */
     private pendingExitAfterRound:boolean = false;
+    /** 连续确认到「本手已结束」的次数，避免结算/开牌瞬间的瞬时状态被当成牌局结束。 */
+    private pendingExitSettledTicks:number = 0;
+    /** 本次预约是否已经给玩家弹过「本局打完后自动退出」提示，避免反复刷屏。 */
+    private pendingExitNotified:boolean = false;
+    /** 发退房协议前的房间号，服务端拒绝退房时用它把房间上下文还原。 */
+    private exitRoomIDBeforeLeave:string = "";
+    /** 上次退房被服务端拒绝的时间；被拒后要冷却，并且只在真正的局间再重试。 */
+    private leaveRejectedAt:number = 0;
     private queueReferenceRoomID:number = 0;
     private queueReturnLobbyAfterLeave:boolean = false;
     private queueRoomLeaveConfirmed:boolean = false;
@@ -147,6 +156,58 @@ export default class panelGameView extends UIPanelViewBase {
 
     onEnable(){
        // Debug.Error("进入enable")
+    }
+
+    // ---------------- 牌桌内消息提醒 ----------------
+
+    /** 直聊未读总数：牌桌左上「设置」按钮与「联系上级」入口共用同一个红点状态。 */
+    private directChatUnreadHandler:(total:number)=>void = null;
+    /** 牌桌内收到新消息时的提示音（沿用俱乐部申请提示音）。 */
+    private directChatMessageHandler:(event:any)=>void = null;
+
+    /**
+     * 大厅 panelMain 与牌桌 panelGameView 互斥，`showPanel(CloseOther)` 进桌时会把大厅面板
+     * 连同它挂在 DirectChatManager 上的监听一起销毁 —— 这就是「局内收不到消息提醒」的原因。
+     * 牌桌自己再挂一份未读/新消息监听，并确保长连接在线（离线/断线期间的消息靠进桌补拉摘要补红点）。
+     */
+    private SetupDirectChatNotice():void
+    {
+        if(this.directChatUnreadHandler != null)
+            return;
+        let manager = DirectChatManager.GetInstance();
+        this.directChatUnreadHandler = (total:number)=>{ this.RefreshDirectChatEntryDot(total); };
+        manager.On("unread",this.directChatUnreadHandler);
+        this.directChatMessageHandler = ()=>{ this.PlayAudio("eff/申请提示"); };
+        manager.On("realtimeMessage",this.directChatMessageHandler);
+        manager.StartRealtime();
+        this.RefreshDirectChatEntryDot(manager.UnreadTotal());
+        manager.LoadUnread().then((unread)=>{
+            if(cc.isValid(this.node))
+                this.RefreshDirectChatEntryDot(unread.total);
+        }).catch(()=>{});
+    }
+
+    /** 红点跟随直聊未读总数：读取消息后 DirectChatManager 会推 unread，这里自动收掉。 */
+    private RefreshDirectChatEntryDot(total:number):void
+    {
+        let show = Number(total || 0) > 0;
+        let configDot = Tool.GetChild(this.node,"RoomFrame/ConfigBT/红点");
+        if(configDot != null)
+            configDot.active = show;
+        let entryDot = Tool.GetChild(this.node,"ConfigMain/联系上级/红点");
+        if(entryDot != null)
+            entryDot.active = show;
+    }
+
+    onDestroy()
+    {
+        if(this.directChatUnreadHandler != null)
+            DirectChatManager.GetInstance().Off("unread",this.directChatUnreadHandler);
+        if(this.directChatMessageHandler != null)
+            DirectChatManager.GetInstance().Off("realtimeMessage",this.directChatMessageHandler);
+        this.directChatUnreadHandler = null;
+        this.directChatMessageHandler = null;
+        super.onDestroy();
     }
 
     /**
@@ -290,6 +351,7 @@ export default class panelGameView extends UIPanelViewBase {
         QueueMatchManager.getInstance().onRoomViewReady();
         this.OnQueueMatchStateChanged(QueueMatchManager.getInstance().getSnapshot());
         this.schedule(this.RefreshRoomInviteEntry, 1, cc.macro.REPEAT_FOREVER, 0.2);
+        this.SetupDirectChatNotice();
 
         this.node.on(cc.Node.EventType.TOUCH_END,(event:cc.Event.EventTouch)=>{
             this.OnPointDown(event);        
@@ -1030,9 +1092,10 @@ export default class panelGameView extends UIPanelViewBase {
         {
             this.RequestQueueMatchFromPopup();
         }
-        else if(button.node.name === "联系客服")
+        else if(button.node.name === "联系上级" || button.node.name === "联系客服")
         {
-            // 与大厅「客服」同一个消息页：可直接找直属代理/群主直聊回复。
+            // 原来是「联系客服」，2026-11-08 改名「联系上级」：入口本身仍是同一个消息页，
+            // 里头固定有直属代理/群主。旧名保留兼容，避免热更只更新脚本时按钮点不动。
             // 传「游戏内」让消息页改用半透明底，保持能看见牌桌进程。
             UIManager.getInstance().showPanel("panelMessage",ShowPanelMode.Cover,"",["游戏内"]);
         }
@@ -1931,8 +1994,33 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else
         {
-            WebSceneLoader.loadScene("login");
+            this.HandleLeaveRoomRejected();
         }
+    }
+
+    /**
+     * 退房被服务端拒绝（最常见是这一手还没结算完）。
+     * 不能切场景：切到大厅后服务端仍认为玩家在房间，下一次房间推送就把玩家拉回
+     * 牌桌，玩家看到的就是「退出去又被拉回来」。这里留在牌桌、恢复状态，并重新挂
+     * 预约，等本手真正结束再退。
+     */
+    private HandleLeaveRoomRejected():void
+    {
+        // 没有经过 DoExitRoom 的退房路径（排队/邀请）没有房间号快照，保持原行为。
+        if(this.exitRoomIDBeforeLeave === "")
+        {
+            WebSceneLoader.loadScene("login");
+            return;
+        }
+        UIManager.getInstance().closePanelByName("panelLoading");
+        let account = GameDataManager.getAccount();
+        if(account != null && (account.roomID === "" || account.roomID === "0"))
+            account.roomID = this.exitRoomIDBeforeLeave;
+        this.exitRoomIDBeforeLeave = "";
+        this.leaveRejectedAt = Date.now();
+        if(this.gameLogic != null)
+            this.gameLogic.ResetLeaveRoom();
+        this.ScheduleExitAfterRound(true);
     }
     onEnterRoom(nCode:number,nRoomID:number)
     {
@@ -3979,14 +4067,28 @@ export default class panelGameView extends UIPanelViewBase {
 
     private DoExitRoom():void
     {
+        // 兜底：任何路径都不允许在局中发退房协议。局中退房会被服务端拒绝，
+        // 玩家被重新拉回牌桌，看起来就是「退出去又被拉回来」。
+        if(this.IsSelfInRound())
+        {
+            this.ScheduleExitAfterRound(true);
+            return;
+        }
         // 已经真正退房，预约标记与等待中的延迟调用都不能再生效。
         this.pendingExitAfterRound = false;
+        this.pendingExitSettledTicks = 0;
+        this.pendingExitNotified = false;
+        this.leaveRejectedAt = 0;
         this.unschedule(this.PollPendingExit);
         this.unschedule(this.DoPendingExit);
         this.gameLogic.PrepareLeaveRoom();
-        GameDataManager.getAccount().roomID = "";
-        GameDataManager.getAccount().reqStopGame();
-        GameDataManager.getAccount().reqLeaveRoom();
+        let account = GameDataManager.getAccount();
+        // 服务端拒绝退房时要用它把房间上下文还原，否则客户端 roomID 已空，
+        // 后续房间推送会被当成别的房间丢弃，玩家就卡在半退出状态。
+        this.exitRoomIDBeforeLeave = account.roomID;
+        account.roomID = "";
+        account.reqStopGame();
+        account.reqLeaveRoom();
 
         UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
         MobileManager.getInstance().OnTalkingEvent("退出房间","退出房间");
@@ -3994,10 +4096,11 @@ export default class panelGameView extends UIPanelViewBase {
 
     /**
      * 「退出房间」入口：
-     * - 不在本手牌中：赢家先确认扣 30% 盈利，输家直接退。
-     * - 本手牌进行中：赢家先确认扣 30% 盈利，输家不确认；确认后只挂预约标记，
-     *   提示「当前牌局结束后，下手将退出房间」，等这一手结算完再发退房协议，
-     *   避免局中退房打断牌局。
+     * - 本手牌进行中（含自己已弃牌、正等别人结算）：赢家先确认扣 30% 盈利，输家不确认；
+     *   确认后只挂预约标记，提示「本局打完后自动退出」，等这一手结算完再发退房协议。
+     *   局中直接退房会被服务端拒绝并把玩家拉回牌桌，所以这里绝不允许立即退。
+     * - 当前不在本手牌里（刚结算完 / 还没发牌）：赢家仍先确认扣 30%，确认后走同一套
+     *   预约流程，退出前会再复查一次状态，撞上下一手开牌就继续等。
      */
     private RequestExitRoom():void
     {
@@ -4008,39 +4111,46 @@ export default class panelGameView extends UIPanelViewBase {
             return;
         }
 
-        if(!this.IsSelfInRound())
+        if(this.IsSelfInRound())
         {
-            this.ConfirmLeaveWhileWinning(()=>this.DoExitRoom());
+            if(this.IsSelfWinning())
+            {
+                // panelMsgView 传入函数即切双按钮版，确定回调 true、取消回调 false。
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                    "本局赢取金额将扣除约30%的费用，\n确认后本局打完后自动退出房间。",
+                    [(confirmed:boolean)=>{
+                        if(confirmed)
+                            this.ScheduleExitAfterRound(true);
+                    }]);
+                return;
+            }
+            this.ScheduleExitAfterRound(true);
             return;
         }
 
-        if(this.IsSelfWinning())
-        {
-            // panelMsgView 传入函数即切双按钮版，确定回调 true、取消回调 false。
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-                "赢家离开或站起将扣除30%盈利，\n是否继续？",
-                [(confirmed:boolean)=>{
-                    if(confirmed)
-                        this.ScheduleExitAfterRound();
-                }]);
-            return;
-        }
-
-        this.ScheduleExitAfterRound();
+        this.ConfirmLeaveWhileWinning(()=>this.ScheduleExitAfterRound(false));
     }
 
-    private ScheduleExitAfterRound():void
+    private ScheduleExitAfterRound(notify:boolean = true):void
     {
         this.pendingExitAfterRound = true;
+        this.pendingExitSettledTicks = 0;
         // PlayerList 不保证在「局间」推过来（自动准备时下一手可能已经开了），
         // 单靠消息触发的检查会一直等不到时机，这里加一路定时复查兜底。
         this.unschedule(this.PollPendingExit);
-        this.schedule(this.PollPendingExit,0.5);
-        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-            "当前牌局结束后，下手将退出房间。");
+        this.unschedule(this.DoPendingExit);
+        this.schedule(this.PollPendingExit,0.25);
+        if(notify && !this.pendingExitNotified)
+        {
+            this.pendingExitNotified = true;
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+                "本局打完后将自动退出房间。");
+        }
+        // 已经不在本手牌里时不用等一个轮询周期，立刻算一遍。
+        this.TryRunPendingExit();
     }
 
-    /** 本手牌是否还在进行中；局间准备、结算完、房间结束都算不在局中。 */
+    /** 本手牌是否还在进行中；局间准备、结算完成、房间结束都算不在局中。 */
     private IsSelfInRound():boolean
     {
         if(this.gameLogic == null || this.gameLogic.strGameState != "running")
@@ -4048,15 +4158,33 @@ export default class panelGameView extends UIPanelViewBase {
         if(!this.IsSelfActuallySeated())
             return false;
         // GameStatus=running 在整房进行期间可能跨多手持续存在，局间不一定翻回
-        // init/ready；自己已经进入本手结算就说明这一手已经打完了。
+        // init/ready；只能靠自己的服务端状态判断这一手有没有打完。
+        return !this.IsSelfRoundSettled();
+    }
+
+    /**
+     * 本人这一手是否已经结束、可以安全退房。任一层成立即算结束：
+     * ① 整手已进入结算比牌（gameLogic.bRoundSettled）—— 弃牌玩家状态会一直停在
+     *    「已经_弃牌_状态」，只靠状态字串判断永远等不到结束，必须靠这个信号；
+     * ② 自己已进入结算状态 —— 但「等待_结算_状态」「旁家_等待_结算_状态」也含
+     *    「结算」二字，人还在本手牌里（先弃牌、等别人打完），不能算结束。
+     * 之前只按 indexOf("结算") 判断，把等待结算当成了已结算，玩家局中退房
+     * 被服务端拒绝后又拉回牌桌，就是这个判错造成的。
+     */
+    private IsSelfRoundSettled():boolean
+    {
+        if(this.gameLogic == null)
+            return false;
         let selfPlayer = this.gameLogic.GetPlayerCtlByID(0);
+        let strState = "";
         if(selfPlayer != null && selfPlayer.info != null)
-        {
-            let strState = String(selfPlayer.info.strServerState || "");
-            if(strState.indexOf("结算") >= 0)
-                return false;
-        }
-        return true;
+            strState = String(selfPlayer.info.strServerState || "");
+        // 还在等结算：本手没结束。
+        if(strState.indexOf("等待") >= 0)
+            return false;
+        if(this.gameLogic.bRoundSettled)
+            return true;
+        return strState.indexOf("结算") >= 0;
     }
 
     /** 每次 PlayerList 刷新后调用：本手牌一结束就执行预约好的退房。 */
@@ -4065,7 +4193,7 @@ export default class panelGameView extends UIPanelViewBase {
         this.TryRunPendingExit();
     }
 
-    /** 预约期间每 0.5s 复查一次，避免错过短暂的局间窗口。 */
+    /** 预约期间定时复查，避免错过短暂的局间窗口。 */
     private PollPendingExit():void
     {
         this.TryRunPendingExit();
@@ -4075,28 +4203,46 @@ export default class panelGameView extends UIPanelViewBase {
     {
         if(!this.pendingExitAfterRound)
         {
+            this.pendingExitSettledTicks = 0;
             this.unschedule(this.PollPendingExit);
             return;
         }
         if(this.IsSelfInRound())
+        {
+            this.pendingExitSettledTicks = 0;
             return;
+        }
+        // 上一次退房被服务端拒绝：先冷却，并且只在房间真正进入局间（GameStatus 不是
+        // running）时才重试。否则会在「结算后、下一手开牌前」反复请求反复失败。
+        if(this.leaveRejectedAt > 0)
+        {
+            if(Date.now() - this.leaveRejectedAt < 3000)
+                return;
+            if(this.gameLogic != null && this.gameLogic.strGameState === "running")
+                return;
+        }
+        // 本人已经进入结算，是最硬的结束信号，当场就退；靠 GameStatus 翻成
+        // init/ready 判断局间时会有瞬时抖动，必须连续两次确认。
+        this.pendingExitSettledTicks = this.IsSelfRoundSettled() ? 2 : (this.pendingExitSettledTicks + 1);
+        if(this.pendingExitSettledTicks < 2)
+            return;
+
         this.pendingExitAfterRound = false;
+        this.pendingExitSettledTicks = 0;
         this.unschedule(this.PollPendingExit);
         this.unschedule(this.DoPendingExit);
         // 留一点时间让玩家看到这一手的结算结果，再走正常退房流程。
-        this.scheduleOnce(this.DoPendingExit,0.8);
+        this.scheduleOnce(this.DoPendingExit,0.6);
     }
 
     private DoPendingExit():void
     {
         if(!cc.isValid(this.node) || this.gameLogic == null || this.gameLogic.IsLeavingRoom())
             return;
-        // 等待期间下一手已经开始，继续挂起，等这手牌打完再退。
+        // 等待期间下一手已经开始，继续挂起，等这手牌打完再退（提示只弹一次）。
         if(this.IsSelfInRound())
         {
-            this.pendingExitAfterRound = true;
-            this.unschedule(this.PollPendingExit);
-            this.schedule(this.PollPendingExit,0.5);
+            this.ScheduleExitAfterRound(true);
             return;
         }
         this.DoExitRoom();
@@ -4115,7 +4261,7 @@ export default class panelGameView extends UIPanelViewBase {
         }
         // panelMsgView 传入函数即切双按钮版，确定回调 true、取消回调 false。
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-            "赢家离开或站起将扣除30%盈利，\n是否继续？",
+            "赢家离开或站起将扣除本局赢取金额的约30%，\n是否继续？",
             [(confirmed:boolean)=>{
                 if(confirmed)
                     action();

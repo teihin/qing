@@ -50,6 +50,10 @@ REQUIRED_SITE_FILES = {
 }
 PUBLIC_EXCLUDED_NAMES = {"Caddyfile.example"}
 PUBLIC_EXCLUDED_SUFFIXES = {".md"}
+# 网站内 APK 固定用 BF 命名；上传归档名以 site-config.json 的 androidApkUrl 为准。
+DEFAULT_APK_RELATIVE = "downloads/BF.apk"
+# 服务器上历史版本用过的旧名，仅用于读取已有 APK 哈希避免重复传输。
+REMOTE_LEGACY_APK_NAMES = ("downloads/BY.apk",)
 CACHE_BUST_LENGTH = 12
 
 
@@ -271,13 +275,15 @@ def read_remote_apk_sha256(
     port: int,
     user: str,
     identity_file: Path,
+    apk_relative: str = DEFAULT_APK_RELATIVE,
 ) -> str | None:
-    remote_apk = REMOTE_TARGET / "downloads" / "BY.apk"
-    command = (
-        "set -eu\n"
-        f"if [ -f {shlex.quote(str(remote_apk))} ]; then\n"
-        f"    sha256sum {shlex.quote(str(remote_apk))} | awk '{{print $1}}'\n"
+    candidates = [apk_relative, *REMOTE_LEGACY_APK_NAMES]
+    command = "set -eu\n" + "".join(
+        f"if [ -f {shlex.quote(str(REMOTE_TARGET / name))} ]; then\n"
+        f"    sha256sum {shlex.quote(str(REMOTE_TARGET / name))} | awk '{{print $1}}'\n"
+        "    exit 0\n"
         "fi\n"
+        for name in candidates
     )
     result = subprocess.run(
         [
@@ -314,6 +320,7 @@ def build_remote_deploy_script(
     apk_sha256: str,
     expected_file_count: int,
     apk_in_archive: bool,
+    apk_relative: str = DEFAULT_APK_RELATIVE,
 ) -> str:
     stage = REMOTE_PARENT / f".{remote_archive.stem}.staging"
     values = {
@@ -327,6 +334,8 @@ def build_remote_deploy_script(
         "config_sha256": config_sha256,
         "profile_sha256": profile_sha256,
         "apk_sha256": apk_sha256,
+        "apk_rel": apk_relative,
+        "apk_candidates": " ".join([apk_relative, *REMOTE_LEGACY_APK_NAMES]),
         "file_count": str(expected_file_count),
         "apk_in_archive": "1" if apk_in_archive else "0",
     }
@@ -374,12 +383,19 @@ unzip -q "$archive" -d "$stage"
 [ -f "$stage/site-config.json" ]
 [ -f "$stage/downloads/BF.mobileconfig" ]
 if [ "$apk_in_archive" = "1" ]; then
-    [ -f "$stage/downloads/BY.apk" ]
+    [ -f "$stage/$apk_rel" ]
 else
-    [ -f "$target/downloads/BY.apk" ]
-    [ "$(sha256sum "$target/downloads/BY.apk" | awk '{{print $1}}')" = "$apk_sha256" ]
+    apk_src=""
+    for rel in $apk_candidates; do
+        if [ -f "$target/$rel" ]; then
+            apk_src="$target/$rel"
+            break
+        fi
+    done
+    [ -n "$apk_src" ]
+    [ "$(sha256sum "$apk_src" | awk '{{print $1}}')" = "$apk_sha256" ]
     mkdir -p "$stage/downloads"
-    cp -- "$target/downloads/BY.apk" "$stage/downloads/BY.apk"
+    cp -- "$apk_src" "$stage/$apk_rel"
 fi
 
 find "$stage" -type d -exec chmod 755 {{}} +
@@ -394,7 +410,7 @@ actual_file_count=$(find "$stage" -type f | wc -l | tr -d ' ')
 [ "$(sha256sum "$stage/index.html" | awk '{{print $1}}')" = "$index_sha256" ]
 [ "$(sha256sum "$stage/site-config.json" | awk '{{print $1}}')" = "$config_sha256" ]
 [ "$(sha256sum "$stage/downloads/BF.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
-[ "$(sha256sum "$stage/downloads/BY.apk" | awk '{{print $1}}')" = "$apk_sha256" ]
+[ "$(sha256sum "$stage/$apk_rel" | awk '{{print $1}}')" = "$apk_sha256" ]
 
 if [ -e "$target" ] && [ ! -d "$target" ]; then
     echo "目标路径存在但不是目录: $target" >&2
@@ -413,7 +429,7 @@ deployed_file_count=$(find "$target" -type f | wc -l | tr -d ' ')
 [ "$(sha256sum "$target/index.html" | awk '{{print $1}}')" = "$index_sha256" ]
 [ "$(sha256sum "$target/site-config.json" | awk '{{print $1}}')" = "$config_sha256" ]
 [ "$(sha256sum "$target/downloads/BF.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
-[ "$(sha256sum "$target/downloads/BY.apk" | awk '{{print $1}}')" = "$apk_sha256" ]
+[ "$(sha256sum "$target/$apk_rel" | awk '{{print $1}}')" = "$apk_sha256" ]
 
 rm -f -- "$archive"
 trap - EXIT HUP INT TERM
@@ -450,7 +466,9 @@ def main() -> int:
     apk_in_archive = True
     if not args.dry_run:
         print("\n[预检] 比较本地与服务器APK版本...", flush=True)
-        remote_apk_sha256 = read_remote_apk_sha256(host, port, user, identity_file)
+        remote_apk_sha256 = read_remote_apk_sha256(
+            host, port, user, identity_file, apk_relative
+        )
         apk_in_archive = remote_apk_sha256 != apk_sha256
     if apk_in_archive:
         entries.append(ArchiveEntry(apk_path, apk_relative))
@@ -542,6 +560,7 @@ def main() -> int:
             apk_sha256,
             final_file_count,
             apk_in_archive=apk_in_archive,
+            apk_relative=apk_relative,
         )
         deploy = subprocess.run(
             [

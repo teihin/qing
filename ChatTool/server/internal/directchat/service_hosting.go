@@ -449,6 +449,52 @@ func (s *Service) SendHostedMessage(ctx context.Context, hostedGuuid, conversati
 	return view, duplicate, recipient, clubID, nil
 }
 
+// SendHostedImage 以托管账号身份发送图片。走与游戏端相同的附件链路：
+// 先建附件、再上传落盘、最后绑定成消息，格式与尺寸由服务端重新识别，
+// 不采信客服端自报的类型和大小。
+func (s *Service) SendHostedImage(ctx context.Context, hostedGuuid, conversationID string, data []byte) (MessageView, string, string, error) {
+	record, err := s.requireHostedEnabled(ctx, hostedGuuid)
+	if err != nil {
+		return MessageView{}, "", "", err
+	}
+	if len(data) == 0 {
+		return MessageView{}, "", "", errMediaIncomplete
+	}
+	if int64(len(data)) > MaxImageBytes {
+		return MessageView{}, "", "", errMediaTooLarge
+	}
+	info, err := SniffImage(data)
+	if err != nil {
+		return MessageView{}, "", "", invalidMedia(err.Error())
+	}
+	session := s.hostedSession(ctx, record.Guuid)
+	recipient, clubID, err := s.RealtimeTarget(ctx, session, conversationID)
+	if err != nil {
+		return MessageView{}, "", "", err
+	}
+	ticket, err := s.CreateAttachment(ctx, session, conversationID, AttachmentRequest{
+		Type: MessageImage, MimeType: info.MimeType, ByteSize: int64(len(data)),
+		Width: info.Width, Height: info.Height,
+	})
+	if err != nil {
+		return MessageView{}, "", "", err
+	}
+	if _, err := s.UploadImage(ctx, session, conversationID, ticket.AttachmentID, data); err != nil {
+		return MessageView{}, "", "", err
+	}
+	clientID, err := NewID()
+	if err != nil {
+		return MessageView{}, "", "", err
+	}
+	view, _, err := s.SendMessage(ctx, session, conversationID, SendRequest{
+		MessageType: MessageImage, AttachmentID: ticket.AttachmentID, ClientMessageID: clientID,
+	})
+	if err != nil {
+		return MessageView{}, "", "", err
+	}
+	return view, recipient, clubID, nil
+}
+
 // ---------------- 内部工具 ----------------
 
 func (s *Service) hostingStore() (HostingStore, error) {

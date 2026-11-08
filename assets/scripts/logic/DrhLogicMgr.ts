@@ -51,6 +51,15 @@ export default class DrhLogicMgr extends cc.Component {
     public strStartTime = ""; //开始时间
     public strEndTime = ""; //结束时间
     public bShowOverAnimate = false;  //结算动画进行中
+    /**
+     * 本手是否已经打完（进入结算比牌阶段）。
+     * GameStatus 可能整场都是 running、局间不翻回 init/ready，退出房间等功能
+     * 需要一个「这一手确实结束了」的确定信号，不能只看自己的服务端状态：
+     * 弃牌玩家会一直停在「已经_弃牌_状态」。
+     * 由结算流程 StartGameCompare 置 true，新一手开始（StartGame / round_count 递增）置 false。
+     */
+    public bRoundSettled = false;
+    private nLastRoundCount = 0;
     public strLastDelayMsg = "";  //动画过程中延迟的消息
     /** 上一局结束后收起桌面牌的倒计时序号；每次排/取消都自增，旧回调自动作废。 */
     private roundCardsHideSerial = 0;
@@ -201,6 +210,23 @@ export default class DrhLogicMgr extends cc.Component {
     public IsLeavingRoom():boolean
     {
         return this.bLeavingRoom;
+    }
+
+    /**
+     * 退房回包失败（服务端拒绝，例如这一手还没结算完）时恢复牌桌。
+     * 不恢复的话客户端会停在大厅、服务端却仍认为玩家在房间，
+     * 下一次房间状态推送就把玩家拉回牌桌 —— 也就是「退出去又被拉回来」。
+     */
+    public ResetLeaveRoom()
+    {
+        if(!this.bLeavingRoom)
+            return;
+        this.bLeavingRoom = false;
+        this.InvalidateRoomCountdown();
+        this.RequestBettingSpotlightRefresh();
+        const account = GameDataManager.getAccount();
+        if (account != null && account.roomID && account.roomID !== "0" && typeof account.reqPlayerList === "function")
+            account.reqPlayerList();
     }
 
     public PrepareLeaveRoom()
@@ -969,6 +995,14 @@ export default class DrhLogicMgr extends cc.Component {
 
         this.game_round = data["game_round"].toString();
         this.round_count = data["round_count"].toString();
+        // 局号变大说明已经开新的一手，上一手的结算标记必须复位，
+        // 否则预约退房 / 站起等判定会把这个新开的牌局当成本手已打完。
+        const nRoundNow = Number(this.round_count);
+        if(isFinite(nRoundNow) && nRoundNow > this.nLastRoundCount)
+        {
+            this.nLastRoundCount = nRoundNow;
+            this.bRoundSettled = false;
+        }
 
         
         this.playingView.setRoomInfo();
@@ -1135,6 +1169,8 @@ export default class DrhLogicMgr extends cc.Component {
    {
        //进入游戏标记打开
        this.bIsGamePlaying = true;
+       //新的一手开始，上一手的结算标记复位
+       this.bRoundSettled = false;
        this.bettingSpotlightCardsDealt = false;
        this.bettingSpotlightActionPlayer = null;
        this.HideBettingSpotlight(true);
@@ -1210,6 +1246,8 @@ export default class DrhLogicMgr extends cc.Component {
     //开始游戏结算前比牌
     public StartGameCompare(strOverType:string)
     {
+        // 走到比牌就是这一手打完了（所有人都已结算），退出房间等功能据此判断本手结束。
+        this.bRoundSettled = true;
         let strUserID = GameDataManager.getAccount().guuid;
         //显示结束看牌相关按钮
         

@@ -1851,26 +1851,35 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         this.Text("总红利值", this.FenText(item.totalBonusFen), row);
     }
 
-    /** 行内按钮：查看资料卡 / 跳到代理链 / 看战绩 / 添加到分组。行是运行时克隆的，用 BindTap 自己挂。 */
+    /**
+     * 行内按钮：查看资料卡 / 跳到代理链 / 看战绩 / 添加到分组。行是运行时克隆的，用 BindTap 自己挂。
+     *
+     * 「查看」和「代理链」都是俱乐部域内的查询（`查询_俱乐部_成员` / `查询_俱乐部_成员_代理链路`
+     * 必带 club_id）。玩家不在任何俱乐部时行数据里的 `club_id` 就是空串，之前这里用
+     * `userClubId || roomClubId` 兜底，等于拿 boss 自己所在俱乐部的 ID 去查一个根本不在里面的人，
+     * 服务端必然查不到（2026-11-08 q1 / 166258 即此因）。现在没有俱乐部就直接藏掉这两个入口；
+     * 「战绩」按玩家 ID 查、不依赖俱乐部，保留。
+     */
     private BindListRowButtons(row:cc.Node, item:BossListRow, clubId:string):void {
         const id = item.id;
+        const hasClub = id !== "" && clubId !== "";
         // 分组直接取接口带下来的字段；没下发（老服务端）就两块都收起。
         this.ApplyRowGroup(row, item);
 
         const viewBtn = row.getChildByName("查看");
         if(viewBtn != null) {
-            viewBtn.active = id !== "";
-            if(viewBtn.active) {
+            viewBtn.active = hasClub;
+            if(hasClub) {
                 this.BindTap(viewBtn, ()=>{
-                    panelClubPlayerInfo.Open(id, clubId || this.userClubId || this.roomClubId, item.name);
+                    panelClubPlayerInfo.Open(id, clubId, item.name);
                 });
             }
         }
 
         const chainBtn = row.getChildByName("代理链");
         if(chainBtn != null) {
-            chainBtn.active = id !== "";
-            if(chainBtn.active) {
+            chainBtn.active = hasClub;
+            if(hasClub) {
                 this.BindTap(chainBtn, ()=>{
                     this.ShowTab("chain", false);
                     this.ApplyTarget(id, item.name);

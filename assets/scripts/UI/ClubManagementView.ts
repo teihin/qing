@@ -131,6 +131,12 @@ export default class ClubManagementView {
     private allyPercentOverrides:{[clubId:string]:number} = {};
     /** 文档 4.11：note 上限 30 字（按字符计），服务端超长直接报错、不截断。 */
     private static readonly NOTE_MAX:number = 30;
+    /**
+     * BOSS 专用的「当前IP / 最后登录」两行是否可见。
+     * 数据来自 查询_玩家_扩展_信息（仅 boss/bigboss 放行），由 panelClubPlayerInfo 查询后写入；
+     * 俱乐部内部的玩家设置卡永不开这两行，所以默认 false。
+     */
+    private extInfoVisible:boolean = false;
     private readonly pageSize:number = 20;
     /** 与 Prefab 中「玩家设置下级列表」一屏可放的行数一致。 */
     private readonly downlinePageSize:number = 4;
@@ -1309,6 +1315,9 @@ export default class ClubManagementView {
             ["暗扣底","暗扣","暗扣值","玩家设置调整暗扣"],
             ["开通额度底","开通额度","玩家设置开通额度"],
             ["额度底","额度","额度值","玩家设置增加额度","玩家设置减少额度"],
+            // BOSS 专用：IP / 最后登录时间，排在所有成员设置行之后。
+            ["玩家IP底","玩家IP","玩家IP值"],
+            ["最后登录底","最后登录","最后登录值"],
         ];
         let y = 120;
         for(const row of rows) {
@@ -1320,6 +1329,25 @@ export default class ClubManagementView {
             }
             y -= 120;
         }
+    }
+    /**
+     * BOSS 视角的扩展信息（当前IP / 最后登录时间）。
+     * 数据由 查询_玩家_扩展_信息 单独取，这里只负责落地与显隐；非 BOSS 入口永远 visible=false。
+     */
+    public SetPlayerExtInfo(ip:string,lastLogin:string,visible:boolean):void {
+        this.extInfoVisible = !!visible;
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(!panel) return;
+        this.text("玩家IP值",visible ? (ip || "—") : "",panel);
+        this.text("最后登录值",visible ? (lastLogin || "—") : "",panel);
+        this.syncExtRows(panel);
+        this.layoutMemberSettingRows();
+    }
+    /** 两行只在「成员设置」页签显示，且要跟其它行一起重排，避免留下空档。 */
+    private syncExtRows(panel:cc.Node):void {
+        const show = this.extInfoVisible && this.settingsTab === "member";
+        for(const name of ["玩家IP底","玩家IP","玩家IP值","最后登录底","最后登录","最后登录值"])
+            this.active(name,show,panel);
     }
     /**
      * 盟主行：收起代理比例、开通代理和赠送，改为显示独立的「盟主比例」行，
@@ -1668,6 +1696,8 @@ export default class ClubManagementView {
         const panel = this.at("面板",modal);
         if(!modal || !panel) { this.message("玩家设置面板暂未加载");return; }
         this.selectedPlayer = item;
+        // 换人先收起 BOSS 扩展行，等 panelClubPlayerInfo 查到结果再点亮，避免串到上一个玩家。
+        this.extInfoVisible = false;
         this.settingsDepth = Math.max(0,Math.floor(depth) || 0);
         const readOnly = this.readOnlyPlayer();
         this.selectedDownline = [];
@@ -1787,6 +1817,8 @@ export default class ClubManagementView {
         this.syncUnionLeaderActions();
         // 暗扣只有成员页签、非普通玩家目标且操作者够权限时才显示。
         this.syncDarkRow();
+        // BOSS 的 IP / 最后登录两行跟着成员页签走（extInfoVisible 由查询结果决定）。
+        this.syncExtRows(panel);
         // 所有显隐都确定后再统一排位，隐藏行不占空位。
         this.layoutMemberSettingRows();
         this.active("玩家设置下级列表",downline,panel);

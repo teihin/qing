@@ -32,6 +32,7 @@
 - `GET /api/agent/quick-replies`；`POST /api/agent/quick-replies`（`{title,content,category}`）、`PUT/DELETE /api/agent/quick-replies/{id}`：全团队共享的常用话术，托管会话与普通客服会话共用；托管页点击话术直接发送，普通会话点击填入输入框。
 - 主管：`GET/POST /api/agent/team`、`PUT /api/agent/team/{id}`；创建/更新客服包含 `channelCode`。
 - 聊天托管：`GET /api/agent/hosted/groups`、`GET /api/agent/hosted/conversations`、`GET/POST /api/agent/hosted/conversations/{id}/messages`、`GET .../balance`、`POST .../gold`。取消托管只把记录置为停用并保留历史，群组项带 `enabled`；停用账号只能只读，代发/上下分返回不可用。
+- `POST /api/agent/hosted/conversations/{id}/uploads?guuid=<托管账号>`：客服代发图片，`multipart/form-data` 的 `file` 字段，仅 JPEG/PNG/WebP、单张 ≤10MB、边长 ≤4096。服务端按文件头重新识别格式与尺寸，走直聊附件链路（建附件→落盘→绑定消息），落库后以托管账号身份发出，返回 `{message}`，与 `.../messages` 的 `message` 结构一致。
 - 托管列表三级都带置顶：分组项（`GET /hosted/groups` 的 `items[].pinned`/`pinnedAt`，一级联盟/俱乐部）、托管账号项（`items[].items[].pinned`/`pinnedAt`，二级盟主/群主）、会话项（`pinned`/`pinnedAt`）。置顶对象固定排最前；全团队共享，存在 `chat_direct_player_remark` / `chat_direct_hosted_pin_target`（`target_type` = `group`/`owner`/`conversation`）。
 - `PUT /api/agent/hosted/conversations/{id}/remark`：请求 `{guuid,remark}`，备注按玩家（会话对方）保存，留空即清除，最长 20 字；返回 `{remark,peerGuuid}`。工作台显示口径为「原名（备注）」，原名始终保留。
 - `POST /api/agent/hosted/pin`：统一置顶入口，请求 `{type,id,guuid,pinned}`；`type` 取 `group`（`id` 为 `club:<id>` / `union:<id>`）、`owner`（`id` 为托管账号 guuid）、`conversation`（`id` 为会话 ID，`guuid` 为托管账号用于归属校验）。返回 `{pinned,peerGuuid}`。

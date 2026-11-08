@@ -5,7 +5,7 @@
     siteName: "BF 官方下载",
     gameName: "BF",
     versionText: "官方最新版",
-    androidApkUrl: "./downloads/BY.apk",
+    androidApkUrl: "./downloads/BF.apk",
     iosProfileUrl: "./downloads/BF.mobileconfig",
     iosGameUrl: "https://154-37-155-17.sslip.io/"
   });

@@ -20,7 +20,7 @@ WebHome/
 ├── assets/
 ├── downloads/
 │   ├── BF.mobileconfig
-│   └── BY.apk              # 上传时由app/release唯一APK映射，不需手工复制
+│   └── BF.apk              # 上传时由app/release唯一APK映射，不需手工复制
 └── scripts/generate_mobileconfig.py
 ```
 

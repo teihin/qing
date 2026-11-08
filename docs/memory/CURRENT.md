@@ -1,8 +1,36 @@
 # qing 当前状态
 
-更新时间：2026-11-07
+更新时间：2026-11-08
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-08 数据统计列表：无俱乐部玩家隐藏「查看 / 代理链」（未构建、待真机）
+
+- 现象：玩家列表点 q1（166258）的「查看」服务端查不到人。根因 `BindListRowButtons` 用 `clubId || this.userClubId || this.roomClubId` 兜底：玩家不在任何俱乐部（行 `club_id` 空、界面「俱乐部」显示「—」）时拿 boss 自己俱乐部的 ID 去查别人，服务端按该俱乐部找成员必然落空。
+- 修法：`hasClub = id !== "" && clubId !== ""`，没有俱乐部就隐藏「查看」「代理链」（两者都是俱乐部域查询），不再兜底；「战绩」走 `查询_玩家_所有的牌局_信息`（只认 user_id），保留。
+- 只改 `panelBossPlayerInfo.ts`（transpile 0 诊断），构建/真机待验；「添加到分组」未动，无俱乐部玩家点它有同样风险。
+
+## 2026-11-08 玩家信息弹窗：BOSS 增加「当前IP / 最后登录」（未构建、服务端待重启联调）
+
+- `panelClubPlayerInfo.prefab`（`俱乐部玩家设置弹窗/面板`）新增 `玩家IP底/玩家IP/玩家IP值`、`最后登录底/最后登录/最后登录值` 两行，结构照抄「备注」行、默认隐藏；值框 280 宽（与「备注值」左端对齐），22 号字实测不溢出。
+- `ClubManagementView`：`layoutMemberSettingRows` 追加这两组自动堆叠到底；新增 `SetPlayerExtInfo(ip,lastLogin,visible)` + `syncExtRows()`，只随「成员设置」页签显示，`openPlayerSettings` 换人时先收起。
+- `panelClubPlayerInfo`：仅 `IsBossAccount()` 才发 `查询_玩家_扩展_信息`，独立 context `playerext:`（`onHallCommand` 先于 loading 拦截），回包填 `ip` / `last_login_time`；失败或 8s 无回包显示「—」。
+- 大厅 `panelMain` 那份玩家设置卡不发请求、不显示（未加节点即有意）；非 BOSS 入口同样看不到。
+- 接口见[玩家扩展信息查询](../../服务器文档整理/玩家扩展信息查询-客户端接口文档.md)：权限 boss/bigboss 名单，2026-11-08 已上传测试服但**待重启 baseapp**；Web 端 IP 会是 `127.0.0.1`（网关未透传 XFF）。transpile 0 诊断、Creator 已导入；构建/真机/真实回包待验。详见[交接](handoffs/2026-11-08-player-info-ext-ip-lastlogin.md)。
+
+## 2026-11-08 牌桌「联系上级」改名 + 局内消息红点/提示音（未构建、未真机）
+
+- `ConfigMain/联系客服` → `联系上级`（Scene 与 prefab 同名改，fileId 一致）；脚本分支认新旧名，点击仍开 `panelMessage`。
+- `assets/V7/ingame_menu_v8_service.png` 只重绘文字带，底板/耳机图标保留原像素；尺寸、alpha、`.meta` 未变，48,152B < 原 52,891B。图标仍是耳机，要换人物图标需另出图。
+- 局内收不到提醒的根因：进桌 `showPanel(CloseOther)` 销毁 `panelMain`，直聊 `unread`/`realtimeMessage` 监听随之注销。牌桌 `onLoad` 自己挂一份（`SetupDirectChatNotice`），`onDestroy` 注销；新消息播 `eff/申请提示`，未读驱动 `RoomFrame/ConfigBT/红点` + `ConfigMain/联系上级/红点`（新增 Label「●」，默认隐藏，读后自动收）。
+- 定向 tsc 0 诊断、Creator 已导入；构建/真机/真实消息联调待验。详见[交接](handoffs/2026-11-08-ingame-message-notice-and-contact-superior.md)。
+
+## 2026-11-08 退出房间：局中不再误退（未构建、未真机）
+
+- 现象：局中点「退出房间」有时直接退、随后被拉回。根因是 `IsSelfInRound()` 用 `indexOf("结算")` 判本手结束，而 `等待_结算_状态`/`旁家_等待_结算_状态` 也含「结算」，弃牌等结算的玩家被当成已结算，退房协议被服务端拒绝后送回牌桌。
+- 修法：新增 `IsSelfRoundSettled()`（含「等待」一律算本手未结束；另认 `DrhLogicMgr.bRoundSettled`——比牌开始置 true，`StartGame`/`round_count` 递增置 false，覆盖弃牌玩家状态不变的情况）。退房只在确认本手结束后发出，`DoExitRoom()` 再兜一次，连续两次确认才退。
+- 退房回包失败不再切场景：`HandleLeaveRoomRejected()` 还原房间号 + `ResetLeaveRoom()` 撤销冻结并重拉 PlayerList，留在牌桌继续预约；被拒后 3s 冷却且只在 GameStatus 非 running 时重试。
+- 只改 `panelGameView.ts`/`DrhLogicMgr.ts`，transpile 0 诊断；Creator、构建、真机、服务端在 running 时是否接受退房均待验。
 
 ## 2026-11-07 数据统计：新增「玩家列表 / 代理列表」页签（未构建、未联调）
 
@@ -21,11 +49,9 @@
 
 - 输赢改 `score_percent`（0~100，只调少）、贡献改 `contrib_add`（分，只调增），两项各自继承；`show_percent` 只留红利/抽水/业绩；清空用 `-1`，发 `100` 会阻断继承。后台 Go/Web 已同步（弹窗两个输入、列表输赢 % + 贡献 +¥），go test/tsc/vite build 通过；未部署、未联调。接口文档已更新。
 
-## 2026-11-07 后台代理贡献管理：暗抽比例列 + 调整入口（已部署）
+## 2026-11-07 后台代理贡献管理：暗抽比例列 + 调整入口（已部署，已归档）
 
-- 游戏服 `异步_查询_代理_展示数据` 新增顶层 `bonus_dark_percent`（该代理自己的红利暗抽，0~100，不参与 `show_percent` 缩放），成员行也带同名行级值；后台透传为 `bonusDarkPercent`。
-- 列表在「贡献」组后新增「暗抽比例」列，操作列在「展示调整」后新增「暗抽比例调整」（弹窗读当前值→保存/设为 0%）；新增 `GET/PUT .../agents/{agentId}/bonus-dark`，底层命令 `设置_俱乐部_代理_红利暗抽`（不传比例=只读回显，写入 `club_agent_info.bonus_dark_percent`）。
-- 19:07 部署二进制 `d8f6677b…` + 前端 `index-Dk2KU1jc.js`/`index-D9kgAfEm.css`（回滚 `backups/xuanmanager.20261107-1907-rollback`、`web.previous-bonus-dark-20261107-1907`）；health 200、新路由未登录 401。真实保存与目视待验，详见[交接](handoffs/2026-11-07-agent-bonus-dark-percent.md)。
+- 原文见[归档](archive/2026-11-08/current-nov07-agent-bonus-dark.md)。
 
 ## 2026-11-07 局末人数不足时收起桌面牌（未构建、待真机）
 
@@ -60,16 +86,13 @@
 - 游戏服 `查询_俱乐部_成员_总分` 的同步回包是空对象（数据只推玩家端 `AllPlayerGold`），后台拿不到；改为聚合 `tbl_Account.sm_club_gold/sm_club_gold2` 的 `{"俱乐部ID": 积分}` 映射，mode 2/3 优先 `*_2` 列，`-99` 不计入。
 - 部署 19:14：二进制 `e9fd5d74…` + 前端 `index-6HAkVMKQ.js`（CSS 未变），回滚 `bin/xuanmanager.previous-clubtotalgold-20261106`、`web.previous-clubtotalgold-20261106`；health 200、未登录 clubs 接口 401。真实登录态目视待验。详见[交接](handoffs/2026-11-06-admin-club-total-gold.md)。
 
-## 2026-11-06 聊天托管：备注 / 置顶 / 快捷话术 / 删除单条会话（已部署）
+## 2026-11-06 聊天托管：备注 / 置顶 / 快捷话术 / 删除单条会话（已部署、已归档）
 
-- 「聊天托管」四项上线：玩家备注名（全团队共享，显示「原名（备注）」，原名保留）、三级置顶（俱乐部/联盟、盟主/群主、会话）、快捷话术一键以托管账号发送、永久删除单条会话。
-- 部署 19:19 服务端 `c7f6cd15…` + 前端 19:32 `index-BSPwxQGC.js`：migration 011+012 已执行，health 200，7 条新路由未登录均 401，回滚 `*.previous-pins3-20261106-191813` / `web.previous-pinconv-20261106-193223`。三级「置顶」按钮统一在每行右侧（分组/账号/会话），同版修：已取消徽标改实心橙底、话术按钮不再随只读会话置灰、工具栏按钮不被压窄。真实账号交互与玩家端表现待验，详见[交接](handoffs/2026-11-06-hosted-chat-prefs.md)。
+- 四项已上线并部署（服务端 `c7f6cd15…` + 前端 `index-BSPwxQGC.js`），真实账号交互待验，原文见[归档](archive/2026-11-08/current-nov06-hosted-chat.md)。
 
-## 2026-11-06 赢家留座限时 + 局中预约退房（未构建、未真机）
+## 2026-11-06 赢家留座限时（退房部分已归档）
 
-- 「留座离桌」：局中未结算判不出输赢，一律弹「限时3分钟、超时按逃跑结算」；局间只给赢家弹，输家直接留座。倒计时读服务端 `site_countdown`。
-- 「退出房间」不再拦「已经开局不能退出」：赢家先确认「离开或站起扣30%盈利」，确认后与输家一样提示「当前牌局结束后，下手将退出房间」，只挂预约标记，本手结算完自动退房；不在局中则直接退。
-- 只改 `panelGameView.ts`；**3 分钟时长、超时逃跑结算、局间允许退房三项需服务端实现**。tsc 无新增诊断，Creator/真机待验。详见[交接](handoffs/2026-11-06-win-seat-limit-exit.md)。
+- 「留座离桌」：局中未结算判不出输赢，一律弹「限时3分钟、超时按逃跑结算」；局间只给赢家弹，输家直接留座。倒计时读服务端 `site_countdown`。局中预约退房原文见[归档](archive/2026-11-08/current-nov06-win-seat-exit.md)，3 分钟时长与超时逃跑结算仍待服务端实现。
 
 ## 2026-11-06 私聊详情 V2 + 单方清除聊天（服务端已部署，客户端未构建）
 
@@ -80,36 +103,9 @@
 
 - 原文见[归档](archive/2026-11-07/current-nov06-kefu-admin.md)。
 
-## 2026-11-05 消息列表置顶官方客服 BF（未构建、未真机）
+## 2026-11-05 消息列表 / 牌桌客服 / 代理贡献（已归档）
 
-- 「全部会话」固定置顶「官方客服 BF」，头像用 `shield_room_exact`；点击进入游戏内直聊，复用 `/chattool/api/player/*`，支持文字和拍照/发图；后台「我的会话」改名「客服消息」。
-- 客服不在线也可先留言：文字/图片入库排队，客服登录/上线后自动接入；客户端只禁用已结束会话。
-- 客服工作台取消上下线和「立即接入」：登录即在线，点开有消息的待接入会话自动接入；「聊天托管」改为 V8 胶囊开关，会话行间距 16。
-- 官方联盟 hash 方案未落地、不再引入。已部署服务端 `7db76dcb…` 等四版二进制与客服站 `index-Dh-vyT3v.js`，回滚点见服务器备份。
-- Prefab/定向 tsc/Go test 通过；Creator 导入、真机、真实排队/回复/图片联调待验证。详见[交接](handoffs/2026-11-05-official-kefu-entry.md)。
-
-## 2026-11-05 牌桌客服改开消息页 + 半透明（未构建、未真机）
-
-- 牌桌「联系客服」不再打开网页客服 `panelKefu`，改为以 `Cover` 打开大厅同一个 `panelMessage`（含直属代理/群主固定入口），并透传「游戏内」：隐藏实心背景、显示 0.47 深色遮罩与左上返回，标题居中；进入会话时隐藏列表只保留一层，关闭会话回到列表，可正常发送/回复。
-- `panelMessage`/`panelMessageChat` Prefab 各加默认隐藏的「游戏内遮罩」，列表页另加默认隐藏「返回」；大厅分页与后台进入会话的外观不变。详见[交接](handoffs/2026-11-05-ingame-message-overlay.md)。
-- Prefab JSON/引用检查与定向 tsc 通过；Creator 导入、网页/真机实际点击与真实会话待验证。
-
-## 2026-11-05 代理贡献管理（后台已部署）
-
-- 后台「代理贡献管理」联盟→俱乐部→代理/玩家逐层展开，真实值与展示值分列，展示值走 `异步_查询_代理_展示数据`；部署与回滚记录见[交接](handoffs/2026-11-05-agent-contributions.md)。
-- 当时的 `show_percent` 单口径已被 2026-11-07 拆两项取代；客户端 `*` 模拟标记仍缺字段，Creator/真机待验。
-
-## 2026-11-05 搓牌 / 玩家设置代理暗扣比例（未构建、未真机，已归档）
-
-- 原文与交接链接见[归档](archive/2026-11-07/current-nov05-client-items.md)。
-
-## 2026-11-05 聊天托管（服务端/客服站已部署，客户端未构建，已归档）
-
-- 原文见[归档](archive/2026-11-07/current-nov05-chat-hosting.md)；后续进展见 `2026-11-06` 两条托管条目。
-
-## 2026-11-05 角色称谓统一 / 玩家信息弹窗换装（未构建、已归档）
-
-- 角色称谓统一（大盟主/盟主/合伙人/群主）与玩家信息弹窗页签换装、额度记录：原文见[归档](archive/2026-11-07/current-nov05-roles-and-playerinfo.md)；交接见 [role-naming](handoffs/2026-11-05-role-naming.md)、[player-record-tabs](handoffs/2026-11-05-player-record-tabs.md)。
+- 「全部会话」置顶官方客服 BF、客服离线留言排队、客服站登录即在线、牌桌「联系客服」改开半透明 `panelMessage`、后台代理贡献逐层展开：原文见[归档](archive/2026-11-08/current-nov05-kefu-and-agent.md)；交接见 [official-kefu-entry](handoffs/2026-11-05-official-kefu-entry.md)、[ingame-message-overlay](handoffs/2026-11-05-ingame-message-overlay.md)、[agent-contributions](handoffs/2026-11-05-agent-contributions.md)。
 
 ## 2026-11-04 消息列表 / 盟友管理 / 游戏设置 / 房间奖池（已归档）
 

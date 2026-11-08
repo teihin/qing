@@ -700,7 +700,15 @@ textarea { resize: none; }
 .hosted-quick-toggle, .hosted-quick-manage { padding: 4px 10px !important; color: #2f6a5c !important; border: 1px solid #cfe3db !important; border-radius: 12px; background: #f2faf6 !important; font-size: 13px !important; }
 .hosted-quick-manage { color: #5b6f6a !important; border-color: #dde7e4 !important; background: #f7fafa !important; }
 .hosted-quick-toggle:disabled, .hosted-quick-manage:disabled { opacity: .45; }
-.hosted-quick-replies { bottom: 200px; }
+/* 托管代发图片：样式与快捷回复按钮对齐，文件选择框沿用 .composer-tools input 的隐藏规则。 */
+.hosted-image-send { flex: 0 0 auto; padding: 4px 12px !important; color: #2f6a5c !important; border: 1px solid #cfe3db !important; border-radius: 12px; background: #f2faf6 !important; font-size: 13px !important; white-space: nowrap; cursor: pointer; }
+.hosted-image-send:hover { background: #e4f6ee !important; }
+.hosted-image-send.disabled { opacity: .45; cursor: not-allowed; }
+/* 托管工具栏按钮偏多（上分/下分/积分/快捷回复/管理话术/图片），窄屏允许换行，
+   避免右侧按钮被容器裁掉点不到。 */
+.hosted-composer .composer-tools { height: auto; min-height: 48px; flex-wrap: wrap; row-gap: 6px; padding-top: 6px; padding-bottom: 6px; }
+.hosted-composer .composer-tools small { flex: 1 1 200px; }
+.hosted-quick-replies { bottom: calc(100% + 6px); }
 .quick-replies header .quick-reply-tip { margin: 0 auto 0 10px; color: #8ba09b; font-size: 11px; }
 .quick-replies header .quick-reply-manage { color: #2f6a5c; font-size: 12px; }
 .quick-replies > button:disabled { opacity: .5; cursor: not-allowed; }

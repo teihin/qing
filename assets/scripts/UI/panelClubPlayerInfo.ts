@@ -44,6 +44,10 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
     private userId:string = "";
     private clubId:string = "";
     private requestContext:string = "";
+    /** BOSS 扩展信息（IP / 最后登录）请求的 context，可为空表示没有在查。 */
+    private extContext:string = "";
+    private extTimer:any = null;
+    private static extSerial:number = 0;
     private loading:boolean = false;
     private timeoutTimer:any = null;
     private view:ClubManagementView = null;
@@ -100,6 +104,10 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
         if(this.timeoutTimer != null) {
             clearTimeout(this.timeoutTimer);
             this.timeoutTimer = null;
+        }
+        if(this.extTimer != null) {
+            clearTimeout(this.extTimer);
+            this.extTimer = null;
         }
         if(this.api)
             KBEngine.Event.deregisterAll(this.api);
@@ -215,9 +223,14 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
     }
 
     public onHallCommand(nCode:number, param:string):void {
+        const text = param == null ? "" : String(param);
+        // 扩展信息用独立 context 且回包常晚于成员详情，必须在 loading 判断之前拦下来。
+        if(this.extContext !== "" && text.indexOf(this.extContext) >= 0) {
+            this.OnExtInfo(nCode, text);
+            return;
+        }
         if(!this.loading)
             return;
-        const text = param == null ? "" : String(param);
         if(this.requestContext !== "" && text.indexOf(this.requestContext) < 0)
             return;
         if(nCode === 0x200)
@@ -252,6 +265,81 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
         if(this.view)
             this.view.OpenPlayerCard(item, this.context);
         this.HideActions();
+        this.QueryExtInfo();
+    }
+
+    // ------------------------------------------------------------------
+    // BOSS 扩展信息：当前IP / 最后登录时间
+    // 文档：服务器文档整理/玩家扩展信息查询-客户端接口文档.md
+    // 只有平台 boss/bigboss 放行，客户端先按 IsBossAccount() 决定要不要发；
+    // 不是 BOSS 就完全不发，也不动那两行（Prefab 里默认隐藏）。
+    // ------------------------------------------------------------------
+    private QueryExtInfo():void {
+        if(!GameDataManager.IsBossAccount())
+            return;
+        if(this.userId === "")
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return;
+        // 先占位，回包晚到时界面不会看起来缺一行。
+        if(this.view)
+            this.view.SetPlayerExtInfo("查询中…", "查询中…", true);
+        this.extContext = "playerext:" + Date.now() + ":" + (++panelClubPlayerInfo.extSerial);
+        const param:any = {
+            header:"查询_玩家_扩展_信息",
+            user_id:this.userId,
+            context:this.extContext
+        };
+        // club_id 只写服务端审计日志，不参与查询；有就带上。
+        if(this.clubId !== "")
+            param.club_id = this.clubId;
+        try {
+            account.reqHallCommand(JSON.stringify(param), "P@" + this.extContext);
+        }
+        catch(error) {
+            this.extContext = "";
+            if(this.view)
+                this.view.SetPlayerExtInfo("", "", true);
+            return;
+        }
+        // 服务端未部署/无回包时不能永远停在「查询中…」。
+        this.extTimer = setTimeout(()=>{
+            this.extTimer = null;
+            if(this.extContext === "")
+                return;
+            this.extContext = "";
+            if(this.view && cc.isValid(this.node))
+                this.view.SetPlayerExtInfo("", "", true);
+        }, 8000);
+    }
+
+    private OnExtInfo(nCode:number, raw:string):void {
+        this.extContext = "";
+        if(this.extTimer != null) {
+            clearTimeout(this.extTimer);
+            this.extTimer = null;
+        }
+        if(this.view == null || !cc.isValid(this.node))
+            return;
+        if(nCode !== 0x200) {
+            // 无权限/玩家不存在这类失败不打断详情主流程，两行留「—」。
+            this.view.SetPlayerExtInfo("", "", true);
+            return;
+        }
+        const data:any = this.Unwrap(raw);
+        const result:any = data && data.result !== undefined ? data.result : data;
+        if(result == null || typeof result !== "object") {
+            this.view.SetPlayerExtInfo("", "", true);
+            return;
+        }
+        const guuid = String(result.guuid == null ? "" : result.guuid).trim();
+        if(guuid !== "" && guuid !== this.userId)
+            return;
+        this.view.SetPlayerExtInfo(
+            String(result.ip == null ? "" : result.ip).trim(),
+            String(result.last_login_time == null ? "" : result.last_login_time).trim(),
+            true);
     }
 
     private ToPlayer(row:any):ClubPlayer {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -269,6 +270,58 @@ func (s *Server) handleHostedSendMessage(w http.ResponseWriter, r *http.Request,
 			"hostedGuuid": hostedGuuid, "messageId": view.ID, "duplicate": duplicate,
 		}, clientIP(r))
 	writeData(w, http.StatusOK, map[string]any{"message": view, "duplicate": duplicate})
+}
+
+// handleHostedSendImage 接收客服上传的图片，以托管账号身份发出。
+// 图片仍走直聊附件链路落盘，和游戏内发图同一套校验与存储。
+func (s *Server) handleHostedSendImage(w http.ResponseWriter, r *http.Request, principal agentPrincipal) {
+	hostedGuuid := strings.TrimSpace(r.URL.Query().Get("guuid"))
+	if hostedGuuid == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "缺少托管账号")
+		return
+	}
+	if !s.messageLimiter.Allow("hosted-image:" + strconv.FormatInt(principal.ID, 10)) {
+		writeError(w, http.StatusTooManyRequests, "UPLOAD_RATE_LIMITED", "上传过于频繁，请稍后再试")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, directchat.MaxImageBytes+(1<<20))
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		writeError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "图片超过允许的大小")
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "FILE_REQUIRED", "请选择要发送的图片")
+		return
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.LimitReader(file, directchat.MaxImageBytes+1))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "UPLOAD_FAILED", "图片读取失败")
+		return
+	}
+	if int64(len(data)) > directchat.MaxImageBytes {
+		writeError(w, http.StatusRequestEntityTooLarge, "FILE_TOO_LARGE", "图片超过允许的大小")
+		return
+	}
+	conversationID := r.PathValue("id")
+	view, recipient, clubID, err := s.direct.SendHostedImage(directchat.WithRequestCache(r.Context()), hostedGuuid, conversationID, data)
+	if err != nil {
+		writeDirectBizError(w, err)
+		return
+	}
+	if s.directHandler != nil {
+		// 对方和托管账号本人都会收到 message.new，游戏客户端可立即刷新。
+		s.directHandler.PublishMessageNew([]string{recipient, hostedGuuid}, conversationID, view.ID, clubID)
+	}
+	s.hub.publish("hosted", liveEvent{Type: "hosted.message", ConversationID: conversationID, Payload: map[string]any{
+		"hostedGuuid": hostedGuuid, "messageId": view.ID, "clubId": clubID,
+		"senderName": view.SenderName, "messageType": view.MessageType, "preview": "[图片]",
+		"incoming": false,
+	}})
+	s.audit(r.Context(), "agent", strconv.FormatInt(principal.ID, 10), "direct.hosted.reply_image",
+		"conversation", conversationID, map[string]any{"hostedGuuid": hostedGuuid, "messageId": view.ID}, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"message": view})
 }
 
 // writeDirectBizError 把直聊业务错误原样映射到 HTTP 状态和错误码。

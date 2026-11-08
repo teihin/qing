@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react'
 import { agentSessionExpiredEvent, agentSessionURL, api, ApiError, jsonBody, notifyAgentSessionExpired, setAgentExpectedID, setCSRF } from './api'
 import { createClientMessageID, gameAdminPlayerURL, playIncomingMessageSound, readAgentSoundPreference, writeAgentSoundPreference } from './client'
 import { Avatar, EmptyState, LoadingScreen, MessageBubble, StatusDot, formatAgo, formatDateTime } from './components'
@@ -170,6 +170,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   const [hostedMessages, setHostedMessages] = useState<HostedMessage[]>([])
   const [hostedText, setHostedText] = useState('')
   const [hostedSending, setHostedSending] = useState(false)
+  const [hostedUploading, setHostedUploading] = useState(false)
   const [hostedBalance, setHostedBalance] = useState<HostedBalance | null>(null)
   const [goldAction, setGoldAction] = useState<'' | 'up' | 'down'>('')
   const [showLedger, setShowLedger] = useState(false)
@@ -541,13 +542,29 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     if (selectedID && detail?.status === 'active' && !internalNote && value.trim()) startAgentTyping(selectedID)
     else stopAgentTyping()
   }
-  const upload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]; event.target.value = ''; if (!file || !selectedID || uploading || detail?.status !== 'active') return
+  const uploadFile = async (file: File) => {
+    if (!selectedID || uploading || detail?.status !== 'active') return
     stopAgentTyping()
     setUploading(true)
     try { const form = new FormData(); form.append('file', file); const item = await api<Message>(`/api/agent/conversations/${selectedID}/uploads`, { method: 'POST', body: form }); setMessages((current) => [...current, item]) }
     catch (reason) { setError(reason instanceof ApiError ? reason.message : '文件上传失败') }
     finally { setUploading(false) }
+  }
+  const upload = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]; event.target.value = ''
+    if (file) await uploadFile(file)
+  }
+  /** 输入框直接粘贴截图/图片：拦截剪贴板里的图片文件，按附件发送。 */
+  const pasteImage = (event: ClipboardEvent<HTMLTextAreaElement>): boolean => {
+    const items = event.clipboardData?.items
+    if (!items) return false
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) { event.preventDefault(); void uploadFile(file); return true }
+      }
+    }
+    return false
   }
   const close = async () => {
     if (!selectedID || !confirm('确认结束这个会话吗？')) return
@@ -751,6 +768,45 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     return items.find((item) => item.conversationId === hostedSelection.conversationId) || null
   }, [hostedConversations, hostedSelection])
 
+  /** 托管代发图片：走直聊附件接口，落库后以托管账号身份发出，其他客服实时可见。 */
+  const uploadHostedImage = async (file: File) => {
+    if (!hostedSelection || hostedUploading) return
+    if (selectedHostedOwner?.enabled === false || selectedHostedConversation?.canSend === false) {
+      setError('该托管会话已不能代发，仅可查看')
+      return
+    }
+    const selection = { ...hostedSelection }
+    setHostedUploading(true)
+    setError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const result = await api<{ message: HostedMessage }>(
+        `/api/agent/hosted/conversations/${selection.conversationId}/uploads?guuid=${encodeURIComponent(selection.guuid)}`,
+        { method: 'POST', body: form },
+      )
+      setHostedMessages((current) => current.some((item) => item.id === result.message.id) ? current : [...current, result.message])
+      void loadHostedConversations(selection.guuid).catch(() => undefined)
+      void loadHostedGroups().catch(() => undefined)
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : '图片发送失败')
+    } finally {
+      setHostedUploading(false)
+    }
+  }
+  /** 托管输入框粘贴图片：直接按图片消息代发。 */
+  const pasteHostedImage = (event: ClipboardEvent<HTMLTextAreaElement>): boolean => {
+    const items = event.clipboardData?.items
+    if (!items) return false
+    for (const item of Array.from(items)) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const file = item.getAsFile()
+        if (file) { event.preventDefault(); void uploadHostedImage(file); return true }
+      }
+    }
+    return false
+  }
+
   const hostedUnread = useMemo(() => hostedGroups.reduce((sum, group) => sum + group.items.reduce((count, owner) => count + owner.unread, 0), 0), [hostedGroups])
 
   const filteredTabs = useMemo(() => [
@@ -821,14 +877,14 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
         })}</div> : <div className="conversation-list">{conversations.length === 0 ? <EmptyState icon="聊" title="暂无会话" text={scope === 'queue' ? '当前没有玩家等待接入' : '新的玩家咨询会显示在这里'} /> : conversations.map((item) => <ConversationCard key={item.id} item={item} selected={selectedID === item.id} onClick={() => selectConversation(item)} />)}</div>}
       </aside>
       <section className="agent-chat-panel">
-        {scope === 'hosted' ? (selectedHostedConversation ? <HostedChatPanel conversation={selectedHostedConversation} owner={selectedHostedOwner} messages={hostedMessages} text={hostedText} sending={hostedSending} error={error} balance={hostedBalance} quickReplies={quickReplies} quickOpen={hostedQuickOpen} pinBusy={pinBusyID === `conversation:${selectedHostedConversation.conversationId}`} deleteBusy={deleteBusyID === selectedHostedConversation.conversationId} onText={setHostedText} onSend={sendHostedMessage} onQuickOpen={setHostedQuickOpen} onQuickSend={(content) => { setHostedQuickOpen(false); void sendHostedText(content) }} onManageQuick={() => { setHostedQuickOpen(false); setShowQuickManager(true) }} onRemark={() => { setRemarkError(''); setRemarkTarget(selectedHostedConversation) }} onTogglePin={(pinned) => void toggleHostedPin(selectedHostedConversation, pinned)} onDelete={() => void deleteHostedConversation(selectedHostedConversation)} onDismissError={() => setError('')} onImage={setPreviewImage} onGold={setGoldAction} /> : <EmptyState icon="托" title="选择托管会话" text="左侧按联盟或俱乐部展开托管账号，选择会话后即可查看记录并代其回复" />) : !detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
+        {scope === 'hosted' ? (selectedHostedConversation ? <HostedChatPanel conversation={selectedHostedConversation} owner={selectedHostedOwner} messages={hostedMessages} text={hostedText} sending={hostedSending} error={error} balance={hostedBalance} quickReplies={quickReplies} quickOpen={hostedQuickOpen} pinBusy={pinBusyID === `conversation:${selectedHostedConversation.conversationId}`} deleteBusy={deleteBusyID === selectedHostedConversation.conversationId} onText={setHostedText} onSend={sendHostedMessage} onQuickOpen={setHostedQuickOpen} onQuickSend={(content) => { setHostedQuickOpen(false); void sendHostedText(content) }} onManageQuick={() => { setHostedQuickOpen(false); setShowQuickManager(true) }} onRemark={() => { setRemarkError(''); setRemarkTarget(selectedHostedConversation) }} onTogglePin={(pinned) => void toggleHostedPin(selectedHostedConversation, pinned)} onDelete={() => void deleteHostedConversation(selectedHostedConversation)} onDismissError={() => setError('')} onImage={setPreviewImage} onGold={setGoldAction} uploading={hostedUploading} onUploadImage={(file) => void uploadHostedImage(file)} onPasteImage={pasteHostedImage} /> : <EmptyState icon="托" title="选择托管会话" text="左侧按联盟或俱乐部展开托管账号，选择会话后即可查看记录并代其回复" />) : !detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
           <header className="chat-header"><button className="mobile-back" onClick={() => setDetailOpen(false)} aria-label="返回会话列表">‹</button><Avatar name={detail.nickname} url={detail.avatarUrl} /><div className="chat-person"><strong>{detail.nickname}<small>ID {detail.playerId} · {detail.category}</small></strong><span><i className={detail.status === 'active' ? 'active' : ''} />{detail.status === 'active' ? '接待中' : detail.status === 'queued' ? '等待接入' : '已结束'}</span></div><div className="chat-actions">{detail.status !== 'queued' && <button className="danger-light" disabled={clearing} onClick={() => void clearHistory()}>{clearing ? '清空中…' : '清空记录'}</button>}{detail.status === 'active' && <><button onClick={() => setShowTransfer(true)}>转接</button><button className="danger-light" onClick={() => void close()}>结束会话</button></>}</div></header>
           <div className="agent-message-list">{messages.map((message) => <MessageBubble key={message.id} message={message} own={(message.senderType === 'agent' || message.senderType === 'note') && message.senderId === String(agent.id)} peerAvatar={detail.avatarUrl} onImage={setPreviewImage} />)}{playerTyping && <div className="agent-typing">玩家正在输入 <i /><i /><i /></div>}<div ref={listEnd} /></div>
           {error && <div className="workspace-error">{error}<button onClick={() => setError('')}>×</button></div>}
           <form className="agent-composer" onSubmit={send}>
             <div className="composer-tools"><label title="发送图片、视频或文件">＋<input type="file" accept="image/*,video/*,.pdf,.txt,.zip" onChange={upload} /></label><button type="button" onClick={() => setShowQuick((value) => !value)}>快捷回复</button><label className="note-switch"><input type="checkbox" checked={internalNote} onChange={(event) => { if (event.target.checked) stopAgentTyping(); setInternalNote(event.target.checked) }} /><span />内部备注</label><small>{uploading ? '正在上传文件…' : internalNote ? '备注仅客服可见' : 'Enter 发送，Shift+Enter 换行'}</small></div>
             {showQuick && <div className="quick-replies"><header><strong>快捷回复</strong><span className="quick-reply-tip">点击填入输入框</span><button type="button" className="quick-reply-manage" onClick={() => { setShowQuick(false); setShowQuickManager(true) }}>管理话术</button><button type="button" onClick={() => setShowQuick(false)}>×</button></header>{quickReplies.map((item) => <button key={item.id} type="button" onClick={() => { setText(item.content); setShowQuick(false) }}><b>{item.title}</b><span>{item.content}</span></button>)}</div>}
-            <textarea value={text} onChange={(event) => onText(event.target.value)} onBlur={stopAgentTyping} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder={detail.status === 'active' ? internalNote ? '输入仅客服团队可见的内部备注…' : '输入回复内容…' : '接入会话后即可回复'} disabled={detail.status !== 'active'} />
+            <textarea value={text} onChange={(event) => onText(event.target.value)} onBlur={stopAgentTyping} onPaste={pasteImage} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder={detail.status === 'active' ? internalNote ? '输入仅客服团队可见的内部备注…' : '输入回复内容…（可直接粘贴图片）' : '接入会话后即可回复'} disabled={detail.status !== 'active'} />
             <div className="composer-submit"><span>{text.length}/2000</span><button type="submit" disabled={!text.trim() || sending || detail.status !== 'active'}>{sending ? '发送中…' : internalNote ? '保存备注' : '发送消息'}</button></div>
           </form>
         </>}
@@ -850,7 +906,7 @@ function ConversationCard({ item, selected, onClick }: { item: Conversation; sel
   return <button className={`conversation-card ${selected ? 'selected' : ''}`} onClick={onClick}><span className="conversation-avatar"><Avatar name={item.nickname} url={item.avatarUrl} />{item.status === 'active' && <i />}</span><span className="conversation-copy"><span className="conversation-title"><strong>{item.nickname}</strong>{item.vip && <em>{item.vip}</em>}<time>{formatAgo(item.lastMessageAt)}</time></span><small>ID {item.playerId} · {item.category}</small><span className="conversation-preview">{item.lastMessage || '暂时没有消息'}</span></span>{item.unread > 0 && <b className="unread-badge">{item.unread > 99 ? '99+' : item.unread}</b>}{item.status === 'queued' && <b className="queue-badge">待接入</b>}</button>
 }
 
-function HostedChatPanel({ conversation, owner, messages, text, sending, error, balance, quickReplies, quickOpen, pinBusy, deleteBusy, onText, onSend, onQuickOpen, onQuickSend, onManageQuick, onRemark, onTogglePin, onDelete, onDismissError, onImage, onGold }: { conversation: HostedConversation; owner: HostedOwner | null; messages: HostedMessage[]; text: string; sending: boolean; error: string; balance: HostedBalance | null; quickReplies: QuickReply[]; quickOpen: boolean; pinBusy: boolean; deleteBusy: boolean; onText: (value: string) => void; onSend: (event: FormEvent) => void; onQuickOpen: (open: boolean) => void; onQuickSend: (content: string) => void; onManageQuick: () => void; onRemark: () => void; onTogglePin: (pinned: boolean) => void; onDelete: () => void; onDismissError: () => void; onImage: (src: string) => void; onGold: (action: 'up' | 'down') => void }) {
+function HostedChatPanel({ conversation, owner, messages, text, sending, error, balance, quickReplies, quickOpen, pinBusy, deleteBusy, onText, onSend, onQuickOpen, onQuickSend, onManageQuick, onRemark, onTogglePin, onDelete, onDismissError, onImage, onGold, uploading, onUploadImage, onPasteImage }: { conversation: HostedConversation; owner: HostedOwner | null; messages: HostedMessage[]; text: string; sending: boolean; error: string; balance: HostedBalance | null; quickReplies: QuickReply[]; quickOpen: boolean; pinBusy: boolean; deleteBusy: boolean; onText: (value: string) => void; onSend: (event: FormEvent) => void; onQuickOpen: (open: boolean) => void; onQuickSend: (content: string) => void; onManageQuick: () => void; onRemark: () => void; onTogglePin: (pinned: boolean) => void; onDelete: () => void; onDismissError: () => void; onImage: (src: string) => void; onGold: (action: 'up' | 'down') => void; uploading: boolean; onUploadImage: (file: File) => void; onPasteImage: (event: ClipboardEvent<HTMLTextAreaElement>) => boolean }) {
   const readOnly = owner?.enabled === false || !conversation.canSend
   const listEnd = useRef<HTMLDivElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -907,13 +963,15 @@ function HostedChatPanel({ conversation, owner, messages, text, sending, error, 
         {/* 话术是团队级配置，不受单条会话只读状态限制；只读时点击会提示不能代发。 */}
         <button type="button" className="hosted-quick-toggle" onClick={() => onQuickOpen(!quickOpen)}>快捷回复</button>
         <button type="button" className="hosted-quick-manage" onClick={onManageQuick}>管理话术</button>
-        <small>{readOnly ? '托管已取消，仅可查看历史记录' : `代 ${owner?.name || conversation.hostedName} 回复 ${displayName}，Enter 发送`}</small>
+        {/* 图片走直聊附件链路，和游戏内发图同一套落盘与校验。 */}
+        <label className={`hosted-image-send ${readOnly || uploading ? 'disabled' : ''}`} title="发送图片（也可直接粘贴截图）">图片<input type="file" accept="image/jpeg,image/png,image/webp" disabled={readOnly || uploading} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) onUploadImage(file) }} /></label>
+        <small>{uploading ? '图片上传中…' : readOnly ? '托管已取消，仅可查看历史记录' : `代 ${owner?.name || conversation.hostedName} 回复 ${displayName}，Enter 发送，可粘贴图片`}</small>
       </div>
       {quickOpen && <div className="quick-replies hosted-quick-replies">
         <header><strong>快捷回复</strong><span className="quick-reply-tip">{readOnly ? '该会话已不能代发，仅可查看' : '点击直接发送'}</span><button type="button" onClick={() => onQuickOpen(false)}>×</button></header>
         {quickReplies.length === 0 ? <p className="hosted-hint">还没有常用话术，点「管理话术」添加</p> : quickReplies.map((item) => <button key={item.id} type="button" disabled={readOnly || sending} title={readOnly ? '该会话已不能代发' : item.content} onClick={() => onQuickSend(item.content)}><b>{item.title}</b><span>{item.content}</span></button>)}
       </div>}
-      <textarea value={text} onChange={(event) => onText(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder={readOnly ? '托管已取消，不能继续回复' : '输入回复内容…'} disabled={readOnly} />
+      <textarea value={text} onChange={(event) => onText(event.target.value)} onPaste={onPasteImage} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit() } }} maxLength={2000} placeholder={readOnly ? '托管已取消，不能继续回复' : '输入回复内容…（可直接粘贴图片）'} disabled={readOnly} />
       <div className="composer-submit"><span>{text.length}/2000</span><button type="submit" disabled={readOnly || !text.trim() || sending}>{sending ? '发送中…' : '以托管账号发送'}</button></div>
     </form>
   </>

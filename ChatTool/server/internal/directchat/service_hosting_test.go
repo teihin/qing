@@ -1,7 +1,10 @@
 package directchat
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/jpeg"
 	"log/slog"
 	"testing"
 )
@@ -165,6 +168,53 @@ func TestHostedConversationAndReply(t *testing.T) {
 	})
 	if biz := AsError(err); biz.Code != CodeHostingInactive {
 		t.Fatalf("未托管账号代发应被拒绝: %v", err)
+	}
+}
+
+// 托管代发图片：以托管账号身份落库成图片消息，非图片内容与已取消托管都要拒绝。
+func TestHostedSendImage(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	env.store.addUnion("111111", Union{ID: "union-1", Name: "测试联盟", OwnerGuuid: "100004", OwnerClub: "111111"})
+	host := env.session(t, "100004")
+	if _, err := env.service.SetHosting(ctx, host, true); err != nil {
+		t.Fatalf("enable hosting failed: %v", err)
+	}
+	conversation, err := env.service.CreateConversation(ctx, host, "111111", "100001")
+	if err != nil {
+		t.Fatalf("create conversation failed: %v", err)
+	}
+	raw := bytes.NewBuffer(nil)
+	if err := jpeg.Encode(raw, image.NewRGBA(image.Rect(0, 0, 8, 6)), nil); err != nil {
+		t.Fatalf("encode image failed: %v", err)
+	}
+	view, recipient, clubID, err := env.service.SendHostedImage(ctx, "100004", conversation.ConversationID, raw.Bytes())
+	if err != nil {
+		t.Fatalf("hosted image failed: %v", err)
+	}
+	if view.MessageType != MessageImage || view.SenderGuuid != "100004" || view.Attachment == nil || view.Attachment.URL == "" {
+		t.Fatalf("托管图片应以托管账号身份落库: %+v", view)
+	}
+	if recipient != "100001" || clubID != "111111" {
+		t.Fatalf("代发图片应返回接收方与俱乐部: recipient=%s club=%s", recipient, clubID)
+	}
+	after, err := env.service.HostedMessages(ctx, "100004", conversation.ConversationID, "", "", 20)
+	if err != nil {
+		t.Fatalf("hosted messages failed: %v", err)
+	}
+	if len(after.Items) != 1 || after.Items[0].MessageType != MessageImage {
+		t.Fatalf("托管图片未出现在历史中: %+v", after.Items)
+	}
+	// 非图片内容不能借上传通道变成聊天图片。
+	if _, _, _, err := env.service.SendHostedImage(ctx, "100004", conversation.ConversationID, []byte("<svg/>")); AsError(err).Code != CodeMediaInvalid {
+		t.Fatalf("非图片内容应被拒绝: %v", err)
+	}
+	// 取消托管后不能继续代发图片。
+	if _, err := env.service.SetHosting(ctx, host, false); err != nil {
+		t.Fatalf("disable hosting failed: %v", err)
+	}
+	if _, _, _, err := env.service.SendHostedImage(ctx, "100004", conversation.ConversationID, raw.Bytes()); AsError(err).Code != CodeHostingInactive {
+		t.Fatalf("取消托管后不应允许代发图片: %v", err)
 	}
 }
 

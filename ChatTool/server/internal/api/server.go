@@ -326,6 +326,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/agent/hosted/conversations/{id}/balance", s.agentAuthorized(false, false, s.handleHostedBalance))
 	s.mux.Handle("GET /api/agent/hosted/conversations/{id}/messages", s.agentAuthorized(false, false, s.handleHostedMessages))
 	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/messages", s.agentAuthorized(true, false, s.handleHostedSendMessage))
+	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/uploads", s.agentAuthorized(true, false, s.handleHostedSendImage))
 	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/gold", s.agentAuthorized(true, false, s.handleHostedGold))
 	s.mux.Handle("PUT /api/agent/hosted/conversations/{id}/remark", s.agentAuthorized(true, false, s.handleHostedRemark))
 	s.mux.Handle("POST /api/agent/hosted/conversations/{id}/pin", s.agentAuthorized(true, false, s.handleHostedPin))
