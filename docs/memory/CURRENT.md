@@ -4,13 +4,13 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
-## 2026-11-08 安卓原生输入条：已紧贴键盘上沿（真机已验证）
+## 2026-11-08 安卓键盘：贴键盘上沿 + 点上半屏收起（真机已验证）
 
-- 现象：弹键盘时跨屏宽白条（含绿色「完成」）浮在画面中部。历次修复都靠 `getHeight()` 倍数硬顶，换机型就歪。
-- 根因：`Cocos2dxEditBox.addItems` 把带 `ALIGN_PARENT_BOTTOM` 的 `RelativeLayout.LayoutParams` 加进 `FrameLayout`，规则被 `generateLayoutParams` 吞掉，容器实际钉在**窗口左上角**——写的 `topMargin` 一直是「距屏幕顶」，只能靠倍数凑。
-- 修法：容器改 `FrameLayout.LayoutParams` + `gravity=BOTTOM`；位置改 `bottomMargin = 键盘高度`（`WindowInsets.Type.ime()` → `getSystemWindowInsetBottom()` → 可见区差值依次回退），每次变化重算；删 `setFitsSystemWindows(true)`。
-- 引擎文件在 Creator 安装目录、重装会被覆盖：新增 `tools/apply_editbox_ime_patch.py`（幂等 + 自动备份）。**Java 改动热更下发不了，必须重新出 APK。**
-- 小米 9 SE（Android 11）真机用户确认正确。其余机型、手势导航、iOS 未验。详见[交接](handoffs/2026-11-08-editbox-ime-position.md)。
+- 根因：`Cocos2dxEditBox.addItems` 把带 `ALIGN_PARENT_BOTTOM` 的 `RelativeLayout.LayoutParams` 加进 `FrameLayout`，规则被 `generateLayoutParams` 吞掉，容器钉在窗口左上角——写的 `topMargin` 一直是「距屏幕顶」，只能靠倍数凑。
+- 修法：容器改 `FrameLayout.LayoutParams` + `gravity=BOTTOM`，位置改 `bottomMargin = 键盘高度`（`Type.ime()` → `getSystemWindowInsetBottom()` → 可见区差值回退），每次变化重算；删 `setFitsSystemWindows(true)`。
+- 另恢复官方语义：点上半屏 `complete()` 收起键盘（2026-07-23 把 `Cocos2dxGLSurfaceView` 里那行注释掉了，才只能点「完成」）。
+- 两个引擎文件都在 Creator 安装目录、重装会被覆盖：`tools/apply_editbox_ime_patch.py`（幂等 + 备份）。**Java 改动热更下发不了，必须重新出 APK。**
+- 小米 9 SE（A11）、MIX 4（A14）真机通过；其余机型与 iOS 未验。详见[交接](handoffs/2026-11-08-editbox-ime-position.md)。
 
 ## 2026-11-08 数据统计列表：无俱乐部玩家隐藏「查看 / 代理链」（未构建、待真机）
 

@@ -174,9 +174,9 @@ public class Cocos2dxEditBox {
         public void hide() {
             mEditText.setVisibility(View.INVISIBLE);
             this.removeListeners();
-            // Drop the IME offset so the strip is back on the window bottom the
-            // next time it appears before the keyboard has been measured.
-            applyImeHeight(0);
+            // The IME offset is reset by the next insets/layout pass (the keyboard
+            // is going away, so it reports 0). Forcing it to 0 here made the strip
+            // jump for a frame while the IME was still up.
         }
 
         /***************************************************************************************
