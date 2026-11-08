@@ -4,6 +4,14 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-08 安卓原生输入条：已紧贴键盘上沿（真机已验证）
+
+- 现象：弹键盘时跨屏宽白条（含绿色「完成」）浮在画面中部。历次修复都靠 `getHeight()` 倍数硬顶，换机型就歪。
+- 根因：`Cocos2dxEditBox.addItems` 把带 `ALIGN_PARENT_BOTTOM` 的 `RelativeLayout.LayoutParams` 加进 `FrameLayout`，规则被 `generateLayoutParams` 吞掉，容器实际钉在**窗口左上角**——写的 `topMargin` 一直是「距屏幕顶」，只能靠倍数凑。
+- 修法：容器改 `FrameLayout.LayoutParams` + `gravity=BOTTOM`；位置改 `bottomMargin = 键盘高度`（`WindowInsets.Type.ime()` → `getSystemWindowInsetBottom()` → 可见区差值依次回退），每次变化重算；删 `setFitsSystemWindows(true)`。
+- 引擎文件在 Creator 安装目录、重装会被覆盖：新增 `tools/apply_editbox_ime_patch.py`（幂等 + 自动备份）。**Java 改动热更下发不了，必须重新出 APK。**
+- 小米 9 SE（Android 11）真机用户确认正确。其余机型、手势导航、iOS 未验。详见[交接](handoffs/2026-11-08-editbox-ime-position.md)。
+
 ## 2026-11-08 数据统计列表：无俱乐部玩家隐藏「查看 / 代理链」（未构建、待真机）
 
 - 现象：玩家列表点 q1（166258）的「查看」服务端查不到人。根因 `BindListRowButtons` 用 `clubId || this.userClubId || this.roomClubId` 兜底：玩家不在任何俱乐部（行 `club_id` 空、界面「俱乐部」显示「—」）时拿 boss 自己俱乐部的 ID 去查别人，服务端按该俱乐部找成员必然落空。
@@ -60,9 +68,8 @@
 
 ## 2026-11-07 客服登录即在线 + 托管跳转游戏后台（已部署）
 
-- 修「接待量已达上限或客服不在线」：实为 `kefuadmin` 被判 offline。心跳旧实现带 `presence<>'offline'`，一旦超时判离线永不恢复；改为心跳无条件回 online，维护任务只在会话过期后踢下线，claim 拆成「不在线」/「接待量 x/y 已满」。
-- 托管「账号资料」加「在游戏后台查看 / 处理」（托管账号 guuid），当前会话「对方」加「对方后台」，与客服侧同一 `gameAdminPlayerURL`。
-- 16:32 部署 `62571121…` + `index-DWH6KahC.js`（回滚 `*.previous-onlinelogin-20261107-1632`，旧 `c7f6cd15…`），health 200，客服 presence 已自动回 online；登录目视待验。详见[交接](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md)。
+- 修「接待量已达上限或客服不在线」：实为 `kefuadmin` 被判 offline。心跳旧实现带 `presence<>'offline'`，超时判离线后永不恢复；改为心跳无条件回 online，维护任务只在会话过期后踢下线，claim 拆成「不在线」/「接待量已满」。
+- 托管「账号资料」加「在游戏后台查看 / 处理」，当前会话「对方」加「对方后台」，与客服侧同一 `gameAdminPlayerURL`。16:32 已部署，health 200，presence 自动回 online。详见[交接](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md)。
 
 ## 2026-11-07 大厅房间推送（未构建）
 
@@ -70,10 +77,8 @@
 
 ## 2026-11-07 后台玩家管理「用户密码」列显示明文（已部署）
 
-- 列仅管理员（`super_admin` 角色，含 admin999 与普通管理员 admin）可见。游戏端只有 MD5、不能解密，因此新增 `mgr_player_login_password`（migration 046）用 AES-GCM 存明文副本，在注册/后台重置/玩家自助改密三处收录；无记录显示「未收录」，不回退摘要。
-- 存量回填 62/63（未命中 `37022268`）；游戏端内部改密不经后台时副本会过期。
-- 00:40 部署（`285c62b3…` + `index-DoJnkJZt.js`）：health 200、未登录 401、公网指向新 js、进程密钥与 `runtime.env` 同哈希；回滚 `bin/xuanmanager.previous-pwdplain-20261107`、`web.previous-pwdplain-20261107`。登录态目视待验，详见[交接](handoffs/2026-11-07-admin-player-password-column.md)。
-
+- 列仅管理员（`super_admin`，含 admin999 与 admin）可见。游戏端只有 MD5，故新增 `mgr_player_login_password`（migration 046）用 AES-GCM 存明文副本，在注册/后台重置/自助改密三处收录；无记录显示「未收录」。存量回填 62/63（未命中 `37022268`）；游戏端内部改密不经后台时副本会过期。
+- 00:40 已部署，health 200、未登录 401、公网指向新 js；登录态目视待验。详见[交接](handoffs/2026-11-07-admin-player-password-column.md)。
 
 ## 2026-11-06 默认对话只留盟主 / 大盟主（已部署）
 
@@ -96,8 +101,7 @@
 
 ## 2026-11-06 私聊详情 V2 + 单方清除聊天（服务端已部署，客户端未构建）
 
-- 按效果图重做聊天皮肤（蓝/金气泡、金色发送、圆形返回/删除），底部新增「清除聊天」；只清自己这一侧，消息与对方/客服视图保留。
-- ChatTool 已部署（00:08）：migration 009 已执行，`/api/health` 200，clear 路由未登录 401；新二进制 `b163889d…`，回滚 `bin/chattool.previous-clear-chat-20261106-000856`，未替换 `web/`。Prefab/引用、`go test`、定向 tsc 通过；Creator、真机与真实会话联调待验。详见[交接](handoffs/2026-11-06-chat-detail-v2-clear.md)。
+- 按效果图重做聊天皮肤（蓝/金气泡、金色发送、圆形返回/删除），底部新增「清除聊天」；只清自己这一侧，消息与对方/客服视图保留。ChatTool 已部署（migration 009、health 200、clear 未登录 401）、`go test` 与定向 tsc 通过；Creator、真机与真实会话联调待验。详见[交接](handoffs/2026-11-06-chat-detail-v2-clear.md)。
 
 ## 2026-11-06 托管保留 + 上下分对账、后台玩家头像（已部署，已归档）
 
@@ -113,10 +117,7 @@
 
 ## 2026-11-04～11-06 我的红利：V2 统计 / 联盟红利 / 合伙人入口（未构建、未真机）
 
-- 「我的」→ 当前俱乐部卡片的「我的收益」（打开 `panelMyHongli` 我的红利）原只给创建者，11-06 起创建者 + 合伙人（V2 权限表该接口为「代理自己 / 群主」）。`ClubContext` 补 `isAgent`（`role` 会被管理员占用），并重排「操作」行 Layout（合伙人 2 个按钮时居中）。详见[交接](handoffs/2026-11-06-agent-my-hongli-entry.md)。
-- 面板口径全部换俱乐部 V2：`ClubBonusStats`（今日/昨日新增、未提取、累计提取，累计=未提取+累计提取）、`ClubBonusList`、`提取_俱乐部_红利`（全部整数元）；删除账号 `hongli`/`all_hongli`、旧 `查询_俱乐部_代理_收益` 与 `HongliList` 回退，无 `club_id` 只提示无俱乐部。详见[交接](handoffs/2026-11-04-my-hongli-club-stats.md)。
-- 联盟区「联盟红利」仅联盟创建者可见，`panelMyHongli` 加 `mode=union` 走 `ClubUnionBonusStats`/`ClubUnionBonusList`/`提取_联盟_红利`，卡片高度 320→410。详见[交接](handoffs/2026-11-04-union-hongli-panel.md)。
-- 各阶段只做 tsc/Prefab 引用检查；Creator 导入、构建、真机与真实回包待验证（曾遇 0x200 先到清 pending 把随后推送丢弃，已修）。
+- 入口开放创建者 + 合伙人（`ClubContext` 补 `isAgent`，`role` 会被管理员占用）；面板口径全部换俱乐部 V2（`ClubBonusStats`/`ClubBonusList`/`提取_俱乐部_红利`，删账号 `hongli`/`all_hongli` 与旧 `查询_俱乐部_代理_收益`）；联盟区仅联盟创建者可见，`mode=union` 走 `ClubUnionBonusStats` 系列，卡片高 320→410。只做 tsc/Prefab 检查，Creator/构建/真机待验。详见[入口](handoffs/2026-11-06-agent-my-hongli-entry.md)、[俱乐部口径](handoffs/2026-11-04-my-hongli-club-stats.md)、[联盟红利](handoffs/2026-11-04-union-hongli-panel.md)。
 
 ## 2026-11-03～11-04（已归档）
 

@@ -26,6 +26,7 @@
 
 - 旧 2.2.1 引擎差异不能整体覆盖 2.4.13。历史仅确认移植 Native 旧格式 PNG 解码兼容到全局 CCImage.cpp；普通与旧格式图片兼容是混淆，不是安全加密。升级/重装 Creator 会覆盖该补丁，热更图片应先转换再生成 manifest/MD5。
 - 键盘排错有多轮互相替代的尝试。2026-07-23 后段明确撤销自定义 Insets/平移等方案，最终历史临时方案是原布局按控件高度提高输入栏，保留 GLSurfaceView 原生编辑期间不自动 complete() 的修复。**不要拿早段“第五版 Insets”当最终状态重新恢复**；先核查全局实际文件、备份和最新真机证据。
+- **2026-11-08 键盘错位已定案**，替掉上面那条临时方案：真根因是 `Cocos2dxEditBox.addItems` 给 `FrameLayout` 传了带 `ALIGN_PARENT_BOTTOM` 的 `RelativeLayout.LayoutParams`，规则被静默丢弃，输入条容器一直钉在窗口左上角，所以历史上写的 `topMargin` 全是“距屏幕顶”，只能靠 `getHeight()` 乘倍数凑。现改为容器 `gravity=BOTTOM` + `bottomMargin = 键盘高度`（`WindowInsets.Type.ime()` 优先），无任何倍数。引擎文件在 Creator 安装目录，重装会被覆盖，用 `tools/apply_editbox_ime_patch.py` 重打；**Java 改动热更下发不了，必须重新出 APK**。详见[交接](../handoffs/2026-11-08-editbox-ime-position.md)。
 - 曾制作允许 Release 开放 V8 Inspector 的内部测试包；正式对外包应核验调试条件保护，不沿用该测试设置。
 - iOS libwebp.a 的旧胖包对齐问题曾用项目内 arm64 重封装解决；受限环境的 CoreSimulatorService 错误不证明平台组件损坏。查工具输出和实际 Xcode 环境后再决定，勿先重装。
 - exFAT 曾产生 ._* AppleDouble，污染资源/Gradle 输出。历史已迁过 APFS，当前卷格式需实查；保留现有将中间产物放 APFS 临时盘的规避，除非独立验证后简化。不能“所有点文件”统删，.git/.gitignore 必须保留。
