@@ -80,22 +80,24 @@ export default function AntiTheftPage({ can, notify }: {
       </>}
     </section>
 
-    {unbindTarget && <AntiTheftUnbindModal item={unbindTarget} notify={notify} onClose={() => setUnbindTarget(null)} onDone={async () => { setUnbindTarget(null); await load(); }} />}
+    {unbindTarget && <AntiTheftUnbindModal item={unbindTarget} notify={notify} onClose={() => setUnbindTarget(null)} onRefresh={load} onDone={async () => { setUnbindTarget(null); await load(); }} />}
   </div>;
 }
 
 function AntiTheftRow({ item, canUnbind, onUnbind }: { item: AntiTheftAccountItem; canUnbind: boolean; onUnbind: (item: AntiTheftAccountItem) => void }) {
+  // playerId 为空的行拼不出解绑地址（会变成 //unbind 被后端当 404「接口不存在」），直接不给按钮。
+  const missingPlayerId = item.enabled && canUnbind && !item.playerId;
   return <tr>
     <td><div className="user-cell"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId || "等待创建"}</small></div></div></td>
     <td><code>{item.loginName}</code><small className="cell-subtitle">注册：{formatDate(item.registrationAt)}</small></td>
     <td><span className={`anti-theft-state ${item.enabled ? "is-enabled" : "is-disabled"}`}><i />{item.enabled ? "已开启" : "未开启"}</span>{!item.stateHealthy && <small className="cell-subtitle anti-theft-state-error">绑定数据异常</small>}</td>
     <td>{item.enabled ? <><strong>{platformNames[item.devicePlatform] || "未知平台"}</strong><code className="anti-theft-device-id">{item.deviceMasked || "设备 ID 缺失"}</code></> : <span>—</span>}</td>
     <td>{item.enabled ? <><strong>{formatDate(item.boundAt)}</strong><small className="cell-subtitle">版本 {item.deviceVersion} · 变更 {item.bindingRevision}</small></> : <><span>未绑定</span><small className="cell-subtitle">最近登录：{formatDate(item.lastLoginAt)}</small></>}</td>
-    <td><div className="row-actions row-actions--right">{item.enabled && canUnbind ? <button className="anti-theft-unbind-button" type="button" onClick={() => onUnbind(item)}>客服解绑</button> : <span className="readonly-badge"><i />{item.enabled ? "仅查看" : "无需解绑"}</span>}</div></td>
+    <td><div className="row-actions row-actions--right">{item.enabled && canUnbind && item.playerId ? <button className="anti-theft-unbind-button" type="button" onClick={() => onUnbind(item)}>客服解绑</button> : missingPlayerId ? <span className="readonly-badge" title="该账号还没有游戏玩家 ID，无法提交解绑；请先确认玩家已进入游戏创建角色"><i />缺少玩家 ID</span> : <span className="readonly-badge"><i />{item.enabled ? "仅查看" : "无需解绑"}</span>}</div></td>
   </tr>;
 }
 
-function AntiTheftUnbindModal({ item, notify, onClose, onDone }: { item: AntiTheftAccountItem; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void; onDone: () => Promise<void> }) {
+function AntiTheftUnbindModal({ item, notify, onClose, onRefresh, onDone }: { item: AntiTheftAccountItem; notify: (message: string, kind?: "success" | "error") => void; onClose: () => void; onRefresh: () => Promise<void>; onDone: () => Promise<void> }) {
   const [reasonCode, setReasonCode] = useState<(typeof reasonOptions)[number]["value"]>("DEVICE_LOST");
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);
@@ -103,6 +105,7 @@ function AntiTheftUnbindModal({ item, notify, onClose, onDone }: { item: AntiThe
   const reasonLength = Array.from(reason.trim()).length;
   const valid = reasonLength >= 2 && reasonLength <= 120;
   const submit = async () => {
+    if (!item.playerId) { notify("该账号缺少游戏玩家 ID，无法提交解绑，请先核对账号注册数据", "error"); return; }
     if (!valid || !confirmed) { notify("请填写身份核验说明并确认解绑影响", "error"); return; }
     setBusy(true);
     try {
@@ -110,8 +113,11 @@ function AntiTheftUnbindModal({ item, notify, onClose, onDone }: { item: AntiThe
       notify(result.message);
       await onDone();
     } catch (cause) {
+      // 后端可能已经改库成功、只是回读或提示环节报错，这里照样刷一次列表，
+      // 免得界面还停在「已开启」，让人以为完全没生效。
       notify(errorMessage(cause, "防盗号解绑失败"), "error");
       setBusy(false);
+      void onRefresh();
     }
   };
   return <Modal eyebrow="CUSTOMER SERVICE UNBIND" title="解除防盗号绑定" onClose={busy ? () => undefined : onClose}>

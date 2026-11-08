@@ -1200,7 +1200,14 @@ export default class panelMain extends UIPanelViewBase {
         for(const path of paths)
         {
             const node = Tool.GetChild(this.node,path);
-            if(node != null)
+            if(node == null)
+                continue;
+            // 「上下分记录」「钻石池消耗」是俱乐部账目，权限比赠送/兑换更窄，按身份单独判定。
+            if(node.name === "上下分记录")
+                node.active = hasClub && this.CanViewUpDownRecord(clubId);
+            else if(node.name === "钻石池消耗")
+                node.active = hasClub && this.CanViewStonePoolCost(clubId);
+            else
                 node.active = hasClub;
         }
         // 「额度授权记录」比上面几个更窄：只有大盟主（联盟总群主）和盟主（已入盟的俱乐部创建者）
@@ -1596,7 +1603,9 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "上下分记录")
         {
-            if(this.ResolveRoomClub() === "")
+            // 只有大群主 / 盟主能看；热更后节点状态残留时再挡一道。
+            const recordClubId = this.ResolveRoomClub();
+            if(recordClubId === "" || !this.CanViewUpDownRecord(recordClubId))
             {
                 this.RefreshClubFinanceMenuVisibility();
                 return;
@@ -1605,7 +1614,9 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "钻石池消耗")
         {
-            if(this.ResolveRoomClub() === "")
+            // 只有大群主能看；其他身份点进来也拦掉。
+            const poolClubId = this.ResolveRoomClub();
+            if(poolClubId === "" || !this.CanViewStonePoolCost(poolClubId))
             {
                 this.RefreshClubFinanceMenuVisibility();
                 return;
@@ -2740,6 +2751,8 @@ export default class panelMain extends UIPanelViewBase {
         if(strName === "我的" && this.clubManagement)
         {
             this.clubManagement.Refresh();
+            // 切回「我的」先按当前俱乐部重算一次入口，身份/联盟状态随后由回包纠正。
+            this.RefreshClubFinanceMenuVisibility();
             const id = this.ResolveRoomClub();
             const account = GameDataManager.getAccount();
             if(id && account)
@@ -4521,6 +4534,10 @@ export default class panelMain extends UIPanelViewBase {
             undefined;
         this.clubUnionStatus[clubId] = {known:true,hasUnion:unionId !== "",unionId:unionId || undefined,
             unionName:unionName || undefined,isOwner,ownerConfirmed:ownerConfirmed || undefined,quotaFen,unionPercent};
+        // 「上下分记录」「钻石池消耗」的入口跟着大群主/盟主身份走，身份结论一变就重算，
+        // 否则首次进「我的」时状态还没回来，藏起来的入口不会再出现。
+        if((previous ? previous.isOwner : undefined) !== isOwner)
+            this.RefreshClubFinanceMenuVisibility();
         if(unionName) this.RememberUnionName(unionId,unionName);
         const info = this.clubDetails[clubId];
         if(info)
@@ -4748,6 +4765,8 @@ export default class panelMain extends UIPanelViewBase {
                 }
             }
         }
+        // 查询_我的_联盟 成功即确认总群主身份，入口（钻石池消耗等）要按新身份立即重算。
+        this.RefreshClubFinanceMenuVisibility();
         if(this.clubManagement) this.clubManagement.Refresh();
         this.RefreshDiscoveryClubFunds(false);
         this.RefreshClubList(false);
@@ -4800,6 +4819,8 @@ export default class panelMain extends UIPanelViewBase {
             this.clubDetails[clubId].union_name = unionName;
         }
         this.unionCreateName = "";
+        // 创建者成为大盟主，联盟专属入口要立即出现。
+        this.RefreshClubFinanceMenuVisibility();
         if(this.clubManagement) this.clubManagement.Refresh();
         this.RefreshClubList(false);
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"联盟创建成功，联盟号：" + unionId);
@@ -5529,6 +5550,8 @@ export default class panelMain extends UIPanelViewBase {
                             }
                         }
                         else this.clubUnionStatus[id] = {known:true,hasUnion:!noUnion,isOwner:false};
+                        // 确认不是总群主后立即收起「钻石池消耗」，不等下一次刷新。
+                        this.RefreshClubFinanceMenuVisibility();
                         if(this.clubManagement) this.clubManagement.Refresh();
                     }
                 }
@@ -5560,6 +5583,8 @@ export default class panelMain extends UIPanelViewBase {
                     this.clubUnionStatus[id] = {known:true,hasUnion:false,isOwner:false};
                 else
                     this.clubUnionStatus[id] = {known:false,hasUnion:false,isOwner:false};
+                // 身份结论变化（尤其「你还没有联盟」）要立即重算入口可见性。
+                this.RefreshClubFinanceMenuVisibility();
                 if(this.clubManagement) this.clubManagement.Refresh();
             }
             return true;
@@ -5916,6 +5941,48 @@ export default class panelMain extends UIPanelViewBase {
             return true;
         const status = this.clubUnionStatus[clubId];
         return !(status && status.known && !status.hasUnion);
+    }
+
+    /**
+     * 账号级「大群主」判定：联盟创建者（大盟主 / 联盟总群主）。
+     * 身份不跟随当前选中的俱乐部，只要任一已知联盟的 is_owner=1 就算。
+     */
+    private IsUnionOwnerAccount():boolean
+    {
+        for(const key in this.clubUnionStatus)
+        {
+            const status = this.clubUnionStatus[key];
+            if(status && status.isOwner === true)
+                return true;
+        }
+        return false;
+    }
+
+    /**
+     * 「上下分记录」入口可见性：只有大群主（联盟总群主）和盟主（已入盟的俱乐部创建者）能看，
+     * 管理员 / 合伙人 / 普通玩家一律不显示。未知状态沿用额度授权记录的口径——
+     * 对俱乐部创建者先放行，等联盟状态回包后再纠正，避免查询慢把入口闪没。
+     */
+    private CanViewUpDownRecord(clubId:string):boolean
+    {
+        if(this.IsUnionOwnerAccount())
+            return true;
+        return this.CanViewQuotaGrantRecord(clubId);
+    }
+
+    /**
+     * 「钻石池消耗」入口可见性：只给大群主（联盟总群主）。
+     * 已确认「不是总群主」才收起；联盟状态已知但 is_owner 尚未回包时仍对俱乐部创建者放行，
+     * 等 `查询_联盟_额度` / `查询_我的_联盟` 的结论回来再纠正，避免大盟主入口被首屏状态藏掉。
+     */
+    private CanViewStonePoolCost(clubId:string):boolean
+    {
+        if(this.IsUnionOwnerAccount())
+            return true;
+        if(!this.IsClubOwner(clubId))
+            return false;
+        const status = this.clubUnionStatus[clubId];
+        return !(status && status.known && status.isOwner === false);
     }
 
     /**

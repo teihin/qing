@@ -118,3 +118,38 @@
 1. Creator 打开项目，看「我的 → 额度授权记录」按钮与弹窗。
 2. 用大盟主账号在测试服点开，核对是否拿到 `ClubQuotaWater` 的授信行；若为空，先确认服务端 type 白名单。
 3. 真机跑一遍分页与滚动，再考虑提交。
+
+## 2026-11-09 查询接口切换到 `查询_联盟_授信_记录`（未构建、未联调）
+
+服务端 2026-11-09 新增 `查询_联盟_授信_记录`（文档 §8.1），一次请求直接返回授信/收回/注资/注资扣减，
+替代原来的「查联盟成员 → 逐个俱乐部查额度流水」串行方案。
+
+- `assets/scripts/UI/panelQuotaGrantRecord.ts` 重写取数层：
+  - 请求 `{"header":"查询_联盟_授信_记录","count":10,"page":n,"context":...}`；**不传 `club_id`**，
+    由服务端按身份取范围（总群主看全联盟、盟主只看自己俱乐部），与入口的「大盟主 / 盟主」口径一致。
+  - 监听 `ClubUnionGrantList` 推送；`onHallCommand` 只处理本次 `context`，`0x200/0x500` 若有列表直接用，
+    其余错误码弹服务端 `error` 文案（兜底「授信记录查询失败，请稍后重试！」）。
+  - 服务端分页：`PAGE_COUNT=10`，翻页由 `ScrollViewEx.callBackFresh` 带页码重新请求；
+    回包 `number` 与在途页码不一致时丢弃（连续翻页防串页）。`count` 是真实总条数不封顶，页码可翻到底。
+  - 行映射：时间 `date`；盟主列取 `name`（额度归属账号，缺失回退 `club_name`），`is_inject=1` 或
+    `type` 含「注资」显示「联盟池」；授权额度取有符号 `quota`（分→元，正红负绿）；
+    余额取 `quota_after`（分→元）。不再本地过滤 type、不再解析 `remark`。
+  - 移除 `ClubMyUnion` / `ClubQuotaWater` 监听、串行游标、超时回退与本地分页；`pendingToken` 一并删除。
+- 入口可见性沿用 2026-11-07 的 `panelMain.CanViewQuotaGrantRecord`（仅俱乐部创建者且已入盟 = 大盟主/盟主）；
+  本次复核与 `ClubManagementView.creatorRole` 的身份口径一致，未再改。
+- 静态验证：`node --experimental-strip-types --check` 通过；文件内无旧符号残留。
+- 未验证：Creator 未导入/构建、未连服务端实测；`ClubUnionGrantList` 推送是否带 `context`、
+  空页回包是否带 `number` 待联调确认。
+
+### 2026-11-09 文档二次更新核对
+
+文档 v2.22 修订后补充了三点，对当前页面只有两处小对齐：
+
+- `club_id` 请求显式传空串（与文档示例一致），仍由服务端按身份取范围；`union_id` 仅 boss/bigboss 使用，
+  客户端入口只对大盟主/盟主开放，不需要传。
+- 响应新增 `remark`（与 `quota_after` 同值）；余额列改为优先 `quota_after`、缺失时回退 `remark`。
+- 权限说明补充「盟主一个账号可能有多个俱乐部」：不传 `club_id` 时列表会覆盖其名下俱乐部，服务端已按身份过滤；
+  页面四列结构（时间 / 盟主 / 授权额度 / 余额）不变，`type`（授信/收回/注资/注资扣减）仍通过正负号与
+  红绿色、「联盟池」标识体现，未新增独立类型列。
+
+

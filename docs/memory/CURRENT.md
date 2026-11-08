@@ -1,8 +1,31 @@
 # qing 当前状态
 
-更新时间：2026-11-08
+更新时间：2026-11-09
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-09 我的 → 额度授权记录：入口仅大盟主/盟主，查询改新接口（未构建、未联调）
+
+- 入口可见性已在 2026-11-07 收窄：`panelMain.CanViewQuotaGrantRecord` 要求「俱乐部创建者 + 已入盟」，
+  即大盟主（联盟总群主）/ 盟主（已入盟创建者）；群主、管理员、合伙人、普通成员不可见，按钮分支同样拦截。
+- 查询从「查联盟成员 → 逐个俱乐部查额度流水」改为服务端 2026-11-09 新增的 `查询_联盟_授信_记录`
+  → 推送 `ClubUnionGrantList`（一次返回授信/收回/注资/注资扣减，服务端分页、`count` 不封顶）。
+  不传 `club_id`（传空串，同文档示例），由服务端按身份限定范围；行字段改用 `quota` / `quota_after`
+  （余额兼容同值的 `remark`），不再本地过滤 type。
+- 只改 `assets/scripts/UI/panelQuotaGrantRecord.ts`，静态语法检查通过；Creator 构建、真机与服务端联调待验。
+  详见[交接](handoffs/2026-11-07-quota-grant-record.md)。
+
+## 2026-11-09 钻石池消耗入口：修大盟主不可见（未构建、未真机）
+
+- 原判定把「联盟状态已知但 `is_owner` 未回包」当成非总群主，且 `查询_我的_联盟` 确认总群主后没有刷新入口，大盟主首屏被藏后再不出现。
+- 改为仅在 `isOwner === false` 时对创建者收起；并在切回「我的」、确认总群主、创建联盟、身份查询失败回包时重算入口。只改 `panelMain.ts`，语法检查通过。
+
+## 2026-11-08 我的红利明细：玩家列改取 player、类型列改显房间号（未构建、未真机）
+
+- 玩家列原取 `row.name || row.guuid`，那是分成接收者（群主自己），所以每行都同名；改为 `row.player || row.name || row.guuid`，服务端回包没有 `player` 时仍兜底旧字段。
+- 「类型」列去掉（`levelText`/`club_id` 分支一并删除），改显「房间号」= `row.room_id`；俱乐部与联盟两种模式一致。
+- 表头文字是烤进 `assets/V7/money_v8_table_my_hongli.png` 的（Prefab 里四个表头 Label 全 `active=false` 是换装后的残留，实际不渲染）。用同系列 `record_table_header_exact.png` 的原字形把「类型」换成「房间号」：调和填充擦旧字 + 按亮度取亮加粗 0.7 档对齐原字重；尺寸/alpha/`.meta` 未变，73,689B < 原 75,064B，Creator 已重新导入（library md5 一致）。
+- Prefab 里那个隐藏 Label 文案同步改成「房间号」（`_string` + `_N$string`）；行内节点名仍是「类型」，脚本按名写入，不动业务节点名。
 
 ## 2026-11-08 安卓键盘：贴键盘上沿 + 点上半屏收起（真机已验证）
 
@@ -80,49 +103,26 @@
 - 列仅管理员（`super_admin`，含 admin999 与 admin）可见。游戏端只有 MD5，故新增 `mgr_player_login_password`（migration 046）用 AES-GCM 存明文副本，在注册/后台重置/自助改密三处收录；无记录显示「未收录」。存量回填 62/63（未命中 `37022268`）；游戏端内部改密不经后台时副本会过期。
 - 00:40 已部署，health 200、未登录 401、公网指向新 js；登录态目视待验。详见[交接](handoffs/2026-11-07-admin-player-password-column.md)。
 
-## 2026-11-06 默认对话只留盟主 / 大盟主（已部署）
+## 2026-11-06 多项已归档
 
-- 玩家、合伙人的消息首页默认对话只剩 BF客服、盟主（未入盟为群主）、大盟主；直属上级合伙人等代理层级不再生成入口，历史会话降为普通会话。
-- 22:28 部署 ChatTool `bce3b475…`（回滚 `bin/chattool.previous-defaultchat-20261106-2228`，旧 `c7f6cd15…`），健康 200、未登录 401；客户端缓存版本 1→2 待构建。详见[交接](handoffs/2026-11-06-default-chat-targets.md)。
-
-## 2026-11-06 后台俱乐部列表新增「俱乐部总积分」（已部署）
-
-- 俱乐部管理列表在「钻石池」后新增「俱乐部总积分」列，单位元；详情接口同字段一并返回。
-- 游戏服 `查询_俱乐部_成员_总分` 的同步回包是空对象（数据只推玩家端 `AllPlayerGold`），后台拿不到；改为聚合 `tbl_Account.sm_club_gold/sm_club_gold2` 的 `{"俱乐部ID": 积分}` 映射，mode 2/3 优先 `*_2` 列，`-99` 不计入。
-- 部署 19:14：二进制 `e9fd5d74…` + 前端 `index-6HAkVMKQ.js`（CSS 未变），回滚 `bin/xuanmanager.previous-clubtotalgold-20261106`、`web.previous-clubtotalgold-20261106`；health 200、未登录 clubs 接口 401。真实登录态目视待验。详见[交接](handoffs/2026-11-06-admin-club-total-gold.md)。
-
-## 2026-11-06 聊天托管：备注 / 置顶 / 快捷话术 / 删除单条会话（已部署、已归档）
-
-- 四项已上线并部署（服务端 `c7f6cd15…` + 前端 `index-BSPwxQGC.js`），真实账号交互待验，原文见[归档](archive/2026-11-08/current-nov06-hosted-chat.md)。
-
-## 2026-11-06 赢家留座限时（退房部分已归档）
-
-- 「留座离桌」：局中未结算判不出输赢，一律弹「限时3分钟、超时按逃跑结算」；局间只给赢家弹，输家直接留座。倒计时读服务端 `site_countdown`。局中预约退房原文见[归档](archive/2026-11-08/current-nov06-win-seat-exit.md)，3 分钟时长与超时逃跑结算仍待服务端实现。
-
-## 2026-11-06 私聊详情 V2 + 单方清除聊天（服务端已部署，客户端未构建）
-
-- 按效果图重做聊天皮肤（蓝/金气泡、金色发送、圆形返回/删除），底部新增「清除聊天」；只清自己这一侧，消息与对方/客服视图保留。ChatTool 已部署（migration 009、health 200、clear 未登录 401）、`go test` 与定向 tsc 通过；Creator、真机与真实会话联调待验。详见[交接](handoffs/2026-11-06-chat-detail-v2-clear.md)。
-
-## 2026-11-06 托管保留 + 上下分对账、后台玩家头像（已部署，已归档）
-
-- 原文见[归档](archive/2026-11-07/current-nov06-kefu-admin.md)。
+- 默认对话/俱乐部总积分、聊天托管、私聊 V2/单方清除、托管对账：[归档](archive/2026-11-08/current-nov06-chat-defaults-and-club-total.md)、[托管](archive/2026-11-08/current-nov06-hosted-chat.md)、[私聊](archive/2026-11-08/current-nov06-chat-and-hongli.md)、[客服后台](archive/2026-11-07/current-nov06-kefu-admin.md)。
+- 赢家留座限时：局中一律弹「限时3分钟、超时按逃跑结算」，局间只给赢家弹；倒计时读 `site_countdown`。留座时长与超时逃跑结算仍待服务端实现，原文见[归档](archive/2026-11-08/current-nov06-win-seat-exit.md)。
 
 ## 2026-11-05 消息列表 / 牌桌客服 / 代理贡献（已归档）
 
-- 「全部会话」置顶官方客服 BF、客服离线留言排队、客服站登录即在线、牌桌「联系客服」改开半透明 `panelMessage`、后台代理贡献逐层展开：原文见[归档](archive/2026-11-08/current-nov05-kefu-and-agent.md)；交接见 [official-kefu-entry](handoffs/2026-11-05-official-kefu-entry.md)、[ingame-message-overlay](handoffs/2026-11-05-ingame-message-overlay.md)、[agent-contributions](handoffs/2026-11-05-agent-contributions.md)。
+- 置顶官方客服 BF、客服离线留言、牌桌「联系客服」开半透明 `panelMessage`、后台代理贡献逐层展开：[归档](archive/2026-11-08/current-nov05-kefu-and-agent.md)、[入口](handoffs/2026-11-05-official-kefu-entry.md)、[局内浮层](handoffs/2026-11-05-ingame-message-overlay.md)、[贡献](handoffs/2026-11-05-agent-contributions.md)。
 
 ## 2026-11-04 消息列表 / 盟友管理 / 游戏设置 / 房间奖池（已归档）
 
-- 原文见[归档](archive/2026-11-05/current-nov04-message-list.md)与[盟友管理](archive/2026-11-05/current-nov04-ally-management.md)、[游戏设置](archive/2026-11-06/current-nov04-game-settings.md)、[房间奖池](archive/2026-11-05/current-nov04-room-jackpot.md)；细节见[滚动分页交接](handoffs/2026-11-04-message-list-scroll-paging.md)、[奖池交接](handoffs/2026-11-04-game-settings-jackpot.md)、[规则交接](handoffs/2026-11-04-game-settings-rules.md)。
+- 消息列表/盟友管理/游戏设置/房间奖池：[归档](archive/2026-11-05/current-nov04-message-list.md)、[盟友](archive/2026-11-05/current-nov04-ally-management.md)、[设置](archive/2026-11-06/current-nov04-game-settings.md)、[奖池](archive/2026-11-05/current-nov04-room-jackpot.md)；交接：[分页](handoffs/2026-11-04-message-list-scroll-paging.md)、[奖池](handoffs/2026-11-04-game-settings-jackpot.md)、[规则](handoffs/2026-11-04-game-settings-rules.md)。
 
-## 2026-11-04～11-06 我的红利：V2 统计 / 联盟红利 / 合伙人入口（未构建、未真机）
+## 2026-11-04～11-06 我的红利（已归档）
 
-- 入口开放创建者 + 合伙人（`ClubContext` 补 `isAgent`，`role` 会被管理员占用）；面板口径全部换俱乐部 V2（`ClubBonusStats`/`ClubBonusList`/`提取_俱乐部_红利`，删账号 `hongli`/`all_hongli` 与旧 `查询_俱乐部_代理_收益`）；联盟区仅联盟创建者可见，`mode=union` 走 `ClubUnionBonusStats` 系列，卡片高 320→410。只做 tsc/Prefab 检查，Creator/构建/真机待验。详见[入口](handoffs/2026-11-06-agent-my-hongli-entry.md)、[俱乐部口径](handoffs/2026-11-04-my-hongli-club-stats.md)、[联盟红利](handoffs/2026-11-04-union-hongli-panel.md)。
+- 面板口径全部换俱乐部 V2，联盟区仅联盟创建者可见。原文见[归档](archive/2026-11-08/current-nov06-chat-and-hongli.md)；细节见[入口](handoffs/2026-11-06-agent-my-hongli-entry.md)、[俱乐部口径](handoffs/2026-11-04-my-hongli-club-stats.md)、[联盟红利](handoffs/2026-11-04-union-hongli-panel.md)。
 
 ## 2026-11-03～11-04（已归档）
 
-- 后台玩家管理移除「加减钻石」并删旧接口：已部署，详见[交接](handoffs/2026-11-04-admin-remove-player-diamonds.md)。
-- 后台俱乐部管理与钻石池、我的页钻石池消耗/上下分记录/入盟审批/联盟归属、创建与加入联盟、按联盟层级的直聊权限：原文见[归档](archive/2026-11-05/current-nov03-club.md)。
+- 后台移除「加减钻石」[交接](handoffs/2026-11-04-admin-remove-player-diamonds.md)；后台俱乐部/钻石池、我的页钻石池消耗/上下分/入盟审批/联盟归属、创建加入联盟、按联盟层级直聊权限：[归档](archive/2026-11-05/current-nov03-club.md)。
 
 ## 2026-10-31～11-03 阶段归档（链接）
 

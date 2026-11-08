@@ -18,7 +18,7 @@ const {ccclass} = cc._decorator;
  *
  * `mode=union` 时复用同一套界面和逻辑，改走联盟红利（V2 文档 §10）：
  * `查询_联盟_红利_统计` → `ClubUnionBonusStats`、`查询_联盟_红利_明细` → `ClubUnionBonusList`、
- * `提取_联盟_红利`。统计字段与俱乐部分红同名，明细的“类型”列显示来源俱乐部。
+ * `提取_联盟_红利`。统计字段与俱乐部分红同名，明细的「房间号」列显示来源房间。
  *
  * 不再读取账号 `hongli` / `all_hongli`，也不再用旧的
  * `查询_俱乐部_代理_收益` / `提取_玩家_红利`。
@@ -230,7 +230,7 @@ export default class panelMyHongli extends UIPanelViewBase {
         this.setLabel("提取红利面板/bk/可提取金额", "可提取金额：" + this.fenText(this.unclaimedFen));
     }
 
-    /** 路由 ClubBonusList / ClubUnionBonusList：[{number,count,date,...,bonus,level|club_id,room_id}] */
+    /** 路由 ClubBonusList / ClubUnionBonusList：[{number,count,date,...,bonus,player,name,guuid,level,room_id}] */
     public onClubBonusList(raw:any) {
         const msg:any = this.parseJson(raw);
         if(!msg || typeof msg !== "object") return;
@@ -352,15 +352,6 @@ export default class panelMyHongli extends UIPanelViewBase {
         this.setLabel("分页/页码", (this.page + 1) + " / " + this.totalPages);
     }
 
-    private levelText(level:any):string {
-        const raw = level === undefined || level === null ? "" : String(level);
-        if(raw === "clubroot") return "创建者";
-        if(raw === "unionroot") return "联盟上缴";
-        const match = /^club(\d+)$/.exec(raw);
-        if(match) return match[1] + "级合伙人";
-        return raw || "分成";
-    }
-
     private renderBonusRows(rows:any[]) {
         const first:any = rows.length > 0 ? rows[0] : null;
         const reportedPage = first ? Number(first.number) : NaN;
@@ -371,12 +362,12 @@ export default class panelMyHongli extends UIPanelViewBase {
             : Math.max(1, this.page + (rows.length >= this.PAGE_SIZE ? 1 : 0));
 
         this.renderRows(rows, (node, row) => {
-            const player = this.isUnion() ? (row.player || row.name || row.guuid) : (row.name || row.guuid);
-            const typeText = this.isUnion()
-                ? (row.club_id ? String(row.club_id) : "—")
-                : this.levelText(row.level);
+            // 玩家列取本局贡献抽水的玩家（`player`）；老回包只有 name/guuid 时兜底。
+            const player = row.player || row.name || row.guuid;
+            const room = row.room_id === undefined || row.room_id === null || String(row.room_id) === ""
+                ? "—" : String(row.room_id);
             this.setNodeLabel(node, "玩家", String(player || "—"));
-            this.setNodeLabel(node, "类型", typeText);
+            this.setNodeLabel(node, "类型", room);
             this.setNodeLabel(node, "金额", this.fenText(row.bonus));
             this.setNodeLabel(node, "时间", String(row.date || row.time || "—"));
         }, this.isUnion() ? "暂无联盟红利明细" : "暂无红利明细");

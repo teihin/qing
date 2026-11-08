@@ -2267,10 +2267,12 @@ export default class DrhPlayerLogic extends cc.Component {
             if (nCount == 5 && this.playerPos == PlayerPos.self)
                 this.PlayAudio(0, "时间到");
 
-            if (this.info.emState == PlayerState.init || this.info.emState == PlayerState.leave || this.info.site_countdown != "0")
+            if (this.info.emState == PlayerState.init || this.info.emState == PlayerState.leave || this.info.emState == PlayerState.ready || this.info.site_countdown != "0")
             {
                 // 留座期间只暂停：藏掉进度条和秒数，但不 unschedule，
                 // 否则回座后没有任何地方重新挂计时器，打牌倒计时会停在原地不走。
+                // ready（等人开局）也要藏：PlayerList 不刷新 proxy_countdown，
+                // 上一局残留的秒数会一直挂在头像上倒数。
                 this.transLightBKBar.node.active = false;
                 this.transLigtBKBlackBKBar.node.active = false;
                 this.txtActionTime.node.active = false;
