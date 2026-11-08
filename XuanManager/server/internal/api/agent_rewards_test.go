@@ -97,3 +97,74 @@ func TestValidRewardKind(t *testing.T) {
 		}
 	}
 }
+
+// 奖池共享的比例是加在「奖池 50%」上的，不是整个奖池：100000 → 50000 → 60% = 30000。
+func TestRewardPoolSuggested(t *testing.T) {
+	cases := []struct {
+		total   float64
+		percent float64
+		want    int64
+	}{
+		{100000, 60, 30000},
+		{100000, 50, 25000},
+		{100000, 100, 50000},
+		{99999, 60, 30000},
+		{0, 60, 0},
+		{100000, 0, 0},
+	}
+	for _, test := range cases {
+		if got := rewardPoolSuggested(test.total, test.percent); got != test.want {
+			t.Fatalf("奖池 %v × %v%% = %d, want %d", test.total, test.percent, got, test.want)
+		}
+	}
+	// 比例按 50% 算，不能等同于直接按奖池总额算。
+	if rewardPoolSuggested(100000, 60) == int64(float64(100000)*0.6) {
+		t.Fatal("比例基准错了：应该按奖池 50%，不能直接按整个奖池")
+	}
+}
+
+// 上级扣掉下级整条线：上级 2 点、下级 1.8 点 → 上级只剩 0.2，不能重复计算。
+func TestBuildRewardPerfDeductsChildren(t *testing.T) {
+	members := []rewardMember{
+		{AgentID: "boss", UpperID: ""},
+		{AgentID: "child", UpperID: "boss"},
+	}
+	lines := map[string]*rewardLine{
+		"boss":  {TodayContrib: 2},
+		"child": {TodayContrib: 1.8},
+	}
+	perf := buildRewardPerfFromLines(members, lines)
+	if got := perf["boss"].Net; got != 0.2 {
+		t.Fatalf("上级净点数 = %v, want 0.2", got)
+	}
+	if got := perf["child"].Net; got != 1.8 {
+		t.Fatalf("下级净点数 = %v, want 1.8", got)
+	}
+	if got := perf["boss"].Granted; got != 1.8 {
+		t.Fatalf("上级已下发 = %v, want 1.8", got)
+	}
+}
+
+// 下级没进本次名单时，也必须把它算进扣减范围，否则上级会把下级的贡献再算一遍。
+func TestRewardLineTargetsIncludesUnselectedChildren(t *testing.T) {
+	selected := []rewardMember{{AgentID: "boss", ClubID: "c1"}}
+	all := []rewardMember{
+		{AgentID: "boss", ClubID: "c1"},
+		{AgentID: "child", UpperID: "boss", ClubID: "c1"},
+		{AgentID: "other", ClubID: "c2"},
+	}
+	targets := rewardLineTargets(selected, all)
+	got := map[string]bool{}
+	for _, m := range targets {
+		got[m.AgentID] = true
+	}
+	if !got["boss"] || !got["child"] {
+		t.Fatalf("应该包含本人与直接下级，实际 %v", got)
+	}
+	if got["other"] {
+		t.Fatal("无关代理不应该被查询")
+	}
+	if len(targets) != 2 {
+		t.Fatalf("查询数量 = %d, want 2", len(targets))
+	}
+}

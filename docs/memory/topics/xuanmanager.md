@@ -10,8 +10,9 @@
 - 2026-10-27 新增「系统配置 → 游戏推广下载地址」：维护游戏端哈希 `usr_hash_info` 的 `下载url`（客户端 `ConfigManager.downloadurl`，推广面板「游戏下载地址」显示它），写入按原行快照/回读/恢复并审计；不涉及 `WebHome` 静态站与 APK。详见[交接](../handoffs/2026-10-27-promotion-download-url.md)。
 - 2026-11-03 新增「联盟管理」（`/game/unions`）并改造俱乐部管理为联盟模式 V2：联盟列表/详情读 `club_union_info`，俱乐部归属读 `club_guuid_info.union_id`，俱乐部额度读 `union_quota`；联盟列表行内提供「加额度 / 减额度」，「调整群主额度」继续复用同一接口，均调用 `增加_联盟_额度` 调整联盟池（扣减传负数），不直接改俱乐部额度。详见[交接](../handoffs/2026-11-03-admin-union-management.md)。
 - 2026-11-03 房间战绩列表/详情增加俱乐部名称、创建者和创建者邀请码，支持按俱乐部 ID/名称和邀请码筛选；房间维护改为只读按俱乐部聚合展示，俱乐部展开二级显示房间，移除解散和全局创建开关入口。详见[交接](../handoffs/2026-11-03-admin-room-records-club-maintenance.md)。
-- 2026-11-07 玩家管理「用户密码」列（已部署）显示**明文**，只对管理员（`p.IsSuper`，即 `super_admin` 角色，覆盖 admin999 与同角色的普通管理员 admin）返回。**游戏端 `third_marketing_info.player_wxpwd`／`tbl_Account.sm_userPWD`／`kbe_accountinfos.password` 全是 MD5、不可解密**，所以新增自有表 `mgr_player_login_password`（migration 046）用 `XUAN_CREDENTIAL_KEY` 的 AES-GCM 存明文副本，在注册/后台重置/玩家自助改密三个入口收录，玩家列表管理员才批量解密；无记录显示「未收录」，不回退摘要。存量用常见密码字典回填 62/63（`source='recovered'`）。详见[交接](../handoffs/2026-11-07-admin-player-password-column.md)。
-- 2026-11-07 新增「业绩核心共享」（`/game/agent-rewards`，模块 58）：业绩/核心/奖池共享三类代理奖励，每天设总额 → 按业绩净点数自动分摊（最大余数法）或人工填写 → 主/子账号拆分 → 一键发放走 exchange 通道 → 记账导出。名单每日从游戏代理候选同步（16 人），排除用独立抑制表而非删行。**新增模块/权限前必须查 `MAX(id)`，本功能曾用 57/5801 与「游戏接口日志」撞号并覆盖对方名称**。详见[交接](../handoffs/2026-11-07-agent-rewards.md)。
+- 2026-11-07 玩家管理「用户密码」列（已部署）显示**明文**，仅管理员（`p.IsSuper`）可见。**游戏端 `third_marketing_info.player_wxpwd`／`sm_userPWD`／`kbe_accountinfos.password` 全是 MD5、不可解密**，故新增自有表 `mgr_player_login_password`（046）用 `XUAN_CREDENTIAL_KEY` 的 AES-GCM 存明文副本，注册/后台重置/自助改密三入口收录。详见[交接](../handoffs/2026-11-07-admin-player-password-column.md)。
+- 2026-11-07 新增「业绩核心共享」（`/game/agent-rewards`，模块 58）：三类代理奖励设总额 → 分摊/手填 → 主子账号拆分 → exchange 发放 → 记账导出；名单从代理候选同步，排除用独立抑制表。**新增模块/权限前必须查 `MAX(id)`，本功能曾用 57/5801 与「游戏接口日志」撞号并覆盖对方名称**。详见[交接](../handoffs/2026-11-07-agent-rewards.md)。
+- 2026-11-08 「业绩核心共享」补齐（迁移 052）：单个 ID 添加修复（原来没入口、后端也没写 `selected=1`）、名单持久、业绩点数按全树扣减、奖池共享关联真实奖池并按比例自动算、三栏汇总、工单前缀改 `BF`。详见[交接](../handoffs/2026-11-08-agent-rewards-v2.md)。
 - 历史用户偏好为功能更新同步正式版本，除非明确只改本地；本次仅整理文档。后续任务依据用户最新要求和已有授权决定发布范围，并履行候选验证、回滚与发布后回读。
 
 来源：[原记忆](../archive/2026-09-05/AGENTS.original.md)第 104–111、147–149 行。

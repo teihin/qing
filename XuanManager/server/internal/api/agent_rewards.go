@@ -104,6 +104,13 @@ type rewardPlanView struct {
 	Kind         string `json:"kind"`
 	PlannedTotal int64  `json:"plannedTotal"`
 	Status       string `json:"status"`
+	// 奖池共享专用：真实奖池数据 + 共享比例 + 自动算出的计划金额。
+	// 奖池金额按「元（金币）」返回，游戏服务原始单位是分，已在这里换算。
+	PoolAvailable bool    `json:"poolAvailable"`
+	PoolTotal     float64 `json:"poolTotal"`
+	PoolHalf      float64 `json:"poolHalf"`
+	PoolPercent   float64 `json:"poolPercent"`
+	PoolSuggested int64   `json:"poolSuggested"`
 }
 
 type rewardTotals struct {
@@ -122,6 +129,9 @@ type rewardOverview struct {
 	Excluded []rewardExcluded `json:"excluded"`
 	Totals   rewardTotals     `json:"totals"`
 	Warnings []string         `json:"warnings"`
+	// 上一次已发放批次里每个代理的实际金额，核心奖励手填时作参考。
+	LastAmounts map[string]int64 `json:"lastAmounts"`
+	LastDate    string           `json:"lastDate"`
 }
 
 func validRewardKind(kind string) bool {
@@ -587,6 +597,12 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放计划失败")
 		return
 	}
+	poolPercent := 0.0
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(pool_percent,0) FROM mgr_agent_reward_plan WHERE id = ?`, planID).
+		Scan(&poolPercent); err != nil {
+		s.logger.Warn("load reward plan pool percent", "error", err)
+		poolPercent = 0
+	}
 
 	members, err := s.loadRewardMembers(ctx)
 	if err != nil {
@@ -620,10 +636,11 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 	}
 
 	overview := rewardOverview{
-		Plan:     rewardPlanView{Date: date, Kind: kind, PlannedTotal: planned, Status: planStatus},
-		Members:  []rewardMember{},
-		Excluded: []rewardExcluded{},
-		Warnings: []string{},
+		Plan:        rewardPlanView{Date: date, Kind: kind, PlannedTotal: planned, Status: planStatus},
+		Members:     []rewardMember{},
+		Excluded:    []rewardExcluded{},
+		Warnings:    []string{},
+		LastAmounts: map[string]int64{},
 	}
 
 	skip := map[string]bool{}
@@ -636,8 +653,32 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 
 	// 业绩点数 = 俱乐部整条线的今日贡献，按上下级逐级扣减（上级减掉下级那条线），
 	// 与需求里"上级 2 点分给下级 1.8 点、上级只剩 0.2"是同一口径。
-	lineMap := s.rewardLineData(ctx, members, &overview)
-	perfMap := buildRewardPerfFromLines(members, lineMap)
+	//
+	// 关键：扣减必须基于「全部在册代理」的代理树，不能只看本次入选名单，
+	// 否则下級没进名单时它的整条线贡献不会被从上级扣掉，上级会被重复计算。
+	allMembers, err := s.loadRewardMembersAll(ctx)
+	if err != nil {
+		s.logger.Error("load all reward members", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
+		return
+	}
+	lineTargets := rewardLineTargets(members, allMembers)
+	lineMap := s.rewardLineData(ctx, lineTargets, &overview)
+	perfMap := buildRewardPerfFromLines(allMembers, lineMap)
+
+	missing := 0
+	for _, m := range members {
+		if skip[m.AgentID] {
+			continue
+		}
+		if _, ok := lineMap[m.AgentID]; !ok {
+			missing++
+		}
+	}
+	if missing > 0 {
+		overview.Warnings = append(overview.Warnings,
+			fmt.Sprintf("%d 个代理没有俱乐部线数据（未挂俱乐部或代理树未加载），对应行显示「无数据」", missing))
+	}
 
 	for _, m := range members {
 		if skip[m.AgentID] {
@@ -697,7 +738,7 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 	}
 	if len(overview.Members) == 0 {
 		overview.Warnings = append(overview.Warnings,
-			"本次分配名单为空：点右上「批量添加」，按联盟或俱乐部勾选要发奖励的代理。")
+			"本次分配名单为空：点右上「单个添加」或「批量添加」，把要发奖励的代理加进名单。")
 	}
 	if kind == rewardKindPerformance {
 		var totalNet float64
@@ -709,7 +750,98 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 				"今天所有代理的整条线贡献都是 0（当天没有产生贡献或线数据未加载），业绩奖励无法按点数分摊")
 		}
 	}
+
+	// 奖池共享：直接读平台真实奖池，避免客服再去别处查数。
+	if kind == rewardKindPool {
+		poolFen, poolErr := s.rewardPoolTotal(ctx)
+		if poolErr != nil {
+			s.logger.Warn("read reward pool total", "error", poolErr)
+			overview.Warnings = append(overview.Warnings,
+				"读取今日奖池失败："+poolErr.Error()+"，可手动填写本次发放总额")
+		} else {
+			percent := poolPercent
+			if percent <= 0 {
+				percent = 60
+			}
+			// 游戏奖池按「分」存储，页面与发放都按「金币/元」口径，这里统一换算。
+			yuan := float64(poolFen) / 100
+			overview.Plan.PoolAvailable = true
+			overview.Plan.PoolTotal = round2(yuan)
+			overview.Plan.PoolHalf = round2(yuan / 2)
+			overview.Plan.PoolPercent = percent
+			overview.Plan.PoolSuggested = rewardPoolSuggested(yuan, percent)
+		}
+		if poolPercent <= 0 {
+			overview.Plan.PoolPercent = 60
+		}
+	} else {
+		overview.Plan.PoolPercent = poolPercent
+	}
+
+	// 核心奖励按人工判断填写，把上一次已发放金额带出来做参考。
+	if kind == rewardKindCore {
+		if last, lastDate, err := s.lastRewardAmountsWithDate(ctx, kind); err == nil {
+			overview.LastAmounts = last
+			overview.LastDate = lastDate
+		} else {
+			s.logger.Warn("load last reward amounts", "error", err)
+		}
+	}
+
 	writeData(w, http.StatusOK, overview)
+}
+
+// handlerRewardSummary 三类奖励当天的汇总（计划/已分配/人数/状态），
+// 供页面顶部三栏并排显示，不用来回切换 tab 才知道哪一栏还没配平。
+func (s *Server) handlerRewardSummary(w http.ResponseWriter, r *http.Request, p principal) {
+	date, err := rewardDate(r.URL.Query().Get("date"), time.Now())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error())
+		return
+	}
+	rows, err := s.db.QueryContext(r.Context(), `SELECT p.kind, p.planned_total, p.status,
+COALESCE(SUM(i.final_amount),0),
+COALESCE(SUM(CASE WHEN i.final_amount > 0 THEN 1 ELSE 0 END),0)
+FROM mgr_agent_reward_plan p
+LEFT JOIN mgr_agent_reward_item i ON i.plan_id = p.id
+WHERE p.reward_date = ?
+GROUP BY p.id, p.kind, p.planned_total, p.status`, date)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取奖励汇总失败")
+		return
+	}
+	defer rows.Close()
+	found := map[string]bool{}
+	items := []map[string]any{}
+	for rows.Next() {
+		var kind, status string
+		var planned, allocated, count int64
+		if err := rows.Scan(&kind, &planned, &status, &allocated, &count); err != nil {
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "解析奖励汇总失败")
+			return
+		}
+		found[kind] = true
+		items = append(items, map[string]any{
+			"kind": kind, "plannedTotal": planned, "allocated": allocated,
+			"count": count, "status": status,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取奖励汇总失败")
+		return
+	}
+	for _, kind := range []string{rewardKindPerformance, rewardKindCore, rewardKindPool} {
+		if found[kind] {
+			continue
+		}
+		items = append(items, map[string]any{
+			"kind": kind, "plannedTotal": 0, "allocated": 0, "count": 0, "status": "draft",
+		})
+	}
+	var selected int64
+	_ = s.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND selected=1`).Scan(&selected)
+	writeData(w, http.StatusOK, map[string]any{"date": date, "items": items, "selected": selected})
 }
 
 func rewardRoleOrder(role string) int {
@@ -730,6 +862,27 @@ func rewardRoleOrder(role string) int {
 func (s *Server) loadRewardMembers(ctx context.Context) ([]rewardMember, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT agent_id, name, role, level, upper_id, club_id, club_name, union_id, union_name, authorized, selected, source
 FROM mgr_agent_reward_member WHERE status='active' AND selected=1 ORDER BY level DESC, id ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list := []rewardMember{}
+	for rows.Next() {
+		var m rewardMember
+		if err := rows.Scan(&m.AgentID, &m.Name, &m.Role, &m.Level, &m.UpperID, &m.ClubID, &m.ClubName,
+			&m.UnionID, &m.UnionName, &m.Authorized, &m.Selected, &m.Source); err != nil {
+			return nil, err
+		}
+		list = append(list, m)
+	}
+	return list, rows.Err()
+}
+
+// loadRewardMembersAll 取全部在册代理（不看是否入选），只用于还原代理层级、
+// 计算净点数时的逐级扣减。入选与否则由 loadRewardMembers 决定。
+func (s *Server) loadRewardMembersAll(ctx context.Context) ([]rewardMember, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT agent_id, name, role, level, upper_id, club_id, club_name, union_id, union_name, authorized, selected, source
+FROM mgr_agent_reward_member WHERE status='active' ORDER BY level DESC, id ASC`)
 	if err != nil {
 		return nil, err
 	}
@@ -927,11 +1080,6 @@ func (s *Server) rewardLineData(ctx context.Context, members []rewardMember, ove
 			result[item.id] = item.line
 		}
 	}
-	missing := len(members) - len(result)
-	if missing > 0 {
-		overview.Warnings = append(overview.Warnings,
-			fmt.Sprintf("%d 个代理没有俱乐部线数据（未挂俱乐部或代理树未加载），对应行显示「无数据」", missing))
-	}
 	return result
 }
 
@@ -1003,9 +1151,10 @@ func anyFloat(v any) float64 {
 
 func (s *Server) handlerRewardSavePlan(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
-		Date         string `json:"date"`
-		Kind         string `json:"kind"`
-		PlannedTotal int64  `json:"plannedTotal"`
+		Date         string   `json:"date"`
+		Kind         string   `json:"kind"`
+		PlannedTotal int64    `json:"plannedTotal"`
+		PoolPercent  *float64 `json:"poolPercent"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -1024,6 +1173,10 @@ func (s *Server) handlerRewardSavePlan(w http.ResponseWriter, r *http.Request, p
 		writeError(w, http.StatusBadRequest, "INVALID_TOTAL", "发放总额必须在 0 到 1 亿金币之间")
 		return
 	}
+	if input.PoolPercent != nil && (*input.PoolPercent < 0 || *input.PoolPercent > 100) {
+		writeError(w, http.StatusBadRequest, "INVALID_PERCENT", "共享比例必须在 0 到 100 之间")
+		return
+	}
 	planID, status, before, err := s.ensureRewardPlan(r.Context(), date, input.Kind, p.Username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放计划失败")
@@ -1033,16 +1186,34 @@ func (s *Server) handlerRewardSavePlan(w http.ResponseWriter, r *http.Request, p
 		writeError(w, http.StatusConflict, "PLAN_LOCKED", "该批次已发放或发放中，不能修改总额")
 		return
 	}
-	if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_agent_reward_plan SET planned_total = ?, status='draft'
+	if input.PoolPercent != nil {
+		if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_agent_reward_plan
+SET planned_total = ?, pool_percent = ?, status='draft' WHERE id = ?`,
+			input.PlannedTotal, *input.PoolPercent, planID); err != nil {
+			writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "保存发放总额失败")
+			return
+		}
+	} else if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_agent_reward_plan SET planned_total = ?, status='draft'
 WHERE id = ?`, input.PlannedTotal, planID); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "保存发放总额失败")
 		return
 	}
+	// 奖池共享：保存时把当日奖池总额落一份快照（pool_base 存游戏原始单位「分」，便于精确对账）。
+	poolBase := int64(0)
+	if input.Kind == rewardKindPool {
+		if total, err := s.rewardPoolTotal(r.Context()); err == nil {
+			poolBase = total
+			if _, err := s.db.ExecContext(r.Context(),
+				`UPDATE mgr_agent_reward_plan SET pool_base = ? WHERE id = ?`, total, planID); err != nil {
+				s.logger.Warn("save reward plan pool base", "error", err)
+			}
+		}
+	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_plan", strconv.FormatInt(planID, 10),
-		map[string]any{"plannedTotal": input.PlannedTotal, "kind": input.Kind, "date": date},
+		map[string]any{"plannedTotal": input.PlannedTotal, "kind": input.Kind, "date": date, "poolPercent": input.PoolPercent},
 		map[string]any{"plannedTotal": before}, map[string]any{"plannedTotal": input.PlannedTotal},
 		0, "设置计划发放总额", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"plannedTotal": input.PlannedTotal})
+	writeData(w, http.StatusOK, map[string]any{"plannedTotal": input.PlannedTotal, "poolBase": poolBase})
 }
 
 type rewardAmountInput struct {
@@ -1225,8 +1396,13 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 	overview := rewardOverview{Warnings: []string{}}
 	switch input.Kind {
 	case rewardKindPerformance:
-		lineMap := s.rewardLineData(ctx, members, &overview)
-		perfMap := buildRewardPerfFromLines(members, lineMap)
+		allMembers, err := s.loadRewardMembersAll(ctx)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
+			return
+		}
+		lineMap := s.rewardLineData(ctx, rewardLineTargets(members, allMembers), &overview)
+		perfMap := buildRewardPerfFromLines(allMembers, lineMap)
 		for _, m := range members {
 			if skip[m.AgentID] {
 				continue
@@ -1327,6 +1503,41 @@ ON DUPLICATE KEY UPDATE auto_amount = VALUES(auto_amount), final_amount = VALUES
 	writeData(w, http.StatusOK, map[string]any{"count": len(allocated), "total": planned})
 }
 
+// rewardLineTargets 返回需要取线数据的代理：本次入选名单 + 他们的直接下级。
+//
+// 只取一层就够了——下级的 team_raw 已经包含它自己下面所有人，上级的净点数
+// 只需要减掉"直接下级整条线"。把下级补进来是为了在下级没进名单时也能正扣减，
+// 否则上级的净点数会被算高、分摊时多拿钱。
+func rewardLineTargets(members, all []rewardMember) []rewardMember {
+	if len(members) == 0 {
+		return nil
+	}
+	wanted := map[string]bool{}
+	out := make([]rewardMember, 0, len(members)*2)
+	for _, m := range members {
+		if strings.TrimSpace(m.ClubID) == "" || wanted[m.AgentID] {
+			continue
+		}
+		wanted[m.AgentID] = true
+		out = append(out, m)
+	}
+	childOf := map[string]bool{}
+	for _, m := range members {
+		childOf[m.AgentID] = true
+	}
+	for _, m := range all {
+		if !childOf[strings.TrimSpace(m.UpperID)] || wanted[m.AgentID] {
+			continue
+		}
+		if strings.TrimSpace(m.ClubID) == "" {
+			continue
+		}
+		wanted[m.AgentID] = true
+		out = append(out, m)
+	}
+	return out
+}
+
 // buildRewardPerfFromLines 用俱乐部整条线的今日贡献算出每个代理的业绩点数：
 //   - 毛（My）  = 该代理整条线的今日贡献（含自己和所有下线）；
 //   - 下发（Granted） = 直接下级的整条线今日贡献之和；
@@ -1334,6 +1545,7 @@ ON DUPLICATE KEY UPDATE auto_amount = VALUES(auto_amount), final_amount = VALUES
 //
 // 这样上下级不会重复计算：每个下线只会从自己的直接上级那里被扣掉一次，
 // 更下一层的贡献已经包含在直接下级的整条线里，不会重复扣。
+// members 必须是「全部在册代理」，只用入选名单会漏扣未入选下级的贡献。
 func buildRewardPerfFromLines(members []rewardMember, lines map[string]*rewardLine) map[string]*rewardPerf {
 	childrenSum := map[string]float64{}
 	for _, m := range members {
@@ -1415,84 +1627,174 @@ func splitRewardByWeight(planned int64, weights map[string]float64) (map[string]
 
 // lastRewardAmounts 取上一次已发放批次里每个代理的金额，作为核心奖励的参考值。
 func (s *Server) lastRewardAmounts(ctx context.Context, kind string) (map[string]int64, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT i.agent_id, i.final_amount
-FROM mgr_agent_reward_item i
-JOIN mgr_agent_reward_plan p ON p.id = i.plan_id
-WHERE p.kind = ? AND p.status = 'paid' AND p.id = (
-  SELECT MAX(id) FROM mgr_agent_reward_plan WHERE kind = ? AND status = 'paid'
-)`, kind, kind)
+	amounts, _, err := s.lastRewardAmountsWithDate(ctx, kind)
+	return amounts, err
+}
+
+// lastRewardAmountsWithDate 同上，额外返回那一批的日期，便于页面标注"参考 11-07"。
+func (s *Server) lastRewardAmountsWithDate(ctx context.Context, kind string) (map[string]int64, string, error) {
+	result := map[string]int64{}
+	var lastID int64
+	var lastDate string
+	if err := s.db.QueryRowContext(ctx, `SELECT id, DATE_FORMAT(reward_date,'%Y-%m-%d')
+FROM mgr_agent_reward_plan WHERE kind = ? AND status = 'paid' ORDER BY id DESC LIMIT 1`, kind).
+		Scan(&lastID, &lastDate); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return result, "", nil
+		}
+		return result, "", err
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT agent_id, final_amount FROM mgr_agent_reward_item WHERE plan_id = ?`, lastID)
 	if err != nil {
-		return nil, err
+		return result, lastDate, err
 	}
 	defer rows.Close()
-	result := map[string]int64{}
 	for rows.Next() {
 		var id string
 		var amount int64
 		if err := rows.Scan(&id, &amount); err != nil {
-			return nil, err
+			return result, lastDate, err
 		}
 		result[id] = amount
 	}
-	return result, rows.Err()
+	return result, lastDate, rows.Err()
 }
 
-// handlerRewardMemberAdd 手工把某个游戏账号加进奖励名单（source=manual，同步时不会被删）。
+// rewardPoolTotal 读平台今天的真实奖池总额，单位是**分**（游戏服务原始口径）。
+// 展示与发放金额按「元/金币」，调用方需要 /100 换算。返回分是为了保留两位小数精度。
+func (s *Server) rewardPoolTotal(ctx context.Context) (int64, error) {
+	callCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+	snapshot, err := s.fetchRewardPools(callCtx, gameOperationContext("agent-reward-pool"))
+	if err != nil {
+		return 0, err
+	}
+	var total int64
+	for _, value := range snapshot.Values {
+		total += value
+	}
+	return total, nil
+}
+
+// rewardPoolSuggested 按「奖池总额 → 50% → 共享比例」算出本次计划发放金额。
+// 比例是加在 50% 上的，不是加在整个奖池上：pool 100000 → 50% = 50000 → 60% = 30000。
+// poolYuan 是奖池总额（元），返回值是整数金币。
+func rewardPoolSuggested(poolYuan float64, percent float64) int64 {
+	if poolYuan <= 0 || percent <= 0 {
+		return 0
+	}
+	half := poolYuan / 2
+	return int64(math.Round(half * percent / 100))
+}
+
+// handlerRewardMemberAdd 手工把游戏账号加进奖励名单并直接参与本次分配。
+//
+// 支持单个 agentId 或批量 agentIds（一行一个/逗号分隔由前端拆好）。
+// 加入后 selected=1、source=manual：每日同步不会把人删掉，也不会掉出名单。
 func (s *Server) handlerRewardMemberAdd(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
-		AgentID string `json:"agentId"`
+		AgentID  string   `json:"agentId"`
+		AgentIDs []string `json:"agentIds"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	agentID := strings.TrimSpace(input.AgentID)
-	if !validAgentID(agentID) {
-		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 不正确")
+	raw := append([]string{input.AgentID}, input.AgentIDs...)
+	ids := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, item := range raw {
+		item = strings.TrimSpace(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		if !validAgentID(item) {
+			writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 不正确："+item)
+			return
+		}
+		seen[item] = true
+		ids = append(ids, item)
+	}
+	if len(ids) == 0 {
+		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "请填写代理 ID")
 		return
 	}
+	if len(ids) > 200 {
+		writeError(w, http.StatusBadRequest, "TOO_MANY", "一次最多添加 200 个代理")
+		return
+	}
+
+	added := make([]map[string]any, 0, len(ids))
+	failed := make([]string, 0)
+	for _, agentID := range ids {
+		name, err := s.addRewardMember(r.Context(), agentID, p.Username)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				failed = append(failed, agentID+"：没有找到这个游戏账号")
+				continue
+			}
+			s.logger.Error("add reward member", "error", err, "agentId", agentID)
+			failed = append(failed, agentID+"：加入失败")
+			continue
+		}
+		added = append(added, map[string]any{"agentId": agentID, "name": name})
+	}
+	if len(added) == 0 {
+		writeError(w, http.StatusBadRequest, "ADD_FAILED", strings.Join(failed, "；"))
+		return
+	}
+	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_member", strings.Join(ids, ","),
+		map[string]any{"action": "manual_add", "count": len(added)}, nil,
+		map[string]any{"added": added, "failed": failed}, 0, "手工加入奖励名单", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{
+		"agentId": ids[0], "name": added[0]["name"],
+		"added": added, "failed": failed, "count": len(added),
+	})
+}
+
+// addRewardMember 写入一行名单（存在则更新并设为参与）。返回昵称。
+func (s *Server) addRewardMember(ctx context.Context, agentID, operator string) (string, error) {
 	var name, roleText, upper string
 	var level int64
 	var isLeader, isPartner, isChief bool
-	err := s.db.QueryRowContext(r.Context(), `SELECT COALESCE(a.sm_name,''), COALESCE(a.sm_role,''), COALESCE(a.sm_level,0),
+	err := s.gameDB.QueryRowContext(ctx, `SELECT COALESCE(a.sm_name,''), COALESCE(a.sm_role,''), COALESCE(a.sm_level,0),
 COALESCE(NULLIF(m.upper_guuid,''), NULLIF(a.sm_agentID,''), ''),
 (a.sm_bigAgentID = a.sm_guuid), (a.sm_supperAgentID = a.sm_guuid), (a.sm_chiefAgentID = a.sm_guuid)
-FROM kbedm.tbl_Account a
-LEFT JOIN kbedm.third_marketing_info m ON m.player_guuid = a.sm_guuid
+FROM tbl_Account a
+LEFT JOIN third_marketing_info m ON m.player_guuid = a.sm_guuid
 WHERE a.sm_guuid = ? ORDER BY m.id DESC LIMIT 1`, agentID).
 		Scan(&name, &roleText, &level, &upper, &isLeader, &isPartner, &isChief)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏账号")
-		return
-	}
 	if err != nil {
-		s.logger.Error("query player for reward member", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "查询玩家失败")
-		return
+		return "", err
 	}
 	var club, clubName, unionID, unionName string
-	if err := s.db.QueryRowContext(r.Context(), `SELECT ca.club_guuid, COALESCE(c.club_name,''), COALESCE(c.union_id,''),
+	if err := s.gameDB.QueryRowContext(ctx, `SELECT ca.club_guuid, COALESCE(c.club_name,''), COALESCE(c.union_id,''),
 COALESCE(u.union_name,'')
-FROM kbedm.club_agent_info ca
-LEFT JOIN kbedm.club_guuid_info c ON c.club_guuid = ca.club_guuid
-LEFT JOIN kbedm.club_union_info u ON u.union_id = c.union_id AND u.status='used'
+FROM club_agent_info ca
+LEFT JOIN club_guuid_info c ON c.club_guuid = ca.club_guuid
+LEFT JOIN club_union_info u ON u.union_id = c.union_id AND u.status='used'
 WHERE ca.user_guuid = ? AND ca.status='used' ORDER BY ca.id DESC LIMIT 1`, agentID).
 		Scan(&club, &clubName, &unionID, &unionName); err != nil {
 		club, clubName, unionID, unionName = "", "", "", ""
 	}
-	if _, err := s.db.ExecContext(r.Context(), `INSERT INTO mgr_agent_reward_member
-(agent_id, name, role, level, upper_id, club_id, club_name, union_id, union_name, authorized, source, status)
-VALUES (?,?,?,?,?,?,?,?,?,0,'manual','active')
+	// 俱乐部内代理链优先作为上级，取不到时退回平台账号链。
+	var clubUpper string
+	_ = s.gameDB.QueryRowContext(ctx, `SELECT COALESCE(upper_guuid,'') FROM club_agent_info
+WHERE user_guuid = ? AND status='used' ORDER BY id DESC LIMIT 1`, agentID).Scan(&clubUpper)
+	if strings.TrimSpace(clubUpper) != "" {
+		upper = strings.TrimSpace(clubUpper)
+	}
+	role := classifyClubRewardRole(roleText, isLeader, 0, level)
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO mgr_agent_reward_member
+(agent_id, name, role, level, upper_id, club_id, club_name, union_id, union_name, authorized, selected, source, status)
+VALUES (?,?,?,?,?,?,?,?,?,0,1,'manual','active')
 ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), level = VALUES(level),
   upper_id = VALUES(upper_id), club_id = VALUES(club_id), club_name = VALUES(club_name),
-  union_id = VALUES(union_id), union_name = VALUES(union_name), status = 'active'`,
-		agentID, name, classifyClubRewardRole(roleText, false, 0, level), level, upper,
+  union_id = VALUES(union_id), union_name = VALUES(union_name), selected = 1, status = 'active'`,
+		agentID, name, role, level, upper,
 		strings.TrimSpace(club), strings.TrimSpace(clubName), strings.TrimSpace(unionID), strings.TrimSpace(unionName)); err != nil {
-		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "加入名单失败")
-		return
+		return "", err
 	}
-	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_member", agentID,
-		map[string]any{"action": "manual_add"}, nil, map[string]any{"name": name}, 0, "手工加入奖励名单", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"agentId": agentID, "name": name})
+	return name, nil
 }
 
 func (s *Server) handlerRewardExclude(w http.ResponseWriter, r *http.Request, p principal) {
@@ -1744,6 +2046,8 @@ WHERE plan_id = ? AND status IN ('paid','mismatch')`, planID)
 		return
 	}
 
+	// 工单前缀决定玩家金币流水里的类型：旧发钱服务按 work_order 前缀识别，
+	// BF=补分（玩家侧看到的"补发"）、JL=奖励。三类代理奖励统一走补发口径。
 	codes := map[string]string{rewardKindPerformance: "P", rewardKindCore: "C", rewardKindPool: "S"}
 	dateCode := strings.ReplaceAll(date, "-", "")
 	var seq int
@@ -1767,7 +2071,7 @@ WHERE plan_id = ? AND status IN ('paid','mismatch')`, planID)
 				continue
 			}
 			seq++
-			order := fmt.Sprintf("JL%s%s%05d", dateCode, codes[input.Kind], seq)
+			order := fmt.Sprintf("BF%s%s%05d", dateCode, codes[input.Kind], seq)
 			before, _ := s.readPlayerBalanceState(ctx, payee)
 			if _, err := s.db.ExecContext(ctx, `INSERT INTO mgr_agent_reward_payout
 (plan_id, item_id, agent_id, payee_guuid, payee_type, amount, work_order, status, balance_before)
@@ -1955,13 +2259,29 @@ func (s *Server) handlerRewardLine(w http.ResponseWriter, r *http.Request, p pri
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理名单失败")
 		return
 	}
+	allMembers, err := s.loadRewardMembersAll(ctx)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
+		return
+	}
 	byID := map[string]rewardMember{}
-	for _, m := range members {
+	for _, m := range allMembers {
 		byID[m.AgentID] = m
 	}
 	self, ok := byID[agentID]
 	if !ok {
 		writeError(w, http.StatusNotFound, "AGENT_NOT_FOUND", "名单里没有这个代理，请先同步")
+		return
+	}
+	inList := false
+	for _, m := range members {
+		if m.AgentID == agentID {
+			inList = true
+			break
+		}
+	}
+	if !inList {
+		writeError(w, http.StatusNotFound, "AGENT_NOT_IN_LIST", "该代理还没加入本次分配名单")
 		return
 	}
 
@@ -1980,7 +2300,7 @@ func (s *Server) handlerRewardLine(w http.ResponseWriter, r *http.Request, p pri
 		cur = parent
 	}
 	var kids []rewardMember
-	for _, m := range members {
+	for _, m := range allMembers {
 		if m.UpperID == self.AgentID {
 			kids = append(kids, m)
 		}

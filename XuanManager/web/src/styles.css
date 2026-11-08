@@ -2758,7 +2758,31 @@ td strong { color: #294149; }
 .reward-empty strong{color:#17323b;font-size:16px}
 .reward-empty p{max-width:460px;color:#7d9298;font-size:13px;line-height:1.7}
 .reward-empty > button{margin-top:4px}
+.reward-direct-add{padding:8px 10px;border:1px dashed #d5e6e4;border-radius:9px;background:#fafdfc}
+.reward-direct-add .reward-dim{white-space:nowrap}
 .reward-list-save{display:grid;gap:10px}
 .reward-list-save strong{color:#17323b;font-size:14px}
 .reward-list-save .reward-tools input{min-width:180px}
 .reward-confirm{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding:11px 14px;border:1px solid #f3e2c4;border-radius:10px;background:#fffaf0;color:#7c5a16;font-size:13px}
+/* 三栏并排汇总：不用切 tab 就能看出哪一栏还没配平 */
+.reward-kinds{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.reward-kind{display:grid;gap:8px;padding:12px 14px;border:1px solid #e0e9ea;border-radius:12px;background:#fff;box-shadow:var(--shadow);text-align:left}
+.reward-kind.is-on{border-color:#bfe3de;background:#f5fdfb;box-shadow:0 0 0 2px rgba(35,168,158,.09)}
+.reward-kind__head{display:flex;align-items:center;gap:8px;color:#17323b;font-size:13.5px;font-weight:600}
+.reward-kind__head small{padding:1px 7px;border-radius:20px;color:#72898f;background:#f0f5f5;font-size:11px;font-weight:400}
+.reward-kind__head em{margin-left:auto;font-style:normal}
+.reward-kind dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:0}
+.reward-kind dt{color:#809499;font-size:11.5px}
+.reward-kind dd{margin:2px 0 0;color:#16313a;font-family:Georgia,serif;font-size:16px;font-variant-numeric:tabular-nums}
+.reward-kind dd.is-bad{color:#c1454f}
+.reward-kind dd.is-ok{color:#12826f}
+@media (max-width:1100px){.reward-kinds{grid-template-columns:1fr}}
+/* 奖池共享：直接显示平台真实奖池与共享比例 */
+.reward-pool{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:14px 16px;border:1px solid #d9e9e6;border-radius:12px;background:linear-gradient(180deg,#f7fdfb,#fff)}
+.reward-pool__cell > span{display:block;color:#6e858b;font-size:12.5px}
+.reward-pool__cell > strong{display:block;margin-top:4px;color:#16313a;font-family:Georgia,serif;font-size:20px;font-variant-numeric:tabular-nums}
+.reward-pool__cell > input{width:100%;height:32px;margin-top:4px;padding:0 9px;border:1px solid #d5e4e5;border-radius:8px;background:#fff;font-variant-numeric:tabular-nums;font-size:14px}
+.reward-pool__cell > input:focus{outline:0;border-color:#63c4bb;box-shadow:0 0 0 3px rgba(35,168,158,.1)}
+.reward-pool__cell small{display:block;margin-top:5px;color:#809499;font-size:11.5px}
+.reward-pool__foot{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:#7d9298;font-size:12.5px}
+@media (max-width:1100px){.reward-pool{grid-template-columns:repeat(2,minmax(0,1fr))}}

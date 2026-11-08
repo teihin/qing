@@ -16,12 +16,19 @@ type Member = {
 };
 type Excluded = { agentId: string; name: string; kind: string; reason: string; operator: string; at: string };
 type Overview = {
-  plan: { date: string; kind: Kind; plannedTotal: number; status: string };
+  plan: {
+    date: string; kind: Kind; plannedTotal: number; status: string;
+    poolAvailable: boolean; poolTotal: number; poolHalf: number; poolPercent: number; poolSuggested: number;
+  };
   members: Member[];
   excluded: Excluded[];
   totals: { amount: number; count: number; planned: number; diff: number; points: number; excluded: number; pool: number };
   warnings: string[];
+  lastAmounts: Record<string, number>;
+  lastDate: string;
 };
+type KindSummary = { kind: Kind; plannedTotal: number; allocated: number; count: number; status: string };
+type Summary = { date: string; items: KindSummary[]; selected: number };
 type LedgerRow = {
   id: number; date: string; kind: Kind; agentId: string; agentName: string; payee: string;
   payeeType: string; amount: number; order: string; status: string; error: string; paidAt: string;
@@ -58,14 +65,14 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const [subOpen, setSubOpen] = useState<Member | null>(null);
   const [excludeOpen, setExcludeOpen] = useState<{ member: Member; scope: string; reason: string } | null>(null);
   const [excludedOpen, setExcludedOpen] = useState(false);
-  const [addOpen, setAddOpen] = useState(false);
   const [pickOpen, setPickOpen] = useState(false);
   const [listOpen, setListOpen] = useState(false);
   const [listRev, setListRev] = useState(0);
-  const [addId, setAddId] = useState("");
   const [payOpen, setPayOpen] = useState(false);
   const [payResult, setPayResult] = useState<PayResult | null>(null);
   const [ledgerOpen, setLedgerOpen] = useState(false);
+  const [summary, setSummary] = useState<Summary | null>(null);
+  const [poolPercent, setPoolPercent] = useState(60);
 
   const editable = Boolean(can("game.agent_reward.edit")) && data?.plan.status !== "paid" && data?.plan.status !== "paying";
   const canPay = Boolean(can("game.agent_reward.pay"));
@@ -77,6 +84,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const applyData = useCallback((value: Overview, keepDraft: boolean) => {
     setData(value);
     setPlanTotal(value.plan.plannedTotal);
+    if (!keepDraft) setPoolPercent(value.plan.poolPercent || 60);
     setDraft(prev => {
       const next: Record<string, number> = {};
       value.members.forEach(m => {
@@ -98,6 +106,14 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     }
   }, []);
 
+  const loadSummary = useCallback(async (targetDate: string) => {
+    try {
+      setSummary(await api<Summary>(`/api/game/agent-rewards/summary?date=${encodeURIComponent(targetDate)}`));
+    } catch {
+      // 汇总只是顶部的辅助信息，失败不打断主流程。
+    }
+  }, []);
+
   const load = useCallback(async (targetDate: string, targetKind: Kind, silent = false, resetDraft = false) => {
     // 只有第一次进页面才铺 loading；后续刷新一律就地更新，不把表格清空重画。
     const firstLoad = !hasData.current;
@@ -107,12 +123,14 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
       const value = await api<Overview>(url);
       applyData(value, !firstLoad && !resetDraft);
       hasData.current = true;
+      void loadSummary(targetDate);
       // 首次进入且名单为空时自动同步一次候选池，避免新部署后看到空白页。
       if (value.members.length === 0 && !autoSynced.current && can("game.agent_reward.edit")) {
         autoSynced.current = true;
         try {
           await api("/api/game/agent-rewards/sync", { method: "POST", ...jsonBody({}) });
           applyData(await api<Overview>(url), true);
+          void loadSummary(targetDate);
         } catch {
           // 同步失败就保持空名单，用户可以手动点「同步名单」重试。
         }
@@ -122,7 +140,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     } finally {
       if (!silent && firstLoad) setLoading(false);
     }
-  }, [notify, can, applyData]);
+  }, [notify, can, applyData, loadSummary]);
 
   // 切日期或切奖励类型属于换一份数据，草稿要重置；其余刷新一律保留页面输入。
   useEffect(() => { void load(date, kind, false, true); }, [date, kind, load]);
@@ -189,8 +207,13 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
 
   const saveAll = async (): Promise<boolean> => {
     if (!data) return false;
-    if (planTotal !== data.plan.plannedTotal || dirty) {
-      await api("/api/game/agent-rewards/plan", { method: "PUT", ...jsonBody({ date: data.plan.date, kind, plannedTotal: planTotal }) });
+    const needPlan = planTotal !== data.plan.plannedTotal || dirty
+      || (kind === "pool" && Math.abs(poolPercent - (data.plan.poolPercent || 0)) > 0.001);
+    if (needPlan) {
+      await api("/api/game/agent-rewards/plan", {
+        method: "PUT",
+        ...jsonBody({ date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
+      });
     }
     const amounts: Record<string, number> = {};
     (data.members ?? []).forEach(m => { amounts[m.agentId] = draft[m.agentId] ?? 0; });
@@ -203,7 +226,10 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     if (!data) return;
     setBusy("allocate");
     try {
-      await api("/api/game/agent-rewards/plan", { method: "PUT", ...jsonBody({ date: data.plan.date, kind, plannedTotal: planTotal }) });
+      await api("/api/game/agent-rewards/plan", {
+        method: "PUT",
+        ...jsonBody({ date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
+      });
       const result = await api<{ count: number; total: number }>("/api/game/agent-rewards/allocate",
         { method: "POST", ...jsonBody({ date: data.plan.date, kind }) });
       // 服务端刚重写了每个人的金额，这里必须重新以服务端为准，不能保留页面上的旧草稿。
@@ -306,29 +332,15 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     } finally { setBusy(""); }
   };
 
-  const addMember = async () => {
-    const id = addId.trim();
-    if (!id) return;
-    setBusy("add");
-    try {
-      const result = await api<{ agentId: string; name: string }>("/api/game/agent-rewards/members",
-        { method: "POST", ...jsonBody({ agentId: id }) });
-      notify(`已加入名单：${result.name || result.agentId}`);
-      setAddOpen(false); setAddId("");
-      await load(date, kind, true);
-    } catch (reason) {
-      notify(reason instanceof Error ? reason.message : "加入名单失败", "error");
-    } finally { setBusy(""); }
-  };
-
+  // 从名单里删除代理：只把 selected 置 0，记录与历史账保留，之后可在「添加代理」里重新加回来。
   const removeFromList = async (member: Member) => {
     setBusy("remove");
     try {
       await api("/api/game/agent-rewards/select", { method: "POST", ...jsonBody({ agentIds: [member.agentId], selected: false }) });
       await load(date, kind, true);
-      notify(`已把 ${member.name || member.agentId} 移出本次分配名单`);
+      notify(`已从名单删除 ${member.name || member.agentId}，需要时可重新添加`);
     } catch (reason) {
-      notify(reason instanceof Error ? reason.message : "移出失败", "error");
+      notify(reason instanceof Error ? reason.message : "删除失败", "error");
     } finally { setBusy(""); }
   };
 
@@ -359,13 +371,22 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     { key: "pool", hint: "手填" },
   ];
   const descriptions: Record<Kind, string> = {
-    performance: "按整条线今日贡献逐级扣减后的点数自动分摊计划总额（上级减掉下级那条线，不重复计算），可人工微调；合计必须等于总额才能发放。",
-    core: "按代理规模、层级与整条线贡献人工填写，金额相对固定，可参考上次发放值。",
-    pool: "按代理整条线每天的今日输赢人工判断分配，没有俱乐部线数据的代理会显示「无数据」。",
+    performance: "按整条线今日贡献逐级扣减后的点数自动分摊计划总额（上级扣掉已给下级的那部分，不重复计算），可人工微调；合计必须等于总额才能发放。",
+    core: "按代理规模、层级与整条线贡献人工填写，金额相对固定。表格会带出上一次已发放金额作参考，可一键预填。",
+    pool: "直接关联平台当天真实奖池：今日奖池 50% × 共享比例 = 本次计划发放金额（可手动覆盖），再按每人整条线的今日输赢人工分配。",
   };
 
   const totalWeight = data?.totals.points ?? 0;
-  const status = data?.plan.status ?? "draft";
+  const summaryMap = useMemo(() => {
+    const map: Record<string, KindSummary> = {};
+    (summary?.items ?? []).forEach(item => { map[item.kind] = item; });
+    return map;
+  }, [summary]);
+  // 奖池共享：比例是加在「奖池 50%」上的，和需求里 100000 → 50000 → 60% → 30000 一致。
+  const poolHalf = data?.plan.poolHalf ?? 0;
+  const poolSuggested = Math.round(poolHalf * (poolPercent || 0) / 100);
+  const kindStatusText = (value?: string) =>
+    value === "paid" ? "已发放" : value === "paying" ? "发放中" : value === "partial" ? "部分异常" : "编辑中";
 
   return (
     <div className="page-stack">
@@ -375,21 +396,34 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
         description={descriptions[kind]}
         actions={<div className="page-header__actions">
           <input type="date" value={date} onChange={event => setDate(event.target.value)} />
-          <Button onClick={() => setPickOpen(true)}>＋ 添加参与代理</Button>
+          <Button onClick={() => setPickOpen(true)}>＋ 添加代理</Button>
           <Button variant="secondary" disabled={busy === "sync"} onClick={() => void syncMembers()}>{busy === "sync" ? "同步中…" : "同步名单"}</Button>
           <Button variant="secondary" onClick={() => setLedgerOpen(true)}>发放账单</Button>
         </div>}
       />
 
-      <div className="reward-tabs">
-        {tabs.map(tab => (
-          <button key={tab.key} type="button" className={`reward-tab${kind === tab.key ? " is-on" : ""}`} onClick={() => setKind(tab.key)}>
-            {KIND_LABEL[tab.key]}<small>{tab.hint}</small>
-          </button>
-        ))}
-        <span className={`reward-status reward-status--${status}`}>
-          {status === "draft" ? "编辑中" : status === "paid" ? "已发放" : status === "paying" ? "发放中" : "部分异常"}
-        </span>
+      <div className="reward-kinds">
+        {tabs.map(tab => {
+          const row = summaryMap[tab.key];
+          const planned = row?.plannedTotal ?? 0;
+          const allocated = row?.allocated ?? 0;
+          const gap = planned - allocated;
+          return (
+            <button key={tab.key} type="button" className={`reward-kind${kind === tab.key ? " is-on" : ""}`}
+              onClick={() => setKind(tab.key)}>
+              <span className="reward-kind__head">
+                {KIND_LABEL[tab.key]}<small>{tab.hint}</small>
+                <em className={`reward-status reward-status--${row?.status ?? "draft"}`}>{kindStatusText(row?.status)}</em>
+              </span>
+              <dl>
+                <div><dt>计划发放</dt><dd>{num(planned)}</dd></div>
+                <div><dt>已分配</dt><dd>{num(allocated)}</dd></div>
+                <div><dt>剩余</dt><dd className={planned > 0 ? (gap === 0 ? "is-ok" : "is-bad") : ""}>{num(Math.abs(gap))}</dd></div>
+                <div><dt>参与人数</dt><dd>{row?.count ?? 0}</dd></div>
+              </dl>
+            </button>
+          );
+        })}
       </div>
 
       <div className="reward-metrics">
@@ -397,12 +431,12 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
           <span>计划发放总额（金币）</span>
           <input type="number" min={0} step={100} value={planTotal} disabled={!editable}
             onChange={event => { setPlanTotal(Math.max(0, Math.floor(Number(event.target.value) || 0))); setDirty(true); }} />
-          <small>每天由主管设置</small>
+          <small>{kind === "pool" ? "可手动覆盖自动算出的金额" : "每天由主管设置"}</small>
         </div>
         <div className="reward-metric">
           <span>已分配</span>
           <strong>{num(allSum)}</strong>
-          <small>{kind === "performance" ? `净点数合计 ${pt(totalWeight)} 元` : `已填 ${payCount} 人`}</small>
+          <small>{kind === "performance" ? `净点数合计 ${pt(totalWeight)}` : `已填 ${payCount} 人`}</small>
         </div>
         <div className={`reward-metric${diff === 0 && allSum > 0 ? " is-ok" : Math.abs(diff) > 0 ? " is-bad" : ""}`}>
           <span>剩余 / 差额</span>
@@ -415,6 +449,43 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
           <small>名单 {data?.members.length ?? 0} 人 · 已排除 {data?.excluded.length ?? 0} 人</small>
         </div>
       </div>
+
+      {kind === "pool" && (
+        <div className="reward-pool">
+          <div className="reward-pool__cell">
+            <span>今日奖池总额</span>
+            <strong>{data?.plan.poolAvailable ? money2(data.plan.poolTotal) : "读取失败"}</strong>
+            <small>平台各皮池实时合计（金币）</small>
+          </div>
+          <div className="reward-pool__cell">
+            <span>今日奖池 50%</span>
+            <strong>{data?.plan.poolAvailable ? money2(data.plan.poolHalf) : "—"}</strong>
+            <small>共享比例的基数</small>
+          </div>
+          <div className="reward-pool__cell">
+            <span>本次共享比例（%）</span>
+            <input type="number" min={0} max={100} step={5} value={poolPercent} disabled={!editable}
+              onChange={event => {
+                const next = Number(event.target.value);
+                setPoolPercent(Math.min(100, Math.max(0, Number.isFinite(next) ? next : 0)));
+                setDirty(true);
+              }} />
+            <small>常用 50% / 60% / 70%，按 50% 基数计算</small>
+          </div>
+          <div className="reward-pool__cell">
+            <span>本次应发（自动计算）</span>
+            <strong>{num(poolSuggested)}</strong>
+            <small>今日奖池 50% × 共享比例</small>
+          </div>
+          <div className="reward-pool__foot">
+            <span>自动算出的金额只是建议值，可写进计划总额后再逐个代理分配。</span>
+            <Button variant="secondary" disabled={!editable || poolSuggested <= 0}
+              onClick={() => { setPlanTotal(poolSuggested); setDirty(true); notify(`计划发放总额已设为 ${num(poolSuggested)}`); }}>
+              按比例写入计划总额
+            </Button>
+          </div>
+        </div>
+      )}
 
       {(data?.warnings ?? []).length > 0 && (
         <div className="reward-warn">
@@ -452,7 +523,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
               <option value="has">有可分配数据</option>
               <option value="noclub">无线数据</option>
             </select>
-            <Button variant="secondary" onClick={() => setPickOpen(true)}>＋ 批量添加</Button>
+            <Button variant="secondary" onClick={() => setPickOpen(true)}>＋ 添加代理</Button>
             <Button variant="secondary" onClick={() => setListOpen(true)}>名单方案</Button>
             <Button variant="secondary" disabled={!editable} onClick={() => {
               const picked = Object.keys(selected).filter(id => selected[id]);
@@ -468,16 +539,14 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
               {kind === "performance" ? "按点数自动分摊" : kind === "core" ? "按上次金额预填" : "按今日输赢预填"}
             </Button>
             <Button variant="ghost" disabled={!editable} onClick={clearAmounts}>清空金额</Button>
-            <Button variant="ghost" disabled={!editable || busy === "save"} onClick={() => void saveAmountsOnly()}>保存草稿</Button>
-            <Button variant="ghost" onClick={exportCsv}>导出</Button>
           </div>
         </div>
 
         {loading ? <LoadingBlock label="正在读取代理奖励数据" /> : members.length === 0 ? (
           <div className="reward-empty">
             <strong>本次分配名单为空</strong>
-            <p>先从俱乐部代理里选出要发奖励的人。只有进入名单的代理才会出现在表格里、参与分摊和发放。</p>
-            <Button onClick={() => setPickOpen(true)}>＋ 批量添加参与的代理</Button>
+            <p>先添加要发奖励的代理，只有进入名单的代理才会出现在表格里、参与分摊和发放。名单会一直保留，不用每天重新添加。</p>
+            <Button onClick={() => setPickOpen(true)}>＋ 添加代理</Button>
           </div>
         ) : (
           <div className="table-wrap">
@@ -496,11 +565,12 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
                   <th>身份</th>
                   <th>联盟</th>
                   <th>俱乐部</th>
-                  {kind === "performance" && <><th className="reward-num">整条线总输赢</th><th className="reward-num">今日输赢</th>
-                    <th className="reward-num">整条线总贡献</th>
-                    <th className="reward-num">今日业绩(毛)</th><th className="reward-num">已下发</th><th className="reward-num">实际点数(净)</th></>}
-                  {kind === "core" && <><th>代理规模</th><th className="reward-num">整条线总输赢</th><th className="reward-num">整条线总贡献</th><th className="reward-num">上次金额</th></>}
-                  {kind === "pool" && <><th className="reward-num">今日输赢</th><th className="reward-num">整条线总输赢</th><th className="reward-num">整条线总贡献</th></>}
+                  <th className="reward-num">今日业绩</th>
+                  <th className="reward-num">实际点数</th>
+                  <th className="reward-num">整条线总输赢</th>
+                  <th className="reward-num">今日输赢</th>
+                  <th className="reward-num">整条线总贡献</th>
+                  {kind === "core" && <th className="reward-num">上次金额</th>}
                   <th className="reward-num" style={{ width: 130 }}>本次金额</th>
                   <th style={{ width: 210 }} />
                 </tr>
@@ -523,25 +593,23 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
                       </td>
                       <td className="reward-dim">{m.unionId ? <span title={`联盟 ID ${m.unionId}`}>{m.unionName || m.unionId}</span> : <span className="reward-muted">—</span>}</td>
                       <td className="reward-dim">{m.clubId ? <span title={`俱乐部 ID ${m.clubId}`}>{m.clubName || m.clubId}</span> : <span className="reward-muted">—</span>}</td>
-                      {kind === "performance" && <>
-                        <td className="reward-num">{m.line ? signed(m.line.totalScore) : <span className="reward-muted">无数据</span>}</td>
-                        <td className="reward-num">{m.line ? signed(m.line.todayScore) : <span className="reward-muted">无数据</span>}</td>
-                        <td className="reward-num">{m.line ? money2(m.line.totalContrib) : <span className="reward-muted">无数据</span>}</td>
-                        <td className="reward-num">{m.perf ? pt(m.perf.my) : <span className="reward-muted">-</span>}</td>
-                        <td className="reward-num">{m.perf ? pt(m.perf.granted) : <span className="reward-muted">-</span>}</td>
-                        <td className="reward-num"><span className={`reward-points${(m.perf?.net ?? 0) > 0 ? "" : " is-zero"}`}>{m.perf ? pt(m.perf.net) : "-"}</span></td>
-                      </>}
-                      {kind === "core" && <>
-                        <td>{(data?.members ?? []).filter(x => x.upperId === m.agentId).length} 个直属下级</td>
-                        <td className="reward-num">{m.line ? signed(m.line.totalScore) : <span className="reward-muted">无数据</span>}</td>
-                        <td className="reward-num">{m.line ? money2(m.line.totalContrib) : <span className="reward-muted">无数据</span>}</td>
-                        <td className="reward-num">{m.paidAmount > 0 ? num(m.paidAmount) : <span className="reward-muted">-</span>}</td>
-                      </>}
-                      {kind === "pool" && <>
-                        <td className="reward-num">{m.line ? signed(m.line.todayScore) : <span className="reward-muted">无数据</span>}</td>
-                        <td className="reward-num">{m.line ? signed(m.line.totalScore) : <span className="reward-muted">无数据</span>}</td>
-                        <td className="reward-num">{m.line ? money2(m.line.totalContrib) : <span className="reward-muted">无数据</span>}</td>
-                      </>}
+                      {/* 三栏都显示同一套代理数据：今日业绩（毛）、实际点数（净，逐级扣减后）、线输赢与贡献 */}
+                      <td className="reward-num">{m.perf ? money2(m.perf.my) : <span className="reward-muted">无数据</span>}</td>
+                      <td className="reward-num">
+                        <span className={`reward-points${(m.perf?.net ?? 0) > 0 ? "" : " is-zero"}`} title={m.perf ? `毛 ${pt(m.perf.my)} − 下发 ${pt(m.perf.granted)}` : ""}>
+                          {m.perf ? pt(m.perf.net) : "无数据"}
+                        </span>
+                      </td>
+                      <td className="reward-num">{m.line ? signed(m.line.totalScore) : <span className="reward-muted">无数据</span>}</td>
+                      <td className="reward-num">{m.line ? signed(m.line.todayScore) : <span className="reward-muted">无数据</span>}</td>
+                      <td className="reward-num">{m.line ? money2(m.line.totalContrib) : <span className="reward-muted">无数据</span>}</td>
+                      {kind === "core" && (
+                        <td className="reward-num">
+                          {(data?.lastAmounts?.[m.agentId] ?? 0) > 0
+                            ? <span title={data?.lastDate ? `参考 ${data.lastDate} 的发放金额` : ""}>{num(data?.lastAmounts?.[m.agentId] ?? 0)}</span>
+                            : <span className="reward-muted">-</span>}
+                        </td>
+                      )}
                       <td className="reward-num">
                         <input className="reward-amount" type="number" min={0} step={1} value={amount} disabled={!editable}
                           onChange={event => setAmount(m.agentId, Number(event.target.value))} />
@@ -551,7 +619,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
                           <button type="button" className="reward-link" onClick={() => setLineOpen(m)}>线数据</button>
                           <button type="button" className="reward-link" onClick={() => setSubOpen(m)}>分账号</button>
                           <button type="button" className="reward-link reward-link--danger" disabled={!editable}
-                            onClick={() => void removeFromList(m)}>移出</button>
+                            onClick={() => void removeFromList(m)}>删除</button>
                         </div>
                       </td>
                     </tr>
@@ -566,11 +634,15 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
           <div>
             <span>参与 <b>{payCount}</b> 人</span>
             <span>合计 <b>{num(allSum)}</b> 金币</span>
-            <span className={diff === 0 ? "is-ok" : "is-bad"}>差额 <b>{num(Math.abs(diff))}</b></span>
+            <span className={diff === 0 ? "is-ok" : "is-bad"}>剩余差额 <b>{num(Math.abs(diff))}</b></span>
             <span className="reward-muted">可见行合计 {num(amountSum)}</span>
           </div>
           <div className="reward-tools">
-            <Button variant="secondary" disabled={!canPay || !editable || diff !== 0 || allSum <= 0} onClick={() => void openPay()}>
+            <Button variant="ghost" disabled={!editable || busy === "save"} onClick={() => void saveAmountsOnly()}>
+              {busy === "save" ? "保存中…" : "保存草稿"}
+            </Button>
+            <Button variant="secondary" onClick={exportCsv}>导出账单</Button>
+            <Button disabled={!canPay || !editable || diff !== 0 || allSum <= 0} onClick={() => void openPay()}>
               确认并发放
             </Button>
           </div>
@@ -623,20 +695,6 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
         )}
       </Modal>}
 
-      {addOpen && <Modal title="按 ID 添加代理" eyebrow="ADD MEMBER" onClose={() => setAddOpen(false)}>
-        <p className="reward-hint">
-          名单默认从游戏账号表同步全部老板/盟主/合伙人/总裁/普通代理。这里用于补加已降级、但业务仍要发钱的老账号：
-          加入后标记为手工来源，每日同步不会把它删掉。不发时用「排除」而不是删除，历史账目会保留。
-        </p>
-        <Field label="玩家 ID" hint="按游戏账号 ID 精确查询昵称与身份">
-          <input placeholder="例如 725838" value={addId} onChange={event => setAddId(event.target.value.trim())} />
-        </Field>
-        <div className="reward-modal-foot">
-          <Button variant="secondary" onClick={() => setAddOpen(false)}>取消</Button>
-          <Button disabled={busy === "add" || !addId} onClick={() => void addMember()}>{busy === "add" ? "加入中…" : "加入名单"}</Button>
-        </div>
-      </Modal>}
-
       {payOpen && <Modal title={`确认发放 · ${KIND_LABEL[kind]}`} eyebrow="PAYOUT" onClose={() => { setPayOpen(false); setPayResult(null); }} wide>
         {payResult ? (
           <div>
@@ -659,8 +717,8 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
               <div className="reward-metric"><span>计划差额</span><strong>0</strong><small>已配平</small></div>
             </div>
             <p className="reward-hint">
-              发放走游戏发钱通道，一单一笔、唯一工单号，发完逐笔回读余额核对。流水类型由游戏侧决定，
-              当前写入「奖励/补分」，需求要的「补发」需要游戏端加前缀。
+              发放走游戏发钱通道：一单一笔、唯一工单号（前缀 <b>BF</b>），发完逐笔回读余额核对。
+              玩家金币流水按工单前缀显示为<b>补发（补分）</b>，三类奖励都一样；主账号与子账号各自独立一笔。
             </p>
             <div className="reward-modal-foot">
               <Button variant="secondary" onClick={() => { setPayOpen(false); setPayResult(null); }}>取消</Button>
@@ -671,6 +729,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
       </Modal>}
 
       {pickOpen && <CandidateModal notify={notify} onClose={() => setPickOpen(false)}
+        onChanged={() => { void load(date, kind, true); }}
         onDone={() => { setPickOpen(false); void load(date, kind, true); }} />}
       {listOpen && <RewardListModal date={date} selectedCount={payCount} rev={listRev} notify={notify}
         onClose={() => setListOpen(false)}
@@ -893,18 +952,31 @@ function LedgerModal({ onClose, notify }: { onClose: () => void; notify: (m: str
  * 批量添加：从俱乐部在册代理里挑人进入本次分配名单。
  * 候选池只加载一次（几十人级别），联盟/俱乐部/关键字都在前端过滤，避免来回请求。
  */
-function CandidateModal({ notify, onClose, onDone }: {
+function CandidateModal({ notify, onClose, onDone, onChanged }: {
   notify: (m: string, k?: "success" | "error") => void;
   onClose: () => void;
   onDone: () => void;
+  /** 名单有变化但弹窗要继续开着（按 ID 直接加入后）时通知外层刷新表格。 */
+  onChanged: () => void;
 }) {
   const [items, setItems] = useState<Member[] | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [unionId, setUnionId] = useState("all");
   const [clubId, setClubId] = useState("all");
   const [keyword, setKeyword] = useState("");
+  const [directIds, setDirectIds] = useState("");
   const [saving, setSaving] = useState(false);
   const [stats, setStats] = useState({ selected: 0, total: 0 });
+
+  const reload = useCallback(async () => {
+    try {
+      const value = await api<{ items: Member[]; selected: number; total: number }>("/api/game/agent-rewards/candidates");
+      setItems(value.items ?? []);
+      setStats({ selected: value.selected ?? 0, total: value.total ?? 0 });
+    } catch (reason) {
+      notify(reason instanceof Error ? reason.message : "读取候选名单失败", "error");
+    }
+  }, [notify]);
 
   useEffect(() => {
     let alive = true;
@@ -966,6 +1038,28 @@ function CandidateModal({ notify, onClose, onDone }: {
 
   const toAdd = picked;
 
+  // 候选池里没有的账号（还没被授权成俱乐部代理、或已降级的老代理），按 ID 直接加。
+  const addDirect = async () => {
+    const ids = directIds.split(/[\s,，;；]+/).map(item => item.trim()).filter(Boolean);
+    if (!ids.length) return;
+    setSaving(true);
+    try {
+      const result = await api<{ count: number; failed: string[]; added: { agentId: string; name: string }[] }>(
+        "/api/game/agent-rewards/members",
+        { method: "POST", ...jsonBody({ agentIds: ids }) });
+      if (result.failed?.length) {
+        notify(`已加入 ${result.count} 人；失败：${result.failed.join("；")}`, "error");
+      } else {
+        notify(`已加入名单并参与本次分配：${result.added.map(item => `${item.name || item.agentId}(${item.agentId})`).join("、")}`);
+      }
+      setDirectIds("");
+      await reload();
+      onChanged();
+    } catch (reason) {
+      notify(reason instanceof Error ? reason.message : "按 ID 加入失败", "error");
+    } finally { setSaving(false); }
+  };
+
   const save = async () => {
     if (!toAdd.length) { onDone(); return; }
     setSaving(true);
@@ -979,12 +1073,15 @@ function CandidateModal({ notify, onClose, onDone }: {
   };
 
   return (
-    <Modal title="批量添加参与分配的代理" eyebrow="PICK AGENTS" onClose={onClose} wide>
+    <Modal title="添加参与分配的代理" eyebrow="ADD AGENTS" onClose={onClose} wide>
       <p className="reward-hint">
         候选池共 {stats.total} 个俱乐部代理（大盟主 / 盟主 / 合伙人 / 代理），名单里已有 {stats.selected} 人。
-        这里只列出<b>还没加入名单</b>的代理；勾选后点保存即加入，已被移出的也可以在这里重新加回来。
+        下方直接勾选即可加入；已被移出的也在这里重新勾回来。列表里没有的账号（还没授权成俱乐部代理的），
+        用最下面一行填 ID 加入。
       </p>
-      <div className="reward-tools" style={{ marginBottom: 12 }}>
+
+      <div className="reward-tools" style={{ marginBottom: 10 }}>
+        <input placeholder="搜代理 ID 或昵称" value={keyword} onChange={event => setKeyword(event.target.value.trim())} />
         <select value={unionId} onChange={event => { setUnionId(event.target.value); setClubId("all"); }}>
           <option value="all">全部联盟</option>
           {unions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -993,9 +1090,17 @@ function CandidateModal({ notify, onClose, onDone }: {
           <option value="all">全部俱乐部</option>
           {clubs.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
         </select>
-        <input placeholder="代理ID或昵称" value={keyword} onChange={event => setKeyword(event.target.value.trim())} />
         <Button variant="secondary" onClick={selectAllVisible}>全选当前 {visible.length} 人</Button>
         <Button variant="ghost" onClick={clearVisible}>取消全选</Button>
+      </div>
+
+      <div className="reward-tools reward-direct-add" style={{ marginBottom: 12 }}>
+        <span className="reward-dim">按 ID 直接加入</span>
+        <input placeholder="例如 725838，多个用逗号或空格分隔" value={directIds}
+          onChange={event => setDirectIds(event.target.value)} style={{ flex: 1, minWidth: 240 }} />
+        <Button variant="secondary" disabled={saving || !directIds.trim()} onClick={() => void addDirect()}>
+          加入名单
+        </Button>
       </div>
 
       {!items ? <LoadingBlock label="正在读取候选代理" /> : visible.length === 0 ? (
