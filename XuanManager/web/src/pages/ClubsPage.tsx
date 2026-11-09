@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
+import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
 import type {
@@ -133,6 +134,7 @@ export default function ClubsPage({
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ClubListItem | null>(null);
   const [stonePoolClub, setStonePoolClub] = useState<ClubListItem | null>(null);
+  const [earningsClub, setEarningsClub] = useState<ClubListItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -461,6 +463,20 @@ export default function ClubsPage({
                           </button>
                           <button
                             type="button"
+                            onClick={() => setEarningsClub(club)}
+                            disabled={!club.ownerId && !club.unionId}
+                            title={
+                              !club.ownerId && !club.unionId
+                                ? "没有找到俱乐部创建者，无法确定收益归属"
+                                : club.unionId
+                                  ? "该俱乐部已入盟，暗抽/奖池收益归联盟大盟主；按俱乐部查看生成明细"
+                                  : "按暗抽、奖池查看该俱乐部群主的每日收益与明细"
+                            }
+                          >
+                            收益对账
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setStonePoolClub(club)}
                             disabled={!club.ownerId || !canAdjustStonePool}
                             title={
@@ -535,6 +551,15 @@ export default function ClubsPage({
           notify={notify}
           onClose={() => setStonePoolClub(null)}
           onDone={() => void load()}
+        />
+      )}
+
+      {earningsClub && (
+        <OwnerEarningsModal
+          scope="club"
+          clubId={earningsClub.clubId}
+          notify={notify}
+          onClose={() => setEarningsClub(null)}
         />
       )}
     </div>

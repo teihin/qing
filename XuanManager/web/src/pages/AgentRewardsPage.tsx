@@ -12,6 +12,7 @@ type Member = {
   agentId: string; name: string; role: string; level: number; upperId: string; clubId: string;
   clubName: string; unionId: string; unionName: string;
   authorized: boolean; selected: boolean; source: string; perf: Perf | null; line: Line | null;
+  sharePercent: number;
   amount: number; splits: Split[]; subs: Sub[]; paidAmount: number;
 };
 type Excluded = { agentId: string; name: string; kind: string; reason: string; operator: string; at: string };
@@ -38,10 +39,14 @@ type PayResult = { total: number; paid: number; failed: number; skipped: number;
 const KIND_LABEL: Record<Kind, string> = { performance: "业绩奖励", core: "核心奖励", pool: "奖池共享" };
 // 与游戏内「代理中心」一致的角色名：大盟主 / 盟主 / 小盟主 / 合伙人 / 代理
 const ROLE_LABEL: Record<string, string> = { grand: "大盟主", leader: "盟主", small_leader: "小盟主", partner: "合伙人", agent: "代理" };
+// 占比堆叠条的分段颜色，按占比从高到低循环使用。
+const SHARE_COLORS = ["#1f948a", "#3f7fbf", "#c69132", "#a4639f", "#4f9160", "#b65f43", "#6b72bd", "#7f8f34", "#2b9aa8", "#9a5a6f"];
 
 const num = (value: number) => (value || 0).toLocaleString("zh-CN");
 const pt = (value: number | null | undefined) => (typeof value === "number" ? value.toFixed(2) : "0.00");
 const money2 = (value: number) => (value || 0).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const pct = (value: number | null | undefined) => `${(value || 0).toFixed(2)}%`;
+const syncClock = () => new Date().toLocaleTimeString("zh-CN", { hour12: false });
 // 防止表格公式注入
 const csvCell = (value: unknown) => `"${String(value ?? "").replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"', '""')}"`;
 
@@ -73,12 +78,15 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const [ledgerOpen, setLedgerOpen] = useState(false);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [poolPercent, setPoolPercent] = useState(60);
+  const [lastSync, setLastSync] = useState("");
 
   const editable = Boolean(can("game.agent_reward.edit")) && data?.plan.status !== "paid" && data?.plan.status !== "paying";
   const canPay = Boolean(can("game.agent_reward.pay"));
 
   const autoSynced = useRef(false);
   const hasData = useRef(false);
+  const perfRefreshing = useRef(false);
+  const perfKey = useRef("");
   // keepDraft=true 表示这是一次静默刷新：保留页面上已经输入但还没保存的金额与拆分，
   // 只把服务端的新数据补进来，避免刷新时把客服正在填的数字冲掉。
   const applyData = useCallback((value: Overview, keepDraft: boolean) => {
@@ -123,6 +131,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
       const value = await api<Overview>(url);
       applyData(value, !firstLoad && !resetDraft);
       hasData.current = true;
+      setLastSync(syncClock());
       void loadSummary(targetDate);
       // 首次进入且名单为空时自动同步一次候选池，避免新部署后看到空白页。
       if (value.members.length === 0 && !autoSynced.current && can("game.agent_reward.edit")) {
@@ -144,6 +153,51 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
 
   // 切日期或切奖励类型属于换一份数据，草稿要重置；其余刷新一律保留页面输入。
   useEffect(() => { void load(date, kind, false, true); }, [date, kind, load]);
+
+  // 轮询回来时如果日期/分栏已经切换，丢弃旧响应，避免把上一份业绩合并进新页面。
+  useEffect(() => { perfKey.current = `${date}|${kind}`; }, [date, kind]);
+
+  // 只把游戏实时业绩/占比合并回当前页面，不碰客服正在填的金额、总额和拆分。
+  // 三栏切换、日期切换都走同一份净点数口径，所以顶部占比在哪个分栏都一致。
+  const refreshPerformance = useCallback(async (manual = false) => {
+    if (perfRefreshing.current || !hasData.current) return;
+    perfRefreshing.current = true;
+    const key = `${date}|${kind}`;
+    try {
+      const value = await api<Overview>(`/api/game/agent-rewards?${new URLSearchParams({ date, kind })}`);
+      if (perfKey.current !== key) return;
+      setData(prev => {
+        if (!prev) return value;
+        const fresh = new Map(value.members.map(m => [m.agentId, m]));
+        return {
+          ...prev,
+          members: prev.members.map(m => {
+            const row = fresh.get(m.agentId);
+            return row ? { ...m, perf: row.perf, line: row.line, sharePercent: row.sharePercent } : m;
+          }),
+          totals: { ...prev.totals, points: value.totals.points },
+          warnings: value.warnings,
+        };
+      });
+      setLastSync(syncClock());
+      if (manual) notify("今日业绩占比已同步");
+    } catch (reason) {
+      if (manual) notify(reason instanceof Error ? reason.message : "同步业绩失败", "error");
+    } finally {
+      perfRefreshing.current = false;
+    }
+  }, [date, kind, notify]);
+
+  // 业绩是游戏服实时累计的，页面每 30 秒静默同步一次；切到后台标签页时暂停。
+  const hasOverview = Boolean(data);
+  useEffect(() => {
+    if (!hasOverview) return;
+    const timer = window.setInterval(() => {
+      if (document.hidden) return;
+      void refreshPerformance();
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [hasOverview, refreshPerformance]);
 
   const syncMembers = async () => {
     setBusy("sync");
@@ -168,6 +222,13 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     if (dataFilter === "noclub" && m.line) return false;
     return true;
   }), [data, keyword, roleFilter, unionFilter, clubFilter, dataFilter, kind, draft]);
+
+  // 顶部占比区不受筛选影响：展示本次名单里所有已加入代理，按占比从高到低排。
+  const shareRows = useMemo(() => (data?.members ?? [])
+    .map(m => ({ id: m.agentId, name: m.name || m.agentId, role: m.role, net: m.perf?.net ?? 0, percent: m.sharePercent ?? 0 }))
+    .sort((a, b) => b.percent - a.percent || b.net - a.net || a.id.localeCompare(b.id)), [data]);
+  const shareSum = useMemo(() => shareRows.reduce((sum, row) => sum + row.percent, 0), [shareRows]);
+  const shareTotal = data?.totals.points ?? 0;
 
   // 联盟/俱乐部下拉：从当前名单聚合，俱乐部随所选联盟联动。
   const unionOptions = useMemo(() => {
@@ -346,12 +407,13 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
 
   const exportCsv = () => {
     if (!data) return;
-    const head = ["日期", "类型", "代理ID", "昵称", "身份", "联盟", "俱乐部", "今日输赢", "整条线总输赢", "整条线总贡献", "今日业绩(毛)", "已下发", "实际点数(净)", "分配金额", "子账号拆分"];
+    const head = ["日期", "类型", "代理ID", "昵称", "身份", "联盟", "俱乐部", "今日输赢", "整条线总输赢", "整条线总贡献", "今日业绩(毛)", "已下发", "实际点数(净)", "业绩占比", "分配金额", "子账号拆分"];
     const rows = members.map(m => [
       data.plan.date, KIND_LABEL[kind], m.agentId, m.name, ROLE_LABEL[m.role] ?? m.role,
       m.unionName || m.unionId, m.clubName || m.clubId,
       m.line ? m.line.todayScore : "", m.line ? m.line.totalScore : "", m.line ? m.line.totalContrib : "",
       m.perf ? m.perf.my : "", m.perf ? m.perf.granted : "", m.perf ? m.perf.net : "",
+      pct(m.sharePercent),
       draft[m.agentId] ?? 0,
       (splits[m.agentId] ?? []).filter(s => s.type === "sub").map(s => `${s.payee}:${s.amount}`).join(" "),
     ]);
@@ -397,6 +459,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
         actions={<div className="page-header__actions">
           <input type="date" value={date} onChange={event => setDate(event.target.value)} />
           <Button onClick={() => setPickOpen(true)}>＋ 添加代理</Button>
+          <Button variant="secondary" onClick={() => void refreshPerformance(true)}>刷新业绩</Button>
           <Button variant="secondary" disabled={busy === "sync"} onClick={() => void syncMembers()}>{busy === "sync" ? "同步中…" : "同步名单"}</Button>
           <Button variant="secondary" onClick={() => setLedgerOpen(true)}>发放账单</Button>
         </div>}
@@ -425,6 +488,52 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
           );
         })}
       </div>
+
+      {data && (
+      <section className={`reward-share${shareTotal > 0 ? "" : " is-empty"}`}>
+        <div className="reward-share__head">
+          <div>
+            <strong>今日业绩占比</strong>
+            <small>
+              本次名单 {shareRows.length} 人 · 按净点数归一，合计 {pct(shareSum)} · 跟随游戏服实时累计，每 30 秒刷新
+            </small>
+          </div>
+          <div className="reward-share__meta">
+            <span>合计净点数 <b>{pt(shareTotal)}</b></span>
+            <span>最近同步 <b>{lastSync || "—"}</b></span>
+            <Button variant="ghost" onClick={() => void refreshPerformance(true)}>立即同步</Button>
+          </div>
+        </div>
+        {shareTotal > 0 && shareRows.length > 0 ? (
+          <>
+            <div className="reward-share__bar" role="img" aria-label="今日业绩占比分布">
+              {shareRows.map((row, index) => row.percent > 0 && (
+                <i key={row.id} style={{ width: `${row.percent}%`, background: SHARE_COLORS[index % SHARE_COLORS.length] }}
+                  title={`${row.name}：${pct(row.percent)} · 净点数 ${pt(row.net)}`} />
+              ))}
+            </div>
+            <div className="reward-share__chips">
+              {shareRows.map((row, index) => (
+                <span key={row.id} className={`reward-share__chip${row.percent > 0 ? "" : " is-zero"}`}
+                  title={`${ROLE_LABEL[row.role] ?? row.role} · ID ${row.id} · 净点数 ${pt(row.net)}`}>
+                  <i style={{ background: SHARE_COLORS[index % SHARE_COLORS.length] }} />
+                  <b>{row.name}</b>
+                  <em>{pct(row.percent)}</em>
+                  <small>{pt(row.net)} 点</small>
+                </span>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="reward-share__empty">
+            今日名单内所有代理的净点数都是 0，暂无可分配业绩；游戏产生今日贡献后会自动同步过来。
+          </p>
+        )}
+        <p className="reward-share__note">
+          「今日业绩」= 该代理整条线的今日贡献，扣掉直接下级后得到净点数；占比按本次名单内净点数归一，和「业绩奖励」自动分摊比例一致。
+        </p>
+      </section>
+      )}
 
       <div className="reward-metrics">
         <div className="reward-metric">
@@ -567,6 +676,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
                   <th>俱乐部</th>
                   <th className="reward-num">今日业绩</th>
                   <th className="reward-num">实际点数</th>
+                  <th className="reward-num" title="本人净点数 ÷ 本次名单净点数合计；有正业绩时合计固定 100%">业绩占比</th>
                   <th className="reward-num">整条线总输赢</th>
                   <th className="reward-num">今日输赢</th>
                   <th className="reward-num">整条线总贡献</th>
@@ -598,6 +708,12 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
                       <td className="reward-num">
                         <span className={`reward-points${(m.perf?.net ?? 0) > 0 ? "" : " is-zero"}`} title={m.perf ? `毛 ${pt(m.perf.my)} − 下发 ${pt(m.perf.granted)}` : ""}>
                           {m.perf ? pt(m.perf.net) : "无数据"}
+                        </span>
+                      </td>
+                      <td className="reward-num">
+                        <span className={`reward-share-pct${(m.sharePercent ?? 0) > 0 ? "" : " is-zero"}`}
+                          title={`净点数 ${pt(m.perf?.net ?? 0)} / 名单合计 ${pt(shareTotal)}`}>
+                          {pct(m.sharePercent)}
                         </span>
                       </td>
                       <td className="reward-num">{m.line ? signed(m.line.totalScore) : <span className="reward-muted">无数据</span>}</td>
@@ -633,6 +749,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
         <div className="reward-foot">
           <div>
             <span>参与 <b>{payCount}</b> 人</span>
+            <span>业绩占比合计 <b>{shareTotal > 0 ? pct(shareSum) : "—"}</b></span>
             <span>合计 <b>{num(allSum)}</b> 金币</span>
             <span className={diff === 0 ? "is-ok" : "is-bad"}>剩余差额 <b>{num(Math.abs(diff))}</b></span>
             <span className="reward-muted">可见行合计 {num(amountSum)}</span>

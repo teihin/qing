@@ -51,8 +51,8 @@ export default function PlayerOptimizationPage({ can, notify }: {
   const search = () => {
     const minimum = minChance.trim();
     const maximum = maxChance.trim();
-    if ((minimum && (Number(minimum) < 0 || Number(minimum) > 100)) || (maximum && (Number(maximum) < 0 || Number(maximum) > 100))) {
-      notify("概率筛选必须是 0 到 100", "error");
+    if ((minimum && (Number(minimum) < -100 || Number(minimum) > 100)) || (maximum && (Number(maximum) < -100 || Number(maximum) > 100))) {
+      notify("概率筛选必须在 -100 到 100 之间", "error");
       return;
     }
     if (minimum && maximum && Number(minimum) > Number(maximum)) {
@@ -106,7 +106,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
         <div className="optimization-search-row">
           <label className="search-box search-box--wide"><span>⌕</span><input maxLength={100} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家、后台设置账号或历史游戏设置人" /><button type="submit">查询</button></label>
           <label><span>优化状态</span><select value={status} onChange={(event) => { setStatus(event.target.value as OptimizationStatus); setPage(1); }}><option value="active">当前启用</option><option value="inactive">未启用</option><option value="all">全部玩家</option></select></label>
-          <label><span>概率范围</span><div><input type="number" min={0} max={100} value={minChance} onChange={(event) => setMinChance(event.target.value)} placeholder="最低" /><i>—</i><input type="number" min={0} max={100} value={maxChance} onChange={(event) => setMaxChance(event.target.value)} placeholder="最高" /></div></label>
+          <label><span>概率范围</span><div><input type="number" min={-100} max={100} value={minChance} onChange={(event) => setMinChance(event.target.value)} placeholder="最低" /><i>—</i><input type="number" min={-100} max={100} value={maxChance} onChange={(event) => setMaxChance(event.target.value)} placeholder="最高" /></div></label>
           <Button type="submit">应用条件</Button>
           {filtersActive && <Button type="button" variant="secondary" onClick={reset}>重置</Button>}
         </div>
@@ -263,7 +263,7 @@ function AddOptimizationModal({ initialItem, notify, onClose, onDone }: {
   const countValue = Number(remainingCount);
   const chanceValue = Number(chance);
   const validId = /^\d{6}$/.test(playerId.trim());
-  const valid = Boolean(player && !player.active) && Number.isInteger(countValue) && countValue >= 1 && countValue <= 1000000 && Number.isInteger(chanceValue) && chanceValue >= 1 && chanceValue <= 100;
+  const valid = Boolean(player && !player.active) && Number.isInteger(countValue) && countValue >= 1 && countValue <= 1000000 && Number.isInteger(chanceValue) && chanceValue !== 0 && chanceValue >= -100 && chanceValue <= 100;
 
   const lookup = async () => {
     if (!validId) { setError("玩家 ID 必须是 6 位数字"); return; }
@@ -304,10 +304,10 @@ function AddOptimizationModal({ initialItem, notify, onClose, onDone }: {
       {error && <div className="form-error"><span>!</span>{error}</div>}
       {player && <div className="optimization-player-summary"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>玩家 ID：{player.playerId} · 登录账号：{player.loginName || "—"}</small></div><em>{player.active ? `已启用 ${player.remainingCount} 次 / ${player.chance}%` : "可以新增"}</em></div>}
       {player && !player.active && <>
-        <div className="operation-warning"><strong>离线玩家也可以直接配置</strong><p>后台会在服务器本机通过数据库事务一次写入设置人、剩余次数和触发概率；提交时锁定该玩家记录并核对当前值，不依赖玩家登录状态。</p></div>
+        <div className="operation-warning"><strong>离线玩家也可以直接配置</strong><p>后台通过服务器本机游戏服接口「异步_设置_玩家_属性」写入触发概率和剩余次数，写入后回读数据库校验；不依赖玩家登录状态，设置人标记位不参与判定。</p></div>
         <div className="optimization-form-grid">
           <Field label="剩余优化次数" hint="填写 1 到 1,000,000 的整数"><input type="number" min={1} max={1000000} step={1} value={remainingCount} disabled={busy} onChange={(event) => { setRemainingCount(event.target.value); setConfirmed(false); }} /></Field>
-          <Field label="触发概率（%）" hint="填写 1 到 100 的整数"><input type="number" min={1} max={100} step={1} value={chance} disabled={busy} onChange={(event) => { setChance(event.target.value); setConfirmed(false); }} /></Field>
+          <Field label="触发概率（%）" hint="填写 1 到 100（正优化）或 -1 到 -100（负优化）；0 不可用"><input type="number" min={-100} max={100} step={1} value={chance} disabled={busy} onChange={(event) => { setChance(event.target.value); setConfirmed(false); }} /></Field>
         </div>
         <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={!valid || busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家、剩余次数和触发概率，确认新增发牌优化</span></label>
       </>}
@@ -329,7 +329,7 @@ function OptimizationModal({ item, notify, onClose, onDone }: {
   const [error, setError] = useState("");
   const countValue = Number(remainingCount);
   const chanceValue = Number(chance);
-  const valid = Number.isInteger(countValue) && countValue >= 1 && countValue <= 1000000 && Number.isInteger(chanceValue) && chanceValue >= 1 && chanceValue <= 100;
+  const valid = Number.isInteger(countValue) && countValue >= 1 && countValue <= 1000000 && Number.isInteger(chanceValue) && chanceValue !== 0 && chanceValue >= -100 && chanceValue <= 100;
   const changed = countValue !== item.remainingCount || chanceValue !== item.chance;
   const markChanged = () => { setConfirmed(false); setError(""); };
 
@@ -352,11 +352,11 @@ function OptimizationModal({ item, notify, onClose, onDone }: {
   return <Modal wide eyebrow="UPDATE DEAL OPTIMIZATION" title={`调整玩家 ${item.playerId} 的发牌优化`} onClose={busy ? () => undefined : onClose}>
     <form className="optimization-modal" onSubmit={submitGuard(submit)}>
       <div className="optimization-player-summary"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>玩家 ID：{item.playerId} · 登录账号：{item.loginName || "—"}</small></div><em>当前剩余 {item.remainingCount} 次 / {item.chance}%</em></div>
-      <div className="operation-warning operation-warning--danger"><strong>这里只调整已存在的优化</strong><p>如需停用请关闭弹窗，在玩家行中点击“删除优化”。后台会在数据库事务内校验页面基准并一次完成修改，不依赖玩家是否在线。</p></div>
+      <div className="operation-warning operation-warning--danger"><strong>这里只调整已存在的优化</strong><p>如需停用请关闭弹窗，在玩家行中点击“删除优化”。后台会通过游戏服接口写入新参数并回读数据库校验，不依赖玩家是否在线。</p></div>
       {error && <div className="form-error"><span>!</span>{error}</div>}
       <div className="optimization-form-grid">
         <Field label="剩余优化次数" hint="填写 1 到 1,000,000 的整数"><input type="number" min={1} max={1000000} step={1} value={remainingCount} disabled={busy} onChange={(event) => { setRemainingCount(event.target.value); markChanged(); }} /></Field>
-        <Field label="触发概率（%）" hint="填写 1 到 100 的整数"><input type="number" min={1} max={100} step={1} value={chance} disabled={busy} onChange={(event) => { setChance(event.target.value); markChanged(); }} /></Field>
+        <Field label="触发概率（%）" hint="填写 1 到 100（正优化）或 -1 到 -100（负优化）；0 不可用"><input type="number" min={-100} max={100} step={1} value={chance} disabled={busy} onChange={(event) => { setChance(event.target.value); markChanged(); }} /></Field>
       </div>
       <div className="optimization-preview"><div><span>修改前</span><strong>{item.remainingCount} 次 · {item.chance}%</strong></div><i>→</i><div className="is-active"><span>修改后</span><strong>{Number.isFinite(countValue) ? countValue : 0} 次 · {Number.isFinite(chanceValue) ? chanceValue : 0}%</strong></div></div>
       <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={!valid || !changed || busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家、剩余次数和触发概率，确认修改发牌优化参数</span></label>
@@ -393,7 +393,7 @@ function DeleteOptimizationModal({ item, notify, onClose, onDone }: {
   return <Modal eyebrow="DELETE DEAL OPTIMIZATION" title="删除发牌优化" onClose={busy ? () => undefined : onClose}>
     <form className="optimization-modal" onSubmit={submitGuard(submit)}>
       <div className="optimization-player-summary"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>玩家 ID：{item.playerId} · 登录账号：{item.loginName || "—"}</small></div><em>{item.remainingCount} 次 / {item.chance}%</em></div>
-      <div className="operation-warning operation-warning--danger"><strong>删除后停止该玩家的发牌优化</strong><p>系统会在数据库事务中把发牌优化设置人、剩余次数和触发概率一次清空，并记录删除前后的完整审计；玩家离线时也可操作。</p></div>
+      <div className="operation-warning operation-warning--danger"><strong>删除后停止该玩家的发牌优化</strong><p>系统会通过游戏服接口把剩余次数和触发概率清零，并回读数据库校验、记录删除前后的完整审计；玩家离线时也可操作。</p></div>
       {error && <div className="form-error"><span>!</span>{error}</div>}
       <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家和当前参数，确认删除并清空该玩家的发牌优化</span></label>
       <div className="form-actions"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>取消</Button><Button type="submit" variant="danger" disabled={!confirmed || busy}>{busy ? "正在删除并回读校验…" : "确认删除优化"}</Button></div>

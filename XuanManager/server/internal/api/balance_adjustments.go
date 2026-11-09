@@ -132,13 +132,17 @@ func balanceAdjustmentConflict(input adjustPlayerBalanceRequest, before playerBa
 }
 
 func normalizeAdjustmentReason(value string) (string, error) {
+	return normalizeAdjustmentReasonText(value, "客服维护原因")
+}
+
+func normalizeAdjustmentReasonText(value, label string) (string, error) {
 	value = strings.TrimSpace(value)
 	if utf8.RuneCountInString(value) < 2 || utf8.RuneCountInString(value) > 120 {
-		return "", errors.New("客服维护原因必须填写 2 到 120 个字符")
+		return "", fmt.Errorf("%s必须填写 2 到 120 个字符", label)
 	}
 	for _, char := range value {
 		if unicode.IsControl(char) {
-			return "", errors.New("客服维护原因不能包含换行或控制字符")
+			return "", fmt.Errorf("%s不能包含换行或控制字符", label)
 		}
 	}
 	return strings.Join(strings.Fields(value), " "), nil

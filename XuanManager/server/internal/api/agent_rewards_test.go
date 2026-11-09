@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"math"
+	"testing"
+)
 
 // 分摊是发钱的核心算法：必须保证总额恒等、结果可复现、0 权重不参与、异常输入被拒绝。
 func TestSplitRewardByWeight(t *testing.T) {
@@ -58,6 +61,64 @@ func TestSplitRewardByWeightStable(t *testing.T) {
 				t.Fatalf("第 %d 次结果不稳定: %s %d != %d", i, id, next[id], amount)
 			}
 		}
+	}
+}
+
+// 占比必须合计 100.00%，且同样的输入每次结果一致，客服看到的占比才能和分摊对上。
+func TestRewardSharePercents(t *testing.T) {
+	cases := []struct {
+		name    string
+		weights map[string]float64
+	}{
+		{"单人", map[string]float64{"a": 5}},
+		{"三人均分", map[string]float64{"a": 1, "b": 1, "c": 1}},
+		{"小数点数", map[string]float64{"a": 55.87, "b": 77.61, "c": 0.03}},
+		{"零权重不占份额", map[string]float64{"a": 2, "b": 0, "c": -1}},
+		{"空名单", map[string]float64{}},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			got := rewardSharePercents(test.weights)
+			var sum float64
+			positive := 0
+			for id, weight := range test.weights {
+				if weight > 0 {
+					positive++
+				}
+				if got[id] < 0 {
+					t.Fatalf("%s 出现负数占比: %v", id, got[id])
+				}
+				sum += got[id]
+			}
+			want := 0.0
+			if positive > 0 {
+				want = 100
+			}
+			if math.Abs(sum-want) > 1e-9 {
+				t.Fatalf("合计 = %.4f, want %.2f (%v)", sum, want, got)
+			}
+			for id, weight := range test.weights {
+				if weight <= 0 && got[id] != 0 {
+					t.Fatalf("零/负权重 %s 占比 = %v, want 0", id, got[id])
+				}
+			}
+		})
+	}
+}
+
+func TestRewardSharePercentsStable(t *testing.T) {
+	weights := map[string]float64{"a": 33.3, "b": 33.3, "c": 33.4, "d": 0}
+	first := rewardSharePercents(weights)
+	for i := 0; i < 20; i++ {
+		next := rewardSharePercents(weights)
+		for id, percent := range first {
+			if next[id] != percent {
+				t.Fatalf("第 %d 次结果不稳定: %s %v != %v", i, id, next[id], percent)
+			}
+		}
+	}
+	if first["a"] != 33.30 || first["b"] != 33.30 || first["c"] != 33.40 {
+		t.Fatalf("占比分配不符合最大余数法: %v", first)
 	}
 }
 

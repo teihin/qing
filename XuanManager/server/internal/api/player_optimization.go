@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -102,14 +103,17 @@ type deletePlayerOptimizationRequest struct {
 	Confirm         bool   `json:"confirm"`
 }
 
-type playerOptimizationConflict struct {
+type playerOptimizationCommandError struct {
+	status  int
 	code    string
 	message string
 }
 
-func (e *playerOptimizationConflict) Error() string {
+func (e *playerOptimizationCommandError) Error() string {
 	return e.message
 }
+
+var playerOptimizationWriteMu sync.Mutex
 
 func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Request, p principal) {
 	page, size := pageParams(r)
@@ -399,7 +403,7 @@ func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -414,15 +418,10 @@ func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusConflict, "OPTIMIZATION_ALREADY_EXISTS", "该玩家已启用发牌优化，请使用调整参数操作")
 		return
 	}
-	managerID, managerName, err := s.readSingleBoss(ctx)
-	if err != nil {
-		s.logger.Error("resolve optimization manager", "error", err)
-		writeError(w, http.StatusServiceUnavailable, "OPTIMIZATION_MANAGER_UNAVAILABLE", "无法唯一确定游戏 BOSS，已停止新增发牌优化")
-		return
-	}
+	// 游戏服只按 optimize01_chance/count 判定，optimize01_man 是可选标记位，不再要求唯一 BOSS。
 	target := playerOptimizationState{
 		PlayerID: playerID, LoginName: before.LoginName, Name: before.Name,
-		ManagerID: managerID, ManagerName: managerName, RemainingCount: input.RemainingCount, Chance: input.Chance, Active: true,
+		RemainingCount: input.RemainingCount, Chance: input.Chance, Active: true,
 	}
 	message := fmt.Sprintf("已为玩家 %s 新增发牌优化：剩余 %d 次、概率 %d%%", playerID, target.RemainingCount, target.Chance)
 	s.completePlayerOptimizationMutation(w, r, p, ctx, "game.player_optimization.create", input.Reason, before, target, message)
@@ -435,8 +434,8 @@ func parseOptimizationChanceRange(r *http.Request) (*int64, *int64, error) {
 			return nil, nil
 		}
 		parsed, err := strconv.ParseInt(value, 10, 64)
-		if err != nil || parsed < 0 || parsed > 100 {
-			return nil, errors.New("概率范围必须是 0 到 100 的整数")
+		if err != nil || parsed < -100 || parsed > 100 {
+			return nil, errors.New("概率范围必须是 -100 到 100 的整数")
 		}
 		return &parsed, nil
 	}
@@ -500,7 +499,7 @@ func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -519,15 +518,10 @@ func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家发牌优化参数已变化，请刷新列表后重新操作")
 		return
 	}
-	managerID, managerName, err := s.readSingleBoss(ctx)
-	if err != nil {
-		s.logger.Error("resolve optimization manager", "error", err)
-		writeError(w, http.StatusServiceUnavailable, "OPTIMIZATION_MANAGER_UNAVAILABLE", "无法唯一确定游戏 BOSS，已停止修改发牌优化")
-		return
-	}
 	target := playerOptimizationState{
 		PlayerID: playerID, LoginName: before.LoginName, Name: before.Name,
-		ManagerID: managerID, ManagerName: managerName, RemainingCount: input.RemainingCount, Chance: input.Chance, Active: true,
+		ManagerID: before.ManagerID, ManagerName: before.ManagerName,
+		RemainingCount: input.RemainingCount, Chance: input.Chance, Active: true,
 	}
 	if optimizationStateMatches(before, target) {
 		writeError(w, http.StatusBadRequest, "OPTIMIZATION_UNCHANGED", "发牌优化参数没有变化")
@@ -545,7 +539,7 @@ func normalizeAndValidateOptimizationRequest(input *updatePlayerOptimizationRequ
 	if !input.Confirm {
 		return errors.New("请确认本次操作会改变玩家发牌优化参数")
 	}
-	if input.ExpectedCount < 0 || input.ExpectedChance < 0 || input.ExpectedChance > 100 {
+	if input.ExpectedCount < 0 || input.ExpectedChance < -100 || input.ExpectedChance > 100 {
 		return errors.New("页面基准参数不正确，请刷新后重试")
 	}
 	return nil
@@ -572,8 +566,8 @@ func validateActiveOptimizationValues(remainingCount, chance int64) error {
 	if remainingCount < 1 || remainingCount > 1000000 {
 		return errors.New("剩余次数必须是 1 到 1,000,000 的整数")
 	}
-	if chance < 1 || chance > 100 {
-		return errors.New("触发概率必须是 1% 到 100% 的整数")
+	if chance == 0 || chance < -100 || chance > 100 {
+		return errors.New("触发概率必须是 -100 到 -1 或 1 到 100 的整数")
 	}
 	return nil
 }
@@ -613,12 +607,12 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "OPTIMIZATION_CONFIRM_REQUIRED", "请确认删除会立即停用该玩家的发牌优化")
 		return
 	}
-	if input.ExpectedCount < 1 || input.ExpectedChance < 1 || input.ExpectedChance > 100 {
+	if input.ExpectedCount < 1 || input.ExpectedChance < -100 || input.ExpectedChance > 100 {
 		writeError(w, http.StatusBadRequest, "INVALID_OPTIMIZATION", "页面基准参数不正确，请刷新后重试")
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -643,27 +637,33 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 }
 
 func (s *Server) completePlayerOptimizationMutation(w http.ResponseWriter, r *http.Request, p principal, ctx context.Context, action, reason string, before, target playerOptimizationState, message string) {
+	operationContext := gameOperationContext("player-optimization")
 	requestAudit := map[string]any{
 		"playerId": target.PlayerID, "remainingCount": target.RemainingCount, "chance": target.Chance,
-		"writeMode": "direct-database-transaction",
+		"writeMode": "game-command", "context": operationContext,
 	}
 	if strings.TrimSpace(reason) != "" {
 		requestAudit["reason"] = strings.TrimSpace(reason)
 	}
-	lockedBefore, after, err := s.writePlayerOptimizationTransaction(ctx, action, before, target)
+	playerOptimizationWriteMu.Lock()
+	defer playerOptimizationWriteMu.Unlock()
+	after, err := s.writePlayerOptimizationViaGameCommand(ctx, action, operationContext, before, target)
 	if err != nil {
-		var conflict *playerOptimizationConflict
-		if errors.As(err, &conflict) {
-			writeError(w, http.StatusConflict, conflict.code, conflict.message)
-			return
+		status := http.StatusInternalServerError
+		code := "OPTIMIZATION_UPDATE_FAILED"
+		resultMessage := "游戏服未确认发牌优化写入，参数没有修改"
+		var commandErr *playerOptimizationCommandError
+		if errors.As(err, &commandErr) {
+			status = commandErr.status
+			code = commandErr.code
+			resultMessage = commandErr.message
 		}
-		s.logger.Error("write player optimization transaction", "action", action, "error", err, "playerId", target.PlayerID)
-		resultMessage := "发牌优化数据库事务未完成，参数没有修改"
-		s.audit(ctx, &p, action, "game_player", target.PlayerID, requestAudit, before, nil, 500, resultMessage, clientIP(r))
-		writeError(w, http.StatusInternalServerError, "OPTIMIZATION_UPDATE_FAILED", resultMessage+"；请刷新后重试")
+		s.logger.Error("write player optimization via game command", "action", action, "error", err, "playerId", target.PlayerID)
+		s.audit(ctx, &p, action, "game_player", target.PlayerID, requestAudit, before, nil, status, resultMessage, clientIP(r))
+		writeError(w, status, code, resultMessage)
 		return
 	}
-	s.audit(ctx, &p, action, "game_player", target.PlayerID, requestAudit, lockedBefore, after, 0, message, clientIP(r))
+	s.audit(ctx, &p, action, "game_player", target.PlayerID, requestAudit, before, after, 0, message, clientIP(r))
 	writeData(w, http.StatusOK, map[string]any{"player": after, "message": message})
 }
 
@@ -721,98 +721,125 @@ func playerOptimizationConfiguredSource(configuredBy, managerID string) string {
 	return ""
 }
 
-func (s *Server) readSingleBoss(ctx context.Context) (string, string, error) {
-	var count int64
-	var playerID, name string
-	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*), COALESCE(MAX(sm_guuid), ''), COALESCE(MAX(sm_name), '')
-FROM kbedm.tbl_Account WHERE sm_role LIKE '%老板%'`).Scan(&count, &playerID, &name)
-	if err != nil {
-		return "", "", err
-	}
-	if count != 1 || playerID == "" {
-		return "", "", fmt.Errorf("expected one boss, found %d", count)
-	}
-	return playerID, name, nil
-}
-
-func (s *Server) writePlayerOptimizationTransaction(ctx context.Context, action string, expected, target playerOptimizationState) (playerOptimizationState, playerOptimizationState, error) {
-	if s.gameDB == nil {
-		return expected, playerOptimizationState{}, errors.New("game database connection is not configured")
-	}
-	tx, err := s.gameDB.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
-	if err != nil {
-		return expected, playerOptimizationState{}, err
-	}
-	defer tx.Rollback()
-
-	lockedBefore := expected
-	err = tx.QueryRowContext(ctx, `SELECT COALESCE(sm_optimize01_man, ''), sm_optimize01_count, sm_optimize01_chance
-FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1 FOR UPDATE`, target.PlayerID).Scan(
-		&lockedBefore.ManagerID, &lockedBefore.RemainingCount, &lockedBefore.Chance,
-	)
-	if err != nil {
-		return expected, playerOptimizationState{}, err
-	}
-	lockedBefore.Active = lockedBefore.RemainingCount > 0
-
-	switch action {
-	case "game.player_optimization.create":
-		if lockedBefore.Active {
-			return lockedBefore, playerOptimizationState{}, &playerOptimizationConflict{
-				code: "OPTIMIZATION_ALREADY_EXISTS", message: "该玩家已启用发牌优化，请刷新列表后使用调整参数操作",
-			}
+func (s *Server) writePlayerOptimizationViaGameCommand(ctx context.Context, action, operationContext string, before, target playerOptimizationState) (playerOptimizationState, error) {
+	if action == "game.player_optimization.delete" {
+		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_count", 0, operationContext); err != nil {
+			return before, err
 		}
-	case "game.player_optimization.update", "game.player_optimization.delete":
-		if !lockedBefore.Active {
-			return lockedBefore, playerOptimizationState{}, &playerOptimizationConflict{
-				code: "OPTIMIZATION_NOT_FOUND", message: "该玩家的发牌优化已不存在，请刷新列表后重试",
-			}
+		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_chance", 0, operationContext); err != nil {
+			return before, s.rollbackPlayerOptimization(before, err)
 		}
-		if !optimizationStateMatches(lockedBefore, expected) {
-			return lockedBefore, playerOptimizationState{}, &playerOptimizationConflict{
-				code: "OPTIMIZATION_CHANGED", message: "玩家发牌优化参数已变化，请刷新列表后重新操作",
-			}
+	} else {
+		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_chance", target.Chance, operationContext); err != nil {
+			return before, err
 		}
-	default:
-		return lockedBefore, playerOptimizationState{}, fmt.Errorf("unsupported optimization action %q", action)
+		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_count", target.RemainingCount, operationContext); err != nil {
+			return before, s.rollbackPlayerOptimization(before, err)
+		}
 	}
 
-	result, err := tx.ExecContext(ctx, `UPDATE kbedm.tbl_Account
-SET sm_optimize01_man = ?, sm_optimize01_count = ?, sm_optimize01_chance = ?
-WHERE sm_guuid = ?`, target.ManagerID, target.RemainingCount, target.Chance, target.PlayerID)
+	verified, err := s.waitForPlayerOptimization(ctx, target.PlayerID, target.RemainingCount, target.Chance)
 	if err != nil {
-		return lockedBefore, playerOptimizationState{}, err
+		s.logger.Error("verify player optimization", "error", err, "playerId", target.PlayerID)
+		return before, s.rollbackPlayerOptimization(before, &playerOptimizationCommandError{
+			status: http.StatusBadGateway, code: "OPTIMIZATION_VERIFY_FAILED",
+			message: "游戏服已接受命令，但未回读到目标参数",
+		})
 	}
-	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
-		if err != nil {
-			return lockedBefore, playerOptimizationState{}, err
-		}
-		return lockedBefore, playerOptimizationState{}, fmt.Errorf("expected one updated player, got %d", affected)
-	}
-
-	verified := target
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(sm_optimize01_man, ''), sm_optimize01_count, sm_optimize01_chance
-FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, target.PlayerID).Scan(
-		&verified.ManagerID, &verified.RemainingCount, &verified.Chance,
-	); err != nil {
-		return lockedBefore, playerOptimizationState{}, err
-	}
-	verified.Active = verified.RemainingCount > 0
-	if !optimizationStateMatches(verified, target) {
-		return lockedBefore, playerOptimizationState{}, errors.New("transaction readback did not match target")
-	}
-	if err := tx.Commit(); err != nil {
-		return lockedBefore, playerOptimizationState{}, err
-	}
-
 	after, err := s.readPlayerOptimizationState(ctx, target.PlayerID, principal{IsSuper: true, IsProtectedRoot: true})
 	if err != nil {
 		after = verified
 		after.LastConfiguredAt = time.Now().Format("2006-01-02 15:04:05")
 	}
-	return lockedBefore, after, nil
+	return after, nil
+}
+
+func (s *Server) setPlayerOptimizationValue(ctx context.Context, playerID, name string, value int64, operationContext string) error {
+	result, err := s.callGameCommand(ctx, "异步_设置_玩家_属性", map[string]any{
+		"guuid": playerID, "name": name, "value": value, "context": operationContext,
+	})
+	if err != nil {
+		return &playerOptimizationCommandError{
+			status: http.StatusBadGateway, code: "OPTIMIZATION_GAME_COMMAND_FAILED",
+			message: "游戏服未确认发牌优化写入，参数没有修改",
+		}
+	}
+	if result.RetCode != 512 {
+		message := gameCommandErrorMessage(result, "游戏服拒绝写入发牌优化")
+		if optimizationCommandResultEmpty(result) {
+			message = "游戏服尚未开放发牌优化设置命令（异步_设置_玩家_属性），请先完成游戏服部署后重试"
+		}
+		return &playerOptimizationCommandError{
+			status: http.StatusBadRequest, code: "OPTIMIZATION_GAME_COMMAND_REJECTED", message: message,
+		}
+	}
+	return nil
+}
+
+func optimizationCommandResultEmpty(result gameCommandResponse) bool {
+	raw := strings.TrimSpace(string(result.RetResult))
+	return raw == "" || raw == "null" || raw == "{}"
+}
+
+func (s *Server) rollbackPlayerOptimization(before playerOptimizationState, cause error) error {
+	if err := s.restorePlayerOptimization(before); err != nil {
+		s.logger.Error("restore player optimization", "error", err, "playerId", before.PlayerID)
+		return &playerOptimizationCommandError{
+			status: http.StatusBadGateway, code: "OPTIMIZATION_ROLLBACK_FAILED",
+			message: "游戏服写入中断且自动恢复失败，请立即人工核对该玩家参数",
+		}
+	}
+	var commandErr *playerOptimizationCommandError
+	if errors.As(cause, &commandErr) {
+		return &playerOptimizationCommandError{
+			status: commandErr.status, code: commandErr.code, message: commandErr.message + "，已恢复原参数",
+		}
+	}
+	return cause
+}
+
+func (s *Server) restorePlayerOptimization(state playerOptimizationState) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	restoreContext := gameOperationContext("player-optimization-restore")
+	if err := s.setPlayerOptimizationValue(ctx, state.PlayerID, "optimize01_chance", state.Chance, restoreContext); err != nil {
+		return err
+	}
+	return s.setPlayerOptimizationValue(ctx, state.PlayerID, "optimize01_count", state.RemainingCount, restoreContext)
+}
+
+func (s *Server) waitForPlayerOptimization(ctx context.Context, playerID string, expectedCount, expectedChance int64) (playerOptimizationState, error) {
+	var last playerOptimizationState
+	var lastErr error
+	for attempt := 0; attempt < 16; attempt++ {
+		last = playerOptimizationState{PlayerID: playerID}
+		lastErr = s.db.QueryRowContext(ctx, `SELECT COALESCE(sm_optimize01_man, ''), sm_optimize01_count, sm_optimize01_chance
+FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, playerID).Scan(
+			&last.ManagerID, &last.RemainingCount, &last.Chance,
+		)
+		if lastErr == nil && optimizationsMatch(last.RemainingCount, last.Chance, expectedCount, expectedChance) {
+			last.Active = last.RemainingCount > 0
+			return last, nil
+		}
+		if attempt < 15 {
+			select {
+			case <-ctx.Done():
+				return last, ctx.Err()
+			case <-time.After(300 * time.Millisecond):
+			}
+		}
+	}
+	if lastErr != nil {
+		return last, lastErr
+	}
+	return last, fmt.Errorf("player optimization count %d / chance %d does not match expected %d / %d",
+		last.RemainingCount, last.Chance, expectedCount, expectedChance)
+}
+
+func optimizationsMatch(actualCount, actualChance, expectedCount, expectedChance int64) bool {
+	return actualCount == expectedCount && actualChance == expectedChance
 }
 
 func optimizationStateMatches(actual, expected playerOptimizationState) bool {
-	return actual.ManagerID == expected.ManagerID && actual.RemainingCount == expected.RemainingCount && actual.Chance == expected.Chance
+	return optimizationsMatch(actual.RemainingCount, actual.Chance, expected.RemainingCount, expected.Chance)
 }

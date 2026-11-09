@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
+import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import type { UnionListItem, UnionListResponse, UnionQuotaAdjustmentResponse } from "../types";
 
@@ -39,6 +40,7 @@ export default function UnionsPage({
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [adjustTarget, setAdjustTarget] = useState<{ union: UnionListItem; action: "add" | "subtract" } | null>(null);
+  const [earningsUnion, setEarningsUnion] = useState<UnionListItem | null>(null);
   const canAdjust = can("game.union.quota_adjust");
 
   const load = useCallback(async () => {
@@ -213,6 +215,9 @@ export default function UnionsPage({
                               </button>
                             </>
                           )}
+                          <button type="button" onClick={() => setEarningsUnion(union)} title="按暗抽、奖池查看该联盟大盟主的每日收益与明细">
+                            收益对账
+                          </button>
                           <button type="button" onClick={() => openClubs(union)} title="进入俱乐部管理查看该联盟下的俱乐部">
                             详情
                           </button>
@@ -268,6 +273,15 @@ export default function UnionsPage({
           notify={notify}
           onClose={() => setAdjustTarget(null)}
           onDone={() => void load()}
+        />
+      )}
+
+      {earningsUnion && (
+        <OwnerEarningsModal
+          scope="union"
+          unionId={earningsUnion.unionId}
+          notify={notify}
+          onClose={() => setEarningsUnion(null)}
         />
       )}
     </div>

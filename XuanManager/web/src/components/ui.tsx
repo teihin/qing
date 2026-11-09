@@ -5,10 +5,10 @@ export function Button({ className = "", variant = "primary", ...props }: Button
   return <button className={`button button--${variant} ${className}`} {...props} />;
 }
 
-export function Modal({ title, eyebrow, children, onClose, wide = false }: { title: string; eyebrow?: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
+export function Modal({ title, eyebrow, children, onClose, wide = false, xwide = false }: { title: string; eyebrow?: string; children: ReactNode; onClose: () => void; wide?: boolean; xwide?: boolean }) {
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className={`modal ${wide ? "modal--wide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
+      <section className={`modal ${wide ? "modal--wide" : ""} ${xwide ? "modal--xwide" : ""}`} role="dialog" aria-modal="true" aria-label={title}>
         <header className="modal__header">
           <div>
             {eyebrow && <span className="eyebrow">{eyebrow}</span>}

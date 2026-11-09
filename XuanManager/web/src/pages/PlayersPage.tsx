@@ -3,7 +3,7 @@ import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
 import { formatBeijingDateTime } from "../time";
-import type { PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo } from "../types";
+import type { PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneGrantRecordsResponse, PlayerStoneGrantResult } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -62,6 +62,8 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<PlayerItem | null>(null);
   const [resettingPassword, setResettingPassword] = useState<PlayerItem | null>(null);
+  const [grantingStone, setGrantingStone] = useState<PlayerItem | null>(null);
+  const [showGrantRecords, setShowGrantRecords] = useState(false);
   const [queryRevision, refreshQuery] = useQueryRefresh();
   const canViewPassword = Boolean(data?.canViewPassword);
 
@@ -109,7 +111,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       <PageHeader
         eyebrow="GAME PLAYERS"
         title="玩家管理"
-        description="查询玩家账号、钻石余额、所在俱乐部和客户端状态；按权限执行登录密码重置。"
+        description="查询玩家账号、钻石余额、所在俱乐部和客户端状态；按权限发放钻石、重置登录密码并追溯发放记录。"
         actions={<span className="readonly-badge"><i />敏感操作全程审计</span>}
       />
 
@@ -148,7 +150,10 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       <section className="panel">
         <div className="toolbar player-toolbar">
           <div><strong>游戏玩家列表</strong><span>数据来自服务器本机 kbedm.tbl_Account</span></div>
-          <span className="toolbar__count">共 {data?.total ?? 0} 名玩家</span>
+          <div className="player-toolbar__actions">
+            <span className="toolbar__count">共 {data?.total ?? 0} 名玩家</span>
+            {can("game.player.grant_stone") && <Button type="button" variant="secondary" onClick={() => setShowGrantRecords(true)}>发放记录</Button>}
+          </div>
         </div>
         {loading && !data ? <LoadingBlock label="正在读取游戏玩家" /> : !data || data.items.length === 0 ? (
           <EmptyState title="没有找到玩家" description="可以清空部分查询条件后重新搜索。" />
@@ -167,7 +172,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
                     <td>{formatDate(player.registrationTime)}</td>
                     <td>{formatDate(player.lastLoginAt)}</td>
-                    <td><div className="row-actions">{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
+                    <td><div className="row-actions">{can("game.player.grant_stone") && <button className="success-link" onClick={() => setGrantingStone(player)}>发放钻石</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -187,6 +192,8 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
 
       {selected && <PlayerDetail player={selected} can={can} canViewSensitive={canViewSensitive} notify={notify} onClose={() => setSelected(null)} />}
       {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
+      {grantingStone && <GrantPlayerStoneModal player={grantingStone} onClose={() => setGrantingStone(null)} onDone={async (message) => { setGrantingStone(null); notify(message); await load(); }} />}
+      {showGrantRecords && <PlayerStoneGrantRecordsModal onClose={() => setShowGrantRecords(false)} notify={notify} />}
     </div>
   );
 }
@@ -230,6 +237,118 @@ function ResetPlayerPasswordModal({ player, onClose, onDone }: { player: PlayerI
     </div>
     <label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID和登录账号，并确认重置该玩家的登录密码</span></label>
     <div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在重置并校验…" : "确认重置密码"}</Button></div>
+  </Modal>;
+}
+
+function GrantPlayerStoneModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (message: string) => Promise<void> }) {
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const amountValue = Number(amount);
+  const amountValid = Number.isInteger(amountValue) && amountValue >= 1 && amountValue <= 1000000;
+  const reasonLength = Array.from(reason.trim()).length;
+  const reasonValid = reasonLength >= 2 && reasonLength <= 120;
+  const invalid = !amountValid || !reasonValid || !confirmed;
+  const submit = async () => {
+    if (!amountValid) { setError("发放数量必须是 1 到 1,000,000 的整数"); return; }
+    if (!reasonValid) { setError("发放原因必须填写 2 到 120 个字符"); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await api<PlayerStoneGrantResult>(`/api/game/players/${encodeURIComponent(player.playerId)}/stone-grants`, {
+        method: "POST", ...jsonBody({ amount: amountValue, reason, expectedStone: player.stone, confirm: confirmed }),
+      });
+      await onDone(result.verified ? result.message : `${result.message}（操作号 ${result.context}）`);
+    } catch (reasonValue) {
+      setError(reasonValue instanceof ApiError ? reasonValue.message : "钻石发放失败");
+    } finally { setBusy(false); }
+  };
+  return <Modal title={`发放钻石 · ${player.name || player.playerId}`} eyebrow="GRANT PLAYER DIAMONDS" onClose={onClose}>
+    <div className="password-reset-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>游戏ID {player.playerId} · 当前钻石 {player.stone.toLocaleString("zh-CN")}</p></div></div>
+    <div className="sensitive-operation-notice"><strong>直接增加玩家钻石</strong><p>操作会调用游戏服立即写入玩家钻石余额并回读校验；发放记录会保存操作账号、数量、时间和原因。</p></div>
+    {error && <div className="form-error"><span>!</span>{error}</div>}
+    <div className="form-grid form-grid--single">
+      <Field label="发放数量" hint="整数钻石，单次 1 到 1,000,000"><input type="number" min="1" max="1000000" step="1" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="例如：100" /></Field>
+      <Field label="发放原因" hint="2～120个字符，只进入后台发放记录，不会发送给玩家"><input value={reason} maxLength={120} onChange={(event) => setReason(event.target.value)} placeholder="例如：活动奖励 / 客诉补偿 / 误扣纠正" /></Field>
+    </div>
+    <label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID和发放数量，并确认给该玩家增加 {amountValid ? `${amountValue.toLocaleString("zh-CN")} 钻` : "钻石"}</span></label>
+    <div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在发放并校验…" : "确认发放钻石"}</Button></div>
+  </Modal>;
+}
+
+function PlayerStoneGrantRecordsModal({ onClose, notify }: { onClose: () => void; notify: (message: string, kind?: "success" | "error") => void }) {
+  const [data, setData] = useState<PlayerStoneGrantRecordsResponse | null>(null);
+  const [keyword, setKeyword] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [applied, setApplied] = useState({ keyword: "", from: "", to: "" });
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [loading, setLoading] = useState(false);
+  const [queryRevision, refreshQuery] = useQueryRefresh();
+
+  const load = useCallback(async () => {
+    void queryRevision;
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+      if (applied.keyword) params.set("keyword", applied.keyword);
+      if (applied.from) params.set("from", applied.from);
+      if (applied.to) params.set("to", applied.to);
+      const response = await api<PlayerStoneGrantRecordsResponse>(`/api/game/players/stone-grants?${params.toString()}`);
+      setData(response);
+      const pages = Math.max(1, Math.ceil(response.total / pageSize));
+      if (page > pages) setPage(pages);
+    } catch (cause) {
+      notify(cause instanceof ApiError ? cause.message : "钻石发放记录加载失败", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [applied, notify, page, pageSize, queryRevision]);
+  useEffect(() => { void load(); }, [load]);
+
+  const search = () => {
+    setApplied({ keyword: keyword.trim(), from, to });
+    setPage(1);
+    refreshQuery();
+  };
+  const reset = () => {
+    setKeyword(""); setFrom(""); setTo("");
+    setApplied({ keyword: "", from: "", to: "" });
+    setPage(1);
+    refreshQuery();
+  };
+  const filtersActive = Boolean(applied.keyword || applied.from || applied.to);
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
+  const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
+  const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
+
+  return <Modal wide title="钻石发放记录" eyebrow="PLAYER DIAMOND GRANTS" onClose={onClose}>
+    <header className="ban-history-header">
+      <div><span>DIAMOND GRANT RECORDS</span><h2>钻石发放记录</h2><p>记录后台账号给哪个玩家发了多少钻石、发放时间和原因；只展示发放成功的记录。</p></div>
+      <strong>{data?.total ?? "—"}<small>条记录</small></strong>
+    </header>
+    <form className="ban-history-filters" onSubmit={(event) => { event.preventDefault(); search(); }}>
+      <label className="ban-history-search"><span>⌕</span><input value={keyword} maxLength={100} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家ID、昵称、账号、操作人或原因" /></label>
+      <label><span>开始日期</span><input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
+      <label><span>结束日期</span><input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
+      <Button type="submit">查询记录</Button>
+      {filtersActive && <Button type="button" variant="secondary" onClick={reset}>重置</Button>}
+    </form>
+    {loading && !data ? <LoadingBlock label="正在读取钻石发放记录" /> : !data || data.items.length === 0 ? <EmptyState title={filtersActive ? "没有匹配的发放记录" : "暂无钻石发放记录"} description={filtersActive ? "可以修改或重置查询条件。" : "通过玩家管理发放钻石后，记录会显示在这里。"} /> : <>
+      <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
+        <table className="ban-history-table"><thead><tr><th>发放时间（北京时间）</th><th>操作账号</th><th>玩家</th><th>发放数量</th><th>钻石余额</th><th>发放原因</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
+          <td><strong>{formatBeijingDateTime(item.createdAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
+          <td><strong>{item.operatorName || "未知账号"}</strong><small className="cell-subtitle">后台管理账号</small></td>
+          <td><div className="ban-history-player"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small><small>账号：{item.loginName || item.accountName || "—"}</small></div></div></td>
+          <td><strong className="stone-value">+{item.amount.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">钻石</small></td>
+          <td><strong>{item.stoneAfter.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">{item.stoneBefore.toLocaleString("zh-CN")} → {item.stoneAfter.toLocaleString("zh-CN")}</small></td>
+          <td><strong className="ban-history-reason">{item.reason || "未记录原因"}</strong>{item.context && <small className="cell-subtitle">操作号 {item.context}</small>}</td>
+        </tr>)}</tbody></table>
+      </div>
+      <footer className="table-pagination"><span>显示 {firstRow}–{lastRow}，共 {data.total} 条发放记录</span><div><label>每页<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>下一页</button></div></footer>
+    </>}
   </Modal>;
 }
 

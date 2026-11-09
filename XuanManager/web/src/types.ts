@@ -195,6 +195,36 @@ export interface PlayerBalanceAdjustmentResult {
   message: string;
 }
 
+export interface PlayerStoneGrantResult {
+  player: { playerId: string; name: string; stone: number; roomId: number };
+  amount: number;
+  context: string;
+  verified: boolean;
+  message: string;
+}
+
+export interface PlayerStoneGrantRecord {
+  id: number;
+  playerId: string;
+  loginName: string;
+  accountName: string;
+  name: string;
+  amount: number;
+  reason: string;
+  operatorName: string;
+  stoneBefore: number;
+  stoneAfter: number;
+  context: string;
+  createdAt: string;
+}
+
+export interface PlayerStoneGrantRecordsResponse {
+  items: PlayerStoneGrantRecord[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
 export interface PlayerClubRef {
   clubId: string;
   name: string;
@@ -1155,6 +1185,163 @@ export interface UnionQuotaAdjustmentResponse {
   verified: boolean;
   message: string;
 }
+
+/** 联盟/俱乐部收益对账（暗抽、奖池）。 */
+export type OwnerEarningsKind = "dark" | "jackpot";
+
+export interface OwnerEarningsClubRef {
+  clubId: string;
+  clubName: string;
+  status: string;
+  ownerId: string;
+  ownerName: string;
+}
+
+export interface OwnerEarningsTarget {
+  scope: "union" | "club";
+  unionId: string;
+  unionName: string;
+  clubId: string;
+  clubName: string;
+  ownerId: string;
+  ownerName: string;
+  ownerRole: string;
+  clubOwnerId: string;
+  clubOwnerName: string;
+  clubs: OwnerEarningsClubRef[];
+}
+
+export interface OwnerEarningsSummary {
+  amountFen: number;
+  amountYuan: number;
+  grossFen: number;
+  grossYuan: number;
+  bonusTaxFen: number;
+  bonusTaxYuan: number;
+  count: number;
+  baseYuan: number;
+  ratioPercent: number;
+  averageYuan: number;
+  unattributedFen: number;
+  unattributedYuan: number;
+  unattributedCount: number;
+}
+
+export interface OwnerEarningsDailyItem {
+  date: string;
+  amountFen: number;
+  amountYuan: number;
+  grossYuan: number;
+  bonusTaxYuan: number;
+  count: number;
+  baseYuan: number;
+  ratioPercent: number;
+  averageYuan: number;
+}
+
+export interface OwnerEarningsClubItem {
+  clubId: string;
+  clubName: string;
+  status: string;
+  amountFen: number;
+  amountYuan: number;
+  count: number;
+  baseYuan: number;
+  ratioPercent: number;
+}
+
+export interface OwnerEarningsDetailItem {
+  id: string;
+  date: string;
+  time: string;
+  clubId: string;
+  clubName: string;
+  roomId: string;
+  playerId: string;
+  playerName: string;
+  baseYuan: number;
+  ratePercent: number;
+  actualPercent: number;
+  waterRate: number;
+  amountFen: number;
+  amountYuan: number;
+  grossYuan: number;
+  bonusTaxYuan: number;
+  level: string;
+  levelLabel: string;
+  typeLabel: string;
+  note: string;
+}
+
+export interface OwnerEarningsDetails {
+  items: OwnerEarningsDetailItem[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface OwnerEarningsRateCount {
+  percent: number;
+  agents: number;
+}
+
+export interface OwnerEarningsDarkClub {
+  clubId: string;
+  clubName: string;
+  status: string;
+  configured: number;
+  unset: number;
+  rates: OwnerEarningsRateCount[];
+}
+
+export interface OwnerEarningsDarkConfig {
+  configured: number;
+  unset: number;
+  rates: OwnerEarningsRateCount[];
+  clubs: OwnerEarningsDarkClub[];
+  effectivePercent: number;
+  note: string;
+}
+
+export interface OwnerEarningsRetentionItem {
+  key: string;
+  label: string;
+  yuan: number | null;
+  source: string;
+}
+
+export interface OwnerEarningsPayoutItem {
+  key: string;
+  percent: number | null;
+  source: string;
+}
+
+export interface OwnerEarningsJackpotConfig {
+  poolKey: string;
+  poolType: string;
+  rewardOn: boolean;
+  retention: OwnerEarningsRetentionItem[];
+  payouts: OwnerEarningsPayoutItem[];
+  source: string;
+  warnings: string[];
+}
+
+export interface OwnerEarningsResponse {
+  scope: "union" | "club";
+  kind: OwnerEarningsKind;
+  target: OwnerEarningsTarget;
+  dateFrom: string;
+  dateTo: string;
+  filterClubId: string;
+  summary: OwnerEarningsSummary;
+  daily: OwnerEarningsDailyItem[];
+  clubs: OwnerEarningsClubItem[];
+  details: OwnerEarningsDetails;
+  dark?: OwnerEarningsDarkConfig;
+  jackpot?: OwnerEarningsJackpotConfig;
+  warnings: string[];
+}
+
 
 /** 群主钻石池加/减结果；stonePool 是操作后（回读到）的钻石数量。 */
 export interface ClubStonePoolAdjustmentResponse {

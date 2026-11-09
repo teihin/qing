@@ -124,7 +124,7 @@ export default class panelMyHongli extends UIPanelViewBase {
     /** 接口里的红利单位为分，展示成元。 */
     private fenText(raw:any):string {
         const fen = Number(raw);
-        if(!isFinite(fen)) return "—";
+        if(!isFinite(fen)) return "-";
         const yuan = fen / 100;
         return Number.isInteger(yuan) ? String(yuan) : yuan.toFixed(2);
     }
@@ -141,10 +141,10 @@ export default class panelMyHongli extends UIPanelViewBase {
 
     private resetStats() {
         this.unclaimedFen = 0;
-        this.setLabel("统计/今日红利/num", "—");
-        this.setLabel("统计/昨日红利/num", "—");
-        this.setLabel("统计/累计红利/num", "—");
-        this.setLabel("未领取红利/num", "—");
+        this.setLabel("统计/今日红利/num", "-");
+        this.setLabel("统计/昨日红利/num", "-");
+        this.setLabel("统计/累计红利/num", "-");
+        this.setLabel("未领取红利/num", "-");
         this.setLabel("提取红利面板/bk/可提取金额", "可提取金额：—");
     }
 

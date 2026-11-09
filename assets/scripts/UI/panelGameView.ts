@@ -62,6 +62,11 @@ export default class panelGameView extends UIPanelViewBase {
     private txtCurDa:cc.Label;
     private imgBattery:cc.ProgressBar;
     private txtBattery:cc.Label;
+    /** 电量连点入口：记连击次数与上次点击时间，800ms 内点满 3 次打开牌局优化。 */
+    private batteryTapCount:number = 0;
+    private batteryTapAt:number = 0;
+    /** BOSS 单点时延迟补发的「关闭检查」，给三连击留出判定窗口。 */
+    private batteryTapTimer:any = null;
 
     private mapID2Gps = new Map<string,string>();
 
@@ -201,6 +206,11 @@ export default class panelGameView extends UIPanelViewBase {
 
     onDestroy()
     {
+        if(this.batteryTapTimer != null)
+        {
+            clearTimeout(this.batteryTapTimer);
+            this.batteryTapTimer = null;
+        }
         if(this.directChatUnreadHandler != null)
             DirectChatManager.GetInstance().Off("unread",this.directChatUnreadHandler);
         if(this.directChatMessageHandler != null)
@@ -502,6 +512,8 @@ export default class panelGameView extends UIPanelViewBase {
             }
         },60,cc.macro.REPEAT_FOREVER,0.1);
 
+        this.InitBossBatteryEntry();
+
 
 
        
@@ -692,6 +704,80 @@ export default class panelGameView extends UIPanelViewBase {
 
             },1);
         },0.3);
+    }
+
+    /**
+     * 电量位置连续点 3 下打开 BOSS「牌局优化」（800ms 内）。
+     * 客户端只决定入口显隐，服务端仍按 boss 名单鉴权。
+     */
+    private InitBossBatteryEntry():void {
+        const battery = Tool.GetChild(this.node,"BK/电量");
+        if(battery == null)
+            return;
+        battery.on(cc.Node.EventType.TOUCH_END, ()=>{
+            if(!GameDataManager.IsBossAccount())
+                return;
+            const now = Date.now();
+            if(now - this.batteryTapAt > 800)
+                this.batteryTapCount = 0;
+            this.batteryTapAt = now;
+            this.batteryTapCount++;
+            if(this.batteryTapCount < 3)
+                return;
+            this.batteryTapCount = 0;
+            UIManager.getInstance().showPanel("panelGameOptimize", ShowPanelMode.Cover);
+        }, this);
+    }
+
+    /**
+     * 「完成」隐形热区的点击：BOSS 三连击开牌局优化；单/双击仍发关闭检查，
+     * 但延迟到连击窗口结束再发，避免三连击时先打出去两条关闭命令。
+     */
+    private OnBossBatteryTap():void {
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return;
+        if(!GameDataManager.IsBossAccount())
+        {
+            Debug.Log("电量三连击：非BOSS账号 level=" + account.level + " role=" + account.role);
+            this.SendCloseCheck();
+            return;
+        }
+
+        const now = Date.now();
+        if(now - this.batteryTapAt > 800)
+            this.batteryTapCount = 0;
+        this.batteryTapAt = now;
+        this.batteryTapCount++;
+
+        if(this.batteryTapTimer != null)
+        {
+            clearTimeout(this.batteryTapTimer);
+            this.batteryTapTimer = null;
+        }
+        if(this.batteryTapCount >= 3)
+        {
+            this.batteryTapCount = 0;
+            Debug.Log("电量三连击打开牌局优化 level=" + account.level + " role=" + account.role);
+            UIManager.getInstance().showPanel("panelGameOptimize", ShowPanelMode.Cover);
+            return;
+        }
+        this.batteryTapTimer = setTimeout(()=>{
+            this.batteryTapTimer = null;
+            if(this.batteryTapCount <= 0)
+                return;
+            this.batteryTapCount = 0;
+            if(cc.isValid(this.node))
+                this.SendCloseCheck();
+        }, 900);
+    }
+
+    private SendCloseCheck():void {
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return;
+        const strParam = "{\"header\":\"关闭检查_命令\"}";
+        account.reqGameCommand(strParam, "关闭检查_命令");
     }
     
 
@@ -1050,6 +1136,13 @@ export default class panelGameView extends UIPanelViewBase {
             this.node.getChildByName("ConfigMain").active = false;
         }
 
+        // RoomFrame/完成 是一块无贴图的隐形热区，正好压在电量上；点电量实际点到它。
+        // BOSS 在这里做三连击判定，非 BOSS 保持原来的「关闭检查」即时发送。
+        if(button.node.name === "完成")
+        {
+            this.OnBossBatteryTap();
+            return;
+        }
 
         if(button.node.name === "ConfigBT")
         {
@@ -1626,11 +1719,6 @@ export default class panelGameView extends UIPanelViewBase {
         {
             let strParam = "{\"header\":\"执行检查_命令\"}";
             GameDataManager.getAccount().reqGameCommand(strParam, "执行检查_命令");
-        }
-        else if(button.node.name == "完成")
-        {
-            let strParam = "{\"header\":\"关闭检查_命令\"}";
-            GameDataManager.getAccount().reqGameCommand(strParam, "关闭检查_命令");
         }
         else if (button.node.name == "休或丢")
         {

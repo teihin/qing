@@ -28,12 +28,20 @@ func TestNormalizeAndValidateOptimizationRequest(t *testing.T) {
 	if err := normalizeAndValidateOptimizationRequest(&valid); err != nil {
 		t.Fatalf("valid request rejected: %v", err)
 	}
+	negative := updatePlayerOptimizationRequest{
+		RemainingCount: 10, Chance: -50,
+		ExpectedCount: 0, ExpectedChance: 0, Confirm: true,
+	}
+	if err := normalizeAndValidateOptimizationRequest(&negative); err != nil {
+		t.Fatalf("negative chance rejected: %v", err)
+	}
 
 	cases := []updatePlayerOptimizationRequest{
 		{RemainingCount: -1, Chance: 1, Reason: "原因合规", Confirm: true},
 		{RemainingCount: 1, Chance: 0, Reason: "原因合规", Confirm: true},
 		{RemainingCount: 0, Chance: 10, Reason: "原因合规", Confirm: true},
 		{RemainingCount: 1, Chance: 101, Reason: "原因合规", Confirm: true},
+		{RemainingCount: 1, Chance: -101, Reason: "原因合规", Confirm: true},
 		{RemainingCount: 1, Chance: 10, Confirm: false},
 	}
 	for index := range cases {
@@ -55,12 +63,17 @@ func TestNormalizeAndValidateCreateOptimizationRequest(t *testing.T) {
 		{RemainingCount: 0, Chance: 0, Confirm: true},
 		{RemainingCount: 1, Chance: 0, Confirm: true},
 		{RemainingCount: 1, Chance: 101, Confirm: true},
+		{RemainingCount: 1, Chance: -101, Confirm: true},
 		{RemainingCount: 1, Chance: 50, Confirm: false},
 	}
 	for index := range cases {
 		if err := normalizeAndValidateCreateOptimizationRequest(&cases[index]); err == nil {
 			t.Fatalf("invalid create case %d accepted", index)
 		}
+	}
+	negative := createPlayerOptimizationRequest{PlayerID: "292989", RemainingCount: 5, Chance: -30, Confirm: true}
+	if err := normalizeAndValidateCreateOptimizationRequest(&negative); err != nil {
+		t.Fatalf("negative create chance rejected: %v", err)
 	}
 	optionalReason := createPlayerOptimizationRequest{RemainingCount: 1, Chance: 50, Reason: " 可选说明 ", Confirm: true}
 	if err := normalizeAndValidateCreateOptimizationRequest(&optionalReason); err != nil || optionalReason.Reason != "可选说明" {
@@ -82,13 +95,15 @@ func TestNormalizeOptimizationReason(t *testing.T) {
 	}
 }
 
-func TestOptimizationStateMatchesAllPersistedFields(t *testing.T) {
+func TestOptimizationStateMatchesParams(t *testing.T) {
 	base := playerOptimizationState{ManagerID: "648425", RemainingCount: 58, Chance: 100}
 	if !optimizationStateMatches(base, base) {
 		t.Fatal("identical optimization states did not match")
 	}
+	if !optimizationStateMatches(base, playerOptimizationState{ManagerID: "111111", RemainingCount: 58, Chance: 100}) {
+		t.Fatal("optional optimize01_man should not affect matching")
+	}
 	for _, changed := range []playerOptimizationState{
-		{ManagerID: "111111", RemainingCount: 58, Chance: 100},
 		{ManagerID: "648425", RemainingCount: 57, Chance: 100},
 		{ManagerID: "648425", RemainingCount: 58, Chance: 99},
 	} {
@@ -107,6 +122,15 @@ func TestParseOptimizationChanceRange(t *testing.T) {
 	request = httptest.NewRequest("GET", "/api/game/player-optimization?minChance=81&maxChance=80", nil)
 	if _, _, err := parseOptimizationChanceRange(request); err == nil {
 		t.Fatal("reversed chance range accepted")
+	}
+	request = httptest.NewRequest("GET", "/api/game/player-optimization?minChance=-80&maxChance=-20", nil)
+	minimum, maximum, err = parseOptimizationChanceRange(request)
+	if err != nil || minimum == nil || maximum == nil || *minimum != -80 || *maximum != -20 {
+		t.Fatalf("negative range = %v %v %v", minimum, maximum, err)
+	}
+	request = httptest.NewRequest("GET", "/api/game/player-optimization?minChance=-101", nil)
+	if _, _, err := parseOptimizationChanceRange(request); err == nil {
+		t.Fatal("out-of-range negative chance accepted")
 	}
 }
 

@@ -208,6 +208,9 @@ code { padding: 4px 7px; border-radius: 6px; color: #176e68; background: #eef8f6
 .player-toolbar > div strong, .player-toolbar > div span { display: block; }
 .player-toolbar > div strong { color: #29434b; font-size: 16px; }
 .player-toolbar > div span { margin-top: 4px; color: #819499; font-size: 12px; }
+.player-toolbar__actions { display: flex; align-items: center; gap: 12px; }
+.player-toolbar__actions .toolbar__count { margin-top: 0; }
+.ban-history-filters input[type="date"] { height: 42px; padding: 0 10px; border: 1px solid #d5e3e4; border-radius: 9px; outline: 0; color: #345159; background: #fff; font-size: 13px; }
 .table-wrap { width: 100%; overflow: auto; }
 .table-wrap.is-loading { opacity: .52; pointer-events: none; }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; }
@@ -2776,6 +2779,26 @@ td strong { color: #294149; }
 .reward-kind dd{margin:2px 0 0;color:#16313a;font-family:Georgia,serif;font-size:16px;font-variant-numeric:tabular-nums}
 .reward-kind dd.is-bad{color:#c1454f}
 .reward-kind dd.is-ok{color:#12826f}
+.reward-share{display:grid;gap:12px;padding:16px 18px;border:1px solid #dfe9ea;border-radius:12px;background:#fff;box-shadow:var(--shadow)}
+.reward-share.is-empty{background:#fbfdfd}
+.reward-share__head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.reward-share__head strong{display:block;color:#17323b;font-size:15px}
+.reward-share__head small{display:block;margin-top:4px;color:#809499;font-size:12px;line-height:1.5}
+.reward-share__meta{display:flex;align-items:center;gap:18px;flex-wrap:wrap;color:#6e858b;font-size:12px}
+.reward-share__meta b{color:#16313a;font-family:Georgia,serif;font-size:15px;font-variant-numeric:tabular-nums}
+.reward-share__bar{display:flex;height:14px;overflow:hidden;border-radius:999px;background:#eef3f3}
+.reward-share__bar i{display:block;height:100%;min-width:2px;transition:width .3s ease}
+.reward-share__chips{display:flex;flex-wrap:wrap;gap:8px;max-height:136px;overflow:auto}
+.reward-share__chip{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid #e0e9ea;border-radius:8px;background:#fbfdfd;font-size:12px;line-height:1.2}
+.reward-share__chip > i{display:block;width:8px;height:8px;flex:0 0 8px;border-radius:50%}
+.reward-share__chip > b{max-width:118px;overflow:hidden;color:#294a50;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
+.reward-share__chip > em{color:#12826f;font-style:normal;font-weight:800;font-variant-numeric:tabular-nums}
+.reward-share__chip > small{color:#8a9b9f;font-size:11px}
+.reward-share__chip.is-zero{opacity:.62}
+.reward-share__empty{margin:0;padding:10px 12px;border:1px dashed #d9e6e6;border-radius:9px;color:#7d9296;background:#f8fbfb;font-size:12.5px}
+.reward-share__note{margin:0;color:#8a9b9f;font-size:11.5px;line-height:1.55}
+.reward-share-pct{color:#12826f;font-weight:800;font-variant-numeric:tabular-nums}
+.reward-share-pct.is-zero{color:#9caaad;font-weight:400}
 @media (max-width:1100px){.reward-kinds{grid-template-columns:1fr}}
 /* 奖池共享：直接显示平台真实奖池与共享比例 */
 .reward-pool{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;padding:14px 16px;border:1px solid #d9e9e6;border-radius:12px;background:linear-gradient(180deg,#f7fdfb,#fff)}
@@ -2786,3 +2809,46 @@ td strong { color: #294149; }
 .reward-pool__cell small{display:block;margin-top:5px;color:#809499;font-size:11.5px}
 .reward-pool__foot{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;align-items:center;color:#7d9298;font-size:12.5px}
 @media (max-width:1100px){.reward-pool{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* 联盟/俱乐部收益对账 */
+.modal--xwide { width: min(1180px, 100%); }
+.earnings-modal { display: grid; gap: 16px; }
+.earnings-target { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; padding: 14px 16px; border: 1px solid #dfe9ea; border-radius: 12px; background: linear-gradient(180deg, #f7fdfb, #fff); }
+.earnings-target > div { min-width: 0; }
+.earnings-target span { display: block; color: #748a90; font-size: 12px; }
+.earnings-target strong { display: block; margin-top: 4px; overflow: hidden; color: #17323b; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.earnings-target small { display: block; margin-top: 4px; overflow: hidden; color: #82969b; font-size: 11.5px; text-overflow: ellipsis; white-space: nowrap; }
+.earnings-tabs { margin: 0; }
+.earnings-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 12px 14px; border: 1px solid #e2ecec; border-radius: 12px; background: #fbfdfd; }
+.earnings-filter > label { display: flex; align-items: center; gap: 6px; color: #6f858b; font-size: 12.5px; }
+.earnings-filter input[type="date"], .earnings-filter select { height: 34px; padding: 0 9px; border: 1px solid #d5e4e5; border-radius: 8px; color: #294a50; background: #fff; font-size: 13px; }
+.earnings-filter .button { min-height: 34px; padding: 0 12px; font-size: 12.5px; }
+.earnings-filter__presets { display: inline-flex; gap: 4px; padding: 4px; border-radius: 9px; background: #edf3f3; }
+.earnings-filter__presets button { min-height: 28px; padding: 0 10px; border: 0; border-radius: 7px; color: #5e747a; background: transparent; font-size: 12.5px; font-weight: 700; }
+.earnings-filter__presets button.is-active { color: #087970; background: #fff; box-shadow: 0 3px 10px rgba(24, 74, 80, .1); }
+.earnings-warnings { display: grid; gap: 5px; padding: 10px 12px; border: 1px solid #f0dfb7; border-radius: 10px; color: #8a672d; background: #fffaf0; font-size: 12.5px; line-height: 1.55; }
+.earnings-warnings p { margin: 0; }
+.earnings-summary { margin-top: 2px; }
+.earnings-summary.is-loading { opacity: .52; }
+.earnings-summary strong { font-size: 17px; }
+.earnings-section { display: grid; gap: 10px; padding-top: 4px; }
+.earnings-section__head { display: flex; align-items: baseline; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.earnings-section__head h3 { color: #19343d; font-size: 15px; }
+.earnings-section__head span { color: #82969b; font-size: 12px; }
+.earnings-empty { padding: 14px; border: 1px dashed #d9e6e6; border-radius: 10px; color: #7d9296; background: #f8fbfb; font-size: 12.5px; text-align: center; }
+.earnings-table { min-width: 760px; }
+.earnings-table--config { min-width: 0; }
+.earnings-table--details { min-width: 1080px; }
+.earnings-config-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.earnings-config-summary > div { padding: 10px 12px; border: 1px solid #e3ecec; border-radius: 10px; background: #fafdfd; }
+.earnings-config-summary span { display: block; color: #7c9298; font-size: 12px; }
+.earnings-config-summary strong { display: block; margin-top: 4px; color: #21414a; font-family: Georgia, "Songti SC", serif; font-size: 18px; }
+.earnings-config-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.earnings-config-grid h4 { margin: 0 0 8px; color: #294a50; font-size: 13px; }
+.earnings-config-grid .table-wrap { border: 1px solid #e5eded; border-radius: 10px; }
+.earnings-chip { display: inline-flex; flex-wrap: wrap; gap: 5px; color: #3c625f; font-size: 12px; }
+.earnings-note { margin: 0; color: #82969b; font-size: 12px; line-height: 1.6; }
+@media (max-width: 900px) {
+  .earnings-target { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .earnings-config-grid { grid-template-columns: 1fr; }
+}

@@ -64,24 +64,27 @@ type rewardSplit struct {
 }
 
 type rewardMember struct {
-	AgentID    string        `json:"agentId"`
-	Name       string        `json:"name"`
-	Role       string        `json:"role"`
-	Level      int64         `json:"level"`
-	UpperID    string        `json:"upperId"`
-	ClubID     string        `json:"clubId"`
-	ClubName   string        `json:"clubName"`
-	UnionID    string        `json:"unionId"`
-	UnionName  string        `json:"unionName"`
-	Authorized bool          `json:"authorized"`
-	Selected   bool          `json:"selected"`
-	Source     string        `json:"source"`
-	Perf       *rewardPerf   `json:"perf"`
-	Line       *rewardLine   `json:"line"`
-	Amount     int64         `json:"amount"`
-	Splits     []rewardSplit `json:"splits"`
-	Subs       []rewardSub   `json:"subs"`
-	PaidAmount int64         `json:"paidAmount"`
+	AgentID    string      `json:"agentId"`
+	Name       string      `json:"name"`
+	Role       string      `json:"role"`
+	Level      int64       `json:"level"`
+	UpperID    string      `json:"upperId"`
+	ClubID     string      `json:"clubId"`
+	ClubName   string      `json:"clubName"`
+	UnionID    string      `json:"unionId"`
+	UnionName  string      `json:"unionName"`
+	Authorized bool        `json:"authorized"`
+	Selected   bool        `json:"selected"`
+	Source     string      `json:"source"`
+	Perf       *rewardPerf `json:"perf"`
+	Line       *rewardLine `json:"line"`
+	// SharePercent 是今日业绩（净点数）在本次名单内的占比，保留两位小数，
+	// 名单内有正业绩时所有行合计固定为 100.00。
+	SharePercent float64       `json:"sharePercent"`
+	Amount       int64         `json:"amount"`
+	Splits       []rewardSplit `json:"splits"`
+	Subs         []rewardSub   `json:"subs"`
+	PaidAmount   int64         `json:"paidAmount"`
 }
 
 type rewardSub struct {
@@ -727,6 +730,19 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 	overview.Totals.Diff = planned - sum
 	overview.Totals.Points = round2(points)
 	overview.Totals.Excluded = int64(len(skip))
+
+	// 今日业绩占比：只用本次名单内的净点数做归一，合计固定 100.00%，
+	// 与「业绩奖励」自动分摊的权重同一口径，发钱时看到的占比就是到手比例。
+	shareWeights := make(map[string]float64, len(overview.Members))
+	for _, m := range overview.Members {
+		if m.Perf != nil && m.Perf.Net > 0 {
+			shareWeights[m.AgentID] = m.Perf.Net
+		}
+	}
+	sharePercents := rewardSharePercents(shareWeights)
+	for i := range overview.Members {
+		overview.Members[i].SharePercent = sharePercents[overview.Members[i].AgentID]
+	}
 	var poolTotal int64
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active'`).
 		Scan(&poolTotal); err == nil {
@@ -1570,6 +1586,60 @@ func buildRewardPerfFromLines(members []rewardMember, lines map[string]*rewardLi
 		out[m.AgentID] = &rewardPerf{My: round2(line.TodayContrib), Granted: granted, Net: net}
 	}
 	return out
+}
+
+// rewardSharePercents 把净点数换算成名单内占比（百分比，保留两位小数）。
+// 用最大余数法补尾差，只要有正权重，所有行的百分比合计恰好 100.00。
+func rewardSharePercents(weights map[string]float64) map[string]float64 {
+	result := make(map[string]float64, len(weights))
+	total := 0.0
+	for _, weight := range weights {
+		if weight > 0 {
+			total += weight
+		}
+	}
+	if total <= 0 {
+		for id := range weights {
+			result[id] = 0
+		}
+		return result
+	}
+	type share struct {
+		id    string
+		units int64
+		frac  float64
+	}
+	shares := make([]share, 0, len(weights))
+	var used int64
+	for id, weight := range weights {
+		if weight <= 0 {
+			result[id] = 0
+			continue
+		}
+		// 百分比 × 100 后取整，最后一位按最大余数补，保证合计 10000。
+		exact := 10000 * weight / total
+		base := int64(math.Floor(exact))
+		shares = append(shares, share{id: id, units: base, frac: exact - float64(base)})
+		used += base
+	}
+	sort.SliceStable(shares, func(i, j int) bool {
+		if shares[i].frac != shares[j].frac {
+			return shares[i].frac > shares[j].frac
+		}
+		if weights[shares[i].id] != weights[shares[j].id] {
+			return weights[shares[i].id] > weights[shares[j].id]
+		}
+		return shares[i].id < shares[j].id
+	})
+	left := int64(10000) - used
+	for i := 0; i < len(shares) && left > 0; i++ {
+		shares[i].units++
+		left--
+	}
+	for _, item := range shares {
+		result[item.id] = float64(item.units) / 100
+	}
+	return result
 }
 
 // splitRewardByWeight 把计划总额按权重分摊到每个代理，用最大余数法补尾差。
