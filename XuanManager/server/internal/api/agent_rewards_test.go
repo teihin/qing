@@ -229,3 +229,15 @@ func TestRewardLineTargetsIncludesUnselectedChildren(t *testing.T) {
 		t.Fatalf("查询数量 = %d, want 2", len(targets))
 	}
 }
+
+// 业绩核心共享以联盟为单位：空联盟必须被拒绝，6 位联盟码才允许进入。
+func TestNormalizeRewardUnionID(t *testing.T) {
+	if value, err := normalizeRewardUnionID(" 123456 "); err != nil || value != "123456" {
+		t.Fatalf("合法联盟码解析失败: %q %v", value, err)
+	}
+	for _, raw := range []string{"", "  ", "12345", "1234567", "abcdef", "12 34"} {
+		if _, err := normalizeRewardUnionID(raw); err == nil {
+			t.Fatalf("非法联盟码 %q 应该被拒绝", raw)
+		}
+	}
+}

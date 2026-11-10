@@ -35,8 +35,33 @@ type LedgerRow = {
   payeeType: string; amount: number; order: string; status: string; error: string; paidAt: string;
 };
 type PayResult = { total: number; paid: number; failed: number; skipped: number; status: string; orders: string[]; errors: string[] };
+type UnionPlan = { kind: Kind; plannedTotal: number; allocated: number; count: number; status: string };
+type UnionRow = {
+  unionId: string; name: string; agentCount: number; selectedCount: number; plans: UnionPlan[];
+};
+type UnionOverview = { date: string; items: UnionRow[]; unassigned: number };
+
+/** 发放页跳转格式：#/game/agent-rewards?unionId=123456&unionName=XX联盟 */
+function unionFromHash(): { unionId: string; unionName: string } {
+  const query = window.location.hash.split("?")[1] ?? "";
+  const params = new URLSearchParams(query);
+  return {
+    unionId: params.get("unionId")?.trim() ?? "",
+    unionName: params.get("unionName")?.trim() ?? "",
+  };
+}
+
+function openUnion(unionId: string, unionName: string) {
+  window.location.hash = `#/game/agent-rewards?unionId=${encodeURIComponent(unionId)}&unionName=${encodeURIComponent(unionName)}`;
+}
+
+function backToUnions() {
+  window.location.hash = "#/game/agent-rewards";
+}
 
 const KIND_LABEL: Record<Kind, string> = { performance: "业绩奖励", core: "核心奖励", pool: "奖池共享" };
+const kindStatusText = (value?: string) =>
+  value === "paid" ? "已发放" : value === "paying" ? "发放中" : value === "partial" ? "部分异常" : "编辑中";
 // 与游戏内「代理中心」一致的角色名：大盟主 / 盟主 / 小盟主 / 合伙人 / 代理
 const ROLE_LABEL: Record<string, string> = { grand: "大盟主", leader: "盟主", small_leader: "小盟主", partner: "合伙人", agent: "代理" };
 // 占比堆叠条的分段颜色，按占比从高到低循环使用。
@@ -50,7 +75,182 @@ const syncClock = () => new Date().toLocaleTimeString("zh-CN", { hour12: false }
 // 防止表格公式注入
 const csvCell = (value: unknown) => `"${String(value ?? "").replace(/^[=+@\-\t\r]/, "'$&").replaceAll('"', '""')}"`;
 
-export default function AgentRewardsPage({ can, notify }: { can: (permission: string) => boolean; notify: (message: string, kind?: "success" | "error") => void }) {
+type PageProps = {
+  can: (permission: string) => boolean;
+  notify: (message: string, kind?: "success" | "error") => void;
+};
+
+/**
+ * 业绩核心共享入口：先选联盟，再进入该联盟的发放页。
+ * 名单、方案、计划、发放全部以联盟为单位，不能跨联盟选人。
+ */
+export default function AgentRewardsPage({ can, notify }: PageProps) {
+  const [scope, setScope] = useState(unionFromHash);
+
+  useEffect(() => {
+    const onHash = () => setScope(unionFromHash());
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+
+  if (!scope.unionId) return <UnionListPage can={can} notify={notify} />;
+  return (
+    <RewardDetail
+      key={scope.unionId}
+      unionId={scope.unionId}
+      unionName={scope.unionName}
+      can={can}
+      notify={notify}
+    />
+  );
+}
+
+/** 联盟列表：只展示联盟维度的汇总，点进某一个联盟后才加载名单与金额。 */
+function UnionListPage({ can, notify }: PageProps) {
+  const [date] = useState(() => beijingDateInput(0));
+  const [data, setData] = useState<UnionOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState("");
+  const [keyword, setKeyword] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      setData(await api<UnionOverview>(`/api/game/agent-rewards/unions?${new URLSearchParams({ date })}`));
+    } catch (reason) {
+      notify(reason instanceof Error ? reason.message : "读取联盟列表失败", "error");
+    } finally {
+      setLoading(false);
+    }
+  }, [date, notify]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const syncMembers = async () => {
+    setBusy("sync");
+    try {
+      await api("/api/game/agent-rewards/sync", { method: "POST", ...jsonBody({}) });
+      await load();
+      notify("代理名单已同步");
+    } catch (reason) {
+      notify(reason instanceof Error ? reason.message : "同步失败", "error");
+    } finally { setBusy(""); }
+  };
+
+  const rows = useMemo(() => (data?.items ?? []).filter(row => {
+    if (!keyword) return true;
+    return row.unionId.includes(keyword) || row.name.includes(keyword);
+  }), [data, keyword]);
+
+  const totalAgents = useMemo(() => (data?.items ?? []).reduce((sum, row) => sum + row.agentCount, 0), [data]);
+  const totalSelected = useMemo(() => (data?.items ?? []).reduce((sum, row) => sum + row.selectedCount, 0), [data]);
+
+  return (
+    <div className="page-stack">
+      <PageHeader
+        eyebrow="GAME / AGENT REWARD"
+        title="业绩核心共享"
+        description="以联盟为单位发放：先选择联盟，再维护该联盟的奖励名单、计划金额与发放账单。不同联盟之间名单互不相通。"
+        actions={<div className="page-header__actions">
+          <Button variant="secondary" disabled={busy === "sync" || !can("game.agent_reward.edit")} onClick={() => void syncMembers()}>
+            {busy === "sync" ? "同步中…" : "同步名单"}
+          </Button>
+          <Button variant="secondary" onClick={() => void load()}>刷新</Button>
+        </div>}
+      />
+
+      <div className="reward-metrics">
+        <div className="reward-metric">
+          <span>联盟数量</span>
+          <strong>{data?.items.length ?? 0}</strong>
+          <small>有联盟即可进入发放</small>
+        </div>
+        <div className="reward-metric">
+          <span>联盟代理</span>
+          <strong>{num(totalAgents)}</strong>
+          <small>已同步的俱乐部代理</small>
+        </div>
+        <div className="reward-metric">
+          <span>已加入名单</span>
+          <strong>{num(totalSelected)}</strong>
+          <small>各联盟名单人数合计</small>
+        </div>
+        <div className="reward-metric">
+          <span>统计日期</span>
+          <strong>{date}</strong>
+          <small>点击联盟后可按日期切换</small>
+        </div>
+      </div>
+
+      {(data?.unassigned ?? 0) > 0 && (
+        <div className="reward-warn">
+          <b>有代理未归属联盟</b>
+          <ul><li>{data?.unassigned} 个代理没有 union_id，不会出现在任何联盟的发放页；请先在游戏里加入联盟，再回来同步名单。</li></ul>
+        </div>
+      )}
+
+      <section className="panel">
+        <div className="panel__header">
+          <div className="reward-tools">
+            <input placeholder="搜联盟名称或联盟码" value={keyword} onChange={event => setKeyword(event.target.value.trim())} />
+            <span className="reward-muted">共 {rows.length} 个联盟</span>
+          </div>
+        </div>
+
+        {loading ? <LoadingBlock label="正在读取联盟列表" /> : rows.length === 0 ? (
+          <div className="reward-empty">
+            <strong>没有可发放的联盟</strong>
+            <p>{keyword ? "换个关键字试试。" : "游戏里还没有联盟，或联盟尚未同步代理。可先点右上「同步名单」。"}</p>
+          </div>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>联盟</th>
+                  <th>联盟码</th>
+                  <th className="reward-num">联盟代理</th>
+                  <th className="reward-num">当前名单</th>
+                  {(["performance", "core", "pool"] as Kind[]).map(kind => (
+                    <th key={kind} className="reward-num">{KIND_LABEL[kind]}</th>
+                  ))}
+                  <th style={{ width: 110 }} />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(row => (
+                  <tr key={row.unionId} style={{ cursor: "pointer" }}
+                    onClick={() => openUnion(row.unionId, row.name)}>
+                    <td className="reward-name"><strong>{row.name}</strong></td>
+                    <td className="reward-dim">{row.unionId}</td>
+                    <td className="reward-num">{num(row.agentCount)}</td>
+                    <td className="reward-num">{num(row.selectedCount)}</td>
+                    {(["performance", "core", "pool"] as Kind[]).map(kind => {
+                      const plan = row.plans.find(item => item.kind === kind);
+                      return (
+                        <td key={kind} className="reward-num">
+                          <div>{num(plan?.plannedTotal ?? 0)}</div>
+                          <small className="reward-muted">{kindStatusText(plan?.status)}</small>
+                        </td>
+                      );
+                    })}
+                    <td>
+                      <Button variant="secondary" onClick={event => { event.stopPropagation(); openUnion(row.unionId, row.name); }}>
+                        进入发放
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId: string; unionName: string }) {
   const [kind, setKind] = useState<Kind>("performance");
   const [date, setDate] = useState(beijingDateInput(0));
   const [data, setData] = useState<Overview | null>(null);
@@ -62,7 +262,6 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const [dirty, setDirty] = useState(false);
   const [keyword, setKeyword] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [unionFilter, setUnionFilter] = useState("all");
   const [clubFilter, setClubFilter] = useState("all");
   const [dataFilter, setDataFilter] = useState("all");
   const [selected, setSelected] = useState<Record<string, boolean>>({});
@@ -116,25 +315,26 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
 
   const loadSummary = useCallback(async (targetDate: string) => {
     try {
-      setSummary(await api<Summary>(`/api/game/agent-rewards/summary?date=${encodeURIComponent(targetDate)}`));
+      setSummary(await api<Summary>(`/api/game/agent-rewards/summary?${new URLSearchParams({ date: targetDate, unionId })}`));
     } catch {
       // 汇总只是顶部的辅助信息，失败不打断主流程。
     }
-  }, []);
+  }, [unionId]);
 
   const load = useCallback(async (targetDate: string, targetKind: Kind, silent = false, resetDraft = false) => {
     // 只有第一次进页面才铺 loading；后续刷新一律就地更新，不把表格清空重画。
     const firstLoad = !hasData.current;
     if (!silent && firstLoad) setLoading(true);
-    const url = `/api/game/agent-rewards?${new URLSearchParams({ date: targetDate, kind: targetKind })}`;
+    const url = `/api/game/agent-rewards?${new URLSearchParams({ date: targetDate, kind: targetKind, unionId })}`;
     try {
       const value = await api<Overview>(url);
       applyData(value, !firstLoad && !resetDraft);
       hasData.current = true;
       setLastSync(syncClock());
       void loadSummary(targetDate);
-      // 首次进入且名单为空时自动同步一次候选池，避免新部署后看到空白页。
-      if (value.members.length === 0 && !autoSynced.current && can("game.agent_reward.edit")) {
+      // 首次进入且当前联盟还没有任何在册代理时自动同步一次，避免新部署后看到空白页；
+      // 联盟里已有人、只是还没加入名单时不自动同步，等用户手动点「同步名单」。
+      if (value.members.length === 0 && (value.totals?.pool ?? 0) === 0 && !autoSynced.current && can("game.agent_reward.edit")) {
         autoSynced.current = true;
         try {
           await api("/api/game/agent-rewards/sync", { method: "POST", ...jsonBody({}) });
@@ -149,7 +349,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     } finally {
       if (!silent && firstLoad) setLoading(false);
     }
-  }, [notify, can, applyData, loadSummary]);
+  }, [notify, can, applyData, loadSummary, unionId]);
 
   // 切日期或切奖励类型属于换一份数据，草稿要重置；其余刷新一律保留页面输入。
   useEffect(() => { void load(date, kind, false, true); }, [date, kind, load]);
@@ -164,7 +364,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     perfRefreshing.current = true;
     const key = `${date}|${kind}`;
     try {
-      const value = await api<Overview>(`/api/game/agent-rewards?${new URLSearchParams({ date, kind })}`);
+      const value = await api<Overview>(`/api/game/agent-rewards?${new URLSearchParams({ date, kind, unionId })}`);
       if (perfKey.current !== key) return;
       setData(prev => {
         if (!prev) return value;
@@ -186,7 +386,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     } finally {
       perfRefreshing.current = false;
     }
-  }, [date, kind, notify]);
+  }, [date, kind, notify, unionId]);
 
   // 业绩是游戏服实时累计的，页面每 30 秒静默同步一次；切到后台标签页时暂停。
   const hasOverview = Boolean(data);
@@ -213,7 +413,6 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const members = useMemo(() => (data?.members ?? []).filter(m => {
     if (keyword && !(m.agentId.includes(keyword) || m.name.includes(keyword))) return false;
     if (roleFilter !== "all" && m.role !== roleFilter) return false;
-    if (unionFilter !== "all" && m.unionId !== unionFilter) return false;
     if (clubFilter !== "all" && m.clubId !== clubFilter) return false;
     if (dataFilter === "has") {
       const weighted = kind === "performance" ? (m.perf?.net ?? 0) : kind === "pool" ? Math.max(m.line?.todayScore ?? 0, 0) : (draft[m.agentId] ?? 0);
@@ -221,7 +420,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     }
     if (dataFilter === "noclub" && m.line) return false;
     return true;
-  }), [data, keyword, roleFilter, unionFilter, clubFilter, dataFilter, kind, draft]);
+  }), [data, keyword, roleFilter, clubFilter, dataFilter, kind, draft]);
 
   // 顶部占比区不受筛选影响：展示本次名单里所有已加入代理，按占比从高到低排。
   const shareRows = useMemo(() => (data?.members ?? [])
@@ -230,22 +429,15 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const shareSum = useMemo(() => shareRows.reduce((sum, row) => sum + row.percent, 0), [shareRows]);
   const shareTotal = data?.totals.points ?? 0;
 
-  // 联盟/俱乐部下拉：从当前名单聚合，俱乐部随所选联盟联动。
-  const unionOptions = useMemo(() => {
-    const map = new Map<string, string>();
-    (data?.members ?? []).forEach(m => { if (m.unionId) map.set(m.unionId, m.unionName || m.unionId); });
-    return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [data]);
-
+  // 联盟内可能跨多个俱乐部：俱乐部下拉只从当前联盟名单聚合。
   const clubOptions = useMemo(() => {
     const map = new Map<string, string>();
     (data?.members ?? []).forEach(m => {
       if (!m.clubId) return;
-      if (unionFilter !== "all" && m.unionId !== unionFilter) return;
       map.set(m.clubId, m.clubName || m.clubId);
     });
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [data, unionFilter]);
+  }, [data]);
 
   const amountSum = useMemo(() => members.reduce((sum, m) => sum + (draft[m.agentId] ?? 0), 0), [members, draft]);
   const allSum = useMemo(() => (data?.members ?? []).reduce((sum, m) => sum + (draft[m.agentId] ?? 0), 0), [data, draft]);
@@ -273,12 +465,12 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     if (needPlan) {
       await api("/api/game/agent-rewards/plan", {
         method: "PUT",
-        ...jsonBody({ date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
+        ...jsonBody({ unionId, date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
       });
     }
     const amounts: Record<string, number> = {};
     (data.members ?? []).forEach(m => { amounts[m.agentId] = draft[m.agentId] ?? 0; });
-    await api("/api/game/agent-rewards/amounts", { method: "PUT", ...jsonBody({ date: data.plan.date, kind, amounts, splits }) });
+    await api("/api/game/agent-rewards/amounts", { method: "PUT", ...jsonBody({ unionId, date: data.plan.date, kind, amounts, splits }) });
     setDirty(false);
     return true;
   };
@@ -289,10 +481,10 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     try {
       await api("/api/game/agent-rewards/plan", {
         method: "PUT",
-        ...jsonBody({ date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
+        ...jsonBody({ unionId, date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
       });
       const result = await api<{ count: number; total: number }>("/api/game/agent-rewards/allocate",
-        { method: "POST", ...jsonBody({ date: data.plan.date, kind }) });
+        { method: "POST", ...jsonBody({ unionId, date: data.plan.date, kind }) });
       // 服务端刚重写了每个人的金额，这里必须重新以服务端为准，不能保留页面上的旧草稿。
       await load(date, kind, true, true);
       notify(`已分摊 ${num(result.total)} 金币，共 ${result.count} 人`);
@@ -333,7 +525,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     setBusy("pay");
     try {
       const result = await api<PayResult>("/api/game/agent-rewards/pay",
-        { method: "POST", ...jsonBody({ date: data.plan.date, kind, confirm: true }) });
+        { method: "POST", ...jsonBody({ unionId, date: data.plan.date, kind, confirm: true }) });
       setPayResult(result);
       notify(result.status === "paid" ? `发放完成：${result.paid} 笔` : `部分完成：成功 ${result.paid} 笔，异常 ${result.failed + (result.total > 0 ? 0 : 0)} 笔`, result.status === "paid" ? "success" : "error");
       await load(date, kind, true, true);
@@ -347,7 +539,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     setBusy("exclude");
     try {
       await api("/api/game/agent-rewards/exclude", { method: "POST", ...jsonBody({
-        agentId: excludeOpen.member.agentId, kind: excludeOpen.scope, reason: excludeOpen.reason.trim(),
+        unionId, agentId: excludeOpen.member.agentId, kind: excludeOpen.scope, reason: excludeOpen.reason.trim(),
       }) });
       setExcludeOpen(null);
       await load(date, kind, true);
@@ -360,7 +552,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const restoreExclude = async (item: Excluded) => {
     setBusy("restore");
     try {
-      await api(`/api/game/agent-rewards/exclude/${encodeURIComponent(item.agentId)}?kind=${encodeURIComponent(item.kind)}`, { method: "DELETE" });
+      await api(`/api/game/agent-rewards/exclude/${encodeURIComponent(item.agentId)}?${new URLSearchParams({ kind: item.kind, unionId })}`, { method: "DELETE" });
       await load(date, kind, true);
       notify(`已恢复 ${item.name || item.agentId}`);
     } catch (reason) {
@@ -371,9 +563,9 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const bindSub = async (agentId: string, subGuuid: string) => {
     setBusy("sub");
     try {
-      await api("/api/game/agent-rewards/sub-accounts", { method: "POST", ...jsonBody({ agentId, subGuuid }) });
+      await api("/api/game/agent-rewards/sub-accounts", { method: "POST", ...jsonBody({ unionId, agentId, subGuuid }) });
       await load(date, kind, true);
-      const fresh = (await api<Overview>(`/api/game/agent-rewards?${new URLSearchParams({ date, kind })}`)).members.find(m => m.agentId === agentId);
+      const fresh = (await api<Overview>(`/api/game/agent-rewards?${new URLSearchParams({ date, kind, unionId })}`)).members.find(m => m.agentId === agentId);
       if (fresh) setSubOpen(fresh);
       notify("子账号已绑定");
     } catch (reason) {
@@ -384,7 +576,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const unbindSub = async (agentId: string, subId: string) => {
     setBusy("sub");
     try {
-      await api(`/api/game/agent-rewards/sub-accounts/${encodeURIComponent(agentId)}/${encodeURIComponent(subId)}`, { method: "DELETE" });
+      await api(`/api/game/agent-rewards/sub-accounts/${encodeURIComponent(agentId)}/${encodeURIComponent(subId)}?${new URLSearchParams({ unionId })}`, { method: "DELETE" });
       notify("已解绑");
       setSubOpen(null);
       await load(date, kind, true);
@@ -397,7 +589,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   const removeFromList = async (member: Member) => {
     setBusy("remove");
     try {
-      await api("/api/game/agent-rewards/select", { method: "POST", ...jsonBody({ agentIds: [member.agentId], selected: false }) });
+      await api("/api/game/agent-rewards/select", { method: "POST", ...jsonBody({ unionId, agentIds: [member.agentId], selected: false }) });
       await load(date, kind, true);
       notify(`已从名单删除 ${member.name || member.agentId}，需要时可重新添加`);
     } catch (reason) {
@@ -422,7 +614,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `代理奖励-${data.plan.date}-${kind}.csv`;
+    link.download = `代理奖励-${unionName || unionId}-${data.plan.date}-${kind}.csv`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -447,14 +639,12 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
   // 奖池共享：比例是加在「奖池 50%」上的，和需求里 100000 → 50000 → 60% → 30000 一致。
   const poolHalf = data?.plan.poolHalf ?? 0;
   const poolSuggested = Math.round(poolHalf * (poolPercent || 0) / 100);
-  const kindStatusText = (value?: string) =>
-    value === "paid" ? "已发放" : value === "paying" ? "发放中" : value === "partial" ? "部分异常" : "编辑中";
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="GAME / AGENT REWARD"
-        title="业绩核心共享"
+        title={`${unionName || unionId} · 业绩核心共享`}
         description={descriptions[kind]}
         actions={<div className="page-header__actions">
           <input type="date" value={date} onChange={event => setDate(event.target.value)} />
@@ -464,6 +654,15 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
           <Button variant="secondary" onClick={() => setLedgerOpen(true)}>发放账单</Button>
         </div>}
       />
+
+      <div className="union-filter-banner">
+        <div>
+          <span>当前发放范围</span>
+          <strong>{unionName || unionId}</strong>
+          <small>联盟码：{unionId} · 名单、方案、金额与发放都只在本联盟内</small>
+        </div>
+        <Button variant="secondary" onClick={backToUnions}>返回联盟列表</Button>
+      </div>
 
       <div className="reward-kinds">
         {tabs.map(tab => {
@@ -615,14 +814,6 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
               <option value="partner">合伙人</option>
               <option value="agent">代理</option>
             </select>
-            <select value={unionFilter} onChange={event => {
-              const next = event.target.value;
-              setUnionFilter(next);
-              setClubFilter("all");
-            }}>
-              <option value="all">全部联盟</option>
-              {unionOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-            </select>
             <select value={clubFilter} onChange={event => setClubFilter(event.target.value)}>
               <option value="all">全部俱乐部</option>
               {clubOptions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -672,7 +863,6 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
                   </th>
                   <th>代理</th>
                   <th>身份</th>
-                  <th>联盟</th>
                   <th>俱乐部</th>
                   <th className="reward-num">今日业绩</th>
                   <th className="reward-num">实际点数</th>
@@ -701,7 +891,6 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
                         <span className={`reward-role reward-role--${m.role}`}>{ROLE_LABEL[m.role] ?? m.role}</span>
                         {splitsOf.length > 1 && <span className="reward-tag">{splitsOf.length} 个账号</span>}
                       </td>
-                      <td className="reward-dim">{m.unionId ? <span title={`联盟 ID ${m.unionId}`}>{m.unionName || m.unionId}</span> : <span className="reward-muted">—</span>}</td>
                       <td className="reward-dim">{m.clubId ? <span title={`俱乐部 ID ${m.clubId}`}>{m.clubName || m.clubId}</span> : <span className="reward-muted">—</span>}</td>
                       {/* 三栏都显示同一套代理数据：今日业绩（毛）、实际点数（净，逐级扣减后）、线输赢与贡献 */}
                       <td className="reward-num">{m.perf ? money2(m.perf.my) : <span className="reward-muted">无数据</span>}</td>
@@ -766,7 +955,7 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
         </div>
       </section>
 
-      {lineOpen && <LineModal member={lineOpen} date={date} onClose={() => setLineOpen(null)} />}
+      {lineOpen && <LineModal member={lineOpen} date={date} unionId={unionId} onClose={() => setLineOpen(null)} />}
       {subOpen && <SubModal member={subOpen} amount={draft[subOpen.agentId] ?? 0} splits={splits[subOpen.agentId] ?? []}
         canConfigure={Boolean(can("game.agent_reward.configure"))} busy={busy === "sub"}
         onBind={bindSub} onUnbind={unbindSub}
@@ -845,14 +1034,14 @@ export default function AgentRewardsPage({ can, notify }: { can: (permission: st
         )}
       </Modal>}
 
-      {pickOpen && <CandidateModal notify={notify} onClose={() => setPickOpen(false)}
+      {pickOpen && <CandidateModal unionId={unionId} unionName={unionName} notify={notify} onClose={() => setPickOpen(false)}
         onChanged={() => { void load(date, kind, true); }}
         onDone={() => { setPickOpen(false); void load(date, kind, true); }} />}
-      {listOpen && <RewardListModal date={date} selectedCount={payCount} rev={listRev} notify={notify}
+      {listOpen && <RewardListModal unionId={unionId} date={date} selectedCount={payCount} rev={listRev} notify={notify}
         onClose={() => setListOpen(false)}
         onChanged={() => setListRev(value => value + 1)}
         onApplied={() => { setListOpen(false); void load(date, kind, true, true); }} />}
-      {ledgerOpen && <LedgerModal onClose={() => setLedgerOpen(false)} notify={notify} />}
+      {ledgerOpen && <LedgerModal unionId={unionId} onClose={() => setLedgerOpen(false)} notify={notify} />}
     </div>
   );
 }
@@ -862,16 +1051,16 @@ function signed(value: number) {
   return <span className={cls}>{value > 0 ? "+" : ""}{num(value)}</span>;
 }
 
-function LineModal({ member, date, onClose }: { member: Member; date: string; onClose: () => void }) {
+function LineModal({ member, date, unionId, onClose }: { member: Member; date: string; unionId: string; onClose: () => void }) {
   const [nodes, setNodes] = useState<{ agentId: string; name: string; role: string; clubId: string; relation: string; line: Line | null; perf: Perf | null }[] | null>(null);
   const [error, setError] = useState("");
   useEffect(() => {
     let alive = true;
-    api<{ nodes: typeof nodes }>(`/api/game/agent-rewards/${encodeURIComponent(member.agentId)}/line?date=${encodeURIComponent(date)}`)
+    api<{ nodes: typeof nodes }>(`/api/game/agent-rewards/${encodeURIComponent(member.agentId)}/line?${new URLSearchParams({ date, unionId })}`)
       .then(value => { if (alive) setNodes(value.nodes ?? []); })
       .catch(reason => { if (alive) setError(reason instanceof Error ? reason.message : "读取失败"); });
     return () => { alive = false; };
-  }, [member.agentId, date]);
+  }, [member.agentId, date, unionId]);
 
   return (
     <Modal title={`${member.name || member.agentId} · 整条线数据`} eyebrow="AGENT LINE" onClose={onClose} wide>
@@ -987,7 +1176,7 @@ function SubModal({ member, amount, splits, canConfigure, busy, onBind, onUnbind
   );
 }
 
-function LedgerModal({ onClose, notify }: { onClose: () => void; notify: (m: string, k?: "success" | "error") => void }) {
+function LedgerModal({ unionId, onClose, notify }: { unionId: string; onClose: () => void; notify: (m: string, k?: "success" | "error") => void }) {
   const [from, setFrom] = useState(beijingDateInput(-9));
   const [to, setTo] = useState(beijingDateInput(0));
   const [rows, setRows] = useState<LedgerRow[] | null>(null);
@@ -997,13 +1186,13 @@ function LedgerModal({ onClose, notify }: { onClose: () => void; notify: (m: str
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const value = await api<{ items: LedgerRow[]; summary: typeof summary }>(`/api/game/agent-rewards/ledger?${new URLSearchParams({ from, to })}`);
+      const value = await api<{ items: LedgerRow[]; summary: typeof summary }>(`/api/game/agent-rewards/ledger?${new URLSearchParams({ from, to, unionId })}`);
       setRows(value.items ?? []);
       setSummary(value.summary ?? { total: 0, performance: 0, core: 0, pool: 0 });
     } catch (reason) {
       notify(reason instanceof Error ? reason.message : "读取账单失败", "error");
     } finally { setLoading(false); }
-  }, [from, to, notify]);
+  }, [from, to, notify, unionId]);
   useEffect(() => { void load(); }, [load]);
 
   const exportCsv = () => {
@@ -1019,7 +1208,7 @@ function LedgerModal({ onClose, notify }: { onClose: () => void; notify: (m: str
   };
 
   return (
-    <Modal title="发放账单" eyebrow="LEDGER" onClose={onClose} wide>
+    <Modal title="发放账单 · 当前联盟" eyebrow="LEDGER" onClose={onClose} wide>
       <div className="reward-tools" style={{ marginBottom: 14 }}>
         <input type="date" value={from} onChange={event => setFrom(event.target.value)} />
         <span className="reward-muted">至</span>
@@ -1069,7 +1258,9 @@ function LedgerModal({ onClose, notify }: { onClose: () => void; notify: (m: str
  * 批量添加：从俱乐部在册代理里挑人进入本次分配名单。
  * 候选池只加载一次（几十人级别），联盟/俱乐部/关键字都在前端过滤，避免来回请求。
  */
-function CandidateModal({ notify, onClose, onDone, onChanged }: {
+function CandidateModal({ unionId, unionName, notify, onClose, onDone, onChanged }: {
+  unionId: string;
+  unionName: string;
   notify: (m: string, k?: "success" | "error") => void;
   onClose: () => void;
   onDone: () => void;
@@ -1078,26 +1269,27 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
 }) {
   const [items, setItems] = useState<Member[] | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
-  const [unionId, setUnionId] = useState("all");
   const [clubId, setClubId] = useState("all");
   const [keyword, setKeyword] = useState("");
   const [directIds, setDirectIds] = useState("");
   const [saving, setSaving] = useState(false);
   const [stats, setStats] = useState({ selected: 0, total: 0 });
 
+  const candidateURL = `/api/game/agent-rewards/candidates?${new URLSearchParams({ unionId })}`;
+
   const reload = useCallback(async () => {
     try {
-      const value = await api<{ items: Member[]; selected: number; total: number }>("/api/game/agent-rewards/candidates");
+      const value = await api<{ items: Member[]; selected: number; total: number }>(candidateURL);
       setItems(value.items ?? []);
       setStats({ selected: value.selected ?? 0, total: value.total ?? 0 });
     } catch (reason) {
       notify(reason instanceof Error ? reason.message : "读取候选名单失败", "error");
     }
-  }, [notify]);
+  }, [candidateURL, notify]);
 
   useEffect(() => {
     let alive = true;
-    api<{ items: Member[]; selected: number; total: number }>("/api/game/agent-rewards/candidates")
+    api<{ items: Member[]; selected: number; total: number }>(candidateURL)
       .then(value => {
         if (!alive) return;
         setItems(value.items ?? []);
@@ -1106,31 +1298,23 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
       })
       .catch(reason => { if (alive) notify(reason instanceof Error ? reason.message : "读取候选名单失败", "error"); });
     return () => { alive = false; };
-  }, [notify]);
-
-  const unions = useMemo(() => {
-    const map = new Map<string, string>();
-    (items ?? []).forEach(m => { if (m.unionId) map.set(m.unionId, m.unionName || m.unionId); });
-    return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [items]);
+  }, [candidateURL, notify]);
 
   const clubs = useMemo(() => {
     const map = new Map<string, string>();
     (items ?? []).forEach(m => {
       if (!m.clubId) return;
-      if (unionId !== "all" && m.unionId !== unionId) return;
       map.set(m.clubId, m.clubName || m.clubId);
     });
     return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, [items, unionId]);
+  }, [items]);
 
   const visible = useMemo(() => (items ?? []).filter(m => {
     if (m.selected) return false; // 已经在名单里的不在这里出现，移出请到列表页操作
-    if (unionId !== "all" && m.unionId !== unionId) return false;
     if (clubId !== "all" && m.clubId !== clubId) return false;
     if (keyword && !(m.agentId.includes(keyword) || m.name.includes(keyword))) return false;
     return true;
-  }), [items, unionId, clubId, keyword]);
+  }), [items, clubId, keyword]);
 
   const allChecked = visible.length > 0 && visible.every(m => picked.includes(m.agentId));
   const someChecked = visible.some(m => picked.includes(m.agentId));
@@ -1163,7 +1347,7 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
     try {
       const result = await api<{ count: number; failed: string[]; added: { agentId: string; name: string }[] }>(
         "/api/game/agent-rewards/members",
-        { method: "POST", ...jsonBody({ agentIds: ids }) });
+        { method: "POST", ...jsonBody({ unionId, agentIds: ids }) });
       if (result.failed?.length) {
         notify(`已加入 ${result.count} 人；失败：${result.failed.join("；")}`, "error");
       } else {
@@ -1181,7 +1365,7 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
     if (!toAdd.length) { onDone(); return; }
     setSaving(true);
     try {
-      await api("/api/game/agent-rewards/select", { method: "POST", ...jsonBody({ agentIds: toAdd, selected: true }) });
+      await api("/api/game/agent-rewards/select", { method: "POST", ...jsonBody({ unionId, agentIds: toAdd, selected: true }) });
       notify(`已把 ${toAdd.length} 人加入分配名单`);
       onDone();
     } catch (reason) {
@@ -1192,17 +1376,14 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
   return (
     <Modal title="添加参与分配的代理" eyebrow="ADD AGENTS" onClose={onClose} wide>
       <p className="reward-hint">
-        候选池共 {stats.total} 个俱乐部代理（大盟主 / 盟主 / 合伙人 / 代理），名单里已有 {stats.selected} 人。
-        下方直接勾选即可加入；已被移出的也在这里重新勾回来。列表里没有的账号（还没授权成俱乐部代理的），
+        当前联盟「{unionName || unionId}」候选池共 {stats.total} 个俱乐部代理（大盟主 / 盟主 / 合伙人 / 代理），
+        名单里已有 {stats.selected} 人。这里只会出现本联盟的代理，不能跨联盟选人。
+        下方直接勾选即可加入；已被移出的也在这里重新勾回来。列表里没有的本联盟账号，
         用最下面一行填 ID 加入。
       </p>
 
       <div className="reward-tools" style={{ marginBottom: 10 }}>
         <input placeholder="搜代理 ID 或昵称" value={keyword} onChange={event => setKeyword(event.target.value.trim())} />
-        <select value={unionId} onChange={event => { setUnionId(event.target.value); setClubId("all"); }}>
-          <option value="all">全部联盟</option>
-          {unions.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-        </select>
         <select value={clubId} onChange={event => setClubId(event.target.value)}>
           <option value="all">全部俱乐部</option>
           {clubs.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -1212,7 +1393,7 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
       </div>
 
       <div className="reward-tools reward-direct-add" style={{ marginBottom: 12 }}>
-        <span className="reward-dim">按 ID 直接加入</span>
+        <span className="reward-dim">按 ID 直接加入（限本联盟）</span>
         <input placeholder="例如 725838，多个用逗号或空格分隔" value={directIds}
           onChange={event => setDirectIds(event.target.value)} style={{ flex: 1, minWidth: 240 }} />
         <Button variant="secondary" disabled={saving || !directIds.trim()} onClick={() => void addDirect()}>
@@ -1221,7 +1402,7 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
       </div>
 
       {!items ? <LoadingBlock label="正在读取候选代理" /> : visible.length === 0 ? (
-        <EmptyState title="没有符合条件的代理" description="换个联盟/俱乐部，或先在游戏里把账号授权为俱乐部代理。" />
+        <EmptyState title="没有符合条件的代理" description="换个俱乐部或关键字；本联盟内没有的账号不能加入。" />
       ) : (
         <div className="table-wrap" style={{ maxHeight: "46vh" }}>
           <table>
@@ -1230,7 +1411,7 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
                 <input ref={headerCk} type="checkbox" checked={allChecked} title="全选当前列表"
                   onChange={event => { if (event.target.checked) selectAllVisible(); else clearVisible(); }} />
               </th>
-              <th>代理</th><th>身份</th><th>联盟</th><th>俱乐部</th>
+              <th>代理</th><th>身份</th><th>俱乐部</th>
             </tr></thead>
             <tbody>
               {visible.map(m => {
@@ -1241,7 +1422,6 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
                       onChange={() => toggle(m.agentId)} /></td>
                     <td className="reward-name"><strong>{m.name || m.agentId}</strong><small>ID {m.agentId}</small></td>
                     <td><span className={`reward-role reward-role--${m.role}`}>{ROLE_LABEL[m.role] ?? m.role}</span></td>
-                    <td className="reward-dim">{m.unionName || <span className="reward-muted">—</span>}</td>
                     <td className="reward-dim">{m.clubName || m.clubId}</td>
                   </tr>
                 );
@@ -1262,8 +1442,9 @@ function CandidateModal({ notify, onClose, onDone, onChanged }: {
   );
 }
 
-/** 名单方案：把当前参与名单存成命名模板，下次一键加载。 */
-function RewardListModal({ date, selectedCount, rev, notify, onClose, onChanged, onApplied }: {
+/** 名单方案：把当前联盟的参与名单存成命名模板，下次一键加载。 */
+function RewardListModal({ unionId, date, selectedCount, rev, notify, onClose, onChanged, onApplied }: {
+  unionId: string;
   date: string;
   selectedCount: number;
   rev: number;
@@ -1281,18 +1462,18 @@ function RewardListModal({ date, selectedCount, rev, notify, onClose, onChanged,
 
   useEffect(() => {
     let alive = true;
-    api<{ items: Row[] }>("/api/game/agent-rewards/lists")
+    api<{ items: Row[] }>(`/api/game/agent-rewards/lists?${new URLSearchParams({ unionId })}`)
       .then(value => { if (alive) setRows(value.items ?? []); })
       .catch(reason => { if (alive) notify(reason instanceof Error ? reason.message : "读取名单方案失败", "error"); });
     return () => { alive = false; };
-  }, [rev, notify]);
+  }, [rev, notify, unionId]);
 
   const save = async () => {
     if (!name.trim()) { notify("请填写名单名称", "error"); return; }
     setBusy("save");
     try {
       const result = await api<{ name: string; memberCount: number }>("/api/game/agent-rewards/lists",
-        { method: "POST", ...jsonBody({ name: name.trim(), note: note.trim() }) });
+        { method: "POST", ...jsonBody({ unionId, name: name.trim(), note: note.trim() }) });
       notify(`已保存名单「${result.name}」，${result.memberCount} 人`);
       setNote("");
       onChanged();
@@ -1305,7 +1486,7 @@ function RewardListModal({ date, selectedCount, rev, notify, onClose, onChanged,
     setBusy("apply");
     try {
       const result = await api<{ name: string; selected: number }>(
-        `/api/game/agent-rewards/lists/${row.id}/apply`, { method: "POST", ...jsonBody({}) });
+        `/api/game/agent-rewards/lists/${row.id}/apply`, { method: "POST", ...jsonBody({ unionId }) });
       notify(`已加载名单「${result.name}」，${result.selected} 人`);
       onChanged();
       onApplied();
@@ -1317,7 +1498,7 @@ function RewardListModal({ date, selectedCount, rev, notify, onClose, onChanged,
   const remove = async (row: Row) => {
     setBusy(`del-${row.id}`);
     try {
-      await api(`/api/game/agent-rewards/lists/${row.id}`, { method: "DELETE" });
+      await api(`/api/game/agent-rewards/lists/${row.id}?${new URLSearchParams({ unionId })}`, { method: "DELETE" });
       notify(`已删除名单「${row.name}」`);
       onChanged();
     } catch (reason) {
@@ -1330,7 +1511,7 @@ function RewardListModal({ date, selectedCount, rev, notify, onClose, onChanged,
       <div className="reward-list-save">
         <div>
           <strong>把当前名单存成模板</strong>
-          <p className="reward-hint">当前入选 {selectedCount} 人。同名会覆盖旧方案；模板只记名单，不影响发放记录。</p>
+          <p className="reward-hint">当前联盟入选 {selectedCount} 人。同名会覆盖本联盟内的旧方案；模板只记名单，不影响发放记录。</p>
         </div>
         <div className="reward-tools">
           <input value={name} onChange={event => setName(event.target.value)} placeholder="名单名称，例如「核心 10 人」" maxLength={64} />

@@ -141,6 +141,16 @@ func validRewardKind(kind string) bool {
 	return kind == rewardKindPerformance || kind == rewardKindCore || kind == rewardKindPool
 }
 
+// normalizeRewardUnionID 业绩核心共享按联盟发放，联盟是唯一发放单位：
+// 所有名单、方案、计划、发放接口都必须带合法联盟码，不能跨联盟操作。
+func normalizeRewardUnionID(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", errors.New("请先选择联盟")
+	}
+	return normalizeUnionID(raw)
+}
+
 func rewardDate(raw string, now time.Time) (string, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -223,10 +233,11 @@ ON DUPLICATE KEY UPDATE
   role = IF(source='auto', VALUES(role), role),
   level = IF(source='auto', VALUES(level), level),
   upper_id = IF(source='auto', VALUES(upper_id), upper_id),
-  club_id = IF(source='auto', VALUES(club_id), club_id),
-  club_name = IF(source='auto', VALUES(club_name), club_name),
-  union_id = IF(source='auto', VALUES(union_id), union_id),
-  union_name = IF(source='auto', VALUES(union_name), union_name),
+  selected = IF(union_id = VALUES(union_id), selected, 0),
+  club_id = VALUES(club_id),
+  club_name = VALUES(club_name),
+  union_id = VALUES(union_id),
+  union_name = VALUES(union_name),
   authorized = VALUES(authorized),
   status = 'active'`,
 			item.id, item.name, role, item.level, item.upper, item.club, item.clubName, item.unionID, item.unionName, item.authorized); err != nil {
@@ -268,20 +279,169 @@ func classifyClubRewardRole(roleText string, isOwner bool, percent, level int64)
 	}
 }
 
-// handlerRewardCandidates 候选池：俱乐部在册的全部代理，带 selected 标记，供「批量添加」勾选。
+// handlerRewardUnions 业绩核心共享的入口：以联盟为单位列出发放范围。
+//
+// 联盟来自游戏库 club_union_info，名单人数/入选人数来自后台自有的代理名单，
+// 三类奖励的当日进度也按联盟各自统计，客服先选联盟再进入发放页。
+func (s *Server) handlerRewardUnions(w http.ResponseWriter, r *http.Request, p principal) {
+	date, err := rewardDate(r.URL.Query().Get("date"), time.Now())
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error())
+		return
+	}
+
+	type unionRow struct {
+		id   string
+		name string
+	}
+	order := []string{}
+	names := map[string]string{}
+	rows, err := s.db.QueryContext(r.Context(), `SELECT union_id, COALESCE(NULLIF(union_name,''), union_id)
+FROM kbedm.club_union_info WHERE status <> 'init' ORDER BY id DESC`)
+	if err != nil {
+		s.logger.Error("query reward unions", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟列表失败")
+		return
+	}
+	for rows.Next() {
+		var item unionRow
+		if err := rows.Scan(&item.id, &item.name); err != nil {
+			rows.Close()
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "解析联盟列表失败")
+			return
+		}
+		if _, exists := names[item.id]; exists {
+			continue
+		}
+		names[item.id] = item.name
+		order = append(order, item.id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟列表失败")
+		return
+	}
+
+	// 只在后台名单里出现、但游戏联盟表查不到的联盟也保留，避免历史名单失去入口。
+	memberCount := map[string]int64{}
+	selectedCount := map[string]int64{}
+	rows, err = s.db.QueryContext(r.Context(), `SELECT union_id, MAX(union_name), COUNT(*),
+COALESCE(SUM(selected=1),0)
+FROM mgr_agent_reward_member
+WHERE status='active' AND union_id <> ''
+GROUP BY union_id`)
+	if err != nil {
+		s.logger.Error("count reward union members", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟代理人数失败")
+		return
+	}
+	for rows.Next() {
+		var id, name string
+		var total, selected int64
+		if err := rows.Scan(&id, &name, &total, &selected); err != nil {
+			rows.Close()
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "解析联盟代理人数失败")
+			return
+		}
+		if _, exists := names[id]; !exists {
+			if strings.TrimSpace(name) == "" {
+				name = id
+			}
+			names[id] = name
+			order = append(order, id)
+		}
+		memberCount[id] = total
+		selectedCount[id] = selected
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟代理人数失败")
+		return
+	}
+
+	type planRow struct {
+		planned   int64
+		allocated int64
+		count     int64
+		status    string
+	}
+	plans := map[string]map[string]planRow{}
+	rows, err = s.db.QueryContext(r.Context(), `SELECT p.union_id, p.kind, p.planned_total, p.status,
+COALESCE(SUM(i.final_amount),0),
+COALESCE(SUM(CASE WHEN i.final_amount > 0 THEN 1 ELSE 0 END),0)
+FROM mgr_agent_reward_plan p
+LEFT JOIN mgr_agent_reward_item i ON i.plan_id = p.id
+WHERE p.reward_date = ? AND p.union_id <> ''
+GROUP BY p.id, p.union_id, p.kind, p.planned_total, p.status`, date)
+	if err != nil {
+		s.logger.Error("query reward union plans", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟奖励进度失败")
+		return
+	}
+	for rows.Next() {
+		var unionID, kind, status string
+		var planned, allocated, count int64
+		if err := rows.Scan(&unionID, &kind, &planned, &status, &allocated, &count); err != nil {
+			rows.Close()
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "解析联盟奖励进度失败")
+			return
+		}
+		if plans[unionID] == nil {
+			plans[unionID] = map[string]planRow{}
+		}
+		plans[unionID][kind] = planRow{planned: planned, allocated: allocated, count: count, status: status}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟奖励进度失败")
+		return
+	}
+
+	items := make([]map[string]any, 0, len(order))
+	for _, id := range order {
+		kinds := make([]map[string]any, 0, 3)
+		for _, kind := range []string{rewardKindPerformance, rewardKindCore, rewardKindPool} {
+			row := plans[id][kind]
+			status := row.status
+			if status == "" {
+				status = rewardPlanDraft
+			}
+			kinds = append(kinds, map[string]any{
+				"kind": kind, "plannedTotal": row.planned, "allocated": row.allocated,
+				"count": row.count, "status": status,
+			})
+		}
+		items = append(items, map[string]any{
+			"unionId": id, "name": names[id], "agentCount": memberCount[id],
+			"selectedCount": selectedCount[id], "plans": kinds,
+		})
+	}
+
+	var unassigned int64
+	_ = s.db.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND union_id=''`).Scan(&unassigned)
+	writeData(w, http.StatusOK, map[string]any{
+		"date": date, "items": items, "unassigned": unassigned,
+	})
+}
+
+// handlerRewardCandidates 候选池：指定联盟内的全部俱乐部代理，带 selected 标记，供「批量添加」勾选。
 func (s *Server) handlerRewardCandidates(w http.ResponseWriter, r *http.Request, p principal) {
-	unionID := strings.TrimSpace(r.URL.Query().Get("unionId"))
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
 	clubID := strings.TrimSpace(r.URL.Query().Get("clubId"))
 	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
 
 	rows, err := s.db.QueryContext(r.Context(), `SELECT agent_id, name, role, level, club_id, club_name,
 union_id, union_name, authorized, selected
 FROM mgr_agent_reward_member
-WHERE status='active'
-  AND (? = '' OR union_id = ?)
+WHERE status='active' AND union_id = ?
   AND (? = '' OR club_id = ?)
-ORDER BY FIELD(role,'grand','leader','small_leader','partner','agent'), union_name, club_name, level DESC, id ASC`,
-		unionID, unionID, clubID, clubID)
+ORDER BY FIELD(role,'grand','leader','small_leader','partner','agent'), club_name, level DESC, id ASC`,
+		unionID, clubID, clubID)
 	if err != nil {
 		s.logger.Error("query reward candidates", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取候选代理失败")
@@ -307,25 +467,33 @@ ORDER BY FIELD(role,'grand','leader','small_leader','partner','agent'), union_na
 	}
 	var selectedCount, total int
 	if err := s.db.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND selected=1`).Scan(&selectedCount); err != nil {
+		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND union_id=? AND selected=1`,
+		unionID).Scan(&selectedCount); err != nil {
 		s.logger.Warn("count selected reward members", "error", err)
 	}
 	if err := s.db.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active'`).Scan(&total); err != nil {
+		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND union_id=?`,
+		unionID).Scan(&total); err != nil {
 		s.logger.Warn("count reward candidates", "error", err)
 	}
 	writeData(w, http.StatusOK, map[string]any{
-		"items": items, "selected": selectedCount, "total": total,
+		"items": items, "selected": selectedCount, "total": total, "unionId": unionID,
 	})
 }
 
-// handlerRewardSelect 批量把候选代理加入或移出本次分配名单。
+// handlerRewardSelect 批量把指定联盟的候选代理加入或移出本次分配名单。
 func (s *Server) handlerRewardSelect(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
+		UnionID  string   `json:"unionId"`
 		AgentIDs []string `json:"agentIds"`
 		Selected bool     `json:"selected"`
 	}
 	if !decodeJSON(w, r, &input) {
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
 	if len(input.AgentIDs) == 0 {
@@ -346,13 +514,43 @@ func (s *Server) handlerRewardSelect(w http.ResponseWriter, r *http.Request, p p
 		ids = append(ids, id)
 	}
 	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+
+	// 只允许操作当前联盟的代理：跨联盟 ID 直接拒绝，避免把人加进别的联盟的单子。
+	checkArgs := append([]any{unionID}, ids...)
+	valid := map[string]bool{}
+	rows, err := s.db.QueryContext(r.Context(), `SELECT agent_id FROM mgr_agent_reward_member
+WHERE status='active' AND union_id = ? AND agent_id IN (`+placeholders+`)`, checkArgs...)
+	if err != nil {
+		s.logger.Error("check reward selection union", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验代理所属联盟失败")
+		return
+	}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			valid[id] = true
+		}
+	}
+	rows.Close()
+	var outside []string
+	for _, id := range input.AgentIDs {
+		if !valid[strings.TrimSpace(id)] {
+			outside = append(outside, strings.TrimSpace(id))
+		}
+	}
+	if len(outside) > 0 {
+		writeError(w, http.StatusBadRequest, "CROSS_UNION",
+			"以下代理不属于当前联盟，不能加入："+strings.Join(outside, "、"))
+		return
+	}
+
 	value := 0
 	if input.Selected {
 		value = 1
 	}
 	result, err := s.db.ExecContext(r.Context(),
-		`UPDATE mgr_agent_reward_member SET selected = ? WHERE status='active' AND agent_id IN (`+placeholders+`)`,
-		append([]any{value}, ids...)...)
+		`UPDATE mgr_agent_reward_member SET selected = ? WHERE status='active' AND union_id = ? AND agent_id IN (`+placeholders+`)`,
+		append([]any{value, unionID}, ids...)...)
 	if err != nil {
 		s.logger.Error("update reward selection", "error", err)
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "更新名单失败")
@@ -364,16 +562,21 @@ func (s *Server) handlerRewardSelect(w http.ResponseWriter, r *http.Request, p p
 		action = "加入名单"
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_member", strings.Join(input.AgentIDs, ","),
-		map[string]any{"action": action, "count": len(input.AgentIDs)}, nil, map[string]any{"affected": affected},
-		0, action, clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"affected": affected, "selected": input.Selected})
+		map[string]any{"action": action, "count": len(input.AgentIDs), "unionId": unionID}, nil,
+		map[string]any{"affected": affected}, 0, action, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"affected": affected, "selected": input.Selected, "unionId": unionID})
 }
 
-// handlerRewardLists 列出已保存的名单方案。
+// handlerRewardLists 列出指定联盟已保存的名单方案。
 func (s *Server) handlerRewardLists(w http.ResponseWriter, r *http.Request, p principal) {
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT id, name, note, member_count, created_by,
 DATE_FORMAT(updated_at, '%Y-%m-%d %H:%i')
-FROM mgr_agent_reward_list ORDER BY updated_at DESC, id DESC`)
+FROM mgr_agent_reward_list WHERE union_id = ? ORDER BY updated_at DESC, id DESC`, unionID)
 	if err != nil {
 		s.logger.Error("query reward lists", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取名单方案失败")
@@ -397,17 +600,24 @@ FROM mgr_agent_reward_list ORDER BY updated_at DESC, id DESC`)
 	// 当前入选人数，前端用来提示"保存几人"。
 	var selected int
 	_ = s.db.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND selected=1`).Scan(&selected)
-	writeData(w, http.StatusOK, map[string]any{"items": items, "selected": selected})
+		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND union_id=? AND selected=1`,
+		unionID).Scan(&selected)
+	writeData(w, http.StatusOK, map[string]any{"items": items, "selected": selected, "unionId": unionID})
 }
 
-// handlerRewardListSave 把当前参与名单保存成命名方案；同名覆盖。
+// handlerRewardListSave 把当前联盟的参与名单保存成命名方案；同联盟同名覆盖。
 func (s *Server) handlerRewardListSave(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
-		Name string `json:"name"`
-		Note string `json:"note"`
+		UnionID string `json:"unionId"`
+		Name    string `json:"name"`
+		Note    string `json:"note"`
 	}
 	if !decodeJSON(w, r, &input) {
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
 	name := strings.TrimSpace(input.Name)
@@ -422,7 +632,8 @@ func (s *Server) handlerRewardListSave(w http.ResponseWriter, r *http.Request, p
 	}
 
 	rows, err := s.db.QueryContext(r.Context(),
-		`SELECT agent_id FROM mgr_agent_reward_member WHERE status='active' AND selected=1 ORDER BY id`)
+		`SELECT agent_id FROM mgr_agent_reward_member WHERE status='active' AND union_id=? AND selected=1 ORDER BY id`,
+		unionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取当前名单失败")
 		return
@@ -436,7 +647,7 @@ func (s *Server) handlerRewardListSave(w http.ResponseWriter, r *http.Request, p
 	}
 	rows.Close()
 	if len(agentIDs) == 0 {
-		writeError(w, http.StatusBadRequest, "EMPTY_LIST", "当前名单是空的，先加入代理再保存")
+		writeError(w, http.StatusBadRequest, "EMPTY_LIST", "当前联盟的名单是空的，先加入代理再保存")
 		return
 	}
 
@@ -446,15 +657,16 @@ func (s *Server) handlerRewardListSave(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(r.Context(), `INSERT INTO mgr_agent_reward_list (name, note, member_count, created_by)
-VALUES (?,?,?,?)
+	if _, err := tx.ExecContext(r.Context(), `INSERT INTO mgr_agent_reward_list (union_id, name, note, member_count, created_by)
+VALUES (?,?,?,?,?)
 ON DUPLICATE KEY UPDATE note = VALUES(note), member_count = VALUES(member_count), created_by = VALUES(created_by)`,
-		name, note, len(agentIDs), p.Username); err != nil {
+		unionID, name, note, len(agentIDs), p.Username); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "保存名单失败")
 		return
 	}
 	var listID int64
-	if err := tx.QueryRowContext(r.Context(), `SELECT id FROM mgr_agent_reward_list WHERE name = ?`, name).Scan(&listID); err != nil {
+	if err := tx.QueryRowContext(r.Context(), `SELECT id FROM mgr_agent_reward_list WHERE union_id = ? AND name = ?`,
+		unionID, name).Scan(&listID); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "保存名单失败")
 		return
 	}
@@ -474,19 +686,35 @@ ON DUPLICATE KEY UPDATE note = VALUES(note), member_count = VALUES(member_count)
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_list", strconv.FormatInt(listID, 10),
-		map[string]any{"name": name, "count": len(agentIDs)}, nil, nil, 0, "保存名单方案", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"id": listID, "name": name, "memberCount": len(agentIDs)})
+		map[string]any{"name": name, "count": len(agentIDs), "unionId": unionID}, nil, nil, 0, "保存名单方案", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"id": listID, "name": name, "memberCount": len(agentIDs), "unionId": unionID})
 }
 
-// handlerRewardListApply 用某个已保存名单替换当前参与名单。
+// handlerRewardListApply 用某个已保存名单替换当前联盟的参与名单。
 func (s *Server) handlerRewardListApply(w http.ResponseWriter, r *http.Request, p principal) {
 	id, ok := parseID(w, r)
 	if !ok {
 		return
 	}
-	var name string
-	if err := s.db.QueryRowContext(r.Context(), `SELECT name FROM mgr_agent_reward_list WHERE id = ?`, id).Scan(&name); err != nil {
+	var input struct {
+		UnionID string `json:"unionId"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
+	var name, listUnion string
+	if err := s.db.QueryRowContext(r.Context(), `SELECT name, union_id FROM mgr_agent_reward_list WHERE id = ?`, id).
+		Scan(&name, &listUnion); err != nil {
 		writeError(w, http.StatusNotFound, "NOT_FOUND", "名单不存在")
+		return
+	}
+	if listUnion != unionID {
+		writeError(w, http.StatusBadRequest, "CROSS_UNION", "该名单方案不属于当前联盟")
 		return
 	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
@@ -496,14 +724,15 @@ func (s *Server) handlerRewardListApply(w http.ResponseWriter, r *http.Request, 
 	}
 	defer tx.Rollback()
 	if _, err := tx.ExecContext(r.Context(),
-		`UPDATE mgr_agent_reward_member SET selected = 0 WHERE status='active' AND selected = 1`); err != nil {
+		`UPDATE mgr_agent_reward_member SET selected = 0 WHERE status='active' AND union_id=? AND selected = 1`,
+		unionID); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "加载名单失败")
 		return
 	}
 	result, err := tx.ExecContext(r.Context(), `UPDATE mgr_agent_reward_member m
 JOIN mgr_agent_reward_list_member lm ON lm.agent_id = m.agent_id AND lm.list_id = ?
 SET m.selected = 1
-WHERE m.status = 'active'`, id)
+WHERE m.status = 'active' AND m.union_id = ?`, id, unionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "加载名单失败")
 		return
@@ -514,15 +743,30 @@ WHERE m.status = 'active'`, id)
 	}
 	affected, _ := result.RowsAffected()
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_list", strconv.FormatInt(id, 10),
-		map[string]any{"action": "apply", "name": name}, nil, map[string]any{"affected": affected},
+		map[string]any{"action": "apply", "name": name, "unionId": unionID}, nil, map[string]any{"affected": affected},
 		0, "加载名单方案", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"id": id, "name": name, "selected": affected})
+	writeData(w, http.StatusOK, map[string]any{"id": id, "name": name, "selected": affected, "unionId": unionID})
 }
 
 // handlerRewardListDelete 删除名单方案（只删模板，不动当前名单）。
 func (s *Server) handlerRewardListDelete(w http.ResponseWriter, r *http.Request, p principal) {
 	id, ok := parseID(w, r)
 	if !ok {
+		return
+	}
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
+	var listUnion string
+	if err := s.db.QueryRowContext(r.Context(), `SELECT union_id FROM mgr_agent_reward_list WHERE id = ?`, id).
+		Scan(&listUnion); err != nil {
+		writeError(w, http.StatusNotFound, "NOT_FOUND", "名单不存在")
+		return
+	}
+	if listUnion != unionID {
+		writeError(w, http.StatusBadRequest, "CROSS_UNION", "该名单方案不属于当前联盟")
 		return
 	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
@@ -544,8 +788,8 @@ func (s *Server) handlerRewardListDelete(w http.ResponseWriter, r *http.Request,
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_list", strconv.FormatInt(id, 10),
-		map[string]any{"action": "delete"}, nil, nil, 0, "删除名单方案", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"id": id})
+		map[string]any{"action": "delete", "unionId": unionID}, nil, nil, 0, "删除名单方案", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"id": id, "unionId": unionID})
 }
 
 func (s *Server) handlerRewardSync(w http.ResponseWriter, r *http.Request, p principal) {
@@ -562,16 +806,16 @@ func (s *Server) handlerRewardSync(w http.ResponseWriter, r *http.Request, p pri
 	writeData(w, http.StatusOK, map[string]any{"count": count})
 }
 
-// ensureRewardPlan 取或创建当日该类奖励的计划行。
-func (s *Server) ensureRewardPlan(ctx context.Context, date, kind, operator string) (int64, string, int64, error) {
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO mgr_agent_reward_plan (reward_date, kind, planned_total, status, created_by)
-VALUES (?,?,0,'draft',?) ON DUPLICATE KEY UPDATE updated_at = updated_at`, date, kind, operator); err != nil {
+// ensureRewardPlan 取或创建当日该联盟该类奖励的计划行。
+func (s *Server) ensureRewardPlan(ctx context.Context, date, kind, unionID, operator string) (int64, string, int64, error) {
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO mgr_agent_reward_plan (reward_date, kind, union_id, planned_total, status, created_by)
+VALUES (?,?,?,0,'draft',?) ON DUPLICATE KEY UPDATE updated_at = updated_at`, date, kind, unionID, operator); err != nil {
 		return 0, "", 0, err
 	}
 	var id, total int64
 	var status string
 	if err := s.db.QueryRowContext(ctx, `SELECT id, status, planned_total FROM mgr_agent_reward_plan
-WHERE reward_date = ? AND kind = ?`, date, kind).Scan(&id, &status, &total); err != nil {
+WHERE reward_date = ? AND kind = ? AND union_id = ?`, date, kind, unionID).Scan(&id, &status, &total); err != nil {
 		return 0, "", 0, err
 	}
 	return id, status, total, nil
@@ -591,10 +835,15 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 		writeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error())
 		return
 	}
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 
-	planID, planStatus, planned, err := s.ensureRewardPlan(ctx, date, kind, p.Username)
+	planID, planStatus, planned, err := s.ensureRewardPlan(ctx, date, kind, unionID, p.Username)
 	if err != nil {
 		s.logger.Error("ensure reward plan", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放计划失败")
@@ -607,13 +856,13 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 		poolPercent = 0
 	}
 
-	members, err := s.loadRewardMembers(ctx)
+	members, err := s.loadRewardMembers(ctx, unionID)
 	if err != nil {
 		s.logger.Error("load reward members", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理名单失败")
 		return
 	}
-	excluded, err := s.loadRewardExcludes(ctx)
+	excluded, err := s.loadRewardExcludes(ctx, unionID)
 	if err != nil {
 		s.logger.Error("load reward excludes", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取排除名单失败")
@@ -659,7 +908,7 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 	//
 	// 关键：扣减必须基于「全部在册代理」的代理树，不能只看本次入选名单，
 	// 否则下級没进名单时它的整条线贡献不会被从上级扣掉，上级会被重复计算。
-	allMembers, err := s.loadRewardMembersAll(ctx)
+	allMembers, err := s.loadRewardMembersAll(ctx, unionID)
 	if err != nil {
 		s.logger.Error("load all reward members", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
@@ -744,7 +993,8 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 		overview.Members[i].SharePercent = sharePercents[overview.Members[i].AgentID]
 	}
 	var poolTotal int64
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active'`).
+	if err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND union_id = ?`, unionID).
 		Scan(&poolTotal); err == nil {
 		overview.Totals.Pool = poolTotal
 	}
@@ -754,7 +1004,7 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 	}
 	if len(overview.Members) == 0 {
 		overview.Warnings = append(overview.Warnings,
-			"本次分配名单为空：点右上「单个添加」或「批量添加」，把要发奖励的代理加进名单。")
+			"当前联盟本次分配名单为空：点「添加代理」把该联盟要发奖励的代理加进名单。")
 	}
 	if kind == rewardKindPerformance {
 		var totalNet float64
@@ -796,7 +1046,7 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 
 	// 核心奖励按人工判断填写，把上一次已发放金额带出来做参考。
 	if kind == rewardKindCore {
-		if last, lastDate, err := s.lastRewardAmountsWithDate(ctx, kind); err == nil {
+		if last, lastDate, err := s.lastRewardAmountsWithDate(ctx, kind, unionID); err == nil {
 			overview.LastAmounts = last
 			overview.LastDate = lastDate
 		} else {
@@ -815,13 +1065,18 @@ func (s *Server) handlerRewardSummary(w http.ResponseWriter, r *http.Request, p 
 		writeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error())
 		return
 	}
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT p.kind, p.planned_total, p.status,
 COALESCE(SUM(i.final_amount),0),
 COALESCE(SUM(CASE WHEN i.final_amount > 0 THEN 1 ELSE 0 END),0)
 FROM mgr_agent_reward_plan p
 LEFT JOIN mgr_agent_reward_item i ON i.plan_id = p.id
-WHERE p.reward_date = ?
-GROUP BY p.id, p.kind, p.planned_total, p.status`, date)
+WHERE p.reward_date = ? AND p.union_id = ?
+GROUP BY p.id, p.kind, p.planned_total, p.status`, date, unionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取奖励汇总失败")
 		return
@@ -856,8 +1111,9 @@ GROUP BY p.id, p.kind, p.planned_total, p.status`, date)
 	}
 	var selected int64
 	_ = s.db.QueryRowContext(r.Context(),
-		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND selected=1`).Scan(&selected)
-	writeData(w, http.StatusOK, map[string]any{"date": date, "items": items, "selected": selected})
+		`SELECT COUNT(*) FROM mgr_agent_reward_member WHERE status='active' AND union_id=? AND selected=1`,
+		unionID).Scan(&selected)
+	writeData(w, http.StatusOK, map[string]any{"date": date, "items": items, "selected": selected, "unionId": unionID})
 }
 
 func rewardRoleOrder(role string) int {
@@ -875,9 +1131,9 @@ func rewardRoleOrder(role string) int {
 	}
 }
 
-func (s *Server) loadRewardMembers(ctx context.Context) ([]rewardMember, error) {
+func (s *Server) loadRewardMembers(ctx context.Context, unionID string) ([]rewardMember, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT agent_id, name, role, level, upper_id, club_id, club_name, union_id, union_name, authorized, selected, source
-FROM mgr_agent_reward_member WHERE status='active' AND selected=1 ORDER BY level DESC, id ASC`)
+FROM mgr_agent_reward_member WHERE status='active' AND union_id=? AND selected=1 ORDER BY level DESC, id ASC`, unionID)
 	if err != nil {
 		return nil, err
 	}
@@ -894,11 +1150,11 @@ FROM mgr_agent_reward_member WHERE status='active' AND selected=1 ORDER BY level
 	return list, rows.Err()
 }
 
-// loadRewardMembersAll 取全部在册代理（不看是否入选），只用于还原代理层级、
+// loadRewardMembersAll 取指定联盟的全部在册代理（不看是否入选），只用于还原代理层级、
 // 计算净点数时的逐级扣减。入选与否则由 loadRewardMembers 决定。
-func (s *Server) loadRewardMembersAll(ctx context.Context) ([]rewardMember, error) {
+func (s *Server) loadRewardMembersAll(ctx context.Context, unionID string) ([]rewardMember, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT agent_id, name, role, level, upper_id, club_id, club_name, union_id, union_name, authorized, selected, source
-FROM mgr_agent_reward_member WHERE status='active' ORDER BY level DESC, id ASC`)
+FROM mgr_agent_reward_member WHERE status='active' AND union_id=? ORDER BY level DESC, id ASC`, unionID)
 	if err != nil {
 		return nil, err
 	}
@@ -915,12 +1171,23 @@ FROM mgr_agent_reward_member WHERE status='active' ORDER BY level DESC, id ASC`)
 	return list, rows.Err()
 }
 
-func (s *Server) loadRewardExcludes(ctx context.Context) ([]rewardExcluded, error) {
+// rewardAgentInUnion 校验代理确实属于指定联盟，所有按代理写入的接口都先过这一层。
+func (s *Server) rewardAgentInUnion(ctx context.Context, agentID, unionID string) (bool, error) {
+	var count int
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mgr_agent_reward_member
+WHERE status='active' AND agent_id = ? AND union_id = ?`, agentID, unionID).Scan(&count); err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+func (s *Server) loadRewardExcludes(ctx context.Context, unionID string) ([]rewardExcluded, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT e.agent_id, COALESCE(m.name,''), e.kind, e.reason, e.operator,
 DATE_FORMAT(e.created_at, '%Y-%m-%d %H:%i')
 FROM mgr_agent_reward_exclude e
-LEFT JOIN mgr_agent_reward_member m ON m.agent_id = e.agent_id
-ORDER BY e.id DESC`)
+JOIN mgr_agent_reward_member m ON m.agent_id = e.agent_id
+WHERE m.union_id = ?
+ORDER BY e.id DESC`, unionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1167,6 +1434,7 @@ func anyFloat(v any) float64 {
 
 func (s *Server) handlerRewardSavePlan(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
+		UnionID      string   `json:"unionId"`
 		Date         string   `json:"date"`
 		Kind         string   `json:"kind"`
 		PlannedTotal int64    `json:"plannedTotal"`
@@ -1178,6 +1446,11 @@ func (s *Server) handlerRewardSavePlan(w http.ResponseWriter, r *http.Request, p
 	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	if !validRewardKind(input.Kind) {
 		writeError(w, http.StatusBadRequest, "INVALID_KIND", "奖励类型不正确")
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
 	date, err := rewardDate(input.Date, time.Now())
@@ -1193,7 +1466,7 @@ func (s *Server) handlerRewardSavePlan(w http.ResponseWriter, r *http.Request, p
 		writeError(w, http.StatusBadRequest, "INVALID_PERCENT", "共享比例必须在 0 到 100 之间")
 		return
 	}
-	planID, status, before, err := s.ensureRewardPlan(r.Context(), date, input.Kind, p.Username)
+	planID, status, before, err := s.ensureRewardPlan(r.Context(), date, input.Kind, unionID, p.Username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放计划失败")
 		return
@@ -1226,13 +1499,14 @@ WHERE id = ?`, input.PlannedTotal, planID); err != nil {
 		}
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_plan", strconv.FormatInt(planID, 10),
-		map[string]any{"plannedTotal": input.PlannedTotal, "kind": input.Kind, "date": date, "poolPercent": input.PoolPercent},
+		map[string]any{"plannedTotal": input.PlannedTotal, "kind": input.Kind, "date": date, "unionId": unionID, "poolPercent": input.PoolPercent},
 		map[string]any{"plannedTotal": before}, map[string]any{"plannedTotal": input.PlannedTotal},
 		0, "设置计划发放总额", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"plannedTotal": input.PlannedTotal, "poolBase": poolBase})
+	writeData(w, http.StatusOK, map[string]any{"plannedTotal": input.PlannedTotal, "poolBase": poolBase, "unionId": unionID})
 }
 
 type rewardAmountInput struct {
+	UnionID string                   `json:"unionId"`
 	Date    string                   `json:"date"`
 	Kind    string                   `json:"kind"`
 	Amounts map[string]int64         `json:"amounts"`
@@ -1249,6 +1523,11 @@ func (s *Server) handlerRewardSaveAmounts(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "INVALID_KIND", "奖励类型不正确")
 		return
 	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
 	date, err := rewardDate(input.Date, time.Now())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error())
@@ -1262,7 +1541,7 @@ func (s *Server) handlerRewardSaveAmounts(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusBadRequest, "TOO_MANY", "一次最多保存 500 个代理")
 		return
 	}
-	planID, status, planned, err := s.ensureRewardPlan(r.Context(), date, input.Kind, p.Username)
+	planID, status, planned, err := s.ensureRewardPlan(r.Context(), date, input.Kind, unionID, p.Username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放计划失败")
 		return
@@ -1272,8 +1551,10 @@ func (s *Server) handlerRewardSaveAmounts(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// 只接受当前联盟名单里的代理，防止把别的联盟的 ID 写进这批金额。
 	names := map[string]string{}
-	rows, err := s.db.QueryContext(r.Context(), `SELECT agent_id, name FROM mgr_agent_reward_member`)
+	rows, err := s.db.QueryContext(r.Context(), `SELECT agent_id, name FROM mgr_agent_reward_member
+WHERE status='active' AND union_id=?`, unionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理名单失败")
 		return
@@ -1285,6 +1566,18 @@ func (s *Server) handlerRewardSaveAmounts(w http.ResponseWriter, r *http.Request
 		}
 	}
 	rows.Close()
+	var outside []string
+	for agentID := range input.Amounts {
+		if _, ok := names[strings.TrimSpace(agentID)]; !ok {
+			outside = append(outside, strings.TrimSpace(agentID))
+		}
+	}
+	if len(outside) > 0 {
+		sort.Strings(outside)
+		writeError(w, http.StatusBadRequest, "CROSS_UNION",
+			"以下代理不属于当前联盟，不能在这批金额里："+strings.Join(outside, "、"))
+		return
+	}
 
 	var sum int64
 	tx, err := s.db.BeginTx(r.Context(), nil)
@@ -1354,16 +1647,17 @@ ON DUPLICATE KEY UPDATE final_amount = VALUES(final_amount), split_json = VALUES
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_plan", strconv.FormatInt(planID, 10),
-		map[string]any{"kind": input.Kind, "date": date, "count": len(input.Amounts), "sum": sum},
+		map[string]any{"kind": input.Kind, "date": date, "unionId": unionID, "count": len(input.Amounts), "sum": sum},
 		nil, map[string]any{"sum": sum, "planned": planned}, 0, "保存分配金额", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"sum": sum, "planned": planned, "diff": planned - sum})
+	writeData(w, http.StatusOK, map[string]any{"sum": sum, "planned": planned, "diff": planned - sum, "unionId": unionID})
 }
 
 // handlerRewardAllocate 按规则自动分摊：业绩按净点数、核心按上次金额、奖池共享按今日输赢正向部分。
 func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
-		Date string `json:"date"`
-		Kind string `json:"kind"`
+		UnionID string `json:"unionId"`
+		Date    string `json:"date"`
+		Kind    string `json:"kind"`
 	}
 	if !decodeJSON(w, r, &input) {
 		return
@@ -1371,6 +1665,11 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	if !validRewardKind(input.Kind) {
 		writeError(w, http.StatusBadRequest, "INVALID_KIND", "奖励类型不正确")
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
 	date, err := rewardDate(input.Date, time.Now())
@@ -1381,7 +1680,7 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
 
-	planID, status, planned, err := s.ensureRewardPlan(ctx, date, input.Kind, p.Username)
+	planID, status, planned, err := s.ensureRewardPlan(ctx, date, input.Kind, unionID, p.Username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放计划失败")
 		return
@@ -1395,12 +1694,12 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 
-	members, err := s.loadRewardMembers(ctx)
+	members, err := s.loadRewardMembers(ctx, unionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理名单失败")
 		return
 	}
-	excluded, _ := s.loadRewardExcludes(ctx)
+	excluded, _ := s.loadRewardExcludes(ctx, unionID)
 	skip := map[string]bool{}
 	for _, ex := range excluded {
 		if ex.Kind == input.Kind || ex.Kind == "all" {
@@ -1412,7 +1711,7 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 	overview := rewardOverview{Warnings: []string{}}
 	switch input.Kind {
 	case rewardKindPerformance:
-		allMembers, err := s.loadRewardMembersAll(ctx)
+		allMembers, err := s.loadRewardMembersAll(ctx, unionID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
 			return
@@ -1438,7 +1737,7 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 			}
 		}
 	case rewardKindCore:
-		last, err := s.lastRewardAmounts(ctx, input.Kind)
+		last, err := s.lastRewardAmounts(ctx, input.Kind, unionID)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取上次金额失败")
 			return
@@ -1514,9 +1813,9 @@ ON DUPLICATE KEY UPDATE auto_amount = VALUES(auto_amount), final_amount = VALUES
 		return
 	}
 	s.audit(ctx, &p, "game.agent_reward.edit", "agent_reward_plan", strconv.FormatInt(planID, 10),
-		map[string]any{"action": "allocate", "kind": input.Kind, "date": date, "planned": planned},
+		map[string]any{"action": "allocate", "kind": input.Kind, "date": date, "unionId": unionID, "planned": planned},
 		nil, map[string]any{"count": len(allocated)}, 0, "按规则自动分摊", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"count": len(allocated), "total": planned})
+	writeData(w, http.StatusOK, map[string]any{"count": len(allocated), "total": planned, "unionId": unionID})
 }
 
 // rewardLineTargets 返回需要取线数据的代理：本次入选名单 + 他们的直接下级。
@@ -1695,19 +1994,19 @@ func splitRewardByWeight(planned int64, weights map[string]float64) (map[string]
 	return result, true
 }
 
-// lastRewardAmounts 取上一次已发放批次里每个代理的金额，作为核心奖励的参考值。
-func (s *Server) lastRewardAmounts(ctx context.Context, kind string) (map[string]int64, error) {
-	amounts, _, err := s.lastRewardAmountsWithDate(ctx, kind)
+// lastRewardAmounts 取本联盟上一次已发放批次里每个代理的金额，作为核心奖励的参考值。
+func (s *Server) lastRewardAmounts(ctx context.Context, kind, unionID string) (map[string]int64, error) {
+	amounts, _, err := s.lastRewardAmountsWithDate(ctx, kind, unionID)
 	return amounts, err
 }
 
 // lastRewardAmountsWithDate 同上，额外返回那一批的日期，便于页面标注"参考 11-07"。
-func (s *Server) lastRewardAmountsWithDate(ctx context.Context, kind string) (map[string]int64, string, error) {
+func (s *Server) lastRewardAmountsWithDate(ctx context.Context, kind, unionID string) (map[string]int64, string, error) {
 	result := map[string]int64{}
 	var lastID int64
 	var lastDate string
 	if err := s.db.QueryRowContext(ctx, `SELECT id, DATE_FORMAT(reward_date,'%Y-%m-%d')
-FROM mgr_agent_reward_plan WHERE kind = ? AND status = 'paid' ORDER BY id DESC LIMIT 1`, kind).
+FROM mgr_agent_reward_plan WHERE kind = ? AND union_id = ? AND status = 'paid' ORDER BY id DESC LIMIT 1`, kind, unionID).
 		Scan(&lastID, &lastDate); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return result, "", nil
@@ -1763,10 +2062,16 @@ func rewardPoolSuggested(poolYuan float64, percent float64) int64 {
 // 加入后 selected=1、source=manual：每日同步不会把人删掉，也不会掉出名单。
 func (s *Server) handlerRewardMemberAdd(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
+		UnionID  string   `json:"unionId"`
 		AgentID  string   `json:"agentId"`
 		AgentIDs []string `json:"agentIds"`
 	}
 	if !decodeJSON(w, r, &input) {
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
 	raw := append([]string{input.AgentID}, input.AgentIDs...)
@@ -1796,10 +2101,14 @@ func (s *Server) handlerRewardMemberAdd(w http.ResponseWriter, r *http.Request, 
 	added := make([]map[string]any, 0, len(ids))
 	failed := make([]string, 0)
 	for _, agentID := range ids {
-		name, err := s.addRewardMember(r.Context(), agentID, p.Username)
+		name, err := s.addRewardMember(r.Context(), agentID, unionID, p.Username)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				failed = append(failed, agentID+"：没有找到这个游戏账号")
+				continue
+			}
+			if errors.Is(err, errRewardCrossUnion) {
+				failed = append(failed, agentID+"："+err.Error())
 				continue
 			}
 			s.logger.Error("add reward member", "error", err, "agentId", agentID)
@@ -1813,16 +2122,19 @@ func (s *Server) handlerRewardMemberAdd(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_member", strings.Join(ids, ","),
-		map[string]any{"action": "manual_add", "count": len(added)}, nil,
+		map[string]any{"action": "manual_add", "count": len(added), "unionId": unionID}, nil,
 		map[string]any{"added": added, "failed": failed}, 0, "手工加入奖励名单", clientIP(r))
 	writeData(w, http.StatusOK, map[string]any{
-		"agentId": ids[0], "name": added[0]["name"],
+		"agentId": ids[0], "name": added[0]["name"], "unionId": unionID,
 		"added": added, "failed": failed, "count": len(added),
 	})
 }
 
+// errRewardCrossUnion 手工按 ID 加人时，账号不属于当前联盟。
+var errRewardCrossUnion = errors.New("不属于当前联盟，不能加入")
+
 // addRewardMember 写入一行名单（存在则更新并设为参与）。返回昵称。
-func (s *Server) addRewardMember(ctx context.Context, agentID, operator string) (string, error) {
+func (s *Server) addRewardMember(ctx context.Context, agentID, unionID, operator string) (string, error) {
 	var name, roleText, upper string
 	var level int64
 	var isLeader, isPartner, isChief bool
@@ -1836,15 +2148,22 @@ WHERE a.sm_guuid = ? ORDER BY m.id DESC LIMIT 1`, agentID).
 	if err != nil {
 		return "", err
 	}
-	var club, clubName, unionID, unionName string
+	var club, clubName, agentUnion, unionName string
 	if err := s.gameDB.QueryRowContext(ctx, `SELECT ca.club_guuid, COALESCE(c.club_name,''), COALESCE(c.union_id,''),
 COALESCE(u.union_name,'')
 FROM club_agent_info ca
 LEFT JOIN club_guuid_info c ON c.club_guuid = ca.club_guuid
 LEFT JOIN club_union_info u ON u.union_id = c.union_id AND u.status='used'
 WHERE ca.user_guuid = ? AND ca.status='used' ORDER BY ca.id DESC LIMIT 1`, agentID).
-		Scan(&club, &clubName, &unionID, &unionName); err != nil {
-		club, clubName, unionID, unionName = "", "", "", ""
+		Scan(&club, &clubName, &agentUnion, &unionName); err != nil {
+		club, clubName, agentUnion, unionName = "", "", "", ""
+	}
+	agentUnion = strings.TrimSpace(agentUnion)
+	if agentUnion == "" {
+		return "", fmt.Errorf("%w：该账号还没有加入任何联盟", errRewardCrossUnion)
+	}
+	if agentUnion != unionID {
+		return "", fmt.Errorf("%w：该账号属于联盟 %s", errRewardCrossUnion, agentUnion)
 	}
 	// 俱乐部内代理链优先作为上级，取不到时退回平台账号链。
 	var clubUpper string
@@ -1861,7 +2180,7 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), level = VALUES
   upper_id = VALUES(upper_id), club_id = VALUES(club_id), club_name = VALUES(club_name),
   union_id = VALUES(union_id), union_name = VALUES(union_name), selected = 1, status = 'active'`,
 		agentID, name, role, level, upper,
-		strings.TrimSpace(club), strings.TrimSpace(clubName), strings.TrimSpace(unionID), strings.TrimSpace(unionName)); err != nil {
+		strings.TrimSpace(club), strings.TrimSpace(clubName), agentUnion, strings.TrimSpace(unionName)); err != nil {
 		return "", err
 	}
 	return name, nil
@@ -1869,6 +2188,7 @@ ON DUPLICATE KEY UPDATE name = VALUES(name), role = VALUES(role), level = VALUES
 
 func (s *Server) handlerRewardExclude(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
+		UnionID string `json:"unionId"`
 		AgentID string `json:"agentId"`
 		Kind    string `json:"kind"`
 		Reason  string `json:"reason"`
@@ -1876,11 +2196,23 @@ func (s *Server) handlerRewardExclude(w http.ResponseWriter, r *http.Request, p 
 	if !decodeJSON(w, r, &input) {
 		return
 	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
 	input.AgentID = strings.TrimSpace(input.AgentID)
 	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	input.Reason = strings.TrimSpace(input.Reason)
 	if !validAgentID(input.AgentID) {
 		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 不正确")
+		return
+	}
+	if ok, err := s.rewardAgentInUnion(r.Context(), input.AgentID, unionID); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验代理所属联盟失败")
+		return
+	} else if !ok {
+		writeError(w, http.StatusBadRequest, "CROSS_UNION", "该代理不属于当前联盟")
 		return
 	}
 	if input.Kind == "" {
@@ -1900,23 +2232,35 @@ VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE reason = VALUES(reason), operator = VAL
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "保存排除记录失败")
 		return
 	}
-	// 同步清掉未发放的分配金额，避免排除后仍被带进发放。
+	// 同步清掉本联盟未发放的分配金额，避免排除后仍被带进发放。
 	if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_agent_reward_item i
 JOIN mgr_agent_reward_plan p ON p.id = i.plan_id
 SET i.final_amount = 0, i.auto_amount = 0
-WHERE i.agent_id = ? AND p.status = 'draft' AND (p.kind = ? OR ? = 'all')`,
-		input.AgentID, input.Kind, input.Kind); err != nil {
+WHERE i.agent_id = ? AND p.status = 'draft' AND p.union_id = ? AND (p.kind = ? OR ? = 'all')`,
+		input.AgentID, unionID, input.Kind, input.Kind); err != nil {
 		s.logger.Warn("clear excluded amount", "error", err)
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_exclude", input.AgentID,
-		map[string]any{"kind": input.Kind, "reason": input.Reason}, nil, nil, 0, "排除代理奖励", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"agentId": input.AgentID, "kind": input.Kind})
+		map[string]any{"kind": input.Kind, "reason": input.Reason, "unionId": unionID}, nil, nil, 0, "排除代理奖励", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"agentId": input.AgentID, "kind": input.Kind, "unionId": unionID})
 }
 
 func (s *Server) handlerRewardExcludeRemove(w http.ResponseWriter, r *http.Request, p principal) {
 	agentID := strings.TrimSpace(r.PathValue("agentId"))
 	if !validAgentID(agentID) {
 		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 不正确")
+		return
+	}
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
+	if ok, err := s.rewardAgentInUnion(r.Context(), agentID, unionID); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验代理所属联盟失败")
+		return
+	} else if !ok {
+		writeError(w, http.StatusBadRequest, "CROSS_UNION", "该代理不属于当前联盟")
 		return
 	}
 	kind := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("kind")))
@@ -1933,17 +2277,23 @@ func (s *Server) handlerRewardExcludeRemove(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.edit", "agent_reward_exclude", agentID,
-		map[string]any{"kind": kind, "action": "restore"}, nil, nil, 0, "恢复代理奖励", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"agentId": agentID})
+		map[string]any{"kind": kind, "action": "restore", "unionId": unionID}, nil, nil, 0, "恢复代理奖励", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"agentId": agentID, "unionId": unionID})
 }
 
 func (s *Server) handlerRewardSubAdd(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
+		UnionID  string `json:"unionId"`
 		AgentID  string `json:"agentId"`
 		SubGuuid string `json:"subGuuid"`
 		Note     string `json:"note"`
 	}
 	if !decodeJSON(w, r, &input) {
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
 	input.AgentID = strings.TrimSpace(input.AgentID)
@@ -1954,6 +2304,13 @@ func (s *Server) handlerRewardSubAdd(w http.ResponseWriter, r *http.Request, p p
 	}
 	if input.AgentID == input.SubGuuid {
 		writeError(w, http.StatusBadRequest, "SAME_ACCOUNT", "子账号不能和主账号相同")
+		return
+	}
+	if ok, err := s.rewardAgentInUnion(r.Context(), input.AgentID, unionID); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验代理所属联盟失败")
+		return
+	} else if !ok {
+		writeError(w, http.StatusBadRequest, "CROSS_UNION", "该代理不属于当前联盟")
 		return
 	}
 	var name string
@@ -1974,8 +2331,8 @@ ON DUPLICATE KEY UPDATE sub_name = VALUES(sub_name), note = VALUES(note), status
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.configure", "agent_reward_sub", input.AgentID,
-		map[string]any{"subGuuid": input.SubGuuid}, nil, map[string]any{"name": name}, 0, "绑定发放子账号", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"agentId": input.AgentID, "subId": input.SubGuuid, "subName": name})
+		map[string]any{"subGuuid": input.SubGuuid, "unionId": unionID}, nil, map[string]any{"name": name}, 0, "绑定发放子账号", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"agentId": input.AgentID, "subId": input.SubGuuid, "subName": name, "unionId": unionID})
 }
 
 func (s *Server) handlerRewardSubRemove(w http.ResponseWriter, r *http.Request, p principal) {
@@ -1985,14 +2342,26 @@ func (s *Server) handlerRewardSubRemove(w http.ResponseWriter, r *http.Request, 
 		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "参数不正确")
 		return
 	}
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
+	if ok, err := s.rewardAgentInUnion(r.Context(), agentID, unionID); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验代理所属联盟失败")
+		return
+	} else if !ok {
+		writeError(w, http.StatusBadRequest, "CROSS_UNION", "该代理不属于当前联盟")
+		return
+	}
 	if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_agent_reward_sub_account SET status='disabled'
 WHERE agent_id = ? AND sub_guuid = ?`, agentID, subID); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "解绑失败")
 		return
 	}
 	s.audit(r.Context(), &p, "game.agent_reward.configure", "agent_reward_sub", agentID,
-		map[string]any{"subGuuid": subID, "action": "unbind"}, nil, nil, 0, "解绑发放子账号", clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"agentId": agentID})
+		map[string]any{"subGuuid": subID, "action": "unbind", "unionId": unionID}, nil, nil, 0, "解绑发放子账号", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"agentId": agentID, "unionId": unionID})
 }
 
 /* ---------------- 发放 ---------------- */
@@ -2009,6 +2378,7 @@ type rewardPayResult struct {
 
 func (s *Server) handlerRewardPay(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
+		UnionID string `json:"unionId"`
 		Date    string `json:"date"`
 		Kind    string `json:"kind"`
 		Confirm bool   `json:"confirm"`
@@ -2019,6 +2389,11 @@ func (s *Server) handlerRewardPay(w http.ResponseWriter, r *http.Request, p prin
 	input.Kind = strings.ToLower(strings.TrimSpace(input.Kind))
 	if !validRewardKind(input.Kind) {
 		writeError(w, http.StatusBadRequest, "INVALID_KIND", "奖励类型不正确")
+		return
+	}
+	unionID, err := normalizeRewardUnionID(input.UnionID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
 	if !input.Confirm {
@@ -2041,7 +2416,7 @@ func (s *Server) handlerRewardPay(w http.ResponseWriter, r *http.Request, p prin
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 
-	planID, status, planned, err := s.ensureRewardPlan(ctx, date, input.Kind, p.Username)
+	planID, status, planned, err := s.ensureRewardPlan(ctx, date, input.Kind, unionID, p.Username)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放计划失败")
 		return
@@ -2221,7 +2596,7 @@ FROM mgr_agent_reward_payout WHERE plan_id = ?`, planID).Scan(&mismatch, &failed
 	result.Status = finalStatus
 
 	s.audit(ctx, &p, "game.agent_reward.pay", "agent_reward_plan", strconv.FormatInt(planID, 10),
-		map[string]any{"kind": input.Kind, "date": date, "planned": planned, "expected": expected},
+		map[string]any{"kind": input.Kind, "date": date, "unionId": unionID, "planned": planned, "expected": expected},
 		nil, map[string]any{"paid": result.Paid, "failed": result.Failed, "skipped": result.Skipped, "status": finalStatus},
 		0, "发放代理奖励", clientIP(r))
 	writeData(w, http.StatusOK, result)
@@ -2266,15 +2641,24 @@ func (s *Server) handlerRewardLedger(w http.ResponseWriter, r *http.Request, p p
 		writeError(w, http.StatusBadRequest, "INVALID_DATE", "开始日期不能晚于结束日期")
 		return
 	}
+	unionID := ""
+	if raw := strings.TrimSpace(r.URL.Query().Get("unionId")); raw != "" {
+		normalized, err := normalizeUnionID(raw)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+			return
+		}
+		unionID = normalized
+	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT p.id, DATE_FORMAT(pl.reward_date,'%Y-%m-%d'), pl.kind,
 p.agent_id, i.agent_name, p.payee_guuid, p.payee_type, p.amount, p.work_order, p.status,
 p.error_message, COALESCE(DATE_FORMAT(p.paid_at,'%Y-%m-%d %H:%i'),'')
 FROM mgr_agent_reward_payout p
 JOIN mgr_agent_reward_plan pl ON pl.id = p.plan_id
 LEFT JOIN mgr_agent_reward_item i ON i.id = p.item_id
-WHERE pl.reward_date BETWEEN ? AND ?
+WHERE pl.reward_date BETWEEN ? AND ? AND (? = '' OR pl.union_id = ?)
 ORDER BY pl.reward_date DESC, p.id DESC
-LIMIT 5000`, from, to)
+LIMIT 5000`, from, to, unionID, unionID)
 	if err != nil {
 		s.logger.Error("query reward ledger", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取账单失败")
@@ -2304,7 +2688,7 @@ LIMIT 5000`, from, to)
 		list = append(list, row)
 	}
 	writeData(w, http.StatusOK, map[string]any{
-		"items": list, "from": from, "to": to,
+		"items": list, "from": from, "to": to, "unionId": unionID,
 		"summary": map[string]int64{"total": total, "performance": performance, "core": core, "pool": pool},
 	})
 }
@@ -2321,15 +2705,20 @@ func (s *Server) handlerRewardLine(w http.ResponseWriter, r *http.Request, p pri
 		writeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error())
 		return
 	}
+	unionID, err := normalizeRewardUnionID(r.URL.Query().Get("unionId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 
-	members, err := s.loadRewardMembers(ctx)
+	members, err := s.loadRewardMembers(ctx, unionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理名单失败")
 		return
 	}
-	allMembers, err := s.loadRewardMembersAll(ctx)
+	allMembers, err := s.loadRewardMembersAll(ctx, unionID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
 		return
@@ -2340,7 +2729,7 @@ func (s *Server) handlerRewardLine(w http.ResponseWriter, r *http.Request, p pri
 	}
 	self, ok := byID[agentID]
 	if !ok {
-		writeError(w, http.StatusNotFound, "AGENT_NOT_FOUND", "名单里没有这个代理，请先同步")
+		writeError(w, http.StatusNotFound, "AGENT_NOT_FOUND", "当前联盟名单里没有这个代理，请先同步")
 		return
 	}
 	inList := false
