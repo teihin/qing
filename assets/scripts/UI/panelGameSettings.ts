@@ -99,6 +99,8 @@ export default class panelGameSettings extends UIPanelViewBase {
     private createNine: boolean = false;
     private createWater: number = 0;
     private createDark: number = 0;
+    /** 同步带入钻石（服务端 special_rule 的「入座扣钻」），默认关闭。 */
+    private createSeatStone: boolean = false;
     private createPending: boolean = false;
     private deletePending: boolean = false;
     private deleteRule: any = null;
@@ -110,6 +112,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         KBEngine.Event.register("ClubPlayList", this, "onClubPlayList");
         KBEngine.Event.register("ClubPlayResult", this, "onClubPlayResult");
         KBEngine.Event.register("ConsumeStonePriceUpdated", this, "onConsumeStonePriceUpdated");
+        KBEngine.Event.register("ClubSeatStoneRatioUpdated", this, "onClubSeatStoneRatioUpdated");
         this.initRuleUi();
     }
 
@@ -195,6 +198,10 @@ export default class panelGameSettings extends UIPanelViewBase {
         }
         if (name === "地九王开关") {
             this.toggleCreateNine();
+            return;
+        }
+        if (name === "同步带入钻石开关") {
+            this.toggleCreateSeatStone();
             return;
         }
         if (name === "抽水减" || name === "抽水加") {
@@ -693,6 +700,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             ? String(rule.dipi_name)
             : "底皮 " + String(rule && rule.dipi_key || "");
         const nine = Number(rule.dijiuwang) === 1;
+        const seatStone = this.ruleSeatStone(rule);
         this.setNodeLabel(row.getChildByName("底皮"), dipi);
         const typeNode = row.getChildByName("类型");
         if (typeNode) {
@@ -701,6 +709,8 @@ export default class panelGameSettings extends UIPanelViewBase {
                 ? new cc.Color(120, 220, 250, 255)
                 : new cc.Color(143, 166, 186, 255);
         }
+        const seatNode = row.getChildByName("带入钻石");
+        if (seatNode) seatNode.active = seatStone;
         const badge = row.getChildByName("徽章");
         if (badge) badge.color = nine
             ? new cc.Color(255, 255, 255, 255)
@@ -752,6 +762,11 @@ export default class panelGameSettings extends UIPanelViewBase {
         return rule && Array.isArray(rule.room_ids) ? rule.room_ids.length : 0;
     }
 
+    /** 该玩法是否开启入座扣钻（ClubPlayList.special_rule 含 token）。 */
+    private ruleSeatStone(rule: any): boolean {
+        return rule && String(rule.special_rule || "").indexOf("入座扣钻") >= 0;
+    }
+
     // ---------------------------------------------------------------- 创建规则
 
     private openCreateDialog() {
@@ -759,6 +774,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.createNine = true;
         this.createWater = 5;
         this.createDark = 0;
+        this.createSeatStone = false;
         this.setCreateHint("");
         // 后台改价后不重登也要拿到新价；节流，连续开关弹窗不会重复请求。
         ConfigManager.getInstance().RefreshConsumePrice();
@@ -796,6 +812,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             if (on) on.active = this.createNine;
             if (off) off.active = !this.createNine;
         }
+        this.refreshSeatStoneRow();
 
         this.setLabel("创建规则弹窗/面板/抽水值/数值", this.createWater + "%");
         this.setLabel("创建规则弹窗/面板/暗抽值/数值", this.createDark + "%");
@@ -867,6 +884,46 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.refreshCreateDialog();
     }
 
+    /** 「同步带入钻石」开关：默认关闭，打开时建房规则带 special_rule=入座扣钻。 */
+    private toggleCreateSeatStone() {
+        if (this.createPending) return;
+        this.createSeatStone = !this.createSeatStone;
+        this.setCreateHint("");
+        this.refreshCreateDialog();
+    }
+
+    private refreshSeatStoneRow() {
+        const switchNode = Tool.GetChild(this.node, "创建规则弹窗/面板/同步带入钻石行/同步带入钻石开关");
+        if (switchNode) {
+            const on = switchNode.getChildByName("开");
+            const off = switchNode.getChildByName("关");
+            if (on) on.active = this.createSeatStone;
+            if (off) off.active = !this.createSeatStone;
+        }
+        const hint = Tool.GetChild(this.node, "创建规则弹窗/面板/同步带入钻石行/说明");
+        if (!hint) return;
+        const label = hint.getComponent(cc.Label);
+        if (!label) return;
+        const ratio = ConfigManager.getInstance().GetClubSeatStoneRatio();
+        label.string = ratio > 0
+            ? "带入/结算按 1 积分 = " + panelGameSettings.FormatRatio(ratio) + " 钻同步扣退"
+            : "兑换比例为 0，开启后不扣钻石";
+        hint.color = ratio > 0
+            ? new cc.Color(143, 166, 186, 255)
+            : new cc.Color(255, 176, 162, 255);
+    }
+
+    private static FormatRatio(value: number): string {
+        if (!isFinite(value)) return "1";
+        const text = value.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+        return text === "" ? "0" : text;
+    }
+
+    public onClubSeatStoneRatioUpdated() {
+        if (this.createDialog && this.createDialog.active)
+            this.refreshSeatStoneRow();
+    }
+
     private stepCreateWater(delta: number) {
         this.setCreateWater(this.createWater + delta);
     }
@@ -914,6 +971,9 @@ export default class panelGameSettings extends UIPanelViewBase {
             dark_percent: this.createDark,
             context: context
         };
+        // 服务端按房间 special_rule 里的「入座扣钻」开启带入/结算钻石同步；不勾选不传，行为不变。
+        if (this.createSeatStone)
+            params.special_rule = "入座扣钻";
         account.reqHallCommand(JSON.stringify(params), context);
         KBEngine.Event.fire("RefreshClubRoomList", 1.5);
         this.setCreateHint("正在创建，房间会自动补开…");
@@ -938,7 +998,8 @@ export default class panelGameSettings extends UIPanelViewBase {
         const nine = Number(rule && rule.dijiuwang) === 1;
         const water = this.ruleWater(rule);
         const dark = this.ruleDark(rule, water);
-        this.setLabel("删除规则弹窗/面板/规则摘要/名称", dipi + " · " + (nine ? "地九王" : "常规"));
+        this.setLabel("删除规则弹窗/面板/规则摘要/名称",
+            dipi + " · " + (nine ? "地九王" : "常规") + (this.ruleSeatStone(rule) ? " · 带入钻石" : ""));
         this.setLabel("删除规则弹窗/面板/规则摘要/准入摘要",
             "准入 " + this.ruleMin(rule) + " · 8 人 · 30 分钟");
         this.setLabel("删除规则弹窗/面板/规则摘要/收益摘要",
@@ -1075,6 +1136,7 @@ export default class panelGameSettings extends UIPanelViewBase {
                 dijiuwang: Number(item.dijiuwang) === 1 ? 1 : 0,
                 water_rate: water,
                 dark_percent: dark,
+                special_rule: item.special_rule == null ? "" : String(item.special_rule),
                 min_money: item.min_money == null ? null : Number(item.min_money),
                 room_ids: Array.isArray(item.room_ids) ? item.room_ids : []
             });

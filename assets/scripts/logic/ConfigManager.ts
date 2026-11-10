@@ -49,6 +49,14 @@ export default class ConfigManager extends cc.Component {
 
     /** usr_hash_info 里存钻石价格 JSON 的 key（后台「钻石消费价格」页读写的就是这条）。 */
     public static readonly CONSUME_PRICE_HASH_KEY:string = "消费钻石价格";
+    /**
+     * 俱乐部配分模式「入座扣钻」的积分→钻石比例，后台按纯小数字符串维护（如 0.1）。
+     * 带入积分 × 比例 = 扣玩家钻石；结算按最终积分 × 比例退回。0 = 不扣，缺省 1:1。
+     * 扣/退都由服务端完成，客户端只读来做文案提示。
+     */
+    public static readonly CLUB_SEAT_STONE_RATIO_HASH_KEY:string = "俱乐部积分对应钻石输赢比";
+    /** 比例未下发/非法时的兜底，与服务端默认一致。 */
+    public static readonly CLUB_SEAT_STONE_RATIO_DEFAULT:number = 1;
 
     /**
      * 后台未配置时的兜底价格，口径按 1 钻 ≈ 1 元折算原金币价。
@@ -73,6 +81,8 @@ export default class ConfigManager extends cc.Component {
 
     /** 后台下发的钻石单价，key 为消费项名。 */
     private consumeStonePrice:{[type:string]:number} = {};
+    /** 后台下发的「俱乐部积分对应钻石输赢比」；默认 1:1。 */
+    private clubSeatStoneRatio:number = ConfigManager.CLUB_SEAT_STONE_RATIO_DEFAULT;
     /** 最近一次主动补拉价目表的时间，见 RefreshConsumePrice。 */
     private consumePriceAskedAt:number = 0;
 
@@ -126,6 +136,8 @@ export default class ConfigManager extends cc.Component {
        this.GetOneHashKey("客服2","客服地址");
        // 各消费项扣多少钻石，后台「钻石消费价格」页维护
        this.GetOneHashKey(ConfigManager.CONSUME_PRICE_HASH_KEY,ConfigManager.CONSUME_PRICE_HASH_KEY);
+       // 俱乐部配分模式带入/结算的积分→钻石比例，后台「钻石消费价格」页维护
+       this.GetOneHashKey(ConfigManager.CLUB_SEAT_STONE_RATIO_HASH_KEY,ConfigManager.CLUB_SEAT_STONE_RATIO_HASH_KEY);
     }
 
     /**
@@ -154,6 +166,12 @@ export default class ConfigManager extends cc.Component {
         return this.GetConsumeStone(ConfigManager.CONSUME_CLUB_ROOM_FEE);
     }
 
+    /** 俱乐部配分模式「入座扣钻」比例；0 表示不扣钻石，未配置时 1:1。 */
+    public GetClubSeatStoneRatio():number
+    {
+        return this.clubSeatStoneRatio;
+    }
+
     /**
      * 重新拉一次价目表。客户端只在登录时读价，后台调价后不重登会一直显示旧价；
      * 打开创建规则弹窗前补拉一次，节流避免反复请求。
@@ -165,6 +183,7 @@ export default class ConfigManager extends cc.Component {
             return;
         this.consumePriceAskedAt = now;
         this.GetOneHashKey(ConfigManager.CONSUME_PRICE_HASH_KEY,ConfigManager.CONSUME_PRICE_HASH_KEY);
+        this.GetOneHashKey(ConfigManager.CLUB_SEAT_STONE_RATIO_HASH_KEY,ConfigManager.CLUB_SEAT_STONE_RATIO_HASH_KEY);
     }
 
     /**
@@ -311,6 +330,46 @@ export default class ConfigManager extends cc.Component {
             if(strJson != null)
                 this.ParseConsumeStonePrice(strJson);
         }
+        else if(context === ConfigManager.CLUB_SEAT_STONE_RATIO_HASH_KEY)
+        {
+            this.ParseClubSeatStoneRatio(strContent);
+        }
+    }
+
+    /**
+     * 解析「俱乐部积分对应钻石输赢比」。服务端按纯小数存（如 `0.1`），
+     * 这里只做展示用；缺失/空/非法保留旧值，0 是合法的“不扣钻石”。
+     */
+    private ParseClubSeatStoneRatio(strContent:string)
+    {
+        let nValue = ConfigManager.ToFiniteNumber(strContent);
+        if(nValue === null)
+        {
+            // 防御后台误存成 base64/URL 编码；正常路径不会走到这里。
+            try
+            {
+                nValue = ConfigManager.ToFiniteNumber(decodeURIComponent(Tool.Base64Decode(strContent)));
+            }
+            catch(error) {}
+        }
+        if(nValue === null || nValue < 0)
+        {
+            Debug.Log("俱乐部积分对应钻石输赢比非法，保留旧值：" + strContent);
+            return;
+        }
+        this.clubSeatStoneRatio = nValue;
+        KBEngine.Event.fire("ClubSeatStoneRatioUpdated");
+    }
+
+    private static ToFiniteNumber(strContent:string):number
+    {
+        if(strContent == null)
+            return null;
+        const strText = String(strContent).trim();
+        if(strText === "")
+            return null;
+        const nValue = Number(strText);
+        return isFinite(nValue) ? nValue : null;
     }
 
     /** 兼容 base64 + URL 编码 / 纯 URL 编码 / 明文三种价目表内容。 */

@@ -1112,6 +1112,11 @@ export default class panelGameView extends UIPanelViewBase {
         const clubRoom = clubId !== "";
         const nHisIn = Number(this.gameLogic.GetPlayerCtlByID(0).info.begin_score);
         display.configure(Number(strMin),balance,Number(this.CheckSmallPlay(nHisIn.toString())));
+        // 房间模板带「入座扣钻」时，带入会同步扣玩家钻石；这里只展示当前钻石余额。
+        const nStone = Number(account.stone);
+        const seatStone = roomSetting.indexOf("入座扣钻") >= 0;
+        Debug.Log("[BUYIN] seatStone=" + seatStone + " stone=" + nStone);
+        display.setStoneBalance(Number.isFinite(nStone) ? nStone : 0, seatStone);
 
         const shortage = Tool.GetChild(this.node,"带入窗口/余额不足提示");
         if(shortage == null)
@@ -2237,6 +2242,10 @@ export default class panelGameView extends UIPanelViewBase {
 
 
         //修改等待信息
+        // 房间模板可能晚于带入窗口到达；已打开时补刷一次，保证「入座扣钻」的钻石余额行能出现。
+        const buyin = Tool.GetChild(this.node,"带入窗口");
+        if (buyin != null && buyin.active)
+            this.RefreshBuyinBalance();
     }
 
     showMsg(strMsg:string)

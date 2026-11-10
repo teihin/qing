@@ -584,10 +584,10 @@ def build_tree():
     widget(create_mask, 45, 0, 0, 0, 0)
     create_modal.add(create_mask)
 
-    create_pane = N("面板", (0, 0), (702, 1020))
+    create_pane = N("面板", (0, 0), (702, 1080))
     sprite(create_pane, SPR["panel"], sliced=True)
     create_pane.comps.append({"kind": "block"})
-    widget(create_pane, 18, 0, 0, 0, 0, 0, 0, 702, 1020)
+    widget(create_pane, 18, 0, 0, 0, 0, 0, 0, 702, 1080)
     create_modal.add(create_pane)
     create_pane.add(text_node("标题", "创建游戏规则", 34, GOLD, (0, 460), (600, 48),
                               1, (0.5, 0.5), True, (DARKOUT, 1.5)))
@@ -668,7 +668,29 @@ def build_tree():
     create_pane.add(text_node("暗抽提示", "不能大于抽水比例；代理单独覆盖，玩家与代理不可见。",
                               18, GRAY, (0, -188), (654, 26), 1, (0.5, 0.5), False))
 
-    auto_bar = N("自动信息", (0, -238), (654, 76))
+    # 入座收费：开启后服务端把带入/结算积分按后台比例同步扣退钻石（special_rule=入座扣钻），默认关闭。
+    seat_row = N("同步带入钻石行", (0, -238), (654, 76))
+    sprite(seat_row, SPR["row"], sliced=True)
+    seat_row.add(text_node("名称", "同步带入钻石", 26, GOLD, (-300, 14), (300, 34),
+                           0, (0, 0.5), True, (DARKOUT, 1)))
+    seat_row.add(text_node("说明", "带入/结算按 1 积分 = 1 钻同步扣退", 18, GRAY,
+                           (-300, -16), (480, 24), 0, (0, 0.5), False))
+    seat_sw = N("同步带入钻石开关", (268, 0), (104, 52))
+    button(seat_sw)
+    seat_on = N("开", (0, 0), (104, 52), active=False)
+    sprite(seat_on, SPR["toggle_on"])
+    seat_on.add(text_node("文字", "开", 20, (255, 242, 216, 255), (-24, 0), (38, 38),
+                          1, (0.5, 0.5), True, (DARKOUT, 1)))
+    seat_off = N("关", (0, 0), (104, 52), active=True)
+    sprite(seat_off, SPR["toggle_off"])
+    seat_off.add(text_node("文字", "关", 20, (255, 242, 216, 255), (24, 0), (38, 38),
+                           1, (0.5, 0.5), True, (DARKOUT, 1)))
+    seat_sw.add(seat_on)
+    seat_sw.add(seat_off)
+    seat_row.add(seat_sw)
+    create_pane.add(seat_row)
+
+    auto_bar = N("自动信息", (0, -318), (654, 76))
     sprite(auto_bar, SPR["row"], sliced=True)
     for name, key, value, x in (("准入", "准入", "50 分", -218),
                                 ("人数", "人数", "8 人", 0),
@@ -678,15 +700,15 @@ def build_tree():
         auto_bar.add(text_node(name + "值", value, 26, GOLD, (x, -13), (180, 32)))
     create_pane.add(auto_bar)
     create_pane.add(text_node("创建提示", "创建后自动开 1 个可加入房，满员/开局补房。",
-                              18, GRAY, (0, -292), (654, 26), 1, (0.5, 0.5), False))
+                              18, GRAY, (0, -372), (654, 26), 1, (0.5, 0.5), False))
     # 房费由服务端建房/周期自动从群主钻石池扣，客户端只提示；金额由后台「消费钻石价格」下发。
     create_pane.add(text_node("房费提示",
                               "房费：开房扣 0 钻；首局开始后每 30 分钟再扣 0 钻；自动补房同扣",
-                              18, (255, 92, 84, 255), (0, -330), (654, 50),
+                              18, (255, 92, 84, 255), (0, -410), (654, 50),
                               1, (0.5, 0.5), True, (DARKOUT, 1), True, 24, 1))
-    create_pane.add(chip_btn("创建规则取消", "取消", (-160, -400), (300, 80),
+    create_pane.add(chip_btn("创建规则取消", "取消", (-160, -480), (300, 80),
                              "chip", 30, GRAY))
-    create_pane.add(chip_btn("创建规则确认", "创建并开房", (160, -400), (300, 80),
+    create_pane.add(chip_btn("创建规则确认", "创建并开房", (160, -480), (300, 80),
                              "btn_gold", 30, DARK, True))
     root.add(create_modal)
 

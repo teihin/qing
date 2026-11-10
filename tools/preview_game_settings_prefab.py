@@ -122,7 +122,11 @@ def render(nid, px, py, pw, ph, forced=None, clip_bottom=None, parent_anchor=(0.
         else:
             draw.rectangle([left, top, left + w, top + h], outline=(255, 0, 0, 160))
     lb, _ = comp(node, "cc.Label")
-    if lb and lb.get("_string"):
+    # Creator 读序列化的 `_N$string`；`_string` 只是运行时缓存，克隆节点时可能仍是旧文案。
+    txt = None
+    if lb:
+        txt = lb.get("_N$string") or lb.get("_string")
+    if lb and txt:
         size = int(lb["_fontSize"] * 1.0)
         try:
             font = ImageFont.truetype(FONT_PATH, size)
@@ -130,7 +134,6 @@ def render(nid, px, py, pw, ph, forced=None, clip_bottom=None, parent_anchor=(0.
             font = ImageFont.load_default()
         nc = node["_color"]
         col = (nc["r"], nc["g"], nc["b"], 255)
-        txt = lb["_string"]
         tw = draw.textlength(txt, font=font)
         if lb["_N$horizontalAlign"] == 0:
             ox = left

@@ -10,6 +10,8 @@ export default class BuyinDisplay extends cc.Component {
     @property(cc.Label) maximum: cc.Label = null;
     @property(cc.Label) already: cc.Label = null;
     @property(cc.Label) balance: cc.Label = null;
+    @property(cc.Node) stoneRow: cc.Node = null;
+    @property(cc.Label) stone: cc.Label = null;
     @property(cc.Button) confirm: cc.Button = null;
 
     private step = 0;
@@ -41,6 +43,18 @@ export default class BuyinDisplay extends cc.Component {
         this.slider.enabled = this.count > 1;
         this.confirm.interactable = this.count > 0;
         this.select(0);
+    }
+
+    /** 房间开启「入座扣钻」时显示玩家当前钻石；其它房间隐藏整行。 */
+    public setStoneBalance(value: number, visible: boolean) {
+        const show = visible === true;
+        // 兼容手工改 prefab 后组件引用丢失：按节点名兜底。
+        const row = this.stoneRow != null ? this.stoneRow : this.node.getChildByName("钻石余额");
+        if (row != null)
+            row.active = show;
+        const label = this.stone != null ? this.stone : (row == null ? null : row.getComponent(cc.Label));
+        if (label != null)
+            label.string = "钻石余额：" + this.format(show && Number.isFinite(value) ? value : 0);
     }
 
     private value(index: number): number {

@@ -6073,7 +6073,9 @@ export default class panelMain extends UIPanelViewBase {
             const time = Date.parse(String(row && row.date || "").replace(" ","T"));
             if(!isFinite(time))
                 continue;
-            if(time >= latestTime)
+            // 服务端按最新在前返回；同一秒可能连续扣多次（date 只到秒），
+            // 必须用严格大于保留第一条，否则会取到同秒里较旧的一条，池余额显示偏大。
+            if(time > latestTime)
             {
                 latest = row;
                 latestTime = time;

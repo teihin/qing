@@ -925,6 +925,21 @@ export interface StoneConsumePriceState {
   parseError: string;
 }
 
+/** 俱乐部配分模式「入座收费」的积分→钻石兑换比例（usr_hash_info 纯小数）。 */
+export interface ClubSeatStoneRatioState {
+  ratio: number;
+  defaultRatio: number;
+  configured: boolean;
+  storageKey: string;
+  clientContext: string;
+  clientFormat: string;
+  updatedBy: string;
+  updatedAt: string | null;
+  rowCount: number;
+  duplicateRows: number;
+  parseError: string;
+}
+
 /** 游戏内「游戏推广」页展示的下载地址（哈希配置 usr_hash_info.下载url）。 */
 export interface PromotionDownloadURLState {
   downloadUrl: string;

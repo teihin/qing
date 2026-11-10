@@ -104168,6 +104168,9 @@
       },
       {
         "__id__": 3030
+      },
+      {
+        "__id__": 4573
       }
     ],
     "_active": false,
@@ -107992,7 +107995,7 @@
       "ctor": "Float64Array",
       "array": [
         -0.3662109375,
-        -236.572265625,
+        -252,
         0,
         0,
         0,
@@ -110051,7 +110054,13 @@
     "confirm": {
       "__id__": 2991
     },
-    "_id": ""
+    "_id": "",
+    "stoneRow": {
+      "__id__": 4573
+    },
+    "stone": {
+      "__id__": 4574
+    }
   },
   {
     "__type__": "cc.PrefabInfo",
@@ -165782,6 +165791,142 @@
       "__id__": 0
     },
     "fileId": "RKm8LDot20260813MsgBT1",
+    "sync": false
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "钻石余额",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 2919
+    },
+    "_children": [],
+    "_active": false,
+    "_components": [
+      {
+        "__id__": 4574
+      },
+      {
+        "__id__": 4575
+      }
+    ],
+    "_prefab": {
+      "__id__": 4576
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 242,
+      "g": 214,
+      "b": 156,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 460,
+      "height": 32
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        -214,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.Label",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 4573
+    },
+    "_enabled": true,
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "钻石余额：0",
+    "_N$string": "钻石余额：0",
+    "_fontSize": 26,
+    "_lineHeight": 28,
+    "_enableWrapText": false,
+    "_N$file": {
+      "__uuid__": "fd7307b2-666e-4c26-963d-59f787cad6fb"
+    },
+    "_isSystemFontUsed": false,
+    "_spacingX": 2,
+    "_batchAsBitmap": false,
+    "_styleFlags": 1,
+    "_underlineHeight": 0,
+    "_N$horizontalAlign": 1,
+    "_N$verticalAlign": 1,
+    "_N$fontFamily": "Arial",
+    "_N$overflow": 2,
+    "_N$cacheMode": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.LabelShadow",
+    "_name": "",
+    "_objFlags": 0,
+    "node": {
+      "__id__": 4573
+    },
+    "_enabled": true,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 0,
+      "g": 13,
+      "b": 27,
+      "a": 190
+    },
+    "_offset": {
+      "__type__": "cc.Vec2",
+      "x": 1,
+      "y": -2
+    },
+    "_blur": 2,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__id__": 0
+    },
+    "fileId": "Rug8Mbhm3MXOFGbTU93B2w",
     "sync": false
   }
 ]
