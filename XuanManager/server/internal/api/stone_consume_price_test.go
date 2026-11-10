@@ -102,3 +102,15 @@ func TestStoneConsumePriceCatalogIncludesCreateUnion(t *testing.T) {
 	}
 	t.Fatal("创建联盟 must be configurable in the stone consume price catalog")
 }
+
+func TestStoneConsumePriceCatalogIncludesClubRoomFee(t *testing.T) {
+	for _, item := range stoneConsumePriceCatalog {
+		if item.Code == "俱乐部实时房间时长费" {
+			if item.Default != 0 {
+				t.Fatalf("俱乐部实时房间时长费 default = %d, want 0", item.Default)
+			}
+			return
+		}
+	}
+	t.Fatal("俱乐部实时房间时长费 must be configurable in the stone consume price catalog")
+}

@@ -39,6 +39,11 @@ export default class ConfigManager extends cc.Component {
     public static readonly CONSUME_CREATE_CLUB:string = "创建俱乐部";
     /** 创建联盟收一次费，默认 10000 钻；成功受理后才扣，见 panelMain.CreateUnion。 */
     public static readonly CONSUME_CREATE_UNION:string = "创建联盟";
+    /**
+     * 俱乐部实时房时长费：服务端建房/续周期自动从群主钻石池扣，客户端只读价展示，
+     * 禁止再调 `玩家_消费_命令`，否则双扣。0 = 未开启。
+     */
+    public static readonly CONSUME_CLUB_ROOM_FEE:string = "俱乐部实时房间时长费";
     // 注：VIP 三档（购买VIP月卡/半年卡/年卡）已停用，2026-10-26 起没有 VIP 消费，
     //     后台配置页也不再维护这三项；客户端 VIP 面板只保留信息展示。
 
@@ -61,11 +66,15 @@ export default class ConfigManager extends cc.Component {
         "延时第3次":400,
         "翻牌":500,
         "创建俱乐部":10000,
-        "创建联盟":10000
+        "创建联盟":10000,
+        // 俱乐部房费不能填非 0 兜底：后台没配就等于未开启，服务端同样按 0 处理。
+        "俱乐部实时房间时长费":0
     };
 
     /** 后台下发的钻石单价，key 为消费项名。 */
     private consumeStonePrice:{[type:string]:number} = {};
+    /** 最近一次主动补拉价目表的时间，见 RefreshConsumePrice。 */
+    private consumePriceAskedAt:number = 0;
 
     public android_down_url:string = "";
     public ios_down_url:string = "";
@@ -137,6 +146,25 @@ export default class ConfigManager extends cc.Component {
     public ResetConsumeStonePrice()
     {
         this.consumeStonePrice = {};
+    }
+
+    /** 俱乐部实时房单次时长费；0 表示未开启（服务端不扣，客户端也不提示费用）。 */
+    public GetClubRoomFee():number
+    {
+        return this.GetConsumeStone(ConfigManager.CONSUME_CLUB_ROOM_FEE);
+    }
+
+    /**
+     * 重新拉一次价目表。客户端只在登录时读价，后台调价后不重登会一直显示旧价；
+     * 打开创建规则弹窗前补拉一次，节流避免反复请求。
+     */
+    public RefreshConsumePrice()
+    {
+        const now = Date.now();
+        if(now - this.consumePriceAskedAt < 60000)
+            return;
+        this.consumePriceAskedAt = now;
+        this.GetOneHashKey(ConfigManager.CONSUME_PRICE_HASH_KEY,ConfigManager.CONSUME_PRICE_HASH_KEY);
     }
 
     /**
@@ -277,17 +305,41 @@ export default class ConfigManager extends cc.Component {
         }
         else if(context === ConfigManager.CONSUME_PRICE_HASH_KEY)
         {
-            // 服务端把 JSON 先 URL 编码再 base64，这里解回来再解析。
-            let strJson = strContent;
+            // 现网存储是 base64(encodeURIComponent(json))；文档示例是纯 URL 编码。
+            // 两种都试，最后再按明文，避免服务端编码方式变动时整份价目表读不到。
+            const strJson = ConfigManager.DecodePriceContent(strContent);
+            if(strJson != null)
+                this.ParseConsumeStonePrice(strJson);
+        }
+    }
+
+    /** 兼容 base64 + URL 编码 / 纯 URL 编码 / 明文三种价目表内容。 */
+    private static DecodePriceContent(strContent:string):string
+    {
+        if(strContent == null)
+            return null;
+        const candidates:string[] = [];
+        try
+        {
+            candidates.push(Tool.Base64Decode(strContent));
+        }
+        catch(error) {}
+        try
+        {
+            candidates.push(decodeURIComponent(strContent));
+        }
+        catch(error) {}
+        candidates.push(strContent);
+        for(const one of candidates)
+        {
             try
             {
-                strJson = Tool.Base64Decode(strContent);
+                JSON.parse(one);
+                return one;
             }
-            catch(error)
-            {
-                Debug.Log("消费钻石价格解码失败，按明文解析");
-            }
-            this.ParseConsumeStonePrice(strJson);
+            catch(error) {}
         }
+        Debug.Log("消费钻石价格解码失败：" + strContent);
+        return null;
     }
 }

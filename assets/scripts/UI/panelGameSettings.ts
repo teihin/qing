@@ -5,6 +5,7 @@ import GameDataManager from "../GameDataManager";
 import Debug from "../common/Debug";
 import { ShowPanelMode } from "../common/GameDef";
 import { resolveRoomClubId } from "../logic/RoomClubContext";
+import ConfigManager from "../logic/ConfigManager";
 
 var KBEngine = require("kbengine");
 
@@ -24,6 +25,8 @@ const BALANCE_QUICK: number[] = [100, 500, 1000, 5000];
 const MAX_BALANCE_FEN = 1000000000000;
 /** 池级配置未设置时服务端返回 0（不派奖），界面初值一律 0；下面是开关打开时的兜底档位。 */
 const FALLBACK_BILI: number[] = [20, 10, 10, 2, 2];
+/** 牌型比例允许两位小数（如 0.5%），按百分比原值下发。 */
+const BILI_DECIMALS = 2;
 
 /** 创建游戏规则只开放 1/3 起的 5 档底皮；0.1/0.2、50/100 不在前台提供。 */
 const RULE_DIPI_KEYS: string[] = ["1", "2", "5", "10", "20"];
@@ -106,6 +109,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("ClubPlayList", this, "onClubPlayList");
         KBEngine.Event.register("ClubPlayResult", this, "onClubPlayResult");
+        KBEngine.Event.register("ConsumeStonePriceUpdated", this, "onConsumeStonePriceUpdated");
         this.initRuleUi();
     }
 
@@ -258,7 +262,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             if (!row) continue;
             const chip = Tool.GetChild(row, "比例_" + i);
             const label = chip ? chip.getChildByName("数值").getComponent(cc.Label) : null;
-            if (label) label.string = this.bili[i] + "%";
+            if (label) label.string = this.formatBili(this.bili[i]) + "%";
             const on = Tool.GetChild(row, "开关_" + i + "/开");
             const off = Tool.GetChild(row, "开关_" + i + "/关");
             if (on) on.active = this.biliOn[i];
@@ -280,6 +284,19 @@ export default class panelGameSettings extends UIPanelViewBase {
     private formatBalanceValue(fen: number): string {
         const value = Math.max(0, Math.floor(fen || 0));
         return value % 100 === 0 ? String(value / 100) : (value / 100).toFixed(2);
+    }
+
+    private normalizeBili(value: any): number {
+        const num = Number(value);
+        if (!isFinite(num)) return 0;
+        const clamped = Math.max(0, Math.min(100, num));
+        return Math.round(clamped * 100) / 100;
+    }
+
+    /** 比例展示去掉多余 0：0.50 → 0.5，10.00 → 10。 */
+    private formatBili(value: number): string {
+        return this.normalizeBili(value).toFixed(BILI_DECIMALS)
+            .replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
     }
 
     private formatBalanceLabel(fen: number): string {
@@ -304,7 +321,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         }
         let total = 0;
         for (let i = 0; i < this.bili.length; i++) total += this.biliOn[i] ? this.bili[i] : 0;
-        label.string = prefix + "合计 " + total + "% · "
+        label.string = prefix + "合计 " + this.formatBili(total) + "% · "
             + (total > 0 ? "各档独立按底皮奖池计算" : "该池未配置时不派奖");
     }
 
@@ -341,7 +358,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             this.biliOn[index] = false;
         } else {
             this.bili[index] = this.lastBili[index] > 0
-                ? Math.min(100, this.lastBili[index])
+                ? this.normalizeBili(this.lastBili[index])
                 : Math.min(100, FALLBACK_BILI[index] || 1);
             this.biliOn[index] = true;
         }
@@ -359,14 +376,16 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.setLabel("弹窗/面板/标题", "修改奖池比例");
         this.setLabel("弹窗/面板/副标题", "当前牌型：" + REWARD_TIER_LABELS[index]);
         this.setQuickLabels(["5%", "10%", "20%", "25%"]);
-        this.setDialogMode(3, 2);
+        this.setDialogMode(6, this.biliInputMode());
 
         let others = 0;
         for (let i = 0; i < this.bili.length; i++) {
             if (i !== index && this.biliOn[i]) others += this.bili[i];
         }
+        others = this.normalizeBili(others);
         this.setLabel("弹窗/面板/提示",
-            "其余牌型共占 " + others + "%，本项最多可改到 " + Math.max(0, 100 - others) + "%");
+            "其余牌型共占 " + this.formatBili(others) + "%，本项最多可改到 "
+            + this.formatBili(Math.max(0, 100 - others)) + "%");
         this.setDialogValue(this.bili[index]);
     }
 
@@ -392,15 +411,40 @@ export default class panelGameSettings extends UIPanelViewBase {
             this.setLabel("弹窗/面板/" + names[i] + "/文字", labels[i]);
     }
 
+    private biliInputMode(): number {
+        // 原生端用小数键盘；网页端 input type=number 会吞掉「0.」里的点，退回文本输入。
+        return cc.sys.isNative ? cc.EditBox.InputMode.DECIMAL : cc.EditBox.InputMode.ANY;
+    }
+
     private setDialogMode(maxLength: number, inputMode: number) {
         const edit = this.editBox();
         if (!edit) return;
         edit.maxLength = maxLength;
         (edit as any).inputMode = inputMode;
+        if (inputMode === cc.EditBox.InputMode.ANY && this.editingKind === "bili") {
+            // 网页版 <input type=number> 会把「0.」判为非法值、吞掉小数点，比例改用文本框输入；
+            // ANY 会把引擎自带的输入/占位标签改成顶部对齐，这里恢复居中单行。
+            this.restoreDialogLabels(edit);
+            const elem: any = (edit as any)._impl && (edit as any)._impl._elem;
+            if (elem && elem.setAttribute) elem.setAttribute("inputmode", "decimal");
+        }
         const placeholder = Tool.GetChild(this.node, "弹窗/面板/输入/PLACEHOLDER_LABEL");
         if (placeholder) {
             const label = placeholder.getComponent(cc.Label);
-            if (label) label.string = inputMode === 0 ? "0.00" : "0-100";
+            if (label) label.string = this.editingKind === "balance" ? "0.00" : "0-100，可填小数";
+        }
+    }
+
+    private restoreDialogLabels(edit: cc.EditBox) {
+        const text = edit.textLabel;
+        if (text) {
+            text.verticalAlign = cc.Label.VerticalAlign.CENTER;
+            text.enableWrapText = false;
+        }
+        const placeholder = edit.placeholderLabel;
+        if (placeholder) {
+            placeholder.verticalAlign = cc.Label.VerticalAlign.CENTER;
+            placeholder.enableWrapText = false;
         }
     }
 
@@ -434,7 +478,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             edit.string = this.formatBalanceValue(value);
             return;
         }
-        edit.string = String(Math.max(0, Math.min(100, Math.floor(value))));
+        edit.string = this.formatBili(value);
     }
 
     private confirmDialog() {
@@ -467,9 +511,15 @@ export default class panelGameSettings extends UIPanelViewBase {
         }
 
         if (this.editingIndex < 0) return;
-        const value = Number(edit.string);
-        if (isNaN(value) || value !== Math.floor(value) || value < 0 || value > 100) {
-            UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "请输入 0-100 的整数");
+        const raw = (edit.string || "").trim();
+        if (!/^\d+(\.\d{1,2})?$/.test(raw)) {
+            UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover,
+                "请输入 0-100 的比例，最多两位小数");
+            return;
+        }
+        const value = this.normalizeBili(Number(raw));
+        if (value < 0 || value > 100) {
+            UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "请输入 0-100 的比例");
             return;
         }
         const index = this.editingIndex;
@@ -710,6 +760,8 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.createWater = 5;
         this.createDark = 0;
         this.setCreateHint("");
+        // 后台改价后不重登也要拿到新价；节流，连续开关弹窗不会重复请求。
+        ConfigManager.getInstance().RefreshConsumePrice();
         this.refreshCreateDialog();
         if (this.createDialog) this.createDialog.active = true;
         if (!this.rulesLoaded && !this.rulesLoading) this.requestRules();
@@ -751,6 +803,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.refreshQuickChips("暗抽", RULE_DARK_QUICK, this.createDark, this.createWater);
         this.setLabel("创建规则弹窗/面板/自动信息/准入值",
             this.ruleAdmit(RULE_DIPI_KEYS[this.createIndex]) + " 分");
+        this.refreshRoomFeeHint();
 
         const confirm = Tool.GetChild(this.node, "创建规则弹窗/面板/创建规则确认");
         if (confirm) {
@@ -759,6 +812,26 @@ export default class panelGameSettings extends UIPanelViewBase {
             this.setNodeLabel(confirm.getChildByName("文字"),
                 this.createPending ? "创建中…" : "创建并开房");
         }
+    }
+
+    /** 创建规则弹窗的红字房费说明；价格由后台「消费钻石价格」下发，0 = 未开启。 */
+    private refreshRoomFeeHint() {
+        const node = Tool.GetChild(this.node, "创建规则弹窗/面板/房费提示");
+        if (!node) return;
+        const fee = ConfigManager.getInstance().GetClubRoomFee();
+        const label = node.getComponent(cc.Label);
+        if (label) label.string = fee > 0
+            ? "房费：开房扣 " + fee + " 钻；首局开始后每 30 分钟再扣 " + fee + " 钻；自动补房同扣"
+            : "房费未开启：开房不扣钻石";
+        node.color = fee > 0
+            ? new cc.Color(255, 92, 84, 255)
+            : new cc.Color(143, 166, 186, 255);
+    }
+
+    /** 价目表补拉回来后，弹窗开着就同步刷新红字。 */
+    public onConsumeStonePriceUpdated() {
+        if (this.createDialog && this.createDialog.active)
+            this.refreshCreateDialog();
     }
 
     private refreshQuickChips(prefix: string, values: number[], current: number, maxValue: number) {
@@ -1222,7 +1295,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         const bili = data["reward_card_bili"];
         if (bili && typeof bili === "object") {
             for (let i = 0; i < REWARD_TIER_KEYS.length; i++) {
-                const v = Math.max(0, Math.min(100, Math.floor(Number(bili[REWARD_TIER_KEYS[i]]) || 0)));
+                const v = this.normalizeBili(bili[REWARD_TIER_KEYS[i]]);
                 this.bili[i] = v;
                 this.biliOn[i] = v > 0;
                 if (v > 0) this.lastBili[i] = v;

@@ -3443,7 +3443,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 654,
-      "height": 1604
+      "height": 1388
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -10203,7 +10203,7 @@
         "__id__": 286
       }
     ],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 289
@@ -10964,7 +10964,7 @@
         "__id__": 306
       }
     ],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 309
@@ -16281,7 +16281,7 @@
     "_layoutSize": {
       "__type__": "cc.Size",
       "width": 654,
-      "height": 1604
+      "height": 1388
     },
     "_resize": 0,
     "_N$layoutType": 2,
@@ -16323,7 +16323,7 @@
     "_isAbsHorizontalCenter": true,
     "_isAbsVerticalCenter": true,
     "_originalWidth": 654,
-    "_originalHeight": 1604,
+    "_originalHeight": 1388,
     "_id": "",
     "node": {
       "__id__": 90
@@ -23084,6 +23084,9 @@
       },
       {
         "__id__": 866
+      },
+      {
+        "__id__": 931
       }
     ],
     "_active": true,
@@ -35728,5 +35731,136 @@
     "node": {
       "__id__": 1
     }
+  },
+  {
+    "__type__": "cc.Node",
+    "_name": "房费提示",
+    "_objFlags": 0,
+    "_parent": {
+      "__id__": 606
+    },
+    "_children": [],
+    "_active": true,
+    "_components": [
+      {
+        "__id__": 933
+      },
+      {
+        "__id__": 934
+      }
+    ],
+    "_prefab": {
+      "__id__": 932
+    },
+    "_opacity": 255,
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 255,
+      "g": 92,
+      "b": 84,
+      "a": 255
+    },
+    "_contentSize": {
+      "__type__": "cc.Size",
+      "width": 654,
+      "height": 50
+    },
+    "_anchorPoint": {
+      "__type__": "cc.Vec2",
+      "x": 0.5,
+      "y": 0.5
+    },
+    "_trs": {
+      "__type__": "TypedArray",
+      "ctor": "Float64Array",
+      "array": [
+        0,
+        -330,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ]
+    },
+    "_eulerAngles": {
+      "__type__": "cc.Vec3",
+      "x": 0,
+      "y": 0,
+      "z": 0
+    },
+    "_skewX": 0,
+    "_skewY": 0,
+    "_is3DNode": false,
+    "_groupIndex": 0,
+    "groupIndex": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.PrefabInfo",
+    "root": {
+      "__id__": 1
+    },
+    "asset": {
+      "__uuid__": "1d247d66-a2b2-4c04-a530-99d156851e8b"
+    },
+    "fileId": "9nhXBC07OAL81/PAjc/y9A",
+    "sync": false
+  },
+  {
+    "__type__": "cc.Label",
+    "_name": "",
+    "_objFlags": 0,
+    "_enabled": true,
+    "node": {
+      "__id__": 931
+    },
+    "_materials": [
+      {
+        "__uuid__": "eca5d2f2-8ef6-41c2-bbe6-f9c79d09c432"
+      }
+    ],
+    "_srcBlendFactor": 770,
+    "_dstBlendFactor": 771,
+    "_string": "房费：开房扣 0 钻；首局开始后每 30 分钟再扣 0 钻；自动补房同扣",
+    "_N$string": "房费：开房扣 0 钻；首局开始后每 30 分钟再扣 0 钻；自动补房同扣",
+    "_fontSize": 18,
+    "_lineHeight": 24,
+    "_enableWrapText": true,
+    "_N$file": {
+      "__uuid__": "fd7307b2-666e-4c26-963d-59f787cad6fb"
+    },
+    "_isSystemFontUsed": false,
+    "_spacingX": 0,
+    "_batchAsBitmap": false,
+    "_styleFlags": 0,
+    "_underlineHeight": 2,
+    "_N$horizontalAlign": 1,
+    "_N$verticalAlign": 1,
+    "_N$fontFamily": "Arial",
+    "_N$overflow": 1,
+    "_N$cacheMode": 0,
+    "_id": ""
+  },
+  {
+    "__type__": "cc.LabelOutline",
+    "_objFlags": 0,
+    "_enabled": true,
+    "node": {
+      "__id__": 931
+    },
+    "_color": {
+      "__type__": "cc.Color",
+      "r": 2,
+      "g": 18,
+      "b": 31,
+      "a": 255
+    },
+    "_width": 1,
+    "_id": "",
+    "_name": ""
   }
 ]

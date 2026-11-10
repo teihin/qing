@@ -18,6 +18,8 @@ export default class panelUserInfo extends UIPanelViewBase {
 
     private player:DrhPlayerLogic = null;
     private bIsVip:boolean = false
+    /** 输赢统计默认遮住，玩家确认扣钻后才显示本次面板内的 6 项数据。 */
+    private statsUnlocked:boolean = false
 
     /** 牌局里的俱乐部以玩家自己的结算俱乐部为准；联盟共享房不能读房间归属的 club_id。 */
     private CurrentRoomClubId():string
@@ -81,6 +83,7 @@ export default class panelUserInfo extends UIPanelViewBase {
 
         Tool.GetChild(this.node,"数据/屏蔽语音").getComponent(cc.Toggle).isChecked = this.player.gameLogic.CheckNoAudio(this.player.info.strUserID)
         this.UpdateInfo();
+        this.RefreshViewButton();
 
         this.RefreshPropPriceLabels();
         this.GetVipInfo()
@@ -124,39 +127,9 @@ export default class panelUserInfo extends UIPanelViewBase {
             let copied = MobileManager.getInstance().CopyToPhone(strID);
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,copied ? "玩家ID复制成功！" : "玩家ID复制失败，请稍后重试！");
         }
-        else if(button.node.name === "看一下")
+        else if(button.node.name === "查看")
         {
-            let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_LOOK_DATA);
-            if(Number(GameDataManager.getAccount().stone) < nCost)
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"钻石不足，查看数据失败！");
-                return;
-            }
-            let strParam:string = this.player.info.remark;
-            if (strParam == "")
-                strParam = "0,0,0,0,0,0,0";
-            let arrayParam = strParam.split(',');
-
-            let nWin = Number(arrayParam[0]);
-            let nLose = Number(arrayParam[1]);
-            let nHe = Number(arrayParam[2]);
-
-            let nTotle = nWin + nLose + nHe;
-            let nFanPer = nTotle > 0 ? Number(arrayParam[3]) * 100 / nTotle : 0;
-            let nWinPer = nTotle > 0 ? nWin * 100 / nTotle : 0;
-
-            let nFanWin = Number(arrayParam[3])>0?Number(arrayParam[5])*100/Number(arrayParam[3]):0;
-
-            Tool.GetChild(this.node,"数据/统计/总局数").getComponent(cc.Label).string = arrayParam[4];
-            Tool.GetChild(this.node,"数据/统计/总手数").getComponent(cc.Label).string = (Number(arrayParam[0])+ Number(arrayParam[1])+ Number(arrayParam[2])).toString();
-            Tool.GetChild(this.node,"数据/统计/翻牌率").getComponent(cc.Label).string = nFanPer.toFixed(0).toString()+"%";
-            Tool.GetChild(this.node,"数据/统计/翻牌胜率").getComponent(cc.Label).string = nFanWin.toFixed(0).toString()+"%";
-            Tool.GetChild(this.node,"数据/统计/获胜手数").getComponent(cc.Label).string = nWin.toString();
-            Tool.GetChild(this.node,"数据/统计/总胜率").getComponent(cc.Label).string =  nWinPer.toFixed(0).toString()+"%";
-
-            //扣费
-            strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_LOOK_DATA);
-            GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
+            this.OnClickViewStats();
         }
         else if(button.node.parent.name === "道具")
         {
@@ -239,6 +212,18 @@ export default class panelUserInfo extends UIPanelViewBase {
     }
     public UpdateInfo()
     {
+        // 未付费时保持设计稿占位：上排 **、下排 -，避免先看到真实输赢。
+        if(!this.statsUnlocked)
+        {
+            this.SetStatLabel("总手数","**");
+            this.SetStatLabel("总胜率","**");
+            this.SetStatLabel("失败率","**");
+            this.SetStatLabel("胜利","-");
+            this.SetStatLabel("平局","-");
+            this.SetStatLabel("失败","-");
+            return;
+        }
+
         let strParam:string = this.player.info.remark;
         if (strParam == "")
             strParam = "0,0,0,0,0,0,0";
@@ -256,31 +241,80 @@ export default class panelUserInfo extends UIPanelViewBase {
 
         let nFanWin = Number(arrayParam[3])>0?Number(arrayParam[5])*100/Number(arrayParam[3]):0;
 
-        let nRuChi = nTotle > 0 ? nRu * 100 / nTotle : 0;   
+        let nRuChi = nTotle > 0 ? nRu * 100 / nTotle : 0;
 
-        // //Tool.GetChild(this.node,"数据/统计/总局数").getComponent(cc.Label).string = arrayParam[4];
-        // Tool.GetChild(this.node,"数据/统计/总手数").getComponent(cc.Label).string = (Number(arrayParam[0])+ Number(arrayParam[1])+ Number(arrayParam[2])).toString();
-        // Tool.GetChild(this.node,"数据/统计/总胜率").getComponent(cc.Label).string =  nWinPer.toFixed(0).toString()+"%";
-        // //Tool.GetChild(this.node,"数据/统计/翻牌率").getComponent(cc.Label).string = nFanPer.toFixed(0).toString()+"%";
-        // //Tool.GetChild(this.node,"数据/统计/翻牌胜率").getComponent(cc.Label).string = nFanWin.toFixed(0).toString()+"%";
-        // Tool.GetChild(this.node,"数据/统计/获胜手数").getComponent(cc.Label).string = nWin.toString();
-        // Tool.GetChild(this.node,"数据/统计/平局手数").getComponent(cc.Label).string = nHe.toString();
-        // Tool.GetChild(this.node,"数据/统计/失败手数").getComponent(cc.Label).string = nLose.toString();
-        // //Tool.GetChild(this.node,"数据/统计/入池率").getComponent(cc.Label).string =  nRuChi.toFixed(0).toString()+"%";
+        this.SetStatLabel("总手数",nTotle.toString());
+        this.SetStatLabel("总胜率",nWinPer.toFixed(0).toString()+"%");
+        this.SetStatLabel("失败率",nLosePer.toFixed(0).toString()+"%");
+        this.SetStatLabel("胜利",nWin.toString());
+        this.SetStatLabel("平局",nHe.toString());
+        this.SetStatLabel("失败",nLose.toString());
 
-        Tool.GetChild(this.node,"数据/统计/总手数").getComponent(cc.Label).string = (Number(arrayParam[0])+ Number(arrayParam[1])+ Number(arrayParam[2])).toString();
-        Tool.GetChild(this.node,"数据/统计/总胜率").getComponent(cc.Label).string =  nWinPer.toFixed(0).toString()+"%";
-        Tool.GetChild(this.node,"数据/统计/失败率").getComponent(cc.Label).string =  nLosePer.toFixed(0).toString()+"%";
+        // 以下三项在 Prefab 里隐藏，保留原有 VIP 逻辑，后续启用时直接显示。
+        this.SetStatLabel("入池率",this.bIsVip?(nRuChi.toFixed(0).toString()+"%"):"*");
+        this.SetStatLabel("翻牌率",this.bIsVip?(nFanPer.toFixed(0).toString()+"%"):"*");
+        this.SetStatLabel("翻牌胜率",this.bIsVip?(nFanWin.toFixed(0).toString()+"%"):"*");
+    }
 
+    private SetStatLabel(strName:string,strValue:string)
+    {
+        let node = Tool.GetChild(this.node,"数据/统计/" + strName);
+        let label = node == null ? null : node.getComponent(cc.Label);
+        if(label != null)
+            label.string = strValue;
+    }
 
-        //VIP数据
-        Tool.GetChild(this.node,"数据/统计/胜利").getComponent(cc.Label).string = this.bIsVip? nWin.toString():"*"
-        Tool.GetChild(this.node,"数据/统计/平局").getComponent(cc.Label).string = this.bIsVip?nHe.toString():"*"
-        Tool.GetChild(this.node,"数据/统计/失败").getComponent(cc.Label).string = this.bIsVip?nLose.toString():"*"
+    /** 按钮文案跟随后台「看数据」价格；已查看后隐藏，避免重复扣费。 */
+    private RefreshViewButton()
+    {
+        let btn = Tool.GetChild(this.node,"数据/统计/查看");
+        if(btn == null)
+            return;
+        btn.active = !this.statsUnlocked;
+        if(this.statsUnlocked)
+            return;
+        let labelNode = btn.getChildByName("V8文字");
+        let label = labelNode == null ? null : labelNode.getComponent(cc.Label);
+        if(label == null)
+            return;
+        let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_LOOK_DATA);
+        label.string = nCost > 0 ? "查看（扣除" + nCost + "钻石）" : "查看输赢统计";
+    }
 
-        Tool.GetChild(this.node,"数据/统计/入池率").getComponent(cc.Label).string = this.bIsVip?(nRuChi.toFixed(0).toString()+"%"):"*"
-        Tool.GetChild(this.node,"数据/统计/翻牌率").getComponent(cc.Label).string = this.bIsVip?(nFanPer.toFixed(0).toString()+"%"):"*"
-        Tool.GetChild(this.node,"数据/统计/翻牌胜率").getComponent(cc.Label).string = this.bIsVip?(nFanWin.toFixed(0).toString()+"%"):"*"
+    private OnClickViewStats()
+    {
+        if(this.statsUnlocked)
+            return;
+        let nCost = ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_LOOK_DATA);
+        if(nCost > 0 && Number(GameDataManager.getAccount().stone) < nCost)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"钻石不足" + nCost + "，无法查看数据！");
+            return;
+        }
+        if(nCost <= 0)
+        {
+            this.UnlockStats(0);
+            return;
+        }
+        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
+            "查看该玩家的输赢统计将扣除" + nCost + "钻石，是否继续？",[(confirmed:boolean)=>{
+                if(confirmed)
+                    this.UnlockStats(nCost);
+            }]);
+    }
+
+    private UnlockStats(nCost:number)
+    {
+        if(this.statsUnlocked || !cc.isValid(this.node))
+            return;
+        this.statsUnlocked = true;
+        this.UpdateInfo();
+        this.RefreshViewButton();
+        if(nCost > 0)
+        {
+            let strParam = ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_LOOK_DATA);
+            GameDataManager.getAccount().reqHallCommand(strParam, "玩家_消费_命令");
+        }
     }
 
     public GetVipInfo()

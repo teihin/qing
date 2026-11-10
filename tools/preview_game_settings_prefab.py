@@ -144,6 +144,8 @@ def render(nid, px, py, pw, ph, forced=None, clip_bottom=None, parent_anchor=(0.
     if lay:
         cy = top + lay.get("_N$paddingTop", 0)
         for c in node.get("_children", []):
+            if not d[c["__id__"]].get("_active", True):
+                continue
             cw = d[c["__id__"]]["_contentSize"]["width"]
             ch = d[c["__id__"]]["_contentSize"]["height"]
             if child_clip is not None and cy + ch > child_clip:

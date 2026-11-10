@@ -2352,6 +2352,17 @@ export default class panelGameView extends UIPanelViewBase {
         {
             this.promptInfoSerial++;
             this.lastPromptInfoTime = Date.now();
+            // 服务端因钻石池不足解散房间：这是全房通知，必须用置顶提示框让所有玩家看到，
+            // 不能再走牌桌内嵌小字（房间关闭后会跟着牌桌一起消失）。
+            if(strWord.indexOf("钻石池余额不足") >= 0 && strWord.indexOf("房间解散") >= 0)
+            {
+                const manager = UIManager.getInstance();
+                // showPanel 复用同名节点时不会重跑 start()，先清掉旧提示框，保证文案更新。
+                manager.closePanelByName("panelMsgView", ClosePanelMode.Normal);
+                manager.closePanelByName("panelMsgView", ClosePanelMode.Top);
+                manager.showPanel("panelMsgView", ShowPanelMode.Cover, strWord);
+                return;
+            }
             if(strWord.indexOf("带入金币不足") >= 0 || strWord.indexOf("俱乐部金币不足") >= 0 ||
                 strWord.indexOf("俱乐部额度不足") >= 0 || strWord.indexOf("该俱乐部额度不足") >= 0 ||
                 strWord.indexOf("未加入联盟") >= 0)
@@ -4187,8 +4198,9 @@ export default class panelGameView extends UIPanelViewBase {
      * - 本手牌进行中（含自己已弃牌、正等别人结算）：赢家先确认扣 30% 盈利，输家不确认；
      *   确认后只挂预约标记，提示「本局打完后自动退出」，等这一手结算完再发退房协议。
      *   局中直接退房会被服务端拒绝并把玩家拉回牌桌，所以这里绝不允许立即退。
-     * - 当前不在本手牌里（刚结算完 / 还没发牌）：赢家仍先确认扣 30%，确认后走同一套
-     *   预约流程，退出前会再复查一次状态，撞上下一手开牌就继续等。
+     * - 当前不在本手牌里（刚结算完 / 还没发牌）：赢家仍先确认扣 30%，确认后立即退房。
+     *   这条路径必须马上出 loading，不能走预约流程的轮询+延时，否则点了会像没反应；
+     *   DoExitRoom 内部还会再复查一次是否局中，撞上下一手开牌会自动改走预约。
      */
     private RequestExitRoom():void
     {
@@ -4216,7 +4228,7 @@ export default class panelGameView extends UIPanelViewBase {
             return;
         }
 
-        this.ConfirmLeaveWhileWinning(()=>this.ScheduleExitAfterRound(false));
+        this.ConfirmLeaveWhileWinning(()=>this.DoExitRoom());
     }
 
     private ScheduleExitAfterRound(notify:boolean = true):void
@@ -5022,14 +5034,14 @@ export default class panelGameView extends UIPanelViewBase {
             const row = Tool.GetChild(container, "牌型_" + i);
             if (!row) continue;
             const ratio = has
-                ? Math.max(0, Math.min(100, Math.floor(Number(bili[JACKPOT_HAND_KEYS[i]]) || 0)))
+                ? Math.max(0, Math.min(100, Number(bili[JACKPOT_HAND_KEYS[i]]) || 0))
                 : 0;
             row.active = ratio > 0;
             if (ratio > 0) {
                 any = true;
                 const label = Tool.GetChild(row, "比例");
                 const comp = label ? label.getComponent(cc.Label) : null;
-                if (comp) comp.string = ratio + "%";
+                if (comp) comp.string = this.FormatJackpotBili(ratio) + "%";
             }
         }
         const header = Tool.GetChild(this.node, root + "V8牌型表头");
@@ -5058,6 +5070,14 @@ export default class panelGameView extends UIPanelViewBase {
     {
         const value = Math.max(0, Math.floor(Number(fen) || 0));
         return value % 100 === 0 ? String(value / 100) : (value / 100).toFixed(2);
+    }
+
+    /** 比例支持两位小数：0.50 → 0.5，10.00 → 10。 */
+    private FormatJackpotBili(value:number):string
+    {
+        const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+        return (Math.round(clamped * 100) / 100).toFixed(2)
+            .replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
     }
 
     /** 普通成员读不到池主配置时：当前档/合计用 PlayerList 的推送值，各级明细显示不可见。 */

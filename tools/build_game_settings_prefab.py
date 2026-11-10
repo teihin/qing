@@ -5,7 +5,7 @@
 只写 assets/resources/UI/panelGameSettings.prefab(.meta)；
 SpriteFrame 全部复用既有 V7 资源与本目录 gs_* 切图。
 
-当前正式布局：单页签「奖池设置」内用滚动区容纳 5 档牌型比例 + 8 个底皮奖池数量；
+当前正式布局：单页签「奖池设置」内用滚动区容纳 5 档牌型比例 + 6 个在售底皮奖池数量；
 Prefab UUID 固定沿用现有正式文件，避免资源引用漂移。不要用其它随机 UUID 覆盖。
 """
 import json, os, uuid, base64, random, string
@@ -405,7 +405,7 @@ def build_tree():
     pool_row.add(pool_sw)
     card.add(pool_row)
 
-    # 单页滚动区：5 档牌型比例 + 8 个底皮奖池数量放在同一张卡片里。
+    # 单页滚动区：5 档牌型比例 + 6 个在售底皮奖池数量（0.1/0.3、0.2/0.5 已停用，保留节点但隐藏）。
     # 滚动区用 top+bottom Widget 随卡片高度拉伸，长屏不会在底部留空。
     scroll = N("滚动", (0, -22), (654, 870))
     scroll.comps.append({"kind": "scrollview"})
@@ -413,9 +413,9 @@ def build_tree():
     view = N("view", (0, 0), (654, 870))
     view.comps.append({"kind": "mask"})
     widget(view, 45, 0, 0, 0, 0, 0, 0, 654, 870)
-    content = N("content", (0, 435), (654, 1604), anchor=(0.5, 1))
+    content = N("content", (0, 435), (654, 1388), anchor=(0.5, 1))
     content.comps.append({"kind": "layout", "sy": 12})
-    widget(content, 17, 0, 0, 0, 0, 0, 0, 654, 1604)
+    widget(content, 17, 0, 0, 0, 0, 0, 0, 654, 1388)
 
     content.add(text_node("牌型标题", "牌型比例", 28, GOLD, (0, 0), (654, 44),
                           0, (0.5, 0.5), True, (DARKOUT, 1)))
@@ -452,7 +452,8 @@ def build_tree():
                           (654, 44), 0, (0.5, 0.5), True, (DARKOUT, 1)))
     dipis = ["0.1/0.3", "0.2/0.5", "1/3", "2/5", "5/10", "10/20", "20/40", "50/100"]
     for i, dipi in enumerate(dipis):
-        row = N("底皮行_%d" % i, (0, 0), (654, 96))
+        # 前两档低底皮已停用：节点保留以对齐服务端 8 个底皮键，但不显示。
+        row = N("底皮行_%d" % i, (0, 0), (654, 96), active=(i >= 2))
         sprite(row, SPR["row"], sliced=True)
         b = N("徽章", (-288, 0), (48, 48))
         sprite(b, SPR["badge"])
@@ -678,6 +679,11 @@ def build_tree():
     create_pane.add(auto_bar)
     create_pane.add(text_node("创建提示", "创建后自动开 1 个可加入房，满员/开局补房。",
                               18, GRAY, (0, -292), (654, 26), 1, (0.5, 0.5), False))
+    # 房费由服务端建房/周期自动从群主钻石池扣，客户端只提示；金额由后台「消费钻石价格」下发。
+    create_pane.add(text_node("房费提示",
+                              "房费：开房扣 0 钻；首局开始后每 30 分钟再扣 0 钻；自动补房同扣",
+                              18, (255, 92, 84, 255), (0, -330), (654, 50),
+                              1, (0.5, 0.5), True, (DARKOUT, 1), True, 24, 1))
     create_pane.add(chip_btn("创建规则取消", "取消", (-160, -400), (300, 80),
                              "chip", 30, GRAY))
     create_pane.add(chip_btn("创建规则确认", "创建并开房", (160, -400), (300, 80),

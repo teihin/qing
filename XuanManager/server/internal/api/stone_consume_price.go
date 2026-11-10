@@ -46,6 +46,9 @@ var stoneConsumePriceCatalog = []stoneConsumePriceItem{
 	{Code: "创建俱乐部", Name: "创建俱乐部", Scene: "大厅 · 俱乐部 · 创建俱乐部", Default: 10000, LegacyMoney: 0, LegacyUnit: ""},
 	// 创建联盟同样是新增收费点，默认 10000 钻；客户端成功受理联盟创建后才扣。
 	{Code: "创建联盟", Name: "创建联盟", Scene: "大厅 · 我的 · 创建联盟", Default: 10000, LegacyMoney: 0, LegacyUnit: ""},
+	// 俱乐部实时房时长费：服务端建房自动扣一次、首局后每周期扣一次，扣群主/联盟总群主钻石池；
+	// 客户端只在创建规则弹窗展示，不调扣费命令。默认 0 = 不收费，与游戏服兜底同口径。
+	{Code: "俱乐部实时房间时长费", Name: "俱乐部实时房时长费", Scene: "俱乐部 · 游戏规则 · 创建规则/自动补房", Default: 0, LegacyMoney: 0, LegacyUnit: ""},
 	// 对局加时（延时）：每手牌最多 3 次，**第 1 次固定免费**，第 2/3 次按价扣钻。
 	// 客户端扣费走统一接口 `玩家_消费_命令`，流水类型统一记「延时」（不是这两项 code）。
 	{Code: "延时第2次", Name: "对局加时 · 第 2 次", Scene: "牌桌 · 延时（每手牌第 2 次）", Default: 200, LegacyMoney: 200, LegacyUnit: "分"},
