@@ -53,6 +53,8 @@ type clubListItem struct {
 	// 这里按同一份落库数据（tbl_Account.sm_club_gold / sm_club_gold2）聚合。
 	// nil 表示读取失败，与「0 分」不是一回事。
 	TotalClubGold *int64 `json:"totalClubGold"`
+	// DarkEnabled 是客户端开房页暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。
+	DarkEnabled bool `json:"darkEnabled"`
 }
 
 type clubMemberNode struct {
@@ -363,6 +365,13 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	} else {
 		s.logger.Error("read club total golds", "error", goldErr)
 	}
+	if darkSettings, darkErr := s.readClubDarkSettings(r.Context(), clubIDs); darkErr == nil {
+		for index := range items {
+			items[index].DarkEnabled = darkSettings[items[index].ClubID]
+		}
+	} else {
+		s.logger.Error("read club dark settings", "error", darkErr)
+	}
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "total": total, "page": page, "pageSize": size,
 		"mode": filters.Mode,
@@ -655,6 +664,11 @@ WHERE c.club_guuid = ? LIMIT 1`, clubID).Scan(
 	if detail.Club.UnionID != "" {
 		detail.Club.OwnerQuotaFen = &clubQuotaFen
 		detail.Club.UnionPoolQuotaFen = &unionPoolFen
+	}
+	if darkEnabled, _, darkErr := s.readClubDarkSetting(ctx, clubID); darkErr == nil {
+		detail.Club.DarkEnabled = darkEnabled
+	} else {
+		s.logger.Error("read club dark setting", "error", darkErr, "clubId", clubID)
 	}
 
 	members, err := s.readClubMembers(ctx, clubID, detail.Club.Mode)

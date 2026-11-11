@@ -22,12 +22,12 @@ W, H = 750, 1334
 
 def load_meta_index():
     tex, frame = {}, {}
-    for meta_path in ASSET.glob("*.png.meta"):
+    for meta_path in (ROOT / "assets").glob("**/*.png.meta"):
         try:
             meta = json.loads(meta_path.read_text())
         except Exception:
             continue
-        png = meta_path.with_suffix("")
+        png = Path(str(meta_path)[:-5])
         for sm in (meta.get("subMetas") or {}).values():
             if sm.get("importer") == "sprite-frame":
                 frame[sm["uuid"]] = (png, sm)

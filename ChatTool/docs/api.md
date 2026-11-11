@@ -57,6 +57,7 @@
 - WebSocket 不可用、超时或回包丢失时，客户端使用同一 `clientMessageId` 回退 HTTP，服务端按该 ID 幂等，避免重复消息。断线重连使用指数退避，恢复后按游标补偿。
 - 会话中的 `peer.role` 使用 `owner`、`leader`、`agent`、`manager`、`member`，联盟总群主在其它俱乐部会话里为 `union_owner`；客户端将 `owner` 显示为“老板”、`union_owner` 显示为“大群主”、代理统一显示“代理”。`peer.note` 只在当前玩家位于目标成员的俱乐部上级链时返回。
 - 固定联系人（默认对话）：本俱乐部创建者（盟主，未入盟显示群主）、俱乐部所在联盟总群主（大盟主），按 guuid 去重；直属上级合伙人等代理链条上的其他层级不生成固定入口，与他们的会话按普通会话处理。固定会话服务端返回 `canDelete=false`，删除请求返回 `DIRECT_DELETE_FORBIDDEN`。
+- `GET/POST /api/direct/bf-entry`：官方客服（BF）入口开关。`GET` 返回 `{eligible,enabled,visible}`：`eligible` 表示当前账号是俱乐部创建者（大盟主/盟主/群主），客户端据此显示消息页顶部开关；`visible` 表示置顶 BF 行是否显示，俱乐部内所有层级的代理和玩家跟随创建者的开关，创建者自己也遵循。`POST` 请求 `{enabled}`，只有创建者可写，非创建者返回 `DIRECT_BF_ENTRY_FORBIDDEN`。没有历史记录时按开启处理。
 
 ## 媒体
 

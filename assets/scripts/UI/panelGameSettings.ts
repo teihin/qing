@@ -40,6 +40,41 @@ const RULE_ROW_GAP = 16;
 /** 创建/删除要等服务端推送 ClubPlayList，超时后只提示重开查看，不重复提交。 */
 const RULE_TIMEOUT = 6;
 
+/** 后台按俱乐部放行的暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。 */
+const DARK_HASH_KEY_PREFIX = "暗抽_俱乐部_";
+const DARK_HASH_CONTEXT_PREFIX = "暗抽开关_";
+/** 哈希查询超时按关闭处理，避免网络异常时一直停留在旧状态。 */
+const DARK_HASH_TIMEOUT = 5;
+/**
+ * 关闭暗抽后整项隐藏，需要把创建规则弹窗收紧：
+ * 顶部组下移 76、下方组上移 96，内容重新居中，面板高度保持 1080。
+ * 数值按当前 Prefab（702x1080）推导；改布局后要同步复核。
+ */
+const DARK_COMPACT_TOP_SHIFT = -76;
+const DARK_COMPACT_BOTTOM_SHIFT = 96;
+
+const DARK_UI_NAMES: string[] = [
+    "暗抽标题", "暗抽说明", "暗抽右侧",
+    "暗抽减", "暗抽值", "暗抽加", "暗抽提示"
+];
+for (let i = 0; i < RULE_DARK_QUICK.length; i++)
+    DARK_UI_NAMES.push("暗抽快捷_" + i);
+
+const CREATE_TOP_NAMES: string[] = [
+    "标题", "副标题", "底皮标题", "底皮说明", "地九王行",
+    "抽水标题", "抽水说明", "抽水右侧",
+    "抽水减", "抽水值", "抽水加", "抽水提示"
+];
+for (let i = 0; i < RULE_DIPI_KEYS.length; i++)
+    CREATE_TOP_NAMES.push("底皮_" + i);
+for (let i = 0; i < RULE_WATER_QUICK.length; i++)
+    CREATE_TOP_NAMES.push("抽水快捷_" + i);
+
+const CREATE_BOTTOM_NAMES: string[] = [
+    "同步带入钻石行", "自动信息", "创建提示", "房费提示",
+    "创建规则取消", "创建规则确认"
+];
+
 type ConfigKind = "bili" | "pool" | "balance";
 type DialogKind = "bili" | "balance";
 
@@ -106,6 +141,17 @@ export default class panelGameSettings extends UIPanelViewBase {
     private deleteRule: any = null;
     private deletePlayId: string = "";
 
+    // ---------------------------------------------------------------- 暗抽开关
+    /** 后台是否给当前俱乐部放行暗抽；默认关闭，等哈希回包再显示。 */
+    private darkEnabled: boolean = false;
+    /** 当前已查询/已应用的俱乐部 ID，用于忽略切换俱乐部后的旧回包。 */
+    private darkClubId: string = "";
+    private darkPendingContext: string = "";
+    private darkPendingAt: number = 0;
+    /** 创建规则弹窗各节点的原始 y，关闭暗抽时按相对偏移收紧布局。 */
+    private darkLayoutBase: {[name: string]: number} = {};
+    private darkLayoutCompact: boolean = false;
+
     onLoad() {
         super.onLoad();
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
@@ -113,6 +159,8 @@ export default class panelGameSettings extends UIPanelViewBase {
         KBEngine.Event.register("ClubPlayResult", this, "onClubPlayResult");
         KBEngine.Event.register("ConsumeStonePriceUpdated", this, "onConsumeStonePriceUpdated");
         KBEngine.Event.register("ClubSeatStoneRatioUpdated", this, "onClubSeatStoneRatioUpdated");
+        KBEngine.Event.register("UserHashInfo", this, "onUserHashInfo");
+        KBEngine.Event.register("UserHashError", this, "onUserHashError");
         this.initRuleUi();
     }
 
@@ -128,6 +176,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.hideCreateDialog();
         this.hideDeleteDialog();
         this.selectTab(0);
+        this.requestDarkState(true);
         this.refreshRows();
     }
 
@@ -209,6 +258,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             return;
         }
         if (name === "暗抽减" || name === "暗抽加") {
+            if (!this.darkEnabled) return;
             this.stepCreateDark(name === "暗抽加" ? 1 : -1);
             return;
         }
@@ -219,6 +269,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             return;
         }
         if (name.indexOf("暗抽快捷_") === 0) {
+            if (!this.darkEnabled) return;
             const index = Number(name.replace("暗抽快捷_", ""));
             if (index >= 0 && index < RULE_DARK_QUICK.length)
                 this.setCreateDark(RULE_DARK_QUICK[index]);
@@ -571,6 +622,8 @@ export default class panelGameSettings extends UIPanelViewBase {
         if (this.rulesCard) this.rulesCard.active = this.activeTab === 0;
         if (this.createDialog) this.createDialog.active = false;
         if (this.deleteDialog) this.deleteDialog.active = false;
+        this.captureCreateLayout();
+        this.syncDarkSection();
         this.applyTabVisual();
     }
 
@@ -719,8 +772,13 @@ export default class panelGameSettings extends UIPanelViewBase {
             "准入 " + this.ruleMin(rule) + " · 8 人 · 30 分钟");
         const water = this.ruleWater(rule);
         const dark = this.ruleDark(rule, water);
+        const waterChip = row.getChildByName("抽水");
+        if (waterChip) waterChip.x = this.darkEnabled ? -166 : 0;
         this.setNodeLabel(Tool.GetChild(row, "抽水/文字"), "抽水 " + water + "%");
-        this.setNodeLabel(Tool.GetChild(row, "暗抽/文字"), "暗抽 " + dark + "% · 仅创建者");
+        const darkChip = row.getChildByName("暗抽");
+        if (darkChip) darkChip.active = this.darkEnabled;
+        if (this.darkEnabled)
+            this.setNodeLabel(Tool.GetChild(row, "暗抽/文字"), "暗抽 " + dark + "% · 仅创建者");
         const rooms = this.ruleRoomCount(rule);
         this.setNodeLabel(row.getChildByName("房间"), rooms > 0
             ? "房间 " + rooms + " 个 · 满员/开局自动补房"
@@ -778,6 +836,8 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.setCreateHint("");
         // 后台改价后不重登也要拿到新价；节流，连续开关弹窗不会重复请求。
         ConfigManager.getInstance().RefreshConsumePrice();
+        // 每次打开都补拉一次开关；后台刚改也能在下一次打开时生效。
+        this.requestDarkState(true);
         this.refreshCreateDialog();
         if (this.createDialog) this.createDialog.active = true;
         if (!this.rulesLoaded && !this.rulesLoading) this.requestRules();
@@ -813,11 +873,16 @@ export default class panelGameSettings extends UIPanelViewBase {
             if (off) off.active = !this.createNine;
         }
         this.refreshSeatStoneRow();
+        this.syncDarkSection();
 
         this.setLabel("创建规则弹窗/面板/抽水值/数值", this.createWater + "%");
-        this.setLabel("创建规则弹窗/面板/暗抽值/数值", this.createDark + "%");
         this.refreshQuickChips("抽水", RULE_WATER_QUICK, this.createWater, RULE_WATER_MAX);
-        this.refreshQuickChips("暗抽", RULE_DARK_QUICK, this.createDark, this.createWater);
+        if (this.darkEnabled) {
+            this.setLabel("创建规则弹窗/面板/暗抽值/数值", this.createDark + "%");
+            this.refreshQuickChips("暗抽", RULE_DARK_QUICK, this.createDark, this.createWater);
+        } else {
+            this.createDark = 0;
+        }
         this.setLabel("创建规则弹窗/面板/自动信息/准入值",
             this.ruleAdmit(RULE_DIPI_KEYS[this.createIndex]) + " 分");
         this.refreshRoomFeeHint();
@@ -968,7 +1033,7 @@ export default class panelGameSettings extends UIPanelViewBase {
             dipi_key: RULE_DIPI_KEYS[this.createIndex],
             dijiuwang: this.createNine ? 1 : 0,
             water_rate: this.createWater,
-            dark_percent: this.createDark,
+            dark_percent: this.darkEnabled ? this.createDark : 0,
             context: context
         };
         // 服务端按房间 special_rule 里的「入座扣钻」开启带入/结算钻石同步；不勾选不传，行为不变。
@@ -1002,8 +1067,9 @@ export default class panelGameSettings extends UIPanelViewBase {
             dipi + " · " + (nine ? "地九王" : "常规") + (this.ruleSeatStone(rule) ? " · 带入钻石" : ""));
         this.setLabel("删除规则弹窗/面板/规则摘要/准入摘要",
             "准入 " + this.ruleMin(rule) + " · 8 人 · 30 分钟");
+        const darkText = this.darkEnabled ? " · 暗抽 " + dark + "%" : "";
         this.setLabel("删除规则弹窗/面板/规则摘要/收益摘要",
-            "抽水 " + water + "% · 暗抽 " + dark + "% · " + this.ruleRoomCount(rule) + " 个房间");
+            "抽水 " + water + "%" + darkText + " · " + this.ruleRoomCount(rule) + " 个房间");
         this.setLabel("删除规则弹窗/面板/提示", "");
         if (this.deleteDialog) this.deleteDialog.active = true;
     }
@@ -1093,6 +1159,9 @@ export default class panelGameSettings extends UIPanelViewBase {
                 "规则已删除，进行中的牌局本局结束后关闭");
             KBEngine.Event.fire("RefreshClubRoomList", 1.5);
         }
+        // 切换俱乐部后玩法列表会先到，开关状态要跟着当前俱乐部重新拉。
+        if (this.resolveSettingsClubId() !== this.darkClubId)
+            this.requestDarkState(true);
         this.renderRules();
     }
 
@@ -1156,6 +1225,150 @@ export default class panelGameSettings extends UIPanelViewBase {
     private resolveSettingsClubId(): string {
         const account = GameDataManager.getAccount();
         return account == null ? "" : resolveRoomClubId(account);
+    }
+
+    // ---------------------------------------------------------------- 暗抽开关（哈希）
+
+    /** 读当前俱乐部的暗抽开关；force=false 时 1 秒内不重复请求。 */
+    private requestDarkState(force: boolean = false) {
+        const clubId = this.resolveSettingsClubId();
+        if (clubId === "") {
+            this.darkClubId = "";
+            this.darkPendingContext = "";
+            this.applyDarkEnabled(false);
+            return;
+        }
+        if (clubId !== this.darkClubId) {
+            // 切俱乐部先回到关闭态，避免 A 俱乐部已开启时 B 俱乐部短暂显示暗抽。
+            this.darkClubId = clubId;
+            this.applyDarkEnabled(false);
+        }
+        const now = Date.now();
+        const context = DARK_HASH_CONTEXT_PREFIX + clubId;
+        if (!force && context === this.darkPendingContext && now - this.darkPendingAt < 1000)
+            return;
+        this.darkClubId = clubId;
+        this.darkPendingContext = context;
+        this.darkPendingAt = now;
+        this.unschedule(this.onDarkTimeout);
+        this.scheduleOnce(this.onDarkTimeout, DARK_HASH_TIMEOUT);
+        ConfigManager.getInstance().GetOneHashKey(DARK_HASH_KEY_PREFIX + clubId, context);
+    }
+
+    /** 查询超时按关闭处理；迟到的回包仍会按 context 重新应用。 */
+    private onDarkTimeout() {
+        if (this.darkPendingContext === "") return;
+        this.darkPendingContext = "";
+        this.darkPendingAt = 0;
+        this.applyDarkEnabled(false);
+    }
+
+    public onUserHashInfo(raw: any) {
+        const msg = this.parsePush(raw);
+        const info = msg && (msg.UserHashInfo || (msg.result && msg.result.UserHashInfo));
+        if (!info) return;
+        const key = info.key == null ? "" : String(info.key).trim();
+        const context = info.context == null ? "" : String(info.context).trim();
+        if (!this.isDarkHashResponse(key, context)) return;
+        this.darkPendingContext = "";
+        this.darkPendingAt = 0;
+        this.unschedule(this.onDarkTimeout);
+        this.applyDarkEnabled(this.darkValue(info.content));
+    }
+
+    public onUserHashError(raw: any) {
+        const msg = this.parsePush(raw);
+        const info = msg && (msg.UserHashError || (msg.result && msg.result.UserHashError));
+        if (!info) return;
+        const context = info.context == null ? "" : String(info.context).trim();
+        if (!this.darkContextMatches(context, this.darkClubId))
+            return;
+        this.darkPendingContext = "";
+        this.darkPendingAt = 0;
+        this.unschedule(this.onDarkTimeout);
+        this.applyDarkEnabled(false);
+    }
+
+    private isDarkHashResponse(key: string, context: string): boolean {
+        const clubId = this.resolveSettingsClubId();
+        if (clubId === "") return false;
+        const expectedKey = DARK_HASH_KEY_PREFIX + clubId;
+        if (key !== "" && key !== expectedKey) return false;
+        return this.darkContextMatches(context, clubId);
+    }
+
+    /** 兼容服务端回传的 param context（暗抽开关_x）和账号命令 context（P@暗抽开关_x）。 */
+    private darkContextMatches(context: string, clubId: string): boolean {
+        if (context === "") return false;
+        const base = DARK_HASH_CONTEXT_PREFIX + clubId;
+        return context === base || context === "P@" + base ||
+            context === this.darkPendingContext ||
+            context === "P@" + this.darkPendingContext;
+    }
+
+    /** 兼容 1 / "1" / true / "True" / 开；其余一律关闭。 */
+    private darkValue(content: any): boolean {
+        if (content === null || content === undefined) return false;
+        const text = String(content).trim().toLowerCase();
+        return text === "1" || text === "true" || text === "on" ||
+            text === "yes" || text === "开" || text === "开启";
+    }
+
+    private applyDarkEnabled(enabled: boolean) {
+        if (this.darkEnabled === enabled) {
+            this.syncDarkSection();
+            return;
+        }
+        this.darkEnabled = enabled;
+        if (!enabled) this.createDark = 0;
+        this.syncDarkSection();
+        if (this.createDialog && this.createDialog.active)
+            this.refreshCreateDialog();
+        if (this.rulesLoaded)
+            this.renderRules();
+    }
+
+    /** 暗抽整项显隐；关闭时同时收紧创建规则弹窗。 */
+    private syncDarkSection() {
+        const show = this.darkEnabled;
+        for (const name of DARK_UI_NAMES) {
+            const node = Tool.GetChild(this.node, "创建规则弹窗/面板/" + name);
+            if (node) node.active = show;
+        }
+        if (!show) this.createDark = 0;
+        this.applyDarkLayout(!show);
+    }
+
+    /** 记录创建规则弹窗各节点的原始 y；Prefab 改布局后运行时自动以新值为基准。 */
+    private captureCreateLayout() {
+        if (Object.keys(this.darkLayoutBase).length > 0) return;
+        const names = CREATE_TOP_NAMES.concat(CREATE_BOTTOM_NAMES);
+        for (const name of names) {
+            const node = Tool.GetChild(this.node, "创建规则弹窗/面板/" + name);
+            if (node) this.darkLayoutBase[name] = node.y;
+        }
+    }
+
+    /**
+     * 关闭暗抽时顶部组下移、下方组上移，内容重新居中；
+     * 开启时按记录的原始 y 恢复。
+     */
+    private applyDarkLayout(compact: boolean) {
+        if (Object.keys(this.darkLayoutBase).length === 0) return;
+        if (this.darkLayoutCompact === compact) return;
+        this.darkLayoutCompact = compact;
+        const topShift = compact ? DARK_COMPACT_TOP_SHIFT : 0;
+        const bottomShift = compact ? DARK_COMPACT_BOTTOM_SHIFT : 0;
+        for (const name of CREATE_TOP_NAMES) {
+            const node = Tool.GetChild(this.node, "创建规则弹窗/面板/" + name);
+            const base = this.darkLayoutBase[name];
+            if (node && base !== undefined) node.y = base + topShift;
+        }
+        for (const name of CREATE_BOTTOM_NAMES) {
+            const node = Tool.GetChild(this.node, "创建规则弹窗/面板/" + name);
+            const base = this.darkLayoutBase[name];
+            if (node && base !== undefined) node.y = base + bottomShift;
+        }
     }
 
     private requestConfig() {

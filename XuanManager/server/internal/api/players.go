@@ -28,13 +28,14 @@ type playerFilters struct {
 	RoomID         *int64
 	MinBalance     *float64
 	MaxBalance     *float64
+	BossOnly       bool
 }
 
 type playerItem struct {
-	ID               int64               `json:"id"`
-	PlayerID         string              `json:"playerId"`
-	LoginName        string              `json:"loginName"`
-	AccountName      string              `json:"accountName"`
+	ID          int64  `json:"id"`
+	PlayerID    string `json:"playerId"`
+	LoginName   string `json:"loginName"`
+	AccountName string `json:"accountName"`
 	// LoginPassword 是玩家登录密码的明文副本（mgr_player_login_password，AES-GCM 密文解密后）。
 	// 游戏端只存 MD5、无法还原，所以只有 XuanManager 亲历过改密（注册/后台重置/自助改密）的账号才有值；
 	// PasswordRecorded 为 false 表示历史密码未收录。只在管理员查询时填充。
@@ -63,6 +64,7 @@ type playerItem struct {
 	LastLoginAt      *time.Time          `json:"lastLoginAt"`
 	LoginCount       int64               `json:"loginCount"`
 	Remark           string              `json:"remark"`
+	IsBoss           bool                `json:"isBoss"`
 	Clubs            []playerClubSummary `json:"clubs"`
 
 	// 俱乐部关系分散在五个逗号分隔列里，只用于拼 Clubs，不直接返回前端。
@@ -115,7 +117,8 @@ a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
 FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
 COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
 COALESCE(a.sm_club_make2, ''), COALESCE(a.sm_club_join2, ''),
-COALESCE(a.sm_club_manage, '')
+COALESCE(a.sm_club_manage, ''),
+(a.sm_level >= 99 OR COALESCE(a.sm_role, '') LIKE '%董事长%' OR COALESCE(a.sm_role, '') LIKE '%总裁%')
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
@@ -141,6 +144,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
 			&lastLogin, &item.LoginCount, &item.Remark,
 			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.clubManage,
+			&item.IsBoss,
 		); err != nil {
 			s.logger.Error("scan game player", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")
@@ -190,6 +194,7 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 		RegisteredTo:   strings.TrimSpace(query.Get("registeredTo")),
 		LoginFrom:      strings.TrimSpace(query.Get("loginFrom")),
 		LoginTo:        strings.TrimSpace(query.Get("loginTo")),
+		BossOnly:       isTruthyQueryValue(query.Get("boss")),
 	}
 	for _, value := range []string{
 		filters.Keyword, filters.PlayerID, filters.Name, filters.LoginName, filters.AgentID,
@@ -239,6 +244,10 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 func buildPlayerWhere(filters playerFilters) (string, []any) {
 	clauses := []string{"1 = 1"}
 	args := []any{}
+	if filters.BossOnly {
+		// BOSS 号条件：等级 ≥ 99 的运营账号；行标红另含董事长/总裁角色。
+		clauses = append(clauses, "a.sm_level >= 99")
+	}
 	if filters.Keyword != "" {
 		like := "%" + filters.Keyword + "%"
 		clauses = append(clauses, `(a.sm_guuid = ? OR a.sm_wxID = ? OR a.sm_name LIKE ? OR
@@ -304,6 +313,15 @@ k.accountName = ? OR a.sm_agentID = ? OR agent.sm_name LIKE ?)`)
 		args = append(args, filters.LoginTo)
 	}
 	return strings.Join(clauses, " AND "), args
+}
+
+func isTruthyQueryValue(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "1", "true":
+		return true
+	default:
+		return false
+	}
 }
 
 func optionalInt(raw, label string, min, max int64) (*int64, error) {

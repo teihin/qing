@@ -26,6 +26,7 @@ interface PlayerFilters {
   registeredTo: string;
   loginFrom: string;
   loginTo: string;
+  boss: string;
 }
 
 const emptyFilters: PlayerFilters = {
@@ -40,6 +41,7 @@ const emptyFilters: PlayerFilters = {
   registeredTo: "",
   loginFrom: "",
   loginTo: "",
+  boss: "",
 };
 
 function playerFiltersFromHash(): PlayerFilters {
@@ -134,6 +136,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
               <Field label="玩家ID"><input value={draft.playerId} onChange={(event) => update("playerId", event.target.value)} placeholder="精确匹配游戏ID" /></Field>
               <Field label="玩家昵称"><input value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="支持部分匹配" /></Field>
               <Field label="登录账号"><input value={draft.loginName} onChange={(event) => update("loginName", event.target.value)} placeholder="登录名或KBE账号" /></Field>
+              <Field label="BOSS号" hint="筛选等级 ≥ 99 的运营账号"><select value={draft.boss} onChange={(event) => update("boss", event.target.value)}><option value="">全部玩家</option><option value="1">只看 BOSS 号</option></select></Field>
               <Field label="当前房间ID"><input type="number" min="0" value={draft.roomId} onChange={(event) => update("roomId", event.target.value)} placeholder="0 表示未在房间" /></Field>
               <Field label="客户端状态"><input value={draft.clientStatus} onChange={(event) => update("clientStatus", event.target.value)} placeholder="精确匹配状态值" /></Field>
               <Field label="客户端版本"><input value={draft.clientVersion} onChange={(event) => update("clientVersion", event.target.value)} placeholder="精确匹配版本号" /></Field>
@@ -163,7 +166,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
               <table className="player-table">
                 <thead><tr><th>玩家</th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
-                  <tr key={player.id}>
+                  <tr key={player.id} className={player.isBoss ? "player-row--boss" : undefined} title={player.isBoss ? "BOSS 号（等级 ≥ 99 或董事长/总裁）" : undefined}>
                     <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small></div></div></td>
                     <td><code>{player.loginName || "—"}</code>{player.accountName && player.accountName !== player.loginName && <small className="cell-subtitle">KBE：{player.accountName}</small>}</td>
                     {canViewPassword && <td><PlayerPasswordCell player={player} /></td>}

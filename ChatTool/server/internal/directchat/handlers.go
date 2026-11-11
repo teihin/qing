@@ -81,6 +81,8 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/direct/unread", h.authorized(h.handleUnread))
 	mux.HandleFunc("GET /api/direct/hosting", h.authorized(h.handleHostingStatus))
 	mux.HandleFunc("POST /api/direct/hosting", h.authorized(h.handleSetHosting))
+	mux.HandleFunc("GET /api/direct/bf-entry", h.authorized(h.handleBFEntryStatus))
+	mux.HandleFunc("POST /api/direct/bf-entry", h.authorized(h.handleSetBFEntry))
 	mux.HandleFunc("GET /api/direct/clubs/{clubId}/members", h.authorized(h.handleMembers))
 	mux.HandleFunc("GET /api/direct/clubs/{clubId}/conversations", h.authorized(h.handleConversations))
 	mux.HandleFunc("POST /api/direct/clubs/{clubId}/conversations", h.authorized(h.handleCreateConversation))
@@ -265,6 +267,32 @@ func (h *Handler) handleSetHosting(w http.ResponseWriter, r *http.Request, sessi
 		return
 	}
 	view, err := h.service.SetHosting(r.Context(), session, body.Enabled)
+	if err != nil {
+		writeDirectError(w, err)
+		return
+	}
+	writeDirectData(w, http.StatusOK, view)
+}
+
+// ---------------- 官方客服（BF）入口开关 ----------------
+
+func (h *Handler) handleBFEntryStatus(w http.ResponseWriter, r *http.Request, session Session) {
+	view, err := h.service.BFEntryStatus(r.Context(), session)
+	if err != nil {
+		writeDirectError(w, err)
+		return
+	}
+	writeDirectData(w, http.StatusOK, view)
+}
+
+func (h *Handler) handleSetBFEntry(w http.ResponseWriter, r *http.Request, session Session) {
+	var body struct {
+		Enabled bool `json:"enabled"`
+	}
+	if !decodeDirectJSON(w, r, &body, 4<<10) {
+		return
+	}
+	view, err := h.service.SetBFEntry(r.Context(), session, body.Enabled)
 	if err != nil {
 		writeDirectError(w, err)
 		return

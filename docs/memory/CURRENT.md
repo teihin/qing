@@ -1,8 +1,44 @@
 # qing 当前状态
 
-更新时间：2026-11-10
+更新时间：2026-11-12
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-12 后台玩家管理：BOSS 号行标红 + BOSS 号筛选（已部署）
+
+- 玩家列表按 `isBoss`（`sm_level >= 99` 或角色含董事长/总裁）把整行标成浅红底；更多条件新增「BOSS号」下拉，只筛 `level >= 99`。
+- 后端 `GET /api/game/players` 新增 `isBoss` 字段和 `boss=1` 查询参数，不改表结构；前端 JS/CSS 同步更新。
+- 已部署 8891：二进制 `aa0aa0f8…`、前端 `index-DFRw6LXi.js` + `index-B03dpufV.css`；health 200、未登录 401。
+  回滚：`backups/xuanmanager.20261112-0005-rollback`、`web.previous-player-boss-20261112-0005`。页面实操待主人验收。详见[交接](handoffs/2026-11-12-player-list-boss-row.md)。
+
+## 2026-11-11 消息页 BF 聊天显示开关（服务端已部署、客户端未构建）
+
+- 顶部新增「BF 聊天」开关，只对俱乐部创建者（大盟主/盟主/未入盟群主）显示，默认开启；关闭后该创建者俱乐部所有层级都看不到置顶 BF 行，创建者自己也隐藏。
+- 服务端新增 `chat_direct_bf_entry` 与 `GET/POST /api/direct/bf-entry`（无记录按开启）；`panelMessage.prefab` 加带 Widget 的开关行并按可见性重排列表顶部。
+- ChatTool 已部署：二进制 `fc2884e4…`、迁移 013 已执行、`/api/direct/bf-entry` 未登录 401、health 200；Go 测试、TS 语法、prefab 引用与两档反渲染通过。Creator 构建、真机与联调待验。详见[交接](handoffs/2026-11-11-message-bf-entry-switch.md)。
+
+## 2026-11-11 牌桌「带入积分」V10（未构建、未真机）
+
+- `panelGameView.prefab` 与 `assets/Scenes/drh8.fire` 同步重做 V10：深蓝亮蓝光影、干净标题、居中大数字、最低/最高固定列、四处美术字、移除编辑图标、实时扣钻、两行积分、钻石余额和参考图按钮。
+- `BuyinDisplay` 按积分→钻石比例刷新扣钻；关闭带入钻石时隐藏两行，原滑杆、确认/取消和协议保留；新增节点带 Widget。
+- TS、引用、Widget、两档预览和扣钻回归通过；Creator、构建、真机、回包待验。详见[交接](handoffs/2026-11-11-buyin-points-v9.md)。
+
+## 2026-11-11 我的红利：新增「业绩股」页签（未构建、未联调）
+
+- `panelMyHongli` 增加我的红利/业绩股页签；联盟红利仍只有红利页。业绩股支持查询、列表、授权和下级昨日占比，底部显示我/下放/剩。
+- 使用 `gs_tab_on/off`，列表伸缩并保留 Widget；接口集合遵循服务端 frontier，添加代理后延时刷新。
+- Prefab、TS、1334/1624 预览通过；Creator、构建、真机、联调待验。详见[交接](handoffs/2026-11-11-my-hongli-perf-tab.md)。
+
+## 2026-11-11 后台业绩核心共享：三类奖励统一按业绩股比例（已部署，游戏服命令待生效）
+
+- 业绩 / 核心 / 奖池共享的自动分摊权重统一改为 `异步_查询_俱乐部_业绩_报表` 的净次数
+  （`left_count`），本次名单内归一；核心不再按上次金额、奖池不再按今日输赢。
+- 发放日期默认昨天（今天未结算）；未来日期前后端都拦截，业绩报表按批次日期换算 `date` 偏移（昨天 = -1）。
+- 奖池历史日期优先用批次保存时的 `pool_base` 快照，没有快照才退回实时奖池并提示；只有当天保存才写快照。
+- 页面表格改为业绩(毛次) / 净业绩(次) / 业绩占比，移除线输赢列；Go/Web 构建与检查通过。
+- 已部署 8891：二进制 `b2301972…`（10,293,432 字节）、前端 `index-DQ5-lFku.js`（CSS 不变）；health 200、发放接口未登录 401。
+  回滚：`backups/xuanmanager.20261111-2306-rollback`、`web.previous-agent-reward-perf-ratio-20261111-2306`。
+  新报表命令用真实联盟（名单 6 人）探测 2 分钟未返回，待游戏服重启 baseapp 后复验。详见[交接](handoffs/2026-11-11-agent-reward-perf-ratio.md)。
 
 ## 2026-11-11 后台业绩核心共享：改为按联盟发放（已部署）
 
@@ -15,11 +51,9 @@
 - 现象：卡片显示钻石池 10，库里 `club_agent_info.stone=8`；`查询_俱乐部_钻石流水` 同一秒连续三条 `11→10 / 10→9 / 9→8`，客户端按 `date >=` 取最新，遍历到同秒最后一条较旧行。
 - 已改 `panelMain.OnClubStoneWater` 为严格 `>`，保留服务端「最新在前」的第一条；三条同秒模拟从 10 修正为 8。详见[交接](handoffs/2026-11-10-club-stone-pool-tie.md)。
 
-## 2026-11-10 俱乐部「同步带入钻石」开关 + 后台兑换比例（后台已部署；客户端未构建）
+## 2026-11-10 俱乐部「同步带入钻石」开关（已归档）
 
-- 创建规则弹窗新增「同步带入钻石」开关（默认关），勾选时 `创建_俱乐部_玩法` 带 `"special_rule": "入座扣钻"`；弹窗显示后台比例（`usr_hash_info.俱乐部积分对应钻石输赢比`，默认 1:1，0=不扣）。测试服已加 `club_room_play_info.special_rule` 并回填 play_id=24，**待重启**；规则列表按 `ClubPlayList.special_rule` 显示「带入钻石」，带入弹窗在房间含 token 时显示玩家钻石余额（prefab 与 drh8 场景都已补）。
-- 后台「钻石消费价格」页把比例并入主列表、删「原金币价」列，统一确认/保存；复用 `configuration.stone_consume` 权限。Go/Web 已部署 8891（二进制 `123e56f5…`、前端 `index-D0v-JYHS.js`），回滚见[交接](handoffs/2026-11-10-club-seat-stone-ratio.md)。
-- 客户端正式 prefab 已改（弹窗高度 1020→1080），1334/1624 布局通过；未 Creator 构建/真机。
+- 创建规则带入钻石开关、后台兑换比例与弹窗，详见[归档](archive/2026-11-11/current-nov10-club-seat-stone.md)。
 
 ## 2026-11-10 钻石池消耗两页签（未构建、未真机）
 
@@ -40,21 +74,18 @@
 - 现象：点击后约 0.85s 才转圈。2026-11-08 把「不在本手牌」路径也并进了预约流程（2×0.25s 轮询 + 0.6s 延时），旧版此处直接 `DoExitRoom()`。
 - 已改回 `ConfirmLeaveWhileWinning(()=>DoExitRoom())`；`DoExitRoom` 内仍复查局中，撞上开牌自动转预约，局中逻辑未变。
 
-## 2026-11-10 玩家信息：付费查看输赢统计（未构建、未真机）
+## 2026-11-10 玩家信息：付费查看输赢统计（已归档）
 
-- `panelUserInfo` 统计框底部新增「查看（扣除N钻石）」按钮，点击二次确认后显示 6 项数据（总手数/总胜率/失败率/胜利/平局/失败）；未付费保持 `**` / `-` 占位，查看后本次面板内隐藏按钮。
-- 价格复用后台「钻石消费价格」的 `看数据`（默认 1 钻），确认后发 `玩家_消费_命令`；每次打开面板需重新付费。
-- Prefab 追加按钮（九宫格 `player_info_v8_button`，`(0,-80) 380×60`）；TS 语法与 Prefab 引用校验通过，Creator 导入/构建/真机/服务端扣费待验。详见[交接](handoffs/2026-11-10-userinfo-view-stats.md)。
+- 统计框付费查看 6 项数据与扣钻确认，详见[归档](archive/2026-11-11/current-nov10-userinfo-stats.md)。
 
-## 2026-11-10 牌桌内「牌局优化」：电量三连击 + 运维优化页（未构建、未真机）
+## 2026-11-11 玩家信息卡片（未构建、未真机）
 
-- BOSS 账号在牌桌连点电量 3 下打开 `panelGameOptimize`；全屏半透明底，首个页签「运维优化」。
-- 上方设置个人（本房在座玩家或手动输入数字 ID）/分组（俱乐部分组）的优化概率与目标金额；下方列表轮询 `异步_查询_胜率目标_列表`，显示进度、剩余、局数、已生效与达成情况，行内可停止。
-- 选择弹窗已拆成通用 prefab `panelPlayerPicker`（玩家/分组两模式，带手动 ID 输入），其他界面可直接 `panelPlayerPicker.Open(...)` 复用。
-- 接口按 `服务器文档整理/胜率目标控制-客户端与后台接口文档.md`；PreFab 由 `tools/apply_ingame_optimize_panel.py` 生成，贴图复用 V8 正式资源。
-- 已过 TS 语法/类型检查、prefab 引用校验、1334/1624 离屏布局；Creator 导入、构建、真机与服务端实测待验。
-- 修正：电量位置被 `RoomFrame/完成` 隐形按钮覆盖，点电池实际发 `关闭检查_命令`；三连击判定已改到该热区，BOSS 单/双击延迟 900ms 补发关闭检查，三连击只开面板。
-- 接口文档更新后已对齐：列表默认查历史（`history=1 + count/page`），点「历史」切回当前目标（不带 history）；`id` 作行 key、`state` 只传单值；设置/停止不自动重试。详见[交接](handoffs/2026-11-10-ingame-game-optimize-panel.md)。
+- `panelUserInfo` 统计区改为两排三列蓝卡：上排总手数/总胜率/摊牌率，下排胜利/平局/失败；沿用 `remark[3]`。
+- 统计框调整、道具下移并补 Widget；TS、引用、1334/1624 预览通过，构建/真机/联调待验。详见[交接](handoffs/2026-11-11-userinfo-stats-layout.md)。
+
+## 2026-11-10 牌桌内「牌局优化」（已归档）
+
+- 电量三连击入口、运维优化页与通用选人弹窗，详见[归档](archive/2026-11-11/current-nov10-game-optimize.md)。
 
 ## 2026-11-10 后台发牌优化：改用游戏服 `异步_设置_玩家_属性`（已部署，未真实写入验收）
 
@@ -75,26 +106,16 @@
 
 ## 2026-11-09 我的红利（俱乐部/联盟）：金框 + 金色美术字（未构建、未真机）
 
-- 用户选定「B3 金框版」：深蓝玻璃 + 金双线框 + 桂冠/金币/礼盒；标题与未领取改用页面通用浅色美术字，未领取区增加青蓝渐变和金额分区，其余正文保持暖白。
-- `assets/V7/hongli_v8_*` 美术与字体已更新，去稻穗并居中；
-  `panelMyHongli.prefab` 与 `panelUnionHongli.prefab` 同步写入，表头四个隐藏 Label 改启用，提取按钮 130→150 宽（九宫格）。
-- 只改 `panelMyHongli.ts` 的占位符（`—` → `-`，位图字体无长破折号）；两档画布反渲染已核对，Creator 导入/构建/真机待验。
-  详见[交接](handoffs/2026-11-09-my-hongli-v8-restyle.md)。
+- B3 金框版（深蓝玻璃/金双线/桂冠金币礼盒）已写入两套 Prefab 与 `hongli_v8_*`，表头 Label 启用、提取按钮 130→150 宽，占位符改 `-`；两档反渲染通过。详见[交接](handoffs/2026-11-09-my-hongli-v8-restyle.md)。
 
 ## 2026-11-09 大厅房间状态换花环徽章：显示 118×47 → 150×60（未构建、未真机）
 
 - 已归档：[2026-11-09 业绩占比与大厅状态徽章](archive/2026-11-11/current-nov09-agent-reward-and-badges.md)。
 
-## 2026-11-09 我的 → 额度授权记录：入口仅大盟主/盟主，查询改新接口（未构建、未联调）
+## 2026-11-09 我的 → 额度授权记录（未构建、未联调）
 
-- 入口可见性已在 2026-11-07 收窄：`panelMain.CanViewQuotaGrantRecord` 要求「俱乐部创建者 + 已入盟」，
-  即大盟主（联盟总群主）/ 盟主（已入盟创建者）；群主、管理员、合伙人、普通成员不可见，按钮分支同样拦截。
-- 查询从「查联盟成员 → 逐个俱乐部查额度流水」改为服务端 2026-11-09 新增的 `查询_联盟_授信_记录`
-  → 推送 `ClubUnionGrantList`（一次返回授信/收回/注资/注资扣减，服务端分页、`count` 不封顶）。
-  不传 `club_id`（传空串，同文档示例），由服务端按身份限定范围；行字段改用 `quota` / `quota_after`
-  （余额兼容同值的 `remark`），不再本地过滤 type。
-- 只改 `assets/scripts/UI/panelQuotaGrantRecord.ts`，静态语法检查通过；Creator 构建、真机与服务端联调待验。
-  详见[交接](handoffs/2026-11-07-quota-grant-record.md)。
+- 入口仅「俱乐部创建者 + 已入盟」（大盟主/盟主）；查询改 `查询_联盟_授信_记录` → `ClubUnionGrantList`，服务端按身份限定俱乐部，行字段 `quota`/`quota_after`，不再本地过滤 type。
+- 只改 `panelQuotaGrantRecord.ts`，语法检查通过；Creator 构建、真机与联调待验。详见[交接](handoffs/2026-11-07-quota-grant-record.md)。
 
 ## 2026-11-09 钻石池消耗入口：修大盟主不可见
 
@@ -122,34 +143,13 @@
 
 - 客服被误判 offline 后心跳永不恢复已修；托管页加「游戏后台查看」。玩家管理「用户密码」明文列（mgr_player_login_password，AES-GCM）已上线。详见[客服在线交接](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md)、[密码列交接](handoffs/2026-11-07-admin-player-password-column.md)。
 
-## 2026-11-04～11-06 历史批次（已归档）
+## 2026-11-03～11-06 历史批次（已归档）
 
-- 11-06 默认对话/俱乐部总积分、聊天托管、私聊 V2、托管对账、客服后台、赢家留座限时：[归档](archive/2026-11-08/current-nov06-chat-defaults-and-club-total.md)、[托管](archive/2026-11-08/current-nov06-hosted-chat.md)、[私聊](archive/2026-11-08/current-nov06-chat-and-hongli.md)、[客服后台](archive/2026-11-07/current-nov06-kefu-admin.md)、[留座](archive/2026-11-08/current-nov06-win-seat-exit.md)。
-- 11-04～05 消息列表/牌桌客服/代理贡献、盟友/游戏设置/房间奖池：[消息列表](archive/2026-11-05/current-nov04-message-list.md)、[客服/代理](archive/2026-11-08/current-nov05-kefu-and-agent.md)、[入口](handoffs/2026-11-05-official-kefu-entry.md)、[浮层](handoffs/2026-11-05-ingame-message-overlay.md)、[贡献](handoffs/2026-11-05-agent-contributions.md)、[盟友](archive/2026-11-05/current-nov04-ally-management.md)、[设置](archive/2026-11-06/current-nov04-game-settings.md)、[奖池](archive/2026-11-05/current-nov04-room-jackpot.md)；交接：[分页](handoffs/2026-11-04-message-list-scroll-paging.md)、[奖池](handoffs/2026-11-04-game-settings-jackpot.md)、[规则](handoffs/2026-11-04-game-settings-rules.md)。
-
-## 2026-11-04～11-06 我的红利（已归档）
-
-- 面板口径全部换俱乐部 V2，联盟区仅联盟创建者可见。原文见[归档](archive/2026-11-08/current-nov06-chat-and-hongli.md)；细节见[入口](handoffs/2026-11-06-agent-my-hongli-entry.md)、[俱乐部口径](handoffs/2026-11-04-my-hongli-club-stats.md)、[联盟红利](handoffs/2026-11-04-union-hongli-panel.md)。
-
-## 2026-11-03～11-04（已归档）
-
-- 后台移除「加减钻石」[交接](handoffs/2026-11-04-admin-remove-player-diamonds.md)；后台俱乐部/钻石池、我的页钻石池消耗/上下分/入盟审批/联盟归属、创建加入联盟、按联盟层级直聊权限：[归档](archive/2026-11-05/current-nov03-club.md)。
-
-## 2026-10-31～11-03 阶段归档（链接）
-
-- 玩家钻石与联盟管理见[归档](archive/2026-11-05/current-nov03-admin.md)；资金明细/牌桌金币/私聊上下分见[归档](archive/2026-11-04/current-nov01-nov03-chat.md)；俱乐部成员额度与 1 对 1 私聊见[归档](archive/2026-11-04/current-oct31-nov01-links.md)。
-
-## 阶段归档（2026-10-30 及更早）
-
-- 10-29～10-30 牌局回顾翻牌、俱乐部玩家备注、底栏改版、机器人、投放按周时段等：[oct29-30](archive/2026-11-01/current-oct29-30.md)；10-27 及更早：[early-items](archive/2026-10-30/current-early-items.md)。
+- 11-06 默认对话/俱乐部总积分、聊天托管、私聊 V2、托管对账、客服后台、赢家留座；11-04～05 消息列表、牌桌客服、代理贡献、盟友/游戏设置/房间奖池；我的红利；11-03～11-04 俱乐部/钻石池；10-31～11-03 阶段归档；2026-10-30 及更早归档：原文与链接统一见[归档](archive/2026-11-12/current-nov03-to-nov06-batches.md)。
 
 ## 本轮实时核对：记忆整理
 
-- 2026-09 整理记录见[整理交接](handoffs/2026-09-05-memory-migration.md)。
-
 ## 最近报告的 UI 状态
-
-- 见[全套进度](handoffs/2026-09-11-v8-all-pages.md)与[逐页归档](archive/2026-09-15/ui-status-table.md)。
 
 ## 待核实项与工作边界
 

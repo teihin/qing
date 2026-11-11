@@ -4,6 +4,7 @@ import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../c
 import { beijingDateInput } from "../time";
 
 type Kind = "performance" | "core" | "pool";
+// 业绩股口径：my = 整条线毛次数，granted = 直接下级次数，net = 扣减后的净次数（次数，不是金额）。
 type Perf = { my: number; granted: number; net: number };
 type Line = { todayScore: number; totalScore: number; yesterdayScore: number; todayContrib: number; totalContrib: number; teamCount: number };
 type Split = { payee: string; payeeName?: string; type: "main" | "sub"; amount: number };
@@ -19,11 +20,11 @@ type Excluded = { agentId: string; name: string; kind: string; reason: string; o
 type Overview = {
   plan: {
     date: string; kind: Kind; plannedTotal: number; status: string;
-    poolAvailable: boolean; poolTotal: number; poolHalf: number; poolPercent: number; poolSuggested: number;
+    poolAvailable: boolean; poolTotal: number; poolHalf: number; poolPercent: number; poolSuggested: number; poolSnapshot: boolean;
   };
   members: Member[];
   excluded: Excluded[];
-  totals: { amount: number; count: number; planned: number; diff: number; points: number; excluded: number; pool: number };
+  totals: { amount: number; count: number; planned: number; diff: number; points: number; excluded: number; pool: number; allCount: number };
   warnings: string[];
   lastAmounts: Record<string, number>;
   lastDate: string;
@@ -107,7 +108,7 @@ export default function AgentRewardsPage({ can, notify }: PageProps) {
 
 /** 联盟列表：只展示联盟维度的汇总，点进某一个联盟后才加载名单与金额。 */
 function UnionListPage({ can, notify }: PageProps) {
-  const [date] = useState(() => beijingDateInput(0));
+  const [date] = useState(() => beijingDateInput(-1));
   const [data, setData] = useState<UnionOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -252,7 +253,8 @@ function UnionListPage({ can, notify }: PageProps) {
 
 function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId: string; unionName: string }) {
   const [kind, setKind] = useState<Kind>("performance");
-  const [date, setDate] = useState(beijingDateInput(0));
+  // 业绩股按自然日结算，今天还没结束，默认发放前一天。
+  const [date, setDate] = useState(beijingDateInput(-1));
   const [data, setData] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
@@ -358,7 +360,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
   useEffect(() => { perfKey.current = `${date}|${kind}`; }, [date, kind]);
 
   // 只把游戏实时业绩/占比合并回当前页面，不碰客服正在填的金额、总额和拆分。
-  // 三栏切换、日期切换都走同一份净点数口径，所以顶部占比在哪个分栏都一致。
+  // 三栏切换、日期切换都走同一份业绩股净次数口径，所以顶部占比在哪个分栏都一致。
   const refreshPerformance = useCallback(async (manual = false) => {
     if (perfRefreshing.current || !hasData.current) return;
     perfRefreshing.current = true;
@@ -380,7 +382,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
         };
       });
       setLastSync(syncClock());
-      if (manual) notify("今日业绩占比已同步");
+      if (manual) notify("业绩股占比已同步");
     } catch (reason) {
       if (manual) notify(reason instanceof Error ? reason.message : "同步业绩失败", "error");
     } finally {
@@ -599,11 +601,10 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
 
   const exportCsv = () => {
     if (!data) return;
-    const head = ["日期", "类型", "代理ID", "昵称", "身份", "联盟", "俱乐部", "今日输赢", "整条线总输赢", "整条线总贡献", "今日业绩(毛)", "已下发", "实际点数(净)", "业绩占比", "分配金额", "子账号拆分"];
+    const head = ["日期", "类型", "代理ID", "昵称", "身份", "联盟", "俱乐部", "业绩(毛次)", "已下发(次)", "净业绩(次)", "业绩占比", "分配金额", "子账号拆分"];
     const rows = members.map(m => [
       data.plan.date, KIND_LABEL[kind], m.agentId, m.name, ROLE_LABEL[m.role] ?? m.role,
       m.unionName || m.unionId, m.clubName || m.clubId,
-      m.line ? m.line.todayScore : "", m.line ? m.line.totalScore : "", m.line ? m.line.totalContrib : "",
       m.perf ? m.perf.my : "", m.perf ? m.perf.granted : "", m.perf ? m.perf.net : "",
       pct(m.sharePercent),
       draft[m.agentId] ?? 0,
@@ -620,14 +621,14 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
   };
 
   const tabs: { key: Kind; hint: string }[] = [
-    { key: "performance", hint: "自动" },
-    { key: "core", hint: "手填" },
-    { key: "pool", hint: "手填" },
+    { key: "performance", hint: "按业绩股比例" },
+    { key: "core", hint: "按业绩股比例" },
+    { key: "pool", hint: "按业绩股比例" },
   ];
   const descriptions: Record<Kind, string> = {
-    performance: "按整条线今日贡献逐级扣减后的点数自动分摊计划总额（上级扣掉已给下级的那部分，不重复计算），可人工微调；合计必须等于总额才能发放。",
-    core: "按代理规模、层级与整条线贡献人工填写，金额相对固定。表格会带出上一次已发放金额作参考，可一键预填。",
-    pool: "直接关联平台当天真实奖池：今日奖池 50% × 共享比例 = 本次计划发放金额（可手动覆盖），再按每人整条线的今日输赢人工分配。",
+    performance: "按业绩股净次数（整条线毛次数 − 直接下级次数）在本次名单内归一，自动分摊计划总额；可人工微调，合计必须等于总额才能发放。",
+    core: "同样按业绩股净次数比例分摊；计划总额由主管填写，金额可人工微调。",
+    pool: "计划总额 = 奖池 50% × 共享比例（可手动覆盖），再按业绩股净次数比例分摊到本次名单。",
   };
 
   const totalWeight = data?.totals.points ?? 0;
@@ -647,7 +648,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
         title={`${unionName || unionId} · 业绩核心共享`}
         description={descriptions[kind]}
         actions={<div className="page-header__actions">
-          <input type="date" value={date} onChange={event => setDate(event.target.value)} />
+          <input type="date" value={date} max={beijingDateInput()} onChange={event => setDate(event.target.value)} />
           <Button onClick={() => setPickOpen(true)}>＋ 添加代理</Button>
           <Button variant="secondary" onClick={() => void refreshPerformance(true)}>刷新业绩</Button>
           <Button variant="secondary" disabled={busy === "sync"} onClick={() => void syncMembers()}>{busy === "sync" ? "同步中…" : "同步名单"}</Button>
@@ -692,44 +693,44 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
       <section className={`reward-share${shareTotal > 0 ? "" : " is-empty"}`}>
         <div className="reward-share__head">
           <div>
-            <strong>今日业绩占比</strong>
+            <strong>业绩股占比</strong>
             <small>
-              本次名单 {shareRows.length} 人 · 按净点数归一，合计 {pct(shareSum)} · 跟随游戏服实时累计，每 30 秒刷新
+              本次名单 {shareRows.length} 人 · 统计日 {date} · 按业绩股净次数归一，合计 {pct(shareSum)}
             </small>
           </div>
           <div className="reward-share__meta">
-            <span>合计净点数 <b>{pt(shareTotal)}</b></span>
+            <span>合计净次数 <b>{num(Math.round(shareTotal))}</b></span>
             <span>最近同步 <b>{lastSync || "—"}</b></span>
             <Button variant="ghost" onClick={() => void refreshPerformance(true)}>立即同步</Button>
           </div>
         </div>
         {shareTotal > 0 && shareRows.length > 0 ? (
           <>
-            <div className="reward-share__bar" role="img" aria-label="今日业绩占比分布">
+            <div className="reward-share__bar" role="img" aria-label="业绩股占比分布">
               {shareRows.map((row, index) => row.percent > 0 && (
                 <i key={row.id} style={{ width: `${row.percent}%`, background: SHARE_COLORS[index % SHARE_COLORS.length] }}
-                  title={`${row.name}：${pct(row.percent)} · 净点数 ${pt(row.net)}`} />
+                  title={`${row.name}：${pct(row.percent)} · 净次数 ${num(row.net)}`} />
               ))}
             </div>
             <div className="reward-share__chips">
               {shareRows.map((row, index) => (
                 <span key={row.id} className={`reward-share__chip${row.percent > 0 ? "" : " is-zero"}`}
-                  title={`${ROLE_LABEL[row.role] ?? row.role} · ID ${row.id} · 净点数 ${pt(row.net)}`}>
+                  title={`${ROLE_LABEL[row.role] ?? row.role} · ID ${row.id} · 净次数 ${num(row.net)}`}>
                   <i style={{ background: SHARE_COLORS[index % SHARE_COLORS.length] }} />
                   <b>{row.name}</b>
                   <em>{pct(row.percent)}</em>
-                  <small>{pt(row.net)} 点</small>
+                  <small>{num(row.net)} 次</small>
                 </span>
               ))}
             </div>
           </>
         ) : (
           <p className="reward-share__empty">
-            今日名单内所有代理的净点数都是 0，暂无可分配业绩；游戏产生今日贡献后会自动同步过来。
+            本次名单内所有代理在统计日的业绩股净次数都是 0，暂无可分配业绩；等业绩结算后会自动同步过来。
           </p>
         )}
         <p className="reward-share__note">
-          「今日业绩」= 该代理整条线的今日贡献，扣掉直接下级后得到净点数；占比按本次名单内净点数归一，和「业绩奖励」自动分摊比例一致。
+          「业绩」= 业绩股报表的净次数（整条线毛次数 − 直接下级次数）；占比按本次名单归一，三类奖励的自动分摊都用这套比例。
         </p>
       </section>
       )}
@@ -744,7 +745,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
         <div className="reward-metric">
           <span>已分配</span>
           <strong>{num(allSum)}</strong>
-          <small>{kind === "performance" ? `净点数合计 ${pt(totalWeight)}` : `已填 ${payCount} 人`}</small>
+          <small>净次数合计 {num(Math.round(totalWeight))} 次</small>
         </div>
         <div className={`reward-metric${diff === 0 && allSum > 0 ? " is-ok" : Math.abs(diff) > 0 ? " is-bad" : ""}`}>
           <span>剩余 / 差额</span>
@@ -761,12 +762,12 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
       {kind === "pool" && (
         <div className="reward-pool">
           <div className="reward-pool__cell">
-            <span>今日奖池总额</span>
+            <span>{data?.plan.poolSnapshot ? "奖池快照" : "今日奖池总额"}</span>
             <strong>{data?.plan.poolAvailable ? money2(data.plan.poolTotal) : "读取失败"}</strong>
-            <small>平台各皮池实时合计（金币）</small>
+            <small>{data?.plan.poolSnapshot ? "该批次保存时的奖池快照（金币）" : "平台各皮池实时合计（金币）"}</small>
           </div>
           <div className="reward-pool__cell">
-            <span>今日奖池 50%</span>
+            <span>奖池 50%（基数）</span>
             <strong>{data?.plan.poolAvailable ? money2(data.plan.poolHalf) : "—"}</strong>
             <small>共享比例的基数</small>
           </div>
@@ -836,7 +837,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
           </div>
           <div className="reward-tools">
             <Button variant="secondary" disabled={!editable || busy === "allocate"} onClick={() => void autoAllocate()}>
-              {kind === "performance" ? "按点数自动分摊" : kind === "core" ? "按上次金额预填" : "按今日输赢预填"}
+              按业绩比例分摊
             </Button>
             <Button variant="ghost" disabled={!editable} onClick={clearAmounts}>清空金额</Button>
           </div>
@@ -864,13 +865,10 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
                   <th>代理</th>
                   <th>身份</th>
                   <th>俱乐部</th>
-                  <th className="reward-num">今日业绩</th>
-                  <th className="reward-num">实际点数</th>
-                  <th className="reward-num" title="本人净点数 ÷ 本次名单净点数合计；有正业绩时合计固定 100%">业绩占比</th>
-                  <th className="reward-num">整条线总输赢</th>
-                  <th className="reward-num">今日输赢</th>
-                  <th className="reward-num">整条线总贡献</th>
-                  {kind === "core" && <th className="reward-num">上次金额</th>}
+                  <th className="reward-num">业绩(毛次)</th>
+                  <th className="reward-num">净业绩(次)</th>
+                  <th className="reward-num" title="本人业绩股净次数 ÷ 本次名单净次数合计；有正业绩时合计固定 100%">业绩占比</th>
+                  {kind === "core" && <th className="reward-num">上次金额(参考)</th>}
                   <th className="reward-num" style={{ width: 130 }}>本次金额</th>
                   <th style={{ width: 210 }} />
                 </tr>
@@ -892,22 +890,19 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
                         {splitsOf.length > 1 && <span className="reward-tag">{splitsOf.length} 个账号</span>}
                       </td>
                       <td className="reward-dim">{m.clubId ? <span title={`俱乐部 ID ${m.clubId}`}>{m.clubName || m.clubId}</span> : <span className="reward-muted">—</span>}</td>
-                      {/* 三栏都显示同一套代理数据：今日业绩（毛）、实际点数（净，逐级扣减后）、线输赢与贡献 */}
-                      <td className="reward-num">{m.perf ? money2(m.perf.my) : <span className="reward-muted">无数据</span>}</td>
+                      {/* 业绩股口径：整条线毛次数 → 扣掉直接下级 → 本次名单内占比 */}
+                      <td className="reward-num">{m.perf ? num(m.perf.my) : <span className="reward-muted">无数据</span>}</td>
                       <td className="reward-num">
-                        <span className={`reward-points${(m.perf?.net ?? 0) > 0 ? "" : " is-zero"}`} title={m.perf ? `毛 ${pt(m.perf.my)} − 下发 ${pt(m.perf.granted)}` : ""}>
-                          {m.perf ? pt(m.perf.net) : "无数据"}
+                        <span className={`reward-points${(m.perf?.net ?? 0) > 0 ? "" : " is-zero"}`} title={m.perf ? `毛 ${num(m.perf.my)} − 下发 ${num(m.perf.granted)}` : ""}>
+                          {m.perf ? num(m.perf.net) : "无数据"}
                         </span>
                       </td>
                       <td className="reward-num">
                         <span className={`reward-share-pct${(m.sharePercent ?? 0) > 0 ? "" : " is-zero"}`}
-                          title={`净点数 ${pt(m.perf?.net ?? 0)} / 名单合计 ${pt(shareTotal)}`}>
+                          title={`净次数 ${num(m.perf?.net ?? 0)} / 名单合计 ${num(Math.round(shareTotal))}`}>
                           {pct(m.sharePercent)}
                         </span>
                       </td>
-                      <td className="reward-num">{m.line ? signed(m.line.totalScore) : <span className="reward-muted">无数据</span>}</td>
-                      <td className="reward-num">{m.line ? signed(m.line.todayScore) : <span className="reward-muted">无数据</span>}</td>
-                      <td className="reward-num">{m.line ? money2(m.line.totalContrib) : <span className="reward-muted">无数据</span>}</td>
                       {kind === "core" && (
                         <td className="reward-num">
                           {(data?.lastAmounts?.[m.agentId] ?? 0) > 0
@@ -1073,7 +1068,7 @@ function LineModal({ member, date, unionId, onClose }: { member: Member; date: s
         <div className="table-wrap">
           <table>
             <thead><tr><th>代理（上级 → 当前 → 下级）</th><th className="reward-num">今日输赢</th><th className="reward-num">整条线总输赢</th>
-              <th className="reward-num">总贡献</th><th className="reward-num">下线人数</th><th className="reward-num">净点数</th></tr></thead>
+              <th className="reward-num">总贡献</th><th className="reward-num">下线人数</th><th className="reward-num">净业绩(元)</th></tr></thead>
             <tbody>
               {nodes.map(node => (
                 <tr key={node.agentId} className={node.relation === "self" ? "reward-self" : ""}>
@@ -1095,7 +1090,7 @@ function LineModal({ member, date, unionId, onClose }: { member: Member; date: s
           </table>
         </div>
       )}
-      <p className="reward-hint">输赢单位是积分，贡献单位是元（分 ÷ 100），来自不同表，不能相加。</p>
+      <p className="reward-hint">线数据为游戏服今日实时口径，与业绩股的统计日无关；输赢单位是积分，贡献单位是元（分 ÷ 100），来自不同表，不能相加。</p>
       <div className="reward-modal-foot"><Button onClick={onClose}>知道了</Button></div>
     </Modal>
   );

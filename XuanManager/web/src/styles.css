@@ -247,6 +247,9 @@ td strong { color: #294149; }
 .max-cell { max-width: 270px; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #a2b0b3; }
 .player-table { min-width: 1220px; }
+/* BOSS 号（等级 ≥ 99 或角色含董事长/总裁）整行浅红底，悬停再深一档。 */
+.player-table tbody tr.player-row--boss { background: #fff1f0; }
+.player-table tbody tr.player-row--boss:hover { background: #ffe6e3; }
 /* 玩家登录密码列：显示后台加密收录的明文；历史账号显示「未收录」。该列只有管理员角色能看到。 */
 .player-password { display: inline-block; max-width: 168px; color: #176e68; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; letter-spacing: .02em; overflow-wrap: anywhere; white-space: normal; }
 .player-password.is-missing { color: #a2b0b3; font-family: inherit; font-size: 12px; }

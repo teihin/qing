@@ -537,6 +537,8 @@ export interface PlayerItem {
   lastLoginAt: string | null;
   loginCount: number;
   remark: string;
+  /** BOSS 号：等级 ≥ 99，或角色含董事长/总裁；前端据此把整行标成浅红色。 */
+  isBoss: boolean;
   clubs: PlayerClubRef[];
 }
 
@@ -977,6 +979,8 @@ export interface ClubListItem {
   stonePool: number | null;
   /** 俱乐部总积分（元）：全体成员在该俱乐部积分之和；后端读取失败时为 null。 */
   totalClubGold: number | null;
+  /** 开房-游戏设置里的暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。 */
+  darkEnabled?: boolean;
 }
 
 export interface ClubListResponse {
@@ -1164,6 +1168,8 @@ export interface UnionListItem {
   status: string;
   /** 游戏库里的创建时间（北京时间墙上时间）。 */
   createdAt: string;
+  /** 总群主俱乐部的开房暗抽开关：usr_hash_info 的「暗抽_俱乐部_<ownerClubId>」。 */
+  darkEnabled?: boolean;
 }
 
 export interface UnionListResponse {
@@ -1197,6 +1203,16 @@ export interface UnionQuotaAdjustmentResponse {
   poolQuotaFen: number;
   poolQuotaYuan: number;
   deltaFen: number;
+  verified: boolean;
+  message: string;
+}
+
+/** 俱乐部/联盟暗抽开关的保存结果；联盟会带回实际写入的总群主俱乐部 ID。 */
+export interface DarkSettingState {
+  scope: "club" | "union";
+  targetId: string;
+  ownerClubId?: string;
+  enabled: boolean;
   verified: boolean;
   message: string;
 }

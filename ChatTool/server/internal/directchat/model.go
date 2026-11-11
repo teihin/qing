@@ -35,6 +35,7 @@ const (
 	CodeRelationUnavailable = "DIRECT_RELATION_UNAVAILABLE"
 	CodeHostingForbidden    = "DIRECT_HOSTING_FORBIDDEN"
 	CodeHostingInactive     = "DIRECT_HOSTING_INACTIVE"
+	CodeBFEntryForbidden    = "DIRECT_BF_ENTRY_FORBIDDEN"
 )
 
 // Error 是可直接映射为 HTTP 响应的业务错误。
@@ -68,6 +69,7 @@ var (
 	errRelationUnavail   = newError(http.StatusServiceUnavailable, CodeRelationUnavailable, "俱乐部关系服务暂时不可用")
 	errHostingForbidden  = newError(http.StatusForbidden, CodeHostingForbidden, "只有俱乐部群主、盟主或大盟主可以开启聊天托管")
 	errHostingInactive   = newError(http.StatusForbidden, CodeHostingInactive, "该账号未开启聊天托管")
+	errBFEntryForbidden  = newError(http.StatusForbidden, CodeBFEntryForbidden, "只有俱乐部创建者可以设置 BF 聊天显示")
 )
 
 // AsError 把任意错误转换为带错误码的业务错误；未知错误一律视为服务内部错误。

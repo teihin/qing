@@ -40,6 +40,9 @@ type unionListItem struct {
 	MemberCount       int64  `json:"memberCount"`
 	Status            string `json:"status"`
 	CreatedAt         string `json:"createdAt"`
+	// DarkEnabled 是联盟总群主俱乐部的开房暗抽开关：
+	// usr_hash_info 的「暗抽_俱乐部_<ownerClubId>」。
+	DarkEnabled bool `json:"darkEnabled"`
 }
 
 type unionClubItem struct {
@@ -134,6 +137,20 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	if err := rows.Err(); err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟列表失败")
 		return
+	}
+
+	ownerClubIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		if item.OwnerClubID != "" {
+			ownerClubIDs = append(ownerClubIDs, item.OwnerClubID)
+		}
+	}
+	if darkSettings, darkErr := s.readClubDarkSettings(r.Context(), ownerClubIDs); darkErr == nil {
+		for index := range items {
+			items[index].DarkEnabled = darkSettings[items[index].OwnerClubID]
+		}
+	} else {
+		s.logger.Error("read union dark settings", "error", darkErr)
 	}
 
 	writeData(w, http.StatusOK, map[string]any{
@@ -239,7 +256,18 @@ WHERE cu.union_id = ? AND cu.status <> 'init'
 LIMIT 1`, unionID).Scan(&item.UnionID, &item.Name, &item.OwnerID, &item.OwnerName,
 		&item.OwnerClubID, &item.OwnerClubName, &item.PoolQuotaFen, &item.Status,
 		&item.CreatedAt, &item.MemberCount, &item.TotalClubQuotaFen)
-	return item, err
+	if err != nil {
+		return item, err
+	}
+	if item.OwnerClubID != "" {
+		if enabled, _, darkErr := s.readClubDarkSetting(ctx, item.OwnerClubID); darkErr == nil {
+			item.DarkEnabled = enabled
+		} else {
+			s.logger.Error("read union dark setting", "error", darkErr,
+				"unionId", item.UnionID, "ownerClubId", item.OwnerClubID)
+		}
+	}
+	return item, nil
 }
 
 type adjustUnionQuotaRequest struct {

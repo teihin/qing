@@ -24,6 +24,7 @@
 | 牌桌内俱乐部金币、带入、邀请和兑换 | [牌桌内俱乐部金币交接](handoffs/2026-11-01-ingame-club-gold.md) | `Account.club_gold`、`club_id`、带入窗口、牌桌邀请、`gold,<club_id>` |
 | 私聊上下分入口与弹窗（权限、二次确认、美术与美术字、EditBox 排版陷阱） | [私聊上下分交接](handoffs/2026-11-01-chat-gold-pad.md) | `panelMessageChat`、`panelClubGoldPad`、`GetClubQuota`、交易密码、panelMsgView 确认、InputFlag、`gd_txt_*` |
 | 消息/直聊按联盟层级（固定老板+大群主、不可删、大群主跨俱乐部门聊、老板上下分+赠送、代理仅赠送） | [联盟直聊交接](handoffs/2026-11-03-direct-chat-union-permissions.md)、[俱乐部 1 对 1 私聊](handoffs/2026-10-31-direct-chat.md) | union_owner、club_union_info、固定联系人、跨俱乐部会话、AllConversations、panelMessageMembers |
+| 消息页 BF 聊天显示开关（创建者设置、俱乐部全员隐藏、默认开启） | [BF 开关交接](handoffs/2026-11-11-message-bf-entry-switch.md) | bf-entry、chat_direct_bf_entry、created by owner、置顶官方客服 |
 | 自动化后台（机器人=账号、投放、分组、Worker 路线、老客户端参考） | [自动化后台](topics/automation-console.md)、[落地交接](handoffs/2026-10-27-automation-console.md)、[限底皮+日志](handoffs/2026-10-28-automation-room-pi.md) | 机器人即账号、投放管理、邀请码、默认带入倍数、只进底皮、robot.room_pi |
 | Worker 节点通道（注册/租约、命令、事件、在线状态、参考 agent） | [Worker 通道](topics/automation-worker-channel.md)、[在线状态交接](handoffs/2026-10-28-worker-realtime-online.md) | `/agent/v1`、X-Agent-Token、租约 20 秒、offline 上报、命令状态机、xuanagent、janitor |
 | 真实游戏客户端（KBEngine 无头登录、俱乐部/进房协议、密码落库、agent-client 落地、xuanagent 启动与重编） | [真实客户端探查](topics/automation-real-client.md)、[落地交接](handoffs/2026-10-28-automation-real-client.md) | nip.io、kbengine.js、预坐/坐下、login_password、0x306、xuanagent.json、交叉编译 |

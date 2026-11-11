@@ -12,10 +12,13 @@ export default class BuyinDisplay extends cc.Component {
     @property(cc.Label) balance: cc.Label = null;
     @property(cc.Node) stoneRow: cc.Node = null;
     @property(cc.Label) stone: cc.Label = null;
+    @property(cc.Node) stoneCostRow: cc.Node = null;
+    @property(cc.Label) stoneCost: cc.Label = null;
     @property(cc.Button) confirm: cc.Button = null;
 
     private step = 0;
     private count = 0;
+    private stoneRatio = 1;
     public currentAmount = 0;
 
     onLoad() {
@@ -45,16 +48,31 @@ export default class BuyinDisplay extends cc.Component {
         this.select(0);
     }
 
-    /** 房间开启「入座扣钻」时显示玩家当前钻石；其它房间隐藏整行。 */
-    public setStoneBalance(value: number, visible: boolean) {
+    /** 房间开启「入座扣钻」时显示钻石余额和当前选择会扣的钻石；其它房间隐藏两行。 */
+    public setStoneBalance(value: number, visible: boolean, ratio: number = 1) {
         const show = visible === true;
         // 兼容手工改 prefab 后组件引用丢失：按节点名兜底。
         const row = this.stoneRow != null ? this.stoneRow : this.node.getChildByName("钻石余额");
+        const costRow = this.stoneCostRow != null ? this.stoneCostRow : this.node.getChildByName("实时扣钻石");
+        this.stoneRatio = Number.isFinite(ratio) && ratio >= 0 ? ratio : 1;
         if (row != null)
             row.active = show;
+        if (costRow != null)
+            costRow.active = show;
         const label = this.stone != null ? this.stone : (row == null ? null : row.getComponent(cc.Label));
         if (label != null)
             label.string = "钻石余额：" + this.format(show && Number.isFinite(value) ? value : 0);
+        const costNode = costRow == null ? null : costRow.getChildByName("扣钻石数");
+        const costLabel = this.stoneCost != null
+            ? this.stoneCost
+            : (costNode != null ? costNode.getComponent(cc.Label) : (costRow == null ? null : costRow.getComponent(cc.Label)));
+        if (costLabel != null)
+            costLabel.string = "落座钻石：" + this.format(show ? this.currentStoneCost() : 0);
+    }
+
+    private currentStoneCost():number {
+        const value = this.currentAmount * this.stoneRatio;
+        return Number.isFinite(value) ? Number(value.toFixed(4)) : 0;
     }
 
     private value(index: number): number {
@@ -71,6 +89,8 @@ export default class BuyinDisplay extends cc.Component {
         this.slider.progress = this.count > 1 ? index / (this.count - 1) : 0;
         this.fill.progress = this.slider.progress;
         this.amount.string = this.format(this.currentAmount);
+        if (this.stoneCost != null)
+            this.stoneCost.string = "落座钻石：" + this.format(this.currentStoneCost());
     }
 
     private format(value: number): string {

@@ -152,6 +152,15 @@ export interface DirectHostingInfo
     message:string;
 }
 
+/** 官方客服（BF）入口状态：创建者可设置，俱乐部内所有成员按创建者的开关显示。 */
+export interface DirectBFEntryInfo
+{
+    eligible:boolean;
+    enabled:boolean;
+    visible:boolean;
+    message:string;
+}
+
 /** 图片来源：相册/文件选择，或调用相机现拍。 */
 export type DirectImageSource = "library" | "camera";
 
@@ -236,6 +245,7 @@ export default class DirectChatManager
     private memberCache:{[clubId:string]:DirectMemberPage} = {};
     private pendingClientIds:{[key:string]:string} = {};
     private hostingInfo:DirectHostingInfo = null;
+    private bfEntryInfo:DirectBFEntryInfo = null;
 
     // ---------------- 长连接与断线补偿 ----------------
 
@@ -395,6 +405,7 @@ export default class DirectChatManager
         this.memberCache = {};
         this.pendingClientIds = {};
         this.hostingInfo = null;
+        this.bfEntryInfo = null;
         this.Fire("accountChanged",guuid);
         this.Fire("unread",0,{});
     }
@@ -858,6 +869,41 @@ export default class DirectChatManager
             clubId:String(source.clubId || ""),
             clubName:String(source.clubName || ""),
             enabledAt:String(source.enabledAt || ""),
+            message:String(source.message || "")
+        };
+    }
+
+    // ================= 官方客服（BF）入口开关 =================
+
+    /** 查询当前账号的 BF 入口开关资格与可见性。force 为 false 时复用本次登录内的结果。 */
+    public BFEntryStatus(force:boolean = false):Promise<DirectBFEntryInfo>
+    {
+        if(!force && this.bfEntryInfo != null)
+            return Promise.resolve(this.bfEntryInfo);
+        return this.Request("GET","/bf-entry").then((data:any)=>{
+            let info = this.NormalizeBFEntryInfo(data);
+            this.bfEntryInfo = info;
+            return info;
+        });
+    }
+
+    /** 创建者开启/关闭自己俱乐部的 BF 入口；服务端会再次校验身份。 */
+    public SetBFEntry(enabled:boolean):Promise<DirectBFEntryInfo>
+    {
+        return this.Request("POST","/bf-entry",{enabled:enabled}).then((data:any)=>{
+            let info = this.NormalizeBFEntryInfo(data);
+            this.bfEntryInfo = info;
+            return info;
+        });
+    }
+
+    private NormalizeBFEntryInfo(data:any):DirectBFEntryInfo
+    {
+        let source = data == null ? {} : data;
+        return {
+            eligible:source.eligible === true,
+            enabled:source.enabled === true,
+            visible:source.visible !== false,
             message:String(source.message || "")
         };
     }

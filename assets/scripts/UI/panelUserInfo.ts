@@ -217,7 +217,7 @@ export default class panelUserInfo extends UIPanelViewBase {
         {
             this.SetStatLabel("总手数","**");
             this.SetStatLabel("总胜率","**");
-            this.SetStatLabel("失败率","**");
+            this.SetStatLabel("摊牌率","**");
             this.SetStatLabel("胜利","-");
             this.SetStatLabel("平局","-");
             this.SetStatLabel("失败","-");
@@ -237,15 +237,13 @@ export default class panelUserInfo extends UIPanelViewBase {
         let nTotle = nWin + nLose + nHe;
         let nFanPer = nTotle > 0 ? Number(arrayParam[3]) * 100 / nTotle : 0;
         let nWinPer = nTotle > 0 ? nWin * 100 / nTotle : 0;
-        let nLosePer = nTotle > 0 ? nLose * 100 / nTotle : 0;
-
         let nFanWin = Number(arrayParam[3])>0?Number(arrayParam[5])*100/Number(arrayParam[3]):0;
 
         let nRuChi = nTotle > 0 ? nRu * 100 / nTotle : 0;
 
         this.SetStatLabel("总手数",nTotle.toString());
         this.SetStatLabel("总胜率",nWinPer.toFixed(0).toString()+"%");
-        this.SetStatLabel("失败率",nLosePer.toFixed(0).toString()+"%");
+        this.SetStatLabel("摊牌率",nFanPer.toFixed(0).toString()+"%");
         this.SetStatLabel("胜利",nWin.toString());
         this.SetStatLabel("平局",nHe.toString());
         this.SetStatLabel("失败",nLose.toString());

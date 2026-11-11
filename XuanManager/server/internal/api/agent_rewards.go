@@ -19,8 +19,8 @@ import (
 //
 // 数据边界：
 //   - 名单、排除、子账号、计划、明细、发放流水全部在自有 mgr_ 库，游戏库只读；
-//   - 业绩点数取自游戏服「奖池业绩结算报表」，上下级扣减由服务端完成，后台不再二次扣减；
-//   - 整条线输赢/贡献取自「代理展示数据」（俱乐部口径），未挂俱乐部的代理明确返回无数据；
+//   - 三类奖励的分配比例统一取「俱乐部业绩」报表的净次数（业绩股口径），按本次名单归一；
+//   - 线数据只在「线数据」弹窗按需查询，不再参与分摊；
 //   - 发放复用既有的 exchange 通道，一单一笔、唯一工单、写后回读余额核对。
 
 const (
@@ -78,7 +78,7 @@ type rewardMember struct {
 	Source     string      `json:"source"`
 	Perf       *rewardPerf `json:"perf"`
 	Line       *rewardLine `json:"line"`
-	// SharePercent 是今日业绩（净点数）在本次名单内的占比，保留两位小数，
+	// SharePercent 是业绩股净次数在本次名单内的占比，保留两位小数，
 	// 名单内有正业绩时所有行合计固定为 100.00。
 	SharePercent float64       `json:"sharePercent"`
 	Amount       int64         `json:"amount"`
@@ -114,10 +114,13 @@ type rewardPlanView struct {
 	PoolHalf      float64 `json:"poolHalf"`
 	PoolPercent   float64 `json:"poolPercent"`
 	PoolSuggested int64   `json:"poolSuggested"`
+	// PoolSnapshot 表示上面的奖池总额取自该批次保存时的快照（历史日期），否则为当前实时奖池。
+	PoolSnapshot bool `json:"poolSnapshot"`
 }
 
 type rewardTotals struct {
 	Amount   int64   `json:"amount"`
+	AllCount int64   `json:"allCount"`
 	Count    int64   `json:"count"`
 	Planned  int64   `json:"planned"`
 	Diff     int64   `json:"diff"`
@@ -160,7 +163,24 @@ func rewardDate(raw string, now time.Time) (string, error) {
 	if err != nil || date.Format("2006-01-02") != raw {
 		return "", errors.New("日期格式不正确")
 	}
+	today := now.In(dashboardLocation)
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, dashboardLocation)
+	if date.After(today) {
+		return "", errors.New("不能选择未来日期")
+	}
 	return raw, nil
+}
+
+// rewardDayOffset 把发放批次日期换算成游戏服业绩接口的「相对今天天数」：
+// 昨天 = -1、今天 = 0。业绩股按自然日结算，默认发放前一天。
+func rewardDayOffset(date string, now time.Time) int {
+	target, err := time.ParseInLocation("2006-01-02", date, dashboardLocation)
+	if err != nil {
+		return -1
+	}
+	today := now.In(dashboardLocation)
+	today = time.Date(today.Year(), today.Month(), today.Day(), 0, 0, 0, 0, dashboardLocation)
+	return int(target.Sub(today).Hours() / 24)
 }
 
 // syncRewardMembers 从游戏库只读同步代理名单。只动自有表，不写游戏库。
@@ -850,10 +870,13 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 		return
 	}
 	poolPercent := 0.0
-	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(pool_percent,0) FROM mgr_agent_reward_plan WHERE id = ?`, planID).
-		Scan(&poolPercent); err != nil {
+	poolBase := int64(0)
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(pool_percent,0), COALESCE(pool_base,0)
+FROM mgr_agent_reward_plan WHERE id = ?`, planID).
+		Scan(&poolPercent, &poolBase); err != nil {
 		s.logger.Warn("load reward plan pool percent", "error", err)
 		poolPercent = 0
+		poolBase = 0
 	}
 
 	members, err := s.loadRewardMembers(ctx, unionID)
@@ -903,33 +926,33 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 		}
 	}
 
-	// 业绩点数 = 俱乐部整条线的今日贡献，按上下级逐级扣减（上级减掉下级那条线），
-	// 与需求里"上级 2 点分给下级 1.8 点、上级只剩 0.2"是同一口径。
-	//
-	// 关键：扣减必须基于「全部在册代理」的代理树，不能只看本次入选名单，
-	// 否则下級没进名单时它的整条线贡献不会被从上级扣掉，上级会被重复计算。
-	allMembers, err := s.loadRewardMembersAll(ctx, unionID)
-	if err != nil {
-		s.logger.Error("load all reward members", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
-		return
+	// 三类奖励统一按「业绩股」净次数分摊：报表只含已开通业绩的代理（含创建者），
+	// my = 整条线毛次数、granted = 直接下级次数、left = 扣减后的净次数。
+	perfMap, allCount, perfErr := s.rewardClubPerformance(ctx, unionID, date)
+	if perfErr != nil {
+		s.logger.Warn("load club performance report", "error", perfErr)
+		overview.Warnings = append(overview.Warnings,
+			"读取业绩股报表失败："+perfErr.Error()+"；本次无法按业绩比例分摊")
+		perfMap = map[string]*rewardPerf{}
 	}
-	lineTargets := rewardLineTargets(members, allMembers)
-	lineMap := s.rewardLineData(ctx, lineTargets, &overview)
-	perfMap := buildRewardPerfFromLines(allMembers, lineMap)
+	if rewardDayOffset(date, time.Now()) == 0 {
+		overview.Warnings = append(overview.Warnings,
+			"统计日是今天，业绩股当天数据还没结算完，建议发放昨天的批次")
+	}
+	overview.Totals.AllCount = allCount
 
 	missing := 0
 	for _, m := range members {
 		if skip[m.AgentID] {
 			continue
 		}
-		if _, ok := lineMap[m.AgentID]; !ok {
+		if _, ok := perfMap[m.AgentID]; !ok {
 			missing++
 		}
 	}
 	if missing > 0 {
 		overview.Warnings = append(overview.Warnings,
-			fmt.Sprintf("%d 个代理没有俱乐部线数据（未挂俱乐部或代理树未加载），对应行显示「无数据」", missing))
+			fmt.Sprintf("%d 个代理没有业绩股数据（未加入业绩股或当天没有业绩），不参与分摊", missing))
 	}
 
 	for _, m := range members {
@@ -937,7 +960,6 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 			continue
 		}
 		m.Perf = perfMap[m.AgentID]
-		m.Line = lineMap[m.AgentID]
 		if item, ok := items[m.AgentID]; ok {
 			m.Amount = item.amount
 			m.Splits = item.splits
@@ -980,7 +1002,7 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 	overview.Totals.Points = round2(points)
 	overview.Totals.Excluded = int64(len(skip))
 
-	// 今日业绩占比：只用本次名单内的净点数做归一，合计固定 100.00%，
+	// 业绩股占比：只用本次名单内的净次数做归一，合计固定 100.00%，
 	// 与「业绩奖励」自动分摊的权重同一口径，发钱时看到的占比就是到手比例。
 	shareWeights := make(map[string]float64, len(overview.Members))
 	for _, m := range overview.Members {
@@ -1006,25 +1028,31 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 		overview.Warnings = append(overview.Warnings,
 			"当前联盟本次分配名单为空：点「添加代理」把该联盟要发奖励的代理加进名单。")
 	}
-	if kind == rewardKindPerformance {
-		var totalNet float64
-		for _, perf := range perfMap {
-			totalNet += perf.Net
-		}
-		if totalNet <= 0 {
-			overview.Warnings = append(overview.Warnings,
-				"今天所有代理的整条线贡献都是 0（当天没有产生贡献或线数据未加载），业绩奖励无法按点数分摊")
-		}
+	if len(shareWeights) == 0 {
+		overview.Warnings = append(overview.Warnings,
+			"本次名单在 "+date+" 都没有业绩股净次数，三类奖励都无法按业绩比例分摊")
 	}
 
-	// 奖池共享：直接读平台真实奖池，避免客服再去别处查数。
+	// 奖池共享：历史日期优先用该批次保存时的奖池快照，没有快照才退回当前实时奖池。
 	if kind == rewardKindPool {
-		poolFen, poolErr := s.rewardPoolTotal(ctx)
-		if poolErr != nil {
-			s.logger.Warn("read reward pool total", "error", poolErr)
-			overview.Warnings = append(overview.Warnings,
-				"读取今日奖池失败："+poolErr.Error()+"，可手动填写本次发放总额")
-		} else {
+		offset := rewardDayOffset(date, time.Now())
+		useSnapshot := offset < 0 && poolBase > 0
+		poolFen := poolBase
+		if !useSnapshot {
+			live, poolErr := s.rewardPoolTotal(ctx)
+			if poolErr != nil {
+				s.logger.Warn("read reward pool total", "error", poolErr)
+				overview.Warnings = append(overview.Warnings,
+					"读取今日奖池失败："+poolErr.Error()+"，可手动填写本次发放总额")
+			} else {
+				poolFen = live
+				if offset < 0 {
+					overview.Warnings = append(overview.Warnings,
+						"该日期没有奖池快照，建议金额按当前实时奖池计算，发放前请人工核对")
+				}
+			}
+		}
+		if poolFen > 0 {
 			percent := poolPercent
 			if percent <= 0 {
 				percent = 60
@@ -1032,6 +1060,7 @@ func (s *Server) handlerRewardOverview(w http.ResponseWriter, r *http.Request, p
 			// 游戏奖池按「分」存储，页面与发放都按「金币/元」口径，这里统一换算。
 			yuan := float64(poolFen) / 100
 			overview.Plan.PoolAvailable = true
+			overview.Plan.PoolSnapshot = useSnapshot
 			overview.Plan.PoolTotal = round2(yuan)
 			overview.Plan.PoolHalf = round2(yuan / 2)
 			overview.Plan.PoolPercent = percent
@@ -1317,6 +1346,72 @@ func (s *Server) rewardPerformance(ctx context.Context, date string) (map[string
 	return out, nil
 }
 
+// rewardClubPerformance 读取「俱乐部业绩」报表（业绩股口径）。
+//
+// 报表只包含已开通业绩的代理（含创建者），my = 整条线毛次数、granted = 直接下级次数、
+// left = 扣减后的净次数；allCount 是整个池（联盟/独立俱乐部）当天的总次数。
+// 同一个代理可能同时挂在多个俱乐部，这里按 guuid 汇总，发放权重直接用净次数。
+func (s *Server) rewardClubPerformance(ctx context.Context, unionID, date string) (map[string]*rewardPerf, int64, error) {
+	offset := rewardDayOffset(date, time.Now())
+	result, err := s.callGameCommand(ctx, "异步_查询_俱乐部_业绩_报表", map[string]any{
+		"union_id": unionID, "date": offset, "context": "p@" + gameOperationContext("agent-reward-club-perf"),
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	if result.RetCode != 512 {
+		return nil, 0, errors.New(describeGameFailure("异步_查询_俱乐部_业绩_报表", result.RetCode, result.RetResult))
+	}
+	raw := result.RetResult
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		raw = json.RawMessage(text)
+	}
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return nil, 0, errors.New("业绩报表格式不正确")
+	}
+	// 新格式带 {"context","result"} 包裹；兼容直接返回 ClubPerfReport 的旧结构。
+	if inner, ok := envelope["result"]; ok {
+		var innerText string
+		if json.Unmarshal(inner, &innerText) == nil {
+			inner = json.RawMessage(innerText)
+		}
+		var nested map[string]json.RawMessage
+		if json.Unmarshal(inner, &nested) == nil {
+			envelope = nested
+		}
+	}
+	var report struct {
+		AllCount int64   `json:"all_count"`
+		List     [][]any `json:"list"`
+	}
+	if err := json.Unmarshal(envelope["ClubPerfReport"], &report); err != nil {
+		return nil, 0, errors.New("业绩报表缺少 ClubPerfReport")
+	}
+	out := map[string]*rewardPerf{}
+	for _, row := range report.List {
+		if len(row) < 8 {
+			continue
+		}
+		id := anyString(row[0])
+		if id == "" {
+			continue
+		}
+		my := anyFloat(row[5])
+		granted := anyFloat(row[6])
+		net := anyFloat(row[7])
+		if existing, ok := out[id]; ok {
+			existing.My = round2(existing.My + my)
+			existing.Granted = round2(existing.Granted + granted)
+			existing.Net = round2(existing.Net + net)
+			continue
+		}
+		out[id] = &rewardPerf{My: round2(my), Granted: round2(granted), Net: round2(net)}
+	}
+	return out, report.AllCount, nil
+}
+
 func round2(v float64) float64 {
 	return math.Round(v*100) / 100
 }
@@ -1418,6 +1513,20 @@ func anyInt(v any) int64 {
 	return 0
 }
 
+func anyString(v any) string {
+	switch typed := v.(type) {
+	case string:
+		return strings.TrimSpace(typed)
+	case json.Number:
+		return typed.String()
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	}
+	return strings.TrimSpace(fmt.Sprint(v))
+}
+
 func anyFloat(v any) float64 {
 	switch typed := v.(type) {
 	case float64:
@@ -1487,9 +1596,10 @@ WHERE id = ?`, input.PlannedTotal, planID); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "保存发放总额失败")
 		return
 	}
-	// 奖池共享：保存时把当日奖池总额落一份快照（pool_base 存游戏原始单位「分」，便于精确对账）。
+	// 奖池共享：只有发放当天保存时才落奖池快照（pool_base 存游戏原始单位「分」，便于精确对账）。
+	// 历史日期保存不能把今天的实时奖池写成那一天的快照，否则事后对账会失真。
 	poolBase := int64(0)
-	if input.Kind == rewardKindPool {
+	if input.Kind == rewardKindPool && rewardDayOffset(date, time.Now()) == 0 {
 		if total, err := s.rewardPoolTotal(r.Context()); err == nil {
 			poolBase = total
 			if _, err := s.db.ExecContext(r.Context(),
@@ -1652,7 +1762,7 @@ ON DUPLICATE KEY UPDATE final_amount = VALUES(final_amount), split_json = VALUES
 	writeData(w, http.StatusOK, map[string]any{"sum": sum, "planned": planned, "diff": planned - sum, "unionId": unionID})
 }
 
-// handlerRewardAllocate 按规则自动分摊：业绩按净点数、核心按上次金额、奖池共享按今日输赢正向部分。
+// handlerRewardAllocate 按业绩股净次数比例分摊：三类奖励共用同一套权重。
 func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p principal) {
 	var input struct {
 		UnionID string `json:"unionId"`
@@ -1707,48 +1817,19 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 		}
 	}
 
+	// 三类奖励统一按业绩股净次数分摊，只有已开通业绩的代理有权重。
+	perfMap, _, err := s.rewardClubPerformance(ctx, unionID, date)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取业绩股报表失败："+err.Error())
+		return
+	}
 	weights := map[string]float64{}
-	overview := rewardOverview{Warnings: []string{}}
-	switch input.Kind {
-	case rewardKindPerformance:
-		allMembers, err := s.loadRewardMembersAll(ctx, unionID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理层级失败")
-			return
+	for _, m := range members {
+		if skip[m.AgentID] {
+			continue
 		}
-		lineMap := s.rewardLineData(ctx, rewardLineTargets(members, allMembers), &overview)
-		perfMap := buildRewardPerfFromLines(allMembers, lineMap)
-		for _, m := range members {
-			if skip[m.AgentID] {
-				continue
-			}
-			if perf, ok := perfMap[m.AgentID]; ok && perf.Net > 0 {
-				weights[m.AgentID] = perf.Net
-			}
-		}
-	case rewardKindPool:
-		lineMap := s.rewardLineData(ctx, members, &overview)
-		for _, m := range members {
-			if skip[m.AgentID] {
-				continue
-			}
-			if line, ok := lineMap[m.AgentID]; ok && line.TodayScore > 0 {
-				weights[m.AgentID] = float64(line.TodayScore)
-			}
-		}
-	case rewardKindCore:
-		last, err := s.lastRewardAmounts(ctx, input.Kind, unionID)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取上次金额失败")
-			return
-		}
-		for _, m := range members {
-			if skip[m.AgentID] {
-				continue
-			}
-			if amount, ok := last[m.AgentID]; ok && amount > 0 {
-				weights[m.AgentID] = float64(amount)
-			}
+		if perf, ok := perfMap[m.AgentID]; ok && perf.Net > 0 {
+			weights[m.AgentID] = perf.Net
 		}
 	}
 
@@ -1757,12 +1838,8 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 		totalWeight += weight
 	}
 	if totalWeight <= 0 {
-		message := map[string]string{
-			rewardKindPerformance: "当天所有代理业绩点数都是 0，无法按点数分摊",
-			rewardKindPool:        "当天所有代理的整条线今日输赢都不是正数，无法按输赢分摊",
-			rewardKindCore:        "没有可参考的上次金额，请手动填写",
-		}[input.Kind]
-		writeError(w, http.StatusBadRequest, "NO_WEIGHT", message)
+		writeError(w, http.StatusBadRequest, "NO_WEIGHT",
+			"本次名单在 "+date+" 都没有业绩股净次数，无法按业绩比例分摊")
 		return
 	}
 

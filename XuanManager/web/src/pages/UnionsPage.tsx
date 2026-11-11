@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
+import DarkSettingModal from "../components/DarkSettingModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import type { UnionListItem, UnionListResponse, UnionQuotaAdjustmentResponse } from "../types";
@@ -40,8 +41,10 @@ export default function UnionsPage({
   const [pageSize, setPageSize] = useState(20);
   const [loading, setLoading] = useState(true);
   const [adjustTarget, setAdjustTarget] = useState<{ union: UnionListItem; action: "add" | "subtract" } | null>(null);
+  const [darkUnion, setDarkUnion] = useState<UnionListItem | null>(null);
   const [earningsUnion, setEarningsUnion] = useState<UnionListItem | null>(null);
   const canAdjust = can("game.union.quota_adjust");
+  const canSetDark = can("game.union.dark_setting");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -149,6 +152,7 @@ export default function UnionsPage({
                     <th>俱乐部</th>
                     <th>联盟池</th>
                     <th>已分配</th>
+                    <th>暗抽</th>
                     <th>状态 / 创建时间</th>
                     <th className="align-right">操作</th>
                   </tr>
@@ -191,6 +195,12 @@ export default function UnionsPage({
                         <small className="cell-subtitle">各俱乐部额度合计</small>
                       </td>
                       <td>
+                        <strong className={union.darkEnabled ? "club-quota-value" : "club-quota-missing"}>
+                          {union.darkEnabled ? "开启" : "关闭"}
+                        </strong>
+                        <small className="cell-subtitle">总群主俱乐部</small>
+                      </td>
+                      <td>
                         <strong>{statusLabels[union.status] ?? union.status ?? "—"}</strong>
                         <small className="cell-subtitle">{union.createdAt || "—"}</small>
                       </td>
@@ -217,6 +227,18 @@ export default function UnionsPage({
                           )}
                           <button type="button" onClick={() => setEarningsUnion(union)} title="按暗抽、奖池查看该联盟大盟主的每日收益与明细">
                             收益对账
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDarkUnion(union)}
+                            disabled={!canSetDark}
+                            title={
+                              canSetDark
+                                ? "开启或关闭联盟总群主俱乐部开房-游戏设置里的暗抽"
+                                : "当前角色没有暗抽开关的权限"
+                            }
+                          >
+                            暗抽设置
                           </button>
                           <button type="button" onClick={() => openClubs(union)} title="进入俱乐部管理查看该联盟下的俱乐部">
                             详情
@@ -272,6 +294,20 @@ export default function UnionsPage({
           action={adjustTarget.action}
           notify={notify}
           onClose={() => setAdjustTarget(null)}
+          onDone={() => void load()}
+        />
+      )}
+
+      {darkUnion && (
+        <DarkSettingModal
+          scope="union"
+          targetId={darkUnion.unionId}
+          targetName={darkUnion.name || darkUnion.unionId}
+          ownerClubId={darkUnion.ownerClubId}
+          currentEnabled={!!darkUnion.darkEnabled}
+          canEdit={canSetDark}
+          notify={notify}
+          onClose={() => setDarkUnion(null)}
           onDone={() => void load()}
         />
       )}

@@ -93,6 +93,31 @@ func TestBuildPlayerWhereLoginRangeUsesBeijingDayBounds(t *testing.T) {
 	}
 }
 
+func TestBuildPlayerWhereBossOnly(t *testing.T) {
+	r := httptest.NewRequest("GET", "/api/game/players?boss=1", nil)
+	filters, err := parsePlayerFilters(r)
+	if err != nil {
+		t.Fatalf("parse filters: %v", err)
+	}
+	if !filters.BossOnly {
+		t.Fatal("boss=1 应当只筛 BOSS 号")
+	}
+	where, args := buildPlayerWhere(filters)
+	if !strings.Contains(where, "a.sm_level >= 99") || len(args) != 0 {
+		t.Fatalf("unexpected boss where clause or args: %s %#v", where, args)
+	}
+
+	r = httptest.NewRequest("GET", "/api/game/players?boss=0", nil)
+	filters, err = parsePlayerFilters(r)
+	if err != nil {
+		t.Fatalf("parse filters: %v", err)
+	}
+	where, _ = buildPlayerWhere(filters)
+	if strings.Contains(where, "a.sm_level >= 99") {
+		t.Fatalf("boss=0 不应附加 BOSS 条件: %s", where)
+	}
+}
+
 func TestParsePlayerFiltersRejectsInvalidRange(t *testing.T) {
 	r := httptest.NewRequest("GET", "/api/game/players?minBalance=20&maxBalance=10", nil)
 	if _, err := parsePlayerFilters(r); err == nil {

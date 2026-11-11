@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
+import DarkSettingModal from "../components/DarkSettingModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
@@ -134,6 +135,7 @@ export default function ClubsPage({
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<ClubListItem | null>(null);
   const [stonePoolClub, setStonePoolClub] = useState<ClubListItem | null>(null);
+  const [darkClub, setDarkClub] = useState<ClubListItem | null>(null);
   const [earningsClub, setEarningsClub] = useState<ClubListItem | null>(null);
 
   const load = useCallback(async () => {
@@ -199,6 +201,7 @@ export default function ClubsPage({
   const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
   const canAdjustStonePool = can("game.club.stone_pool_adjust");
+  const canSetDark = can("game.club.dark_setting");
 
   return (
     <div className="page-stack">
@@ -386,6 +389,7 @@ export default function ClubsPage({
                     <th>群主额度</th>
                     <th>钻石池</th>
                     <th>俱乐部总积分</th>
+                    <th>暗抽</th>
                     <th>抽成</th>
                     <th className="align-right">操作</th>
                   </tr>
@@ -455,6 +459,12 @@ export default function ClubsPage({
                           </strong>
                         )}
                       </td>
+                      <td>
+                        <strong className={club.darkEnabled ? "club-quota-value" : "club-quota-missing"}
+                          title={club.unionId ? "已入盟，开房暗抽由联盟管理控制" : undefined}>
+                          {club.darkEnabled ? "开启" : club.unionId ? "随联盟" : "关闭"}
+                        </strong>
+                      </td>
                       <td>{club.tax || "—"}</td>
                       <td>
                         <div className="row-actions">
@@ -488,6 +498,20 @@ export default function ClubsPage({
                             }
                           >
                             调整钻石池
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDarkClub(club)}
+                            disabled={!canSetDark || !!club.unionId}
+                            title={
+                              club.unionId
+                                ? "该俱乐部已入盟，请在联盟管理里开启暗抽"
+                                : canSetDark
+                                  ? "开启或关闭该俱乐部开房-游戏设置里的暗抽"
+                                  : "当前角色没有暗抽开关的权限"
+                            }
+                          >
+                            暗抽设置
                           </button>
                         </div>
                       </td>
@@ -550,6 +574,19 @@ export default function ClubsPage({
           canAdjust={canAdjustStonePool}
           notify={notify}
           onClose={() => setStonePoolClub(null)}
+          onDone={() => void load()}
+        />
+      )}
+
+      {darkClub && (
+        <DarkSettingModal
+          scope="club"
+          targetId={darkClub.clubId}
+          targetName={darkClub.name || darkClub.clubId}
+          currentEnabled={!!darkClub.darkEnabled}
+          canEdit={canSetDark}
+          notify={notify}
+          onClose={() => setDarkClub(null)}
           onDone={() => void load()}
         />
       )}
