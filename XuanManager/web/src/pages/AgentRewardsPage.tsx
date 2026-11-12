@@ -281,13 +281,18 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
   const [poolPercent, setPoolPercent] = useState(60);
   const [lastSync, setLastSync] = useState("");
 
-  const editable = Boolean(can("game.agent_reward.edit")) && data?.plan.status !== "paid" && data?.plan.status !== "paying";
+  // 页面上的金额、分摊、发放都只认日期框和当前分栏：数据必须已经按当前选择加载回来才允许写。
+  const loadedForCurrent = data?.plan.date === date && data?.plan.kind === kind;
+  const editable = Boolean(can("game.agent_reward.edit")) && loadedForCurrent
+    && data?.plan.status !== "paid" && data?.plan.status !== "paying";
   const canPay = Boolean(can("game.agent_reward.pay"));
 
   const autoSynced = useRef(false);
   const hasData = useRef(false);
   const perfRefreshing = useRef(false);
   const perfKey = useRef("");
+  const loadSeq = useRef(0);
+  const summarySeq = useRef(0);
   // keepDraft=true 表示这是一次静默刷新：保留页面上已经输入但还没保存的金额与拆分，
   // 只把服务端的新数据补进来，避免刷新时把客服正在填的数字冲掉。
   const applyData = useCallback((value: Overview, keepDraft: boolean) => {
@@ -316,20 +321,25 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
   }, []);
 
   const loadSummary = useCallback(async (targetDate: string) => {
+    const seq = ++summarySeq.current;
     try {
-      setSummary(await api<Summary>(`/api/game/agent-rewards/summary?${new URLSearchParams({ date: targetDate, unionId })}`));
+      const value = await api<Summary>(`/api/game/agent-rewards/summary?${new URLSearchParams({ date: targetDate, unionId })}`);
+      if (seq === summarySeq.current) setSummary(value);
     } catch {
       // 汇总只是顶部的辅助信息，失败不打断主流程。
     }
   }, [unionId]);
 
   const load = useCallback(async (targetDate: string, targetKind: Kind, silent = false, resetDraft = false) => {
+    // 切日期/分栏时服务端响应可能乱序返回，只认最后一次请求，避免旧日期的数据覆盖当前页面。
+    const seq = ++loadSeq.current;
     // 只有第一次进页面才铺 loading；后续刷新一律就地更新，不把表格清空重画。
     const firstLoad = !hasData.current;
     if (!silent && firstLoad) setLoading(true);
     const url = `/api/game/agent-rewards?${new URLSearchParams({ date: targetDate, kind: targetKind, unionId })}`;
     try {
       const value = await api<Overview>(url);
+      if (seq !== loadSeq.current) return;
       applyData(value, !firstLoad && !resetDraft);
       hasData.current = true;
       setLastSync(syncClock());
@@ -340,16 +350,19 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
         autoSynced.current = true;
         try {
           await api("/api/game/agent-rewards/sync", { method: "POST", ...jsonBody({}) });
-          applyData(await api<Overview>(url), true);
+          const fresh = await api<Overview>(url);
+          if (seq !== loadSeq.current) return;
+          applyData(fresh, true);
           void loadSummary(targetDate);
         } catch {
           // 同步失败就保持空名单，用户可以手动点「同步名单」重试。
         }
       }
     } catch (reason) {
+      if (seq !== loadSeq.current) return;
       notify(reason instanceof Error ? reason.message : "读取奖励数据失败", "error");
     } finally {
-      if (!silent && firstLoad) setLoading(false);
+      if (seq === loadSeq.current && !silent && firstLoad) setLoading(false);
     }
   }, [notify, can, applyData, loadSummary, unionId]);
 
@@ -460,33 +473,40 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
     setDirty(true);
   };
 
+  // 所有写入都以日期框当前日期 + 当前分栏为准；数据还没按当前选择加载完就拒绝操作。
+  const ensureLoadedForCurrent = () => {
+    if (data && data.plan.date === date && data.plan.kind === kind) return true;
+    notify("正在加载所选日期与分栏的数据，请稍候再操作", "error");
+    return false;
+  };
+
   const saveAll = async (): Promise<boolean> => {
-    if (!data) return false;
+    if (!data || !ensureLoadedForCurrent()) return false;
     const needPlan = planTotal !== data.plan.plannedTotal || dirty
       || (kind === "pool" && Math.abs(poolPercent - (data.plan.poolPercent || 0)) > 0.001);
     if (needPlan) {
       await api("/api/game/agent-rewards/plan", {
         method: "PUT",
-        ...jsonBody({ unionId, date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
+        ...jsonBody({ unionId, date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
       });
     }
     const amounts: Record<string, number> = {};
     (data.members ?? []).forEach(m => { amounts[m.agentId] = draft[m.agentId] ?? 0; });
-    await api("/api/game/agent-rewards/amounts", { method: "PUT", ...jsonBody({ unionId, date: data.plan.date, kind, amounts, splits }) });
+    await api("/api/game/agent-rewards/amounts", { method: "PUT", ...jsonBody({ unionId, date, kind, amounts, splits }) });
     setDirty(false);
     return true;
   };
 
   const autoAllocate = async () => {
-    if (!data) return;
+    if (!data || !ensureLoadedForCurrent()) return;
     setBusy("allocate");
     try {
       await api("/api/game/agent-rewards/plan", {
         method: "PUT",
-        ...jsonBody({ unionId, date: data.plan.date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
+        ...jsonBody({ unionId, date, kind, plannedTotal: planTotal, ...(kind === "pool" ? { poolPercent } : {}) }),
       });
       const result = await api<{ count: number; total: number }>("/api/game/agent-rewards/allocate",
-        { method: "POST", ...jsonBody({ unionId, date: data.plan.date, kind }) });
+        { method: "POST", ...jsonBody({ unionId, date, kind }) });
       // 服务端刚重写了每个人的金额，这里必须重新以服务端为准，不能保留页面上的旧草稿。
       await load(date, kind, true, true);
       notify(`已分摊 ${num(result.total)} 金币，共 ${result.count} 人`);
@@ -503,13 +523,17 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
 
   const saveAmountsOnly = async () => {
     setBusy("save");
-    try { await saveAll(); notify("已保存分配金额"); await load(date, kind, true, true); }
+    try {
+      if (!(await saveAll())) return;
+      notify("已保存分配金额");
+      await load(date, kind, true, true);
+    }
     catch (reason) { notify(reason instanceof Error ? reason.message : "保存失败", "error"); }
     finally { setBusy(""); }
   };
 
   const openPay = async () => {
-    if (!data) return;
+    if (!data || !ensureLoadedForCurrent()) return;
     setBusy("prepay");
     try {
       if (diff !== 0) { notify(`分配合计与计划总额相差 ${num(Math.abs(diff))}，不能发放`, "error"); return; }
@@ -523,11 +547,11 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
   };
 
   const doPay = async () => {
-    if (!data) return;
+    if (!data || !ensureLoadedForCurrent()) return;
     setBusy("pay");
     try {
       const result = await api<PayResult>("/api/game/agent-rewards/pay",
-        { method: "POST", ...jsonBody({ unionId, date: data.plan.date, kind, confirm: true }) });
+        { method: "POST", ...jsonBody({ unionId, date, kind, confirm: true }) });
       setPayResult(result);
       notify(result.status === "paid" ? `发放完成：${result.paid} 笔` : `部分完成：成功 ${result.paid} 笔，异常 ${result.failed + (result.total > 0 ? 0 : 0)} 笔`, result.status === "paid" ? "success" : "error");
       await load(date, kind, true, true);
