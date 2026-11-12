@@ -20,6 +20,28 @@
 
 - 联盟列表：`GET /api/game/club-perf/unions`
   - `kbedm.club_union_info`（status <> 'init'）+ 俱乐部数。
+- 联盟成员候选：`GET /api/game/club-perf/candidates?union_id=...`
+  - 只返回**代理**：俱乐部创建者，或在本俱乐部持有可用邀请码
+    （`club_invite_code_info.status='used'`，即 `is_agent=1`）；**所有层级都返回**。
+  - **已开通的人不再返回**（俱乐部级/联盟层/联盟根默认都算），列表只留未开通的代理。
+  - 普通玩家（无可用邀请码且非创建者）不出现；`percent=0` 也可能是代理，
+    不能再用 `percent` 判断。按 guuid 去重、盟主优先。
+  - 弹窗直接列出该列表，支持按玩家ID或昵称搜索；不支持跨联盟添加。
+  - 身份：创建者=盟主（联盟根=大盟主），is_agent=合伙人，其余=玩家；
+    总览树也按这个口径显示身份（不再直接用报表里的“合伙人”）。
+- 核对玩家：`GET /api/game/club-perf/player?union_id=...&player_id=...`
+  - 在联盟代理树中定位玩家，返回昵称/俱乐部/身份/是否已开通；
+  - 已开通判断：联盟根创建者默认开通；否则查 `club_perf_grant_info`（used）
+    或 `club_perf_union_grant_info`（used）。
+- 授权：`POST /api/game/club-perf/grant`，`{union_id, player_id}`
+  - 调用游戏服 `设置_俱乐部_业绩_授权`（`enabled=1`，`club_id` = 目标所在俱乐部，
+    `context` 用 `p@`）；不做取消。
+  - 权限 `game.club_perf.grant`；服务端仍按后台游戏账号的授权范围校验。
+  - 只允许盟主/代理：创建者或 `is_agent=1`（有可用邀请码）；普通玩家返回
+    `PLAYER_NOT_ELIGIBLE`，避免把玩家加成业绩股成员。
+  - **限制**：按 v7 文档，联盟层只能授权盟主节点；其他俱乐部的普通代理会返回
+    「联盟层只支持盟主节点，其他俱乐部代理请由该俱乐部盟主授权」。
+    后台游戏账号自己所在俱乐部的代理可走俱乐部内授权。错误原样弹在弹窗里。
 - 联盟总览：`GET /api/game/club-perf/overview?union_id=...&date=YYYY-MM-DD`
   - 联盟/总群主/总群主俱乐部：`kbedm.club_union_info`
     （`club_guuid` 是联盟根 A1）。
@@ -37,15 +59,22 @@
   `下放` = A1 的 `granted_count` + 已开通成员盟主的整俱乐部 `M_c`；
   `剩` = 我 - 下放；占比 = 剩/联盟总次数。
 - 盟主/代理：用报表的 `my/granted/left/left_percent`，与客户端业绩股页一致。
-- 未开通节点：`enabled=false`，次数/占比显示 `—`；未授权盟主的下级按各自授权行生效，不级联。
+- **只展示已授权人员**：报表未命中的节点不展示；未授权盟主被删除后，其已授权下级提升到最近的已授权上级
+  （无已授权上级时挂联盟根）。因此 `totalCount == enabledCount`。
 - 联盟根默认开通（v7：只有联盟根创建者默认开通）。
 
 ## 菜单 / 权限
 
 - 迁移 058：`mgr_module` 在「游戏管理」(id=20) 下新增 `game.club_perf`「业绩股」，
   路由 `/game/club-perf`，sort 40。
-- 权限 `game.club_perf.view`「查询业绩股」；只读，不提供后台授权/取消入口。
+- 权限 `game.club_perf.view`「查询业绩股」+ `game.club_perf.grant`「授权业绩股」（059）。
+- 页面详情右上「＋ 新增开通人员」：弹窗直接列出**当前联盟全部成员**（名称/ID/俱乐部/
+  身份/开通状态），支持按 ID 或昵称搜索；点选后确认开通。成功后 1.2s/2.4s 各刷新一次。
+  只有 `game.club_perf.grant` 显示按钮；联盟成员列表里没有的人不能添加。
 - 默认只授予 role_id=1（超级管理员）；其他角色需在「角色权限」里分配。
+- 后台不提供取消入口（与客户端一致：只授权不取消）。
+- 迁移 060：旧「奖池业绩」模块 `visible=0`，菜单隐藏；模块/权限/历史数据保留，可在
+  「功能模块」里恢复 visible。已登录会话需刷新/重新登录后菜单才更新。
 
 ## 验证
 
@@ -67,6 +96,45 @@
   `CLUB PERFORMANCE SHARES`、`club-perf/overview`、`club-perf-table`。
 - 回滚：`install` 回 `backups/xuanmanager.20261112-1627-rollback` + `start.sh`；
   前端 `rm -rf web && mv web.previous-club-perf-20261112-1627 web`。
+- 2026-11-12 23:33 前端二次部署（联盟列表入口 + 默认只展开联盟根）：
+  `index-BztC41gR.js` + `index-BuMkAbiz.css`；回滚目录
+  `web.previous-club-perf-list-20261112-2333`。
+- 2026-11-12 23:44 三次部署（只列已授权人员 + 过滤未授权节点）：
+  后端 `2f4de954…`（10,498,232 字节，回滚 `backups/xuanmanager.20261112-2344-rollback`）；
+  前端 `index-5C9MyG7D.js` + `index-OOw2MYcz.css`（JS 925,116 / CSS 246,219 字节，
+  与本地一致，回滚 `web.previous-club-perf-auth-20261112-2344`）。
+  health 200、未登录接口 401；线上命中「只列出已授权业绩股的人员」。
+- 2026-11-12 23:49 四次部署（后台「新增开通人员」+ 059 授权权限）：
+  后端 `3b9fe59b…`（10,518,712 字节，回滚 `backups/xuanmanager.20261112-2349-rollback`）；
+  前端 `index-ByliZGGH.js` + `index-B64GuSTe.css`（927,764 / 246,672 字节，
+  回滚 `web.previous-club-perf-grant-20261112-2349`）。
+  迁移 059 已执行，`game.club_perf.grant` 与 role 1 已回读；health 200、
+  player/grant 接口未登录 401；线上命中「新增开通人员 / club-perf/grant」。
+- 2026-11-13 00:15 五次部署（新增联盟成员下拉选择）：
+  后端 `039e896f…`（10,526,904 字节，回滚 `backups/xuanmanager.20261113-0015-rollback`）；
+  前端 `index-CKTrwxjy.js` + `index-B64GuSTe.css`（928,700 / 246,672 字节，
+  回滚 `web.previous-club-perf-select-20261113-0015`）。
+  health 200、candidates 未登录 401；线上命中「从联盟成员选择 / club-perf/candidates」。
+- 2026-11-13 00:29 六次部署（弹窗改为联盟成员列表 + ID/昵称搜索；隐藏奖池业绩菜单）：
+  后端 `337884cf…`（10,531,000 字节，回滚 `backups/xuanmanager.20261113-0029-rollback`）；
+  前端 `index-CAGjTSsD.js` + `index-CzBBGOYh.css`（928,686 / 247,713 字节，
+  回滚 `web.previous-club-perf-search-20261113-0029`）。
+  迁移 060 已执行：`game.jackpot` visible=0；health 200；线上命中
+  「输入玩家ID或昵称 / 没有匹配的联盟成员 / club-perf-candidate-list」。
+- 2026-11-13 00:37 七次部署（候选只留盟主/合伙人，修正身份）：
+  后端 `4394d83c…`（10,531,000 字节，回滚 `backups/xuanmanager.20261113-0037-rollback`）；
+  前端无改动（仍是 `index-CAGjTSsD.js`）。health 200、candidates 未登录 401。
+  只读 SQL 复核：联盟 196102 的候选只剩 3 个盟主（percent=100），4 个普通玩家被过滤。
+- 2026-11-13 00:43 八次部署（候选改为 is_agent 口径，包含所有层级）：
+  后端 `ca078109…`（10,531,000 字节，回滚 `backups/xuanmanager.20261113-0043-rollback`）；
+  前端无改动。health 200、candidates 未登录 401。
+  只读 SQL 复核联盟 196102：候选为 3 个盟主 + a2/a4 两个各层级代理（共 5 人）；
+  a5/z1 无可用邀请码，作为普通玩家被排除。`percent=0` 不再作为判定依据。
+- 2026-11-13 00:48 九次部署（候选只留未开通）：
+  后端 `9708117b…`（10,531,000 字节，回滚 `backups/xuanmanager.20261113-0048-rollback`）；
+  前端 `index-OJTIozTJ.js` + `index-De6POb83.css`（928,452 / 247,535 字节，
+  回滚 `web.previous-club-perf-available-20261113-0048`）。列表去掉业绩股状态列；
+  health 200、candidates 未登录 401；线上命中「当前联盟没有可添加的代理」。
 
 ## 未验证 / 下一步
 

@@ -478,6 +478,10 @@ export default class panelGameOptimize extends UIPanelViewBase {
     }
 
     private FillRow(item:cc.Node, row:OptimizeRow):void {
+        const loseBg = item.getChildByName("背景_输");
+        if(loseBg != null)
+            loseBg.active = row.targetValue < 0;
+
         this.SetLabel(item, "名字", row.name !== "" ? row.name : row.guuid);
         let sub = "ID " + row.guuid;
         if(row.groupName !== "")

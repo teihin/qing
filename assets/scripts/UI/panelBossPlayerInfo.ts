@@ -269,8 +269,11 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     private static groupSerial:number = 0;
     /** 上次拉列表的时间戳：来回切页签时 2 秒内不重复请求。 */
     private groupStamp:number = 0;
-    /** 弹窗模式：create 建组 / addMember 按 ID 加人 / pick 选组加人 / confirm 二次确认。 */
+    /** 弹窗模式：create 建组 / addMember 按 ID 加人 / pick 选组加人 / confirm 删除二次确认。 */
     private dialogMode:string = "";
+    /** 删除分组的确认阶段：1=第一次确认，2=再次确认；关闭弹窗后归零。 */
+    private deleteConfirmStage:number = 0;
+    private deleteConfirmName:string = "";
     private dialogGroupId:string = "";
     private dialogUserId:string = "";
     private pickedGroupId:string = "";
@@ -2155,8 +2158,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     // ------------------------------------------------------------------
     // 分组管理（《俱乐部玩家分组-客户端与后台接口文档》2.x / 3.x / 4.x）
     // ------------------------------------------------------------------
-    /** 分组命令用的 club_id：优先本房间实际结算俱乐部，其次被查玩家所属俱乐部，最后账号自己的俱乐部。 */
-    private GroupClubId():string {
+    /** 查看玩家资料/切代理链用的俱乐部：优先本房间实际结算俱乐部，其次被查玩家所属俱乐部，最后账号自己的俱乐部。 */
+    private DetailClubId():string {
         const account:any = GameDataManager.getAccount();
         let id = resolveMyRoomClubId(account, this.userClubId);
         if(id === "")
@@ -2180,11 +2183,6 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.ShowGroupError("网络未就绪，请稍后重试");
             return;
         }
-        const clubId = this.GroupClubId();
-        if(clubId === "") {
-            this.ShowGroupError("缺少俱乐部信息，无法管理分组");
-            return;
-        }
         this.groupStamp = Date.now();
         this.groupContext = "bossgrp:" + Date.now() + ":" + (++panelBossPlayerInfo.groupSerial);
         this.ClearGroupTimer();
@@ -2199,7 +2197,6 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         try {
             account.reqHallCommand(JSON.stringify({
                 header:"查询_俱乐部_分组列表",
-                club_id:clubId,
                 context:this.groupContext
             }), "P@" + this.groupContext);
         }
@@ -2217,11 +2214,6 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.Toast("网络未就绪，请稍后重试");
             return;
         }
-        const clubId = this.GroupClubId();
-        if(clubId === "") {
-            this.Toast("缺少俱乐部信息，无法管理分组");
-            return;
-        }
         this.groupBusy = true;
         this.groupContext = "bossgrp:" + Date.now() + ":" + (++panelBossPlayerInfo.groupSerial);
         this.ClearGroupTimer();
@@ -2232,7 +2224,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.Toast("操作超时，请刷新后确认结果");
             this.QueryGroups(true);
         }, 12000);
-        const param:any = {header:header, club_id:clubId, context:this.groupContext};
+        const param:any = {header:header, context:this.groupContext};
         if(extra != null) {
             for(const key in extra)
                 param[key] = extra[key];
@@ -2328,11 +2320,6 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.MemberHint("网络未就绪，请稍后重试");
             return;
         }
-        const clubId = this.GroupClubId();
-        if(clubId === "") {
-            this.MemberHint("缺少俱乐部信息，无法查看成员");
-            return;
-        }
         this.memberGroupId = groupId;
         this.memberLoaded = false;
         this.MemberHint("正在加载成员…");
@@ -2348,7 +2335,6 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         try {
             account.reqHallCommand(JSON.stringify({
                 header:"查询_俱乐部_分组_成员",
-                club_id:clubId,
                 group_id:groupId,
                 page:0,
                 count:100,
@@ -2643,7 +2629,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             if(viewBtn.active) {
                 this.BindTap(viewBtn, ()=>{
                     UIManager.getInstance().showPanel("panelClubPlayerInfo", ShowPanelMode.Cover,
-                        JSON.stringify({userId:id, clubId:member.club || this.GroupClubId()}));
+                        JSON.stringify({userId:id, clubId:member.club || this.DetailClubId()}));
                 });
             }
         }
@@ -2656,7 +2642,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
                 this.BindTap(chainBtn, ()=>{
                     this.CloseDialog();
                     this.ShowTab("chain", false);
-                    this.ApplyTarget(id, member.name, member.club || this.GroupClubId());
+                    this.ApplyTarget(id, member.name, member.club || this.DetailClubId());
                 });
             }
         }
@@ -2935,6 +2921,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     }
 
     private OpenDeleteDialog(groupId:string, groupName:string):void {
+        this.deleteConfirmStage = 1;
+        this.deleteConfirmName = groupName;
         this.OpenDialog("confirm", groupId, "", "删除分组",
             "删除「" + groupName + "」后，组内成员会变为未分组，且不可恢复");
     }
@@ -3019,6 +3007,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         // 成员列表只要一个「关闭」；确定键收起来，取消键挪到正中。
         this.Active("分组弹窗/面板/确定", mode !== "members");
         this.Text("分组弹窗/面板/取消/文字", mode === "members" ? "关闭" : "取消");
+        this.Text("分组弹窗/面板/确定/文字", mode === "confirm" ? "继续" : "确定");
         const cancelBtn = this.At("分组弹窗/面板/取消");
         if(cancelBtn)
             cancelBtn.x = mode === "members" ? 0 : -170;
@@ -3054,6 +3043,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         this.dialogGroupId = "";
         this.dialogUserId = "";
         this.pickedGroupId = "";
+        this.deleteConfirmStage = 0;
+        this.deleteConfirmName = "";
         this.memberLoaded = false;
     }
 
@@ -3111,6 +3102,16 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             const groupId = this.dialogGroupId;
             if(groupId === "") {
                 this.CloseDialog();
+                return;
+            }
+            // 第一次确认只翻到第二页，不直接删；第二次确认才真正发命令。
+            if(this.deleteConfirmStage < 2) {
+                this.deleteConfirmStage = 2;
+                this.Text("分组弹窗/面板/标题", "再次确认删除");
+                this.Text("分组弹窗/面板/提示",
+                    "真的要删除分组「" + (this.deleteConfirmName || groupId) +
+                    "」吗？组内成员会变为未分组，且不可恢复。");
+                this.Text("分组弹窗/面板/确定/文字", "确认删除");
                 return;
             }
             this.CloseDialog();

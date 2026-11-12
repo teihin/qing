@@ -44,23 +44,20 @@ func TestBuildClubPerfTreeUnionRootAndNoCascade(t *testing.T) {
 		t.Fatalf("unexpected union totals: my=%d granted=%d left=%d percent=%s",
 			root.My, root.Granted, root.Left, root.Percent)
 	}
-	if total != 4 || enabled != 3 {
+	if total != 3 || enabled != 3 {
 		t.Fatalf("unexpected counts: total=%d enabled=%d", total, enabled)
 	}
 
-	var leader *clubPerfNode
+	var promoted *clubPerfNode
 	for _, child := range root.Children {
 		if child.PlayerID == "200" {
-			leader = child
+			t.Fatalf("unopened leader 200 should be filtered out")
+		}
+		if child.PlayerID == "201" {
+			promoted = child
 		}
 	}
-	if leader == nil {
-		t.Fatalf("leader 200 not attached to root")
-	}
-	if leader.Enabled {
-		t.Fatalf("leader 200 should be unopened")
-	}
-	if len(leader.Children) != 1 || leader.Children[0].PlayerID != "201" || !leader.Children[0].Enabled {
-		t.Fatalf("agent 201 should stay enabled under unopened leader: %+v", leader.Children)
+	if promoted == nil || !promoted.Enabled {
+		t.Fatalf("enabled agent 201 should be promoted to nearest enabled ancestor")
 	}
 }

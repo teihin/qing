@@ -66,7 +66,7 @@ type clubPerfClub struct {
 
 type clubPerfAgent struct {
 	ID, Name, ClubID, ClubName, Upper string
-	IsOwner                           bool
+	IsOwner, IsAgent                  bool
 }
 
 type clubPerfReportRow struct {
@@ -185,6 +185,346 @@ FROM kbedm.club_union_info WHERE union_id = ? AND status <> 'init'`, unionID).
 	})
 }
 
+type clubPerfCandidate struct {
+	PlayerID  string `json:"playerId"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	ClubID    string `json:"clubId"`
+	ClubName  string `json:"clubName"`
+	UnionID   string `json:"unionId"`
+	UnionName string `json:"unionName"`
+	IsLeader  bool   `json:"isLeader"`
+	Enabled   bool   `json:"enabled"`
+}
+
+// handleClubPerfCandidates 返回当前联盟的全部代理（含未开通），供后台下拉选择。
+func (s *Server) handleClubPerfCandidates(w http.ResponseWriter, r *http.Request, p principal) {
+	unionID := strings.TrimSpace(r.URL.Query().Get("union_id"))
+	if unionID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_UNION", "请选择联盟")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	rows, err := s.gameDB.QueryContext(ctx, `SELECT ca.user_guuid,
+COALESCE(NULLIF(ca.user_name,''), a.sm_name, ''),
+ca.club_guuid, COALESCE(c.club_name,''),
+COALESCE(c.union_id,''), COALESCE(u.union_name,''),
+(c.account_id = a.id)
+FROM kbedm.club_agent_info ca
+JOIN kbedm.tbl_Account a ON a.sm_guuid = ca.user_guuid
+JOIN kbedm.club_guuid_info c ON c.club_guuid = ca.club_guuid
+LEFT JOIN kbedm.club_union_info u ON u.union_id = c.union_id AND u.status='used'
+WHERE ca.status = 'used' AND c.union_id = ? AND c.club_status NOT IN ('init','del')
+  AND ((c.account_id = a.id) OR EXISTS(
+        SELECT 1 FROM kbedm.club_invite_code_info ic
+        WHERE ic.club_guuid = ca.club_guuid AND ic.user_guuid = ca.user_guuid AND ic.status = 'used'))
+ORDER BY (c.account_id = a.id) DESC, ca.id`, unionID)
+	if err != nil {
+		s.logger.Error("list club perf candidates", "error", err, "union_id", unionID)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟成员失败")
+		return
+	}
+	defer rows.Close()
+	seen := map[string]bool{}
+	items := make([]clubPerfCandidate, 0, 128)
+	for rows.Next() {
+		var item clubPerfCandidate
+		if err := rows.Scan(&item.PlayerID, &item.Name, &item.ClubID, &item.ClubName,
+			&item.UnionID, &item.UnionName, &item.IsLeader); err != nil {
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "解析联盟成员失败")
+			return
+		}
+		if item.PlayerID == "" || seen[item.PlayerID] {
+			continue
+		}
+		seen[item.PlayerID] = true
+		item.UnionID = unionID
+		item.Role = "合伙人"
+		if item.IsLeader {
+			item.Role = "盟主"
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟成员失败")
+		return
+	}
+	var ownerID, unionName string
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(owner_guuid,''), COALESCE(union_name,'')
+FROM kbedm.club_union_info WHERE union_id = ? AND status <> 'init'`, unionID).Scan(&ownerID, &unionName); err == nil {
+		for i := range items {
+			if items[i].UnionName == "" {
+				items[i].UnionName = unionName
+			}
+			if items[i].PlayerID == ownerID {
+				items[i].Role = "大盟主"
+			}
+		}
+	}
+	enabled := s.clubPerfEnabledSet(ctx, unionID)
+	available := make([]clubPerfCandidate, 0, len(items))
+	for i := range items {
+		items[i].Enabled = items[i].PlayerID == ownerID || enabled[items[i].PlayerID]
+		// 已开通的不再出现在「新增开通人员」列表里。
+		if !items[i].Enabled {
+			available = append(available, items[i])
+		}
+	}
+	items = available
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].IsLeader != items[j].IsLeader {
+			return items[i].IsLeader
+		}
+		if items[i].Name != items[j].Name {
+			return items[i].Name < items[j].Name
+		}
+		return items[i].PlayerID < items[j].PlayerID
+	})
+	writeData(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// clubPerfEnabledSet 返回该联盟已开通业绩股的 guuid 集合（俱乐部级 + 联盟层）。
+func (s *Server) clubPerfEnabledSet(ctx context.Context, unionID string) map[string]bool {
+	result := map[string]bool{}
+	rows, err := s.gameDB.QueryContext(ctx, `SELECT DISTINCT g.user_guuid
+FROM kbedm.club_perf_grant_info g
+JOIN kbedm.club_guuid_info c ON c.club_guuid = g.club_guuid
+WHERE c.union_id = ? AND g.status = 'used'`, unionID)
+	if err != nil {
+		s.logger.Warn("read club perf enabled set", "error", err, "union_id", unionID)
+	} else {
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil && id != "" {
+				result[id] = true
+			}
+		}
+		rows.Close()
+	}
+	rows, err = s.gameDB.QueryContext(ctx, `SELECT DISTINCT leader_guuid
+FROM kbedm.club_perf_union_grant_info WHERE union_id = ? AND status = 'used'`, unionID)
+	if err != nil {
+		s.logger.Warn("read club perf union enabled set", "error", err, "union_id", unionID)
+	} else {
+		for rows.Next() {
+			var id string
+			if rows.Scan(&id) == nil && id != "" {
+				result[id] = true
+			}
+		}
+		rows.Close()
+	}
+	return result
+}
+
+type clubPerfPlayer struct {
+	PlayerID  string `json:"playerId"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	ClubID    string `json:"clubId"`
+	ClubName  string `json:"clubName"`
+	UnionID   string `json:"unionId"`
+	UnionName string `json:"unionName"`
+	IsLeader  bool   `json:"isLeader"`
+	IsAgent   bool   `json:"isAgent"`
+	Enabled   bool   `json:"enabled"`
+	Eligible  bool   `json:"eligible"`
+}
+
+// handleClubPerfPlayer 核对联盟内的目标玩家，供后台「新增开通人员」弹窗使用。
+func (s *Server) handleClubPerfPlayer(w http.ResponseWriter, r *http.Request, p principal) {
+	unionID := strings.TrimSpace(r.URL.Query().Get("union_id"))
+	playerID := strings.TrimSpace(r.URL.Query().Get("player_id"))
+	if unionID == "" || playerID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_PARAMS", "请选择联盟并输入玩家ID")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+	player, err := s.clubPerfLookupPlayer(ctx, unionID, playerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "该玩家不在本联盟代理树中")
+		return
+	}
+	if err != nil {
+		s.logger.Error("lookup club perf player", "error", err, "union_id", unionID, "player_id", playerID)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "核对玩家失败")
+		return
+	}
+	writeData(w, http.StatusOK, player)
+}
+
+// handleClubPerfGrant 只做「开通」，不提供取消；与客户端一致走 enabled=1。
+func (s *Server) handleClubPerfGrant(w http.ResponseWriter, r *http.Request, p principal) {
+	var input struct {
+		UnionID  string `json:"union_id"`
+		PlayerID string `json:"player_id"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	unionID := strings.TrimSpace(input.UnionID)
+	playerID := strings.TrimSpace(input.PlayerID)
+	if unionID == "" || playerID == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_PARAMS", "请选择联盟并输入玩家ID")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	player, err := s.clubPerfLookupPlayer(ctx, unionID, playerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "该玩家不在本联盟代理树中")
+		return
+	}
+	if err != nil {
+		s.logger.Error("lookup club perf player for grant", "error", err, "union_id", unionID, "player_id", playerID)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "核对玩家失败")
+		return
+	}
+	if !player.Eligible {
+		writeError(w, http.StatusBadRequest, "PLAYER_NOT_ELIGIBLE", "只能为盟主或合伙人开通业绩股")
+		return
+	}
+
+	op := "p@" + gameOperationContext("club-perf-grant")
+	requestAudit := map[string]any{"unionId": unionID, "clubId": player.ClubID, "enabled": 1, "context": op}
+	result, err := s.callGameCommand(ctx, "设置_俱乐部_业绩_授权", map[string]any{
+		"club_id": player.ClubID, "user_id": player.PlayerID, "enabled": 1, "context": op,
+	})
+	if err != nil {
+		s.audit(r.Context(), &p, "game.club_perf.grant", "game_player", player.PlayerID,
+			requestAudit, player, nil, 502, "游戏服调用失败", clientIP(r))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", "授权失败："+err.Error())
+		return
+	}
+	if result.RetCode != 512 {
+		message := describeGameFailure("设置_俱乐部_业绩_授权", result.RetCode, result.RetResult)
+		s.audit(r.Context(), &p, "game.club_perf.grant", "game_player", player.PlayerID,
+			requestAudit, player, result.RetResult, result.RetCode, message, clientIP(r))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", message)
+		return
+	}
+	scope, clubIDs := decodeClubPerfGrantResult(result.RetResult)
+	message := "已授权业绩股成员"
+	if scope == "union" {
+		message = "已授权盟主业绩股"
+	}
+	s.audit(r.Context(), &p, "game.club_perf.grant", "game_player", player.PlayerID,
+		requestAudit, player, map[string]any{"scope": scope, "clubIds": clubIDs}, 0, message, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{
+		"player": player, "scope": scope, "clubIds": clubIDs, "message": message,
+	})
+}
+
+func (s *Server) clubPerfLookupPlayer(ctx context.Context, unionID, playerID string) (*clubPerfPlayer, error) {
+	var player clubPerfPlayer
+	var isOwner bool
+	err := s.gameDB.QueryRowContext(ctx, `SELECT ca.user_guuid,
+COALESCE(NULLIF(ca.user_name,''), a.sm_name, ''),
+ca.club_guuid, COALESCE(c.club_name,''),
+COALESCE(c.union_id,''), COALESCE(u.union_name,''),
+(c.account_id = a.id),
+EXISTS(SELECT 1 FROM kbedm.club_invite_code_info ic
+       WHERE ic.club_guuid = ca.club_guuid AND ic.user_guuid = ca.user_guuid AND ic.status = 'used')
+FROM kbedm.club_agent_info ca
+JOIN kbedm.tbl_Account a ON a.sm_guuid = ca.user_guuid
+JOIN kbedm.club_guuid_info c ON c.club_guuid = ca.club_guuid
+LEFT JOIN kbedm.club_union_info u ON u.union_id = c.union_id AND u.status='used'
+WHERE ca.user_guuid = ? AND ca.status = 'used'
+  AND c.union_id = ? AND c.club_status NOT IN ('init','del')
+ORDER BY (c.account_id = a.id) DESC, ca.id
+LIMIT 1`, playerID, unionID).
+		Scan(&player.PlayerID, &player.Name, &player.ClubID, &player.ClubName,
+			&player.UnionID, &player.UnionName, &isOwner, &player.IsAgent)
+	if err != nil {
+		return nil, err
+	}
+	player.UnionID = unionID
+	player.IsLeader = isOwner
+	player.Role = "玩家"
+	var ownerID, ownerClubID string
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(owner_guuid,''), COALESCE(club_guuid,'')
+FROM kbedm.club_union_info WHERE union_id = ? AND status <> 'init'`, unionID).
+		Scan(&ownerID, &ownerClubID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		s.logger.Warn("load club perf union owner", "error", err, "union_id", unionID)
+	}
+	if player.PlayerID == ownerID {
+		player.Role = "大盟主"
+	} else if isOwner {
+		player.Role = "盟主"
+	} else if player.IsAgent {
+		player.Role = "合伙人"
+	}
+	player.Eligible = isOwner || player.IsAgent
+	if player.PlayerID == ownerID && player.ClubID == ownerClubID {
+		player.Enabled = true
+	}
+	if !player.Enabled {
+		player.Enabled = s.clubPerfGrantUsed(ctx, unionID, player.ClubID, player.PlayerID)
+	}
+	return &player, nil
+}
+
+func (s *Server) clubPerfGrantUsed(ctx context.Context, unionID, clubID, playerID string) bool {
+	var status string
+	err := s.gameDB.QueryRowContext(ctx, `SELECT status FROM kbedm.club_perf_grant_info
+WHERE club_guuid = ? AND user_guuid = ? LIMIT 1`, clubID, playerID).Scan(&status)
+	if err == nil && status == "used" {
+		return true
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		s.logger.Warn("read club perf grant", "error", err, "club_id", clubID, "player_id", playerID)
+	}
+	err = s.gameDB.QueryRowContext(ctx, `SELECT status FROM kbedm.club_perf_union_grant_info
+WHERE union_id = ? AND leader_club_id = ? AND leader_guuid = ? LIMIT 1`, unionID, clubID, playerID).Scan(&status)
+	if err == nil && status == "used" {
+		return true
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		s.logger.Warn("read club perf union grant", "error", err, "union_id", unionID, "club_id", clubID, "player_id", playerID)
+	}
+	return false
+}
+
+func decodeClubPerfGrantResult(raw json.RawMessage) (string, []string) {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		raw = json.RawMessage(text)
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(raw, &envelope) != nil {
+		return "", nil
+	}
+	if inner, ok := envelope["result"]; ok {
+		var innerText string
+		if json.Unmarshal(inner, &innerText) == nil {
+			inner = json.RawMessage(innerText)
+		}
+		var nested map[string]json.RawMessage
+		if json.Unmarshal(inner, &nested) == nil {
+			envelope = nested
+		}
+	}
+	var scope string
+	if value, ok := envelope["scope"]; ok {
+		_ = json.Unmarshal(value, &scope)
+	}
+	var clubs []string
+	if value, ok := envelope["club_ids"]; ok {
+		_ = json.Unmarshal(value, &clubs)
+	}
+	if len(clubs) == 0 {
+		if value, ok := envelope["club_id"]; ok {
+			var clubID string
+			if json.Unmarshal(value, &clubID) == nil && clubID != "" {
+				clubs = append(clubs, clubID)
+			}
+		}
+	}
+	return scope, clubs
+}
+
 func (s *Server) clubPerfClubs(ctx context.Context, unionID string) (map[string]*clubPerfClub, []string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT c.club_guuid, COALESCE(c.club_name,''),
 COALESCE(a.sm_guuid,''), COALESCE(a.sm_name,'')
@@ -220,7 +560,9 @@ func (s *Server) clubPerfAgents(ctx context.Context, unionID string) ([]clubPerf
 COALESCE(NULLIF(ca.user_name,''), a.sm_name, ''),
 ca.club_guuid, COALESCE(c.club_name,''),
 COALESCE(NULLIF(ca.upper_guuid,''), ''),
-(c.account_id = a.id)
+(c.account_id = a.id),
+EXISTS(SELECT 1 FROM kbedm.club_invite_code_info ic
+       WHERE ic.club_guuid = ca.club_guuid AND ic.user_guuid = ca.user_guuid AND ic.status = 'used')
 FROM kbedm.club_agent_info ca
 JOIN kbedm.tbl_Account a ON a.sm_guuid = ca.user_guuid
 JOIN kbedm.club_guuid_info c ON c.club_guuid = ca.club_guuid
@@ -234,7 +576,7 @@ ORDER BY ca.id`, unionID)
 	seen := map[string]bool{}
 	for rows.Next() {
 		var item clubPerfAgent
-		if err := rows.Scan(&item.ID, &item.Name, &item.ClubID, &item.ClubName, &item.Upper, &item.IsOwner); err != nil {
+		if err := rows.Scan(&item.ID, &item.Name, &item.ClubID, &item.ClubName, &item.Upper, &item.IsOwner, &item.IsAgent); err != nil {
 			return nil, err
 		}
 		key := item.ClubID + ":" + item.ID
@@ -332,7 +674,7 @@ func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs 
 	newNode := func(id, name, clubID, clubName string) *clubPerfNode {
 		return &clubPerfNode{
 			Key: clubID + ":" + id, PlayerID: id, Name: name, ClubID: clubID, ClubName: clubName,
-			UnionID: unionInfo.UnionID, UnionName: unionInfo.UnionName, Role: "合伙人",
+			UnionID: unionInfo.UnionID, UnionName: unionInfo.UnionName, Role: "玩家",
 			Percent: "0.00", Children: []*clubPerfNode{},
 		}
 	}
@@ -388,6 +730,9 @@ func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs 
 		if node.Name == "" {
 			node.Name = a.Name
 		}
+		if a.IsAgent {
+			node.Role = "合伙人"
+		}
 		if a.Upper != "" && a.Upper != a.ID {
 			if _, ok := bc.nodes[a.Upper]; ok {
 				bc.parents[a.ID] = a.Upper
@@ -429,6 +774,10 @@ func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs 
 				target = newNode(row.ID, row.Name, "", row.ClubName)
 				loose = append(loose, target)
 			}
+			target.Role = "合伙人"
+			if row.Role != "" {
+				target.Role = row.Role
+			}
 		}
 		target.Enabled = true
 		target.My = row.My
@@ -437,9 +786,6 @@ func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs 
 		target.Percent = row.Percent
 		if target.Name == "" {
 			target.Name = row.Name
-		}
-		if !target.IsLeader && !target.IsUnionOwner && row.Role != "" {
-			target.Role = row.Role
 		}
 	}
 
@@ -541,9 +887,26 @@ func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs 
 		root.Percent = "0.00"
 	}
 
+	// 只列出已授权业绩股的人员：未授权节点删除，其已授权下级提升到最近的已授权上级。
+	filterEnabledClubPerf(root)
 	sortClubPerfChildren(root)
 	total, enabled := countClubPerfNodes(root)
 	return root, total, enabled
+}
+
+// filterEnabledClubPerf 保留 enabled 节点；disabled 节点本身不展示，但把它下面
+// 已保留的（已授权）子孙挂到当前父节点，避免未授权盟主的下级消失。
+func filterEnabledClubPerf(node *clubPerfNode) bool {
+	children := make([]*clubPerfNode, 0, len(node.Children))
+	for _, child := range node.Children {
+		if filterEnabledClubPerf(child) {
+			children = append(children, child)
+		} else {
+			children = append(children, child.Children...)
+		}
+	}
+	node.Children = children
+	return node.Enabled
 }
 
 func sortClubPerfChildren(node *clubPerfNode) {
