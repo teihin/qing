@@ -45,10 +45,12 @@ type agentPrincipal struct {
 	ChannelCode string `json:"channelCode"`
 	ChannelName string `json:"channelName"`
 	Presence    string `json:"presence"`
+	TOTPEnabled bool   `json:"totpEnabled"`
+	IsSuper     bool   `json:"isSuper"`
 	CSRFHash    string `json:"-"`
 }
 
-func (p agentPrincipal) IsSupervisor() bool { return p.Role == "supervisor" }
+func (p agentPrincipal) IsSupervisor() bool { return p.Role == "supervisor" || p.IsSuper }
 
 type playerPrincipal struct {
 	PlayerID       string `json:"playerId"`
@@ -74,7 +76,9 @@ type Server struct {
 	logger         *slog.Logger
 	hub            *eventHub
 	loginLimiter   *rateLimiter
+	totpLimiter    *rateLimiter
 	messageLimiter *rateLimiter
+	totpKey        []byte
 	assignmentMu   sync.Mutex
 	mediaTicketMu  sync.Mutex
 	mediaTickets   map[string]mediaAccessTicket
@@ -102,8 +106,10 @@ func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) *
 		logger:         logger,
 		hub:            newEventHub(),
 		loginLimiter:   newRateLimiter(8, 10*time.Minute),
+		totpLimiter:    newRateLimiter(20, 10*time.Minute),
 		messageLimiter: newRateLimiter(30, time.Minute),
 		mediaTickets:   make(map[string]mediaAccessTicket),
+		totpKey:        security.DeriveTOTPKey(cfg.TOTPKey),
 	}
 	s.routes()
 	s.routesDirect()
@@ -313,6 +319,12 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/player/satisfaction", s.playerAuthorized(true, s.handlePlayerSatisfaction))
 
 	s.mux.HandleFunc("POST /api/agent/auth/login", s.handleAgentLogin)
+	s.mux.HandleFunc("POST /api/agent/auth/totp/verify", s.handleAgentTOTPVerify)
+	s.mux.Handle("GET /api/agent/auth/totp/status", s.agentAuthorized(false, false, s.handleAgentTOTPStatus))
+	s.mux.Handle("POST /api/agent/auth/totp/setup", s.agentAuthorized(true, false, s.handleAgentTOTPSetup))
+	s.mux.Handle("POST /api/agent/auth/totp/confirm", s.agentAuthorized(true, false, s.handleAgentTOTPConfirm))
+	s.mux.Handle("POST /api/agent/auth/totp/disable", s.agentAuthorized(true, false, s.handleAgentTOTPDisable))
+	s.mux.Handle("POST /api/agent/auth/totp/recovery", s.agentAuthorized(true, false, s.handleAgentTOTPRegenerateRecovery))
 	s.mux.Handle("GET /api/agent/auth/me", s.agentAuthorized(false, false, s.handleAgentMe))
 	s.mux.Handle("POST /api/agent/auth/password", s.agentAuthorized(true, false, s.handleAgentChangePassword))
 	s.mux.Handle("POST /api/agent/auth/logout", s.agentAuthorized(true, false, s.handleAgentLogout))
@@ -357,6 +369,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/agent/team", s.agentAuthorized(false, true, s.handleTeamList))
 	s.mux.Handle("POST /api/agent/team", s.agentAuthorized(true, true, s.handleTeamCreate))
 	s.mux.Handle("PUT /api/agent/team/{id}", s.agentAuthorized(true, true, s.handleTeamUpdate))
+	s.mux.Handle("POST /api/agent/team/{id}/totp/reset", s.agentAuthorized(true, true, s.handleTeamResetTOTP))
 
 	s.mux.HandleFunc("GET /api/media/{id}", s.handleMedia)
 	s.mux.HandleFunc("/", s.handleStatic)
@@ -419,11 +432,11 @@ func (s *Server) authenticateAgent(r *http.Request) (agentPrincipal, error) {
 		return agentPrincipal{}, errors.New("missing session")
 	}
 	var p agentPrincipal
-	err = s.db.QueryRowContext(r.Context(), `SELECT a.id, a.username, a.display_name, a.role, a.channel_code, channel.display_name, a.presence, sess.csrf_hash
+	err = s.db.QueryRowContext(r.Context(), `SELECT a.id, a.username, a.display_name, a.role, a.is_super, a.channel_code, channel.display_name, a.presence, a.totp_enabled, sess.csrf_hash
 FROM chat_agent_session sess JOIN chat_agent a ON a.id = sess.agent_id
 JOIN chat_channel channel ON channel.code=a.channel_code AND channel.enabled=1
 WHERE sess.token_hash = ? AND sess.expires_at > NOW() AND a.enabled = 1`, security.HashToken(cookie.Value)).Scan(
-		&p.ID, &p.Username, &p.DisplayName, &p.Role, &p.ChannelCode, &p.ChannelName, &p.Presence, &p.CSRFHash,
+		&p.ID, &p.Username, &p.DisplayName, &p.Role, &p.IsSuper, &p.ChannelCode, &p.ChannelName, &p.Presence, &p.TOTPEnabled, &p.CSRFHash,
 	)
 	if err != nil {
 		return agentPrincipal{}, err

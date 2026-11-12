@@ -3,6 +3,7 @@ import { agentSessionExpiredEvent, agentSessionURL, api, ApiError, jsonBody, not
 import { createClientMessageID, gameAdminPlayerURL, playIncomingMessageSound, readAgentSoundPreference, writeAgentSoundPreference } from './client'
 import { Avatar, EmptyState, LoadingScreen, MessageBubble, StatusDot, formatAgo, formatDateTime } from './components'
 import HostingLedgerPage from './HostingLedgerPage'
+import SecuritySettingsModal from './SecuritySettingsModal'
 import type { Agent, Conversation, ConversationDetail, Message, ServiceChannel, TeamMember } from './types'
 
 type Dashboard = { queued: number; active: number; myActive: number; myUnread: number; allUnread: number; onlineAgents: number; todayClosed: number }
@@ -67,7 +68,17 @@ export default function AgentApp() {
   const [agent, setAgent] = useState<Agent | null>(null)
   const [checking, setChecking] = useState(true)
 	const [sessionNotice, setSessionNotice] = useState('')
+	const [showTOTPPrompt, setShowTOTPPrompt] = useState(false)
+	const [showSecurity, setShowSecurity] = useState(false)
 	const agentRef = useRef<Agent | null>(null)
+
+	const refreshAgent = useCallback(async () => {
+		const result = await api<{ agent: Agent; csrfToken: string }>('/api/agent/auth/me')
+		agentRef.current = result.agent
+		setAgentExpectedID(result.agent.id)
+		setCSRF(result.csrfToken)
+		setAgent(result.agent)
+	}, [])
 
 	useEffect(() => {
 		const handleSessionExpired = (event: Event) => {
@@ -104,38 +115,142 @@ export default function AgentApp() {
   }, [])
 
   if (checking) return <LoadingScreen label="正在进入客服工作台" />
-	if (!agent) return <AgentLogin notice={sessionNotice} onLogin={(value, token) => { agentRef.current = value; setSessionNotice(''); setAgentExpectedID(value.id); setCSRF(token); setAgent(value); announceAgentIdentity(value.id) }} />
-	return <AgentWorkspace agent={agent} onLogout={() => { agentRef.current = null; setAgentExpectedID(); setCSRF(''); setAgent(null) }} />
+	if (!agent) return <AgentLogin notice={sessionNotice} onLogin={(value, token) => {
+		agentRef.current = value
+		setSessionNotice('')
+		setAgentExpectedID(value.id)
+		setCSRF(token)
+		setAgent(value)
+		announceAgentIdentity(value.id)
+		if (!value.totpEnabled) setShowTOTPPrompt(true)
+	}} />
+	return <>
+		<AgentWorkspace agent={agent} onLogout={() => {
+			agentRef.current = null
+			setAgentExpectedID()
+			setCSRF('')
+			setAgent(null)
+			setShowTOTPPrompt(false)
+			setShowSecurity(false)
+		}} onSecurity={() => setShowSecurity(true)} />
+		{showTOTPPrompt && !agent.totpEnabled && <TOTPBindPrompt
+			onClose={() => setShowTOTPPrompt(false)}
+			onBind={() => { setShowTOTPPrompt(false); setShowSecurity(true) }}
+		/>}
+		{showSecurity && <SecuritySettingsModal onClose={() => setShowSecurity(false)} onChanged={refreshAgent} />}
+	</>
 }
 
+type AgentLoginResult = { agent?: Agent; csrfToken?: string; totpRequired?: boolean; challengeToken?: string; expiresIn?: number }
+
 function AgentLogin({ notice, onLogin }: { notice: string; onLogin: (agent: Agent, token: string) => void }) {
+  const [step, setStep] = useState<'password' | 'totp'>('password')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [code, setCode] = useState('')
+  const [useRecovery, setUseRecovery] = useState(false)
+  const [challengeToken, setChallengeToken] = useState('')
+  const [expiresAt, setExpiresAt] = useState(0)
+  const [secondsLeft, setSecondsLeft] = useState(0)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (step !== 'totp' || !expiresAt) return
+    const tick = () => setSecondsLeft(Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000)))
+    tick()
+    const timer = window.setInterval(tick, 1000)
+    return () => window.clearInterval(timer)
+  }, [step, expiresAt])
+
+  const backToPassword = () => {
+    setStep('password')
+    setChallengeToken('')
+    setCode('')
+    setUseRecovery(false)
+    setError('')
+  }
+
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); if (!username || !password || loading) return
+    event.preventDefault()
+    if (loading) return
+    if (step === 'password') {
+      if (!username || !password) return
+      setLoading(true); setError('')
+      try {
+        const result = await api<AgentLoginResult>('/api/agent/auth/login', { method: 'POST', body: jsonBody({ username, password }) })
+        if (result.totpRequired && result.challengeToken) {
+          setChallengeToken(result.challengeToken)
+          setExpiresAt(Date.now() + (result.expiresIn ?? 300) * 1000)
+          setPassword('')
+          setCode('')
+          setStep('totp')
+          return
+        }
+        if (result.agent && result.csrfToken) onLogin(result.agent, result.csrfToken)
+      } catch (reason) {
+        setError(reason instanceof ApiError ? reason.message : '登录失败，请稍后重试')
+      } finally { setLoading(false) }
+      return
+    }
+    if (!code.trim()) return
     setLoading(true); setError('')
     try {
-      const result = await api<{ agent: Agent; csrfToken: string }>('/api/agent/auth/login', { method: 'POST', body: jsonBody({ username, password }) })
-      onLogin(result.agent, result.csrfToken)
-    } catch (reason) { setError(reason instanceof ApiError ? reason.message : '登录失败，请稍后重试') }
-    finally { setLoading(false) }
+      const result = await api<AgentLoginResult>('/api/agent/auth/login/totp/verify', { method: 'POST', body: jsonBody({ challengeToken, code: code.trim() }) })
+      if (result.agent && result.csrfToken) onLogin(result.agent, result.csrfToken)
+    } catch (reason) {
+      setError(reason instanceof ApiError ? reason.message : '验证失败，请稍后重试')
+      if (reason instanceof ApiError && (reason.code === 'CHALLENGE_EXPIRED' || reason.code === 'ACCOUNT_DISABLED')) {
+        setStep('password')
+        setChallengeToken('')
+        setCode('')
+      }
+    } finally { setLoading(false) }
   }
+
+  const normalizedCode = useRecovery ? code.replace(/[\s-]/g, '') : code
+  const codeReady = useRecovery ? normalizedCode.length === 10 : /^\d{6}$/.test(code)
+
   return <main className="agent-login-page">
     <section className="login-showcase"><div className="showcase-content"><span className="brand-mark brand-mark-login">BY</span><p>玩家服务中枢</p><h1>每一次回应，<br />都让服务更有温度。</h1><div className="showcase-points"><span>实时会话</span><span>智能分配</span><span>安全留痕</span></div></div></section>
     <section className="login-panel"><form className="login-card" onSubmit={submit}>
-      <header><span className="mobile-login-mark">BY</span><small>客服工作台</small><h2>欢迎回来</h2><p>登录后开始处理玩家咨询</p></header>
-      <label><span>客服账号</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" maxLength={32} placeholder="请输入客服账号" autoFocus /></label>
-      <label><span>登录密码</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" maxLength={72} placeholder="请输入登录密码" /></label>
-	  {(error || notice) && <div className="form-error">{error || notice}</div>}
-      <button type="submit" disabled={loading || !username || !password}>{loading ? '登录中…' : '登录工作台'}</button>
-      <footer>账号由客服主管统一创建。如无法登录，请联系管理员。</footer>
+      {step === 'password' ? <>
+        <header><span className="mobile-login-mark">BY</span><small>客服工作台</small><h2>欢迎回来</h2><p>登录后开始处理玩家咨询</p></header>
+        <label><span>客服账号</span><input value={username} onChange={(event) => setUsername(event.target.value)} autoComplete="username" maxLength={32} placeholder="请输入客服账号" autoFocus /></label>
+        <label><span>登录密码</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" maxLength={72} placeholder="请输入登录密码" /></label>
+        {(error || notice) && <div className="form-error">{error || notice}</div>}
+        <button type="submit" disabled={loading || !username || !password}>{loading ? '登录中…' : '登录工作台'}</button>
+        <footer>账号由客服主管统一创建。如无法登录，请联系管理员。</footer>
+      </> : <>
+        <header><span className="mobile-login-mark">BY</span><small>TWO-STEP VERIFICATION</small><h2>输入谷歌验证码</h2><p>账号 {username} 已开启两步验证</p></header>
+        {useRecovery
+          ? <label><span>恢复码</span><input className="totp-code-input totp-code-input--text" value={code} maxLength={20} onChange={(event) => setCode(event.target.value.toUpperCase())} autoComplete="one-time-code" placeholder="输入 10 位恢复码" autoFocus /></label>
+          : <label><span>6 位动态码</span><input className="totp-code-input" value={code} maxLength={6} inputMode="numeric" onChange={(event) => setCode(event.target.value.replace(/[^0-9]/g, ''))} autoComplete="one-time-code" placeholder="000000" autoFocus /></label>}
+        <div className="login-verify-row">
+          <span>{secondsLeft > 0 ? `本次验证剩余 ${secondsLeft} 秒` : '验证已过期，请返回重新登录'}</span>
+          <button type="button" onClick={() => { setUseRecovery((value) => !value); setCode(''); setError('') }}>{useRecovery ? '使用动态码' : '使用恢复码'}</button>
+        </div>
+        {error && <div className="form-error">{error}</div>}
+        <button type="submit" disabled={loading || !codeReady || secondsLeft <= 0}>{loading ? '验证中…' : '验证并进入'}</button>
+        <footer><button type="button" className="login-back" onClick={backToPassword}>← 返回重新输入账号密码</button></footer>
+      </>}
     </form></section>
   </main>
 }
 
-function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => void }) {
+function TOTPBindPrompt({ onClose, onBind }: { onClose: () => void; onBind: () => void }) {
+  return <div className="modal-backdrop"><div className="modal-card security-modal">
+    <header><div><small>ACCOUNT SECURITY</small><h3>建议开启谷歌验证</h3></div><button type="button" onClick={onClose}>×</button></header>
+    <div className="security-body">
+      <div className="totp-state"><span>当前状态</span><strong>仅使用账号密码登录</strong></div>
+      <div className="totp-banner">开启后，每次登录还需要输入验证器 App 的 6 位动态码。即使密码泄露，没有你的手机也无法登录。</div>
+      <p className="totp-note">绑定约需 1 分钟，完成后会生成 10 个一次性恢复码，请离线保存。</p>
+      <div className="security-actions"><button type="button" onClick={onClose}>稍后再说</button><button type="button" className="primary" onClick={onBind}>立即绑定</button></div>
+    </div>
+  </div></div>
+}
+
+function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogout: () => void; onSecurity: () => void }) {
   const [dashboard, setDashboard] = useState<Dashboard>({ queued: 0, active: 0, myActive: 0, myUnread: 0, allUnread: 0, onlineAgents: 0, todayClosed: 0 })
   const [scope, setScope] = useState<'mine' | 'queue' | 'all' | 'closed' | 'hosted'>('hosted')
   const [search, setSearch] = useState('')
@@ -820,7 +935,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
   return <main className="agent-shell">
     <header className="agent-topbar"><div className="agent-logo"><span className="brand-mark brand-mark-small">BY</span><div><strong>玩家服务中枢</strong><small>{agent.channelName}</small></div></div>
       <div className="topbar-metrics"><span><b>{dashboard.queued}</b> 人待接入</span><span><b>{dashboard.myActive}</b> 个接待中</span><span><b>{dashboard.onlineAgents}</b> 位客服在线</span></div>
-      <div className="agent-account"><Avatar name={agent.displayName} /><div><strong>{agent.displayName}</strong><small>{agent.role === 'supervisor' ? '客服主管' : '在线客服'}</small></div><button className={`sound-toggle ${soundEnabled ? 'active' : ''}`} type="button" aria-pressed={soundEnabled} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); writeAgentSoundPreference(next); if (next) void playIncomingMessageSound() }}>{soundEnabled ? '声音开' : '声音关'}</button><button type="button" onClick={() => setShowLedger(true)}>对账统计</button><button type="button" onClick={() => setShowPassword(true)}>改密码</button>{agent.role === 'supervisor' && <button type="button" onClick={() => setShowTeam(true)}>团队</button>}<button className="logout-button" type="button" onClick={() => void logout()}>退出</button></div>
+      <div className="agent-account"><Avatar name={agent.displayName} /><div><strong>{agent.displayName}</strong><small>{agent.isSuper ? '在线客服' : agent.role === 'supervisor' ? '客服主管' : '在线客服'}</small></div><button className={`sound-toggle ${soundEnabled ? 'active' : ''}`} type="button" aria-pressed={soundEnabled} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); writeAgentSoundPreference(next); if (next) void playIncomingMessageSound() }}>{soundEnabled ? '声音开' : '声音关'}</button><button type="button" onClick={() => setShowLedger(true)}>对账统计</button><button type="button" onClick={() => setShowPassword(true)}>改密码</button><button type="button" onClick={onSecurity}>安全</button>{agent.role === 'supervisor' && <button type="button" onClick={() => setShowTeam(true)}>团队</button>}<button className="logout-button" type="button" onClick={() => void logout()}>退出</button></div>
     </header>
     <section className={`agent-workspace ${detailOpen ? 'mobile-detail-open' : ''}`}>
       <aside className="conversation-sidebar">
@@ -896,7 +1011,7 @@ function AgentWorkspace({ agent, onLogout }: { agent: Agent; onLogout: () => voi
     {remarkTarget && <HostedRemarkModal target={remarkTarget} saving={remarkSaving} error={remarkError} onClose={() => { if (!remarkSaving) setRemarkTarget(null) }} onSubmit={(value) => void saveHostedRemark(remarkTarget, value)} />}
     {showQuickManager && <QuickReplyManager items={quickReplies} onClose={() => setShowQuickManager(false)} onChanged={() => void loadQuickReplies().catch(() => undefined)} />}
     {showLedger && <HostingLedgerPage role={agent.role} onClose={() => setShowLedger(false)} />}
-    {showTeam && <TeamModal members={team} channels={channels} currentAgentID={agent.id} onClose={() => setShowTeam(false)} onRefresh={loadTeam} />}
+    {showTeam && <TeamModal members={team} channels={channels} currentAgentID={agent.id} currentIsSuper={agent.isSuper} onClose={() => setShowTeam(false)} onRefresh={loadTeam} />}
     {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
     {previewImage && <div className="image-preview" role="dialog" aria-modal="true" onClick={() => setPreviewImage('')}><button type="button">×</button><img src={previewImage} alt="图片预览" /></div>}
   </main>
@@ -1226,7 +1341,7 @@ function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   return <div className="modal-backdrop"><form className="modal-card password-modal" onSubmit={submit}><header><div><small>ACCOUNT SECURITY</small><h3>修改登录密码</h3></div><button type="button" onClick={onClose}>×</button></header>{success ? <div className="password-success"><span>✓</span><h4>密码修改成功</h4><p>其他设备上的旧登录会话已经失效，当前工作台可以继续使用。</p><button type="button" onClick={onClose}>完成</button></div> : <><div className="password-fields"><label><span>当前密码</span><input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" maxLength={72} required /></label><label><span>新密码</span><input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} autoComplete="new-password" maxLength={72} minLength={6} required /><small>至少6位，最长72字节</small></label><label><span>确认新密码</span><input type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} autoComplete="new-password" maxLength={72} minLength={6} required /></label></div>{error && <div className="form-error password-error">{error}</div>}<footer><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={saving || !currentPassword || newPassword.length < 6 || !confirmPassword}>{saving ? '正在修改…' : '确认修改'}</button></footer></>}</form></div>
 }
 
-function TeamModal({ members, channels, currentAgentID, onClose, onRefresh }: { members: TeamMember[]; channels: ServiceChannel[]; currentAgentID: number; onClose: () => void; onRefresh: () => Promise<void> }) {
+function TeamModal({ members, channels, currentAgentID, currentIsSuper, onClose, onRefresh }: { members: TeamMember[]; channels: ServiceChannel[]; currentAgentID: number; currentIsSuper: boolean; onClose: () => void; onRefresh: () => Promise<void> }) {
   const [showCreate, setShowCreate] = useState(false); const [error, setError] = useState('')
   const update = async (member: TeamMember, values: { enabled?: boolean; channelCode?: string }) => {
     setError('')
@@ -1235,7 +1350,15 @@ function TeamModal({ members, channels, currentAgentID, onClose, onRefresh }: { 
       await onRefresh()
     } catch (value) { setError(value instanceof ApiError ? value.message : '更新失败') }
   }
-  return <div className="modal-backdrop"><div className="modal-card team-modal"><header><div><small>TEAM MANAGEMENT</small><h3>客服团队与通道</h3></div><button type="button" onClick={onClose}>×</button></header><div className="team-summary"><span><b>{members.filter((item) => item.presence === 'online').length}</b> 在线客服</span><span><b>{members.reduce((sum, item) => sum + item.activeConversations, 0)}</b> 接待中</span><button type="button" onClick={() => setShowCreate((value) => !value)}>＋ 新建客服</button></div>{showCreate && <CreateAgentForm channels={channels} onCreated={async () => { setShowCreate(false); await onRefresh() }} onError={setError} />}{error && <div className="form-error team-error">{error}</div>}<div className="team-list">{members.map((member) => <div key={member.id}><Avatar name={member.displayName} /><span><strong>{member.displayName}<em>{member.role === 'supervisor' ? '主管' : '客服'}</em></strong><small>@{member.username} · {member.activeConversations}/{member.maxConversations} 个会话</small></span><label className="team-channel"><span>服务通道</span><select value={member.channelCode} disabled={member.id === currentAgentID} title={member.id === currentAgentID ? '当前登录主管的通道需由其他主管修改' : '修改后该客服只能处理新通道会话'} onChange={(event) => void update(member, { channelCode: event.target.value })}>{channels.map((channel) => <option key={channel.code} value={channel.code}>{channel.displayName}</option>)}</select></label><StatusDot status={member.presence} /><b>{member.presence === 'online' ? '在线' : member.presence === 'away' ? '离开' : '离线'}</b><label className="enabled-switch"><input type="checkbox" checked={member.enabled} onChange={(event) => void update(member, { enabled: event.target.checked })} /><span /></label></div>)}</div></div></div>
+  const resetTOTP = async (member: TeamMember) => {
+    if (!window.confirm(`确定重置“${member.displayName}”的谷歌验证吗？\n\n该客服当前会话会退出，重新登录后需要重新绑定。`)) return
+    setError('')
+    try {
+      await api(`/api/agent/team/${member.id}/totp/reset`, { method: 'POST' })
+      await onRefresh()
+    } catch (value) { setError(value instanceof ApiError ? value.message : '重置验证失败') }
+  }
+  return <div className="modal-backdrop"><div className="modal-card team-modal"><header><div><small>TEAM MANAGEMENT</small><h3>客服团队与通道</h3></div><button type="button" onClick={onClose}>×</button></header><div className="team-summary"><span><b>{members.filter((item) => item.presence === 'online').length}</b> 在线客服</span><span><b>{members.reduce((sum, item) => sum + item.activeConversations, 0)}</b> 接待中</span><button type="button" onClick={() => setShowCreate((value) => !value)}>＋ 新建客服</button></div>{showCreate && <CreateAgentForm channels={channels} onCreated={async () => { setShowCreate(false); await onRefresh() }} onError={setError} />}{error && <div className="form-error team-error">{error}</div>}<div className="team-list">{members.map((member) => <div key={member.id}><Avatar name={member.displayName} /><span><strong>{member.displayName}<em>{member.isSuper ? '客服' : member.role === 'supervisor' ? '主管' : '客服'}</em></strong><small>@{member.username} · {member.activeConversations}/{member.maxConversations} 个会话</small><small className={`team-totp ${member.totpEnabled ? 'is-on' : ''}`}>谷歌验证 {member.totpEnabled ? '已绑定' : '未绑定'}</small></span><label className="team-channel"><span>服务通道</span><select value={member.channelCode} disabled={member.id === currentAgentID} title={member.id === currentAgentID ? '当前登录账号的通道需由其他账号修改' : '修改后该客服只能处理新通道会话'} onChange={(event) => void update(member, { channelCode: event.target.value })}>{channels.map((channel) => <option key={channel.code} value={channel.code}>{channel.displayName}</option>)}</select></label><StatusDot status={member.presence} /><b>{member.presence === 'online' ? '在线' : member.presence === 'away' ? '离开' : '离线'}</b>{member.id !== currentAgentID && member.totpEnabled && (member.role === 'agent' || (currentIsSuper && member.role === 'supervisor')) && <button type="button" className="team-totp-reset" onClick={() => void resetTOTP(member)}>重置验证</button>}<label className="enabled-switch"><input type="checkbox" checked={member.enabled} onChange={(event) => void update(member, { enabled: event.target.checked })} /><span /></label></div>)}</div></div></div>
 }
 
 function CreateAgentForm({ channels, onCreated, onError }: { channels: ServiceChannel[]; onCreated: () => Promise<void>; onError: (value: string) => void }) {

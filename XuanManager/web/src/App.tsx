@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody, SESSION_EXPIRED_EVENT } from "./api";
 import Layout from "./components/Layout";
-import { Field, FormActions, LoadingBlock, Modal, submitGuard, Toast } from "./components/ui";
+import SecuritySettingsModal from "./components/SecuritySettingsModal";
+import { Button, Field, FormActions, LoadingBlock, Modal, submitGuard, Toast } from "./components/ui";
 import AuditPage from "./pages/AuditPage";
 import GameCallLogsPage from "./pages/GameCallLogsPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -58,15 +59,25 @@ export default function App() {
   const [route, setRoute] = useState(routeFromHash);
   const [notice, setNotice] = useState<Notice>(null);
   const [changePassword, setChangePassword] = useState(false);
+  const [securityOpen, setSecurityOpen] = useState(false);
+  const [totpPrompt, setTotpPrompt] = useState(false);
 
-  const refreshSession = useCallback(async () => {
+  const refreshSession = useCallback(async (): Promise<SessionData | null> => {
     try {
-      setSession(await api<SessionData>("/api/auth/me"));
-    } catch (reason) {
-      if (reason instanceof ApiError && reason.status === 401) setSession(null);
-      else setSession(null);
+      const data = await api<SessionData>("/api/auth/me");
+      setSession(data);
+      return data;
+    } catch {
+      setSession(null);
+      return null;
     }
   }, []);
+
+  // 每次用账号密码完成登录后提醒一次；未绑定时不阻塞使用，可稍后再绑。
+  const handleLoginSuccess = useCallback(async () => {
+    const data = await refreshSession();
+    if (data && !data.user.totpEnabled) setTotpPrompt(true);
+  }, [refreshSession]);
 
   useEffect(() => { void refreshSession(); }, [refreshSession]);
   useEffect(() => {
@@ -169,14 +180,37 @@ export default function App() {
   }, [route, can, notify, navigate, session?.user.isSuper, session?.user.isProtectedRoot, session?.user.username]);
 
   if (session === undefined) return <div className="boot-screen"><span className="brand__mark brand__mark--large"><i>X</i></span><LoadingBlock label="正在建立安全会话" /></div>;
-  if (session === null) return <LoginPage onSuccess={refreshSession} />;
+  if (session === null) return <LoginPage onSuccess={handleLoginSuccess} />;
 
   return (
     <>
-      <Layout session={session} route={route} onNavigate={navigate} onChangePassword={() => setChangePassword(true)} onLogout={logout}>{page}</Layout>
+      <Layout session={session} route={route} onNavigate={navigate} onChangePassword={() => setChangePassword(true)} onSecurity={() => setSecurityOpen(true)} onLogout={logout}>{page}</Layout>
       {changePassword && <ChangePasswordModal onClose={() => setChangePassword(false)} onSaved={(message) => { setChangePassword(false); notify(message); }} />}
+      {securityOpen && <SecuritySettingsModal onClose={() => setSecurityOpen(false)} onChanged={() => { void refreshSession(); }} notify={notify} />}
+      {totpPrompt && !session.user.totpEnabled && (
+        <TOTPBindPrompt
+          onClose={() => setTotpPrompt(false)}
+          onBind={() => { setTotpPrompt(false); setSecurityOpen(true); }}
+        />
+      )}
       {notice && <Toast {...notice} onClose={() => setNotice(null)} />}
     </>
+  );
+}
+
+function TOTPBindPrompt({ onClose, onBind }: { onClose: () => void; onBind: () => void }) {
+  return (
+    <Modal title="建议开启谷歌验证" eyebrow="ACCOUNT SECURITY" onClose={onClose}>
+      <div className="totp-panel">
+        <div className="totp-state"><span>当前状态</span><strong>仅使用账号密码登录</strong></div>
+        <div className="info-banner">开启后，每次登录还需要输入验证器 App 的 6 位动态码。即使密码泄露，没有你的手机也无法登录。</div>
+        <p className="totp-note">绑定约需 1 分钟，完成后会生成 10 个一次性恢复码，请离线保存。</p>
+        <div className="totp-actions">
+          <Button variant="secondary" onClick={onClose}>稍后再说</Button>
+          <Button onClick={onBind}>立即绑定</Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

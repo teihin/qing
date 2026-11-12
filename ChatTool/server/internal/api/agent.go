@@ -58,7 +58,7 @@ COALESCE(SUM(c.status='active' AND EXISTS (
 		return
 	}
 	_ = s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_agent
-WHERE channel_code=? AND enabled=1 AND presence='online' AND last_seen_at>=?
+WHERE channel_code=? AND enabled=1 AND hidden=0 AND presence='online' AND last_seen_at>=?
 AND EXISTS (SELECT 1 FROM chat_agent_session sess WHERE sess.agent_id=chat_agent.id AND sess.expires_at>NOW())`, p.ChannelCode, cutoff).Scan(&onlineAgents)
 	writeData(w, http.StatusOK, map[string]any{"queued": queued, "active": active, "myActive": myActive, "myUnread": myUnread, "allUnread": allUnread, "onlineAgents": onlineAgents, "todayClosed": todayClosed})
 }
@@ -540,11 +540,12 @@ func (s *Server) handleQuickReplyDelete(w http.ResponseWriter, r *http.Request, 
 }
 
 func (s *Server) handleTeamOptions(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
-	rows, err := s.db.QueryContext(r.Context(), `SELECT a.id,a.display_name,a.role,a.channel_code,channel.display_name,a.presence,a.max_conversations,a.last_seen_at,
+	rows, err := s.db.QueryContext(r.Context(), `SELECT a.id,a.display_name,a.role,a.is_super,a.channel_code,channel.display_name,a.presence,a.totp_enabled,a.max_conversations,a.last_seen_at,
 (SELECT COUNT(*) FROM chat_conversation c WHERE c.assigned_agent_id=a.id AND c.status='active'
  AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')) active_count
 FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code
-WHERE a.enabled=1 AND a.channel_code=? ORDER BY FIELD(a.presence,'online','away','offline'),a.display_name`, p.ChannelCode)
+WHERE a.enabled=1 AND a.channel_code=? AND (a.hidden=0 OR a.id=?)
+ORDER BY FIELD(a.presence,'online','away','offline'),a.display_name`, p.ChannelCode, p.ID)
 	if err != nil {
 		writeError(w, 500, "DB_ERROR", "无法读取可转接客服")
 		return
@@ -554,21 +555,25 @@ WHERE a.enabled=1 AND a.channel_code=? ORDER BY FIELD(a.presence,'online','away'
 	for rows.Next() {
 		var id int64
 		var name, role, channelCode, channelName, presence string
+		var isSuper, totpEnabled bool
 		var max, active int
 		var last sql.NullTime
-		if rows.Scan(&id, &name, &role, &channelCode, &channelName, &presence, &max, &last, &active) == nil {
-			items = append(items, map[string]any{"id": id, "username": "", "displayName": name, "role": role, "enabled": true,
-				"channelCode": channelCode, "channelName": channelName, "presence": presence, "maxConversations": max, "activeConversations": active, "lastSeenAt": nullableTime(last)})
+		if rows.Scan(&id, &name, &role, &isSuper, &channelCode, &channelName, &presence, &totpEnabled, &max, &last, &active) == nil {
+			items = append(items, map[string]any{"id": id, "username": "", "displayName": name, "role": role, "isSuper": isSuper, "enabled": true,
+				"channelCode": channelCode, "channelName": channelName, "presence": presence, "totpEnabled": totpEnabled,
+				"maxConversations": max, "activeConversations": active, "lastSeenAt": nullableTime(last)})
 		}
 	}
 	writeData(w, 200, map[string]any{"items": items})
 }
 
 func (s *Server) handleTeamList(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
-	rows, err := s.db.QueryContext(r.Context(), `SELECT a.id,a.username,a.display_name,a.role,a.channel_code,channel.display_name,a.enabled,a.presence,a.max_conversations,a.last_seen_at,
+	rows, err := s.db.QueryContext(r.Context(), `SELECT a.id,a.username,a.display_name,a.role,a.is_super,a.channel_code,channel.display_name,a.enabled,a.presence,a.totp_enabled,a.max_conversations,a.last_seen_at,
 (SELECT COUNT(*) FROM chat_conversation c WHERE c.assigned_agent_id=a.id AND c.status='active'
  AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=c.id AND player_message.sender_type='player')) active_count
-FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code ORDER BY a.enabled DESC,channel.sort_order,a.role,a.display_name`)
+FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code
+WHERE (a.hidden=0 OR a.id=?)
+ORDER BY a.enabled DESC,channel.sort_order,a.role,a.display_name`, p.ID)
 	if err != nil {
 		writeError(w, 500, "DB_ERROR", "无法读取客服团队")
 		return
@@ -578,11 +583,11 @@ FROM chat_agent a JOIN chat_channel channel ON channel.code=a.channel_code ORDER
 	for rows.Next() {
 		var id int64
 		var username, name, role, channelCode, channelName, presence string
-		var enabled bool
+		var enabled, isSuper, totpEnabled bool
 		var max, active int
 		var last sql.NullTime
-		if rows.Scan(&id, &username, &name, &role, &channelCode, &channelName, &enabled, &presence, &max, &last, &active) == nil {
-			items = append(items, map[string]any{"id": id, "username": username, "displayName": name, "role": role, "channelCode": channelCode, "channelName": channelName, "enabled": enabled, "presence": presence, "maxConversations": max, "activeConversations": active, "lastSeenAt": nullableTime(last)})
+		if rows.Scan(&id, &username, &name, &role, &isSuper, &channelCode, &channelName, &enabled, &presence, &totpEnabled, &max, &last, &active) == nil {
+			items = append(items, map[string]any{"id": id, "username": username, "displayName": name, "role": role, "isSuper": isSuper, "channelCode": channelCode, "channelName": channelName, "enabled": enabled, "presence": presence, "totpEnabled": totpEnabled, "maxConversations": max, "activeConversations": active, "lastSeenAt": nullableTime(last)})
 		}
 	}
 	channels, err := s.listEnabledChannels(r.Context())
@@ -679,12 +684,16 @@ func (s *Server) handleTeamUpdate(w http.ResponseWriter, r *http.Request, p agen
 		return
 	}
 	var existingRole, existingChannel string
-	var existingEnabled bool
+	var existingEnabled, existingIsSuper, existingHidden bool
 	var activeConversations int
-	if err := s.db.QueryRowContext(r.Context(), `SELECT role,channel_code,enabled,
+	if err := s.db.QueryRowContext(r.Context(), `SELECT role,channel_code,enabled,is_super,hidden,
 (SELECT COUNT(*) FROM chat_conversation active WHERE active.assigned_agent_id=chat_agent.id AND active.status='active'
  AND EXISTS (SELECT 1 FROM chat_message player_message WHERE player_message.conversation_id=active.id AND player_message.sender_type='player'))
-FROM chat_agent WHERE id=?`, id).Scan(&existingRole, &existingChannel, &existingEnabled, &activeConversations); err != nil {
+FROM chat_agent WHERE id=?`, id).Scan(&existingRole, &existingChannel, &existingEnabled, &existingIsSuper, &existingHidden, &activeConversations); err != nil {
+		writeError(w, 404, "AGENT_NOT_FOUND", "客服账号不存在")
+		return
+	}
+	if (existingHidden || existingIsSuper) && !p.IsSuper {
 		writeError(w, 404, "AGENT_NOT_FOUND", "客服账号不存在")
 		return
 	}
@@ -707,7 +716,7 @@ FROM chat_agent WHERE id=?`, id).Scan(&existingRole, &existingChannel, &existing
 	}
 	if existingRole == "supervisor" && existingEnabled && (req.Role != "supervisor" || !req.Enabled) {
 		var otherSupervisors int
-		if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_agent WHERE role='supervisor' AND enabled=1 AND id<>?`, id).Scan(&otherSupervisors); err != nil {
+		if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM chat_agent WHERE role='supervisor' AND enabled=1 AND hidden=0 AND id<>?`, id).Scan(&otherSupervisors); err != nil {
 			writeError(w, 500, "DB_ERROR", "无法校验主管账号")
 			return
 		}
@@ -750,6 +759,71 @@ FROM chat_agent WHERE id=?`, id).Scan(&existingRole, &existingChannel, &existing
 	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "team.update", "agent", strconv.FormatInt(id, 10), map[string]any{"role": req.Role, "channel": channel.Code, "enabled": req.Enabled, "maxConversations": req.MaxConversations, "passwordReset": req.NewPassword != ""}, clientIP(r))
 	s.hub.publish("team", liveEvent{Type: "team.changed"})
 	writeData(w, 200, map[string]any{"id": id})
+}
+
+func (s *Server) handleTeamResetTOTP(w http.ResponseWriter, r *http.Request, p agentPrincipal) {
+	id, ok := parseInt64Path(w, r.PathValue("id"))
+	if !ok {
+		return
+	}
+	if id == p.ID {
+		writeError(w, http.StatusBadRequest, "CANNOT_RESET_SELF", "不能重置自己的谷歌验证，请使用恢复码或服务器本机维护命令")
+		return
+	}
+	var username, role string
+	var enabled, isSuper, hidden bool
+	if err := s.db.QueryRowContext(r.Context(), `SELECT username, role, totp_enabled, is_super, hidden FROM chat_agent WHERE id = ?`, id).
+		Scan(&username, &role, &enabled, &isSuper, &hidden); err != nil {
+		writeError(w, http.StatusNotFound, "AGENT_NOT_FOUND", "客服账号不存在")
+		return
+	}
+	if (hidden || isSuper) && !p.IsSuper {
+		writeError(w, http.StatusNotFound, "AGENT_NOT_FOUND", "客服账号不存在")
+		return
+	}
+	if role == "supervisor" && !p.IsSuper {
+		writeError(w, http.StatusForbidden, "SUPERVISOR_TOTP_PROTECTED", "客服主管的二次验证不能由其他主管重置，请使用恢复码或服务器本机维护命令")
+		return
+	}
+	if !enabled {
+		writeError(w, http.StatusBadRequest, "TOTP_NOT_ENABLED", "该客服尚未绑定谷歌验证")
+		return
+	}
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(r.Context(), `UPDATE chat_agent SET
+totp_secret = NULL, totp_enabled = 0, totp_confirmed_at = NULL, totp_last_step = 0, presence = 'offline'
+WHERE id = ?`, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	for _, statement := range []string{
+		`DELETE FROM chat_agent_recovery_code WHERE agent_id = ?`,
+		`DELETE FROM chat_agent_login_challenge WHERE agent_id = ?`,
+		`DELETE FROM chat_agent_session WHERE agent_id = ?`,
+	} {
+		if _, err := tx.ExecContext(r.Context(), statement, id); err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+			return
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	_ = s.requeueAgentConversations(r.Context(), id, "二次验证被主管重置")
+	s.hub.publish("agent:"+strconv.FormatInt(id, 10), liveEvent{
+		Type:    "session.replaced",
+		Payload: map[string]any{"message": "客服主管已重置你的谷歌验证，请重新登录并重新绑定"},
+	})
+	s.hub.publish("team", liveEvent{Type: "team.changed"})
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "team.reset_totp", "agent", strconv.FormatInt(id, 10),
+		map[string]any{"username": username}, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"message": "已重置该客服的谷歌验证，旧会话已退出；重新登录后需重新绑定"})
 }
 
 func nullableTime(value sql.NullTime) any {

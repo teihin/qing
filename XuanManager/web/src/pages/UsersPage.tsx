@@ -29,6 +29,20 @@ export default function UsersPage({ can, notify }: { can: (permission: string) =
     }
   }, [query, queryRevision, notify]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const reload = () => { void load(); };
+    window.addEventListener("xuan:totp-changed", reload);
+    return () => window.removeEventListener("xuan:totp-changed", reload);
+  }, [load]);
+
+  const resetTOTP = async (user: UserItem) => {
+    if (!window.confirm(`确定重置“${user.displayName}”的谷歌验证吗？\n\n该用户所有登录会话会立即退出，重新登录后需要重新绑定验证器。`)) return;
+    try {
+      const result = await api<{ message: string }>(`/api/users/${user.id}/totp/reset`, { method: "POST" });
+      notify(result.message);
+      await load();
+    } catch (reason) { notify(errorMessage(reason), "error"); }
+  };
 
   const setStatus = async (user: UserItem) => {
     const next = user.status === "enabled" ? "disabled" : "enabled";
@@ -49,14 +63,15 @@ export default function UsersPage({ can, notify }: { can: (permission: string) =
           <span className="toolbar__count">共 {data?.total ?? 0} 个后台用户</span>
         </div>
         {!data ? <LoadingBlock /> : data.items.length === 0 ? <EmptyState title="没有找到后台用户" description="调整搜索条件，或创建一个新的后台账号。" /> : (
-          <div className="table-wrap"><table><thead><tr><th>用户</th><th>账号</th><th>角色</th><th>状态</th><th>最近登录（北京时间）</th><th>创建时间（北京时间）</th><th className="align-right">操作</th></tr></thead><tbody>
+          <div className="table-wrap"><table><thead><tr><th>用户</th><th>账号</th><th>角色</th><th>状态</th><th>二次验证</th><th>最近登录（北京时间）</th><th>创建时间（北京时间）</th><th className="align-right">操作</th></tr></thead><tbody>
             {data.items.map((user) => (
               <tr key={user.id}>
                 <td><div className="user-cell"><span>{user.displayName.slice(0, 1) || "管"}</span><div><strong>{user.displayName}</strong>{user.isSuper && <small>系统最高权限账号</small>}</div></div></td>
-                <td><code>{user.username}</code></td><td>{user.roleName}</td><td><StatusPill status={user.status} superAdmin={user.isSuper} /></td><td>{formatDate(user.lastLoginAt)}</td><td>{formatDate(user.createdAt)}</td>
+                <td><code>{user.username}</code></td><td>{user.roleName}</td><td><StatusPill status={user.status} superAdmin={user.isSuper} /></td><td><span className={`pill pill--${user.totpEnabled ? "enabled" : "disabled"}`}><i />{user.totpEnabled ? "已绑定" : "未绑定"}</span></td><td>{formatDate(user.lastLoginAt)}</td><td>{formatDate(user.createdAt)}</td>
                 <td><div className="row-actions">
                   {can("user.update") && <button onClick={() => setModal({ type: "edit", user })}>编辑</button>}
                   {can("user.reset_password") && !user.isSuper && <button onClick={() => setModal({ type: "password", user })}>重置密码</button>}
+                  {can("user.reset_totp") && !user.isSuper && user.totpEnabled && <button className="danger-link" onClick={() => void resetTOTP(user)}>重置验证</button>}
                   {can("user.status") && !user.isSuper && <button className={user.status === "enabled" ? "danger-link" : "success-link"} onClick={() => void setStatus(user)}>{user.status === "enabled" ? "停用" : "启用"}</button>}
                 </div></td>
               </tr>

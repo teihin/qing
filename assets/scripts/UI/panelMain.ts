@@ -22,6 +22,7 @@ import WebLoadingManager from "../common/WebLoadingManager";
 import RoomInviteManager from "../logic/RoomInviteManager";
 import panelExchangeStone from "./panelExchangeStone";
 import panelBossPlayerInfo from "./panelBossPlayerInfo";
+import panelInitTradePwd from "./panelInitTradePwd";
 import { resolveRoomClubId, withRoomClubId } from "../logic/RoomClubContext";
 import DirectChatManager from "../logic/DirectChatManager";
 
@@ -962,10 +963,21 @@ export default class panelMain extends UIPanelViewBase {
         const modifyPanel = this.node.getChildByName("修改交易密码");
         if(modifyPanel != null)
             modifyPanel.active = false;
-        const initPanel = this.node.getChildByName("初始化交易密码");
-        if(initPanel != null)
-            initPanel.active = true;
-        this.ClearTransactionPasswordInputs();
+        // 初始化交易密码是独立 Prefab，挂 Canvas/Top：从上下分、赠送等深层弹窗进来时不会被盖住。
+        UIManager.getInstance().showPanel("panelInitTradePwd",ShowPanelMode.Top);
+    }
+
+    private GetInitTradePasswordPanel():panelInitTradePwd
+    {
+        const top = UIManager.getInstance().top;
+        if(top == null)
+            return null;
+        for(const item of top.children)
+        {
+            if(item.name == "panelInitTradePwd")
+                return item.getComponent(panelInitTradePwd);
+        }
+        return null;
     }
 
     private ShowTransactionPasswordRequired():void
@@ -2220,7 +2232,7 @@ export default class panelMain extends UIPanelViewBase {
         {
             if(this.bNeedInitJYPwd)
             {
-                Tool.GetChild(this.node,"初始化交易密码").active = true
+                this.OpenInitTransactionPassword();
             }
             else
             {
@@ -2258,29 +2270,6 @@ export default class panelMain extends UIPanelViewBase {
 
             // 改交易密码用登录密码核验：登录密码校验和交易密码落库都在后台完成。
             this.SubmitPayPasswordChange(strLoginPwd, strNewPwd1);
-        }
-        else if(button.node.name == "确定初始化交易密码")
-        {
-            let strNewPwd1 = Tool.GetChild(this.node,"初始化交易密码/列表/新密码1/txt").getComponent(cc.EditBox).string
-            let strNewPwd2 = Tool.GetChild(this.node,"初始化交易密码/列表/新密码2/txt").getComponent(cc.EditBox).string
-            if(strNewPwd1 == "")
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请输入新密码");
-                return
-            }
-            if(strNewPwd2 == "")
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"请再次输入新密码");
-                return
-            }
-            if(strNewPwd1 != strNewPwd2)
-            {
-                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,"两次密码输入不一致");
-                return
-            }
-            //开始修改
-            let strParam = "{\"header\":\"修改_玩家_交易密码\",\"old_pwd\":\"\",\"new_pwd\":\"" + strNewPwd1 + "\"}";
-            GameDataManager.getAccount().reqHallCommand(strParam, "P@修改_玩家_交易密码");
         }
         else if(button.node.name == "惩罚列表")
         {
@@ -2364,13 +2353,16 @@ export default class panelMain extends UIPanelViewBase {
         let inputPaths = [
             "修改交易密码/列表/原有密码/txt",
             "修改交易密码/列表/新密码1/txt",
-            "修改交易密码/列表/新密码2/txt",
-            "初始化交易密码/列表/新密码1/txt",
-            "初始化交易密码/列表/新密码2/txt"
+            "修改交易密码/列表/新密码2/txt"
         ];
         for(let path of inputPaths)
         {
-            let editBox = Tool.GetChild(this.node,path).getComponent(cc.EditBox);
+            let node = Tool.GetChild(this.node,path);
+            if(node == null)
+                continue;
+            let editBox = node.getComponent(cc.EditBox);
+            if(editBox == null)
+                continue;
             editBox.string = "";
             editBox.blur();
         }
@@ -5786,13 +5778,21 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(param.indexOf("修改_玩家_登录密码")>=0 || param.indexOf("修改_玩家_交易密码")>=0)
         {
+            const isTradePassword = param.indexOf("修改_玩家_交易密码")>=0;
+            // 初始化交易密码 Prefab 自己发命令，回包也由它收尾，这里只做转发，避免重复提示。
+            const initPanel = isTradePassword ? this.GetInitTradePasswordPanel() : null;
+            if(initPanel != null)
+            {
+                if(nCode == 0x200)
+                    this.bNeedInitJYPwd = false;
+                initPanel.OnSubmitResult(nCode,param);
+                return;
+            }
             if (nCode == 0x200)
             {
-                if(param.indexOf("修改_玩家_交易密码")>=0)
+                if(isTradePassword)
                 {
                     this.ClearTransactionPasswordInputs();
-                    if(this.bNeedInitJYPwd)
-                        Tool.GetChild(this.node,"初始化交易密码").active = false;
                     this.bNeedInitJYPwd = false;
                 }
                 UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "修改密码成功！");                

@@ -35,16 +35,17 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	var p principal
 	var passwordHash, status string
-	var isSuper bool
+	var isSuper, totpEnabled bool
 	var failCount int
 	var lockedUntil sql.NullTime
+	var totpSecret sql.NullString
 	err := s.db.QueryRowContext(r.Context(), `SELECT
 u.id, u.username, u.display_name, u.role_id, r.code, r.name, u.is_super,
-u.password_hash, u.status, u.login_fail_count, u.locked_until
+u.password_hash, u.status, u.login_fail_count, u.locked_until, u.totp_enabled, u.totp_secret
 FROM mgr_user u JOIN mgr_role r ON r.id = u.role_id
 WHERE u.username = ?`, input.Username).Scan(
 		&p.ID, &p.Username, &p.DisplayName, &p.RoleID, &p.RoleCode, &p.RoleName, &isSuper,
-		&passwordHash, &status, &failCount, &lockedUntil,
+		&passwordHash, &status, &failCount, &lockedUntil, &totpEnabled, &totpSecret,
 	)
 	if err != nil || status != "enabled" || (lockedUntil.Valid && lockedUntil.Time.After(time.Now())) || !security.VerifyPassword(passwordHash, input.Password) {
 		if err == nil && status == "enabled" && (!lockedUntil.Valid || lockedUntil.Time.Before(time.Now())) {
@@ -60,6 +61,27 @@ WHERE id = ?`, p.ID)
 	}
 	p.IsProtectedRoot = isProtectedRootIdentity(p.Username)
 	p.IsSuper = isEffectiveSuper(isSuper, p.RoleCode)
+	p.TOTPEnabled = totpEnabled
+
+	if totpEnabled {
+		if !totpSecret.Valid || strings.TrimSpace(totpSecret.String) == "" {
+			s.logger.Error("totp enabled without secret", "user", p.Username)
+			writeError(w, http.StatusInternalServerError, "TOTP_STATE_INVALID", "二次验证配置异常，请联系超级管理员重置")
+			return
+		}
+		challengeToken, err := s.createLoginChallenge(r.Context(), p.ID, clientIP(r))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "LOGIN_CHALLENGE_ERROR", "暂时无法发起二次验证，请稍后重试")
+			return
+		}
+		// 密码通过但尚未完成二次验证：不下发会话、不动旧会话，避免知道密码的人先把正常用户踢下线。
+		writeData(w, http.StatusOK, map[string]any{
+			"totpRequired":   true,
+			"challengeToken": challengeToken,
+			"expiresIn":      int(totpChallengeTTL.Seconds()),
+		})
+		return
+	}
 
 	sessionToken, err := security.NewToken()
 	if err != nil {
@@ -139,6 +161,7 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request, p principal) {
 			"id": p.ID, "username": p.Username, "displayName": p.DisplayName,
 			"roleId": p.RoleID, "roleCode": p.RoleCode, "roleName": p.RoleName,
 			"isSuper": p.IsSuper, "isProtectedRoot": p.IsProtectedRoot,
+			"totpEnabled": p.TOTPEnabled,
 		},
 		"permissions": permissionCodes,
 		"modules":     modules,

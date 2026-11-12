@@ -46,11 +46,12 @@ const iconText: Record<string, string> = {
   "automation-audit": "审",
 };
 
-export default function Layout({ session, route, onNavigate, onChangePassword, onLogout, children }: {
+export default function Layout({ session, route, onNavigate, onChangePassword, onSecurity, onLogout, children }: {
   session: SessionData;
   route: string;
   onNavigate: (route: string) => void;
   onChangePassword: () => void;
+  onSecurity: () => void;
   onLogout: () => void;
   children: ReactNode;
 }) {
@@ -204,6 +205,7 @@ export default function Layout({ session, route, onNavigate, onChangePassword, o
             <span className="account-menu__avatar">{session.user.displayName.slice(0, 1) || "管"}</span>
             <div><strong>{session.user.displayName}</strong><small>{session.user.roleName}</small></div>
             <button type="button" onClick={onChangePassword}>改密</button>
+            <button type="button" onClick={onSecurity}>安全</button>
             <button type="button" onClick={onLogout}>退出</button>
           </div>
         </header>

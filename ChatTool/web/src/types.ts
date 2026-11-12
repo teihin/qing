@@ -6,6 +6,19 @@ export type Agent = {
 	channelCode: string
 	channelName: string
   presence: 'online' | 'away' | 'offline'
+  totpEnabled: boolean
+  isSuper: boolean
+}
+
+export type TOTPStatus = {
+  enabled: boolean
+  confirmedAt: string | null
+  recoveryCodesLeft: number
+}
+
+export type TOTPSetup = {
+  secret: string
+  otpauthUri: string
 }
 
 export type Message = {

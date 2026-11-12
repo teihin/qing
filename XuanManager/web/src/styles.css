@@ -2855,3 +2855,31 @@ td strong { color: #294149; }
   .earnings-target { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .earnings-config-grid { grid-template-columns: 1fr; }
 }
+
+/* ── 谷歌验证（TOTP） ── */
+.login-card__switch { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: -4px 0 14px; color: #7d9196; font-size: 12px; }
+.login-card__switch button { padding: 0; border: 0; color: #268c84; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.login-card__switch--back { justify-content: center; margin-top: 16px; }
+input.totp-code-input { width: 100%; height: 52px; padding: 0 12px; border: 1px solid #d9e5e6; border-radius: 10px; outline: 0; color: #102a34; background: #f9fbfb; font-size: 24px; font-weight: 700; letter-spacing: .38em; text-align: center; font-variant-numeric: tabular-nums; transition: .2s; }
+input.totp-code-input--text { font-size: 16px; letter-spacing: .12em; }
+input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shadow: 0 0 0 3px rgba(35, 168, 158, .1); }
+.totp-panel { display: grid; gap: 16px; }
+.totp-state { display: grid; gap: 5px; padding: 18px; border: 1px solid #e3ecec; border-radius: 12px; background: #f8fbfb; }
+.totp-state span { color: #7f9398; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.totp-state strong { color: #19343d; font-size: 18px; }
+.totp-state--on { border-color: #cfe9e1; background: linear-gradient(135deg, #f1faf7, #f8fbfb); }
+.totp-state--on span { color: #258361; }
+.totp-meta { display: flex; flex-wrap: wrap; gap: 10px 22px; color: #6f858a; font-size: 13px; }
+.totp-note { color: #7f9398; font-size: 12px; line-height: 1.7; }
+.totp-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 4px; }
+.totp-qr { display: grid; place-items: center; padding: 14px; border: 1px solid #e3ecec; border-radius: 14px; background: #fff; }
+.totp-qr img { display: block; width: min(230px, 100%); height: auto; }
+.totp-secret { color: #5f767c; font-size: 12px; line-height: 1.7; word-break: break-all; }
+.totp-secret code { display: inline-block; margin-top: 5px; padding: 5px 8px; border-radius: 6px; color: #102a34; background: #eef5f4; font-size: 13px; letter-spacing: .06em; }
+.recovery-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 14px; border: 1px dashed #cfe0df; border-radius: 10px; background: #f8fbfb; }
+.recovery-codes code { padding: 8px 10px; border: 1px solid #e3ecec; border-radius: 6px; color: #19343d; background: #fff; font-size: 13px; letter-spacing: .08em; text-align: center; }
+.recovery-actions { display: flex; gap: 10px; }
+@media (max-width: 620px) {
+  .recovery-codes { grid-template-columns: 1fr; }
+  input.totp-code-input { font-size: 20px; letter-spacing: .26em; }
+}

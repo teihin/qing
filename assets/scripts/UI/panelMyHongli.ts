@@ -75,6 +75,15 @@ export default class panelMyHongli extends UIPanelViewBase {
     private perfRows:cc.Node[] = [];
     private perfInput:cc.EditBox = null;
     private perfEnabled:boolean = true;
+    /** 业绩股归属俱乐部；正常情况下等于面板俱乐部。 */
+    private perfClubId:string = "";
+    /** 业绩股页签由 ClubPerfInfo.enabled 控制，查询回来前先隐藏。 */
+    private perfTabNode:cc.Node = null;
+    private perfTabAvailable:boolean = false;
+    /** 旧回包兜底：俱乐部级授权落到其它俱乐部时保留提示到下次刷新。 */
+    private perfNotice:string = "";
+    /** 最近一次列表是否带联盟盟主行，用于判断当前账号是否有管理权限。 */
+    private perfHasLeaders:boolean = false;
     private perfPage:number = 0;
     private perfTotalPages:number = 1;
 
@@ -102,11 +111,14 @@ export default class panelMyHongli extends UIPanelViewBase {
         this.started = true;
         this.initTabs();
         this.switchTab(this.isUnion() ? panelMyHongli.TAB_HONGLI : this.currentTab, true);
+        // 页签显隐取决于服务端的开通状态，进面板先查一次。
+        if(!this.isUnion()) this.requestPerfInfo();
     }
 
     onEnable() {
         if(!this.started) return;
-        if(this.currentTab === panelMyHongli.TAB_PERF && !this.isUnion()) this.refreshPerf();
+        if(this.currentTab === panelMyHongli.TAB_PERF && !this.isUnion() && this.perfTabAvailable) this.refreshPerf();
+        else if(this.currentTab === panelMyHongli.TAB_PERF) this.switchTab(panelMyHongli.TAB_HONGLI, true);
         else this.beginQuery();
     }
 
@@ -134,6 +146,7 @@ export default class panelMyHongli extends UIPanelViewBase {
             return;
         }
         this.clubId = String(data.club_id || data.clubId || "");
+        this.perfClubId = this.clubId;
     }
 
     private isUnion():boolean {
@@ -429,15 +442,23 @@ export default class panelMyHongli extends UIPanelViewBase {
         this.tabNodes = [];
         const hongliTab = Tool.GetChild(this.node, "页签/页签_我的红利");
         const perfTab = Tool.GetChild(this.node, "页签/页签_业绩股");
+        this.perfTabNode = perfTab;
         if(hongliTab) this.tabNodes.push(hongliTab);
         if(perfTab) this.tabNodes.push(perfTab);
         if(hongliTab && hongliTab.getComponent(cc.Sprite))
             this.tabOnFrame = hongliTab.getComponent(cc.Sprite).spriteFrame;
         if(perfTab && perfTab.getComponent(cc.Sprite))
             this.tabOffFrame = perfTab.getComponent(cc.Sprite).spriteFrame;
-        // 联盟红利没有 club_id，业绩股页签整条隐藏。
+        // 联盟红利没有 club_id，整条页签栏隐藏；俱乐部模式先只显示「我的红利」一个页签，
+        // 查询到 enabled=true 再放出「业绩股」，非成员不会看到业绩股页签。
+        this.perfTabAvailable = false;
         if(this.tabRoot) this.tabRoot.active = !this.isUnion();
-        if(this.isUnion()) this.currentTab = panelMyHongli.TAB_HONGLI;
+        if(this.isUnion()) {
+            this.currentTab = panelMyHongli.TAB_HONGLI;
+        } else {
+            if(this.perfTabNode) this.perfTabNode.active = false;
+            if(hongliTab) hongliTab.setPosition(0, 0);
+        }
         this.applyTabVisual();
     }
 
@@ -461,7 +482,7 @@ export default class panelMyHongli extends UIPanelViewBase {
     private switchTab(tab:number, force:boolean = false) {
         if(tab !== panelMyHongli.TAB_HONGLI && tab !== panelMyHongli.TAB_PERF) return;
         if(!force && tab === this.currentTab) return;
-        if(tab === panelMyHongli.TAB_PERF && this.isUnion()) return;
+        if(tab === panelMyHongli.TAB_PERF && (this.isUnion() || !this.perfTabAvailable)) return;
         this.currentTab = tab;
         this.closeClaimPanel();
         this.claimPending = false;
@@ -525,7 +546,7 @@ export default class panelMyHongli extends UIPanelViewBase {
             this.perfContent.setPosition(0, this.perfView.height / 2);
         }
         this.refreshPerfPaging();
-        if(this.clubId === "") {
+        if(this.perfClubId === "") {
             this.setPerfHint("当前没有俱乐部，无法查看业绩股");
             return;
         }
@@ -536,13 +557,14 @@ export default class panelMyHongli extends UIPanelViewBase {
 
     private requestPerfInfo() {
         const account:any = GameDataManager.getAccount();
-        if(!account || this.clubId === "") return;
+        if(!account || this.perfClubId === "") return;
+        if(this.perfInfoPending) return;
         const ctx = "clubperf_info:" + Date.now();
         this.perfInfoPending = true;
         this.perfInfoContext = ctx;
         account.reqHallCommand(JSON.stringify({
             header:panelMyHongli.PERF_HEADER_INFO,
-            club_id:this.clubId,
+            club_id:this.perfClubId,
             date:-1,
             context:"p@" + ctx
         }), "P@" + ctx);
@@ -550,14 +572,14 @@ export default class panelMyHongli extends UIPanelViewBase {
 
     private requestPerfList(page:number = 0) {
         const account:any = GameDataManager.getAccount();
-        if(!account || this.clubId === "") return;
+        if(!account || this.perfClubId === "") return;
         this.perfPage = Math.max(0, page);
         const ctx = "clubperf_list:" + Date.now() + ":" + this.perfPage;
         this.perfListPending = true;
         this.perfListContext = ctx;
         account.reqHallCommand(JSON.stringify({
             header:panelMyHongli.PERF_HEADER_LIST,
-            club_id:this.clubId,
+            club_id:this.perfClubId,
             date:-1,
             count:panelMyHongli.PERF_PAGE_SIZE,
             page:this.perfPage,
@@ -566,9 +588,7 @@ export default class panelMyHongli extends UIPanelViewBase {
     }
 
     private addPerfMember() {
-        const account:any = GameDataManager.getAccount();
-        if(!account) return;
-        if(this.clubId === "") {
+        if(this.perfClubId === "") {
             UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "当前没有俱乐部！");
             return;
         }
@@ -578,21 +598,36 @@ export default class panelMyHongli extends UIPanelViewBase {
         }
         const userId = this.perfInput ? String(this.perfInput.string || "").trim() : "";
         if(!/^\d+$/.test(userId)) {
-            UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "请输入正确的下级代理ID！");
+            UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "请输入正确的代理ID！");
             return;
         }
-        if(this.perfGrantPending) return;
+        this.setPerfGrant(userId);
+    }
+
+    /** 只授权、不取消：enabled 恒为 1，已授权的盟主不再发请求。 */
+    private setPerfGrant(userId:string) {
+        const account:any = GameDataManager.getAccount();
+        if(!account || this.perfClubId === "" || this.perfGrantPending) return;
         const ctx = "clubperf_grant:" + Date.now();
         this.perfGrantPending = true;
         this.perfGrantContext = ctx;
-        this.setPerfHint("正在添加…");
+        this.setPerfHint("正在授权…");
         account.reqHallCommand(JSON.stringify({
             header:panelMyHongli.PERF_HEADER_GRANT,
-            club_id:this.clubId,
+            club_id:this.perfClubId,
             user_id:userId,
             enabled:1,
             context:"p@" + ctx
         }), "P@" + ctx);
+    }
+
+    private authorizeLeader(row:cc.Node) {
+        const leader:any = row ? (row as any).__perfLeader : null;
+        if(!leader || !leader.length) return;
+        if(Number(leader[10]) === 1) return;
+        const guuid = String(leader[0] || "");
+        if(!/^\d+$/.test(guuid)) return;
+        this.setPerfGrant(guuid);
     }
 
     /** 兼容字符串 / {"context","result"} / {"ret_code","ret_result"} 三种回包。 */
@@ -656,21 +691,43 @@ export default class panelMyHongli extends UIPanelViewBase {
                 this.setPerfHint(error);
                 UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, error);
             }
-            else this.onPerfGranted();
+            else this.onPerfGranted(data);
             return true;
         }
         return false;
     }
 
     private applyPerfInfo(info:any) {
-        this.perfEnabled = info.enabled !== false;
+        const enabled = info.enabled;
+        this.perfEnabled = !(enabled === false || enabled === 0
+            || String(enabled) === "false" || String(enabled) === "0");
         this.applyPerfTotals(info.my_count, info.granted_count, info.left_count, info.all_count,
             info.my_percent, info.granted_percent, info.left_percent);
+        this.applyPerfTabAvailability();
         if(!this.perfEnabled) this.setPerfHint("你尚未开通业绩，暂不能查看业绩股");
     }
 
+    /** 非业绩股成员只隐藏「业绩股」页签；「我的红利」页签仍在，单独时居中。 */
+    private applyPerfTabAvailability() {
+        if(this.isUnion()) return;
+        const available = this.perfEnabled;
+        if(available === this.perfTabAvailable) return;
+        this.perfTabAvailable = available;
+        if(this.tabRoot) this.tabRoot.active = true;
+        if(this.perfTabNode) this.perfTabNode.active = available;
+        const hongliTab = this.tabNodes.length > 0 ? this.tabNodes[0] : null;
+        if(hongliTab) hongliTab.setPosition(available ? -106 : 0, 0);
+        if(!available && this.currentTab === panelMyHongli.TAB_PERF)
+            this.switchTab(panelMyHongli.TAB_HONGLI, true);
+    }
+
     private applyPerfList(listData:any, reply:any) {
-        const list:any[] = Array.isArray(listData.list) ? listData.list : [];
+        const list:any[] = Array.isArray(listData.list) ? listData.list
+            : (Array.isArray(listData) ? listData : []);
+        // v6：总群主查自己的俱乐部时，第 1 页额外返回联盟盟主节点；不计入 count。
+        const leaders:any[] = Array.isArray(listData.leaders) ? listData.leaders : [];
+        // 第 2 页起 leaders 为空，不能因此丢掉已确认的总群主管理权限。
+        if(leaders.length > 0) this.perfHasLeaders = true;
         const total = Number(listData.count !== undefined ? listData.count
             : (reply && reply.count !== undefined ? reply.count : 0));
         const reportedPage = Number(listData.number !== undefined ? listData.number
@@ -680,17 +737,49 @@ export default class panelMyHongli extends UIPanelViewBase {
             ? Math.max(1, Math.ceil(total / panelMyHongli.PERF_PAGE_SIZE))
             : Math.max(1, this.perfPage + (list.length >= panelMyHongli.PERF_PAGE_SIZE ? 1 : 0));
         this.applyPerfTotals(listData.my_count, listData.granted_count, listData.left_count, listData.all_count);
-        this.renderPerfRows(list);
+        this.renderPerfRows(list, leaders);
     }
 
-    private onPerfGranted() {
+    /** 兼容旧俱乐部落库回包：club_id/club_ids 是实际落库俱乐部。 */
+    private grantedPerfClubs(reply:any):string[] {
+        const result:string[] = [];
+        const push = (raw:any) => {
+            if(raw === null || raw === undefined) return;
+            if(Array.isArray(raw)) {
+                raw.forEach(push);
+                return;
+            }
+            String(raw).split(",").forEach((part) => {
+                const id = part.trim();
+                if(/^\d+$/.test(id) && result.indexOf(id) < 0) result.push(id);
+            });
+        };
+        push(reply && reply.club_id);
+        push(reply && reply.club_ids);
+        return result;
+    }
+
+    private onPerfGranted(reply:any) {
         if(this.perfInput) this.perfInput.string = "";
-        UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, "已添加业绩股成员！");
-        this.setPerfHint("已添加，正在刷新…");
-        // 授权写库是异步的，稍等再刷新，避免读到旧名单。
-        this.scheduleOnce(() => {
-            if(this.currentTab === panelMyHongli.TAB_PERF) this.refreshPerf();
-        }, 0.8);
+        const isUnion = String((reply && reply.scope) || "") === "union";
+        const clubs = this.grantedPerfClubs(reply);
+        this.perfNotice = "";
+        // v6 起跨俱乐部普通代理会被服务端拒绝；这里只兼容旧的俱乐部级回包。
+        if(!isUnion && clubs.length > 0 && this.perfClubId !== "" && clubs.indexOf(this.perfClubId) < 0)
+            this.perfNotice = "该代理的业绩股已记录在俱乐部 " + clubs[0] + "，当前俱乐部列表不显示";
+        const message = this.perfNotice !== ""
+            ? this.perfNotice
+            : (isUnion ? "已授权盟主业绩股！" : "已添加业绩股成员！");
+        UIManager.getInstance().showPanel("panelMsgView", ShowPanelMode.Cover, message);
+        this.setPerfHint("已提交，正在刷新…");
+        // 授权写库是异步的，两次刷新覆盖落库延迟。
+        this.scheduleOnce(() => this.refreshPerfAfterGrant(), 1.0);
+        this.scheduleOnce(() => this.refreshPerfAfterGrant(), 2.4);
+    }
+
+    private refreshPerfAfterGrant() {
+        if(this.currentTab !== panelMyHongli.TAB_PERF || !this.perfTabAvailable) return;
+        this.refreshPerf();
     }
 
     private perfRowAt(index:number):cc.Node {
@@ -700,35 +789,124 @@ export default class panelMyHongli extends UIPanelViewBase {
             row.name = "业绩行" + (this.perfRows.length + 1).toString();
             row.parent = this.perfContent;
             row.active = false;
+            // 模板行是隐藏的，UIViewBase 不会给克隆出来的按钮绑事件，这里补一次。
+            const buttonNode = row.getChildByName("授权按钮");
+            if(buttonNode) {
+                const button = buttonNode.getComponent(cc.Button);
+                if(button) {
+                    button.transition = cc.Button.Transition.NONE;
+                    buttonNode.on("click", this.onButtonClickVirtual, this);
+                }
+            }
             this.perfRows.push(row);
         }
         return this.perfRows[index];
     }
 
-    private renderPerfRows(list:any[]) {
+    private renderPerfRows(list:any[], leaders:any[] = []) {
         this.perfRows.forEach((row) => row.active = false);
         const half = this.perfRowTemplate ? this.perfRowTemplate.height / 2 : 48;
-        list.forEach((item, index) => {
+        const place = (index:number, fill:(row:cc.Node) => void) => {
             const row = this.perfRowAt(index);
             if(!row) return;
             row.active = true;
             row.setPosition(0, -(index * panelMyHongli.PERF_ROW_SPACING + half));
-            const guuid = item && item.length > 0 ? String(item[0]) : "";
-            const name = item && item.length > 1 ? String(item[1]) : "";
-            const percent = item && item.length > 3 ? String(item[3]) : "0.00";
-            this.setNodeLabel(row, "昵称", name !== "" ? name : ("ID" + guuid));
-            this.setNodeLabel(row, "玩家ID", "ID:" + guuid);
-            this.setNodeLabel(row, "占比", percent + "%");
-            const avatar = Tool.GetChild(row, "头像/mask/img");
-            const sprite = avatar ? avatar.getComponent(cc.Sprite) : null;
-            if(sprite && guuid !== "") ImageManager.getInstance().BindPlayerListAvatar(guuid, sprite);
-        });
-        this.layoutPerfList(list.length);
-        if(list.length > 0) {
-            if(this.perfEnabled) this.setPerfHint("");
+            fill(row);
+        };
+        // leaders 只出现在第 1 页，固定在 frontier 成员之前，不计入分页总数。
+        leaders.forEach((leader, index) => place(index, (row) => this.fillPerfLeaderRow(row, leader)));
+        list.forEach((item, index) =>
+            place(leaders.length + index, (row) => this.fillPerfMemberRow(row, item)));
+        const total = leaders.length + list.length;
+        this.layoutPerfList(total);
+        if(total > 0) {
+            this.setPerfHint("");
         }
-        else this.setPerfHint(this.perfEnabled ? "暂无业绩股成员" : "你尚未开通业绩，暂不能查看业绩股");
+        else if(!this.perfEnabled) this.setPerfHint("你尚未开通业绩，暂不能查看业绩股");
+        else this.setPerfHint(this.perfNotice !== "" ? this.perfNotice : "暂无业绩股成员");
         this.refreshPerfPaging();
+    }
+
+    /** frontier 成员行只读：不提供取消入口。 */
+    private fillPerfMemberRow(row:cc.Node, item:any) {
+        (row as any).__perfLeader = null;
+        const percentNode = row.getChildByName("占比");
+        if(percentNode) percentNode.setPosition(245, 0);
+        const button = row.getChildByName("授权按钮");
+        if(button) button.active = false;
+        const guuid = item && item.length > 0 ? String(item[0]) : "";
+        const name = item && item.length > 1 ? String(item[1]) : "";
+        const percent = item && item.length > 3 ? String(item[3]) : "0.00";
+        this.setNodeLabel(row, "昵称", name !== "" ? name : ("ID" + guuid));
+        this.setNodeLabel(row, "玩家ID", "ID:" + guuid);
+        this.setNodeLabel(row, "占比", percent + "%");
+        const avatar = Tool.GetChild(row, "头像/mask/img");
+        const sprite = avatar ? avatar.getComponent(cc.Sprite) : null;
+        if(sprite && guuid !== "") ImageManager.getInstance().BindPlayerListAvatar(guuid, sprite);
+    }
+
+    /**
+     * 联盟盟主行：[guuid, 昵称, 俱乐部ID, 身份, 联盟名, 俱乐部名, M_c, G_c, L_c, 占比, 授权状态]。
+     * [6] 是整俱乐部次数，[8] 是盟主剩余，[9] 的占比按 L_c/all_count。
+     */
+    private fillPerfLeaderRow(row:cc.Node, leader:any) {
+        (row as any).__perfLeader = leader;
+        const guuid = leader && leader.length > 0 ? String(leader[0]) : "";
+        const name = leader && leader.length > 1 ? String(leader[1]) : "";
+        const clubId = leader && leader.length > 2 ? String(leader[2]) : "";
+        const clubName = leader && leader.length > 5 ? String(leader[5]) : "";
+        const myCount = leader && leader.length > 6 ? Number(leader[6]) : 0;
+        const percent = leader && leader.length > 9 ? String(leader[9]) : "0.00";
+        const granted = !!(leader && Number(leader[10]) === 1);
+        this.setNodeLabel(row, "昵称", "【盟主】" + (name !== "" ? name : "ID" + guuid));
+        const clubText = clubName !== "" ? clubName : clubId;
+        // M_c 是该盟主俱乐部整条线的贡献次数，不是个人次数；授权后整体计入总群主「下放」。
+        this.setNodeLabel(row, "玩家ID",
+            "ID:" + guuid + (clubText !== "" ? " · " + clubText : "")
+            + " · 整线" + (isFinite(myCount) ? myCount : 0) + "次");
+        this.setNodeLabel(row, "占比", percent + "%");
+        const manage = this.canManagePerf();
+        const percentNode = row.getChildByName("占比");
+        if(percentNode) percentNode.setPosition(manage ? 155 : 245, 0);
+        const avatar = Tool.GetChild(row, "头像/mask/img");
+        const sprite = avatar ? avatar.getComponent(cc.Sprite) : null;
+        if(sprite && guuid !== "") ImageManager.getInstance().BindPlayerListAvatar(guuid, sprite);
+
+        const button = row.getChildByName("授权按钮");
+        if(!button) return;
+        button.active = manage;
+        if(manage) this.applyPerfButtonState(button, granted);
+    }
+
+    /** 金色「授权」可点；已授权只显示深色「已授权」，不提供取消。 */
+    private applyPerfButtonState(button:cc.Node, granted:boolean) {
+        const buttonComp = button.getComponent(cc.Button);
+        if(buttonComp) buttonComp.interactable = !granted;
+        const buttonSprite = button.getComponent(cc.Sprite);
+        if(buttonSprite) {
+            const frame = granted ? this.tabOffFrame : this.tabOnFrame;
+            if(frame) buttonSprite.spriteFrame = frame;
+        }
+        const labelNode = button.getChildByName("文字");
+        if(labelNode) {
+            const label = labelNode.getComponent(cc.Label);
+            if(label) label.string = granted ? "已授权" : "授权";
+            labelNode.color = granted
+                ? new cc.Color(169, 192, 214, 255)
+                : new cc.Color(48, 30, 8, 255);
+        }
+    }
+
+    /** 与服务端 §5 一致：boss、俱乐部创建者、总群主（有 leaders）才显示盟主授权入口。 */
+    private canManagePerf():boolean {
+        const account:any = GameDataManager.getAccount();
+        if(!account) return false;
+        if(Number(account.level || 0) >= 99) return true;
+        if(this.perfHasLeaders) return true;
+        for(const raw of String(account.club_make || "").split(",")) {
+            if(raw.trim() === this.perfClubId) return true;
+        }
+        return false;
     }
 
     private layoutPerfList(count:number) {
@@ -822,6 +1000,7 @@ export default class panelMyHongli extends UIPanelViewBase {
         else if(name === "页签_我的红利") this.switchTab(panelMyHongli.TAB_HONGLI);
         else if(name === "页签_业绩股") this.switchTab(panelMyHongli.TAB_PERF);
         else if(name === "确认添加业绩") this.addPerfMember();
+        else if(name === "授权按钮") this.authorizeLeader(button.node.parent);
         else if(name === "提取红利") this.openClaimPanel();
         else if(name === "记录") {
             this.requestStats();

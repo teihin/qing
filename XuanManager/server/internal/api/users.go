@@ -44,7 +44,7 @@ WHERE (? = 1 OR u.username <> 'admin999')
 	}
 	rows, err := s.db.QueryContext(r.Context(), `SELECT
 u.id, u.username, u.display_name, u.role_id, r.code, r.name,
-(u.is_super = 1 OR r.code = 'super_admin'), u.status,
+(u.is_super = 1 OR r.code = 'super_admin'), u.status, u.totp_enabled,
 u.last_login_at, u.created_at
 FROM mgr_user u JOIN mgr_role r ON r.id = u.role_id
 WHERE (? = 1 OR u.username <> 'admin999')
@@ -59,7 +59,7 @@ ORDER BY (u.is_super = 1 OR r.code = 'super_admin') DESC, u.id DESC LIMIT ? OFFS
 	for rows.Next() {
 		var item userItem
 		if err := rows.Scan(&item.ID, &item.Username, &item.DisplayName, &item.RoleID, &item.RoleCode, &item.RoleName,
-			&item.IsSuper, &item.Status, &item.LastLoginAt, &item.CreatedAt); err != nil {
+			&item.IsSuper, &item.Status, &item.TOTPEnabled, &item.LastLoginAt, &item.CreatedAt); err != nil {
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取用户数据失败")
 			return
 		}
@@ -284,6 +284,66 @@ FROM mgr_user u JOIN mgr_role role_row ON role_row.id = u.role_id WHERE u.id = ?
 	s.audit(r.Context(), &p, "user.reset_password", "mgr_user", numericID(id),
 		map[string]any{"passwordChanged": true}, nil, nil, 0, "密码已重置，旧会话已失效", clientIP(r))
 	writeData(w, http.StatusOK, map[string]any{"message": "密码已重置，用户需要重新登录"})
+}
+
+func (s *Server) handleResetUserTOTP(w http.ResponseWriter, r *http.Request, p principal) {
+	id, ok := parseID(w, r)
+	if !ok {
+		return
+	}
+	var username string
+	var isSuper, isProtectedRoot, enabled bool
+	if err := s.db.QueryRowContext(r.Context(), `SELECT u.username,
+(u.is_super = 1 OR role_row.code = 'super_admin'), (u.username = 'admin999'), u.totp_enabled
+FROM mgr_user u JOIN mgr_role role_row ON role_row.id = u.role_id WHERE u.id = ?`, id).
+		Scan(&username, &isSuper, &isProtectedRoot, &enabled); err != nil {
+		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
+		return
+	}
+	if hideSuperUserFrom(p, isProtectedRoot) {
+		writeError(w, http.StatusNotFound, "USER_NOT_FOUND", "用户不存在")
+		return
+	}
+	if isSuper {
+		writeError(w, http.StatusForbidden, "SUPER_PROTECTED", "超级管理员的二次验证不能用用户管理重置，请使用恢复码或服务器本机维护命令")
+		return
+	}
+	if !enabled {
+		writeError(w, http.StatusBadRequest, "TOTP_NOT_ENABLED", "该用户尚未绑定谷歌验证")
+		return
+	}
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(r.Context(), `UPDATE mgr_user SET
+totp_secret = NULL, totp_enabled = 0, totp_confirmed_at = NULL, totp_last_step = 0
+WHERE id = ?`, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM mgr_user_recovery_code WHERE user_id = ?`, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM mgr_login_challenge WHERE user_id = ?`, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	if _, err := tx.ExecContext(r.Context(), `DELETE FROM mgr_session WHERE user_id = ?`, id); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, "DB_ERROR", "重置二次验证失败")
+		return
+	}
+	s.audit(r.Context(), &p, "user.reset_totp", "mgr_user", numericID(id),
+		map[string]any{"username": username}, map[string]any{"totpEnabled": true}, map[string]any{"totpEnabled": false},
+		0, "已重置二次验证，旧会话已失效", clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"message": "已重置该用户的谷歌验证，旧会话已全部退出；用户重新登录后需重新绑定"})
 }
 
 func (s *Server) roleState(r *http.Request, roleID int64) (bool, bool) {

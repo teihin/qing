@@ -41,6 +41,7 @@ type Server struct {
 	passwordIPLimiter      *passwordAttemptLimiter
 	gameHTTPClient         httpDoer
 	platformRevenueSem     chan struct{}
+	totpKey                []byte
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, principal)
@@ -61,6 +62,7 @@ func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) h
 		passwordIPLimiter:      newPasswordAttemptLimiter(20, time.Hour, 30*time.Minute),
 		gameHTTPClient:         &http.Client{Timeout: 6 * time.Second},
 		platformRevenueSem:     make(chan struct{}, 1),
+		totpKey:                security.DeriveTOTPKey(cfg.CredentialKey),
 	}
 	s.routes()
 	return s.securityHeaders(s.mux)
@@ -69,6 +71,12 @@ func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) h
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
+	s.mux.HandleFunc("POST /api/auth/login/totp", s.handleTOTPLogin)
+	s.mux.Handle("GET /api/auth/totp/status", s.authorized("", false, s.handleTOTPStatus))
+	s.mux.Handle("POST /api/auth/totp/setup", s.authorized("", true, s.handleTOTPSetup))
+	s.mux.Handle("POST /api/auth/totp/confirm", s.authorized("", true, s.handleTOTPConfirm))
+	s.mux.Handle("POST /api/auth/totp/disable", s.authorized("", true, s.handleTOTPDisable))
+	s.mux.Handle("POST /api/auth/totp/recovery", s.authorized("", true, s.handleTOTPRegenerateRecovery))
 	s.mux.Handle("POST /api/service/clubs/{clubId}/members/{userId}/gold", s.serviceAuthorized(s.handleServiceClubMemberGold))
 	s.mux.HandleFunc("OPTIONS /api/game/registrations", s.handleRegistrationOptions)
 	s.mux.HandleFunc("POST /api/game/registrations", s.handleCreateGameRegistration)
@@ -188,6 +196,7 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/users/{id}", s.authorized("user.update", true, s.handleUpdateUser))
 	s.mux.Handle("PUT /api/users/{id}/status", s.authorized("user.status", true, s.handleUserStatus))
 	s.mux.Handle("PUT /api/users/{id}/password", s.authorized("user.reset_password", true, s.handleResetPassword))
+	s.mux.Handle("POST /api/users/{id}/totp/reset", s.authorized("user.reset_totp", true, s.handleResetUserTOTP))
 
 	s.mux.Handle("GET /api/roles", s.authorized("role.view", false, s.handleListRoles))
 	s.mux.Handle("POST /api/roles", s.authorized("role.create", true, s.handleCreateRole))
@@ -299,13 +308,13 @@ func (s *Server) authenticate(r *http.Request) (principal, error) {
 	var p principal
 	var isSuper bool
 	err = s.db.QueryRowContext(r.Context(), `SELECT
-u.id, u.username, u.display_name, u.role_id, r.code, r.name, u.is_super, sess.csrf_hash
+u.id, u.username, u.display_name, u.role_id, r.code, r.name, u.is_super, u.totp_enabled, sess.csrf_hash
 FROM mgr_session sess
 JOIN mgr_user u ON u.id = sess.user_id
 JOIN mgr_role r ON r.id = u.role_id
 WHERE sess.token_hash = ? AND sess.expires_at > NOW()
   AND u.status = 'enabled' AND r.status = 'enabled'`, tokenHash).Scan(
-		&p.ID, &p.Username, &p.DisplayName, &p.RoleID, &p.RoleCode, &p.RoleName, &isSuper, &p.CSRFHash,
+		&p.ID, &p.Username, &p.DisplayName, &p.RoleID, &p.RoleCode, &p.RoleName, &isSuper, &p.TOTPEnabled, &p.CSRFHash,
 	)
 	if err != nil {
 		return principal{}, err

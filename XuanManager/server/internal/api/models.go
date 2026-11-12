@@ -11,6 +11,7 @@ type principal struct {
 	RoleName        string
 	IsSuper         bool
 	IsProtectedRoot bool
+	TOTPEnabled     bool
 	CSRFHash        string
 	Permissions     map[string]bool
 }
@@ -27,6 +28,7 @@ type userItem struct {
 	RoleCode    string     `json:"roleCode"`
 	RoleName    string     `json:"roleName"`
 	IsSuper     bool       `json:"isSuper"`
+	TOTPEnabled bool       `json:"totpEnabled"`
 	Status      string     `json:"status"`
 	LastLoginAt *time.Time `json:"lastLoginAt"`
 	CreatedAt   time.Time  `json:"createdAt"`

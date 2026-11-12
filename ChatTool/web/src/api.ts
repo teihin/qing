@@ -61,11 +61,16 @@ export class ApiError extends Error {
   }
 }
 
+/** 登录与二次验证发生在会话建立之前，不能带客服身份头，也不能触发“会话失效”广播。 */
+function isAgentAuthEntry(path: string): boolean {
+	return path === '/api/agent/auth/login' || path === '/api/agent/auth/totp/verify'
+}
+
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers)
   if (init.body && !(init.body instanceof FormData)) headers.set('Content-Type', 'application/json')
 	if (csrfToken && init.method && init.method !== 'GET') headers.set('X-CSRF-Token', csrfToken)
-  if (agentExpectedID && path.startsWith('/api/agent/') && path !== '/api/agent/auth/login') headers.set('X-Agent-Expected-ID', agentExpectedID)
+  if (agentExpectedID && path.startsWith('/api/agent/') && !isAgentAuthEntry(path)) headers.set('X-Agent-Expected-ID', agentExpectedID)
   if (playerSessionRef && path.startsWith('/api/player/')) headers.set('X-Player-Session-Ref', playerSessionRef)
   if (playerEmbeddedToken && path.startsWith('/api/player/')) headers.set('X-Player-Embedded-Token', playerEmbeddedToken)
   const response = await fetch(appURL(path), { ...init, headers, credentials: 'same-origin' })
@@ -76,7 +81,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch {
     throw new ApiError('INVALID_RESPONSE', '服务器返回了无法识别的内容', response.status)
   }
-	if (response.status === 401 && path.startsWith('/api/agent/') && path !== '/api/agent/auth/login') {
+	if (response.status === 401 && path.startsWith('/api/agent/') && !isAgentAuthEntry(path)) {
 		notifyAgentSessionExpired(!result.ok ? result.error.message : undefined)
 	}
   if (!response.ok || !result.ok) {

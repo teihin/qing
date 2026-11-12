@@ -53,20 +53,20 @@ function csrfToken(): string {
   return value ? decodeURIComponent(value.slice("xuan_csrf=".length)) : "";
 }
 
-/** 只用于控制台排查：密码/令牌等字段必须脱敏，不能原样打印。 */
+/** 只用于控制台排查：密码/令牌/动态码/恢复码等字段必须脱敏，不能原样打印。 */
+function redactSensitive(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactSensitive);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+    if (/pass(word)?|token|secret|authorization|code|otpauth/i.test(key)) return [key, "***"];
+    return [key, redactSensitive(item)];
+  }));
+}
+
 function debugBody(body: BodyInit | null | undefined): unknown {
   if (typeof body !== "string") return undefined;
   try {
-    const parsed: unknown = JSON.parse(body);
-    const redact = (value: unknown): unknown => {
-      if (Array.isArray(value)) return value.map(redact);
-      if (!value || typeof value !== "object") return value;
-      return Object.fromEntries(Object.entries(value).map(([key, item]) => {
-        if (/pass(word)?|token|secret|authorization/i.test(key)) return [key, "***"];
-        return [key, redact(item)];
-      }));
-    };
-    return redact(parsed);
+    return redactSensitive(JSON.parse(body));
   } catch {
     return body.length > 300 ? `${body.slice(0, 300)}…` : body;
   }
@@ -157,7 +157,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
       method,
       path: requestPath,
       status: response.status,
-      data: payload.data,
+      data: redactSensitive(payload.data),
     });
   }
   return payload.data;

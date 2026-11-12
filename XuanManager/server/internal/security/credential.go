@@ -22,6 +22,12 @@ func DeriveCredentialKey(material string) []byte {
 	return sum[:]
 }
 
+// DeriveTOTPKey 给谷歌验证密钥单独派生子密钥，和机器人密码密文互不影响。
+func DeriveTOTPKey(material string) []byte {
+	sum := sha256.Sum256([]byte("xuanmanager/totp-secret/v1\x00" + material))
+	return sum[:]
+}
+
 // SealCredential 用 AES-256-GCM 加密，输出 v1:<base64(nonce|ciphertext)>。
 func SealCredential(key []byte, plaintext string) (string, error) {
 	if len(plaintext) == 0 {

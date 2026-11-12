@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"strconv"
@@ -26,19 +27,10 @@ func (s *Server) handleAgentLogin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "LOGIN_RATE_LIMITED", "登录尝试过于频繁，请稍后再试")
 		return
 	}
-	sessionToken, err := security.RandomToken()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "TOKEN_FAILED", "无法创建登录会话")
-		return
-	}
-	csrfToken, err := security.RandomToken()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "TOKEN_FAILED", "无法创建安全令牌")
-		return
-	}
 	var p agentPrincipal
 	var passwordHash string
 	var enabled bool
+	var totpSecret sql.NullString
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "登录暂时不可用")
@@ -47,9 +39,9 @@ func (s *Server) handleAgentLogin(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 	// 锁定客服账号行，使同一账号的并发登录串行执行。最后完成的登录会删除
 	// 前一个会话，因此不会出现两个设备同时保持有效登录的竞态。
-	err = tx.QueryRowContext(r.Context(), `SELECT id,username,password_hash,display_name,role,channel_code,enabled,presence
+	err = tx.QueryRowContext(r.Context(), `SELECT id,username,password_hash,display_name,role,is_super,channel_code,enabled,presence,totp_enabled,totp_secret
 FROM chat_agent WHERE username=? FOR UPDATE`, req.Username).Scan(
-		&p.ID, &p.Username, &passwordHash, &p.DisplayName, &p.Role, &p.ChannelCode, &enabled, &p.Presence,
+		&p.ID, &p.Username, &passwordHash, &p.DisplayName, &p.Role, &p.IsSuper, &p.ChannelCode, &enabled, &p.Presence, &p.TOTPEnabled, &totpSecret,
 	)
 	if err != nil || !enabled || !security.CheckPassword(passwordHash, req.Password) {
 		_ = tx.Rollback()
@@ -63,19 +55,38 @@ FROM chat_agent WHERE username=? FOR UPDATE`, req.Username).Scan(
 		writeError(w, http.StatusUnauthorized, "INVALID_CREDENTIALS", "账号或密码不正确")
 		return
 	}
-	deleteResult, err := tx.ExecContext(r.Context(), `DELETE FROM chat_agent_session WHERE agent_id=?`, p.ID)
+	if p.TOTPEnabled {
+		if !totpSecret.Valid || strings.TrimSpace(totpSecret.String) == "" {
+			s.logger.Error("agent totp enabled without secret", "agent", p.Username)
+			writeError(w, http.StatusInternalServerError, "TOTP_STATE_INVALID", "二次验证配置异常，请联系客服主管重置")
+			return
+		}
+		// 密码通过但尚未完成二次验证：不建会话、不动旧会话；先释放账号行锁再建挑战。
+		_ = tx.Rollback()
+		challengeToken, err := s.createAgentLoginChallenge(r.Context(), p.ID, clientIP(r))
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "LOGIN_CHALLENGE_ERROR", "暂时无法发起二次验证，请稍后重试")
+			return
+		}
+		writeData(w, http.StatusOK, map[string]any{
+			"totpRequired":   true,
+			"challengeToken": challengeToken,
+			"expiresIn":      int(agentTOTPChallengeTTL.Seconds()),
+		})
+		return
+	}
+	sessionToken, err := security.RandomToken()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", "登录暂时不可用")
+		writeError(w, http.StatusInternalServerError, "TOKEN_FAILED", "无法创建登录会话")
 		return
 	}
-	replacedSessions, _ := deleteResult.RowsAffected()
-	if _, err = tx.ExecContext(r.Context(), `INSERT INTO chat_agent_session
-(token_hash, agent_id, csrf_hash, expires_at, last_seen_at, created_at)
-VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), p.ID, security.HashToken(csrfToken), time.Now().Add(s.cfg.SessionTTL)); err != nil {
-		writeError(w, http.StatusInternalServerError, "DB_ERROR", "登录暂时不可用")
+	csrfToken, err := security.RandomToken()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "TOKEN_FAILED", "无法创建安全令牌")
 		return
 	}
-	if _, err = tx.ExecContext(r.Context(), `UPDATE chat_agent SET presence = 'online', last_seen_at = NOW() WHERE id = ?`, p.ID); err != nil {
+	replacedSessions, err := s.createAgentSession(r.Context(), tx, p.ID, sessionToken, csrfToken)
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "DB_ERROR", "登录暂时不可用")
 		return
 	}
@@ -84,9 +95,34 @@ VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), p.ID, secu
 		return
 	}
 	p.Presence = "online"
+	s.completeAgentLogin(w, r, p, sessionToken, csrfToken, replacedSessions, "password")
+	writeData(w, http.StatusOK, map[string]any{"agent": p, "csrfToken": csrfToken})
+}
+
+// createAgentSession 删除该客服的旧会话并写入新会话；调用方负责事务和提交。
+func (s *Server) createAgentSession(ctx context.Context, tx *sql.Tx, agentID int64, sessionToken, csrfToken string) (int64, error) {
+	deleteResult, err := tx.ExecContext(ctx, `DELETE FROM chat_agent_session WHERE agent_id=?`, agentID)
+	if err != nil {
+		return 0, err
+	}
+	replacedSessions, _ := deleteResult.RowsAffected()
+	if _, err = tx.ExecContext(ctx, `INSERT INTO chat_agent_session
+(token_hash, agent_id, csrf_hash, expires_at, last_seen_at, created_at)
+VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), agentID, security.HashToken(csrfToken), time.Now().Add(s.cfg.SessionTTL)); err != nil {
+		return 0, err
+	}
+	if _, err = tx.ExecContext(ctx, `UPDATE chat_agent SET presence = 'online', last_seen_at = NOW() WHERE id = ?`, agentID); err != nil {
+		return 0, err
+	}
+	return replacedSessions, nil
+}
+
+// completeAgentLogin 处理登录成功后的 Cookie、审计、被顶号推送和派单。
+func (s *Server) completeAgentLogin(w http.ResponseWriter, r *http.Request, p agentPrincipal, sessionToken, csrfToken string, replacedSessions int64, method string) {
 	setCookie(w, agentSessionCookie, sessionToken, s.cfg.CookiePath, true, s.cfg.CookieSecure, s.cfg.SessionTTL)
 	setCookie(w, agentCSRFCookie, csrfToken, s.cfg.CookiePath, false, s.cfg.CookieSecure, s.cfg.SessionTTL)
-	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "agent.login", "agent", strconv.FormatInt(p.ID, 10), map[string]any{"replacedSessionCount": replacedSessions}, clientIP(r))
+	s.audit(r.Context(), "agent", strconv.FormatInt(p.ID, 10), "agent.login", "agent", strconv.FormatInt(p.ID, 10),
+		map[string]any{"replacedSessionCount": replacedSessions, "method": method}, clientIP(r))
 	if replacedSessions > 0 {
 		s.hub.publish("agent:"+strconv.FormatInt(p.ID, 10), liveEvent{
 			Type:    "session.replaced",
@@ -96,7 +132,6 @@ VALUES (?, ?, ?, ?, NOW(), NOW())`, security.HashToken(sessionToken), p.ID, secu
 	s.hub.publish("team", liveEvent{Type: "team.changed"})
 	s.tryAssignQueued(r.Context(), "agent_login")
 	s.tryRebalanceLiveConversations(r.Context(), "agent_login")
-	writeData(w, http.StatusOK, map[string]any{"agent": p, "csrfToken": csrfToken})
 }
 
 func (s *Server) handleAgentMe(w http.ResponseWriter, r *http.Request, p agentPrincipal) {

@@ -33,6 +33,7 @@ type Config struct {
 	GameDBUser        string
 	GameDBPassword    string
 	PlayerLinkKey     string
+	TOTPKey           string
 	BootstrapUser     string
 	BootstrapPassword string
 	BootstrapName     string
@@ -140,6 +141,7 @@ func Load() (Config, error) {
 		GameDBUser:        strings.TrimSpace(os.Getenv("CHAT_GAME_DB_USER")),
 		GameDBPassword:    os.Getenv("CHAT_GAME_DB_PASSWORD"),
 		PlayerLinkKey:     os.Getenv("CHAT_PLAYER_LINK_KEY"),
+		TOTPKey:           strings.TrimSpace(os.Getenv("CHAT_TOTP_KEY")),
 		BootstrapUser:     strings.TrimSpace(os.Getenv("CHAT_BOOTSTRAP_USERNAME")),
 		BootstrapPassword: os.Getenv("CHAT_BOOTSTRAP_PASSWORD"),
 		BootstrapName:     env("CHAT_BOOTSTRAP_NAME", "客服主管"),
@@ -183,6 +185,13 @@ func Load() (Config, error) {
 	}
 	if len(cfg.PlayerLinkKey) < 16 || len(cfg.PlayerLinkKey) > 128 {
 		return Config{}, fmt.Errorf("CHAT_PLAYER_LINK_KEY 必须为 16 到 128 个字符")
+	}
+	// 谷歌验证密钥的加密材料：没单独配置时从现有链路密钥派生，零配置也能跑；
+	// 一旦配置了 CHAT_TOTP_KEY 就必须保持稳定，否则已绑定的验证器全部解不开。
+	if cfg.TOTPKey == "" {
+		cfg.TOTPKey = cfg.PlayerLinkKey
+	} else if len(cfg.TOTPKey) < 16 || len(cfg.TOTPKey) > 128 {
+		return Config{}, fmt.Errorf("CHAT_TOTP_KEY 必须为 16 到 128 个字符")
 	}
 	if cfg.MaxImageBytes <= 0 || cfg.MaxVideoBytes <= 0 || cfg.MaxFileBytes <= 0 {
 		return Config{}, fmt.Errorf("媒体文件大小上限必须大于 0")

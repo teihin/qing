@@ -9,6 +9,18 @@ export interface SessionUser {
   roleName: string;
   isSuper: boolean;
   isProtectedRoot: boolean;
+  totpEnabled: boolean;
+}
+
+export interface TOTPStatus {
+  enabled: boolean;
+  confirmedAt: string | null;
+  recoveryCodesLeft: number;
+}
+
+export interface TOTPSetup {
+  secret: string;
+  otpauthUri: string;
 }
 
 export interface ModuleItem {
@@ -477,6 +489,7 @@ export interface UserItem {
   roleCode: string;
   roleName: string;
   isSuper: boolean;
+  totpEnabled: boolean;
   status: Status;
   lastLoginAt: string | null;
   createdAt: string;
