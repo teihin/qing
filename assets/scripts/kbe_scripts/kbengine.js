@@ -1938,6 +1938,10 @@ KBEngine.Entity = KBEngine.Class.extend(
 	{
 		KBEngine.Event.fire("set_club_manage", this.club_manage);
 	},
+	set_union_manage(old)
+	{
+		KBEngine.Event.fire("set_union_manage", this.union_manage);
+	},
 	set_chiefAgentID(old)
 	{
 		KBEngine.Event.fire("set_chiefAgentID");

@@ -91,9 +91,9 @@ export default class GameDataManager extends cc.Component {
     }
 
     /**
-     * 客户端能拿到的 BOSS/运营账号口径：`level >= 99`。
-     * 服务端「代理链路」命令仍以 d_users 的 boss/bigboss 名单做最终鉴权，
-     * 这里只决定要不要显示 BOSS 专属入口，不能当作权限校验。
+     * 平台 boss 口径：`level >= 99` 或 董事长/总裁。
+     * 仅用于平台级能力（战绩、扩展信息等仍只放行 boss/bigboss 的查询）；
+     * 「数据统计」和「点头像进 BOSS 面板」两个入口改用 HasManageScope()。
      */
     public static IsBossAccount():boolean
     {
@@ -106,6 +106,33 @@ export default class GameDataManager extends cc.Component {
         // 老平台账号（董事长/总裁）没有 99 级，但同样是运营视角。
         const role = account.role == null ? "" : String(account.role);
         return role.indexOf("董事长") >= 0 || role.indexOf("总裁") >= 0;
+    }
+
+    /**
+     * 游戏内两个 BOSS 入口的唯一判定：账号是否配置了可管理范围。
+     * `union_manage` 或 `club_manage` 任一非空即为大小BOSS；不再看 level / 角色。
+     */
+    public static HasManageScope():boolean
+    {
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        return GameDataManager.SplitIdList(account.club_manage).length > 0 ||
+            GameDataManager.SplitIdList(account.union_manage).length > 0;
+    }
+
+    /** 逗号分隔编号列表：去空、去重；null/undefined 视为空。 */
+    public static SplitIdList(value:any):string[]
+    {
+        const result:string[] = [];
+        const text = value == null ? "" : String(value);
+        for(const raw of text.split(","))
+        {
+            const id = raw.trim();
+            if(id !== "" && result.indexOf(id) < 0)
+                result.push(id);
+        }
+        return result;
     }
 
     //全局初始化

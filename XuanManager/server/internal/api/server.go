@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"xuanmanager/internal/config"
@@ -42,6 +43,11 @@ type Server struct {
 	gameHTTPClient         httpDoer
 	platformRevenueSem     chan struct{}
 	totpKey                []byte
+
+	// 游戏服 union_manage 列是否已部署；只在首次查询时探测一次，避免每条玩家列表都查 information_schema。
+	manageScopeColumnMu      sync.Mutex
+	manageScopeColumnChecked bool
+	manageScopeColumnOK      bool
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, principal)
@@ -95,6 +101,8 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/game/players/{playerId}/balance-adjustments", s.authorized("game.player.balance_adjust", true, s.handleAdjustPlayerBalance))
 	s.mux.Handle("GET /api/game/players/stone-grants", s.authorized("game.player.grant_stone", false, s.handleListPlayerStoneGrants))
 	s.mux.Handle("POST /api/game/players/{playerId}/stone-grants", s.authorized("game.player.grant_stone", true, s.handleGrantPlayerStone))
+	s.mux.Handle("GET /api/game/players/manage-scope/options", s.authorized("game.player.manage_scope", false, s.handlePlayerManageScopeOptions))
+	s.mux.Handle("POST /api/game/players/{playerId}/manage-scope", s.authorized("game.player.manage_scope", true, s.handleSetPlayerManageScope))
 	s.mux.Handle("GET /api/game/players/{playerId}/clubs", s.authorized("game.player.view", false, s.handleGetPlayerClubs))
 	s.mux.Handle("GET /api/game/players/{playerId}/clubs/{clubId}/subordinates", s.authorized("game.player.view", false, s.handleGetPlayerClubSubordinates))
 	s.mux.Handle("GET /api/game/players/{playerId}/rooms", s.authorized("game.room_record.view", false, s.handlePlayerRoomHistory))

@@ -1540,8 +1540,8 @@ export default class panelGameView extends UIPanelViewBase {
             // }
             // else
             // {
-                // BOSS 账号看全屏玩家数据（首个页签是代理链）；普通账号仍是原来的资料卡。
-                if(GameDataManager.IsBossAccount())
+                // 配置了管理范围的账号看全屏玩家数据（首个页签是代理链）；其余仍是原来的资料卡。
+                if(GameDataManager.HasManageScope())
                     UIManager.getInstance().showPanel("panelBossPlayerInfo",ShowPanelMode.Cover,"",arrayParam)
                 else
                     UIManager.getInstance().showPanel("panelUserInfo",ShowPanelMode.Cover,"",arrayParam)

@@ -39,40 +39,48 @@ type playerItem struct {
 	// LoginPassword 是玩家登录密码的明文副本（mgr_player_login_password，AES-GCM 密文解密后）。
 	// 游戏端只存 MD5、无法还原，所以只有 XuanManager 亲历过改密（注册/后台重置/自助改密）的账号才有值；
 	// PasswordRecorded 为 false 表示历史密码未收录。只在管理员查询时填充。
-	LoginPassword    string              `json:"loginPassword,omitempty"`
-	PasswordRecorded bool                `json:"passwordRecorded"`
-	Name             string              `json:"name"`
-	Photo            string              `json:"photo"`
-	Sex              string              `json:"sex"`
-	Role             string              `json:"role"`
-	Gold             int64               `json:"gold"`
-	Gold2            int64               `json:"gold2"`
-	Balance          float64             `json:"balance"`
-	Stone            int64               `json:"stone"`
-	Level            int64               `json:"level"`
-	VIP              int64               `json:"vip"`
-	VIPLevel         int64               `json:"vipLevel"`
-	AgentID          string              `json:"agentId"`
-	AgentName        string              `json:"agentName"`
-	RoomID           int64               `json:"roomId"`
-	RoomType         string              `json:"roomType"`
-	ClientVersion    string              `json:"clientVersion"`
-	ClientStatus     string              `json:"clientStatus"`
-	TotalRounds      int64               `json:"totalRounds"`
-	TotalScore       int64               `json:"totalScore"`
-	RegistrationTime string              `json:"registrationTime"`
-	LastLoginAt      *time.Time          `json:"lastLoginAt"`
-	LoginCount       int64               `json:"loginCount"`
-	Remark           string              `json:"remark"`
-	IsBoss           bool                `json:"isBoss"`
+	LoginPassword    string     `json:"loginPassword,omitempty"`
+	PasswordRecorded bool       `json:"passwordRecorded"`
+	Name             string     `json:"name"`
+	Photo            string     `json:"photo"`
+	Sex              string     `json:"sex"`
+	Role             string     `json:"role"`
+	Gold             int64      `json:"gold"`
+	Gold2            int64      `json:"gold2"`
+	Balance          float64    `json:"balance"`
+	Stone            int64      `json:"stone"`
+	Level            int64      `json:"level"`
+	VIP              int64      `json:"vip"`
+	VIPLevel         int64      `json:"vipLevel"`
+	AgentID          string     `json:"agentId"`
+	AgentName        string     `json:"agentName"`
+	RoomID           int64      `json:"roomId"`
+	RoomType         string     `json:"roomType"`
+	ClientVersion    string     `json:"clientVersion"`
+	ClientStatus     string     `json:"clientStatus"`
+	TotalRounds      int64      `json:"totalRounds"`
+	TotalScore       int64      `json:"totalScore"`
+	RegistrationTime string     `json:"registrationTime"`
+	LastLoginAt      *time.Time `json:"lastLoginAt"`
+	LoginCount       int64      `json:"loginCount"`
+	Remark           string     `json:"remark"`
+	// IsBoss 是后台口径的「大小BOSS」：已配置可管理联盟（union_manage）或俱乐部（club_manage）的账号。
+	// 不再按等级 99 / 董事长 / 总裁判定；等级只影响游戏内身份显示，不决定管理范围。
+	IsBoss bool `json:"isBoss"`
+	// UnionManage / ClubManage 是逗号分隔的授权范围，直接给后台配置弹窗回显。
+	UnionManage string `json:"unionManage"`
+	ClubManage  string `json:"clubManage"`
+	// UnionManageNames / ClubManageNames 是按授权顺序解析出的名称，供列表直接展示管理范围。
+	// 找不到名称时 name 为空串，前端回退显示编号。
+	UnionManageNames []manageScopeName   `json:"unionManageNames"`
+	ClubManageNames  []manageScopeName   `json:"clubManageNames"`
 	Clubs            []playerClubSummary `json:"clubs"`
 
 	// 俱乐部关系分散在五个逗号分隔列里，只用于拼 Clubs，不直接返回前端。
-	clubMake   string
-	clubJoin   string
-	clubMake2  string
-	clubJoin2  string
-	clubManage string
+	clubMake  string
+	clubJoin  string
+	clubMake2 string
+	clubJoin2 string
 }
 
 // 玩家登录密码只对管理员返回。管理员 = `super_admin` 角色（含 admin999 超级管理员
@@ -90,7 +98,9 @@ func (s *Server) handleListPlayers(w http.ResponseWriter, r *http.Request, p pri
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
-	where, args := buildPlayerWhere(filters)
+	// 游戏服尚未部署 union_manage 时列不存在；先探测再拼 SQL，避免整个玩家列表报错。
+	hasUnionManage := s.hasManageScopeColumn(r.Context())
+	where, args := buildPlayerWhere(filters, hasUnionManage)
 
 	var total int64
 	countQuery := `SELECT COUNT(DISTINCT a.id)
@@ -105,9 +115,15 @@ WHERE ` + where
 	}
 
 	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
+	unionManageExpr := "''"
+	bossExpr := "COALESCE(TRIM(a.sm_club_manage), '') <> ''"
+	if hasUnionManage {
+		unionManageExpr = "COALESCE(a.sm_union_manage, '')"
+		bossExpr = "(COALESCE(TRIM(a.sm_union_manage), '') <> '' OR COALESCE(TRIM(a.sm_club_manage), '') <> '')"
+	}
 	// 时间口径：MySQL 会话时区为 SYSTEM（Asia/Shanghai），库里的 DATETIME、NOW()、
 	// CURRENT_TIMESTAMP、FROM_UNIXTIME() 拿到的都已经是北京时间墙上时间，查询时不得再叠加 8 小时。
-	rows, err := s.db.QueryContext(r.Context(), `SELECT
+	listQuery := fmt.Sprintf(`SELECT
 a.id, a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_photo,
 a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
 (a.sm_gold + a.sm_gold2 / 100.0) AS balance, a.sm_stone, a.sm_level,
@@ -117,14 +133,14 @@ a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
 FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
 COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
 COALESCE(a.sm_club_make2, ''), COALESCE(a.sm_club_join2, ''),
-COALESCE(a.sm_club_manage, ''),
-(a.sm_level >= 99 OR COALESCE(a.sm_role, '') LIKE '%董事长%' OR COALESCE(a.sm_role, '') LIKE '%总裁%')
+COALESCE(a.sm_club_manage, ''), %s, %s
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
-WHERE `+where+`
+WHERE %s
 ORDER BY a.id DESC
-LIMIT ? OFFSET ?`, queryArgs...)
+LIMIT ? OFFSET ?`, unionManageExpr, bossExpr, where)
+	rows, err := s.db.QueryContext(r.Context(), listQuery, queryArgs...)
 	if err != nil {
 		s.logger.Error("list game players", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家列表失败")
@@ -143,8 +159,8 @@ LIMIT ? OFFSET ?`, queryArgs...)
 			&item.RoomID, &item.RoomType, &item.ClientVersion, &item.ClientStatus,
 			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
 			&lastLogin, &item.LoginCount, &item.Remark,
-			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.clubManage,
-			&item.IsBoss,
+			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.ClubManage,
+			&item.UnionManage, &item.IsBoss,
 		); err != nil {
 			s.logger.Error("scan game player", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")
@@ -170,6 +186,10 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		s.logger.Error("attach player clubs", "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家所在俱乐部失败")
 		return
+	}
+	// 管理范围名称只用于展示，批量解析失败不能拖垮整个玩家列表。
+	if err := s.attachPlayerManageScopeNames(r.Context(), items); err != nil {
+		s.logger.Error("attach player manage scope names", "error", err)
 	}
 
 	writeData(w, http.StatusOK, map[string]any{
@@ -241,12 +261,17 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 	return filters, nil
 }
 
-func buildPlayerWhere(filters playerFilters) (string, []any) {
+func buildPlayerWhere(filters playerFilters, hasUnionManage bool) (string, []any) {
 	clauses := []string{"1 = 1"}
 	args := []any{}
 	if filters.BossOnly {
-		// BOSS 号条件：等级 ≥ 99 的运营账号；行标红另含董事长/总裁角色。
-		clauses = append(clauses, "a.sm_level >= 99")
+		// 大小BOSS 条件：已配置可管理联盟或俱乐部；不再看等级 / 董事长 / 总裁。
+		if hasUnionManage {
+			clauses = append(clauses, "(COALESCE(TRIM(a.sm_union_manage), '') <> '' OR COALESCE(TRIM(a.sm_club_manage), '') <> '')")
+		} else {
+			// 游戏服还没部署 union_manage 列时只能按 club_manage 筛，避免整条查询报错。
+			clauses = append(clauses, "COALESCE(TRIM(a.sm_club_manage), '') <> ''")
+		}
 	}
 	if filters.Keyword != "" {
 		like := "%" + filters.Keyword + "%"

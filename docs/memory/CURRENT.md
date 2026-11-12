@@ -4,6 +4,22 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-12 客户端两个 BOSS 入口改按管理范围（已改代码、未构建）
+
+- 「我的→数据统计」和「牌桌点头像进 BOSS 面板」改用 `GameDataManager.HasManageScope()`（`club_manage`/`union_manage` 非空），不再看 `level>=99`/董事长/总裁。
+- 玩家列表/代理列表默认不带 `club_id`，查账号管理的全部俱乐部；手动选「一级过滤：俱乐部」时才带。
+- 修代理链 `club_id`：列表/玩家信息/分组行点「代理链」传被查玩家自己的俱乐部，不再用当前房间俱乐部；按 ID/昵称搜索无俱乐部时回落当前 club。
+- 未构建：`build/jsb-link` 仍是 01:21 旧产物，Creator 需重新编译/构建后再生成热更新。详见[交接](handoffs/2026-11-12-client-boss-entry-scope.md)。
+
+## 2026-11-12 后台玩家管理：大小BOSS = union_manage / club_manage（已部署 8891）
+
+- 玩家列表浅红行与「大小BOSS」筛选改为 `sm_union_manage` 或 `sm_club_manage` 非空，不再看等级 99 / 董事长 / 总裁；列表新增 `unionManage` / `clubManage`。
+- 玩家管理新增「管理范围」弹窗与 `POST /api/game/players/{playerId}/manage-scope`：调游戏服 `异步_设置_俱乐部_管理范围`，回读两列校验、并发旧值 409、全程审计；迁移 059 已执行，权限 `game.player.manage_scope` id=5820、3 个角色授权。
+- 弹窗改为直接勾选：`GET /api/game/players/manage-scope/options` 返回全部启用联盟 + 未入盟独立俱乐部，支持搜索多选，不再手输编号。
+- 列表与玩家详情按名称展示管理范围（后端批量补 `unionManageNames` / `clubManageNames`），名称缺失回退编号。
+- 已部署：二进制 `87a9b52a…`、前端 `index-CnQgFCHa.js` + `index-BXvdQkqt.css`；行内按钮「管理范围」已改名「设置管理员」，仅切前端目录、服务未重启；health 200、未登录接口 401。回滚：二进制 `backups/xuanmanager.20261112-2131-rollback`（`d38c4081…`）、前端 `web.previous-adminlabel-20261112-2229`。
+- 游戏服 `sm_union_manage` 列与 `异步_设置_俱乐部_管理范围` 命令已探测可用；当前库中 0 个账号配置范围，需在页面配置后才会标红。页面实操待验。详见[交接](handoffs/2026-11-12-admin-player-manage-scope.md)。
+
 ## 2026-11-12 业绩核心共享：写操作改用日期框当前日期（已部署 8891）
 
 - 报错「本次名单在 2026-11-01…」是请求真带了 11-01（审计与游戏服日志同刻 `date=-11`，该标签页日期框就在 11-01）；游戏库 `club_perf_contrib_info` 联盟 196102 仅 11-12 有记录，11-01/11-11 为空，报表全 0。
@@ -38,12 +54,9 @@
 - 登录两阶段、绑定/恢复码/关闭、登录提醒、主管重置；迁移 014/015 已执行。
 - 隐藏账号 `admin999`（显示名 客服z）对他人不可见，团队/转接/在线数已过滤；二进制 `ca7715…`、前端 `index-DjuST7cE.js`；回滚 `web.previous-no-super-label-20261112-1457`。详见[交接](handoffs/2026-11-12-chattool-totp.md)。
 
-## 2026-11-12 后台玩家管理：BOSS 号行标红 + BOSS 号筛选（已部署）
+## 2026-11-12 后台玩家管理：BOSS 号行标红（已被大小BOSS口径替代）
 
-- 玩家列表按 `isBoss`（`sm_level >= 99` 或角色含董事长/总裁）把整行标成浅红底；更多条件新增「BOSS号」下拉，只筛 `level >= 99`。
-- 后端 `GET /api/game/players` 新增 `isBoss` 字段和 `boss=1` 查询参数，不改表结构；前端 JS/CSS 同步更新。
-- 已部署 8891：二进制 `aa0aa0f8…`、前端 `index-DFRw6LXi.js` + `index-B03dpufV.css`；health 200、未登录 401。
-  回滚：`backups/xuanmanager.20261112-0005-rollback`、`web.previous-player-boss-20261112-0005`。页面实操待主人验收。详见[交接](handoffs/2026-11-12-player-list-boss-row.md)。
+- 原按 `sm_level >= 99` / 董事长 / 总裁 标红；现已改为 `union_manage` / `club_manage` 非空，见上方小节。旧交接：[2026-11-12-player-list-boss-row](handoffs/2026-11-12-player-list-boss-row.md)。
 
 ## 2026-11-11 消息页 BF 聊天显示开关（服务端已部署、客户端未构建）
 
@@ -80,33 +93,9 @@
 - 迁移 055 给计划表与名单方案加 `union_id` 并改唯一键/回填历史；跨联盟选人由后端拒绝（选人、金额、排除、子账号、账单都会校验），换联盟同步会把 `selected` 置 0。
 - 已部署 8891（二进制 `0c558b28…`、前端 `index-BDfIIHx6.js`）；迁移已执行：7 计划回填、9 无归属，29 代理有联盟、2 无。`go build/test/vet`、`tsc/eslint/vite build` 通过；未登录实操验收。详见[交接](handoffs/2026-11-11-agent-reward-union-scope.md)。
 
-## 2026-11-10 「我的」俱乐部卡片钻石池取错同秒最新行（客户端未构建）
+## 2026-11-10 客户端批次（已归档）
 
-- 现象：卡片显示钻石池 10，库里 `club_agent_info.stone=8`；`查询_俱乐部_钻石流水` 同一秒连续三条 `11→10 / 10→9 / 9→8`，客户端按 `date >=` 取最新，遍历到同秒最后一条较旧行。
-- 已改 `panelMain.OnClubStoneWater` 为严格 `>`，保留服务端「最新在前」的第一条；三条同秒模拟从 10 修正为 8。详见[交接](handoffs/2026-11-10-club-stone-pool-tie.md)。
-
-## 2026-11-10 俱乐部「同步带入钻石」开关（已归档）
-
-- 创建规则带入钻石开关、后台兑换比例与弹窗，详见[归档](archive/2026-11-11/current-nov10-club-seat-stone.md)。
-
-## 2026-11-10 钻石池消耗两页签（未构建、未真机）
-
-- 新增「钻石池兑换 / 开房消耗」页签；开房消耗走 `ClubStoneWater` 的 `钻石房间扣费` 行（时间/房间号/消耗钻石/余额，本地 10 条/页）；流水无 `room_id` 时房间号显示 `—`。详见[交接](handoffs/2026-11-10-stone-pool-cost-tabs.md)。
-
-## 2026-11-10 俱乐部实时房房费提示
-
-- 客户端创建规则红字房费说明 + 牌桌钻石池不足解散弹窗（`消费钻石价格.俱乐部实时房间时长费`，默认 0=未开启，不扣费）；后台 catalog 加项并部署 8891，随 HEAD 上线收益对账接口；客户端未构建。详见[交接](handoffs/2026-11-10-club-room-fee-hint.md)。
-
-## 2026-11-10 游戏设置·奖池：比例支持两位小数、隐藏低底皮（未构建、未真机）
-
-- 「修改奖池比例」改为小数输入（网页端文本框、原生端小数键盘），0~100、最多两位小数（如 0.5），列表/合计/「其余牌型共占」提示统一去尾零显示；牌桌奖池弹窗同口径。
-- 「底皮奖池数量」隐藏已停用的 `0.1/0.3`、`0.2/0.5` 两行（节点保留以对齐服务端 8 个底皮键），滚动 content 高度 1604→1388。
-- **服务端仍是「整数 0~100」口径**（服务器文档 §10.4）；若游戏服按整数截断，0.x 会变 0，需服务端同步支持小数。详见[交接](handoffs/2026-11-10-game-settings-jackpot-decimal.md)。
-
-## 2026-11-10 退出房间：点击立即出 loading（未构建、未真机）
-
-- 现象：点击后约 0.85s 才转圈。2026-11-08 把「不在本手牌」路径也并进了预约流程（2×0.25s 轮询 + 0.6s 延时），旧版此处直接 `DoExitRoom()`。
-- 已改回 `ConfirmLeaveWhileWinning(()=>DoExitRoom())`；`DoExitRoom` 内仍复查局中，撞上开牌自动转预约，局中逻辑未变。
+- 钻石池同秒取值、消耗两页签、实时房房费、奖池两位小数、退出 loading，原文见[归档](archive/2026-11-12/current-nov10-client-batches.md)；带入钻石开关见[归档](archive/2026-11-11/current-nov10-club-seat-stone.md)。
 
 ## 2026-11-10 玩家信息：付费查看输赢统计（已归档）
 

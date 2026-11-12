@@ -597,7 +597,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
                 if(id === "")
                     return;
                 UIManager.getInstance().showPanel("panelClubPlayerInfo", ShowPanelMode.Cover,
-                    JSON.stringify({userId:id, clubId:this.userClubId || this.roomClubId}));
+                    JSON.stringify({userId:id, clubId:clubId || this.userClubId || this.roomClubId}));
             }, this);
         }
 
@@ -615,7 +615,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
                     if(id === "")
                         return;
                     this.ShowTab("chain", false);
-                    this.ApplyTarget(id, t(data.name));
+                    this.ApplyTarget(id, t(data.name), clubId);
                 }, this);
             }
         }
@@ -696,11 +696,17 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         this.SearchByName(key);
     }
 
-    private ApplyTarget(userId:string, name:string):void {
+    /**
+     * 切到代理链目标。clubId 必须是**被查玩家自己的俱乐部**，不能沿用当前房间的俱乐部；
+     * 直接输 ID / 按昵称搜索拿不到俱乐部时才回退到当前 club。
+     */
+    private ApplyTarget(userId:string, name:string, clubId:string = ""):void {
         this.userId = userId;
         // 直接输 ID 查的时候拿不到昵称，必须清空旧值，否则抬头还挂着上一个玩家的名字。
         this.userName = name;
         this.userPhoto = "";
+        if(clubId !== "")
+            this.userClubId = clubId;
         this.retryCount = 0;
         this.clubFallbackTried = false;
         this.QueryChain();
@@ -787,7 +793,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             return;
         }
         const name = String(target.name || "").trim();
-        this.ApplyTarget(guuid, name);
+        const clubId = String(target.club_id || target.clubId || "").trim();
+        this.ApplyTarget(guuid, name, clubId);
     }
 
     private ParseSearch(raw:any):any {
@@ -1882,7 +1889,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             if(hasClub) {
                 this.BindTap(chainBtn, ()=>{
                     this.ShowTab("chain", false);
-                    this.ApplyTarget(id, item.name);
+                    this.ApplyTarget(id, item.name, clubId);
                 });
             }
         }
@@ -2649,7 +2656,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
                 this.BindTap(chainBtn, ()=>{
                     this.CloseDialog();
                     this.ShowTab("chain", false);
-                    this.ApplyTarget(id, member.name);
+                    this.ApplyTarget(id, member.name, member.club || this.GroupClubId());
                 });
             }
         }

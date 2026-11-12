@@ -519,6 +519,11 @@ export interface AuditItem {
   createdAt: string;
 }
 
+export interface ManageScopeName {
+  id: string;
+  name: string;
+}
+
 export interface PlayerItem {
   id: number;
   playerId: string;
@@ -550,9 +555,39 @@ export interface PlayerItem {
   lastLoginAt: string | null;
   loginCount: number;
   remark: string;
-  /** BOSS 号：等级 ≥ 99，或角色含董事长/总裁；前端据此把整行标成浅红色。 */
+  /** 大小BOSS：已配置可管理联盟（union_manage）或俱乐部（club_manage）；前端据此把整行标成浅红色。 */
   isBoss: boolean;
+  /** 可管理联盟号，逗号分隔；用于配置弹窗回显。 */
+  unionManage: string;
+  /** 可管理俱乐部号，逗号分隔；用于配置弹窗回显。 */
+  clubManage: string;
+  /** 可管理联盟名称，按授权顺序；name 为空时前端回退显示 id。 */
+  unionManageNames: ManageScopeName[];
+  /** 可管理俱乐部名称，按授权顺序；name 为空时前端回退显示 id。 */
+  clubManageNames: ManageScopeName[];
   clubs: PlayerClubRef[];
+}
+
+export interface PlayerManageScopeResult {
+  playerId: string;
+  unionManage: string;
+  clubManage: string;
+  verified: boolean;
+  message: string;
+  context: string;
+}
+
+export interface ManageScopeOption {
+  id: string;
+  name: string;
+  ownerName?: string;
+  clubCount?: number;
+  memberCount?: number;
+}
+
+export interface ManageScopeOptions {
+  unions: ManageScopeOption[];
+  clubs: ManageScopeOption[];
 }
 
 export interface PlayerRoomSummary {

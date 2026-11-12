@@ -318,6 +318,7 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_club_join", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_make", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_manage", this, "OnClubMembershipChanged");
+        KBEngine.Event.register("set_union_manage", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_gold", this, "OnClubGoldChanged");
         KBEngine.Event.register("ClubAgentInfo", this, "OnClubAgentInfo");
         KBEngine.Event.register("ClubUnionQuota", this, "OnClubUnionQuota");
@@ -459,9 +460,9 @@ export default class panelMain extends UIPanelViewBase {
             Tool.GetChild(this.node,"Main/我的/信息/测试").active = false;
         }
 
-        // 「我的」右上角的数据统计入口：仅 BOSS 账号可见（prefab 里默认隐藏）。
-        // 口径与牌局里的一致：level>=99 或 董事长/总裁；服务端仍会按 boss 名单鉴权。
-        Tool.GetChild(this.node,"Main/我的/数据统计").active = GameDataManager.IsBossAccount();
+        // 「我的」右上角的数据统计入口：只看是否配置了管理范围（union_manage / club_manage），
+        // 不再看等级/角色；prefab 里默认隐藏。
+        this.RefreshBossEntryVisibility();
 
         if(GameDataManager.instance.nShowNotify)
         {
@@ -1254,10 +1255,10 @@ export default class panelMain extends UIPanelViewBase {
         if(this.clubManagement && this.clubManagement.HandleButton(button))
             return;
         // 「我的」右上角的数据统计：打开 BOSS 数据面板（代理链/玩家信息）。
-        // 按钮只对 BOSS 显示，这里再挡一道防止热更后节点状态残留被误点。
+        // 按钮只对配置了管理范围的账号显示，这里再挡一道防止热更后节点状态残留被误点。
         if(button.node.name === "数据统计")
         {
-            if(GameDataManager.IsBossAccount())
+            if(GameDataManager.HasManageScope())
             {
                 // 从大厅进来必须带当前俱乐部：面板的「玩家信息」「代理链路」两条查询都用它当
                 // club_id，不带的话服务端会退回账号默认俱乐部，和当前在看的那家对不上。
@@ -4387,8 +4388,17 @@ export default class panelMain extends UIPanelViewBase {
         return true;
     }
 
+    /** 「数据统计」入口只看管理范围（union_manage / club_manage），属性变化后立即重算。 */
+    private RefreshBossEntryVisibility():void
+    {
+        const node = Tool.GetChild(this.node,"Main/我的/数据统计");
+        if(node)
+            node.active = GameDataManager.HasManageScope();
+    }
+
     public OnClubMembershipChanged()
     {
+        this.RefreshBossEntryVisibility();
         this.clubAgentInfo = {};
         this.clubAgentRecheck = {};
         this.clubInfoAsked = {};

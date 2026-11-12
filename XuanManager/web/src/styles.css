@@ -247,12 +247,35 @@ td strong { color: #294149; }
 .max-cell { max-width: 270px; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: #a2b0b3; }
 .player-table { min-width: 1220px; }
-/* BOSS 号（等级 ≥ 99 或角色含董事长/总裁）整行浅红底，悬停再深一档。 */
+/* 大小BOSS：已配置 union_manage / club_manage 的账号整行浅红底，悬停再深一档。 */
 .player-table tbody tr.player-row--boss { background: #fff1f0; }
 .player-table tbody tr.player-row--boss:hover { background: #ffe6e3; }
 /* 玩家登录密码列：显示后台加密收录的明文；历史账号显示「未收录」。该列只有管理员角色能看到。 */
 .player-password { display: inline-block; max-width: 168px; color: #176e68; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; letter-spacing: .02em; overflow-wrap: anywhere; white-space: normal; }
 .player-password.is-missing { color: #a2b0b3; font-family: inherit; font-size: 12px; }
+/* 玩家列表里的大小BOSS管理范围：单行省略，完整内容放在行 title 里。 */
+.scope-summary { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 大小BOSS 管理范围：联盟 / 独立俱乐部多选 */
+.scope-picker-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 14px 0; }
+.scope-picker { display: flex; flex-direction: column; min-width: 0; border: 1px solid #dbe6e7; border-radius: 10px; background: #fbfdfd; overflow: hidden; }
+.scope-picker > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 11px 12px; border-bottom: 1px solid #e4edee; background: #f3f9f8; }
+.scope-picker > header div { display: flex; flex-direction: column; gap: 3px; }
+.scope-picker > header strong { color: #24434a; font-size: 14px; }
+.scope-picker > header small { color: #7d9095; font-size: 11px; }
+.scope-picker > header > span { flex: none; padding: 3px 8px; border-radius: 999px; color: #176f67; background: #e6f5f2; font-size: 11px; font-weight: 750; }
+.scope-picker__search { display: flex; align-items: center; gap: 7px; margin: 10px 12px 8px; padding: 0 10px; border: 1px solid #dbe6e7; border-radius: 8px; background: #fff; }
+.scope-picker__search span { color: #8aa0a5; }
+.scope-picker__search input { width: 100%; height: 36px; border: 0; outline: 0; color: #29434a; background: transparent; font-size: 13px; }
+.scope-picker__list { max-height: 240px; overflow: auto; padding: 0 6px 8px; }
+.scope-picker__row { display: flex; align-items: flex-start; gap: 9px; padding: 7px 8px; border-radius: 7px; cursor: pointer; }
+.scope-picker__row:hover { background: #f0f8f7; }
+.scope-picker__row input { margin-top: 2px; accent-color: #209c93; }
+.scope-picker__row > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.scope-picker__row strong { color: #29434a; font-size: 13px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.scope-picker__row small { color: #7d9095; font-size: 11px; }
+.scope-picker__row.is-unknown strong { color: #b64e5a; }
+.scope-picker__empty { margin: 10px 8px; color: #9aacb0; font-size: 12px; }
+@media (max-width: 720px) { .scope-picker-grid { grid-template-columns: 1fr; } }
 .money-value, .stone-value { color: #117b72; font-family: Georgia, "Songti SC", serif; font-size: 16px; }
 .club-chip-list { display: flex; flex-wrap: wrap; gap: 5px; max-width: 230px; }
 .club-chip { display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; padding: 4px 9px; border: 1px solid #cfe7e3; border-radius: 999px; color: #176f67; background: #f0f9f7; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }

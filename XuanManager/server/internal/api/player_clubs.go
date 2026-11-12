@@ -76,7 +76,7 @@ func clubIDsFromMembershipColumns(values ...string) []string {
 }
 
 func playerMembershipColumns(item playerItem) []string {
-	return []string{item.clubMake, item.clubMake2, item.clubJoin, item.clubJoin2, item.clubManage}
+	return []string{item.clubMake, item.clubMake2, item.clubJoin, item.clubJoin2, item.ClubManage}
 }
 
 func (s *Server) attachPlayerClubs(ctx context.Context, items []playerItem) error {

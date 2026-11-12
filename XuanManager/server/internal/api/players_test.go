@@ -68,7 +68,7 @@ func TestParsePlayerFilters(t *testing.T) {
 	if filters.LoginFrom != "2026-09-01" || filters.LoginTo != "2026-09-19" {
 		t.Fatalf("unexpected login range: %#v", filters)
 	}
-	where, args := buildPlayerWhere(filters)
+	where, args := buildPlayerWhere(filters, true)
 	if strings.Contains(where, filters.PlayerID) || strings.Contains(where, filters.AgentID) {
 		t.Fatalf("query values must not be interpolated: %s", where)
 	}
@@ -79,7 +79,7 @@ func TestParsePlayerFilters(t *testing.T) {
 }
 
 func TestBuildPlayerWhereLoginRangeUsesBeijingDayBounds(t *testing.T) {
-	where, args := buildPlayerWhere(playerFilters{LoginFrom: "2026-09-01", LoginTo: "2026-09-19"})
+	where, args := buildPlayerWhere(playerFilters{LoginFrom: "2026-09-01", LoginTo: "2026-09-19"}, true)
 	for _, expected := range []string{
 		"k.lasttime >= UNIX_TIMESTAMP(CONCAT(?, ' 00:00:00'))",
 		"k.lasttime <= UNIX_TIMESTAMP(CONCAT(?, ' 23:59:59'))",
@@ -100,11 +100,21 @@ func TestBuildPlayerWhereBossOnly(t *testing.T) {
 		t.Fatalf("parse filters: %v", err)
 	}
 	if !filters.BossOnly {
-		t.Fatal("boss=1 应当只筛 BOSS 号")
+		t.Fatal("boss=1 应当只筛大小BOSS")
 	}
-	where, args := buildPlayerWhere(filters)
-	if !strings.Contains(where, "a.sm_level >= 99") || len(args) != 0 {
+	where, args := buildPlayerWhere(filters, true)
+	if !strings.Contains(where, "COALESCE(TRIM(a.sm_union_manage), '') <> ''") ||
+		!strings.Contains(where, "COALESCE(TRIM(a.sm_club_manage), '') <> ''") || len(args) != 0 {
 		t.Fatalf("unexpected boss where clause or args: %s %#v", where, args)
+	}
+	if strings.Contains(where, "sm_level") {
+		t.Fatalf("大小BOSS 筛选不应再看等级: %s", where)
+	}
+
+	// 游戏服未部署 union_manage 时退回只按 club_manage 筛。
+	where, _ = buildPlayerWhere(filters, false)
+	if strings.Contains(where, "sm_union_manage") || !strings.Contains(where, "sm_club_manage") {
+		t.Fatalf("missing union column fallback: %s", where)
 	}
 
 	r = httptest.NewRequest("GET", "/api/game/players?boss=0", nil)
@@ -112,9 +122,9 @@ func TestBuildPlayerWhereBossOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse filters: %v", err)
 	}
-	where, _ = buildPlayerWhere(filters)
-	if strings.Contains(where, "a.sm_level >= 99") {
-		t.Fatalf("boss=0 不应附加 BOSS 条件: %s", where)
+	where, _ = buildPlayerWhere(filters, true)
+	if strings.Contains(where, "sm_union_manage") || strings.Contains(where, "sm_club_manage") {
+		t.Fatalf("boss=0 不应附加大小BOSS条件: %s", where)
 	}
 }
 

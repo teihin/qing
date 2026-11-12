@@ -3,7 +3,7 @@ import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
 import { formatBeijingDateTime } from "../time";
-import type { PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneGrantRecordsResponse, PlayerStoneGrantResult } from "../types";
+import type { ManageScopeName, ManageScopeOption, ManageScopeOptions, PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerManageScopeResult, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneGrantRecordsResponse, PlayerStoneGrantResult } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -50,6 +50,38 @@ function playerFiltersFromHash(): PlayerFilters {
   return playerId ? { ...emptyFilters, playerId } : { ...emptyFilters };
 }
 
+function scopeDisplayNames(items: ManageScopeName[] | undefined, raw: string): string[] {
+  if (items && items.length > 0) return items.map((item) => item.name || item.id);
+  return parseScopeIDs(raw || "");
+}
+
+function scopeShortText(items: ManageScopeName[] | undefined, raw: string, limit = 3): string {
+  const names = scopeDisplayNames(items, raw);
+  if (names.length === 0) return "";
+  const shown = names.slice(0, limit).join("、");
+  return names.length > limit ? `${shown} 等${names.length}个` : shown;
+}
+
+function scopeRowSummary(player: PlayerItem): string {
+  const unions = scopeShortText(player.unionManageNames, player.unionManage);
+  const clubs = scopeShortText(player.clubManageNames, player.clubManage);
+  return [unions ? `联盟 ${unions}` : "", clubs ? `俱乐部 ${clubs}` : ""].filter(Boolean).join(" · ");
+}
+
+function scopeFullText(player: PlayerItem): string {
+  const unions = scopeDisplayNames(player.unionManageNames, player.unionManage);
+  const clubs = scopeDisplayNames(player.clubManageNames, player.clubManage);
+  return [
+    unions.length ? `联盟 ${unions.join("、")}` : "",
+    clubs.length ? `俱乐部 ${clubs.join("、")}` : "",
+  ].filter(Boolean).join("；");
+}
+
+function scopeDetailText(items: ManageScopeName[] | undefined, raw: string): string {
+  const names = scopeDisplayNames(items, raw);
+  return names.length ? names.join("、") : "未配置";
+}
+
 const balanceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const clubModeLabels: Record<string, string> = { "1": "普通模式", "2": "茶楼模式", "3": "带分模式" };
 const clubStatusLabels: Record<string, string> = { used: "正常", init: "未启用", del: "已解散" };
@@ -65,6 +97,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
   const [selected, setSelected] = useState<PlayerItem | null>(null);
   const [resettingPassword, setResettingPassword] = useState<PlayerItem | null>(null);
   const [grantingStone, setGrantingStone] = useState<PlayerItem | null>(null);
+  const [configuringScope, setConfiguringScope] = useState<PlayerItem | null>(null);
   const [showGrantRecords, setShowGrantRecords] = useState(false);
   const [queryRevision, refreshQuery] = useQueryRefresh();
   const canViewPassword = Boolean(data?.canViewPassword);
@@ -136,7 +169,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
               <Field label="玩家ID"><input value={draft.playerId} onChange={(event) => update("playerId", event.target.value)} placeholder="精确匹配游戏ID" /></Field>
               <Field label="玩家昵称"><input value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="支持部分匹配" /></Field>
               <Field label="登录账号"><input value={draft.loginName} onChange={(event) => update("loginName", event.target.value)} placeholder="登录名或KBE账号" /></Field>
-              <Field label="BOSS号" hint="筛选等级 ≥ 99 的运营账号"><select value={draft.boss} onChange={(event) => update("boss", event.target.value)}><option value="">全部玩家</option><option value="1">只看 BOSS 号</option></select></Field>
+              <Field label="大小BOSS" hint="筛选已配置可管理联盟或俱乐部（union_manage / club_manage）的账号"><select value={draft.boss} onChange={(event) => update("boss", event.target.value)}><option value="">全部玩家</option><option value="1">只看大小BOSS</option></select></Field>
               <Field label="当前房间ID"><input type="number" min="0" value={draft.roomId} onChange={(event) => update("roomId", event.target.value)} placeholder="0 表示未在房间" /></Field>
               <Field label="客户端状态"><input value={draft.clientStatus} onChange={(event) => update("clientStatus", event.target.value)} placeholder="精确匹配状态值" /></Field>
               <Field label="客户端版本"><input value={draft.clientVersion} onChange={(event) => update("clientVersion", event.target.value)} placeholder="精确匹配版本号" /></Field>
@@ -166,8 +199,8 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
               <table className="player-table">
                 <thead><tr><th>玩家</th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
-                  <tr key={player.id} className={player.isBoss ? "player-row--boss" : undefined} title={player.isBoss ? "BOSS 号（等级 ≥ 99 或董事长/总裁）" : undefined}>
-                    <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small></div></div></td>
+                  <tr key={player.id} className={player.isBoss ? "player-row--boss" : undefined} title={player.isBoss ? `大小BOSS${scopeFullText(player) ? ` · ${scopeFullText(player)}` : ""}` : undefined}>
+                    <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small>{player.isBoss && <small className="cell-subtitle scope-summary">大小BOSS · {scopeRowSummary(player)}</small>}</div></div></td>
                     <td><code>{player.loginName || "—"}</code>{player.accountName && player.accountName !== player.loginName && <small className="cell-subtitle">KBE：{player.accountName}</small>}</td>
                     {canViewPassword && <td><PlayerPasswordCell player={player} /></td>}
                     <td><strong className="stone-value">{player.stone.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">钻石</small></td>
@@ -175,7 +208,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
                     <td>{formatDate(player.registrationTime)}</td>
                     <td>{formatDate(player.lastLoginAt)}</td>
-                    <td><div className="row-actions">{can("game.player.grant_stone") && <button className="success-link" onClick={() => setGrantingStone(player)}>发放钻石</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
+                    <td><div className="row-actions">{can("game.player.grant_stone") && <button className="success-link" onClick={() => setGrantingStone(player)}>发放钻石</button>}{can("game.player.manage_scope") && <button onClick={() => setConfiguringScope(player)}>设置管理员</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -196,6 +229,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       {selected && <PlayerDetail player={selected} can={can} canViewSensitive={canViewSensitive} notify={notify} onClose={() => setSelected(null)} />}
       {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
       {grantingStone && <GrantPlayerStoneModal player={grantingStone} onClose={() => setGrantingStone(null)} onDone={async (message) => { setGrantingStone(null); notify(message); await load(); }} />}
+      {configuringScope && <ManageScopeModal player={configuringScope} onClose={() => setConfiguringScope(null)} onDone={async (message) => { setConfiguringScope(null); notify(message); await load(); }} />}
       {showGrantRecords && <PlayerStoneGrantRecordsModal onClose={() => setShowGrantRecords(false)} notify={notify} />}
     </div>
   );
@@ -277,6 +311,123 @@ function GrantPlayerStoneModal({ player, onClose, onDone }: { player: PlayerItem
     </div>
     <label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID和发放数量，并确认给该玩家增加 {amountValid ? `${amountValue.toLocaleString("zh-CN")} 钻` : "钻石"}</span></label>
     <div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在发放并校验…" : "确认发放钻石"}</Button></div>
+  </Modal>;
+}
+
+function parseScopeIDs(raw: string): string[] {
+  return Array.from(new Set(raw.split(/[,，\s]+/).map((value) => value.trim()).filter(Boolean)));
+}
+
+function ManageScopePicker({ title, hint, options, selected, onChange, emptyText }: {
+  title: string;
+  hint: string;
+  options: ManageScopeOption[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  emptyText: string;
+}) {
+  const [keyword, setKeyword] = useState("");
+  const selectedSet = useMemo(() => new Set(selected), [selected]);
+  const keywordText = keyword.trim().toLowerCase();
+  const visible = useMemo(() => options.filter((option) => {
+    if (!keywordText) return true;
+    return option.id.includes(keywordText) || option.name.toLowerCase().includes(keywordText);
+  }), [keywordText, options]);
+  const unknown = selected.filter((id) => !options.some((option) => option.id === id));
+  const toggle = (id: string) => onChange(selectedSet.has(id)
+    ? selected.filter((value) => value !== id)
+    : [...selected, id]);
+  return <section className="scope-picker">
+    <header><div><strong>{title}</strong><small>{hint}</small></div><span>已选 {selected.length}</span></header>
+    <div className="scope-picker__search"><span>⌕</span><input value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="搜索名称或编号" /></div>
+    <div className="scope-picker__list">
+      {unknown.map((id) => <label key={`unknown-${id}`} className="scope-picker__row is-unknown">
+        <input type="checkbox" checked onChange={() => onChange(selected.filter((value) => value !== id))} />
+        <span><strong>{id}</strong><small>当前已配置，但不在可选列表中（可能已入盟或已解散）</small></span>
+      </label>)}
+      {visible.map((option) => <label key={option.id} className="scope-picker__row">
+        <input type="checkbox" checked={selectedSet.has(option.id)} onChange={() => toggle(option.id)} />
+        <span>
+          <strong>{option.name || option.id}</strong>
+          <small>ID {option.id}{option.ownerName ? ` · 总群主 ${option.ownerName}` : ""}{option.clubCount !== undefined ? ` · ${option.clubCount} 家俱乐部` : ""}{option.memberCount !== undefined ? ` · ${option.memberCount} 人` : ""}</small>
+        </span>
+      </label>)}
+      {visible.length === 0 && unknown.length === 0 && <p className="scope-picker__empty">{emptyText}</p>}
+    </div>
+  </section>;
+}
+
+function ManageScopeModal({ player, onClose, onDone }: { player: PlayerItem; onClose: () => void; onDone: (message: string) => Promise<void> }) {
+  const [options, setOptions] = useState<ManageScopeOptions | null>(null);
+  const [optionsLoading, setOptionsLoading] = useState(true);
+  const [optionsError, setOptionsError] = useState("");
+  const [optionsRevision, setOptionsRevision] = useState(0);
+  const [unionIDs, setUnionIDs] = useState<string[]>(() => parseScopeIDs(player.unionManage || ""));
+  const [clubIDs, setClubIDs] = useState<string[]>(() => parseScopeIDs(player.clubManage || ""));
+  const [confirmed, setConfirmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setOptionsLoading(true);
+    setOptionsError("");
+    api<ManageScopeOptions>("/api/game/players/manage-scope/options")
+      .then((data) => { if (!cancelled) setOptions(data); })
+      .catch((reasonValue) => {
+        if (!cancelled) setOptionsError(reasonValue instanceof ApiError ? reasonValue.message : "可选项加载失败");
+      })
+      .finally(() => { if (!cancelled) setOptionsLoading(false); });
+    return () => { cancelled = true; };
+  }, [optionsRevision]);
+
+  const invalidID = [...unionIDs, ...clubIDs].find((id) => !/^\d{6}$/.test(id));
+  const invalid = Boolean(invalidID) || !confirmed || optionsLoading;
+  const submit = async () => {
+    if (invalidID) { setError(`编号 ${invalidID} 不是 6 位数字`); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await api<PlayerManageScopeResult>(`/api/game/players/${encodeURIComponent(player.playerId)}/manage-scope`, {
+        method: "POST",
+        ...jsonBody({
+          unionIds: unionIDs,
+          clubIds: clubIDs,
+          expectedUnionManage: player.unionManage || "",
+          expectedClubManage: player.clubManage || "",
+          confirm: confirmed,
+        }),
+      });
+      await onDone(result.verified ? result.message : `${result.message}（操作号 ${result.context}）`);
+    } catch (reasonValue) {
+      setError(reasonValue instanceof ApiError ? reasonValue.message : "管理范围设置失败");
+    } finally { setBusy(false); }
+  };
+  return <Modal wide title={`设置管理员 · ${player.name || player.playerId}`} eyebrow="PLAYER MANAGE SCOPE" onClose={onClose}>
+    <div className="password-reset-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>游戏ID {player.playerId} · {player.isBoss ? "当前是大小BOSS" : "当前未配置管理范围"}</p></div></div>
+    <div className="sensitive-operation-notice"><strong>这两个属性决定游戏内的 BOSS 入口</strong><p>配置后，玩家登录游戏会看到「数据统计」和点击头像的 BOSS 面板；全部取消勾选表示清空。只覆盖可管理联盟/独立俱乐部，不影响玩家的俱乐部成员关系。</p></div>
+    {error && <div className="form-error"><span>!</span>{error}</div>}
+    {optionsError && <div className="form-error"><span>!</span>{optionsError}<button type="button" className="link-button" onClick={() => setOptionsRevision((value) => value + 1)}>重新加载</button></div>}
+    {optionsLoading ? <LoadingBlock label="正在读取可管理的联盟和俱乐部" /> : <div className="scope-picker-grid">
+      <ManageScopePicker
+        title="可管理联盟"
+        hint="选中后该联盟下全部俱乐部都可管理"
+        options={options?.unions || []}
+        selected={unionIDs}
+        onChange={setUnionIDs}
+        emptyText="暂无联盟"
+      />
+      <ManageScopePicker
+        title="可管理独立俱乐部"
+        hint="只列未加入联盟的俱乐部"
+        options={options?.clubs || []}
+        selected={clubIDs}
+        onChange={setClubIDs}
+        emptyText="暂未入盟的俱乐部为空"
+      />
+    </div>}
+    <p className="field__hint">保存后覆盖为：联盟 {unionIDs.length} 个、独立俱乐部 {clubIDs.length} 个。已入盟的俱乐部请通过它所属的联盟授权。</p>
+    <label className="confirm-check"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家ID，并确认覆盖该玩家的可管理联盟和俱乐部</span></label>
+    <div className="form-actions"><Button variant="secondary" onClick={onClose}>取消</Button><Button disabled={invalid || busy} onClick={() => void submit()}>{busy ? "正在写入并校验…" : "保存管理范围"}</Button></div>
   </Modal>;
 }
 
@@ -436,6 +587,14 @@ function PlayerProfileTab({ player, canViewSensitive, sensitive, sensitiveLoadin
           <Detail label="客户端版本" value={player.clientVersion} />
           <Detail label="当前房间" value={player.roomId > 0 ? `${player.roomId}（${player.roomType || "类型未记录"}）` : "未在房间"} />
         </div>
+      </section>
+      <section className="player-detail-section">
+        <h3>管理范围（大小BOSS）</h3>
+        <div className="player-detail-grid">
+          <Detail label="可管理联盟" value={scopeDetailText(player.unionManageNames, player.unionManage)} mono />
+          <Detail label="可管理俱乐部" value={scopeDetailText(player.clubManageNames, player.clubManage)} mono />
+        </div>
+        <p className="field__hint">由玩家列表的「设置管理员」配置；两个属性都为空时，游戏内不显示数据统计和 BOSS 头像面板。</p>
       </section>
       <section className="player-detail-section">
         <h3>钻石与战绩</h3>
