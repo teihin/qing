@@ -122,6 +122,8 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.update", true, s.handleUpdatePlayerOptimization))
 	s.mux.Handle("DELETE /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.delete", true, s.handleDeletePlayerOptimization))
 	s.mux.Handle("GET /api/game/jackpot/agents", s.authorized("game.jackpot.view", false, s.handleJackpotAgents))
+	s.mux.Handle("GET /api/game/club-perf/unions", s.authorized("game.club_perf.view", false, s.handleClubPerfUnions))
+	s.mux.Handle("GET /api/game/club-perf/overview", s.authorized("game.club_perf.view", false, s.handleClubPerfOverview))
 	s.mux.Handle("GET /api/game/agent-rewards", s.authorized("game.agent_reward.view", false, s.handlerRewardOverview))
 	s.mux.Handle("GET /api/game/agent-rewards/unions", s.authorized("game.agent_reward.view", false, s.handlerRewardUnions))
 	s.mux.Handle("GET /api/game/agent-rewards/summary", s.authorized("game.agent_reward.view", false, s.handlerRewardSummary))

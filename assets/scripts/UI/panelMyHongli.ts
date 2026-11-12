@@ -565,7 +565,7 @@ export default class panelMyHongli extends UIPanelViewBase {
         account.reqHallCommand(JSON.stringify({
             header:panelMyHongli.PERF_HEADER_INFO,
             club_id:this.perfClubId,
-            date:-1,
+            date:0,
             context:"p@" + ctx
         }), "P@" + ctx);
     }
@@ -580,7 +580,7 @@ export default class panelMyHongli extends UIPanelViewBase {
         account.reqHallCommand(JSON.stringify({
             header:panelMyHongli.PERF_HEADER_LIST,
             club_id:this.perfClubId,
-            date:-1,
+            date:0,
             count:panelMyHongli.PERF_PAGE_SIZE,
             page:this.perfPage,
             context:"p@" + ctx

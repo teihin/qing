@@ -4,6 +4,13 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-12 后台新增「业绩股」总览（已部署 8891，页面待验）
+
+- 游戏管理 → 业绩股：选联盟后按代理树展示全量代理，含上级下级、开通状态与我/下放/剩/占比；联盟根按联盟树口径汇总，未开通节点单独标识。
+- 后端新增 `GET /api/game/club-perf/unions|overview`：代理树读 `club_agent_info`，业绩走 `异步_查询_俱乐部_业绩_报表(union_id)`，报表未命中即未开通；迁移 058 加模块与 `game.club_perf.view`。
+- 已部署：二进制 `e173c8b2…`、前端 `index-Dz_DYocB.js`；迁移 058 已执行并回读模块/权限/role 1；health 200、未登录接口 401。回滚：`backups/xuanmanager.20261112-1627-rollback`、`web.previous-club-perf-20261112-1627`。
+- 未做登录态页面视觉验收；游戏服报表命令需真实联盟验证。详见[交接](handoffs/2026-11-12-club-perf-admin-module.md)。
+
 ## 2026-11-12 初始化交易密码改独立 Prefab（未构建、未真机）
 
 - 「玩家信息 → 上下分」未设交易密码时的初始化弹窗原为 `panelMain` 子节点，被 Top 层上下分/赠送面板挡住；已抽出 `panelInitTradePwd.prefab`，改以 `ShowPanelMode.Top` 打开，校验/提示同走 Top，回包由 `panelMain` 转发给 `OnSubmitResult`。
@@ -105,12 +112,9 @@
 
 - 电量三连击入口、运维优化页与通用选人弹窗，详见[归档](archive/2026-11-11/current-nov10-game-optimize.md)。
 
-## 2026-11-10 后台发牌优化：改用游戏服 `异步_设置_玩家_属性`（已部署，未真实写入验收）
+## 2026-11-10 后台发牌优化（已归档）
 
-- 新增/调整/删除不再直连游戏库写 `tbl_Account`，改为调用服务器本机 8890 的 `异步_设置_玩家_属性` 写 `optimize01_chance`、`optimize01_count`（删除写 0），写后 16×300ms 回读数据库校验；第二字段失败或回读失败时把两个字段恢复为操作前值。
-- `optimize01_man` 是可选标记、不参与判定，后台不再查询/要求唯一 BOSS，原「无法唯一确定游戏 BOSS」报错消失。历史 `man` 值保留，不再覆盖。
-- 概率支持 `1～100`（正优化）与 `-100～-1`（负优化），`0` 不允许；后端校验、范围筛选和前端输入同步放开。
-- 已部署正式 8891：二进制 `347a37e0…`（回滚 `backups/xuanmanager.20261110-0026-rollback`），前端 `index-BU2OmBcu.js`（CSS 保持 `index-DCd0vLpS.css`；回滚目录 `web.previous-player-optimization-20261110-0026`）。health 200、发牌优化路由未登录 401、旧 BOSS 报错串为 0；8890 只读查询 `718968` 返回 chance/count 均为 0。未在页面实操新增/调整/删除，未做真实玩家写入验收。详见[交接](handoffs/2026-11-10-player-optimization-game-command.md)。
+- 改用 `异步_设置_玩家_属性`、概率正负区间与回读校验，详见[归档](archive/2026-11-12/current-nov10-player-optimization.md)。
 
 ## 2026-11-09 后台玩家管理：发放钻石 + 发放记录（已部署，游戏服命令待部署）
 

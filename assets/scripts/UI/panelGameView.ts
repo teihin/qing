@@ -3039,6 +3039,8 @@ export default class panelGameView extends UIPanelViewBase {
         root.getChildByName("图例2").active = !showText && !report;
         root.getChildByName("V8局数").getComponent(cc.Label).string = total > 0 ? "第" + this.nCurPage + "局" : "暂无已完成牌局";
         root.getChildByName("V8空记录").active = total <= 0;
+        if (showText || total <= 0)
+            this.SetNodeActive("牌局回顾/芒池", false);
         const flipEntry = root.getChildByName("翻牌");
         if (flipEntry != null)
             flipEntry.active = total > 0 && !showText;
@@ -3221,6 +3223,7 @@ export default class panelGameView extends UIPanelViewBase {
             this.nCurPage = nRound;
             Tool.GetChild(this.node,"牌局回顾/分页/页码").getComponent(cc.Label).string = nRound.toString()+" / "+(Number(this.gameLogic.round_count)-1);
             this.UpdateReviewChrome();
+            this.SetNodeActive("牌局回顾/芒池", false);
             let strParam = "{\"header\":\"查询_房间_玩家_战绩_信息\",\"room_id\":\"" + GameDataManager.getAccount().roomID + "\",\"round_id\":\"" + nRound.toString() + "\"}";
             GameDataManager.getAccount().reqAccountCommand(strParam, "@查询_房间_玩家_战绩_信息");
         }
@@ -3246,6 +3249,7 @@ export default class panelGameView extends UIPanelViewBase {
         if(data == null)
             return;
         let jList = data["RoundScore"];
+        let jPlayers:any[] = null;
         if (jList.length > 0)
         {
             let  jRound = jList[0];                      
@@ -3254,7 +3258,7 @@ export default class panelGameView extends UIPanelViewBase {
                 this.strShowPai = jRound["remark2"].toString();
             }
 
-            let jPlayers = jRound["players"];            
+            jPlayers = jRound["players"];            
             for (let i = 0; i < jPlayers.length; i++)
             {
                 let jItem = jPlayers[i];
@@ -3291,9 +3295,46 @@ export default class panelGameView extends UIPanelViewBase {
             }
         }
 
-
+        this.UpdateReviewMangChi(jPlayers);
         this.UpdateReviewChrome();
 
+    }
+
+    /** 本局芒池在 remark 第 12 段（index 11，格式「本局芒池:数字」），老记录没有这段就隐藏。 */
+    private UpdateReviewMangChi(jPlayers:any[]):void
+    {
+        const labelNode = Tool.GetChild(this.node,"牌局回顾/芒池");
+        if (labelNode == null)
+            return;
+
+        let strShow = "";
+        if (jPlayers != null)
+        {
+            for (let item of jPlayers)
+            {
+                if (item == null || item["remark"] == null)
+                    continue;
+                const arrayAll = item["remark"].toString().split('@');
+                if (arrayAll.length <= 11)
+                    continue;
+                const strSeg = arrayAll[11].trim();
+                if (strSeg.length > 0)
+                {
+                    strShow = strSeg;
+                    break;
+                }
+            }
+        }
+
+        if (strShow.length == 0)
+        {
+            labelNode.active = false;
+            return;
+        }
+        if (strShow.indexOf("本局芒池") < 0)
+            strShow = "本局芒池:" + strShow;
+        labelNode.getComponent(cc.Label).string = strShow;
+        labelNode.active = true;
     }
 
     public setItemInfo(objNew:cc.Node,jOne:any)

@@ -2883,3 +2883,32 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
   .recovery-codes { grid-template-columns: 1fr; }
   input.totp-code-input { font-size: 20px; letter-spacing: .26em; }
 }
+
+/* 业绩股：按联盟查看全量代理树 */
+.club-perf-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-bottom: 16px; }
+.club-perf-filters .field { min-width: 240px; }
+.club-perf-filters select { width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid #dce8e9; border-radius: 9px; color: #19343d; background: #fff; }
+.club-perf-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.club-perf-stats > div { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid #e3ecec; border-radius: 12px; background: #f8fbfb; }
+.club-perf-stats span { color: #7f9398; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.club-perf-stats strong { color: #19343d; font-size: 18px; }
+.club-perf-stats small { color: #6f858a; font-size: 12px; }
+.club-perf-table { width: 100%; border-collapse: collapse; }
+.club-perf-table th, .club-perf-table td { padding: 10px 12px; border-bottom: 1px solid #e5eded; text-align: left; vertical-align: middle; }
+.club-perf-table th { color: #6f858a; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.club-perf-table tbody tr:hover { background: #f7fbfa; }
+.club-perf-table tr.is-off td { color: #8da0a5; }
+.club-perf-name { display: flex; align-items: center; gap: 8px; min-width: 280px; }
+.club-perf-name strong { color: #19343d; font-size: 14px; }
+.club-perf-name small { color: var(--muted); font-size: 12px; }
+.club-perf-toggle { display: inline-grid; width: 22px; height: 22px; flex: 0 0 22px; place-items: center; padding: 0; border: 1px solid #dce8e9; border-radius: 6px; color: #26877d; background: #fff; font-size: 12px; line-height: 1; }
+.club-perf-toggle.is-empty { visibility: hidden; }
+.perf-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.perf-badge.is-on { color: #08776f; background: var(--teal-soft); }
+.perf-badge.is-off { color: #7b8d92; background: #eef3f3; }
+.perf-badge.is-root { color: #8a5a12; background: #fdf1dc; }
+.perf-badge.is-leader { color: #2f5d92; background: #eaf1fb; }
+.club-perf-note { margin-top: 12px; color: #7f9398; font-size: 12px; line-height: 1.7; }
+@media (max-width: 900px) {
+  .club-perf-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
