@@ -11,6 +11,7 @@ const iconText: Record<string, string> = {
   system: "◇",
   game: "游",
   players: "玩",
+  "user-data": "查",
   agents: "代",
   transactions: "账",
   "platform-revenue": "收",

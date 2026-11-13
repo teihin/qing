@@ -48,6 +48,11 @@ type Server struct {
 	manageScopeColumnMu      sync.Mutex
 	manageScopeColumnChecked bool
 	manageScopeColumnOK      bool
+
+	// club_history_info 的时间列布局（date 是否已含时间 / 是否有独立 time 列），只探测一次。
+	clubHistoryTimeMu      sync.Mutex
+	clubHistoryTimeChecked bool
+	clubHistoryTimeExpr    string
 }
 
 type handlerFunc func(http.ResponseWriter, *http.Request, principal)
@@ -106,6 +111,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/players/{playerId}/clubs", s.authorized("game.player.view", false, s.handleGetPlayerClubs))
 	s.mux.Handle("GET /api/game/players/{playerId}/clubs/{clubId}/subordinates", s.authorized("game.player.view", false, s.handleGetPlayerClubSubordinates))
 	s.mux.Handle("GET /api/game/players/{playerId}/rooms", s.authorized("game.room_record.view", false, s.handlePlayerRoomHistory))
+	s.mux.Handle("GET /api/game/user-data/profile", s.authorized("game.user_data.view", false, s.handleUserDataProfile))
+	s.mux.Handle("GET /api/game/user-data/records", s.authorized("game.user_data.view", false, s.handleUserDataRecords))
 	s.mux.Handle("GET /api/game/clubs", s.authorized("game.club.view", false, s.handleListClubs))
 	s.mux.Handle("GET /api/game/clubs/{clubId}", s.authorized("game.club.view", false, s.handleGetClub))
 	s.mux.Handle("GET /api/game/clubs/{clubId}/earnings", s.authorized("game.club.view", false, s.handleClubEarnings))

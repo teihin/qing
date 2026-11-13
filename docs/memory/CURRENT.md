@@ -1,8 +1,14 @@
 # qing 当前状态
 
-更新时间：2026-11-12
+更新时间：2026-11-13
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-13 后台新增「用户端数据查询」（已改代码、未部署）
+
+- 游戏管理新增只读入口 `/game/user-data`，按游戏用户ID一个页面切换五类明细：上下分记录（`club_history_info.opt_type='添加积分'`）、赠送金币（`积分赠送/积分受赠`）、金币流向（`usr_cash_water.money_type='gold'`）、钻石流向（`money_type='stone'`）、收益红利（`usr_income_info.remark1=玩家`，排除 `clubtotal` 基线）。
+- 迁移 `061_user_data_query.sql`：模块 `game.user_data`、权限 `game.user_data.view`，并按 `game.player.view` 角色授权。接口 `GET /api/game/user-data/profile|records`，日期默认最近 7 天、单次最多 31 天，支持关键字与分页。
+- 已验证：Go build/vet/test 通过，前端 tsc + vite build、定向 eslint 通过。未部署 8891、未连正式库核对字段/索引、未登录态页面验收。详见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
 
 ## 2026-11-12 客户端两个 BOSS 入口改按管理范围（已改代码、未构建）
 
@@ -58,19 +64,15 @@
 
 ## 2026-11-12 后台玩家管理：BOSS 号行标红（已被大小BOSS口径替代）
 
-- 原按 `sm_level >= 99` / 董事长 / 总裁 标红；现已改为 `union_manage` / `club_manage` 非空，见上方小节。旧交接：[2026-11-12-player-list-boss-row](handoffs/2026-11-12-player-list-boss-row.md)。
+- 已被 `union_manage` / `club_manage` 口径替代，旧交接见 [2026-11-12-player-list-boss-row](handoffs/2026-11-12-player-list-boss-row.md)。
 
 ## 2026-11-11 消息页 BF 聊天显示开关（服务端已部署、客户端未构建）
 
-- 顶部新增「BF 聊天」开关，只对俱乐部创建者（大盟主/盟主/未入盟群主）显示，默认开启；关闭后该创建者俱乐部所有层级都看不到置顶 BF 行，创建者自己也隐藏。
-- 服务端新增 `chat_direct_bf_entry` 与 `GET/POST /api/direct/bf-entry`（无记录按开启）；`panelMessage.prefab` 加带 Widget 的开关行并按可见性重排列表顶部。
-- ChatTool 已部署：二进制 `fc2884e4…`、迁移 013 已执行、`/api/direct/bf-entry` 未登录 401、health 200；Go 测试、TS 语法、prefab 引用与两档反渲染通过。Creator 构建、真机与联调待验。详见[交接](handoffs/2026-11-11-message-bf-entry-switch.md)。
+- 创建者可见的「BF 聊天」开关，服务端 `chat_direct_bf_entry` 已部署；客户端 Prefab 待 Creator 构建/真机。详见[交接](handoffs/2026-11-11-message-bf-entry-switch.md)。
 
 ## 2026-11-11 牌桌「带入积分」V10（未构建、未真机）
 
-- `panelGameView.prefab` 与 `assets/Scenes/drh8.fire` 同步重做 V10：深蓝亮蓝光影、干净标题、居中大数字、最低/最高固定列、四处美术字、移除编辑图标、实时扣钻、两行积分、钻石余额和参考图按钮。
-- `BuyinDisplay` 按积分→钻石比例刷新扣钻；关闭带入钻石时隐藏两行，原滑杆、确认/取消和协议保留；新增节点带 Widget。
-- TS、引用、Widget、两档预览和扣钻回归通过；Creator、构建、真机、回包待验。详见[交接](handoffs/2026-11-11-buyin-points-v9.md)。
+- `panelGameView.prefab` / `drh8.fire` 重做 V10 并接入钻石扣费；Creator、构建、真机、回包待验。详见[交接](handoffs/2026-11-11-buyin-points-v9.md)。
 
 ## 2026-11-11 我的红利：新增「业绩股」页签（2026-11-12 按 v6 联盟树改造）
 
@@ -118,9 +120,8 @@
 
 ## 2026-11-09 后台玩家管理：发放钻石 + 发放记录（已部署，游戏服命令待部署）
 
-- 玩家管理新增「发放钻石」：调游戏服 `异步_增加_玩家_钻石`，回读 `sm_stone` 后写 `game.player.grant_stone` 审计；「发放记录」按操作账号、玩家、数量、前后余额、原因、时间分页追溯成功发放。
-- 新权限 `game.player.grant_stone`。首版迁移 053 误用已占用的 id=2103，覆盖了「重置玩家密码」名称；054 已恢复并用自增 id（5815）建新权限，053 源码改为不写死 id。
-- XuanManager 已发布 8891（health 200，前端 `index-BL3MOz60.js`，二进制 `97ebc419…`）。**游戏服命令探测仍返回 769 空结果，尚未部署**，复核时 8890 已停止监听。页面会明确提示先部署游戏服。未登录验收、未做真实发放。详见[交接](handoffs/2026-11-09-admin-player-stone-grant.md)。
+- 新增「发放钻石」与「发放记录」，走游戏服 `异步_增加_玩家_钻石` 并回读审计；权限 `game.player.grant_stone`，迁移 053/054 已修正权限 id 冲突。
+- XuanManager 已发布 8891；游戏服命令当时探测 769 未注册。详见[交接](handoffs/2026-11-09-admin-player-stone-grant.md)。
 
 ## 2026-11-09 后台业绩核心共享：三栏常驻「今日业绩占比」
 
