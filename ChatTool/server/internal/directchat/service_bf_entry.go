@@ -7,8 +7,8 @@ import (
 
 // BFEntryInfo 是游戏客户端消息页看到的官方客服入口状态。
 //
-// Eligible 只对俱乐部创建者（大盟主/盟主/未入盟群主）为 true，客户端据此
-// 显示顶部开关；Visible 决定置顶的「官方客服」行是否出现，创建者自己也遵循它。
+// 开关已移到后台「俱乐部管理」，Eligible 恒为 false：旧客户端据此隐藏顶部开关。
+// Visible 决定置顶的「官方客服」行是否出现，按账号所属俱乐部逐个判断，任一关闭即隐藏。
 type BFEntryInfo struct {
 	Eligible bool   `json:"eligible"`
 	Enabled  bool   `json:"enabled"`
@@ -24,8 +24,8 @@ func (s *Service) bfEntryStore() (BFEntryStore, error) {
 	return store, nil
 }
 
-// BFEntryStatus 返回当前账号的开关资格、开关状态和入口可见性。
-// 创建者读自己的记录；其他成员按所属俱乐部创建者的记录判断，任一关闭即隐藏。
+// BFEntryStatus 返回当前账号的入口可见性。
+// 俱乐部级记录优先；没有俱乐部记录时回落到旧版创建者账号记录；都没有则默认显示。
 func (s *Service) BFEntryStatus(ctx context.Context, session Session) (BFEntryInfo, error) {
 	clubs, err := s.directory.ListMyClubs(ctx, session.Guuid)
 	if err != nil {
@@ -37,61 +37,42 @@ func (s *Service) BFEntryStatus(ctx context.Context, session Session) (BFEntryIn
 	}
 	info := BFEntryInfo{Enabled: true, Visible: true}
 	for _, club := range clubs {
-		if strings.TrimSpace(club.OwnerGuuid) != strings.TrimSpace(session.Guuid) {
-			continue
-		}
-		info.Eligible = true
-		record, ok, err := store.GetBFEntry(ctx, session.Guuid)
+		enabled, err := s.bfEntryEnabledForClub(ctx, store, club)
 		if err != nil {
 			return BFEntryInfo{}, err
 		}
-		if ok {
-			info.Enabled = record.Enabled
-		}
-		info.Visible = info.Enabled
-		return info, nil
-	}
-	// 非创建者：看自己所属各俱乐部创建者的开关。没有加入俱乐部时保持默认显示。
-	for _, club := range clubs {
-		owner := strings.TrimSpace(club.OwnerGuuid)
-		if owner == "" {
-			continue
-		}
-		record, ok, err := store.GetBFEntry(ctx, owner)
-		if err != nil {
-			return BFEntryInfo{}, err
-		}
-		if ok && !record.Enabled {
-			info.Visible = false
+		if !enabled {
 			info.Enabled = false
+			info.Visible = false
 			return info, nil
 		}
 	}
 	return info, nil
 }
 
-// SetBFEntry 开启或关闭当前账号的 BF 入口；只有俱乐部创建者可以设置。
+func (s *Service) bfEntryEnabledForClub(ctx context.Context, store BFEntryStore, club Club) (bool, error) {
+	record, ok, err := store.GetBFClubEntry(ctx, club.ClubID)
+	if err != nil {
+		return false, err
+	}
+	if ok {
+		return record.Enabled, nil
+	}
+	owner := strings.TrimSpace(club.OwnerGuuid)
+	if owner == "" {
+		return true, nil
+	}
+	legacy, ok, err := store.GetBFEntry(ctx, owner)
+	if err != nil {
+		return false, err
+	}
+	if ok {
+		return legacy.Enabled, nil
+	}
+	return true, nil
+}
+
+// SetBFEntry 保留旧版客户端的写入口，但不再允许游戏内设置；开关统一由后台俱乐部管理控制。
 func (s *Service) SetBFEntry(ctx context.Context, session Session, enabled bool) (BFEntryInfo, error) {
-	clubs, err := s.directory.ListMyClubs(ctx, session.Guuid)
-	if err != nil {
-		return BFEntryInfo{}, relationUnavailable(err)
-	}
-	eligible := false
-	for _, club := range clubs {
-		if strings.TrimSpace(club.OwnerGuuid) == strings.TrimSpace(session.Guuid) {
-			eligible = true
-			break
-		}
-	}
-	if !eligible {
-		return BFEntryInfo{}, errBFEntryForbidden
-	}
-	store, err := s.bfEntryStore()
-	if err != nil {
-		return BFEntryInfo{}, err
-	}
-	if err := store.SaveBFEntry(ctx, session.Guuid, enabled); err != nil {
-		return BFEntryInfo{}, err
-	}
-	return BFEntryInfo{Eligible: true, Enabled: enabled, Visible: enabled}, nil
+	return BFEntryInfo{}, errBFEntryForbidden
 }

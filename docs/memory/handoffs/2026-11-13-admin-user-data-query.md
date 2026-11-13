@@ -69,9 +69,35 @@
 5. 收益红利今日/昨日统计按 `usr_income_info.date` 与 `remark1` 汇总，排除 `clubtotal`；与客户端按俱乐部范围的统计可能因跨俱乐部/联盟上缴行而不同。
 6. 前端未在浏览器中登录验收；仅构建与静态检查通过。
 
+## 2026-11-13 追加：额度变化记录 + 基本信息 / 代理链（已部署 8891）
+
+用户要求：查询对象是大盟主或盟主时，额外显示「额度变化记录」；同一页面补充玩家基本信息，包括加入了哪些俱乐部、各自角色和代理链。
+
+- **身份口径**：沿用客户端「我的 → 额度授权记录」入口——俱乐部创建者且俱乐部已入盟才显示额度页签。联盟创建者（`club_union_info.owner_guuid` = 创建者）标「大盟主」，其余已入盟创建者标「盟主」，未入盟创建者「群主」；`club_agent_info` 有行但 `club_invite_code_info` 无 used 邀请码的仍按普通成员，不标合伙人。
+- **额度数据源**：`kbedm.club_history_info`，`opt_type LIKE '额度%' AND user_quota<>0`，`user_quota` 单位分 → 元；余额取 `remark` 尾段（`旧→新` 或纯余额）。类型映射：额度占用=带入、额度回补=结算、额度联盟授信=联盟授信、额度联盟注资=平台注资、额度奖励=平台奖励。V2 新流水 `opter_name` 常为空，查询时按 `opter_guuid` 关联 `tbl_Account.sm_name` 补全。
+- **基本信息**：`tbl_Account` 增补账号角色、注册时间、客户端版本、`sm_union_manage` / `sm_club_manage`（大小 BOSS 管理范围）；`clubs[]` 增补联盟、直属上级、分成比例、当前额度（大盟主看联盟池 `club_union_info.union_quota`，盟主看 `club_guuid_info.union_quota`）和 `chain[]`。
+- **代理链**：按玩家所在每个俱乐部独立组装，`club_agent_info.upper_guuid` 向上回溯到创建者，再追加联盟总群主；不含本人，已取消代理不在 `status='used'` 中会自动接到上级。
+- **接口**：`GET /api/game/user-data/records?kind=quota`，非大盟主/盟主返回 403 `QUOTA_VISIBLE_DENIED`；`profile` 新增 `quotaVisible`、`role`、`regTime`、`clientVersion`、`manageUnions`、`manageClubs`、`clubs[].chain` 等字段。无新迁移、无新权限。
+
+改动文件：
+
+- `XuanManager/server/internal/api/user_data.go`：`userDataKindQuota`、身份/俱乐部/代理链装配、`queryUserDataQuota`、`userDataQuotaTypeLabel`。
+- `XuanManager/server/internal/api/user_data_test.go`：额度类型映射与代理链组装单测。
+- `XuanManager/web/src/pages/UserDataPage.tsx`：条件页签「额度变化记录」、基本信息与代理链面板、额度表格。
+- `XuanManager/web/src/styles.css`：基本信息/俱乐部卡/代理链/角色标签样式，页签改自适应列数。
+- `XuanManager/新后台管理系统接口文档.md` §4.5.5。
+
+验证：
+
+- 线上只读核对（2026-11-13）：`club_history_info` 实际额度类型为 `额度占用/额度回补/额度联盟授信/额度联盟注资/额度奖励`，`user_quota` 与 `remark` 格式符合预期；`club_union_info.owner_guuid` 与 `club_guuid_info.account_id` 可反查创建者；额度查询 SQL 与操作人补全联查实测通过。
+- `go build ./... && go vet ./... && go test ./...` 通过；`npm run build` 与定向 eslint 通过。
+- 已部署 8891：后端 `sha256 c3b81f4f…`（`backups/xuanmanager.20261113-2244-rollback`，原始 `b6d68684…`）；前端 `index-BlT_8jCE.js` + `index-CLlbA0eV.css`（`web.previous-userdata-20261113-2244`）。health 200、未登录 records 401、线上 JS/CSS 200 且命中「额度变化记录」「基本信息与代理链」。
+
+未验证：未登录正式后台做页面视觉与交互验收；额度页大盟主联盟池侧行与盟主俱乐部行的展示口径需用真实账号核对。
+
 ## 下一步
 
-1. 在候选/正式环境执行迁移 061，确认新菜单和权限出现在对应角色下。
-2. 用真实玩家 ID 逐页核对五类明细与客户端显示是否一致（尤其上下分 `user_gold` 符号、赠送双行、红利层级）。
-3. 观察 `club_history_info` 查询耗时，必要时补日期/用户索引或改为按俱乐部维度查询。
-4. 验收通过后再按授权决定是否部署 8891。
+1. 用大盟主（如 895742）和盟主（如 529749）账号在后台查看基本信息、代理链和额度变化页签。
+2. 若额度页数据为空，先确认该玩家是否已入盟且为俱乐部创建者，再核对日期范围。
+3. 观察大俱乐部（代理行较多）打开玩家信息时的耗时，必要时只加载所在俱乐部的代理链。
+

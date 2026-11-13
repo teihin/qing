@@ -1029,6 +1029,8 @@ export interface ClubListItem {
   totalClubGold: number | null;
   /** 开房-游戏设置里的暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。 */
   darkEnabled?: boolean;
+  /** 消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认开启。 */
+  bfChatEnabled?: boolean;
 }
 
 export interface ClubListResponse {
@@ -1260,6 +1262,14 @@ export interface DarkSettingState {
   scope: "club" | "union";
   targetId: string;
   ownerClubId?: string;
+  enabled: boolean;
+  verified: boolean;
+  message: string;
+}
+
+/** 俱乐部 BF 聊天入口开关保存结果。 */
+export interface BFChatState {
+  clubId: string;
   enabled: boolean;
   verified: boolean;
   message: string;

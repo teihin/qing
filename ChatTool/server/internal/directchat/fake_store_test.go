@@ -24,6 +24,7 @@ type fakeStore struct {
 	hostedPins    map[string]time.Time
 	clubGold      map[string]int64
 	bfEntries     map[string]bool
+	bfClubEntries map[string]bool
 	seq           int
 }
 
@@ -44,6 +45,7 @@ func newFakeStore() *fakeStore {
 		hostedPins:    map[string]time.Time{},
 		clubGold:      map[string]int64{},
 		bfEntries:     map[string]bool{},
+		bfClubEntries: map[string]bool{},
 	}
 }
 
@@ -150,6 +152,14 @@ func (f *fakeStore) GetBFEntry(_ context.Context, guuid string) (BFEntry, bool, 
 func (f *fakeStore) SaveBFEntry(_ context.Context, guuid string, enabled bool) error {
 	f.bfEntries[guuid] = enabled
 	return nil
+}
+
+func (f *fakeStore) GetBFClubEntry(_ context.Context, clubID string) (BFClubEntry, bool, error) {
+	enabled, ok := f.bfClubEntries[clubID]
+	if !ok {
+		return BFClubEntry{}, false, nil
+	}
+	return BFClubEntry{ClubID: clubID, Enabled: enabled}, true, nil
 }
 
 func (f *fakeStore) UnreadByClub(ctx context.Context, guuid string) (map[string]int, error) {

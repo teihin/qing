@@ -55,6 +55,61 @@ func TestUserDataBonusLevelLabel(t *testing.T) {
 	}
 }
 
+func TestUserDataQuotaTypeLabel(t *testing.T) {
+	cases := map[string]string{
+		"额度占用":   "带入",
+		"额度回补":   "结算",
+		"额度联盟授信": "联盟授信",
+		"额度联盟注资": "平台注资",
+		"额度奖励":   "平台奖励",
+		"额度抽水回补": "抽水回补",
+		"额度其他":   "其他",
+	}
+	for optType, want := range cases {
+		if got := userDataQuotaTypeLabel(optType); got != want {
+			t.Fatalf("quota type %q label = %q, want %q", optType, got, want)
+		}
+	}
+}
+
+func TestBuildUserDataChain(t *testing.T) {
+	rows := map[string]userDataAgentRow{
+		"100": {ClubID: "1", PlayerID: "100", Name: "member", UpperID: "200"},
+		"200": {ClubID: "1", PlayerID: "200", Name: "agent", UpperID: "500", Percent: 50},
+		"500": {ClubID: "1", PlayerID: "500", Name: "owner", Percent: 100},
+	}
+	hasCode := map[string]bool{"200": true}
+	names := map[string]string{"900": "union owner"}
+
+	unionMeta := userDataClubMeta{ClubID: "1", Name: "A", UnionID: "u1", UnionOwnerID: "900", CreatorID: "500"}
+	memberChain := buildUserDataChain("100", unionMeta, userDataAgentRow{}, rows, hasCode, names)
+	if len(memberChain) != 2 {
+		t.Fatalf("member chain = %+v, want creator + union owner", memberChain)
+	}
+	if memberChain[0].PlayerID != "500" || memberChain[0].Role != "盟主" {
+		t.Fatalf("unexpected creator node: %+v", memberChain[0])
+	}
+	if memberChain[1].PlayerID != "900" || memberChain[1].Role != "大盟主" || memberChain[1].Name != "union owner" {
+		t.Fatalf("unexpected union node: %+v", memberChain[1])
+	}
+
+	agentChain := buildUserDataChain("200", unionMeta, rows["200"], rows, hasCode, names)
+	if len(agentChain) != 2 || agentChain[0].PlayerID != "500" || agentChain[1].PlayerID != "900" {
+		t.Fatalf("agent chain = %+v, want creator + union owner", agentChain)
+	}
+
+	creatorChain := buildUserDataChain("500", unionMeta, rows["500"], rows, hasCode, names)
+	if len(creatorChain) != 1 || creatorChain[0].PlayerID != "900" {
+		t.Fatalf("creator chain = %+v, want only union owner", creatorChain)
+	}
+
+	groupMeta := userDataClubMeta{ClubID: "1", Name: "A", CreatorID: "500"}
+	ownerChain := buildUserDataChain("500", groupMeta, rows["500"], rows, hasCode, names)
+	if len(ownerChain) != 0 {
+		t.Fatalf("independent owner chain = %+v, want empty", ownerChain)
+	}
+}
+
 func TestParseTrailingFloat(t *testing.T) {
 	cases := map[string]float64{
 		"2084":     2084,

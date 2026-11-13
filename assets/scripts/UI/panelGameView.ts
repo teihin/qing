@@ -3300,7 +3300,7 @@ export default class panelGameView extends UIPanelViewBase {
 
     }
 
-    /** 本局芒池在 remark 第 12 段（index 11，格式「本局芒池:数字」），老记录没有这段就隐藏。 */
+    /** 本局芒池在 remark 第 12 段（index 11），原样显示服务端字符串，老记录没有这段就隐藏。 */
     private UpdateReviewMangChi(jPlayers:any[]):void
     {
         const labelNode = Tool.GetChild(this.node,"牌局回顾/芒池");
@@ -3331,8 +3331,6 @@ export default class panelGameView extends UIPanelViewBase {
             labelNode.active = false;
             return;
         }
-        if (strShow.indexOf("本局芒池") < 0)
-            strShow = "本局芒池:" + strShow;
         labelNode.getComponent(cc.Label).string = strShow;
         labelNode.active = true;
     }

@@ -873,24 +873,14 @@ export default class DirectChatManager
         };
     }
 
-    // ================= 官方客服（BF）入口开关 =================
+    // ================= 官方客服（BF）入口可见性 =================
 
-    /** 查询当前账号的 BF 入口开关资格与可见性。force 为 false 时复用本次登录内的结果。 */
+    /** 查询当前账号的 BF 入口可见性；开关已移到后台俱乐部管理，force 为 false 时复用本次登录内的结果。 */
     public BFEntryStatus(force:boolean = false):Promise<DirectBFEntryInfo>
     {
         if(!force && this.bfEntryInfo != null)
             return Promise.resolve(this.bfEntryInfo);
         return this.Request("GET","/bf-entry").then((data:any)=>{
-            let info = this.NormalizeBFEntryInfo(data);
-            this.bfEntryInfo = info;
-            return info;
-        });
-    }
-
-    /** 创建者开启/关闭自己俱乐部的 BF 入口；服务端会再次校验身份。 */
-    public SetBFEntry(enabled:boolean):Promise<DirectBFEntryInfo>
-    {
-        return this.Request("POST","/bf-entry",{enabled:enabled}).then((data:any)=>{
             let info = this.NormalizeBFEntryInfo(data);
             this.bfEntryInfo = info;
             return info;

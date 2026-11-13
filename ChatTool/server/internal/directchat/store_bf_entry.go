@@ -9,8 +9,15 @@ import (
 
 // BFEntry 是一个俱乐部创建者的官方客服入口开关。
 // 没有记录时按开启处理，兼容升级前所有账号默认能看到 BF 聊天。
+// 创建者已经不能在客户端设置，只作为后台按俱乐部开关上线前的历史数据回退。
 type BFEntry struct {
 	Guuid   string
+	Enabled bool
+}
+
+// BFClubEntry 是后台按俱乐部维护的官方客服入口开关。
+type BFClubEntry struct {
+	ClubID  string
 	Enabled bool
 }
 
@@ -19,6 +26,7 @@ type BFEntry struct {
 type BFEntryStore interface {
 	GetBFEntry(ctx context.Context, guuid string) (BFEntry, bool, error)
 	SaveBFEntry(ctx context.Context, guuid string, enabled bool) error
+	GetBFClubEntry(ctx context.Context, clubID string) (BFClubEntry, bool, error)
 }
 
 func (s *SQLStore) GetBFEntry(ctx context.Context, guuid string) (BFEntry, bool, error) {
@@ -47,4 +55,21 @@ func (s *SQLStore) SaveBFEntry(ctx context.Context, guuid string, enabled bool) 
 VALUES (?, ?, NOW())
 ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), updated_at = NOW()`, guuid, enabled)
 	return err
+}
+
+func (s *SQLStore) GetBFClubEntry(ctx context.Context, clubID string) (BFClubEntry, bool, error) {
+	clubID = strings.TrimSpace(clubID)
+	if clubID == "" {
+		return BFClubEntry{}, false, nil
+	}
+	var item BFClubEntry
+	err := s.db.QueryRowContext(ctx, `SELECT club_id, enabled FROM chat_direct_bf_club WHERE club_id = ? LIMIT 1`,
+		clubID).Scan(&item.ClubID, &item.Enabled)
+	if errors.Is(err, sql.ErrNoRows) {
+		return BFClubEntry{}, false, nil
+	}
+	if err != nil {
+		return BFClubEntry{}, false, err
+	}
+	return item, true, nil
 }

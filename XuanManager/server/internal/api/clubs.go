@@ -55,6 +55,8 @@ type clubListItem struct {
 	TotalClubGold *int64 `json:"totalClubGold"`
 	// DarkEnabled 是客户端开房页暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。
 	DarkEnabled bool `json:"darkEnabled"`
+	// BFChatEnabled 是消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认开启。
+	BFChatEnabled bool `json:"bfChatEnabled"`
 }
 
 type clubMemberNode struct {
@@ -371,6 +373,13 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		}
 	} else {
 		s.logger.Error("read club dark settings", "error", darkErr)
+	}
+	if bfChat, bfErr := s.readClubBFChatStates(r.Context(), items); bfErr == nil {
+		for index := range items {
+			items[index].BFChatEnabled = bfChat[items[index].ClubID]
+		}
+	} else {
+		s.logger.Error("read club bf chat states", "error", bfErr)
 	}
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "total": total, "page": page, "pageSize": size,
@@ -689,6 +698,11 @@ WHERE c.club_guuid = ? LIMIT 1`, clubID).Scan(
 		} else {
 			s.logger.Error("read club stone pool", "error", poolErr, "clubId", clubID)
 		}
+	}
+	if bfEnabled, bfErr := s.readClubBFChatState(ctx, clubID, detail.Club.OwnerID); bfErr == nil {
+		detail.Club.BFChatEnabled = bfEnabled
+	} else {
+		s.logger.Error("read club bf chat state", "error", bfErr, "clubId", clubID)
 	}
 	// 俱乐部总积分与列表同一口径，详情页顶部要能看到同一数字。
 	if totalGolds, goldErr := s.clubTotalGolds(ctx, []clubListItem{detail.Club}); goldErr == nil {

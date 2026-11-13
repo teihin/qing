@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import DarkSettingModal from "../components/DarkSettingModal";
+import BFChatModal from "../components/BFChatModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
@@ -136,6 +137,7 @@ export default function ClubsPage({
   const [selected, setSelected] = useState<ClubListItem | null>(null);
   const [stonePoolClub, setStonePoolClub] = useState<ClubListItem | null>(null);
   const [darkClub, setDarkClub] = useState<ClubListItem | null>(null);
+  const [bfChatClub, setBFChatClub] = useState<ClubListItem | null>(null);
   const [earningsClub, setEarningsClub] = useState<ClubListItem | null>(null);
 
   const load = useCallback(async () => {
@@ -202,6 +204,7 @@ export default function ClubsPage({
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
   const canAdjustStonePool = can("game.club.stone_pool_adjust");
   const canSetDark = can("game.club.dark_setting");
+  const canSetBFChat = can("game.club.bf_chat");
 
   return (
     <div className="page-stack">
@@ -390,6 +393,7 @@ export default function ClubsPage({
                     <th>钻石池</th>
                     <th>俱乐部总积分</th>
                     <th>暗抽</th>
+                    <th>BF聊天</th>
                     <th>抽成</th>
                     <th className="align-right">操作</th>
                   </tr>
@@ -465,6 +469,12 @@ export default function ClubsPage({
                           {club.darkEnabled ? "开启" : club.unionId ? "随联盟" : "关闭"}
                         </strong>
                       </td>
+                      <td>
+                        <strong className={club.bfChatEnabled !== false ? "club-quota-value" : "club-quota-missing"}
+                          title="消息页置顶的 BF 聊天（官方客服）入口；默认开启">
+                          {club.bfChatEnabled !== false ? "开启" : "关闭"}
+                        </strong>
+                      </td>
                       <td>{club.tax || "—"}</td>
                       <td>
                         <div className="row-actions">
@@ -512,6 +522,18 @@ export default function ClubsPage({
                             }
                           >
                             暗抽设置
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBFChatClub(club)}
+                            disabled={!canSetBFChat}
+                            title={
+                              canSetBFChat
+                                ? "开启或关闭该俱乐部消息页置顶的 BF 聊天入口"
+                                : "当前角色没有 BF 聊天开关的权限"
+                            }
+                          >
+                            BF聊天
                           </button>
                         </div>
                       </td>
@@ -587,6 +609,18 @@ export default function ClubsPage({
           canEdit={canSetDark}
           notify={notify}
           onClose={() => setDarkClub(null)}
+          onDone={() => void load()}
+        />
+      )}
+
+      {bfChatClub && (
+        <BFChatModal
+          clubId={bfChatClub.clubId}
+          clubName={bfChatClub.name}
+          currentEnabled={bfChatClub.bfChatEnabled !== false}
+          canEdit={canSetBFChat}
+          notify={notify}
+          onClose={() => setBFChatClub(null)}
           onDone={() => void load()}
         />
       )}

@@ -1,19 +1,40 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError } from "../api";
 import { Button, EmptyState, LoadingBlock, PageHeader } from "../components/ui";
 import { beijingDateInput, dateInputDayCount, formatBeijingDateTime } from "../time";
 
-type Kind = "club" | "gift" | "gold" | "stone" | "bonus";
+type Kind = "club" | "gift" | "gold" | "stone" | "bonus" | "quota";
 
-type ClubRef = { clubId: string; clubName: string; role: string };
+type ChainNode = { playerId: string; name: string; role: string; clubId: string; clubName: string; percent: number };
+
+type ClubRef = {
+  clubId: string;
+  clubName: string;
+  role: string;
+  unionId: string;
+  unionName: string;
+  upperId: string;
+  upperName: string;
+  percent: number;
+  quotaFen: number;
+  isCreator: boolean;
+  isAgent: boolean;
+  chain: ChainNode[];
+};
 
 type Profile = {
   playerId: string;
   loginName: string;
   name: string;
+  role: string;
+  regTime: string;
+  clientVersion: string;
+  manageUnions: string;
+  manageClubs: string;
   gold: number;
   stone: number;
   unclaimedBonus: number;
+  quotaVisible: boolean;
   clubs: ClubRef[];
 };
 
@@ -73,6 +94,7 @@ const tabs: Array<{ key: Kind; label: string; hint: string }> = [
   { key: "gold", label: "金币流向", hint: "usr_cash_water 金币流水" },
   { key: "stone", label: "钻石流向", hint: "usr_cash_water 钻石流水" },
   { key: "bonus", label: "收益红利", hint: "代理分成入账与提取" },
+  { key: "quota", label: "额度变化记录", hint: "俱乐部 / 联盟额度变动（大盟主、盟主）" },
 ];
 
 const moneyFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -83,6 +105,17 @@ function signed(value: number, digits = 2): string {
   if (value > 0) return `+${formatter.format(value)}`;
   if (value < 0) return `−${formatter.format(Math.abs(value))}`;
   return formatter.format(0);
+}
+
+function roleTone(role: string): string {
+  switch (role) {
+    case "大盟主": return "root";
+    case "盟主": return "leader";
+    case "群主": return "owner";
+    case "管理员": return "manager";
+    case "合伙人": return "agent";
+    default: return "member";
+  }
 }
 
 export default function UserDataPage({ notify }: { notify: (message: string, kind?: "success" | "error") => void }) {
@@ -140,6 +173,15 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
 
   useEffect(() => { void load(); }, [load, reloadKey]);
 
+  const visibleTabs = useMemo(
+    () => tabs.filter((item) => item.key !== "quota" || profile?.quotaVisible === true),
+    [profile],
+  );
+
+  useEffect(() => {
+    if (profile && kind === "quota" && !profile.quotaVisible) setKind("club");
+  }, [profile, kind]);
+
   const searchPlayer = () => {
     const clean = playerIdDraft.trim();
     if (!clean) { notify("请输入游戏用户ID", "error"); return; }
@@ -147,6 +189,7 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
     setPlayerIdDraft(clean);
     setProfile(null);
     setData(null);
+    setKind("club");
     setPage(1);
   };
 
@@ -184,14 +227,14 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const firstRow = data && data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const lastRow = data ? Math.min(data.total, data.page * data.pageSize) : 0;
-  const activeTab = tabs.find((item) => item.key === kind) ?? tabs[0];
+  const activeTab = visibleTabs.find((item) => item.key === kind) ?? visibleTabs[0];
 
   return (
     <div className="page-stack">
       <PageHeader
         eyebrow="USER LEDGER"
         title="用户端数据查询"
-        description="输入游戏用户ID，按客户端「我的」页面口径查询上下分、赠送、金币、钻石和收益红利明细。默认最近 7 天，单次最多 31 天。"
+        description="输入游戏用户ID，查看账号基本信息、所在俱乐部与代理链，并按客户端「我的」页面口径查询上下分、赠送、金币、钻石、收益红利和额度变化明细。默认最近 7 天，单次最多 31 天。"
         actions={<span className="readonly-badge"><i />只读查询</span>}
       />
 
@@ -215,8 +258,8 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
           <div className="transaction-welcome__mark">查</div>
           <span className="eyebrow">ALL CLIENT RECORDS</span>
           <h2>一个入口查完玩家在客户端看到的全部明细</h2>
-          <p>上下分、赠送金币、金币流向、钻石流向、收益红利都在同一页切换，数据按当前日期范围统计。</p>
-          <div><span>上下分</span><span>赠送金币</span><span>金币流向</span><span>钻石流向</span><span>收益红利</span></div>
+          <p>账号资料、俱乐部身份、代理链，以及上下分、赠送金币、金币流向、钻石流向、收益红利和额度变化都在同一页切换，数据按当前日期范围统计。</p>
+          <div><span>基本信息</span><span>上下分</span><span>赠送金币</span><span>金币流向</span><span>钻石流向</span><span>收益红利</span><span>额度变化</span></div>
         </section>
       )}
 
@@ -230,11 +273,6 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
               <span className="eyebrow">PLAYER ACCOUNT</span>
               <h2>{profile.name || "未设置昵称"}</h2>
               <p>游戏ID：<code>{profile.playerId}</code> · 登录账号：{profile.loginName || "—"}</p>
-              <p className="user-data-clubs">
-                {profile.clubs.length === 0 ? "未加入俱乐部" : profile.clubs.map((club) => (
-                  <span key={club.clubId}>{club.clubName || club.clubId}（{club.role}）</span>
-                ))}
-              </p>
             </div>
             <div className="transaction-current-balance">
               <small>当前金币 / 钻石</small>
@@ -243,8 +281,10 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
             </div>
           </section>
 
+          <UserDataIdentity profile={profile} />
+
           <section className={`user-data-tabs user-data-tabs--${kind}`}>
-            {tabs.map((item) => (
+            {visibleTabs.map((item) => (
               <button key={item.key} type="button" className={item.key === kind ? "is-active" : ""} onClick={() => switchKind(item.key)}>
                 <strong>{item.label}</strong>
                 <small>{item.hint}</small>
@@ -301,6 +341,81 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
   );
 }
 
+function UserDataIdentity({ profile }: { profile: Profile }) {
+  const manageParts: string[] = [];
+  if (profile.manageUnions) manageParts.push(`联盟 ${profile.manageUnions}`);
+  if (profile.manageClubs) manageParts.push(`俱乐部 ${profile.manageClubs}`);
+  return (
+    <section className="panel user-data-identity">
+      <header className="user-data-identity__head">
+        <div>
+          <span className="eyebrow">BASIC PROFILE</span>
+          <h3>基本信息与代理链</h3>
+          <p>账号资料、所在俱乐部身份，以及从直属上级到俱乐部创建者 / 大盟主的代理链。</p>
+        </div>
+        <span className="toolbar__count">{profile.clubs.length} 个俱乐部</span>
+      </header>
+      <div className="user-data-facts">
+        <div><span>注册时间</span><strong>{profile.regTime || "—"}</strong></div>
+        <div><span>账号角色</span><strong>{profile.role || "—"}</strong></div>
+        <div><span>客户端版本</span><strong>{profile.clientVersion || "—"}</strong></div>
+        <div><span>大小 BOSS 管理范围</span><strong>{manageParts.length > 0 ? manageParts.join(" · ") : "—"}</strong></div>
+        <div><span>当前金币 / 钻石</span><strong>{moneyFormatter.format(profile.gold)} 元 / {stoneFormatter.format(profile.stone)} 钻</strong></div>
+        <div><span>未提取红利</span><strong>{moneyFormatter.format(profile.unclaimedBonus)} 元</strong></div>
+      </div>
+
+      {profile.clubs.length === 0 ? (
+        <EmptyState title="未加入俱乐部" description="该玩家当前不在任何俱乐部中，没有可展示的身份与代理链。" />
+      ) : (
+        <div className="user-data-club-grid">
+          {profile.clubs.map((club) => (
+            <article key={club.clubId} className="user-data-club">
+              <header>
+                <div>
+                  <strong>{club.clubName || club.clubId}</strong>
+                  <small>俱乐部 {club.clubId}</small>
+                </div>
+                <span className={`user-data-role user-data-role--${roleTone(club.role)}`}>{club.role}</span>
+              </header>
+              <dl>
+                <div>
+                  <dt>所属联盟</dt>
+                  <dd>{club.unionName || club.unionId ? `${club.unionName || "—"}（${club.unionId}）` : "未入盟"}</dd>
+                </div>
+                <div>
+                  <dt>直属上级</dt>
+                  <dd>{club.upperName || club.upperId ? `${club.upperName || "—"}（${club.upperId}）` : (club.isCreator ? "创建者本人" : "无")}</dd>
+                </div>
+                <div>
+                  <dt>分成比例</dt>
+                  <dd>{club.isCreator || club.isAgent ? `${club.percent}%` : "—"}</dd>
+                </div>
+                <div>
+                  <dt>当前额度</dt>
+                  <dd>{club.role === "大盟主" || club.role === "盟主" ? `${moneyFormatter.format(club.quotaFen / 100)} 元` : "—"}</dd>
+                </div>
+              </dl>
+              <div className="user-data-chain">
+                <span className="user-data-chain__label">代理链</span>
+                <div className="user-data-chain__track">
+                  <span className="user-data-chain__self">本人</span>
+                  {club.chain.map((node) => (
+                    <Fragment key={`${club.clubId}-${node.playerId}`}>
+                      <i>→</i>
+                      <span className="user-data-chain__node">{node.name || node.playerId}<small>{node.role}</small></span>
+                    </Fragment>
+                  ))}
+                  {club.chain.length === 0 && <><i>→</i><span className="user-data-chain__empty">无上级</span></>}
+                </div>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function UserDataSummaryStrip({ kind, summary, profile }: { kind: Kind; summary: Summary; profile: Profile }) {
   if (kind === "bonus") {
     return (
@@ -353,6 +468,25 @@ function UserDataTable({ kind, items }: { kind: Kind; items: RecordItem[] }) {
             <td><strong>{item.typeLabel}</strong>{item.typeLabel !== item.type && <small className="cell-subtitle">{item.type}</small>}</td>
             <td><strong className={`gold-change gold-change--${item.amount >= 0 ? "in" : "out"}`}>{kind === "stone" ? `${signed(item.amount, 0)} 钻` : `${signed(item.amount)} 元`}</strong></td>
             <td><span className="balance-route">{kind === "stone" ? stoneFormatter.format(item.before) : moneyFormatter.format(item.before)}<i>→</i><strong>{kind === "stone" ? stoneFormatter.format(item.balance) : moneyFormatter.format(item.balance)}</strong></span></td>
+            <td>{item.roomId || "—"}</td>
+            <td><span className="user-data-remark">{item.remark || "—"}</span></td>
+          </tr>
+        ))}</tbody>
+      </table>
+    );
+  }
+  if (kind === "quota") {
+    return (
+      <table className="user-data-table">
+        <thead><tr><th>时间</th><th>类型</th><th>额度变化</th><th>变化后余额</th><th>操作人</th><th>俱乐部</th><th>房间</th><th>说明</th></tr></thead>
+        <tbody>{items.map((item) => (
+          <tr key={item.id}>
+            <td><strong>{formatBeijingDateTime(item.occurredAt)}</strong></td>
+            <td><span className={`user-data-tag ${item.amount < 0 ? "is-out" : "is-in"}`}>{item.typeLabel}</span><small className="cell-subtitle">{item.type}</small></td>
+            <td><strong className={`gold-change gold-change--${item.amount >= 0 ? "in" : "out"}`}>{signed(item.amount)} 元</strong></td>
+            <td>{moneyFormatter.format(item.balance)}</td>
+            <td>{item.counterparty || "—"}{item.counterpartyId && <small className="cell-subtitle">{item.counterpartyId}</small>}</td>
+            <td>{item.clubName || item.clubId || "—"}</td>
             <td>{item.roomId || "—"}</td>
             <td><span className="user-data-remark">{item.remark || "—"}</span></td>
           </tr>

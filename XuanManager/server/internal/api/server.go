@@ -118,6 +118,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/clubs/{clubId}/earnings", s.authorized("game.club.view", false, s.handleClubEarnings))
 	s.mux.Handle("POST /api/game/clubs/{clubId}/stone-pool-adjustments", s.authorized("game.club.stone_pool_adjust", true, s.handleAdjustClubStonePool))
 	s.mux.Handle("PUT /api/game/clubs/{clubId}/dark-setting", s.authorized("game.club.dark_setting", true, s.handleSetClubDarkSetting))
+	s.mux.Handle("PUT /api/game/clubs/{clubId}/bf-chat", s.authorized("game.club.bf_chat", true, s.handleSetClubBFChat))
 	s.mux.Handle("GET /api/game/unions", s.authorized("game.union.view", false, s.handleListUnions))
 	s.mux.Handle("GET /api/game/unions/{unionId}", s.authorized("game.union.view", false, s.handleGetUnion))
 	s.mux.Handle("GET /api/game/unions/{unionId}/earnings", s.authorized("game.union.view", false, s.handleUnionEarnings))

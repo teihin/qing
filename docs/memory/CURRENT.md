@@ -4,6 +4,10 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-13 BF 聊天开关移交后台（已部署 8891/8893）
+
+- 隐藏开关，置顶入口保留；后台按俱乐部开关，默认开启。ChatTool 迁移 014 建 `chat_direct_bf_club`，拒绝客户端写入；XuanManager 迁移 063 建 `game.club.bf_chat` 与 `PUT /api/game/clubs/{clubId}/bf-chat`。两端 health 200；客户端未构建。见[交接](handoffs/2026-11-13-club-bf-chat-admin.md)。
+
 ## 2026-11-13 业绩核心共享：发放改三阶段（已部署 8891，真实发放待验）
 
 - 「确认并发放」改为：① `发放_总群主_奖励` 把本批总额（元×100=额度分）注入大盟主联盟池；② 按俱乐部汇总下属成员金额，`发放_盟主_奖励` 下划到各盟主俱乐部；③ `异步_发放_玩家_奖励` 给成员发俱乐部积分（同俱乐部同金额合并、单批 20 人）。
@@ -17,11 +21,12 @@
 - 行模板 `额度授权记录对象.prefab` 新增 `typelabel`，在盟主名下方显示「类型：授信/收回/注资/注资扣减/额度奖励」；`panelQuotaGrantRecord.ts` 读取 `type` 写入。
 - 未运行 Creator 导入/编译/构建；需重导 Prefab、编译脚本并热更后实机确认长类型不截断。详见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
 
-## 2026-11-13 后台新增「用户端数据查询」（已改代码、未部署）
+## 2026-11-13 后台「用户端数据查询」（已部署 8891）
 
-- 游戏管理新增只读入口 `/game/user-data`，按游戏用户ID一个页面切换五类明细：上下分记录（`club_history_info.opt_type='添加积分'`）、赠送金币（`积分赠送/积分受赠`）、金币流向（`usr_cash_water.money_type='gold'`）、钻石流向（`money_type='stone'`）、收益红利（`usr_income_info.remark1=玩家`，排除 `clubtotal` 基线）。
-- 迁移 `061_user_data_query.sql`：模块 `game.user_data`、权限 `game.user_data.view`，并按 `game.player.view` 角色授权。接口 `GET /api/game/user-data/profile|records`，日期默认最近 7 天、单次最多 31 天，支持关键字与分页。
-- 已验证：Go build/vet/test 通过，前端 tsc + vite build、定向 eslint 通过。未部署 8891、未连正式库核对字段/索引、未登录态页面验收。详见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
+- 游戏管理只读入口 `/game/user-data`：按玩家 ID 查看基本信息（角色、注册时间、版本、管理范围）、所在俱乐部与身份、代理链，以及上下分、赠送金币、金币流向、钻石流向、收益红利（排除 `clubtotal` 基线）五类明细。
+- 大盟主 / 盟主（已入盟俱乐部的创建者）额外显示「额度变化记录」：`club_history_info` 的 `opt_type LIKE '额度%' AND user_quota<>0`，分→元，涵盖带入/结算/联盟授信/平台注资/平台奖励；其他玩家请求返回 403。代理链按每个俱乐部独立回溯 `club_agent_info.upper_guuid` 到创建者再到大盟主，合伙人以 used 邀请码为准。
+- 迁移 `061_user_data_query.sql`：模块 `game.user_data`、权限 `game.user_data.view`。接口 `GET /api/game/user-data/profile|records`，默认最近 7 天、单次最多 31 天。
+- 已部署 8891：后端 `c3b81f4f…`、前端 `index-BlT_8jCE.js` + `index-CLlbA0eV.css`；health 200、未登录接口 401。回滚：`backups/xuanmanager.20261113-2244-rollback`（原始 `b6d68684…`）、`web.previous-userdata-20261113-2244`。未做登录态页面视觉验收。详见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
 
 ## 2026-11-12 客户端两个 BOSS 入口改按管理范围（已改代码、未构建）
 
@@ -45,9 +50,7 @@
 - 报错「本次名单在 2026-11-01…」是请求真带了 11-01（审计与游戏服日志同刻 `date=-11`，该标签页日期框就在 11-01）；游戏库 `club_perf_contrib_info` 联盟 196102 仅 11-12 有记录，11-01/11-11 为空，报表全 0。
 - 计划总额/分配金额/分摊/发放改用日期框 `date` + 当前 `kind`，不再用 `data.plan.date`；数据与当前选择不一致时按钮禁用并提示；`load`/`loadSummary` 加序号丢弃过期响应。
 - 部署前端 `index-ClSOsNS9.js`（`38688b83…`，公网校验一致），health 200、未登录 401；回滚 `backups/web.20261112-2105-rollback`。登录态页面实操待验。
-
-## 2026-11-12 牌局回顾显示本局芒池
-- 解析 remark 第 12 段显示「本局芒池:数字」，缺段自动隐藏；`panelGameView.prefab`/`drh8.fire` 已加节点，待验。
+- 牌局回顾：remark 第 12 段原样显示服务端字符串（不再拼前缀），缺段隐藏；`panelGameView.prefab`/`drh8.fire` 已加节点，待验。
 
 ## 2026-11-12 后台新增「业绩股」总览（已部署 8891，页面待验）
 
@@ -74,14 +77,6 @@
 
 - 登录两阶段、绑定/恢复码/关闭、登录提醒、主管重置；迁移 014/015 已执行。
 - 隐藏账号 `admin999`（显示名 客服z）对他人不可见，团队/转接/在线数已过滤；二进制 `ca7715…`、前端 `index-DjuST7cE.js`；回滚 `web.previous-no-super-label-20261112-1457`。详见[交接](handoffs/2026-11-12-chattool-totp.md)。
-
-## 2026-11-12 后台玩家管理：BOSS 号行标红（已被大小BOSS口径替代）
-
-- 已被 `union_manage` / `club_manage` 口径替代，旧交接见 [2026-11-12-player-list-boss-row](handoffs/2026-11-12-player-list-boss-row.md)。
-
-## 2026-11-11 消息页 BF 聊天显示开关（服务端已部署、客户端未构建）
-
-- 创建者可见的「BF 聊天」开关，服务端 `chat_direct_bf_entry` 已部署；客户端 Prefab 待 Creator 构建/真机。详见[交接](handoffs/2026-11-11-message-bf-entry-switch.md)。
 
 ## 2026-11-11 牌桌「带入积分」V10（未构建、未真机）
 

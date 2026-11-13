@@ -21,9 +21,8 @@ const LOAD_MORE_DISTANCE = 260;
 const PULL_REFRESH_DISTANCE = 40;
 /** 会话行之间的纵向间距；置顶官方客服与第一条会话之间同样留出。 */
 const ROW_GAP = 16;
-/** 消息列表默认顶部偏移；顶部出现 BF 开关时整体下移，避免压住开关。 */
+/** 消息列表默认顶部偏移。 */
 const LIST_TOP = 130.5;
-const LIST_TOP_WITH_BF_SWITCH = 190;
 
 /**
  * 消息首页：当前账号所有俱乐部的会话列表。
@@ -65,16 +64,9 @@ export default class panelMessage extends UIPanelViewBase {
     private hostingInfo:DirectHostingInfo = null;
     private hostingBusy:boolean = false;
 
-    /** 顶部「BF 聊天」显示开关：只对俱乐部创建者显示，控制俱乐部内所有人看到的置顶入口。 */
-    private bfButton:cc.Node = null;
-    private bfDotLabel:cc.Label = null;
-    private bfStateLabel:cc.Label = null;
-    private bfSwitchOn:cc.Node = null;
-    private bfSwitchOff:cc.Node = null;
-    private bfInfo:DirectBFEntryInfo = null;
-    private bfBusy:boolean = false;
+    /** 置顶「BF 聊天」入口显示状态：开关已移到后台俱乐部管理，客户端只读可见性。 */
     private bfVisible:boolean = true;
-    private bfSwitchShown:boolean = false;
+    private bfLoaded:boolean = false;
 
     private list:DirectConversation[] = [];
     private page:number = 0;
@@ -141,15 +133,6 @@ export default class panelMessage extends UIPanelViewBase {
         this.hostingDotLabel = hostingDot == null ? null : hostingDot.getComponent(cc.Label);
         this.hostingSwitchOn = this.hostingButton == null ? null : this.hostingButton.getChildByName("开关-开");
         this.hostingSwitchOff = this.hostingButton == null ? null : this.hostingButton.getChildByName("开关-关");
-        this.bfButton = this.NodeOf("BF开关");
-        let bfDot = this.bfButton == null ? null : Tool.GetChild(this.bfButton,"指示点");
-        this.bfDotLabel = bfDot == null ? null : bfDot.getComponent(cc.Label);
-        let bfState = this.bfButton == null ? null : Tool.GetChild(this.bfButton,"状态");
-        this.bfStateLabel = bfState == null ? null : bfState.getComponent(cc.Label);
-        this.bfSwitchOn = this.bfButton == null ? null : this.bfButton.getChildByName("开关-开");
-        this.bfSwitchOff = this.bfButton == null ? null : this.bfButton.getChildByName("开关-关");
-        if(this.bfButton != null)
-            this.bfButton.active = false;
         this.backgroundNode = this.NodeOf("背景");
         this.overlayMaskNode = this.NodeOf("游戏内遮罩");
         this.backButton = this.NodeOf("返回");
@@ -1144,10 +1127,6 @@ export default class panelMessage extends UIPanelViewBase {
         {
             this.ToggleHosting();
         }
-        else if(name === "BF开关")
-        {
-            this.ToggleBFEntry();
-        }
         else
         {
             super.onButtonClick(button);
@@ -1225,62 +1204,38 @@ export default class panelMessage extends UIPanelViewBase {
         }]);
     }
 
-    // ================= 官方客服（BF）入口开关 =================
+    // ================= 官方客服（BF）入口可见性 =================
 
     private LoadBFEntryStatus(force:boolean):void
     {
         if(this.manager.CurrentGuuid() === "")
         {
-            if(this.bfButton != null)
-                this.bfButton.active = false;
             this.ApplyBFVisibility(true);
             return;
         }
         this.manager.BFEntryStatus(force).then((info)=>{
+            this.bfLoaded = true;
             this.ApplyBFEntryInfo(info);
         }).catch(()=>{
-            // 服务端未更新或网络异常：有上次结果就保持不变；首次失败则入口默认显示，但不给开关。
-            if(this.bfInfo != null)
+            // 服务端未更新或网络异常：有上次结果就保持不变；首次失败则入口默认显示。
+            if(this.bfLoaded)
                 return;
-            if(this.bfButton != null)
-                this.bfButton.active = false;
             this.ApplyBFVisibility(true);
         });
     }
 
     private ApplyBFEntryInfo(info:DirectBFEntryInfo):void
     {
-        this.bfInfo = info;
-        let eligible = info != null && info.eligible;
-        if(this.bfButton != null)
-            this.bfButton.active = eligible;
-        let enabled = info == null || info.enabled !== false;
-        if(this.bfStateLabel != null)
-        {
-            this.bfStateLabel.string = enabled ? "已显示" : "已隐藏";
-            this.bfStateLabel.node.color = enabled ? cc.color(246,206,132) : cc.color(143,166,189);
-        }
-        if(this.bfDotLabel != null)
-        {
-            this.bfDotLabel.node.color = enabled ? cc.color(246,206,132) : cc.color(104,126,148);
-            this.bfDotLabel.node.opacity = enabled ? 255 : 165;
-        }
-        if(this.bfSwitchOn != null)
-            this.bfSwitchOn.active = enabled;
-        if(this.bfSwitchOff != null)
-            this.bfSwitchOff.active = !enabled;
-        // 入口可见性由服务端计算；创建者自己也遵循同一个开关。
+        // 入口可见性由服务端按俱乐部计算；客户端不再提供开关。
         this.ApplyBFVisibility(info == null || info.visible !== false);
     }
 
-    /** 同步置顶入口和开关占位：开关只对创建者出现，列表在它下方重新排布。 */
+    /** 同步置顶入口显隐与列表排版。 */
     private ApplyBFVisibility(visible:boolean):void
     {
-        let showSwitch = this.bfButton != null && this.bfButton.active;
-        if(this.bfVisible === visible && this.bfSwitchShown === showSwitch)
+        if(this.bfVisible === visible)
             return;
         this.bfVisible = visible;
-        this.bfSwitchShown = showSwitch;
         let oldOffset = this.scroll == null ? 0 : Math.max(0,this.scroll.getScrollOffset().y);
         if(this.pinnedItem != null && cc.isValid(this.pinnedItem))
         {
@@ -1290,7 +1245,7 @@ export default class panelMessage extends UIPanelViewBase {
         }
         if(this.scrollWidget != null)
         {
-            this.scrollWidget.top = showSwitch ? LIST_TOP_WITH_BF_SWITCH : LIST_TOP;
+            this.scrollWidget.top = LIST_TOP;
             // 运行时改 top 不会自动重排；先对齐列表，再让 view 跟随列表新高度拉伸。
             this.scrollWidget.updateAlignment();
             let viewNode = this.scroll.node.getChildByName("view");
@@ -1323,33 +1278,5 @@ export default class panelMessage extends UIPanelViewBase {
         let itemHeight = this.ItemHeight();
         this.content.height = Math.max(this.PinnedHeight() + itemHeight,
             this.ListHeight(itemHeight,this.list.length),this.ViewHeight() + 1);
-    }
-
-    private ToggleBFEntry():void
-    {
-        if(this.bfBusy)
-            return;
-        if(this.bfInfo == null || !this.bfInfo.eligible)
-        {
-            this.ShowToast("只有俱乐部创建者可以设置 BF 聊天显示");
-            return;
-        }
-        let enabled = !this.bfInfo.enabled;
-        let message = enabled ?
-            "开启后，你俱乐部的所有玩家和代理会重新看到 BF 聊天入口，确定开启吗？" :
-            "关闭后，你俱乐部的所有玩家和代理（含各级代理）在消息列表都看不到 BF 聊天，你自己也会隐藏。确定关闭吗？";
-        UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message,[(confirmed:boolean)=>{
-            if(!confirmed || this.bfBusy)
-                return;
-            this.bfBusy = true;
-            this.manager.SetBFEntry(enabled).then((info)=>{
-                this.bfBusy = false;
-                this.ApplyBFEntryInfo(info);
-                this.ShowToast(info != null && info.enabled ? "BF 聊天已显示" : "BF 聊天已隐藏");
-            }).catch((error:any)=>{
-                this.bfBusy = false;
-                this.ShowToast(this.ErrorText(error));
-            });
-        }]);
     }
 }

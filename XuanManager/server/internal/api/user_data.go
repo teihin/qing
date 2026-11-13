@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,12 +14,13 @@ import (
 
 // 用户端数据查询（只读）。
 //
-// 按游戏用户ID汇总客户端「我的」里能看到的五类明细：
+// 按游戏用户ID汇总客户端「我的」里能看到的明细，并给出账号基本信息、所在俱乐部身份与代理链：
 //   - 上下分记录：club_history_info.opt_type='添加积分'（客户端的 AddMemberGoldList 口径）
 //   - 赠送金币：club_history_info.opt_type='积分赠送'/'积分受赠'
 //   - 金币流向：usr_cash_water.money_type='gold'
 //   - 钻石流向：usr_cash_water.money_type='stone'
 //   - 收益红利：usr_income_info.remark1=归属账号（客户端 ClubBonusList 口径，排除 clubtotal 对账基线）
+//   - 额度变化：club_history_info.user_quota（分），只对大盟主 / 盟主开放
 //
 // 客户端这些页都只取最近 8 天；后台默认最近 7 天，可手动改日期，单次最多 31 天。
 
@@ -30,21 +32,46 @@ const (
 	userDataKindGold  = "gold"
 	userDataKindStone = "stone"
 	userDataKindBonus = "bonus"
+	userDataKindQuota = "quota"
 )
 
-type userDataClub struct {
+type userDataChainNode struct {
+	PlayerID string `json:"playerId"`
+	Name     string `json:"name"`
+	Role     string `json:"role"`
 	ClubID   string `json:"clubId"`
 	ClubName string `json:"clubName"`
-	Role     string `json:"role"`
+	Percent  int64  `json:"percent"`
+}
+
+type userDataClub struct {
+	ClubID    string              `json:"clubId"`
+	ClubName  string              `json:"clubName"`
+	Role      string              `json:"role"`
+	UnionID   string              `json:"unionId"`
+	UnionName string              `json:"unionName"`
+	UpperID   string              `json:"upperId"`
+	UpperName string              `json:"upperName"`
+	Percent   int64               `json:"percent"`
+	QuotaFen  int64               `json:"quotaFen"`
+	IsCreator bool                `json:"isCreator"`
+	IsAgent   bool                `json:"isAgent"`
+	Chain     []userDataChainNode `json:"chain"`
 }
 
 type userDataProfile struct {
 	PlayerID       string         `json:"playerId"`
 	LoginName      string         `json:"loginName"`
 	Name           string         `json:"name"`
+	Role           string         `json:"role"`
+	RegTime        string         `json:"regTime"`
+	ClientVersion  string         `json:"clientVersion"`
+	ManageUnions   string         `json:"manageUnions"`
+	ManageClubs    string         `json:"manageClubs"`
 	Gold           float64        `json:"gold"`
 	Stone          int64          `json:"stone"`
 	UnclaimedBonus float64        `json:"unclaimedBonus"`
+	QuotaVisible   bool           `json:"quotaVisible"`
 	Clubs          []userDataClub `json:"clubs"`
 }
 
@@ -133,12 +160,18 @@ func (s *Server) handleUserDataRecords(w http.ResponseWriter, r *http.Request, _
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
-	if _, err := s.readUserDataProfile(r.Context(), filters.PlayerID); errors.Is(err, sql.ErrNoRows) {
+	profile, err := s.readUserDataProfile(r.Context(), filters.PlayerID)
+	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏用户ID")
 		return
-	} else if err != nil {
+	}
+	if err != nil {
 		s.logger.Error("read user data profile before records", "playerId", filters.PlayerID, "error", err)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家信息失败")
+		return
+	}
+	if filters.Kind == userDataKindQuota && !profile.QuotaVisible {
+		writeError(w, http.StatusForbidden, "QUOTA_VISIBLE_DENIED", "额度变化记录只对大盟主 / 盟主开放")
 		return
 	}
 
@@ -150,6 +183,8 @@ func (s *Server) handleUserDataRecords(w http.ResponseWriter, r *http.Request, _
 		response, err = s.queryUserDataClubHistory(r.Context(), filters)
 	case userDataKindBonus:
 		response, err = s.queryUserDataBonus(r.Context(), filters)
+	case userDataKindQuota:
+		response, err = s.queryUserDataQuota(r.Context(), filters)
 	default:
 		err = errors.New("明细类型不正确")
 	}
@@ -174,7 +209,7 @@ func parseUserDataFilters(r *http.Request, now time.Time) (userDataFilters, erro
 		return userDataFilters{}, errors.New("请输入正确的游戏用户ID")
 	}
 	switch filters.Kind {
-	case userDataKindClub, userDataKindGift, userDataKindGold, userDataKindStone, userDataKindBonus:
+	case userDataKindClub, userDataKindGift, userDataKindGold, userDataKindStone, userDataKindBonus, userDataKindQuota:
 	default:
 		return userDataFilters{}, errors.New("明细类型不正确")
 	}
@@ -214,51 +249,336 @@ func (s *Server) readUserDataProfile(ctx context.Context, playerID string) (user
 	var clubMake, clubMake2, clubJoin, clubJoin2, clubManage string
 	var hongliRaw int64
 	err := s.db.QueryRowContext(ctx, `SELECT sm_guuid, COALESCE(sm_wxID, ''), COALESCE(sm_name, ''),
+COALESCE(sm_role, ''), COALESCE(sm_reg_time, ''), COALESCE(sm_client_version, ''),
+COALESCE(sm_union_manage, ''), COALESCE(sm_club_manage, ''),
 COALESCE(sm_gold, 0) + COALESCE(sm_gold2, 0) / 100.0,
 COALESCE(sm_stone, 0), COALESCE(sm_hongli, 0),
 COALESCE(sm_club_make, ''), COALESCE(sm_club_make2, ''),
-COALESCE(sm_club_join, ''), COALESCE(sm_club_join2, ''),
-COALESCE(sm_club_manage, '')
+COALESCE(sm_club_join, ''), COALESCE(sm_club_join2, ''), COALESCE(sm_club_manage, '')
 FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, playerID).Scan(
-		&profile.PlayerID, &profile.LoginName, &profile.Name, &profile.Gold,
-		&profile.Stone, &hongliRaw, &clubMake, &clubMake2, &clubJoin, &clubJoin2, &clubManage,
+		&profile.PlayerID, &profile.LoginName, &profile.Name,
+		&profile.Role, &profile.RegTime, &profile.ClientVersion,
+		&profile.ManageUnions, &profile.ManageClubs,
+		&profile.Gold, &profile.Stone, &hongliRaw,
+		&clubMake, &clubMake2, &clubJoin, &clubJoin2, &clubManage,
 	)
 	if err != nil {
 		return userDataProfile{}, err
 	}
 	profile.UnclaimedBonus = float64(hongliRaw) / 100
-	profile.Clubs = s.readUserDataClubs(ctx, clubMake, clubMake2, clubJoin, clubJoin2, clubManage)
+	profile.Clubs, profile.QuotaVisible = s.readUserDataClubs(ctx, playerID, clubMake, clubMake2, clubJoin, clubJoin2, clubManage)
 	return profile, nil
 }
 
-func (s *Server) readUserDataClubs(ctx context.Context, clubMake, clubMake2, clubJoin, clubJoin2, clubManage string) []userDataClub {
+// userDataClubMeta 是俱乐部 + 联盟的展示信息；创建者按 club_guuid_info.account_id 反查。
+type userDataClubMeta struct {
+	ClubID        string
+	Name          string
+	UnionID       string
+	UnionName     string
+	UnionOwnerID  string
+	CreatorID     string
+	ClubQuotaFen  int64
+	UnionQuotaFen int64
+}
+
+type userDataAgentRow struct {
+	ClubID   string
+	PlayerID string
+	Name     string
+	UpperID  string
+	Percent  int64
+}
+
+func (s *Server) readUserDataClubs(ctx context.Context, playerID, clubMake, clubMake2, clubJoin, clubJoin2, clubManage string) ([]userDataClub, bool) {
 	makeIDs := toStringSet(clubMake, clubMake2)
 	manageIDs := toStringSet(clubManage)
 	joinIDs := toStringSet(clubJoin, clubJoin2)
 	allIDs := clubIDsFromMembershipColumns(clubMake, clubMake2, clubJoin, clubJoin2, clubManage)
 	if len(allIDs) == 0 {
-		return []userDataClub{}
+		return []userDataClub{}, false
 	}
-	metas, err := s.readActiveClubMeta(ctx, allIDs)
+	metas := s.readUserDataClubMetas(ctx, allIDs)
+	if len(metas) == 0 {
+		return []userDataClub{}, false
+	}
+
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(allIDs)), ",")
+	args := make([]any, 0, len(allIDs)+1)
+	args = append(args, playerID)
+	for _, clubID := range allIDs {
+		args = append(args, clubID)
+	}
+
+	selfRows := map[string]userDataAgentRow{}
+	hasCode := map[string]bool{}
+	rowsByClub := map[string]map[string]userDataAgentRow{}
+	rows, err := s.db.QueryContext(ctx, `SELECT club_guuid, user_guuid, COALESCE(user_name, ''),
+COALESCE(upper_guuid, ''), COALESCE(percent, 0)
+FROM kbedm.club_agent_info WHERE status = 'used' AND club_guuid IN (`+placeholders+`)`, args[1:]...)
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Warn("read user club names", "error", err)
+			s.logger.Warn("read user data agent rows", "error", err)
 		}
-		metas = map[string]clubMeta{}
+	} else {
+		for rows.Next() {
+			var row userDataAgentRow
+			if rows.Scan(&row.ClubID, &row.PlayerID, &row.Name, &row.UpperID, &row.Percent) != nil {
+				continue
+			}
+			if rowsByClub[row.ClubID] == nil {
+				rowsByClub[row.ClubID] = map[string]userDataAgentRow{}
+			}
+			rowsByClub[row.ClubID][row.PlayerID] = row
+			if row.PlayerID == playerID {
+				selfRows[row.ClubID] = row
+			}
+		}
+		_ = rows.Close()
 	}
+
+	codeRows, err := s.db.QueryContext(ctx, `SELECT DISTINCT club_guuid FROM kbedm.club_invite_code_info
+WHERE status = 'used' AND user_guuid = ? AND club_guuid IN (`+placeholders+`)`, args...)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("read user data invite codes", "error", err)
+		}
+	} else {
+		for codeRows.Next() {
+			var clubID string
+			if codeRows.Scan(&clubID) == nil {
+				hasCode[clubID] = true
+			}
+		}
+		_ = codeRows.Close()
+	}
+
+	names := s.readUserDataNames(ctx, collectUserDataChainIDs(metas, rowsByClub))
+
 	clubs := make([]userDataClub, 0, len(allIDs))
+	quotaVisible := false
 	for _, clubID := range allIDs {
-		role := "成员"
-		if makeIDs[clubID] {
-			role = "群主"
-		} else if manageIDs[clubID] {
-			role = "管理员"
-		} else if !joinIDs[clubID] {
+		meta, ok := metas[clubID]
+		if !ok {
 			continue
 		}
-		clubs = append(clubs, userDataClub{ClubID: clubID, ClubName: metas[clubID].Name, Role: role})
+		isCreator := makeIDs[clubID]
+		isManager := manageIDs[clubID]
+		isAgent := hasCode[clubID]
+		if !isCreator && !isManager && !joinIDs[clubID] {
+			continue
+		}
+		role := "成员"
+		switch {
+		case isCreator && meta.UnionID != "" && meta.UnionOwnerID == playerID:
+			role = "大盟主"
+		case isCreator && meta.UnionID != "":
+			role = "盟主"
+		case isCreator:
+			role = "群主"
+		case isManager:
+			role = "管理员"
+		case isAgent:
+			role = "合伙人"
+		}
+		club := userDataClub{
+			ClubID:    clubID,
+			ClubName:  meta.Name,
+			Role:      role,
+			UnionID:   meta.UnionID,
+			UnionName: meta.UnionName,
+			IsCreator: isCreator,
+			IsAgent:   isAgent,
+		}
+		if isCreator && meta.UnionID != "" {
+			quotaVisible = true
+			if meta.UnionOwnerID == playerID {
+				club.QuotaFen = meta.UnionQuotaFen
+			} else {
+				club.QuotaFen = meta.ClubQuotaFen
+			}
+		}
+		if self := selfRows[clubID]; self.PlayerID != "" {
+			club.UpperID = self.UpperID
+			club.UpperName = names[self.UpperID]
+			club.Percent = self.Percent
+		}
+		club.Chain = buildUserDataChain(playerID, meta, selfRows[clubID], rowsByClub[clubID], hasCode, names)
+		clubs = append(clubs, club)
 	}
-	return clubs
+	sort.SliceStable(clubs, func(left, right int) bool {
+		leftRank, rightRank := userDataClubRoleRank(clubs[left].Role), userDataClubRoleRank(clubs[right].Role)
+		if leftRank != rightRank {
+			return leftRank < rightRank
+		}
+		return clubs[left].ClubID < clubs[right].ClubID
+	})
+	return clubs, quotaVisible
+}
+
+func userDataClubRoleRank(role string) int {
+	switch role {
+	case "大盟主":
+		return 0
+	case "盟主":
+		return 1
+	case "群主":
+		return 2
+	case "管理员":
+		return 3
+	case "合伙人":
+		return 4
+	}
+	return 5
+}
+
+func (s *Server) readUserDataClubMetas(ctx context.Context, clubIDs []string) map[string]userDataClubMeta {
+	result := map[string]userDataClubMeta{}
+	if len(clubIDs) == 0 {
+		return result
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(clubIDs)), ",")
+	args := make([]any, 0, len(clubIDs))
+	for _, clubID := range clubIDs {
+		args = append(args, clubID)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT c.club_guuid, COALESCE(c.club_name, ''),
+COALESCE(c.union_id, ''), COALESCE(c.union_quota, 0),
+COALESCE(cu.union_name, ''), COALESCE(cu.owner_guuid, ''), COALESCE(cu.union_quota, 0),
+COALESCE(a.sm_guuid, '')
+FROM kbedm.club_guuid_info c
+LEFT JOIN kbedm.club_union_info cu ON cu.union_id = c.union_id AND cu.status <> 'init'
+LEFT JOIN kbedm.tbl_Account a ON a.id = c.account_id
+WHERE c.club_guuid IN (`+placeholders+`) AND c.club_status NOT IN ('init', 'del')`, args...)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("read user data club metas", "error", err)
+		}
+		return result
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var meta userDataClubMeta
+		if rows.Scan(&meta.ClubID, &meta.Name, &meta.UnionID, &meta.ClubQuotaFen,
+			&meta.UnionName, &meta.UnionOwnerID, &meta.UnionQuotaFen, &meta.CreatorID) != nil {
+			continue
+		}
+		result[meta.ClubID] = meta
+	}
+	return result
+}
+
+// collectUserDataChainIDs 汇总代理链可能出现的账号，用于批量补昵称。
+func collectUserDataChainIDs(metas map[string]userDataClubMeta, rowsByClub map[string]map[string]userDataAgentRow) []string {
+	seen := map[string]bool{}
+	ids := make([]string, 0)
+	add := func(id string) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+	}
+	for _, meta := range metas {
+		add(meta.CreatorID)
+		add(meta.UnionOwnerID)
+	}
+	for _, rows := range rowsByClub {
+		for _, row := range rows {
+			add(row.PlayerID)
+			add(row.UpperID)
+		}
+	}
+	return ids
+}
+
+func (s *Server) readUserDataNames(ctx context.Context, playerIDs []string) map[string]string {
+	names := map[string]string{}
+	if len(playerIDs) == 0 {
+		return names
+	}
+	placeholders := strings.TrimRight(strings.Repeat("?,", len(playerIDs)), ",")
+	args := make([]any, 0, len(playerIDs))
+	for _, id := range playerIDs {
+		args = append(args, id)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT sm_guuid, COALESCE(sm_name, '')
+FROM kbedm.tbl_Account WHERE sm_guuid IN (`+placeholders+`)`, args...)
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("read user data names", "error", err)
+		}
+		return names
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, name string
+		if rows.Scan(&id, &name) == nil && name != "" {
+			names[id] = name
+		}
+	}
+	return names
+}
+
+// buildUserDataChain 组装「直属上级 → … → 俱乐部创建者 → 大盟主」，不含玩家自己。
+// 已取消的代理不在 status='used' 里，链路会自动接到其上级。
+func buildUserDataChain(playerID string, meta userDataClubMeta, self userDataAgentRow,
+	rows map[string]userDataAgentRow, hasCode map[string]bool, names map[string]string) []userDataChainNode {
+	chain := make([]userDataChainNode, 0, 6)
+	seen := map[string]bool{playerID: true}
+	appendNode := func(id string) {
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		row := rows[id]
+		role := "成员"
+		if hasCode[id] {
+			role = "合伙人"
+		}
+		chain = append(chain, userDataChainNode{
+			PlayerID: id,
+			Name:     userDataNodeName(id, row.Name, names),
+			Role:     role,
+			ClubID:   meta.ClubID,
+			ClubName: meta.Name,
+			Percent:  row.Percent,
+		})
+	}
+	current := self.UpperID
+	if self.PlayerID == "" {
+		current = meta.CreatorID
+	}
+	for current != "" && len(chain) < 16 && !seen[current] {
+		appendNode(current)
+		current = rows[current].UpperID
+	}
+	// 普通玩家的代理表行可能不存在，仍要把创建者补进链路。
+	if meta.CreatorID != "" && meta.CreatorID != playerID && len(chain) < 16 && !seen[meta.CreatorID] {
+		appendNode(meta.CreatorID)
+	}
+	if meta.UnionID != "" && meta.UnionOwnerID != "" && !seen[meta.UnionOwnerID] && len(chain) < 16 {
+		appendNode(meta.UnionOwnerID)
+	}
+	for index := range chain {
+		switch {
+		case chain[index].PlayerID == meta.UnionOwnerID && meta.UnionID != "":
+			chain[index].Role = "大盟主"
+		case chain[index].PlayerID == meta.CreatorID:
+			if meta.UnionID != "" {
+				chain[index].Role = "盟主"
+			} else {
+				chain[index].Role = "群主"
+			}
+		}
+	}
+	return chain
+}
+
+func userDataNodeName(id, fallback string, names map[string]string) string {
+	if name := strings.TrimSpace(names[id]); name != "" {
+		return name
+	}
+	return strings.TrimSpace(fallback)
 }
 
 func toStringSet(values ...string) map[string]bool {
@@ -422,6 +742,107 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	}
 	s.attachUserDataClubNames(ctx, response.Items, clubIDs)
 	return response, nil
+}
+
+func (s *Server) queryUserDataQuota(ctx context.Context, filters userDataFilters) (userDataRecordsResponse, error) {
+	where := []string{
+		"h.user_guuid = ?", "h.opt_type LIKE '额度%'", "COALESCE(h.user_quota, 0) <> 0",
+		"h.date >= ?", "h.date < ?",
+	}
+	args := []any{filters.PlayerID, filters.From, nextDate(filters.To)}
+	if clause, clauseArgs := userDataLikeClause(filters.Keyword,
+		"h.opt_type", "h.remark", "h.room_id", "h.user_name", "h.opter_name", "h.club_guuid"); clause != "" {
+		where = append(where, clause)
+		args = append(args, clauseArgs...)
+	}
+	whereSQL := strings.Join(where, " AND ")
+
+	var response userDataRecordsResponse
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*),
+COALESCE(SUM(CASE WHEN COALESCE(h.user_quota, 0) > 0 THEN h.user_quota ELSE 0 END), 0),
+COALESCE(ABS(SUM(CASE WHEN COALESCE(h.user_quota, 0) < 0 THEN h.user_quota ELSE 0 END)), 0),
+COALESCE(SUM(COALESCE(h.user_quota, 0)), 0)
+FROM kbedm.club_history_info h WHERE `+whereSQL, args...).Scan(
+		&response.Summary.Count, &response.Summary.TotalIn, &response.Summary.TotalOut, &response.Summary.Net,
+	); err != nil {
+		return userDataRecordsResponse{}, err
+	}
+	response.Summary.TotalIn /= 100
+	response.Summary.TotalOut /= 100
+	response.Summary.Net /= 100
+
+	queryArgs := append(append([]any{}, args...), filters.PageSize, (filters.Page-1)*filters.PageSize)
+	rows, err := s.db.QueryContext(ctx, `SELECT h.id, `+s.userDataClubHistoryTimeExpr(ctx)+`, COALESCE(h.opt_type, ''),
+COALESCE(h.user_quota, 0), COALESCE(h.remark, ''), COALESCE(h.room_id, ''),
+COALESCE(h.user_guuid, ''), COALESCE(h.user_name, ''),
+COALESCE(h.opter_guuid, ''), COALESCE(NULLIF(h.opter_name, ''), op.sm_name, ''), COALESCE(h.club_guuid, '')
+FROM kbedm.club_history_info h
+LEFT JOIN kbedm.tbl_Account op ON op.sm_guuid = h.opter_guuid
+WHERE `+whereSQL+`
+ORDER BY h.date DESC, h.id DESC
+LIMIT ? OFFSET ?`, queryArgs...)
+	if err != nil {
+		return userDataRecordsResponse{}, err
+	}
+	defer rows.Close()
+
+	response.Items = make([]userDataRecord, 0, filters.PageSize)
+	response.Page = filters.Page
+	response.PageSize = filters.PageSize
+	response.Total = response.Summary.Count
+	clubIDs := make([]string, 0, filters.PageSize)
+	for rows.Next() {
+		var item userDataRecord
+		var quotaFen int64
+		item.Kind = userDataKindQuota
+		item.Unit = "元"
+		if err := rows.Scan(&item.ID, &item.OccurredAt, &item.Type,
+			&quotaFen, &item.Remark, &item.RoomID,
+			&item.PlayerID, &item.PlayerName, &item.CounterpartyID, &item.Counterparty, &item.ClubID); err != nil {
+			return userDataRecordsResponse{}, err
+		}
+		item.Amount = float64(quotaFen) / 100
+		item.Before = 0
+		if balance, ok := parseTrailingFloat(item.Remark); ok {
+			item.Balance = balance / 100
+		}
+		item.TypeLabel = userDataQuotaTypeLabel(item.Type)
+		if item.ClubID != "" {
+			clubIDs = append(clubIDs, item.ClubID)
+		}
+		response.Items = append(response.Items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return userDataRecordsResponse{}, err
+	}
+	s.attachUserDataClubNames(ctx, response.Items, clubIDs)
+	return response, nil
+}
+
+func userDataQuotaTypeLabel(optType string) string {
+	switch optType {
+	case "额度占用":
+		return "带入"
+	case "额度回补":
+		return "结算"
+	case "额度联盟授信":
+		return "联盟授信"
+	case "额度联盟注资":
+		return "平台注资"
+	case "额度奖励":
+		return "平台奖励"
+	case "额度授信":
+		return "额度授信"
+	case "额度收回":
+		return "额度收回"
+	case "额度转入":
+		return "额度转入"
+	case "额度抽水回补":
+		return "抽水回补"
+	case "额度兑换":
+		return "额度兑换"
+	}
+	return strings.TrimPrefix(optType, "额度")
 }
 
 func (s *Server) queryUserDataBonus(ctx context.Context, filters userDataFilters) (userDataRecordsResponse, error) {

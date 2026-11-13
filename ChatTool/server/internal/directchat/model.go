@@ -69,7 +69,7 @@ var (
 	errRelationUnavail   = newError(http.StatusServiceUnavailable, CodeRelationUnavailable, "俱乐部关系服务暂时不可用")
 	errHostingForbidden  = newError(http.StatusForbidden, CodeHostingForbidden, "只有俱乐部群主、盟主或大盟主可以开启聊天托管")
 	errHostingInactive   = newError(http.StatusForbidden, CodeHostingInactive, "该账号未开启聊天托管")
-	errBFEntryForbidden  = newError(http.StatusForbidden, CodeBFEntryForbidden, "只有俱乐部创建者可以设置 BF 聊天显示")
+	errBFEntryForbidden  = newError(http.StatusForbidden, CodeBFEntryForbidden, "BF 聊天开关已由后台俱乐部管理统一设置")
 )
 
 // AsError 把任意错误转换为带错误码的业务错误；未知错误一律视为服务内部错误。
