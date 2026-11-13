@@ -2734,6 +2734,28 @@ td strong { color: #294149; }
 .reward-status--paid{color:#0f7a60;background:#e6f7f0}
 .reward-status--paying{color:#8a6a12;background:#fdf4e0}
 .reward-status--partial{color:#b64350;background:#fdeef0}
+.reward-stage{display:inline-flex;align-items:center;height:24px;padding:0 9px;border-radius:7px;font-size:12px;font-weight:650;white-space:nowrap}
+.reward-stage--union{color:#175d74;background:#e7f3f8}
+.reward-stage--leader{color:#7a5a12;background:#fbf3df}
+.reward-stage--player{color:#0f7a60;background:#e6f7f0}
+.reward-ledger-group td{padding:12px 14px;border-top:1px solid #dfe9ea;border-bottom:1px solid #e7eeee;background:#f5faf9}
+.reward-ledger-group b{color:#21454c;font-size:13px}
+.reward-ledger-group span{margin-left:10px;color:#789095;font-size:12px}
+.reward-ledger-desc{max-width:320px;color:#526c72;font-size:12px;line-height:1.55}
+.reward-ledger-desc small{display:block;margin-top:3px;color:#b64350;font-size:11.5px}
+.reward-chain{display:block;max-width:240px;overflow:hidden;color:#526c72;font-size:12px;text-overflow:ellipsis;white-space:nowrap;cursor:help}
+.reward-metrics.reward-ledger-metrics{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
+.reward-ledger-metrics .reward-metric{padding:10px 12px}
+.reward-ledger-metrics .reward-metric > strong{margin-top:3px;font-size:20px}
+.reward-ledger-metrics .reward-metric > small{margin-top:3px;font-size:11px}
+.reward-ledger-table-wrap{max-height:62vh;border:1px solid #e3eded;border-radius:10px;overflow:auto}
+.reward-ledger-table{min-width:900px;table-layout:fixed}
+.reward-ledger-table th,.reward-ledger-table td{padding:10px 12px;vertical-align:top;overflow:hidden;text-overflow:ellipsis}
+.reward-ledger-table thead th{position:sticky;top:0;z-index:2;background:#f8fafa;box-shadow:inset 0 -1px 0 #e7eeee}
+.reward-ledger-table td.reward-ledger-desc{max-width:none;white-space:normal;overflow:visible;text-overflow:clip;word-break:break-word;line-height:1.55}
+.reward-ledger-table .reward-ledger-desc small.reward-ledger-order{color:#84979b}
+.reward-ledger-table .reward-name small{display:block;margin-top:2px;color:#84979b;font-size:11px}
+.reward-ledger-table .reward-ledger-group td{white-space:normal}
 .reward-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
 .reward-metric{padding:14px 16px;border:1px solid #e0e9ea;border-radius:12px;background:#fff;box-shadow:var(--shadow)}
 .reward-metric > span{display:block;color:#6e858b;font-size:12.5px}

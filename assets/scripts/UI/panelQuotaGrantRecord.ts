@@ -166,6 +166,16 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
             nameNode.getComponent(cc.Label).string = name === "" ? "—" : name;
         }
 
+        // 服务端 type（授信/收回/注资/注资扣减/额度奖励）直接展示在盟主名下方。
+        const typeNode = node.getChildByName("typelabel");
+        if(typeNode != null)
+        {
+            typeNode.active = true;
+            const label = typeNode.getComponent(cc.Label);
+            if(label != null)
+                label.string = type === "" ? "类型：—" : "类型：" + type;
+        }
+
         // 服务端 type 已按正负号定好（授信/收回/注资/注资扣减），这里只按 quota 符号着色。
         const quota = Number(String(jItem["quota"] == null ? "" : jItem["quota"]).replace(/,/g,""));
         const valid = isFinite(quota);

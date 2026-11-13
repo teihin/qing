@@ -21,21 +21,27 @@ import (
 //   - 名单、排除、子账号、计划、明细、发放流水全部在自有 mgr_ 库，游戏库只读；
 //   - 三类奖励的分配比例统一取「俱乐部业绩」报表的净次数（业绩股口径），按本次名单归一；
 //   - 线数据只在「线数据」弹窗按需查询，不再参与分摊；
-//   - 发放复用既有的 exchange 通道，一单一笔、唯一工单、写后回读余额核对。
+//   - 发放走俱乐部奖励三阶段：平台注入联盟池 → 大盟主下划盟主额度 → 盟主发成员俱乐部积分。
 
 const (
 	rewardKindPerformance = "performance"
 	rewardKindCore        = "core"
 	rewardKindPool        = "pool"
 
-	rewardPlanDraft    = "draft"
-	rewardPlanPaying   = "paying"
+	rewardPlanDraft  = "draft"
+	rewardPlanPaying = "paying"
+	// 发放三个阶段：平台→联盟池（大盟主）、大盟主→盟主俱乐部、盟主→成员积分。
+	rewardStageUnion   = "union"
+	rewardStageLeader  = "leader"
+	rewardStagePlayer  = "player"
 	rewardPlanPaid     = "paid"
 	rewardPlanPartial  = "partial"
 	rewardPayoutPaid   = "paid"
 	rewardPayoutFailed = "failed"
 	rewardPayoutMiss   = "mismatch"
 	rewardPayoutPend   = "pending"
+	// 玩家在房间内，奖励已登记到内存待补，结算后自动入账。
+	rewardPayoutWaiting = "waiting"
 )
 
 // 同一时刻只允许一个批次发放，避免两条请求互相覆盖余额与工单。
@@ -63,6 +69,12 @@ type rewardSplit struct {
 	Amount    int64  `json:"amount"`
 }
 
+type rewardChainNode struct {
+	AgentID string `json:"agentId"`
+	Name    string `json:"name"`
+	Role    string `json:"role"`
+}
+
 type rewardMember struct {
 	AgentID    string      `json:"agentId"`
 	Name       string      `json:"name"`
@@ -78,6 +90,8 @@ type rewardMember struct {
 	Source     string      `json:"source"`
 	Perf       *rewardPerf `json:"perf"`
 	Line       *rewardLine `json:"line"`
+	// Chain 是从最高层上级到本人（含本人）的代理链，最多 16 级，用于名单里直接展示。
+	Chain []rewardChainNode `json:"chain"`
 	// SharePercent 是业绩股净次数在本次名单内的占比，保留两位小数，
 	// 名单内有正业绩时所有行合计固定为 100.00。
 	SharePercent float64       `json:"sharePercent"`
@@ -885,6 +899,15 @@ FROM mgr_agent_reward_plan WHERE id = ?`, planID).
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取代理名单失败")
 		return
 	}
+	// 代理链用联盟内全部在册代理回溯，避免只选了部分人时上级缺失。
+	chainByID := map[string]rewardMember{}
+	if allMembers, loadErr := s.loadRewardMembersAll(ctx, unionID); loadErr != nil {
+		s.logger.Warn("load reward members for chain", "error", loadErr)
+	} else {
+		for _, member := range allMembers {
+			chainByID[member.AgentID] = member
+		}
+	}
 	excluded, err := s.loadRewardExcludes(ctx, unionID)
 	if err != nil {
 		s.logger.Error("load reward excludes", "error", err)
@@ -972,6 +995,7 @@ FROM mgr_agent_reward_plan WHERE id = ?`, planID).
 		if m.Subs == nil {
 			m.Subs = []rewardSub{}
 		}
+		m.Chain = buildRewardChain(m.AgentID, chainByID)
 		overview.Members = append(overview.Members, m)
 	}
 
@@ -1200,6 +1224,27 @@ FROM mgr_agent_reward_member WHERE status='active' AND union_id=? ORDER BY level
 	return list, rows.Err()
 }
 
+// buildRewardChain 从代理本人沿 upper_id 回溯到最高层，再反转成「最高层 → 本人」。
+// 只使用本次联盟名单里的在册代理；断开或循环时停止，避免把其它联盟/已失效账号拼进来。
+func buildRewardChain(agentID string, byID map[string]rewardMember) []rewardChainNode {
+	chain := []rewardChainNode{}
+	seen := map[string]bool{}
+	current := strings.TrimSpace(agentID)
+	for current != "" && len(chain) < 16 && !seen[current] {
+		member, ok := byID[current]
+		if !ok {
+			break
+		}
+		seen[current] = true
+		chain = append(chain, rewardChainNode{AgentID: member.AgentID, Name: member.Name, Role: member.Role})
+		current = strings.TrimSpace(member.UpperID)
+	}
+	for left, right := 0, len(chain)-1; left < right; left, right = left+1, right-1 {
+		chain[left], chain[right] = chain[right], chain[left]
+	}
+	return chain
+}
+
 // rewardAgentInUnion 校验代理确实属于指定联盟，所有按代理写入的接口都先过这一层。
 func (s *Server) rewardAgentInUnion(ctx context.Context, agentID, unionID string) (bool, error) {
 	var count int
@@ -1282,7 +1327,7 @@ WHERE status='active' ORDER BY id`)
 
 func (s *Server) loadRewardPaid(ctx context.Context, planID int64) (map[string]int64, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT agent_id, COALESCE(SUM(amount),0) FROM mgr_agent_reward_payout
-WHERE plan_id = ? AND status IN ('paid','mismatch','pending') GROUP BY agent_id`, planID)
+WHERE plan_id = ? AND stage = 'player' AND status IN ('paid','mismatch','pending','waiting') GROUP BY agent_id`, planID)
 	if err != nil {
 		return nil, err
 	}
@@ -1297,6 +1342,15 @@ WHERE plan_id = ? AND status IN ('paid','mismatch','pending') GROUP BY agent_id`
 		result[id] = amount
 	}
 	return result, rows.Err()
+}
+
+// rewardPlanStarted 判断该批次是否已经真实发起过发放。
+// 一旦联盟池或任一盟主额度已划出，金额就必须锁定，否则重试时无法保证总额一致。
+func (s *Server) rewardPlanStarted(ctx context.Context, planID int64) (bool, error) {
+	var count int64
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mgr_agent_reward_payout
+WHERE plan_id = ? AND status IN ('paid','pending','waiting','mismatch')`, planID).Scan(&count)
+	return count > 0, err
 }
 
 // rewardPerformance 调游戏服结算报表，取每个代理的毛/下发/净点数。
@@ -1584,6 +1638,13 @@ func (s *Server) handlerRewardSavePlan(w http.ResponseWriter, r *http.Request, p
 		writeError(w, http.StatusConflict, "PLAN_LOCKED", "该批次已发放或发放中，不能修改总额")
 		return
 	}
+	if started, err := s.rewardPlanStarted(r.Context(), planID); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放记录失败")
+		return
+	} else if started {
+		writeError(w, http.StatusConflict, "PLAN_LOCKED", "该批次已发起过发放，金额不能再修改；如需调整请另建日期批次")
+		return
+	}
 	if input.PoolPercent != nil {
 		if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_agent_reward_plan
 SET planned_total = ?, pool_percent = ?, status='draft' WHERE id = ?`,
@@ -1658,6 +1719,13 @@ func (s *Server) handlerRewardSaveAmounts(w http.ResponseWriter, r *http.Request
 	}
 	if status == rewardPlanPaid || status == rewardPlanPaying {
 		writeError(w, http.StatusConflict, "PLAN_LOCKED", "该批次已发放或发放中，不能修改金额")
+		return
+	}
+	if started, err := s.rewardPlanStarted(r.Context(), planID); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放记录失败")
+		return
+	} else if started {
+		writeError(w, http.StatusConflict, "PLAN_LOCKED", "该批次已发起过发放，金额不能再修改；如需调整请另建日期批次")
 		return
 	}
 
@@ -1797,6 +1865,13 @@ func (s *Server) handlerRewardAllocate(w http.ResponseWriter, r *http.Request, p
 	}
 	if status == rewardPlanPaid || status == rewardPlanPaying {
 		writeError(w, http.StatusConflict, "PLAN_LOCKED", "该批次已发放或发放中，不能重新分摊")
+		return
+	}
+	if started, err := s.rewardPlanStarted(ctx, planID); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放记录失败")
+		return
+	} else if started {
+		writeError(w, http.StatusConflict, "PLAN_LOCKED", "该批次已发起过发放，金额不能再调整；如需重算请另建日期批次")
 		return
 	}
 	if planned <= 0 {
@@ -2444,13 +2519,59 @@ WHERE agent_id = ? AND sub_guuid = ?`, agentID, subID); err != nil {
 /* ---------------- 发放 ---------------- */
 
 type rewardPayResult struct {
-	Total   int64    `json:"total"`
-	Paid    int64    `json:"paid"`
-	Failed  int64    `json:"failed"`
-	Skipped int64    `json:"skipped"`
-	Status  string   `json:"status"`
-	Orders  []string `json:"orders"`
-	Errors  []string `json:"errors"`
+	Total        int64    `json:"total"`
+	Paid         int64    `json:"paid"`
+	Waiting      int64    `json:"waiting"`
+	Failed       int64    `json:"failed"`
+	Skipped      int64    `json:"skipped"`
+	Injected     int64    `json:"injected"`
+	LeaderAmount int64    `json:"leaderAmount"`
+	LeaderCount  int64    `json:"leaderCount"`
+	Status       string   `json:"status"`
+	Orders       []string `json:"orders"`
+	Errors       []string `json:"errors"`
+}
+
+type rewardPayoutRow struct {
+	ID          int64
+	Stage       string
+	AgentID     string
+	ClubID      string
+	Payee       string
+	Amount      int64
+	Order       string
+	Status      string
+	Description string
+	// 额度流水以「分」存储，用于重试时判断上一笔是否已经到账。
+	QuotaBefore int64
+	QuotaAfter  int64
+	CreatedAt   string
+}
+
+type rewardClubTarget struct {
+	ID         string
+	Name       string
+	LeaderID   string
+	LeaderName string
+	Quota      int64
+}
+
+type rewardPayTarget struct {
+	AgentID  string
+	Name     string
+	ClubID   string
+	ClubName string
+	Amount   int64
+}
+
+// rewardTransferSettled 表示这一笔已经不需要再调用游戏服；pending 是上次调用中断，
+// 必须先核对余额/流水，不能直接当成已完成。
+func rewardTransferSettled(status string) bool {
+	switch status {
+	case rewardPayoutPaid, rewardPayoutWaiting, rewardPayoutMiss:
+		return true
+	}
+	return false
 }
 
 func (s *Server) handlerRewardPay(w http.ResponseWriter, r *http.Request, p principal) {
@@ -2474,16 +2595,12 @@ func (s *Server) handlerRewardPay(w http.ResponseWriter, r *http.Request, p prin
 		return
 	}
 	if !input.Confirm {
-		writeError(w, http.StatusBadRequest, "CONFIRM_REQUIRED", "请确认本次会真实发放金币")
+		writeError(w, http.StatusBadRequest, "CONFIRM_REQUIRED", "请确认本次会真实发放俱乐部积分与额度")
 		return
 	}
 	date, err := rewardDate(input.Date, time.Now())
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_DATE", err.Error())
-		return
-	}
-	if s.cfg.GameExchangeSign == "" {
-		writeError(w, http.StatusServiceUnavailable, "PAY_DISABLED", "游戏发钱通道未配置，无法发放")
 		return
 	}
 
@@ -2507,34 +2624,27 @@ func (s *Server) handlerRewardPay(w http.ResponseWriter, r *http.Request, p prin
 		return
 	}
 
-	type target struct {
-		itemID int64
-		agent  string
-		name   string
-		amount int64
-		splits []rewardSplit
-	}
-	rows, err := s.db.QueryContext(ctx, `SELECT id, agent_id, agent_name, final_amount, COALESCE(split_json,'')
-FROM mgr_agent_reward_item WHERE plan_id = ? AND final_amount > 0 ORDER BY id`, planID)
+	// 名单与金额：金额单位是元（俱乐部积分），额度接口要求分，调用前统一 ×100。
+	rows, err := s.db.QueryContext(ctx, `SELECT i.agent_id, COALESCE(NULLIF(i.agent_name,''), m.name, ''),
+COALESCE(m.club_id,''), COALESCE(m.club_name,''), i.final_amount
+FROM mgr_agent_reward_item i
+LEFT JOIN mgr_agent_reward_member m ON m.agent_id = i.agent_id
+WHERE i.plan_id = ? AND i.final_amount > 0 ORDER BY i.id`, planID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取分配明细失败")
 		return
 	}
-	var targets []target
+	var targets []rewardPayTarget
 	var expected int64
 	for rows.Next() {
-		var t target
-		var raw string
-		if err := rows.Scan(&t.itemID, &t.agent, &t.name, &t.amount, &raw); err != nil {
+		var target rewardPayTarget
+		if err := rows.Scan(&target.AgentID, &target.Name, &target.ClubID, &target.ClubName, &target.Amount); err != nil {
 			rows.Close()
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取分配明细失败")
 			return
 		}
-		if strings.TrimSpace(raw) != "" {
-			_ = json.Unmarshal([]byte(raw), &t.splits)
-		}
-		targets = append(targets, t)
-		expected += t.amount
+		targets = append(targets, target)
+		expected += target.Amount
 	}
 	rows.Close()
 	if len(targets) == 0 {
@@ -2546,125 +2656,486 @@ FROM mgr_agent_reward_item WHERE plan_id = ? AND final_amount > 0 ORDER BY id`, 
 			fmt.Sprintf("分配合计 %d 与计划总额 %d 不一致，不能发放", expected, planned))
 		return
 	}
+	if expected > math.MaxInt64/100 {
+		writeError(w, http.StatusBadRequest, "INVALID_TOTAL", "发放总额超出可用范围")
+		return
+	}
+	totalFen := expected * 100
 
-	// 已成功发放过的账号不再重复发，防止重复点击/重复请求造成双发。
-	paidRows, err := s.db.QueryContext(ctx, `SELECT payee_guuid FROM mgr_agent_reward_payout
-WHERE plan_id = ? AND status IN ('paid','mismatch')`, planID)
+	clubTotals := map[string]int64{}
+	for _, target := range targets {
+		if strings.TrimSpace(target.ClubID) == "" {
+			writeError(w, http.StatusBadRequest, "CLUB_REQUIRED",
+				fmt.Sprintf("代理 %s（%s）没有绑定俱乐部，无法发放俱乐部积分", target.Name, target.AgentID))
+			return
+		}
+		clubTotals[target.ClubID] += target.Amount
+	}
+	clubs, err := s.rewardUnionClubs(ctx, unionID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟俱乐部失败")
+		return
+	}
+	for clubID := range clubTotals {
+		if _, ok := clubs[clubID]; !ok {
+			writeError(w, http.StatusBadRequest, "CLUB_REQUIRED",
+				fmt.Sprintf("俱乐部 %s 不属于当前联盟，无法下划额度", clubID))
+			return
+		}
+	}
+
+	ownerID, ownerName, unionName := s.rewardUnionOwner(ctx, unionID)
+	if ownerName == "" {
+		ownerName = ownerID
+	}
+	if ownerName == "" {
+		ownerName = "大盟主"
+	}
+	if unionName == "" {
+		unionName = unionID
+	}
+
+	existing, err := s.loadRewardPayoutRows(ctx, planID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发放记录失败")
 		return
 	}
-	alreadyPaid := map[string]bool{}
-	for paidRows.Next() {
-		var payee string
-		if err := paidRows.Scan(&payee); err == nil {
-			alreadyPaid[payee] = true
+	// 还没产生任何成功流水时，失败记录只是上一次尝试的结果；金额可能已被修改，
+	// 先清掉失败行再重算，避免旧俱乐部/旧金额的失败记录干扰本次结果。
+	hasSettled := false
+	for _, row := range existing {
+		if rewardTransferSettled(row.Status) {
+			hasSettled = true
+			break
 		}
 	}
-	paidRows.Close()
+	if !hasSettled {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM mgr_agent_reward_payout
+WHERE plan_id = ? AND status = 'failed'`, planID); err == nil {
+			existing, _ = s.loadRewardPayoutRows(ctx, planID)
+		}
+	}
+	var unionRow *rewardPayoutRow
+	leaderRows := map[string]*rewardPayoutRow{}
+	memberRows := map[string]*rewardPayoutRow{}
+	for i := range existing {
+		row := &existing[i]
+		switch row.Stage {
+		case rewardStageUnion:
+			if unionRow == nil {
+				unionRow = row
+			}
+		case rewardStageLeader:
+			leaderRows[row.ClubID] = row
+		default:
+			key := row.AgentID + "|" + row.Payee
+			if memberRows[key] == nil || memberRows[key].ID < row.ID {
+				memberRows[key] = row
+			}
+		}
+	}
+
+	if unionRow != nil && (rewardTransferSettled(unionRow.Status) || unionRow.Status == rewardPayoutPend) && unionRow.Amount != expected {
+		writeError(w, http.StatusConflict, "PLAN_LOCKED",
+			fmt.Sprintf("该批次已向联盟池发放过 %d，与当前分配合计 %d 不一致，不能继续发放", unionRow.Amount, expected))
+		return
+	}
 
 	if _, err := s.db.ExecContext(ctx, `UPDATE mgr_agent_reward_plan SET status='paying' WHERE id = ?`, planID); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "更新批次状态失败")
 		return
 	}
 
-	// 工单前缀决定玩家金币流水里的类型：旧发钱服务按 work_order 前缀识别，
-	// BF=补分（玩家侧看到的"补发"）、JL=奖励。三类代理奖励统一走补发口径。
 	codes := map[string]string{rewardKindPerformance: "P", rewardKindCore: "C", rewardKindPool: "S"}
 	dateCode := strings.ReplaceAll(date, "-", "")
 	var seq int
 	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM mgr_agent_reward_payout`).Scan(&seq); err != nil {
 		seq = 0
 	}
+	nextOrder := func(stage string) string {
+		seq++
+		stageCode := map[string]string{rewardStageUnion: "U", rewardStageLeader: "L", rewardStagePlayer: "M"}[stage]
+		return fmt.Sprintf("RW%s%s%s%05d", dateCode, codes[input.Kind], stageCode, seq)
+	}
 
 	result := rewardPayResult{Total: expected, Orders: []string{}, Errors: []string{}}
-	for _, t := range targets {
-		payees := t.splits
-		if len(payees) == 0 {
-			payees = []rewardSplit{{Payee: t.agent, Type: "main", Amount: t.amount}}
+	// 调用结果不确定时，只认本次操作开始后写入的积分流水，避免把历史奖励当成已到账。
+	flowSince := time.Now().Add(-2 * time.Minute).Format("2006-01-02 15:04:05")
+
+	// 第一阶段：平台把本批总额发到大盟主的联盟额度池。
+	unionOK := false
+	if unionRow != nil && unionRow.Status == rewardPayoutPend {
+		after := s.readRewardUnionQuota(ctx, unionID)
+		if after >= unionRow.QuotaBefore+totalFen {
+			unionRow.Status = rewardPayoutPaid
+			_, _ = s.saveRewardPayout(ctx, unionRow.ID, planID, rewardStageUnion, ownerID, ownerName,
+				"", "", ownerID, unionRow.Description, unionRow.Order, expected, rewardPayoutPaid,
+				unionRow.QuotaBefore, after, "")
 		}
-		for _, split := range payees {
-			if split.Amount <= 0 {
-				continue
+	}
+	if unionRow != nil && rewardTransferSettled(unionRow.Status) {
+		unionOK = true
+		result.Injected = expected
+		if unionRow.Order != "" {
+			result.Orders = append(result.Orders, unionRow.Order)
+		}
+	}
+	if !unionOK {
+		before := s.readRewardUnionQuota(ctx, unionID)
+		order := ""
+		if unionRow != nil {
+			order = unionRow.Order
+		}
+		if order == "" {
+			order = nextOrder(rewardStageUnion)
+		}
+		desc := fmt.Sprintf("平台向大盟主「%s」的联盟额度池发放 %d 额度（联盟：%s）", ownerName, expected, unionName)
+		id, saveErr := s.saveRewardPayout(ctx, rowID(unionRow), planID, rewardStageUnion, ownerID, ownerName,
+			"", "", ownerID, desc, order, expected, rewardPayoutPend, before, before, "")
+		if saveErr != nil {
+			writeError(w, http.StatusInternalServerError, "UPDATE_FAILED", "创建联盟池发放记录失败")
+			return
+		}
+		payload, callErr := s.callRewardCommand(ctx, "发放_总群主_奖励", map[string]any{
+			"union_id": unionID, "quota_fen": totalFen, "context": gameOperationContext("reward-union"),
+		})
+		after := s.readRewardUnionQuota(ctx, unionID)
+		if callErr != nil && after-before >= totalFen {
+			callErr = nil
+		}
+		if callErr != nil {
+			desc += "失败"
+			_, _ = s.saveRewardPayout(ctx, id, planID, rewardStageUnion, ownerID, ownerName,
+				"", "", ownerID, desc, order, expected, rewardPayoutFailed, before, after, callErr.Error())
+			result.Failed++
+			result.Errors = append(result.Errors, "联盟池发放失败："+callErr.Error())
+		} else {
+			if value := anyInt(payload["union_quota"]); value > 0 {
+				after = value
 			}
-			payee := strings.TrimSpace(split.Payee)
-			if alreadyPaid[payee] {
-				result.Skipped++
-				continue
+			desc = fmt.Sprintf("平台向大盟主「%s」的联盟额度池发放 %d 额度（联盟：%s），发放后池余额 %d 额度",
+				ownerName, expected, unionName, after/100)
+			if _, err := s.saveRewardPayout(ctx, id, planID, rewardStageUnion, ownerID, ownerName,
+				"", "", ownerID, desc, order, expected, rewardPayoutPaid, before, after, ""); err != nil {
+				s.logger.Warn("update union reward payout", "error", err)
 			}
-			seq++
-			order := fmt.Sprintf("BF%s%s%05d", dateCode, codes[input.Kind], seq)
-			before, _ := s.readPlayerBalanceState(ctx, payee)
-			if _, err := s.db.ExecContext(ctx, `INSERT INTO mgr_agent_reward_payout
-(plan_id, item_id, agent_id, payee_guuid, payee_type, amount, work_order, status, balance_before)
-VALUES (?,?,?,?,?,?,?,'pending',?)`,
-				planID, t.itemID, t.agent, payee, split.Type, split.Amount, order, int64(before.Balance)); err != nil {
-				result.Errors = append(result.Errors, fmt.Sprintf("%s：创建发放单失败", payee))
-				result.Failed++
-				continue
-			}
-			if err := s.callBalanceExchange(ctx, payee, split.Amount, order); err != nil {
-				result.Failed++
-				result.Errors = append(result.Errors, fmt.Sprintf("%s（%s）：%v", payee, order, err))
-				_, _ = s.db.ExecContext(ctx, `UPDATE mgr_agent_reward_payout SET status='failed', error_message=?
-WHERE work_order = ?`, truncate(err.Error(), 240), order)
-				continue
-			}
-			result.Paid++
+			result.Injected = expected
 			result.Orders = append(result.Orders, order)
-			alreadyPaid[payee] = true
+			unionOK = true
 		}
 	}
 
-	// 逐笔回读余额核对：账号金币必须正好增加发放金额。
-	if len(result.Orders) > 0 {
-		time.Sleep(600 * time.Millisecond)
+	failedClubs := map[string]string{}
+	clubIDs := make([]string, 0, len(clubTotals))
+	for clubID := range clubTotals {
+		clubIDs = append(clubIDs, clubID)
 	}
-	afterRows, err := s.db.QueryContext(ctx, `SELECT id, payee_guuid, amount, work_order, balance_before
-FROM mgr_agent_reward_payout WHERE plan_id = ? AND status='pending'`, planID)
-	if err == nil {
-		type pending struct {
-			id     int64
-			payee  string
-			amount int64
-			order  string
-			before int64
-		}
-		var list []pending
-		for afterRows.Next() {
-			var item pending
-			if err := afterRows.Scan(&item.id, &item.payee, &item.amount, &item.order, &item.before); err == nil {
-				list = append(list, item)
+	sort.Strings(clubIDs)
+
+	// 第二阶段：大盟主从联盟池把每个俱乐部下面所有人的金额汇总，下划到对应盟主俱乐部。
+	if unionOK {
+		for _, clubID := range clubIDs {
+			club := clubs[clubID]
+			amount := clubTotals[clubID]
+			fen := amount * 100
+			row := leaderRows[clubID]
+			if row != nil && row.Status == rewardPayoutPend {
+				after := s.readRewardClubQuota(ctx, clubID)
+				if after >= row.QuotaBefore+fen {
+					row.Status = rewardPayoutPaid
+					_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStageLeader, club.LeaderID, club.LeaderName,
+						clubID, club.Name, club.LeaderID, row.Description, row.Order, amount, rewardPayoutPaid,
+						row.QuotaBefore, after, "")
+				}
 			}
-		}
-		afterRows.Close()
-		for _, item := range list {
-			state, err := s.readPlayerBalanceState(ctx, item.payee)
-			if err != nil {
-				_, _ = s.db.ExecContext(ctx, `UPDATE mgr_agent_reward_payout SET status='mismatch',
-error_message='发放后读取余额失败' WHERE id = ?`, item.id)
+			if row != nil && rewardTransferSettled(row.Status) {
+				result.LeaderAmount += amount
+				result.LeaderCount++
 				continue
 			}
-			after := int64(state.Balance)
-			if after-item.before == item.amount {
-				_, _ = s.db.ExecContext(ctx, `UPDATE mgr_agent_reward_payout SET status='paid', ret_code=512,
-balance_after=?, paid_at=NOW() WHERE id = ?`, after, item.id)
-			} else {
-				_, _ = s.db.ExecContext(ctx, `UPDATE mgr_agent_reward_payout SET status='mismatch', ret_code=512,
-balance_after=?, error_message=? WHERE id = ?`,
-					after, truncate(fmt.Sprintf("余额未按预期增加：前 %d，后 %d，应加 %d", item.before, after, item.amount), 240), item.id)
+			before := s.readRewardClubQuota(ctx, clubID)
+			order := ""
+			if row != nil {
+				order = row.Order
+			}
+			if order == "" {
+				order = nextOrder(rewardStageLeader)
+			}
+			desc := fmt.Sprintf("大盟主「%s」从联盟池下划 %d 额度给盟主「%s」（俱乐部：%s）",
+				ownerName, amount, club.LeaderName, club.Name)
+			id, saveErr := s.saveRewardPayout(ctx, rowID(row), planID, rewardStageLeader, club.LeaderID, club.LeaderName,
+				clubID, club.Name, club.LeaderID, desc, order, amount, rewardPayoutPend, before, before, "")
+			if saveErr != nil {
+				failedClubs[clubID] = "创建盟主额度记录失败"
+				result.Failed++
+				result.Errors = append(result.Errors, club.Name+"："+failedClubs[clubID])
+				continue
+			}
+			payload, callErr := s.callRewardCommand(ctx, "发放_盟主_奖励", map[string]any{
+				"union_id": unionID, "club_id": clubID, "quota_fen": fen,
+				"context": gameOperationContext("reward-leader"),
+			})
+			after := s.readRewardClubQuota(ctx, clubID)
+			if callErr != nil && after-before >= fen {
+				callErr = nil
+			}
+			if callErr != nil {
+				desc += "失败"
+				_, _ = s.saveRewardPayout(ctx, id, planID, rewardStageLeader, club.LeaderID, club.LeaderName,
+					clubID, club.Name, club.LeaderID, desc, order, amount, rewardPayoutFailed, before, after, callErr.Error())
+				failedClubs[clubID] = callErr.Error()
+				result.Failed++
+				result.Errors = append(result.Errors, club.Name+"："+callErr.Error())
+				continue
+			}
+			if value := anyInt(payload["club_quota"]); value > 0 {
+				after = value
+			}
+			unionAfter := anyInt(payload["union_quota"])
+			desc = fmt.Sprintf("大盟主「%s」从联盟池下划 %d 额度给盟主「%s」（俱乐部：%s），下划后俱乐部额度 %d 额度",
+				ownerName, amount, club.LeaderName, club.Name, after/100)
+			if unionAfter > 0 {
+				desc += fmt.Sprintf("，联盟池余额 %d 额度", unionAfter/100)
+			}
+			if _, err := s.saveRewardPayout(ctx, id, planID, rewardStageLeader, club.LeaderID, club.LeaderName,
+				clubID, club.Name, club.LeaderID, desc, order, amount, rewardPayoutPaid, before, after, ""); err != nil {
+				s.logger.Warn("update leader reward payout", "error", err)
+			}
+			result.LeaderAmount += amount
+			result.LeaderCount++
+		}
+	}
+
+	// 第三阶段：各盟主按俱乐部给成员发放俱乐部积分；同俱乐部同金额合并成一批，单批最多 20 人。
+	if unionOK {
+		for _, clubID := range clubIDs {
+			club := clubs[clubID]
+			if message := failedClubs[clubID]; message != "" {
+				for _, target := range targets {
+					if target.ClubID != clubID {
+						continue
+					}
+					key := target.AgentID + "|" + target.AgentID
+					row := memberRows[key]
+					if row != nil && rewardTransferSettled(row.Status) {
+						result.Skipped++
+						continue
+					}
+					order := ""
+					if row != nil {
+						order = row.Order
+					}
+					if order == "" {
+						order = nextOrder(rewardStagePlayer)
+					}
+					desc := fmt.Sprintf("盟主「%s」给成员「%s」（ID:%s）发放 %d 俱乐部积分（俱乐部：%s）失败：盟主额度下划失败（%s）",
+						club.LeaderName, target.Name, target.AgentID, target.Amount, club.Name, message)
+					if _, err := s.saveRewardPayout(ctx, rowID(row), planID, rewardStagePlayer, target.AgentID, target.Name,
+						clubID, club.Name, target.AgentID, desc, order, target.Amount, rewardPayoutFailed, 0, 0,
+						"盟主额度下划失败："+message); err != nil {
+						s.logger.Warn("record leader-failed player reward", "error", err)
+					}
+					result.Failed++
+				}
+				continue
+			}
+			byAmount := map[int64][]rewardPayTarget{}
+			for _, target := range targets {
+				if target.ClubID == clubID {
+					byAmount[target.Amount] = append(byAmount[target.Amount], target)
+				}
+			}
+			amounts := make([]int64, 0, len(byAmount))
+			for amount := range byAmount {
+				amounts = append(amounts, amount)
+			}
+			sort.Slice(amounts, func(i, j int) bool { return amounts[i] < amounts[j] })
+			for _, amount := range amounts {
+				group := byAmount[amount]
+				for start := 0; start < len(group); start += 20 {
+					end := start + 20
+					if end > len(group) {
+						end = len(group)
+					}
+					batch := group[start:end]
+					var pendingBatch []rewardPayTarget
+					for _, target := range batch {
+						key := target.AgentID + "|" + target.AgentID
+						row := memberRows[key]
+						if row == nil {
+							pendingBatch = append(pendingBatch, target)
+							continue
+						}
+						if row.Status == rewardPayoutPend {
+							if s.playerHasRewardFlow(ctx, target.AgentID, clubID, row.CreatedAt) {
+								desc := fmt.Sprintf("盟主「%s」给成员「%s」（ID:%s）发放 %d 俱乐部积分（俱乐部：%s），已到账",
+									club.LeaderName, target.Name, target.AgentID, amount, club.Name)
+								_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+									clubID, club.Name, target.AgentID, desc, row.Order, amount, rewardPayoutPaid, 0, 0, "")
+								result.Paid++
+								continue
+							}
+							if s.playerInRoom(ctx, target.AgentID) {
+								desc := fmt.Sprintf("盟主「%s」给成员「%s」（ID:%s）发放 %d 俱乐部积分（俱乐部：%s）；玩家在房间内，结算后自动补发",
+									club.LeaderName, target.Name, target.AgentID, amount, club.Name)
+								_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+									clubID, club.Name, target.AgentID, desc, row.Order, amount, rewardPayoutWaiting, 0, 0, "")
+								result.Waiting++
+								continue
+							}
+						}
+						if rewardTransferSettled(row.Status) {
+							result.Skipped++
+							continue
+						}
+						pendingBatch = append(pendingBatch, target)
+					}
+					if len(pendingBatch) == 0 {
+						continue
+					}
+					ids := make([]string, 0, len(pendingBatch))
+					batchRows := map[string]*rewardPayoutRow{}
+					for _, target := range pendingBatch {
+						key := target.AgentID + "|" + target.AgentID
+						row := memberRows[key]
+						order := ""
+						if row != nil && row.Status != rewardPayoutFailed {
+							order = row.Order
+						}
+						if order == "" {
+							order = nextOrder(rewardStagePlayer)
+						}
+						desc := fmt.Sprintf("盟主「%s」给成员「%s」（ID:%s）发放 %d 俱乐部积分（俱乐部：%s）",
+							club.LeaderName, target.Name, target.AgentID, amount, club.Name)
+						id, saveErr := s.saveRewardPayout(ctx, rowID(row), planID, rewardStagePlayer, target.AgentID, target.Name,
+							clubID, club.Name, target.AgentID, desc, order, amount, rewardPayoutPend, 0, 0, "")
+						if saveErr != nil {
+							result.Failed++
+							result.Errors = append(result.Errors, target.Name+"：创建发放记录失败")
+							continue
+						}
+						batchRows[target.AgentID] = &rewardPayoutRow{
+							ID: id, Stage: rewardStagePlayer, AgentID: target.AgentID, ClubID: clubID,
+							Payee: target.AgentID, Amount: amount, Order: order, Status: rewardPayoutPend,
+						}
+						ids = append(ids, target.AgentID)
+					}
+					if len(ids) == 0 {
+						continue
+					}
+					payload, callErr := s.callRewardCommand(ctx, "异步_发放_玩家_奖励", map[string]any{
+						"club_id": clubID, "user_ids": ids, "gold": amount,
+						"context": gameOperationContext("reward-player"),
+					})
+					if callErr != nil {
+						for _, target := range pendingBatch {
+							row := batchRows[target.AgentID]
+							if row == nil {
+								continue
+							}
+							base := fmt.Sprintf("盟主「%s」给成员「%s」（ID:%s）发放 %d 俱乐部积分（俱乐部：%s）",
+								club.LeaderName, target.Name, target.AgentID, amount, club.Name)
+							var commandErr *rewardCommandError
+							certain := errors.As(callErr, &commandErr) || strings.Contains(callErr.Error(), "connection refused")
+							uncertain := !certain
+							switch {
+							case s.playerHasRewardFlow(ctx, target.AgentID, clubID, flowSince):
+								_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+									clubID, club.Name, target.AgentID, base+"，已到账", row.Order, amount, rewardPayoutPaid, 0, 0, "")
+								result.Paid++
+							case uncertain && s.playerInRoom(ctx, target.AgentID):
+								_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+									clubID, club.Name, target.AgentID, base+"；玩家在房间内，结算后自动补发", row.Order, amount, rewardPayoutWaiting, 0, 0, "")
+								result.Waiting++
+							default:
+								_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+									clubID, club.Name, target.AgentID, base+"失败", row.Order, amount, rewardPayoutFailed, 0, 0, callErr.Error())
+								result.Failed++
+								result.Errors = append(result.Errors, target.Name+"："+callErr.Error())
+							}
+						}
+						continue
+					}
+					success := gameStringSet(payload["success"])
+					waiting := gameStringSet(payload["pending"])
+					failures := gameFailureMap(payload["failed"])
+					for _, target := range pendingBatch {
+						row := batchRows[target.AgentID]
+						if row == nil {
+							continue
+						}
+						base := fmt.Sprintf("盟主「%s」给成员「%s」（ID:%s）发放 %d 俱乐部积分（俱乐部：%s）",
+							club.LeaderName, target.Name, target.AgentID, amount, club.Name)
+						switch {
+						case success[target.AgentID]:
+							_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+								clubID, club.Name, target.AgentID, base+"，已到账", row.Order, amount, rewardPayoutPaid, 0, 0, "")
+							result.Paid++
+						case waiting[target.AgentID]:
+							_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+								clubID, club.Name, target.AgentID, base+"；玩家在房间内，结算后自动补发", row.Order, amount, rewardPayoutWaiting, 0, 0, "")
+							result.Waiting++
+						default:
+							message := failures[target.AgentID]
+							if message == "" {
+								message = "服务端未返回该玩家结果"
+							}
+							_, _ = s.saveRewardPayout(ctx, row.ID, planID, rewardStagePlayer, target.AgentID, target.Name,
+								clubID, club.Name, target.AgentID, base+"失败", row.Order, amount, rewardPayoutFailed, 0, 0, message)
+							result.Failed++
+							result.Errors = append(result.Errors, target.Name+"："+message)
+						}
+					}
+				}
 			}
 		}
 	}
 
+	// 未从联盟池拿到额度时，所有成员记失败，不能越过额度直接发积分。
+	if !unionOK {
+		for _, clubID := range clubIDs {
+			club := clubs[clubID]
+			for _, target := range targets {
+				if target.ClubID != clubID {
+					continue
+				}
+				key := target.AgentID + "|" + target.AgentID
+				row := memberRows[key]
+				if row != nil && rewardTransferSettled(row.Status) {
+					result.Skipped++
+					continue
+				}
+				order := ""
+				if row != nil {
+					order = row.Order
+				}
+				if order == "" {
+					order = nextOrder(rewardStagePlayer)
+				}
+				desc := fmt.Sprintf("盟主「%s」给成员「%s」（ID:%s）发放 %d 俱乐部积分（俱乐部：%s）失败：联盟池发放未完成",
+					club.LeaderName, target.Name, target.AgentID, target.Amount, club.Name)
+				if _, err := s.saveRewardPayout(ctx, rowID(row), planID, rewardStagePlayer, target.AgentID, target.Name,
+					clubID, club.Name, target.AgentID, desc, order, target.Amount, rewardPayoutFailed, 0, 0,
+					"联盟池发放未完成"); err != nil {
+					s.logger.Warn("record skipped player reward", "error", err)
+				}
+				result.Failed++
+			}
+		}
+	}
+
+	// 每个阶段每个对象只保留一条记录，按最终状态汇总批次结果。
 	finalStatus := rewardPlanPaid
-	var mismatch, failed int
+	var failedCount, successCount int64
 	if err := s.db.QueryRowContext(ctx, `SELECT
-COALESCE(SUM(status='mismatch'),0), COALESCE(SUM(status='failed'),0)
-FROM mgr_agent_reward_payout WHERE plan_id = ?`, planID).Scan(&mismatch, &failed); err != nil {
+COALESCE(SUM(status='failed'),0), COALESCE(SUM(status IN ('paid','waiting','mismatch')),0)
+FROM mgr_agent_reward_payout WHERE plan_id = ?`, planID).Scan(&failedCount, &successCount); err != nil {
 		s.logger.Warn("summarize reward payouts", "error", err)
 	}
-	if mismatch > 0 || failed > 0 {
+	switch {
+	case successCount == 0 && failedCount > 0:
+		finalStatus = rewardPlanDraft
+	case failedCount > 0:
 		finalStatus = rewardPlanPartial
 	}
 	if _, err := s.db.ExecContext(ctx, `UPDATE mgr_agent_reward_plan SET status=? WHERE id = ?`, finalStatus, planID); err != nil {
@@ -2674,26 +3145,245 @@ FROM mgr_agent_reward_payout WHERE plan_id = ?`, planID).Scan(&mismatch, &failed
 
 	s.audit(ctx, &p, "game.agent_reward.pay", "agent_reward_plan", strconv.FormatInt(planID, 10),
 		map[string]any{"kind": input.Kind, "date": date, "unionId": unionID, "planned": planned, "expected": expected},
-		nil, map[string]any{"paid": result.Paid, "failed": result.Failed, "skipped": result.Skipped, "status": finalStatus},
-		0, "发放代理奖励", clientIP(r))
+		nil, map[string]any{
+			"paid": result.Paid, "waiting": result.Waiting, "failed": result.Failed, "skipped": result.Skipped,
+			"injected": result.Injected, "leaderAmount": result.LeaderAmount, "leaderCount": result.LeaderCount,
+			"status": finalStatus,
+		}, 0, "发放代理俱乐部积分", clientIP(r))
 	writeData(w, http.StatusOK, result)
+}
+
+func rowID(row *rewardPayoutRow) int64 {
+	if row == nil {
+		return 0
+	}
+	return row.ID
+}
+
+func (s *Server) rewardUnionOwner(ctx context.Context, unionID string) (string, string, string) {
+	var ownerID, ownerName, unionName string
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(owner_guuid,''), COALESCE(owner_name,''), COALESCE(union_name,'')
+FROM kbedm.club_union_info WHERE union_id = ? LIMIT 1`, unionID).Scan(&ownerID, &ownerName, &unionName); err != nil {
+		s.logger.Warn("load reward union owner", "error", err, "union_id", unionID)
+	}
+	return ownerID, ownerName, unionName
+}
+
+func (s *Server) rewardUnionClubs(ctx context.Context, unionID string) (map[string]*rewardClubTarget, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT c.club_guuid, COALESCE(NULLIF(c.club_name,''), c.club_guuid),
+COALESCE(a.sm_guuid,''), COALESCE(NULLIF(a.sm_name,''),''), COALESCE(c.union_quota,0)
+FROM kbedm.club_guuid_info c
+LEFT JOIN kbedm.tbl_Account a ON a.id = c.account_id
+WHERE c.union_id = ? AND c.club_status <> 'del'`, unionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	result := map[string]*rewardClubTarget{}
+	for rows.Next() {
+		var club rewardClubTarget
+		if err := rows.Scan(&club.ID, &club.Name, &club.LeaderID, &club.LeaderName, &club.Quota); err != nil {
+			return nil, err
+		}
+		if club.LeaderName == "" {
+			club.LeaderName = club.LeaderID
+		}
+		if club.LeaderName == "" {
+			club.LeaderName = "盟主"
+		}
+		result[club.ID] = &club
+	}
+	return result, rows.Err()
+}
+
+func (s *Server) readRewardUnionQuota(ctx context.Context, unionID string) int64 {
+	var quota int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(union_quota,0) FROM kbedm.club_union_info
+WHERE union_id = ?`, unionID).Scan(&quota); err != nil {
+		s.logger.Warn("read reward union quota", "error", err, "union_id", unionID)
+	}
+	return quota
+}
+
+func (s *Server) readRewardClubQuota(ctx context.Context, clubID string) int64 {
+	var quota int64
+	if err := s.db.QueryRowContext(ctx, `SELECT COALESCE(union_quota,0) FROM kbedm.club_guuid_info
+WHERE club_guuid = ?`, clubID).Scan(&quota); err != nil {
+		s.logger.Warn("read reward club quota", "error", err, "club_id", clubID)
+	}
+	return quota
+}
+
+func (s *Server) loadRewardPayoutRows(ctx context.Context, planID int64) ([]rewardPayoutRow, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, COALESCE(stage,'player'), COALESCE(agent_id,''), COALESCE(club_id,''),
+COALESCE(payee_guuid,''), amount, COALESCE(work_order,''), status, COALESCE(description,''), quota_before, quota_after,
+COALESCE(DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s'),'')
+FROM mgr_agent_reward_payout WHERE plan_id = ? ORDER BY id`, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	list := []rewardPayoutRow{}
+	for rows.Next() {
+		var row rewardPayoutRow
+		if err := rows.Scan(&row.ID, &row.Stage, &row.AgentID, &row.ClubID, &row.Payee, &row.Amount,
+			&row.Order, &row.Status, &row.Description, &row.QuotaBefore, &row.QuotaAfter, &row.CreatedAt); err != nil {
+			return nil, err
+		}
+		list = append(list, row)
+	}
+	return list, rows.Err()
+}
+
+func (s *Server) saveRewardPayout(ctx context.Context, existingID, planID int64, stage, agentID, subjectName,
+	clubID, clubName, payee, description, order string, amount int64, status string,
+	quotaBefore, quotaAfter int64, message string) (int64, error) {
+	if existingID > 0 {
+		_, err := s.db.ExecContext(ctx, `UPDATE mgr_agent_reward_payout SET
+stage=?, agent_id=?, subject_name=?, club_id=?, club_name=?, payee_guuid=?, description=?, amount=?, work_order=?,
+status=?, error_message=?, quota_before=?, quota_after=?,
+paid_at=CASE WHEN ?='paid' THEN COALESCE(paid_at, NOW()) ELSE paid_at END
+WHERE id=?`,
+			stage, agentID, subjectName, clubID, clubName, payee, description, amount, order,
+			status, truncate(message, 240), quotaBefore, quotaAfter, status, existingID)
+		return existingID, err
+	}
+	result, err := s.db.ExecContext(ctx, `INSERT INTO mgr_agent_reward_payout
+(plan_id, item_id, stage, agent_id, club_id, club_name, subject_name, payee_guuid, payee_type, amount, description,
+work_order, status, error_message, quota_before, quota_after, paid_at)
+VALUES (?,0,?,?,?,?,?,?,'main',?,?,?,?,?,?,?, CASE WHEN ?='paid' THEN NOW() ELSE NULL END)`,
+		planID, stage, agentID, clubID, clubName, subjectName, payee, amount, description,
+		order, status, truncate(message, 240), quotaBefore, quotaAfter, status)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
+}
+
+func (s *Server) callRewardCommand(ctx context.Context, header string, params map[string]any) (map[string]any, error) {
+	result, err := s.callGameCommand(ctx, header, params)
+	if err != nil {
+		return nil, err
+	}
+	if result.RetCode != 512 {
+		// 769 是游戏服明确拒绝，和网络超时不同：不能当成“可能已处理”。
+		return nil, &rewardCommandError{message: describeGameFailure(header, result.RetCode, result.RetResult)}
+	}
+	return decodeGameObject(result.RetResult), nil
+}
+
+type rewardCommandError struct {
+	message string
+}
+
+func (e *rewardCommandError) Error() string { return e.message }
+
+func decodeGameObject(raw json.RawMessage) map[string]any {
+	var text string
+	if json.Unmarshal(raw, &text) == nil {
+		raw = json.RawMessage(text)
+	}
+	var object map[string]any
+	if err := json.Unmarshal(raw, &object); err != nil {
+		return map[string]any{}
+	}
+	if inner, ok := object["result"]; ok {
+		if innerText, ok := inner.(string); ok {
+			var nested map[string]any
+			if json.Unmarshal([]byte(innerText), &nested) == nil {
+				return nested
+			}
+		}
+		if nested, ok := inner.(map[string]any); ok {
+			return nested
+		}
+	}
+	return object
+}
+
+func gameStringSet(value any) map[string]bool {
+	result := map[string]bool{}
+	switch typed := value.(type) {
+	case []any:
+		for _, item := range typed {
+			if id := anyString(item); id != "" {
+				result[id] = true
+			}
+		}
+	case []string:
+		for _, id := range typed {
+			if id = strings.TrimSpace(id); id != "" {
+				result[id] = true
+			}
+		}
+	case string:
+		for _, id := range strings.Split(typed, ",") {
+			if id = strings.TrimSpace(id); id != "" {
+				result[id] = true
+			}
+		}
+	}
+	return result
+}
+
+func gameFailureMap(value any) map[string]string {
+	result := map[string]string{}
+	list, _ := value.([]any)
+	for _, item := range list {
+		row, _ := item.(map[string]any)
+		id := anyString(row["guuid"])
+		if id == "" {
+			id = anyString(row["user_id"])
+		}
+		if id == "" {
+			continue
+		}
+		result[id] = anyString(row["error"])
+	}
+	return result
+}
+
+func (s *Server) playerInRoom(ctx context.Context, playerID string) bool {
+	state, err := s.readPlayerBalanceState(ctx, playerID)
+	return err == nil && state.RoomID != 0
+}
+
+func (s *Server) playerHasRewardFlow(ctx context.Context, playerID, clubID, since string) bool {
+	query := `SELECT COUNT(*) FROM kbedm.club_history_info
+WHERE opt_type='积分奖励' AND user_guuid=? AND club_guuid=?`
+	args := []any{playerID, clubID}
+	if strings.TrimSpace(since) != "" {
+		query += ` AND date >= ?`
+		args = append(args, since)
+	}
+	var count int64
+	if err := s.db.QueryRowContext(ctx, query, args...).Scan(&count); err != nil {
+		return false
+	}
+	return count > 0
 }
 
 /* ---------------- 账单 ---------------- */
 
 type rewardLedgerRow struct {
-	ID        int64  `json:"id"`
-	Date      string `json:"date"`
-	Kind      string `json:"kind"`
-	AgentID   string `json:"agentId"`
-	AgentName string `json:"agentName"`
-	Payee     string `json:"payee"`
-	PayeeType string `json:"payeeType"`
-	Amount    int64  `json:"amount"`
-	Order     string `json:"order"`
-	Status    string `json:"status"`
-	Error     string `json:"error"`
-	PaidAt    string `json:"paidAt"`
+	ID          int64  `json:"id"`
+	PlanID      int64  `json:"planId"`
+	Date        string `json:"date"`
+	Kind        string `json:"kind"`
+	Stage       string `json:"stage"`
+	AgentID     string `json:"agentId"`
+	AgentName   string `json:"agentName"`
+	ClubID      string `json:"clubId"`
+	ClubName    string `json:"clubName"`
+	Payee       string `json:"payee"`
+	PayeeType   string `json:"payeeType"`
+	Amount      int64  `json:"amount"`
+	QuotaAfter  int64  `json:"quotaAfter"`
+	Order       string `json:"order"`
+	Status      string `json:"status"`
+	Error       string `json:"error"`
+	Description string `json:"description"`
+	PaidAt      string `json:"paidAt"`
 }
 
 func (s *Server) handlerRewardLedger(w http.ResponseWriter, r *http.Request, p principal) {
@@ -2727,14 +3417,17 @@ func (s *Server) handlerRewardLedger(w http.ResponseWriter, r *http.Request, p p
 		}
 		unionID = normalized
 	}
-	rows, err := s.db.QueryContext(r.Context(), `SELECT p.id, DATE_FORMAT(pl.reward_date,'%Y-%m-%d'), pl.kind,
-p.agent_id, i.agent_name, p.payee_guuid, p.payee_type, p.amount, p.work_order, p.status,
-p.error_message, COALESCE(DATE_FORMAT(p.paid_at,'%Y-%m-%d %H:%i'),'')
+	rows, err := s.db.QueryContext(r.Context(), `SELECT p.id, p.plan_id, DATE_FORMAT(pl.reward_date,'%Y-%m-%d'), pl.kind,
+COALESCE(p.stage,'player'), COALESCE(p.agent_id,''), COALESCE(NULLIF(p.subject_name,''), i.agent_name, ''),
+COALESCE(p.club_id,''), COALESCE(p.club_name,''), COALESCE(p.payee_guuid,''), COALESCE(p.payee_type,'main'),
+p.amount, COALESCE(p.quota_after,0), COALESCE(p.work_order,''), p.status, COALESCE(p.error_message,''),
+COALESCE(p.description,''), COALESCE(DATE_FORMAT(p.paid_at,'%Y-%m-%d %H:%i'),'')
 FROM mgr_agent_reward_payout p
 JOIN mgr_agent_reward_plan pl ON pl.id = p.plan_id
 LEFT JOIN mgr_agent_reward_item i ON i.id = p.item_id
 WHERE pl.reward_date BETWEEN ? AND ? AND (? = '' OR pl.union_id = ?)
-ORDER BY pl.reward_date DESC, p.id DESC
+ORDER BY pl.reward_date DESC, p.plan_id DESC,
+FIELD(COALESCE(p.stage,'player'),'union','leader','player'), p.id ASC
 LIMIT 5000`, from, to, unionID, unionID)
 	if err != nil {
 		s.logger.Error("query reward ledger", "error", err)
@@ -2743,15 +3436,24 @@ LIMIT 5000`, from, to, unionID, unionID)
 	}
 	defer rows.Close()
 	list := []rewardLedgerRow{}
-	var total, performance, core, pool int64
+	var total, performance, core, pool, unionInjected, leaderGranted, waiting int64
 	for rows.Next() {
 		var row rewardLedgerRow
-		if err := rows.Scan(&row.ID, &row.Date, &row.Kind, &row.AgentID, &row.AgentName, &row.Payee,
-			&row.PayeeType, &row.Amount, &row.Order, &row.Status, &row.Error, &row.PaidAt); err != nil {
+		if err := rows.Scan(&row.ID, &row.PlanID, &row.Date, &row.Kind, &row.Stage, &row.AgentID, &row.AgentName,
+			&row.ClubID, &row.ClubName, &row.Payee, &row.PayeeType, &row.Amount, &row.QuotaAfter, &row.Order,
+			&row.Status, &row.Error, &row.Description, &row.PaidAt); err != nil {
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "解析账单失败")
 			return
 		}
-		if row.Status == "paid" {
+		if row.Stage == "" {
+			row.Stage = rewardStagePlayer
+		}
+		switch {
+		case row.Status == rewardPayoutPaid && row.Stage == rewardStageUnion:
+			unionInjected += row.Amount
+		case row.Status == rewardPayoutPaid && row.Stage == rewardStageLeader:
+			leaderGranted += row.Amount
+		case row.Status == rewardPayoutPaid:
 			total += row.Amount
 			switch row.Kind {
 			case rewardKindPerformance:
@@ -2761,12 +3463,17 @@ LIMIT 5000`, from, to, unionID, unionID)
 			case rewardKindPool:
 				pool += row.Amount
 			}
+		case row.Status == rewardPayoutWaiting:
+			waiting += row.Amount
 		}
 		list = append(list, row)
 	}
 	writeData(w, http.StatusOK, map[string]any{
 		"items": list, "from": from, "to": to, "unionId": unionID,
-		"summary": map[string]int64{"total": total, "performance": performance, "core": core, "pool": pool},
+		"summary": map[string]int64{
+			"total": total, "performance": performance, "core": core, "pool": pool,
+			"unionInjected": unionInjected, "leaderGranted": leaderGranted, "waiting": waiting,
+		},
 	})
 }
 

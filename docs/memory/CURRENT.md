@@ -4,6 +4,19 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-13 业绩核心共享：发放改三阶段（已部署 8891，真实发放待验）
+
+- 「确认并发放」改为：① `发放_总群主_奖励` 把本批总额（元×100=额度分）注入大盟主联盟池；② 按俱乐部汇总下属成员金额，`发放_盟主_奖励` 下划到各盟主俱乐部；③ `异步_发放_玩家_奖励` 给成员发俱乐部积分（同俱乐部同金额合并、单批 20 人）。
+- 迁移 `062_agent_reward_club_payout.sql` 给 `mgr_agent_reward_payout` 加 `stage/club_id/club_name/subject_name/description/quota_before/quota_after`；账单按「平台→大盟主→盟主→成员」分组展示并给出详细说明。
+- 批次一旦产生 `paid/pending/waiting/mismatch` 流水，总额/金额/重新分摊全部锁定；重试按额度余额、积分流水与房间状态幂等处理。
+- 已部署：二进制 `b6d68684…`、前端 `index-BIGNTpl-.js`；迁移已自动执行，health 200、账单未登录 401。账单弹窗已改为 1180px 宽 + 6 列合并 + 吸顶表头；名单新增「代理链」列并同步导出 CSV（按 `upper_id` 回溯，超长省略/悬停看全链）。回滚：`backups/xuanmanager.20261113-2221-rollback`、`backups/web.20261113-2223-rollback`。
+- 未做真实发放（未动真实资金/积分）；登录态页面与到账需用测试联盟实测。详见[交接](handoffs/2026-11-13-agent-reward-club-payout.md)。
+
+## 2026-11-13 客户端「额度授权记录」增加类型显示（未构建、未真机）
+
+- 行模板 `额度授权记录对象.prefab` 新增 `typelabel`，在盟主名下方显示「类型：授信/收回/注资/注资扣减/额度奖励」；`panelQuotaGrantRecord.ts` 读取 `type` 写入。
+- 未运行 Creator 导入/编译/构建；需重导 Prefab、编译脚本并热更后实机确认长类型不截断。详见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
+
 ## 2026-11-13 后台新增「用户端数据查询」（已改代码、未部署）
 
 - 游戏管理新增只读入口 `/game/user-data`，按游戏用户ID一个页面切换五类明细：上下分记录（`club_history_info.opt_type='添加积分'`）、赠送金币（`积分赠送/积分受赠`）、金币流向（`usr_cash_water.money_type='gold'`）、钻石流向（`money_type='stone'`）、收益红利（`usr_income_info.remark1=玩家`，排除 `clubtotal` 基线）。
@@ -97,67 +110,29 @@
 - 迁移 055 给计划表与名单方案加 `union_id` 并改唯一键/回填历史；跨联盟选人由后端拒绝（选人、金额、排除、子账号、账单都会校验），换联盟同步会把 `selected` 置 0。
 - 已部署 8891（二进制 `0c558b28…`、前端 `index-BDfIIHx6.js`）；迁移已执行：7 计划回填、9 无归属，29 代理有联盟、2 无。`go build/test/vet`、`tsc/eslint/vite build` 通过；未登录实操验收。详见[交接](handoffs/2026-11-11-agent-reward-union-scope.md)。
 
-## 2026-11-10 客户端批次（已归档）
-
-- 钻石池同秒取值、消耗两页签、实时房房费、奖池两位小数、退出 loading，原文见[归档](archive/2026-11-12/current-nov10-client-batches.md)；带入钻石开关见[归档](archive/2026-11-11/current-nov10-club-seat-stone.md)。
-
-## 2026-11-10 玩家信息：付费查看输赢统计（已归档）
-
-- 统计框付费查看 6 项数据与扣钻确认，详见[归档](archive/2026-11-11/current-nov10-userinfo-stats.md)。
-
 ## 2026-11-11 玩家信息卡片（未构建、未真机）
 
 - `panelUserInfo` 统计区改为两排三列蓝卡：上排总手数/总胜率/摊牌率，下排胜利/平局/失败；沿用 `remark[3]`。
 - 统计框调整、道具下移并补 Widget；TS、引用、1334/1624 预览通过，构建/真机/联调待验。详见[交接](handoffs/2026-11-11-userinfo-stats-layout.md)。
-
-## 2026-11-10 牌桌内「牌局优化」（已归档）
-
-- 电量三连击入口、运维优化页与通用选人弹窗，详见[归档](archive/2026-11-11/current-nov10-game-optimize.md)。
-
-## 2026-11-10 后台发牌优化（已归档）
-
-- 改用 `异步_设置_玩家_属性`、概率正负区间与回读校验，详见[归档](archive/2026-11-12/current-nov10-player-optimization.md)。
 
 ## 2026-11-09 后台玩家管理：发放钻石 + 发放记录（已部署，游戏服命令待部署）
 
 - 新增「发放钻石」与「发放记录」，走游戏服 `异步_增加_玩家_钻石` 并回读审计；权限 `game.player.grant_stone`，迁移 053/054 已修正权限 id 冲突。
 - XuanManager 已发布 8891；游戏服命令当时探测 769 未注册。详见[交接](handoffs/2026-11-09-admin-player-stone-grant.md)。
 
-## 2026-11-09 后台业绩核心共享：三栏常驻「今日业绩占比」
-
-- 已归档：[2026-11-09 业绩占比与大厅状态徽章](archive/2026-11-11/current-nov09-agent-reward-and-badges.md)。
-
 ## 2026-11-09 我的红利（俱乐部/联盟）：金框 + 金色美术字（未构建、未真机）
 
 - B3 金框版（深蓝玻璃/金双线/桂冠金币礼盒）已写入两套 Prefab 与 `hongli_v8_*`，表头 Label 启用、提取按钮 130→150 宽，占位符改 `-`；两档反渲染通过。详见[交接](handoffs/2026-11-09-my-hongli-v8-restyle.md)。
-
-## 2026-11-09 大厅花环徽章 / 钻石池消耗入口（已归档）
-
-- 花环徽章 118×47→150×60 与业绩占比见[归档](archive/2026-11-11/current-nov09-agent-reward-and-badges.md)；钻石池入口见[归档](archive/2026-11-10/current-nov09-stone-pool-entry.md)。
-
-## 2026-11-09 我的 → 额度授权记录（已归档）
-
-- 入口限创建者+已入盟，查询 `查询_联盟_授信_记录`、服务端按身份限定俱乐部；未构建未联调，原文见[归档](archive/2026-11-12/current-nov09-quota-grant-record.md)。
-
-## 2026-11-08 客户端交互与安卓键盘（已归档）
-
-- 我的红利明细字段、安卓键盘贴边与收起、无俱乐部玩家按钮、玩家信息/联系上级/局内提醒、局中退房防误退，详见[批次归档](archive/2026-11-10/current-nov08-client-ui-and-keyboard.md)。
-
-## 2026-11-07 数据统计页签 / 杂项（已归档）
-
-- 玩家、代理列表页签与统计见[交接](handoffs/2026-11-07-boss-all-player-agent-tabs.md)；交易密码核验、局末人数不足收牌、大厅房间推送见[归档](archive/2026-11-10/current-nov07-misc.md)。
-
-## 2026-11-07 后台代理贡献展示规则拆两项（已归档）
-
-- 输赢 `score_percent` / 贡献 `contrib_add` 两项独立继承、`show_percent` 只留红抽业绩；原文见[归档](archive/2026-11-12/current-nov07-agent-contrib-two-fields.md)。
 
 ## 2026-11-07 已部署批次（客服在线、密码明文列）
 
 - 客服被误判 offline 后心跳永不恢复已修；托管页加「游戏后台查看」。玩家管理「用户密码」明文列（mgr_player_login_password，AES-GCM）已上线。详见[客服在线交接](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md)、[密码列交接](handoffs/2026-11-07-admin-player-password-column.md)。
 
-## 2026-11-03～11-06 历史批次（已归档）
+## 2026-11-03～11-10 历史批次（已归档）
 
-- 11-03～11-06 各批次原文与链接见[归档](archive/2026-11-12/current-nov03-to-nov06-batches.md)。
+- 客户端：[11-10 客户端批次](archive/2026-11-12/current-nov10-client-batches.md) · [带入钻石开关](archive/2026-11-11/current-nov10-club-seat-stone.md) · [付费输赢统计](archive/2026-11-11/current-nov10-userinfo-stats.md) · [牌局优化](archive/2026-11-11/current-nov10-game-optimize.md) · [后台发牌优化](archive/2026-11-12/current-nov10-player-optimization.md)。
+- 业绩/徽章/额度：[业绩占比与徽章](archive/2026-11-11/current-nov09-agent-reward-and-badges.md) · [钻石池入口](archive/2026-11-10/current-nov09-stone-pool-entry.md) · [额度授权记录](archive/2026-11-12/current-nov09-quota-grant-record.md)。
+- 其它：[11-08 交互与键盘](archive/2026-11-10/current-nov08-client-ui-and-keyboard.md) · [11-07 数据统计/杂项](archive/2026-11-10/current-nov07-misc.md) · [11-07 代理贡献两项](archive/2026-11-12/current-nov07-agent-contrib-two-fields.md) · [11-03～11-06](archive/2026-11-12/current-nov03-to-nov06-batches.md)。
 
 ## 本轮实时核对：记忆整理
 

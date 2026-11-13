@@ -241,3 +241,77 @@ func TestNormalizeRewardUnionID(t *testing.T) {
 		}
 	}
 }
+
+// 游戏服回包可能是直接对象、JSON 字符串或 {"result": ...} 包裹，三种都要能解析。
+func TestDecodeGameObject(t *testing.T) {
+	cases := []string{
+		`{"union_id":"123456","union_quota":"1000000"}`,
+		`"{\"union_id\":\"123456\",\"union_quota\":\"1000000\"}"`,
+		`{"result":{"union_id":"123456","union_quota":"1000000"}}`,
+		`{"result":"{\"union_id\":\"123456\",\"union_quota\":\"1000000\"}"}`,
+	}
+	for _, raw := range cases {
+		object := decodeGameObject([]byte(raw))
+		if anyString(object["union_id"]) != "123456" || anyInt(object["union_quota"]) != 1000000 {
+			t.Fatalf("解析失败 %s => %v", raw, object)
+		}
+	}
+}
+
+func TestRewardPlayerResultParsers(t *testing.T) {
+	payload := map[string]any{
+		"success": []any{"100001", "100002"},
+		"pending": []any{"100003"},
+		"failed": []any{
+			map[string]any{"guuid": "100004", "error": "玩家不属于该俱乐部"},
+		},
+	}
+	success := gameStringSet(payload["success"])
+	if !success["100001"] || !success["100002"] || success["100003"] {
+		t.Fatalf("success 解析不正确: %v", success)
+	}
+	waiting := gameStringSet(payload["pending"])
+	if !waiting["100003"] || waiting["100001"] {
+		t.Fatalf("pending 解析不正确: %v", waiting)
+	}
+	failures := gameFailureMap(payload["failed"])
+	if failures["100004"] != "玩家不属于该俱乐部" {
+		t.Fatalf("failed 解析不正确: %v", failures)
+	}
+}
+
+// pending 是上次调用中断，必须重新核对，不能直接当成已完成。
+func TestRewardTransferSettled(t *testing.T) {
+	for _, status := range []string{rewardPayoutPaid, rewardPayoutWaiting, rewardPayoutMiss} {
+		if !rewardTransferSettled(status) {
+			t.Fatalf("%s 应该视为已结算", status)
+		}
+	}
+	for _, status := range []string{rewardPayoutPend, rewardPayoutFailed, ""} {
+		if rewardTransferSettled(status) {
+			t.Fatalf("%s 不应视为已结算", status)
+		}
+	}
+}
+
+func TestBuildRewardChain(t *testing.T) {
+	byID := map[string]rewardMember{
+		"a": {AgentID: "a", Name: "A", Role: "leader"},
+		"b": {AgentID: "b", Name: "B", Role: "partner", UpperID: "a"},
+		"c": {AgentID: "c", Name: "C", Role: "agent", UpperID: "b"},
+		"d": {AgentID: "d", Name: "D", Role: "agent", UpperID: "missing"},
+	}
+	chain := buildRewardChain("c", byID)
+	if len(chain) != 3 || chain[0].AgentID != "a" || chain[1].AgentID != "b" || chain[2].AgentID != "c" {
+		t.Fatalf("代理链应为 a→b→c，实际 %+v", chain)
+	}
+	if chain := buildRewardChain("d", byID); len(chain) != 1 || chain[0].AgentID != "d" {
+		t.Fatalf("上级缺失时应只保留本人，实际 %+v", chain)
+	}
+	// 循环关系不能死循环：d 的上级 e、e 的上级 d。
+	byID["d"] = rewardMember{AgentID: "d", Name: "D", Role: "agent", UpperID: "e"}
+	byID["e"] = rewardMember{AgentID: "e", Name: "E", Role: "agent", UpperID: "d"}
+	if chain := buildRewardChain("d", byID); len(chain) != 2 {
+		t.Fatalf("循环关系应截断为 2 个节点，实际 %+v", chain)
+	}
+}

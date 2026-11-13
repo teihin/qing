@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, jsonBody } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { beijingDateInput } from "../time";
@@ -9,10 +9,12 @@ type Perf = { my: number; granted: number; net: number };
 type Line = { todayScore: number; totalScore: number; yesterdayScore: number; todayContrib: number; totalContrib: number; teamCount: number };
 type Split = { payee: string; payeeName?: string; type: "main" | "sub"; amount: number };
 type Sub = { subId: string; subName: string; note: string };
+type ChainNode = { agentId: string; name: string; role: string };
 type Member = {
   agentId: string; name: string; role: string; level: number; upperId: string; clubId: string;
   clubName: string; unionId: string; unionName: string;
   authorized: boolean; selected: boolean; source: string; perf: Perf | null; line: Line | null;
+  chain?: ChainNode[];
   sharePercent: number;
   amount: number; splits: Split[]; subs: Sub[]; paidAmount: number;
 };
@@ -32,10 +34,20 @@ type Overview = {
 type KindSummary = { kind: Kind; plannedTotal: number; allocated: number; count: number; status: string };
 type Summary = { date: string; items: KindSummary[]; selected: number };
 type LedgerRow = {
-  id: number; date: string; kind: Kind; agentId: string; agentName: string; payee: string;
-  payeeType: string; amount: number; order: string; status: string; error: string; paidAt: string;
+  id: number; planId: number; date: string; kind: Kind; stage: "union" | "leader" | "player";
+  agentId: string; agentName: string; clubId: string; clubName: string; payee: string;
+  payeeType: string; amount: number; quotaAfter: number; order: string; status: string; error: string;
+  description: string; paidAt: string;
 };
-type PayResult = { total: number; paid: number; failed: number; skipped: number; status: string; orders: string[]; errors: string[] };
+type LedgerSummary = {
+  total: number; performance: number; core: number; pool: number;
+  unionInjected: number; leaderGranted: number; waiting: number;
+};
+type PayResult = {
+  total: number; paid: number; waiting: number; failed: number; skipped: number;
+  injected: number; leaderAmount: number; leaderCount: number;
+  status: string; orders: string[]; errors: string[];
+};
 type UnionPlan = { kind: Kind; plannedTotal: number; allocated: number; count: number; status: string };
 type UnionRow = {
   unionId: string; name: string; agentCount: number; selectedCount: number; plans: UnionPlan[];
@@ -61,10 +73,18 @@ function backToUnions() {
 }
 
 const KIND_LABEL: Record<Kind, string> = { performance: "业绩奖励", core: "核心奖励", pool: "奖池共享" };
+const STAGE_LABEL: Record<string, string> = { union: "平台 → 大盟主", leader: "大盟主 → 盟主", player: "盟主 → 成员" };
 const kindStatusText = (value?: string) =>
   value === "paid" ? "已发放" : value === "paying" ? "发放中" : value === "partial" ? "部分异常" : "编辑中";
 // 与游戏内「代理中心」一致的角色名：大盟主 / 盟主 / 小盟主 / 合伙人 / 代理
 const ROLE_LABEL: Record<string, string> = { grand: "大盟主", leader: "盟主", small_leader: "小盟主", partner: "合伙人", agent: "代理" };
+const chainText = (chain?: ChainNode[] | null) => (chain ?? []).map(node => {
+  const role = ROLE_LABEL[node.role] ?? "";
+  const name = node.name || node.agentId;
+  return role === "" ? name : role + " " + name;
+}).join(" → ");
+const chainTitle = (chain?: ChainNode[] | null) => (chain ?? []).map(node =>
+  `${ROLE_LABEL[node.role] ?? node.role ?? ""} ${node.name || node.agentId}（ID ${node.agentId}）`).join(" → ");
 // 占比堆叠条的分段颜色，按占比从高到低循环使用。
 const SHARE_COLORS = ["#1f948a", "#3f7fbf", "#c69132", "#a4639f", "#4f9160", "#b65f43", "#6b72bd", "#7f8f34", "#2b9aa8", "#9a5a6f"];
 
@@ -283,8 +303,9 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
 
   // 页面上的金额、分摊、发放都只认日期框和当前分栏：数据必须已经按当前选择加载回来才允许写。
   const loadedForCurrent = data?.plan.date === date && data?.plan.kind === kind;
-  const editable = Boolean(can("game.agent_reward.edit")) && loadedForCurrent
-    && data?.plan.status !== "paid" && data?.plan.status !== "paying";
+  // partial 说明已有成功/待补发流水，后端会锁定金额；此时只允许重试失败项，不再改金额。
+  const planLocked = data?.plan.status === "paid" || data?.plan.status === "paying" || data?.plan.status === "partial";
+  const editable = Boolean(can("game.agent_reward.edit")) && loadedForCurrent && !planLocked;
   const canPay = Boolean(can("game.agent_reward.pay"));
 
   const autoSynced = useRef(false);
@@ -457,7 +478,18 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
   const amountSum = useMemo(() => members.reduce((sum, m) => sum + (draft[m.agentId] ?? 0), 0), [members, draft]);
   const allSum = useMemo(() => (data?.members ?? []).reduce((sum, m) => sum + (draft[m.agentId] ?? 0), 0), [data, draft]);
   const payCount = useMemo(() => (data?.members ?? []).filter(m => (draft[m.agentId] ?? 0) > 0).length, [data, draft]);
-  const subCount = useMemo(() => Object.values(splits).reduce((sum, list) => sum + list.filter(s => s.type === "sub" && s.amount > 0).length, 0), [splits]);
+  const payoutClubs = useMemo(() => {
+    const map = new Map<string, { name: string; count: number; amount: number }>();
+    (data?.members ?? []).forEach(m => {
+      const amount = draft[m.agentId] ?? 0;
+      if (amount <= 0 || !m.clubId) return;
+      const row = map.get(m.clubId) ?? { name: m.clubName || m.clubId, count: 0, amount: 0 };
+      row.count += 1;
+      row.amount += amount;
+      map.set(m.clubId, row);
+    });
+    return [...map.entries()].map(([id, row]) => ({ id, ...row }));
+  }, [data, draft]);
   const diff = planTotal - allSum;
 
   const setAmount = (agentId: string, value: number) => {
@@ -537,7 +569,8 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
     setBusy("prepay");
     try {
       if (diff !== 0) { notify(`分配合计与计划总额相差 ${num(Math.abs(diff))}，不能发放`, "error"); return; }
-      await saveAll();
+      // 已产生成功/待补发流水的批次金额已锁定，重试时直接复用服务端金额，不能再保存草稿。
+      if (editable) await saveAll();
       await load(date, kind, true);
       setPayResult(null);
       setPayOpen(true);
@@ -553,7 +586,8 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
       const result = await api<PayResult>("/api/game/agent-rewards/pay",
         { method: "POST", ...jsonBody({ unionId, date, kind, confirm: true }) });
       setPayResult(result);
-      notify(result.status === "paid" ? `发放完成：${result.paid} 笔` : `部分完成：成功 ${result.paid} 笔，异常 ${result.failed + (result.total > 0 ? 0 : 0)} 笔`, result.status === "paid" ? "success" : "error");
+      const summary = `联盟池 ${num(result.injected)} · 下划盟主 ${num(result.leaderAmount)}（${result.leaderCount} 家） · 到账 ${result.paid} 人${result.waiting > 0 ? ` · 待补发 ${result.waiting} 人` : ""}`;
+      notify(result.status === "paid" ? `发放完成：${summary}` : `部分完成：${summary}，失败 ${result.failed} 笔`, result.status === "paid" ? "success" : "error");
       await load(date, kind, true, true);
     } catch (reason) {
       notify(reason instanceof Error ? reason.message : "发放失败", "error");
@@ -625,10 +659,10 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
 
   const exportCsv = () => {
     if (!data) return;
-    const head = ["日期", "类型", "代理ID", "昵称", "身份", "联盟", "俱乐部", "业绩(毛次)", "已下发(次)", "净业绩(次)", "业绩占比", "分配金额", "子账号拆分"];
+    const head = ["日期", "类型", "代理ID", "昵称", "身份", "联盟", "俱乐部", "代理链", "业绩(毛次)", "已下发(次)", "净业绩(次)", "业绩占比", "分配金额", "子账号拆分"];
     const rows = members.map(m => [
       data.plan.date, KIND_LABEL[kind], m.agentId, m.name, ROLE_LABEL[m.role] ?? m.role,
-      m.unionName || m.unionId, m.clubName || m.clubId,
+      m.unionName || m.unionId, m.clubName || m.clubId, chainText(m.chain),
       m.perf ? m.perf.my : "", m.perf ? m.perf.granted : "", m.perf ? m.perf.net : "",
       pct(m.sharePercent),
       draft[m.agentId] ?? 0,
@@ -761,7 +795,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
 
       <div className="reward-metrics">
         <div className="reward-metric">
-          <span>计划发放总额（金币）</span>
+          <span>计划发放总额（俱乐部积分）</span>
           <input type="number" min={0} step={100} value={planTotal} disabled={!editable}
             onChange={event => { setPlanTotal(Math.max(0, Math.floor(Number(event.target.value) || 0))); setDirty(true); }} />
           <small>{kind === "pool" ? "可手动覆盖自动算出的金额" : "每天由主管设置"}</small>
@@ -889,6 +923,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
                   <th>代理</th>
                   <th>身份</th>
                   <th>俱乐部</th>
+                  <th>代理链</th>
                   <th className="reward-num">业绩(毛次)</th>
                   <th className="reward-num">净业绩(次)</th>
                   <th className="reward-num" title="本人业绩股净次数 ÷ 本次名单净次数合计；有正业绩时合计固定 100%">业绩占比</th>
@@ -914,6 +949,13 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
                         {splitsOf.length > 1 && <span className="reward-tag">{splitsOf.length} 个账号</span>}
                       </td>
                       <td className="reward-dim">{m.clubId ? <span title={`俱乐部 ID ${m.clubId}`}>{m.clubName || m.clubId}</span> : <span className="reward-muted">—</span>}</td>
+                      <td>
+                        {m.chain && m.chain.length > 0 ? (
+                          <span className="reward-chain" title={chainTitle(m.chain)}>{chainText(m.chain)}</span>
+                        ) : (
+                          <span className="reward-muted">—</span>
+                        )}
+                      </td>
                       {/* 业绩股口径：整条线毛次数 → 扣掉直接下级 → 本次名单内占比 */}
                       <td className="reward-num">{m.perf ? num(m.perf.my) : <span className="reward-muted">无数据</span>}</td>
                       <td className="reward-num">
@@ -958,7 +1000,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
           <div>
             <span>参与 <b>{payCount}</b> 人</span>
             <span>业绩占比合计 <b>{shareTotal > 0 ? pct(shareSum) : "—"}</b></span>
-            <span>合计 <b>{num(allSum)}</b> 金币</span>
+            <span>合计 <b>{num(allSum)}</b> 俱乐部积分</span>
             <span className={diff === 0 ? "is-ok" : "is-bad"}>剩余差额 <b>{num(Math.abs(diff))}</b></span>
             <span className="reward-muted">可见行合计 {num(amountSum)}</span>
           </div>
@@ -967,7 +1009,7 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
               {busy === "save" ? "保存中…" : "保存草稿"}
             </Button>
             <Button variant="secondary" onClick={exportCsv}>导出账单</Button>
-            <Button disabled={!canPay || !editable || diff !== 0 || allSum <= 0} onClick={() => void openPay()}>
+            <Button disabled={!canPay || !loadedForCurrent || diff !== 0 || allSum <= 0} onClick={() => void openPay()}>
               确认并发放
             </Button>
           </div>
@@ -1024,30 +1066,34 @@ function RewardDetail({ unionId, unionName, can, notify }: PageProps & { unionId
         {payResult ? (
           <div>
             <div className="reward-metrics">
-              <div className="reward-metric"><span>发放总额</span><strong>{num(payResult.total)}</strong><small>金币</small></div>
-              <div className="reward-metric"><span>成功</span><strong>{payResult.paid}</strong><small>笔</small></div>
+              <div className="reward-metric"><span>联盟池注入</span><strong>{num(payResult.injected)}</strong><small>额度</small></div>
+              <div className="reward-metric"><span>下划盟主</span><strong>{num(payResult.leaderAmount)}</strong><small>额度 · {payResult.leaderCount} 家</small></div>
+              <div className="reward-metric"><span>成员到账</span><strong>{payResult.paid}</strong><small>人</small></div>
+              <div className="reward-metric"><span>待补发</span><strong>{payResult.waiting}</strong><small>人（在房间内）</small></div>
               <div className="reward-metric"><span>失败</span><strong>{payResult.failed}</strong><small>笔</small></div>
-              <div className="reward-metric"><span>跳过</span><strong>{payResult.skipped}</strong><small>笔（已发过）</small></div>
+              <div className="reward-metric"><span>跳过</span><strong>{payResult.skipped}</strong><small>人（已发过）</small></div>
             </div>
             {payResult.errors.length > 0 && <div className="reward-warn"><b>失败明细</b><ul>{payResult.errors.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
-            <p className="reward-hint">发放结果已写入账单；异常行可在账单里按工单号核对余额后人工处理。</p>
+            <p className="reward-hint">结果已按「平台 → 大盟主 → 盟主 → 成员」写入发放账单；失败行可在账单里核对额度/积分流水后重试。</p>
             <div className="reward-modal-foot"><Button onClick={() => { setPayOpen(false); setPayResult(null); }}>关闭</Button></div>
           </div>
         ) : (
           <div>
             <div className="reward-metrics">
               <div className="reward-metric"><span>发放人数</span><strong>{payCount}</strong><small>人</small></div>
-              <div className="reward-metric"><span>发放总额</span><strong>{num(planTotal)}</strong><small>金币</small></div>
-              <div className="reward-metric"><span>子账号笔数</span><strong>{subCount}</strong><small>笔</small></div>
+              <div className="reward-metric"><span>发放总额</span><strong>{num(planTotal)}</strong><small>俱乐部积分</small></div>
+              <div className="reward-metric"><span>下划盟主</span><strong>{payoutClubs.length}</strong><small>家 · {num(payoutClubs.reduce((sum, row) => sum + row.amount, 0))} 额度</small></div>
               <div className="reward-metric"><span>计划差额</span><strong>0</strong><small>已配平</small></div>
             </div>
             <p className="reward-hint">
-              发放走游戏发钱通道：一单一笔、唯一工单号（前缀 <b>BF</b>），发完逐笔回读余额核对。
-              玩家金币流水按工单前缀显示为<b>补发（补分）</b>，三类奖励都一样；主账号与子账号各自独立一笔。
+              发放分三步：① 平台把总额 <b>{num(planTotal)}</b> 积分按 1:100 折成额度，发到大盟主的联盟额度池；
+              ② 大盟主按 <b>{payoutClubs.length}</b> 家俱乐部把下属成员金额汇总，下划到各盟主俱乐部额度；
+              ③ 各盟主给成员发放对应俱乐部积分。房间内成员登记为待补发，结算后自动到账；子账号拆分不参与本流程。
             </p>
+            {planLocked && <p className="reward-hint is-bad">该批次已有发放记录，金额已锁定；本次只重试失败项，已到账或待补发的成员不会重复发放。</p>}
             <div className="reward-modal-foot">
               <Button variant="secondary" onClick={() => { setPayOpen(false); setPayResult(null); }}>取消</Button>
-              <Button disabled={busy === "pay"} onClick={() => void doPay()}>{busy === "pay" ? "发放中…" : `确认发放 ${num(planTotal)} 金币`}</Button>
+              <Button disabled={busy === "pay"} onClick={() => void doPay()}>{busy === "pay" ? "发放中…" : `确认发放 ${num(planTotal)} 俱乐部积分`}</Button>
             </div>
           </div>
         )}
@@ -1147,7 +1193,7 @@ function SubModal({ member, amount, splits, canConfigure, busy, onBind, onUnbind
 
   return (
     <Modal title={`${member.name || member.agentId} · 分账号发放`} eyebrow="SPLIT PAYOUT" onClose={onClose}>
-      <p className="reward-hint">主账号与子账号金额合计必须等于该代理本次分配金额 {num(amount)} 金币。</p>
+      <p className="reward-hint">主账号与子账号金额合计必须等于该代理本次分配金额 {num(amount)} 俱乐部积分。子账号拆分仅作记录，本模块发放按代理本人账号到账俱乐部积分。</p>
       <table>
         <thead><tr><th>收款账号</th><th>类型</th><th className="reward-num">金额</th><th /></tr></thead>
         <tbody>
@@ -1195,29 +1241,61 @@ function SubModal({ member, amount, splits, canConfigure, busy, onBind, onUnbind
   );
 }
 
+type LedgerGroup = {
+  planId: number;
+  date: string;
+  kind: Kind;
+  rows: LedgerRow[];
+  memberPaid: number;
+  waiting: number;
+};
+
 function LedgerModal({ unionId, onClose, notify }: { unionId: string; onClose: () => void; notify: (m: string, k?: "success" | "error") => void }) {
   const [from, setFrom] = useState(beijingDateInput(-9));
   const [to, setTo] = useState(beijingDateInput(0));
   const [rows, setRows] = useState<LedgerRow[] | null>(null);
-  const [summary, setSummary] = useState({ total: 0, performance: 0, core: 0, pool: 0 });
+  const [summary, setSummary] = useState<LedgerSummary>({
+    total: 0, performance: 0, core: 0, pool: 0, unionInjected: 0, leaderGranted: 0, waiting: 0,
+  });
   const [loading, setLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const value = await api<{ items: LedgerRow[]; summary: typeof summary }>(`/api/game/agent-rewards/ledger?${new URLSearchParams({ from, to, unionId })}`);
+      const value = await api<{ items: LedgerRow[]; summary: LedgerSummary }>(`/api/game/agent-rewards/ledger?${new URLSearchParams({ from, to, unionId })}`);
       setRows(value.items ?? []);
-      setSummary(value.summary ?? { total: 0, performance: 0, core: 0, pool: 0 });
+      setSummary(value.summary ?? { total: 0, performance: 0, core: 0, pool: 0, unionInjected: 0, leaderGranted: 0, waiting: 0 });
     } catch (reason) {
       notify(reason instanceof Error ? reason.message : "读取账单失败", "error");
     } finally { setLoading(false); }
   }, [from, to, notify, unionId]);
   useEffect(() => { void load(); }, [load]);
 
+  const groups = useMemo(() => {
+    const order: number[] = [];
+    const map = new Map<number, LedgerGroup>();
+    (rows ?? []).forEach(row => {
+      let group = map.get(row.planId);
+      if (!group) {
+        group = { planId: row.planId, date: row.date, kind: row.kind, rows: [], memberPaid: 0, waiting: 0 };
+        map.set(row.planId, group);
+        order.push(row.planId);
+      }
+      group.rows.push(row);
+      if (row.stage === "player" && row.status === "paid") group.memberPaid += row.amount;
+      if (row.stage === "player" && row.status === "waiting") group.waiting += 1;
+    });
+    return order.map(id => map.get(id)!);
+  }, [rows]);
+
   const exportCsv = () => {
-    const head = ["日期", "类型", "代理ID", "代理昵称", "收款账号", "账号类型", "金额", "工单号", "状态", "到账时间"];
-    const body = (rows ?? []).map(row => [row.date, KIND_LABEL[row.kind] ?? row.kind, row.agentId, row.agentName, row.payee,
-      row.payeeType === "main" ? "主账号" : "子账号", row.amount, row.order, row.status, row.paidAt]);
+    const head = ["日期", "类型", "流转", "对象", "对象ID", "俱乐部", "金额", "单位", "状态", "说明", "错误", "操作单号", "到账时间"];
+    const body = (rows ?? []).map(row => {
+      const stage = row.stage || "player";
+      return [row.date, KIND_LABEL[row.kind] ?? row.kind, STAGE_LABEL[stage] ?? stage,
+        row.agentName || row.agentId, row.agentId, row.clubName || row.clubId, row.amount,
+        stage === "player" ? "俱乐部积分" : "额度", ledgerStatusText(row), row.description, row.error, row.order, row.paidAt];
+    });
     const csv = [head, ...body].map(row => row.map(csvCell).join(",")).join("\r\n");
     const blob = new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1227,7 +1305,7 @@ function LedgerModal({ unionId, onClose, notify }: { unionId: string; onClose: (
   };
 
   return (
-    <Modal title="发放账单 · 当前联盟" eyebrow="LEDGER" onClose={onClose} wide>
+    <Modal title="发放账单 · 当前联盟" eyebrow="LEDGER" onClose={onClose} xwide>
       <div className="reward-tools" style={{ marginBottom: 14 }}>
         <input type="date" value={from} onChange={event => setFrom(event.target.value)} />
         <span className="reward-muted">至</span>
@@ -1236,42 +1314,88 @@ function LedgerModal({ unionId, onClose, notify }: { unionId: string; onClose: (
         <Button variant="secondary" onClick={() => { setFrom(beijingDateInput(-14)); setTo(beijingDateInput(0)); }}>近 15 天</Button>
         <Button variant="ghost" onClick={exportCsv}>导出 CSV</Button>
       </div>
-      <div className="reward-metrics">
-        <div className="reward-metric"><span>合计发放</span><strong>{num(summary.total)}</strong><small>金币（仅已到账）</small></div>
-        <div className="reward-metric"><span>业绩奖励</span><strong>{num(summary.performance)}</strong><small>金币</small></div>
-        <div className="reward-metric"><span>核心奖励</span><strong>{num(summary.core)}</strong><small>金币</small></div>
-        <div className="reward-metric"><span>奖池共享</span><strong>{num(summary.pool)}</strong><small>金币</small></div>
+      <div className="reward-metrics reward-ledger-metrics">
+        <div className="reward-metric"><span>成员到账</span><strong>{num(summary.total)}</strong><small>俱乐部积分</small></div>
+        <div className="reward-metric"><span>平台拨入联盟池</span><strong>{num(summary.unionInjected)}</strong><small>额度（大盟主）</small></div>
+        <div className="reward-metric"><span>下划盟主</span><strong>{num(summary.leaderGranted)}</strong><small>额度</small></div>
+        <div className="reward-metric"><span>待补发</span><strong>{num(summary.waiting)}</strong><small>积分（在房间内）</small></div>
+        <div className="reward-metric"><span>业绩奖励</span><strong>{num(summary.performance)}</strong><small>积分</small></div>
+        <div className="reward-metric"><span>核心奖励</span><strong>{num(summary.core)}</strong><small>积分</small></div>
+        <div className="reward-metric"><span>奖池共享</span><strong>{num(summary.pool)}</strong><small>积分</small></div>
       </div>
       {loading ? <LoadingBlock label="正在读取账单" /> : (rows ?? []).length === 0 ? (
-        <EmptyState title="这段时间没有发放记录" description="在「业绩核心共享」里发放一次后，这里会出现每个账号的明细与工单号。" />
+        <EmptyState title="这段时间没有发放记录" description="在「业绩核心共享」里发放一次后，这里会按「平台→大盟主→盟主→成员」逐层列出额度与积分。" />
       ) : (
-        <div className="table-wrap" style={{ maxHeight: "46vh" }}>
-          <table>
-            <thead><tr><th>日期</th><th>类型</th><th>代理</th><th>收款账号</th><th className="reward-num">金额</th><th>工单号</th><th>状态</th><th>到账时间</th></tr></thead>
+        <div className="table-wrap reward-ledger-table-wrap">
+          <table className="reward-ledger-table">
+            <colgroup>
+              <col style={{ width: 100 }} />
+              <col style={{ width: 190 }} />
+              <col style={{ width: 100 }} />
+              <col style={{ width: 80 }} />
+              <col />
+              <col style={{ width: 140 }} />
+            </colgroup>
+            <thead><tr><th>流转</th><th>对象 / 俱乐部</th><th className="reward-num">金额</th><th>状态</th><th>详细说明</th><th>时间</th></tr></thead>
             <tbody>
-              {(rows ?? []).map(row => (
-                <tr key={row.id}>
-                  <td>{row.date}</td>
-                  <td>{KIND_LABEL[row.kind] ?? row.kind}</td>
-                  <td className="reward-name"><strong>{row.agentName || row.agentId}</strong><small>{row.agentId}</small></td>
-                  <td className="reward-name"><strong>{row.payee}</strong><small>{row.payeeType === "main" ? "主账号" : "子账号"}</small></td>
-                  <td className="reward-num">{num(row.amount)}</td>
-                  <td>{row.order}</td>
-                  <td><span className={`reward-status reward-status--${row.status === "paid" ? "paid" : "partial"}`}>
-                    {row.status === "paid" ? "已到账" : row.status === "failed" ? "失败" : row.status === "mismatch" ? "余额异常" : "处理中"}
-                  </span></td>
-                  <td>{row.paidAt || "-"}</td>
-                </tr>
+              {groups.map(group => (
+                <Fragment key={group.planId}>
+                  <tr className="reward-ledger-group">
+                    <td colSpan={6}>
+                      <b>{group.date} · {KIND_LABEL[group.kind] ?? group.kind}</b>
+                      <span>批次 #{group.planId} · 成员到账 {num(group.memberPaid)} 积分{group.waiting > 0 ? ` · 待补发 ${group.waiting} 人` : ""}</span>
+                    </td>
+                  </tr>
+                  {group.rows.map(row => {
+                    const stage = row.stage || "player";
+                    const club = row.clubName || row.clubId || "";
+                    return (
+                      <tr key={row.id}>
+                        <td><span className={`reward-stage reward-stage--${stage}`}>{STAGE_LABEL[stage] ?? stage}</span></td>
+                        <td className="reward-name">
+                          <strong>{row.agentName || row.agentId || "—"}</strong>
+                          <small>{row.agentId ? `ID ${row.agentId}` : ""}{club ? `${row.agentId ? " · " : ""}${club}` : ""}</small>
+                        </td>
+                        <td className="reward-num">
+                          {num(row.amount)}
+                          <small className="reward-muted"> {stage === "player" ? "积分" : "额度"}</small>
+                        </td>
+                        <td><span className={`reward-status reward-status--${ledgerStatusClass(row)}`}>{ledgerStatusText(row)}</span></td>
+                        <td className="reward-ledger-desc">
+                          {row.description || `${KIND_LABEL[row.kind] ?? row.kind} · ${row.agentName || row.agentId} → ${row.payee}`}
+                          {row.error && <small>错误：{row.error}</small>}
+                          <small className="reward-ledger-order">单号：{row.order || "-"}</small>
+                        </td>
+                        <td>{row.paidAt || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </Fragment>
               ))}
             </tbody>
           </table>
         </div>
       )}
-      <p className="reward-hint">汇总只统计已到账行；主账号与子账号分开显示，但代理合计不重复计算。</p>
+      <p className="reward-hint">账单按批次从「平台 → 大盟主」到「大盟主 → 盟主」再到「盟主 → 成员」排列；额度与俱乐部积分单位不同，汇总分开统计。</p>
       <div className="reward-modal-foot"><Button onClick={onClose}>关闭</Button></div>
     </Modal>
   );
 }
+
+const ledgerStatusText = (row: LedgerRow) => {
+  if (row.status === "paid") return row.stage === "player" ? "已到账" : "已完成";
+  if (row.status === "waiting") return "待补发";
+  if (row.status === "failed") return "失败";
+  if (row.status === "mismatch") return "余额异常";
+  return "处理中";
+};
+
+const ledgerStatusClass = (row: LedgerRow) => {
+  if (row.status === "paid") return "paid";
+  if (row.status === "waiting" || row.status === "pending") return "paying";
+  return "partial";
+};
+
 
 /**
  * 批量添加：从俱乐部在册代理里挑人进入本次分配名单。
