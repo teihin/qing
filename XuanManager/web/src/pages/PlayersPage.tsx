@@ -3,7 +3,7 @@ import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
 import { formatBeijingDateTime } from "../time";
-import type { ManageScopeName, ManageScopeOption, ManageScopeOptions, PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerManageScopeResult, PlayerPasswordResetResult, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneGrantRecordsResponse, PlayerStoneGrantResult } from "../types";
+import type { ManageScopeName, ManageScopeOption, ManageScopeOptions, PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerManageScopeResult, PlayerPasswordResetResult, PlayerRelationsResponse, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneGrantRecordsResponse, PlayerStoneGrantResult } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -87,6 +87,13 @@ function scopeDetailText(items: ManageScopeName[] | undefined, raw: string): str
 const balanceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const clubModeLabels: Record<string, string> = { "1": "普通模式", "2": "茶楼模式", "3": "带分模式" };
 const clubStatusLabels: Record<string, string> = { used: "正常", init: "未启用", del: "已解散" };
+const relationTypeLabels: Record<string, string> = { device: "同设备", gps: "同GPS网格", ip: "同公网IP" };
+
+function relationStrength(score: number): { label: string; className: string } {
+  if (score >= 100) return { label: "强", className: "is-strong" };
+  if (score >= 60) return { label: "中", className: "is-medium" };
+  return { label: "弱", className: "is-weak" };
+}
 
 export default function PlayersPage({ can, canViewSensitive, notify }: { can: (permission: string) => boolean; canViewSensitive: boolean; notify: (message: string, kind?: "success" | "error") => void }) {
   const [data, setData] = useState<PlayerResponse | null>(null);
@@ -94,12 +101,14 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
   const [applied, setApplied] = useState<PlayerFilters>(playerFiltersFromHash);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [relatedSort, setRelatedSort] = useState<"none" | "desc" | "asc">("none");
   const [loading, setLoading] = useState(true);
   const [advanced, setAdvanced] = useState(false);
   const [selected, setSelected] = useState<PlayerItem | null>(null);
   const [resettingPassword, setResettingPassword] = useState<PlayerItem | null>(null);
   const [grantingStone, setGrantingStone] = useState<PlayerItem | null>(null);
   const [configuringScope, setConfiguringScope] = useState<PlayerItem | null>(null);
+  const [viewingRelations, setViewingRelations] = useState<PlayerItem | null>(null);
   const [showGrantRecords, setShowGrantRecords] = useState(false);
   const [queryRevision, refreshQuery] = useQueryRefresh();
   const canViewPassword = Boolean(data?.canViewPassword);
@@ -110,8 +119,12 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       const clean = value.trim();
       if (clean) params.set(key, clean);
     }
+    if (relatedSort !== "none") {
+      params.set("sort", "relatedCount");
+      params.set("order", relatedSort);
+    }
     return params.toString();
-  }, [applied, page, pageSize]);
+  }, [applied, page, pageSize, relatedSort]);
 
   const load = useCallback(async () => {
     void queryRevision;
@@ -134,8 +147,13 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
   const resetFilters = () => {
     setDraft(emptyFilters);
     setApplied(emptyFilters);
+    setRelatedSort("none");
     setPage(1);
     refreshQuery();
+  };
+  const toggleRelatedSort = () => {
+    setRelatedSort((current) => current === "none" ? "desc" : current === "desc" ? "asc" : "none");
+    setPage(1);
   };
   const update = (key: keyof PlayerFilters, value: string) => setDraft((current) => ({ ...current, [key]: value }));
   const activeFilterCount = Object.values(applied).filter(Boolean).length;
@@ -200,19 +218,20 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <>
             <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
               <table className="player-table">
-                <thead><tr><th>玩家</th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th title="最近上报 IP 的 6 位短码，与游戏内 BOSS 玩家信息弹窗同一规则">IP短码</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
+                <thead><tr><th>玩家</th><th><button type="button" className={`table-sort ${relatedSort !== "none" ? "is-active" : ""}`} onClick={toggleRelatedSort} title="按关联账号数量排序；第三次点击恢复默认顺序">关联账号数量 <span>{relatedSort === "desc" ? "↓" : relatedSort === "asc" ? "↑" : "↕"}</span></button></th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th title="最近上报 IP 的 6 位短码，与游戏内 BOSS 玩家信息弹窗同一规则">IP短码</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
                   <tr key={player.id} className={player.isBoss ? "player-row--boss" : undefined} title={player.isBoss ? `大小BOSS${scopeFullText(player) ? ` · ${scopeFullText(player)}` : ""}` : undefined}>
                     <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small>{player.isBoss && <small className="cell-subtitle scope-summary">大小BOSS · {scopeRowSummary(player)}</small>}</div></div></td>
+                    <td>{player.relatedVisible ? <button type="button" className="relation-count-link" onClick={() => setViewingRelations(player)} title="查看关联账号">{player.relatedCount}</button> : <span className="muted">—</span>}</td>
                     <td><code>{player.loginName || "—"}</code>{player.accountName && player.accountName !== player.loginName && <small className="cell-subtitle">KBE：{player.accountName}</small>}</td>
                     {canViewPassword && <td><PlayerPasswordCell player={player} /></td>}
                     <td><strong className="stone-value">{player.stone.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">钻石</small></td>
                     <td>{player.clubs.length > 0 ? <div className="club-chip-list">{player.clubs.map((club) => <span className="club-chip" key={club.clubId} title={`俱乐部ID：${club.clubId}`}>{club.name || club.clubId}</span>)}</div> : <span className="muted">未加入俱乐部</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
-                    <td><code>{player.ipCode || "—"}</code></td>
+                    <td><code>{player.ipCode || "—"}</code>{canViewSensitive && player.ip && <small className="cell-subtitle">{player.ip}</small>}</td>
                     <td>{formatDate(player.registrationTime)}</td>
                     <td>{formatDate(player.lastLoginAt)}</td>
-                    <td><div className="row-actions">{can("game.player.grant_stone") && <button className="success-link" onClick={() => setGrantingStone(player)}>发放钻石</button>}{can("game.player.manage_scope") && <button onClick={() => setConfiguringScope(player)}>设置管理员</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>
+                    <td><div className="row-actions">{can("game.player.grant_stone") && <button className="success-link" onClick={() => setGrantingStone(player)}>发放钻石</button>}{can("game.player.manage_scope") && <button onClick={() => setConfiguringScope(player)}>设置管理员</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setViewingRelations(player)}>关联账号</button><button onClick={() => setSelected(player)}>查看详情</button></div></td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -234,6 +253,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
       {resettingPassword && <ResetPlayerPasswordModal player={resettingPassword} onClose={() => setResettingPassword(null)} onDone={(result) => { setResettingPassword(null); notify(result.message); }} />}
       {grantingStone && <GrantPlayerStoneModal player={grantingStone} onClose={() => setGrantingStone(null)} onDone={async (message) => { setGrantingStone(null); notify(message); await load(); }} />}
       {configuringScope && <ManageScopeModal player={configuringScope} onClose={() => setConfiguringScope(null)} onDone={async (message) => { setConfiguringScope(null); notify(message); await load(); }} />}
+      {viewingRelations && <PlayerRelationsModal player={viewingRelations} onClose={() => setViewingRelations(null)} notify={notify} />}
       {showGrantRecords && <PlayerStoneGrantRecordsModal onClose={() => setShowGrantRecords(false)} notify={notify} />}
     </div>
   );
@@ -577,6 +597,55 @@ function PlayerDetail({ player, can, canViewSensitive, notify, onClose }: { play
       {tab === "rooms" && canViewRooms && <PlayerRoomsTab player={player} data={rooms} page={roomPage} loading={roomLoading} onPage={setRoomPage} />}
     </Modal>
   );
+}
+
+function PlayerRelationsModal({ player, onClose, notify }: { player: PlayerItem; onClose: () => void; notify: (message: string, kind?: "success" | "error") => void }) {
+  const [data, setData] = useState<PlayerRelationsResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const load = useCallback(async () => {
+    setLoading(true); setError("");
+    try {
+      setData(await api<PlayerRelationsResponse>(`/api/game/players/${encodeURIComponent(player.playerId)}/relations`));
+    } catch (reason) {
+      const message = reason instanceof ApiError ? reason.message : "关联账号加载失败";
+      setError(message);
+      notify(message, "error");
+    } finally { setLoading(false); }
+  }, [notify, player.playerId]);
+  useEffect(() => { void load(); }, [load]);
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const item of data?.items || []) {
+      for (const type of item.types) counts[type] = (counts[type] || 0) + 1;
+    }
+    return counts;
+  }, [data]);
+  return <Modal wide title={`关联账号 · ${player.name || player.playerId}`} eyebrow="RELATED ACCOUNTS" onClose={onClose}>
+    <div className="password-reset-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>游戏ID {player.playerId} · 关联账号 {data ? data.total : "…"} 个</p></div></div>
+    <div className="sensitive-operation-notice"><strong>关联只作排查线索</strong><p>同设备为高置信，同GPS网格为中置信，同公网IP为弱线索；NAT、网吧、家人共用设备都可能误报，不能直接作为作弊结论。</p></div>
+    {loading ? <LoadingBlock label="正在读取关联账号" /> : error ? <div className="sensitive-load-error"><span>{error}</span><button type="button" onClick={() => void load()}>重新读取</button></div> : !data || data.items.length === 0 ? <EmptyState title="暂未发现关联账号" description="按同设备、同GPS网格、同公网IP都没有找到其他账号；数据会随玩家登录逐步积累。" /> : <>
+      <div className="relation-summary">
+        <span>共 <strong>{data.total}</strong> 个</span>
+        {Object.entries(relationTypeLabels).map(([type, label]) => <span key={type}>{label} <strong>{typeCounts[type] || 0}</strong></span>)}
+      </div>
+      <div className="table-wrap">
+        <table className="player-relations-table">
+          <thead><tr><th>关联玩家</th><th>关联方式</th><th>关联强度</th><th>最近关联时间</th></tr></thead>
+          <tbody>{data.items.map((item) => {
+            const strength = relationStrength(item.score);
+            return <tr key={item.playerId}>
+              <td><div className="user-cell"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small></div></div></td>
+              <td><div className="relation-tags">{item.types.map((type) => <span key={type} className={`relation-tag relation-tag--${type}`}>{relationTypeLabels[type] || type}</span>)}</div></td>
+              <td><span className={`relation-strength ${strength.className}`}>{strength.label}</span></td>
+              <td>{item.lastSeen || "—"}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
+      {data.total > data.items.length && <p className="field__hint">最多显示前 {data.items.length} 条，共 {data.total} 条。</p>}
+    </>}
+  </Modal>;
 }
 
 function PlayerProfileTab({ player, canViewSensitive, sensitive, sensitiveLoading, sensitiveError, onRetrySensitive }: { player: PlayerItem; canViewSensitive: boolean; sensitive: PlayerSensitiveInfo | null; sensitiveLoading: boolean; sensitiveError: string; onRetrySensitive: () => void }) {

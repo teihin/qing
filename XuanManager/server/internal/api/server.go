@@ -102,6 +102,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/dashboard/summary", s.authorized("dashboard.view", false, s.handleDashboard))
 	s.mux.Handle("GET /api/game/players", s.authorized("game.player.view", false, s.handleListPlayers))
 	s.mux.Handle("GET /api/game/players/{playerId}/sensitive", s.authorized("game.player.view", false, s.handleGetPlayerSensitiveInfo))
+	s.mux.Handle("GET /api/game/players/{playerId}/relations", s.authorized("game.player.view", false, s.handlePlayerRelations))
 	s.mux.Handle("POST /api/game/players/{playerId}/password", s.authorized("game.player.reset_password", true, s.handleResetPlayerPassword))
 	s.mux.Handle("POST /api/game/players/{playerId}/balance-adjustments", s.authorized("game.player.balance_adjust", true, s.handleAdjustPlayerBalance))
 	s.mux.Handle("GET /api/game/players/stone-grants", s.authorized("game.player.grant_stone", false, s.handleListPlayerStoneGrants))

@@ -4,9 +4,16 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-14 后台玩家管理：关联账号/重复玩家（已部署 8891，数据待采集）
+
+- 按《重复玩家识别-IP设备关联方案》聚合同设备（90天）、同GPS网格（7天）、同公网IP（7天）；单IP>20人、单网格>50人不参与。
+- 玩家列表「关联账号数量」列在「玩家」后，表头可点按数量排序（desc→asc→默认，全局计算，上限 2000）；点「关联账号」查看全部关联玩家、方式与强度（最多200条）。
+- 已部署：二进制 `bb8bdf37…`、前端 `index-magx5XK-.js` + `index-DeSwv4Lg.css`；备份 `backups/xuanmanager.20261114-005539-rollback`、`web.previous-20261114-005539`。
+- 首版误用 `s.db`（webcm）导致 1146「读取关联账号失败」，已改 `s.gameDB`；两表 00:36:56 起已有写入（718968，web/127.0.0.1），采集端正常。正式设备表无 `last_ip`/`last_ip_public`，方案 §4.2/§5.3 不能原样套用。详见[交接](handoffs/2026-11-14-admin-player-relations.md)。
+
 ## 2026-11-14 后台玩家管理支持 IP 短码（已部署 8891）
 
-- 玩家列表新增「IP短码」列（6 位 Base62，与客户端同规则；列表不返回原始 IP），高级筛选新增「IP短码」精确匹配 `tbl_Account.sm_ip`。
+- 玩家列表新增「IP短码」列（6 位 Base62，与客户端同规则），高级筛选新增「IP短码」精确匹配 `tbl_Account.sm_ip`；`admin999` 额外收到原始 `ip` 并在短码下方显示，其他账号无该字段。
 - 玩家详情保持原样：明文 IP/GPS 仍仅 `admin999` 可见。
 - 已部署修正版：二进制 `f2c47066…`、前端 `index-B_pOglF-.js`；备份 `backups/xuanmanager.20261114-002434-rollback`、`web.previous-20261114-002434`；health 200、未登录接口 401。详见[交接](handoffs/2026-11-14-admin-player-ip-shortcode.md)。
 
@@ -30,8 +37,7 @@
 
 ## 2026-11-13 客户端「额度授权记录」增加类型显示（未构建、未真机）
 
-- 行模板 `额度授权记录对象.prefab` 新增 `typelabel`，在盟主名下方显示「类型：授信/收回/注资/注资扣减/额度奖励」；`panelQuotaGrantRecord.ts` 读取 `type` 写入。
-- 未运行 Creator 导入/编译/构建；需重导 Prefab、编译脚本并热更后实机确认长类型不截断。详见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
+- 行模板新增 `typelabel` 显示授信/收回/注资/注资扣减/额度奖励；未构建/热更/真机。详见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
 
 ## 2026-11-13 后台「用户端数据查询」（已部署 8891）
 
@@ -55,10 +61,8 @@
 
 ## 2026-11-12 业绩核心共享：写操作改用日期框当前日期（已部署 8891）
 
-- 报错「本次名单在 2026-11-01…」是请求真带了 11-01（审计与游戏服日志同刻 `date=-11`，该标签页日期框就在 11-01）；游戏库 `club_perf_contrib_info` 联盟 196102 仅 11-12 有记录，11-01/11-11 为空，报表全 0。
-- 计划总额/分配金额/分摊/发放改用日期框 `date` + 当前 `kind`，不再用 `data.plan.date`；数据与当前选择不一致时按钮禁用并提示；`load`/`loadSummary` 加序号丢弃过期响应。
-- 部署前端 `index-ClSOsNS9.js`（`38688b83…`，公网校验一致），health 200、未登录 401；回滚 `backups/web.20261112-2105-rollback`。登录态页面实操待验。
-- 牌局回顾：remark 第 12 段原样显示服务端字符串（不再拼前缀），缺段隐藏；`panelGameView.prefab`/`drh8.fire` 已加节点，待验。
+- 计划总额/分配/分摊/发放改用日期框 `date` + 当前 `kind`，不再用 `data.plan.date`；数据与选择不一致时按钮禁用，`load/loadSummary` 丢弃过期响应。
+- 前端 `index-ClSOsNS9.js` 已部署（回滚 `backups/web.20261112-2105-rollback`），登录态待验；牌局回顾 remark 第 12 段原样显示、缺段隐藏，Prefab 已加节点待验。
 
 ## 2026-11-12 后台新增「业绩股」总览（已部署 8891，页面待验）
 

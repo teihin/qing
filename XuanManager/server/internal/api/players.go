@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +33,9 @@ type playerFilters struct {
 	BossOnly       bool
 	// IPAddress 是 IP短码 解码后的 IPv4，按 tbl_Account.sm_ip 精确匹配。
 	IPAddress string
+	// SortBy / SortOrder 目前只支持 relatedCount 的 asc/desc。
+	SortBy    string
+	SortOrder string
 }
 
 type playerItem struct {
@@ -60,8 +65,12 @@ type playerItem struct {
 	RoomType         string  `json:"roomType"`
 	ClientVersion    string  `json:"clientVersion"`
 	ClientStatus     string  `json:"clientStatus"`
-	// IPCode 是最近上报 IP（tbl_Account.sm_ip）的 6 位短码；原始 IP 不在列表返回。
-	IPCode           string     `json:"ipCode"`
+	// IPCode 是最近上报 IP（tbl_Account.sm_ip）的 6 位短码；IP 只对 admin999 返回。
+	IPCode string `json:"ipCode"`
+	IP     string `json:"ip,omitempty"`
+	// RelatedCount / RelatedVisible 是关联账号摘要；查询失败时 visible=false，前端显示「—」。
+	RelatedCount     int        `json:"relatedCount"`
+	RelatedVisible   bool       `json:"relatedVisible"`
 	TotalRounds      int64      `json:"totalRounds"`
 	TotalScore       int64      `json:"totalScore"`
 	RegistrationTime string     `json:"registrationTime"`
@@ -85,7 +94,7 @@ type playerItem struct {
 	clubJoin  string
 	clubMake2 string
 	clubJoin2 string
-	ip        string
+	rawIP     string
 }
 
 // 玩家登录密码只对管理员返回。管理员 = `super_admin` 角色（含 admin999 超级管理员
@@ -119,69 +128,47 @@ WHERE ` + where
 		return
 	}
 
-	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
-	unionManageExpr := "''"
-	bossExpr := "COALESCE(TRIM(a.sm_club_manage), '') <> ''"
-	if hasUnionManage {
-		unionManageExpr = "COALESCE(a.sm_union_manage, '')"
-		bossExpr = "(COALESCE(TRIM(a.sm_union_manage), '') <> '' OR COALESCE(TRIM(a.sm_club_manage), '') <> '')"
-	}
-	// 时间口径：MySQL 会话时区为 SYSTEM（Asia/Shanghai），库里的 DATETIME、NOW()、
-	// CURRENT_TIMESTAMP、FROM_UNIXTIME() 拿到的都已经是北京时间墙上时间，查询时不得再叠加 8 小时。
-	listQuery := fmt.Sprintf(`SELECT
-a.id, a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_photo,
-a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
-(a.sm_gold + a.sm_gold2 / 100.0) AS balance, a.sm_stone, a.sm_level,
-a.sm_vip, a.sm_vip_level, a.sm_agentID, COALESCE(agent.sm_name, ''),
-a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status, COALESCE(a.sm_ip, ''),
-a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
-FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
-COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
-COALESCE(a.sm_club_make2, ''), COALESCE(a.sm_club_join2, ''),
-COALESCE(a.sm_club_manage, ''), %s, %s
-FROM kbedm.tbl_Account a
-LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
-LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
-WHERE %s
-ORDER BY a.id DESC
-LIMIT ? OFFSET ?`, unionManageExpr, bossExpr, where)
-	rows, err := s.db.QueryContext(r.Context(), listQuery, queryArgs...)
-	if err != nil {
-		s.logger.Error("list game players", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家列表失败")
-		return
-	}
-	defer rows.Close()
-
 	items := make([]playerItem, 0, size)
-	for rows.Next() {
-		var item playerItem
-		var lastLogin sql.NullTime
-		if err := rows.Scan(
-			&item.ID, &item.PlayerID, &item.LoginName, &item.AccountName, &item.Name, &item.Photo,
-			&item.Sex, &item.Role, &item.Gold, &item.Gold2, &item.Balance, &item.Stone, &item.Level,
-			&item.VIP, &item.VIPLevel, &item.AgentID, &item.AgentName,
-			&item.RoomID, &item.RoomType, &item.ClientVersion, &item.ClientStatus, &item.ip,
-			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
-			&lastLogin, &item.LoginCount, &item.Remark,
-			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.ClubManage,
-			&item.UnionManage, &item.IsBoss,
-		); err != nil {
-			s.logger.Error("scan game player", "error", err)
-			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")
+	relations := map[string][]playerRelation{}
+	relationsOK := false
+
+	if filters.SortBy == "relatedCount" {
+		// 关联数量是实时聚合出来的，必须对筛选后的全部玩家算完再排序，不能只排当前页。
+		ids, err := s.matchingPlayerIDs(r.Context(), where, args, relationSortMaxPlayers)
+		if err != nil {
+			s.logger.Error("list players for relation sort", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家列表失败")
 			return
 		}
-		if lastLogin.Valid {
-			item.LastLoginAt = &lastLogin.Time
+		if len(ids) > relationSortMaxPlayers {
+			writeError(w, http.StatusBadRequest, "SORT_TOO_MANY",
+				fmt.Sprintf("按关联账号排序最多支持 %d 名玩家，请先缩小筛选条件", relationSortMaxPlayers))
+			return
 		}
-		item.IPCode = EncodeIPCode(item.ip)
-		items = append(items, item)
+		relations, err = s.loadPlayerRelations(r.Context(), ids)
+		if err != nil {
+			s.logger.Error("load player relations for sort", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "关联账号排序失败，请稍后重试")
+			return
+		}
+		sortPlayerIDsByRelations(ids, relations, filters.SortOrder)
+		items, err = s.queryPlayerItemsByIDs(r.Context(), hasUnionManage, where, args,
+			playerIDPage(ids, page, size), p.IsProtectedRoot)
+		if err != nil {
+			s.logger.Error("list game players by relation order", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家列表失败")
+			return
+		}
+		relationsOK = true
+	} else {
+		items, err = s.queryPlayerItemsPage(r.Context(), hasUnionManage, where, args, size, (page-1)*size, p.IsProtectedRoot)
+		if err != nil {
+			s.logger.Error("list game players", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家列表失败")
+			return
+		}
 	}
-	if err := rows.Err(); err != nil {
-		s.logger.Error("iterate game players", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家数据失败")
-		return
-	}
+
 	if canViewPassword {
 		if err := s.attachPlayerLoginPasswords(r.Context(), items); err != nil {
 			// 密码副本读取失败不能拖垮整个玩家列表；字段留空，前端显示「未收录」。
@@ -198,10 +185,196 @@ LIMIT ? OFFSET ?`, unionManageExpr, bossExpr, where)
 		s.logger.Error("attach player manage scope names", "error", err)
 	}
 
+	if !relationsOK {
+		guuids := make([]string, 0, len(items))
+		for _, item := range items {
+			guuids = append(guuids, item.PlayerID)
+		}
+		if loaded, err := s.loadPlayerRelations(r.Context(), guuids); err != nil {
+			// 关联账号属于辅助排查信息，查询失败只降级为「—」。
+			s.logger.Error("load player relations", "error", err)
+		} else {
+			relations = loaded
+			relationsOK = true
+		}
+	}
+	if relationsOK {
+		for i := range items {
+			items[i].RelatedVisible = true
+			items[i].RelatedCount = len(relations[items[i].PlayerID])
+		}
+	}
+
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "page": page, "pageSize": size, "total": total,
 		"canViewPassword": canViewPassword,
 	})
+}
+
+// relationSortMaxPlayers 限制按关联账号排序时的候选人数，避免一次拉全量玩家做关联。
+const relationSortMaxPlayers = 2000
+
+func playerListSelectSQL(hasUnionManage bool) string {
+	unionManageExpr := "''"
+	bossExpr := "COALESCE(TRIM(a.sm_club_manage), '') <> ''"
+	if hasUnionManage {
+		unionManageExpr = "COALESCE(a.sm_union_manage, '')"
+		bossExpr = "(COALESCE(TRIM(a.sm_union_manage), '') <> '' OR COALESCE(TRIM(a.sm_club_manage), '') <> '')"
+	}
+	return fmt.Sprintf(`SELECT
+a.id, a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_photo,
+a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
+(a.sm_gold + a.sm_gold2 / 100.0) AS balance, a.sm_stone, a.sm_level,
+a.sm_vip, a.sm_vip_level, a.sm_agentID, COALESCE(agent.sm_name, ''),
+a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status, COALESCE(a.sm_ip, ''),
+a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
+FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
+COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
+COALESCE(a.sm_club_make2, ''), COALESCE(a.sm_club_join2, ''),
+COALESCE(a.sm_club_manage, ''), %s, %s
+FROM kbedm.tbl_Account a
+LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
+LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID`, unionManageExpr, bossExpr)
+}
+
+func (s *Server) queryPlayerItemsPage(ctx context.Context, hasUnionManage bool, where string, args []any, size, offset int, protectedRoot bool) ([]playerItem, error) {
+	query := playerListSelectSQL(hasUnionManage) + `
+WHERE ` + where + `
+ORDER BY a.id DESC
+LIMIT ? OFFSET ?`
+	queryArgs := append(append([]any{}, args...), size, offset)
+	return s.queryAndScanPlayerItems(ctx, query, queryArgs, protectedRoot)
+}
+
+func (s *Server) queryPlayerItemsByIDs(ctx context.Context, hasUnionManage bool, where string, args []any, ids []string, protectedRoot bool) ([]playerItem, error) {
+	if len(ids) == 0 {
+		return []playerItem{}, nil
+	}
+	query := playerListSelectSQL(hasUnionManage) + `
+WHERE ` + where + `
+  AND a.sm_guuid IN (` + placeholders(len(ids)) + `)
+ORDER BY a.id DESC`
+	queryArgs := append(append([]any{}, args...), stringArgs(ids)...)
+	items, err := s.queryAndScanPlayerItems(ctx, query, queryArgs, protectedRoot)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]playerItem, len(items))
+	for _, item := range items {
+		byID[item.PlayerID] = item
+	}
+	ordered := make([]playerItem, 0, len(ids))
+	for _, id := range ids {
+		if item, ok := byID[id]; ok {
+			ordered = append(ordered, item)
+		}
+	}
+	return ordered, nil
+}
+
+func (s *Server) queryAndScanPlayerItems(ctx context.Context, query string, args []any, protectedRoot bool) ([]playerItem, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]playerItem, 0, 20)
+	for rows.Next() {
+		var item playerItem
+		var lastLogin sql.NullTime
+		if err := rows.Scan(
+			&item.ID, &item.PlayerID, &item.LoginName, &item.AccountName, &item.Name, &item.Photo,
+			&item.Sex, &item.Role, &item.Gold, &item.Gold2, &item.Balance, &item.Stone, &item.Level,
+			&item.VIP, &item.VIPLevel, &item.AgentID, &item.AgentName,
+			&item.RoomID, &item.RoomType, &item.ClientVersion, &item.ClientStatus, &item.rawIP,
+			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
+			&lastLogin, &item.LoginCount, &item.Remark,
+			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.ClubManage,
+			&item.UnionManage, &item.IsBoss,
+		); err != nil {
+			return nil, err
+		}
+		if lastLogin.Valid {
+			item.LastLoginAt = &lastLogin.Time
+		}
+		item.IPCode = EncodeIPCode(item.rawIP)
+		if protectedRoot {
+			item.IP = item.rawIP
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func (s *Server) matchingPlayerIDs(ctx context.Context, where string, args []any, max int) ([]string, error) {
+	query := `SELECT DISTINCT a.sm_guuid
+FROM kbedm.tbl_Account a
+LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
+LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
+WHERE ` + where + `
+LIMIT ?`
+	queryArgs := append(append([]any{}, args...), max+1)
+	rows, err := s.db.QueryContext(ctx, query, queryArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0, 128)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+func sortPlayerIDsByRelations(ids []string, relations map[string][]playerRelation, order string) {
+	sort.SliceStable(ids, func(i, j int) bool {
+		left, right := len(relations[ids[i]]), len(relations[ids[j]])
+		if left != right {
+			if order == "asc" {
+				return left < right
+			}
+			return left > right
+		}
+		return comparePlayerIDs(ids[i], ids[j]) > 0
+	})
+}
+
+func comparePlayerIDs(left, right string) int {
+	leftValue, leftErr := strconv.ParseUint(left, 10, 64)
+	rightValue, rightErr := strconv.ParseUint(right, 10, 64)
+	if leftErr == nil && rightErr == nil {
+		switch {
+		case leftValue < rightValue:
+			return -1
+		case leftValue > rightValue:
+			return 1
+		default:
+			return 0
+		}
+	}
+	return strings.Compare(left, right)
+}
+
+func playerIDPage(ids []string, page, size int) []string {
+	start := (page - 1) * size
+	if start >= len(ids) {
+		return nil
+	}
+	end := start + size
+	if end > len(ids) {
+		end = len(ids)
+	}
+	return ids[start:end]
 }
 
 func parsePlayerFilters(r *http.Request) (playerFilters, error) {
@@ -221,6 +394,17 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 		LoginFrom:      strings.TrimSpace(query.Get("loginFrom")),
 		LoginTo:        strings.TrimSpace(query.Get("loginTo")),
 		BossOnly:       isTruthyQueryValue(query.Get("boss")),
+		SortBy:         strings.TrimSpace(query.Get("sort")),
+		SortOrder:      strings.ToLower(strings.TrimSpace(query.Get("order"))),
+	}
+	if filters.SortBy != "" && filters.SortBy != "relatedCount" {
+		return playerFilters{}, errors.New("不支持的排序字段")
+	}
+	if filters.SortOrder == "" {
+		filters.SortOrder = "desc"
+	}
+	if filters.SortOrder != "asc" && filters.SortOrder != "desc" {
+		return playerFilters{}, errors.New("排序方向只能是 asc 或 desc")
 	}
 	if ipCode := strings.TrimSpace(query.Get("ipCode")); ipCode != "" {
 		ip, err := DecodeIPCode(ipCode)

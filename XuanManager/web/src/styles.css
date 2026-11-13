@@ -1068,6 +1068,23 @@ td strong { color: #294149; }
 .player-club-subordinates .player-profile-section-title { margin: 0 -16px 12px; border-bottom: 1px solid #e8eeee; }
 .player-club-subordinate-table { min-width: 680px; }
 .player-room-history-table { min-width: 890px; }
+.player-relations-table { min-width: 620px; }
+.relation-summary { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 12px 0 14px; color: #4c6670; font-size: 13px; }
+.relation-summary strong { color: #123f4a; }
+.relation-count-link { padding: 0; border: 0; background: none; color: #0f5f57; font: inherit; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.table-sort { display: inline-flex; align-items: center; gap: 3px; padding: 0; border: 0; background: none; color: inherit; font: inherit; font-weight: 700; cursor: pointer; }
+.table-sort span { color: #8aa0a6; font-size: 11px; }
+.table-sort.is-active { color: #0f5f57; }
+.table-sort.is-active span { color: #0f5f57; }
+.relation-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.relation-tag { padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.relation-tag--device { color: #0d6158; background: #e3f4f0; }
+.relation-tag--gps { color: #8a5a12; background: #fdf1d8; }
+.relation-tag--ip { color: #4e5f6b; background: #eef2f5; }
+.relation-strength { font-weight: 800; }
+.relation-strength.is-strong { color: #b2432f; }
+.relation-strength.is-medium { color: #a8721a; }
+.relation-strength.is-weak { color: #63747c; }
 .player-history-context { display: block; max-width: 250px; overflow: hidden; color: #60787e; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .player-history-context.is-maintenance { max-width: 360px; color: #176f67; font-weight: 650; line-height: 1.55; text-overflow: initial; white-space: normal; }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 17px; }

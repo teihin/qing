@@ -270,6 +270,22 @@ export interface PlayerPasswordResetResult {
   message: string;
 }
 
+export interface PlayerRelationItem {
+  playerId: string;
+  name: string;
+  /** device=同设备，gps=同GPS网格，ip=同公网IP。 */
+  types: string[];
+  score: number;
+  lastSeen: string;
+}
+
+export interface PlayerRelationsResponse {
+  playerId: string;
+  name: string;
+  items: PlayerRelationItem[];
+  total: number;
+}
+
 export interface PlayerSensitiveInfo {
   playerId: string;
   ip: string;
@@ -549,8 +565,13 @@ export interface PlayerItem {
   roomType: string;
   clientVersion: string;
   clientStatus: string;
-  /** 最近上报 IP 的 6 位短码，与游戏内 BOSS 弹窗同一规则；原始 IP 不在列表返回。 */
+  /** 最近上报 IP 的 6 位短码，与游戏内 BOSS 弹窗同一规则。 */
   ipCode: string;
+  /** 原始 IP，仅 admin999 查询时返回。 */
+  ip?: string;
+  /** 关联账号数量；relatedVisible=false 表示本次关联查询失败或无权查看。 */
+  relatedCount: number;
+  relatedVisible: boolean;
   totalRounds: number;
   totalScore: number;
   registrationTime: string;
