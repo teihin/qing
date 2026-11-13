@@ -29,6 +29,8 @@ type playerFilters struct {
 	MinBalance     *float64
 	MaxBalance     *float64
 	BossOnly       bool
+	// IPAddress 是 IP短码 解码后的 IPv4，按 tbl_Account.sm_ip 精确匹配。
+	IPAddress string
 }
 
 type playerItem struct {
@@ -39,25 +41,27 @@ type playerItem struct {
 	// LoginPassword 是玩家登录密码的明文副本（mgr_player_login_password，AES-GCM 密文解密后）。
 	// 游戏端只存 MD5、无法还原，所以只有 XuanManager 亲历过改密（注册/后台重置/自助改密）的账号才有值；
 	// PasswordRecorded 为 false 表示历史密码未收录。只在管理员查询时填充。
-	LoginPassword    string     `json:"loginPassword,omitempty"`
-	PasswordRecorded bool       `json:"passwordRecorded"`
-	Name             string     `json:"name"`
-	Photo            string     `json:"photo"`
-	Sex              string     `json:"sex"`
-	Role             string     `json:"role"`
-	Gold             int64      `json:"gold"`
-	Gold2            int64      `json:"gold2"`
-	Balance          float64    `json:"balance"`
-	Stone            int64      `json:"stone"`
-	Level            int64      `json:"level"`
-	VIP              int64      `json:"vip"`
-	VIPLevel         int64      `json:"vipLevel"`
-	AgentID          string     `json:"agentId"`
-	AgentName        string     `json:"agentName"`
-	RoomID           int64      `json:"roomId"`
-	RoomType         string     `json:"roomType"`
-	ClientVersion    string     `json:"clientVersion"`
-	ClientStatus     string     `json:"clientStatus"`
+	LoginPassword    string  `json:"loginPassword,omitempty"`
+	PasswordRecorded bool    `json:"passwordRecorded"`
+	Name             string  `json:"name"`
+	Photo            string  `json:"photo"`
+	Sex              string  `json:"sex"`
+	Role             string  `json:"role"`
+	Gold             int64   `json:"gold"`
+	Gold2            int64   `json:"gold2"`
+	Balance          float64 `json:"balance"`
+	Stone            int64   `json:"stone"`
+	Level            int64   `json:"level"`
+	VIP              int64   `json:"vip"`
+	VIPLevel         int64   `json:"vipLevel"`
+	AgentID          string  `json:"agentId"`
+	AgentName        string  `json:"agentName"`
+	RoomID           int64   `json:"roomId"`
+	RoomType         string  `json:"roomType"`
+	ClientVersion    string  `json:"clientVersion"`
+	ClientStatus     string  `json:"clientStatus"`
+	// IPCode 是最近上报 IP（tbl_Account.sm_ip）的 6 位短码；原始 IP 不在列表返回。
+	IPCode           string     `json:"ipCode"`
 	TotalRounds      int64      `json:"totalRounds"`
 	TotalScore       int64      `json:"totalScore"`
 	RegistrationTime string     `json:"registrationTime"`
@@ -81,6 +85,7 @@ type playerItem struct {
 	clubJoin  string
 	clubMake2 string
 	clubJoin2 string
+	ip        string
 }
 
 // 玩家登录密码只对管理员返回。管理员 = `super_admin` 角色（含 admin999 超级管理员
@@ -128,7 +133,7 @@ a.id, a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_photo,
 a.sm_sex, a.sm_role, a.sm_gold, a.sm_gold2,
 (a.sm_gold + a.sm_gold2 / 100.0) AS balance, a.sm_stone, a.sm_level,
 a.sm_vip, a.sm_vip_level, a.sm_agentID, COALESCE(agent.sm_name, ''),
-a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status,
+a.sm_roomID, a.sm_roomType, a.sm_client_version, a.sm_client_status, COALESCE(a.sm_ip, ''),
 a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
 FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
 COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
@@ -156,7 +161,7 @@ LIMIT ? OFFSET ?`, unionManageExpr, bossExpr, where)
 			&item.ID, &item.PlayerID, &item.LoginName, &item.AccountName, &item.Name, &item.Photo,
 			&item.Sex, &item.Role, &item.Gold, &item.Gold2, &item.Balance, &item.Stone, &item.Level,
 			&item.VIP, &item.VIPLevel, &item.AgentID, &item.AgentName,
-			&item.RoomID, &item.RoomType, &item.ClientVersion, &item.ClientStatus,
+			&item.RoomID, &item.RoomType, &item.ClientVersion, &item.ClientStatus, &item.ip,
 			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
 			&lastLogin, &item.LoginCount, &item.Remark,
 			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.ClubManage,
@@ -169,6 +174,7 @@ LIMIT ? OFFSET ?`, unionManageExpr, bossExpr, where)
 		if lastLogin.Valid {
 			item.LastLoginAt = &lastLogin.Time
 		}
+		item.IPCode = EncodeIPCode(item.ip)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
@@ -215,6 +221,13 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 		LoginFrom:      strings.TrimSpace(query.Get("loginFrom")),
 		LoginTo:        strings.TrimSpace(query.Get("loginTo")),
 		BossOnly:       isTruthyQueryValue(query.Get("boss")),
+	}
+	if ipCode := strings.TrimSpace(query.Get("ipCode")); ipCode != "" {
+		ip, err := DecodeIPCode(ipCode)
+		if err != nil {
+			return playerFilters{}, err
+		}
+		filters.IPAddress = ip
 	}
 	for _, value := range []string{
 		filters.Keyword, filters.PlayerID, filters.Name, filters.LoginName, filters.AgentID,
@@ -303,6 +316,7 @@ k.accountName = ? OR a.sm_agentID = ? OR agent.sm_name LIKE ?)`)
 	addLike("a.sm_role", filters.Role)
 	addExact("a.sm_client_status", filters.ClientStatus)
 	addExact("a.sm_client_version", filters.ClientVersion)
+	addExact("a.sm_ip", filters.IPAddress)
 	if filters.Level != nil {
 		clauses = append(clauses, "a.sm_level = ?")
 		args = append(args, *filters.Level)

@@ -2,6 +2,7 @@ import ImageManager from "../logic/ImageManager";
 import {ShowPanelMode} from "../common/GameDef";
 import UIManager from "../common/UIManager";
 import DirectChatManager from "../logic/DirectChatManager";
+import MobileManager from "../mobile/MobileManager";
 
 export type ClubRole = "owner" | "manager" | "agent" | "member";
 export type ClubListKind = "members" | "applications" | "union" | "allies";
@@ -630,7 +631,7 @@ export default class ClubManagementView {
             "玩家设置关闭","玩家设置复制ID","玩家设置赠送金币","玩家设置上下分","玩家设置调整分数","玩家设置踢出俱乐部",
             "玩家设置调整比例","玩家设置代理开关","玩家设置取消代理",
             "玩家设置备注","玩家设置开通额度","玩家设置增加额度","玩家设置减少额度","玩家设置禁止游戏","玩家设置禁止账号",
-            "玩家设置调整盟主比例","玩家设置调整暗扣",
+            "玩家设置调整盟主比例","玩家设置调整暗扣","玩家IP复制",
             "成员设置","成员设置非激活","下级成员","下级成员激活",
             "额度记录","额度记录激活","记录_上下分","记录_上下分激活","记录_牌局","记录_牌局激活",
             "记录第一页","记录上一页","记录下一页","记录最后一页",
@@ -649,6 +650,17 @@ export default class ClubManagementView {
             this.settingsDepth = 0;
         } else if(name === "玩家设置复制ID") {
             if(this.selectedPlayer) this.message("玩家ID：" + this.selectedPlayer.id);
+        } else if(name === "玩家IP复制") {
+            const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+            const label = this.at("玩家IP值",panel);
+            const labelComp = label ? label.getComponent(cc.Label) : null;
+            const code = labelComp ? String(labelComp.string || "").trim() : "";
+            if(code === "" || code === "—" || code === "查询中…") {
+                this.message("IP短码为空，暂时无法复制！");
+                return true;
+            }
+            const copied = MobileManager.getInstance().CopyToPhone(code);
+            this.message(copied ? "IP短码复制成功！" : "IP短码复制失败，请稍后重试！");
         } else if(name === "玩家设置赠送金币") {
             // 赠送是玩家之间转账（赠送_俱乐部_积分，扣自己的积分）。
             if(this.selectedPlayer && this.gift) this.gift(this.selectedPlayer,"give");
@@ -1316,7 +1328,7 @@ export default class ClubManagementView {
             ["开通额度底","开通额度","玩家设置开通额度"],
             ["额度底","额度","额度值","玩家设置增加额度","玩家设置减少额度"],
             // BOSS 专用：IP / 最后登录时间，排在所有成员设置行之后。
-            ["玩家IP底","玩家IP","玩家IP值"],
+            ["玩家IP底","玩家IP","玩家IP值","玩家IP复制"],
             ["最后登录底","最后登录","最后登录值"],
         ];
         let y = 120;
@@ -1346,7 +1358,7 @@ export default class ClubManagementView {
     /** 两行只在「成员设置」页签显示，且要跟其它行一起重排，避免留下空档。 */
     private syncExtRows(panel:cc.Node):void {
         const show = this.extInfoVisible && this.settingsTab === "member";
-        for(const name of ["玩家IP底","玩家IP","玩家IP值","最后登录底","最后登录","最后登录值"])
+        for(const name of ["玩家IP底","玩家IP","玩家IP值","玩家IP复制","最后登录底","最后登录","最后登录值"])
             this.active(name,show,panel);
     }
     /**

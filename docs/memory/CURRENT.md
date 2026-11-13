@@ -4,6 +4,18 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-14 后台玩家管理支持 IP 短码（已部署 8891）
+
+- 玩家列表新增「IP短码」列（6 位 Base62，与客户端同规则；列表不返回原始 IP），高级筛选新增「IP短码」精确匹配 `tbl_Account.sm_ip`。
+- 玩家详情保持原样：明文 IP/GPS 仍仅 `admin999` 可见。
+- 已部署修正版：二进制 `f2c47066…`、前端 `index-B_pOglF-.js`；备份 `backups/xuanmanager.20261114-002434-rollback`、`web.previous-20261114-002434`；health 200、未登录接口 401。详见[交接](handoffs/2026-11-14-admin-player-ip-shortcode.md)。
+
+## 2026-11-14 BOSS 玩家信息弹窗 IP 改短码（未构建、未真机）
+
+- `panelClubPlayerInfo.ts` 上屏前把 `ip` 转成 6 位无损可逆短码（Base62），弹窗不再出现明文 IP；IP 行右侧新增「复制」按钮，复制短码本身；非 IPv4 显示「—」。
+- 服务端未改，回包仍是明文；解码规则见[接口文档 §8](../../服务器文档整理/玩家扩展信息查询-客户端接口文档.md)。后台后续还原按同一规则实现。
+- 未运行 Creator 编译/构建/热更/真机。详见[交接](handoffs/2026-11-14-client-player-ip-shortcode.md)。
+
 ## 2026-11-13 BF 聊天开关移交后台（已部署 8891/8893）
 
 - 隐藏开关，置顶入口保留；后台按俱乐部开关，默认开启。ChatTool 迁移 014 建 `chat_direct_bf_club`，拒绝客户端写入；XuanManager 迁移 063 建 `game.club.bf_chat` 与 `PUT /api/game/clubs/{clubId}/bf-chat`。两端 health 200；客户端未构建。见[交接](handoffs/2026-11-13-club-bf-chat-admin.md)。
@@ -38,12 +50,8 @@
 
 ## 2026-11-12 后台玩家管理：大小BOSS = union_manage / club_manage（已部署 8891）
 
-- 玩家列表浅红行与「大小BOSS」筛选改为 `sm_union_manage` 或 `sm_club_manage` 非空，不再看等级 99 / 董事长 / 总裁；列表新增 `unionManage` / `clubManage`。
-- 玩家管理新增「管理范围」弹窗与 `POST /api/game/players/{playerId}/manage-scope`：调游戏服 `异步_设置_俱乐部_管理范围`，回读两列校验、并发旧值 409、全程审计；迁移 059 已执行，权限 `game.player.manage_scope` id=5820、3 个角色授权。
-- 弹窗改为直接勾选：`GET /api/game/players/manage-scope/options` 返回全部启用联盟 + 未入盟独立俱乐部，支持搜索多选，不再手输编号。
-- 列表与玩家详情按名称展示管理范围（后端批量补 `unionManageNames` / `clubManageNames`），名称缺失回退编号。
-- 已部署：二进制 `87a9b52a…`、前端 `index-CnQgFCHa.js` + `index-BXvdQkqt.css`；行内按钮「管理范围」已改名「设置管理员」，仅切前端目录、服务未重启；health 200、未登录接口 401。回滚：二进制 `backups/xuanmanager.20261112-2131-rollback`（`d38c4081…`）、前端 `web.previous-adminlabel-20261112-2229`。
-- 游戏服 `sm_union_manage` 列与 `异步_设置_俱乐部_管理范围` 命令已探测可用；当前库中 0 个账号配置范围，需在页面配置后才会标红。页面实操待验。详见[交接](handoffs/2026-11-12-admin-player-manage-scope.md)。
+- 「大小BOSS」筛选/浅红行改看 `sm_union_manage` 或 `sm_club_manage` 非空；新增「设置管理员」弹窗（迁移 059、权限 `game.player.manage_scope`），调游戏服 `异步_设置_俱乐部_管理范围` 并回读校验/审计。
+- 列表与详情批量补管理范围名称；已部署 8891（二进制 `87a9b52a…`、前端 `index-CnQgFCHa.js` + `index-BXvdQkqt.css`，回滚备份见交接）。详见[交接](handoffs/2026-11-12-admin-player-manage-scope.md)。
 
 ## 2026-11-12 业绩核心共享：写操作改用日期框当前日期（已部署 8891）
 
@@ -88,16 +96,10 @@
 - v6：渲染 `leaders`（盟主行含俱乐部/整线次数/占比/授权状态），盟主只授权不取消，已授权显示「已授权」；成员行只读；授权后 1.0s/2.4s 刷新。
 - 抓包 775447/267493 已确认是联盟层盟主授权；服务端 v6 需部署重启才有 `scope`/`leaders`。Prefab/TS/JSON 检查通过，Creator/真机/联调待验。详见[交接](handoffs/2026-11-11-my-hongli-perf-tab.md)。
 
-## 2026-11-11 后台业绩核心共享：三类奖励统一按业绩股比例（已部署，游戏服命令待生效）
+## 2026-11-11 后台业绩核心共享：三类奖励统一按业绩股比例（已被 11-13 三阶段发放替代）
 
-- 业绩 / 核心 / 奖池共享的自动分摊权重统一改为 `异步_查询_俱乐部_业绩_报表` 的净次数
-  （`left_count`），本次名单内归一；核心不再按上次金额、奖池不再按今日输赢。
-- 发放日期默认昨天（今天未结算）；未来日期前后端都拦截，业绩报表按批次日期换算 `date` 偏移（昨天 = -1）。
-- 奖池历史日期优先用批次保存时的 `pool_base` 快照，没有快照才退回实时奖池并提示；只有当天保存才写快照。
-- 页面表格改为业绩(毛次) / 净业绩(次) / 业绩占比，移除线输赢列；Go/Web 构建与检查通过。
-- 已部署 8891：二进制 `b2301972…`（10,293,432 字节）、前端 `index-DQ5-lFku.js`（CSS 不变）；health 200、发放接口未登录 401。
-  回滚：`backups/xuanmanager.20261111-2306-rollback`、`web.previous-agent-reward-perf-ratio-20261111-2306`。
-  新报表命令用真实联盟（名单 6 人）探测 2 分钟未返回，待游戏服重启 baseapp 后复验。详见[交接](handoffs/2026-11-11-agent-reward-perf-ratio.md)。
+- 自动分摊权重统一为业绩报表净次数（`left_count`），发放日期默认昨天、未来日期拦截；奖池历史日期优先用批次 `pool_base` 快照。
+- 已部署 8891（二进制 `b2301972…`、前端 `index-DQ5-lFku.js`）；新报表命令待游戏服重启复验。详见[交接](handoffs/2026-11-11-agent-reward-perf-ratio.md)。
 
 ## 2026-11-11 后台业绩核心共享：改为按联盟发放（已部署）
 

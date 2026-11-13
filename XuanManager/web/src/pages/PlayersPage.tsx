@@ -27,6 +27,7 @@ interface PlayerFilters {
   loginFrom: string;
   loginTo: string;
   boss: string;
+  ipCode: string;
 }
 
 const emptyFilters: PlayerFilters = {
@@ -42,6 +43,7 @@ const emptyFilters: PlayerFilters = {
   loginFrom: "",
   loginTo: "",
   boss: "",
+  ipCode: "",
 };
 
 function playerFiltersFromHash(): PlayerFilters {
@@ -169,6 +171,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
               <Field label="玩家ID"><input value={draft.playerId} onChange={(event) => update("playerId", event.target.value)} placeholder="精确匹配游戏ID" /></Field>
               <Field label="玩家昵称"><input value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="支持部分匹配" /></Field>
               <Field label="登录账号"><input value={draft.loginName} onChange={(event) => update("loginName", event.target.value)} placeholder="登录名或KBE账号" /></Field>
+              <Field label="IP短码" hint="6 位字母数字，区分大小写；按数据库最近上报 IP 精确匹配"><input value={draft.ipCode} onChange={(event) => update("ipCode", event.target.value)} placeholder="如 43Ypq1" maxLength={6} /></Field>
               <Field label="大小BOSS" hint="筛选已配置可管理联盟或俱乐部（union_manage / club_manage）的账号"><select value={draft.boss} onChange={(event) => update("boss", event.target.value)}><option value="">全部玩家</option><option value="1">只看大小BOSS</option></select></Field>
               <Field label="当前房间ID"><input type="number" min="0" value={draft.roomId} onChange={(event) => update("roomId", event.target.value)} placeholder="0 表示未在房间" /></Field>
               <Field label="客户端状态"><input value={draft.clientStatus} onChange={(event) => update("clientStatus", event.target.value)} placeholder="精确匹配状态值" /></Field>
@@ -197,7 +200,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <>
             <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
               <table className="player-table">
-                <thead><tr><th>玩家</th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
+                <thead><tr><th>玩家</th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th title="最近上报 IP 的 6 位短码，与游戏内 BOSS 玩家信息弹窗同一规则">IP短码</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
                   <tr key={player.id} className={player.isBoss ? "player-row--boss" : undefined} title={player.isBoss ? `大小BOSS${scopeFullText(player) ? ` · ${scopeFullText(player)}` : ""}` : undefined}>
                     <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small>{player.isBoss && <small className="cell-subtitle scope-summary">大小BOSS · {scopeRowSummary(player)}</small>}</div></div></td>
@@ -206,6 +209,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
                     <td><strong className="stone-value">{player.stone.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">钻石</small></td>
                     <td>{player.clubs.length > 0 ? <div className="club-chip-list">{player.clubs.map((club) => <span className="club-chip" key={club.clubId} title={`俱乐部ID：${club.clubId}`}>{club.name || club.clubId}</span>)}</div> : <span className="muted">未加入俱乐部</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
+                    <td><code>{player.ipCode || "—"}</code></td>
                     <td>{formatDate(player.registrationTime)}</td>
                     <td>{formatDate(player.lastLoginAt)}</td>
                     <td><div className="row-actions">{can("game.player.grant_stone") && <button className="success-link" onClick={() => setGrantingStone(player)}>发放钻石</button>}{can("game.player.manage_scope") && <button onClick={() => setConfiguringScope(player)}>设置管理员</button>}{can("game.player.reset_password") && <button onClick={() => setResettingPassword(player)}>重置密码</button>}<button onClick={() => setSelected(player)}>查看详情</button></div></td>

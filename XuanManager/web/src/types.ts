@@ -549,6 +549,8 @@ export interface PlayerItem {
   roomType: string;
   clientVersion: string;
   clientStatus: string;
+  /** 最近上报 IP 的 6 位短码，与游戏内 BOSS 弹窗同一规则；原始 IP 不在列表返回。 */
+  ipCode: string;
   totalRounds: number;
   totalScore: number;
   registrationTime: string;

@@ -336,10 +336,37 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
         const guuid = String(result.guuid == null ? "" : result.guuid).trim();
         if(guuid !== "" && guuid !== this.userId)
             return;
+        // 明文 IP 不上屏，只显示可逆短码；规则见 玩家扩展信息查询-客户端接口文档.md §8。
         this.view.SetPlayerExtInfo(
-            String(result.ip == null ? "" : result.ip).trim(),
+            panelClubPlayerInfo.EncodeIp(String(result.ip == null ? "" : result.ip).trim()),
             String(result.last_login_time == null ? "" : result.last_login_time).trim(),
             true);
+    }
+
+    private static readonly IP_CODE_ALPHABET:string = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    /**
+     * IPv4 → 6 位 Base62 短码（固定 6 位，左侧补 0），无损可逆。
+     * 后台还原按文档同一规则实现；非 IPv4 返回 ""，界面显示「—」。
+     */
+    private static EncodeIp(ip:string):string {
+        const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(ip);
+        if(m == null)
+            return "";
+        const bytes:number[] = [];
+        for(let i = 1; i <= 4; i++) {
+            const v = parseInt(m[i], 10);
+            if(!(v >= 0 && v <= 255))
+                return "";
+            bytes.push(v);
+        }
+        const alphabet = panelClubPlayerInfo.IP_CODE_ALPHABET;
+        let value = ((bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3]) >>> 0;
+        let body = "";
+        for(let i = 0; i < 6; i++) {
+            body = alphabet.charAt(value % 62) + body;
+            value = Math.floor(value / 62);
+        }
+        return body;
     }
 
     private ToPlayer(row:any):ClubPlayer {
