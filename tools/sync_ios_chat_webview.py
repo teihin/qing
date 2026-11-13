@@ -41,7 +41,7 @@ def deduplicate_bridge_lines(text: str) -> str:
     seen: set[str] = set()
     output: list[str] = []
     for line in text.splitlines(keepends=True):
-        if "QingChatWebViewBridge" in line:
+        if "QingChatWebViewBridge" in line or "ImageIO.framework" in line:
             if line in seen:
                 continue
             seen.add(line)
@@ -161,6 +161,38 @@ def main() -> int:
         "\t\t\t\t71C0B00171C0B00171C0B001 /* QingChatWebViewBridge.mm in Sources */,\n"
         "\t\t\t\t73D0A00173D0A00173D0A001 /* DirectChatImageBridge.mm in Sources */,\n",
         "direct image source phase",
+    )
+    project = replace_once(
+        project,
+        "\t\t73D0A00173D0A00173D0A001 /* DirectChatImageBridge.mm in Sources */ = "
+        "{isa = PBXBuildFile; fileRef = 73D0A00373D0A00373D0A003 "
+        "/* DirectChatImageBridge.mm */; settings = {COMPILER_FLAGS = \"-fobjc-arc\"; }; };\n",
+        "\t\t73D0A00173D0A00173D0A001 /* DirectChatImageBridge.mm in Sources */ = "
+        "{isa = PBXBuildFile; fileRef = 73D0A00373D0A00373D0A003 "
+        "/* DirectChatImageBridge.mm */; settings = {COMPILER_FLAGS = \"-fobjc-arc\"; }; };\n"
+        "\t\t73D0A00573D0A00573D0A005 /* ImageIO.framework in Frameworks */ = "
+        "{isa = PBXBuildFile; fileRef = 73D0A00473D0A00473D0A004 /* ImageIO.framework */; };\n",
+        "ImageIO build file",
+    )
+    project = replace_once(
+        project,
+        "\t\t73D0A00373D0A00373D0A003 /* DirectChatImageBridge.mm */ = "
+        "{isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; "
+        "name = DirectChatImageBridge.mm; path = ios/DirectChatImageBridge.mm; sourceTree = \"<group>\"; };\n",
+        "\t\t73D0A00373D0A00373D0A003 /* DirectChatImageBridge.mm */ = "
+        "{isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.objcpp; "
+        "name = DirectChatImageBridge.mm; path = ios/DirectChatImageBridge.mm; sourceTree = \"<group>\"; };\n"
+        "\t\t73D0A00473D0A00473D0A004 /* ImageIO.framework */ = "
+        "{isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ImageIO.framework; "
+        "path = System/Library/Frameworks/ImageIO.framework; sourceTree = SDKROOT; };\n",
+        "ImageIO file reference",
+    )
+    project = replace_once(
+        project,
+        "\t\t\t\tBA3A85EC1A724AE900924D24 /* Security.framework in Frameworks */,\n",
+        "\t\t\t\tBA3A85EC1A724AE900924D24 /* Security.framework in Frameworks */,\n"
+        "\t\t\t\t73D0A00573D0A00573D0A005 /* ImageIO.framework in Frameworks */,\n",
+        "ImageIO frameworks phase",
     )
     pbxproj.write_text(deduplicate_bridge_lines(project), encoding="utf-8")
 
