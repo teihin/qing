@@ -49,14 +49,14 @@
 直聊使用独立的 `/api/direct/*` 路由、`chat_direct_*` 数据表和游戏库只读连接，与客服会话、客服 SSE 和客服权限相互隔离。
 
 - `POST /api/direct/session`：使用游戏端生成的一次性 `dc1` 票据建立直聊会话；`POST /api/direct/session/dev` 仅在本地联调开关开启时允许用 `guuid` 换会话。
-- `GET /api/direct/me`、`GET /api/direct/clubs`、`GET /api/direct/unread`：读取当前玩家资料、所属俱乐部和未读汇总。
+- `GET /api/direct/me`、`GET /api/direct/clubs`、`GET /api/direct/unread`：读取当前玩家资料、所属俱乐部和未读汇总。未读口径与会话列表一致：俱乐部已删除或用户已退出时，该俱乐部的历史未读不计入 `total`/`byClub`，避免底部红点与列表不一致。
 - `GET /api/direct/clubs/{clubId}/members`：读取俱乐部成员；`GET/POST /api/direct/clubs/{clubId}/conversations`：读取或创建一对一会话。联盟总群主可读取/创建联盟内任意俱乐部的成员会话，跨俱乐部会话按对方所在 `clubId` 归属。
 - `GET /api/direct/conversations`：读取当前账号参与的全部会话（含联盟总群主的跨俱乐部会话）；消息使用 `GET/POST /api/direct/conversations/{conversationId}/messages`，支持 `before`、`after` 游标。
 - `POST /api/direct/conversations/{conversationId}/attachments`、`.../{attachmentId}/upload`、`.../{attachmentId}/complete`：图片、语音附件创建、上传和确认；`POST .../{conversationId}/read` 已读，`DELETE .../{conversationId}` 隐藏可删除会话，`POST .../{conversationId}/clear` 单方清除本人这一侧的聊天记录（消息行保留，对方和客服仍可见）。
 - `POST /api/direct/ws-ticket`：为当前直聊会话签发一次性 WebSocket 票据；`GET /api/direct/ws?ticket=...`：建立长连接。消息落库成功后推送 `message.new`，发送方收到 `message.sent`；事件只携带游标，客户端按 `after` 补拉完整消息。
 - WebSocket 不可用、超时或回包丢失时，客户端使用同一 `clientMessageId` 回退 HTTP，服务端按该 ID 幂等，避免重复消息。断线重连使用指数退避，恢复后按游标补偿。
-- 会话中的 `peer.role` 使用 `owner`、`leader`、`agent`、`manager`、`member`，联盟总群主在其它俱乐部会话里为 `union_owner`；客户端将 `owner` 显示为“老板”、`union_owner` 显示为“大群主”、代理统一显示“代理”。`peer.note` 只在当前玩家位于目标成员的俱乐部上级链时返回。
-- 固定联系人（默认对话）：本俱乐部创建者（盟主，未入盟显示群主）、俱乐部所在联盟总群主（大盟主），按 guuid 去重；直属上级合伙人等代理链条上的其他层级不生成固定入口，与他们的会话按普通会话处理。固定会话服务端返回 `canDelete=false`，删除请求返回 `DIRECT_DELETE_FORBIDDEN`。
+- 会话与成员列表中的 `role` 使用 `owner`、`leader`、`agent`、`manager`、`member`，联盟总群主在其它俱乐部会话里为 `union_owner`；显示身份以服务端 `roleName` 为准：联盟创始人=大盟主、已入盟俱乐部创建者=盟主、未入盟创建者=群主、代理统一=合伙人。客户端不能只按 `role` 把 `owner` 固定显示成群主。`note`/`peer.note` 只在当前玩家位于目标成员的俱乐部上级链时返回。
+- 固定联系人（默认对话）：本俱乐部创建者（盟主，未入盟显示群主）、俱乐部所在联盟总群主（大盟主），按 guuid 去重；直属上级合伙人等代理链条上的其他层级不生成固定入口，与他们的会话按普通会话处理。后台关闭该俱乐部 BF 聊天后，普通合伙人和玩家只保留所属盟主入口，大盟主入口只对本俱乐部盟主保留；重新开启恢复。固定会话服务端返回 `canDelete=false`，删除请求返回 `DIRECT_DELETE_FORBIDDEN`。
 - `GET /api/direct/bf-entry`：官方客服（BF）入口状态。返回 `{eligible,enabled,visible}`：`eligible` 恒为 `false`（开关已移到后台俱乐部管理，客户端不再显示顶部开关）；`visible` 表示置顶 BF 行是否显示，按当前账号所属俱乐部逐个判断，任一俱乐部关闭即隐藏，创建者也遵循。`POST` 保留兼容但一律返回 `DIRECT_BF_ENTRY_FORBIDDEN`，开关统一由后台「俱乐部管理」按俱乐部设置；没有记录时回落到旧版创建者账号记录，再没有则默认开启。
 
 ## 媒体

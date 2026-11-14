@@ -13,8 +13,8 @@ const {ccclass} = cc._decorator;
 const PAGE_SIZE = 30;
 /** 本地缓存只保留第一页，进页面时先出列表；多页数据仍由服务端分页保证。 */
 const LIST_CACHE_MAX = 30;
-/** v2：默认对话改为只保留盟主/大盟主，旧缓存里的上级合伙人入口行必须作废。 */
-const LIST_CACHE_VERSION = 2;
+/** v4：缓存需带服务端 roleName（盟主/群主），旧缓存按 role 回退会误显示群主。 */
+const LIST_CACHE_VERSION = 4;
 /** 距离底部小于该高度时自动请求下一页。 */
 const LOAD_MORE_DISTANCE = 260;
 /** 顶部负向回弹超过该距离（设计像素）后松手触发刷新。 */
@@ -309,7 +309,8 @@ export default class panelMessage extends UIPanelViewBase {
                         name:String(one.peer.name || ""),
                         note:String(one.peer.note || ""),
                         avatar:String(one.peer.avatar || ""),
-                        role:String(one.peer.role || "member")
+                        role:String(one.peer.role || "member"),
+                        roleName:String(one.peer.roleName || "")
                     },
                     lastMessage:String(one.lastMessage || ""),
                     lastMessageType:String(one.lastMessageType || ""),
@@ -445,11 +446,18 @@ export default class panelMessage extends UIPanelViewBase {
             incomingKeys[this.ConversationKey(item)] = true;
 
         let merged:DirectConversation[] = incoming.slice(0);
-        for(let old of this.list)
+        // 第一页已是全量（服务端没有后续页）时以本次结果为准，避免 BF 关闭后
+        // 已下线的固定入口继续留在内存列表里。
+        if(this.page <= 1 && hasMore !== true && this.list.length > incoming.length)
+            merged = incoming.slice(0);
+        else
         {
-            if(incomingKeys[this.ConversationKey(old)] === true)
-                continue;
-            merged.push(old);
+            for(let old of this.list)
+            {
+                if(incomingKeys[this.ConversationKey(old)] === true)
+                    continue;
+                merged.push(old);
+            }
         }
 
         let addedAtTop = merged.length - this.list.length;
@@ -993,7 +1001,7 @@ export default class panelMessage extends UIPanelViewBase {
                 // 俱乐部名称后明确标识老板/大群主，避免玩家只看到名字而不知道对方身份。
                 let peerRole = item.peer == null ? "" : String(item.peer.role || "");
                 if(peerRole === "owner" || peerRole === "union_owner")
-                    name += "（" + DirectChatManager.RoleName(peerRole) + "）";
+                    name += "（" + DirectChatManager.DisplayRoleName(item.peer) + "）";
             }
             nameLabel.string = name;
         }

@@ -267,16 +267,29 @@ type UnreadView struct {
 }
 
 // Unread 返回所有俱乐部未读总和。
+// 口径必须与会话列表一致：俱乐部已删除或用户已退出时，该俱乐部的历史未读
+// 不再计入红点，否则会出现底部有红点、消息列表却没有对应会话的情况。
 func (s *Service) Unread(ctx context.Context, session Session) (UnreadView, error) {
 	byClub, err := s.store.UnreadByClub(ctx, session.Guuid)
 	if err != nil {
 		return UnreadView{}, err
 	}
+	visible := make(map[string]int, len(byClub))
 	total := 0
-	for _, count := range byClub {
+	for clubID, count := range byClub {
+		if count <= 0 {
+			continue
+		}
+		if _, err := s.viewerForClub(ctx, session, clubID); err != nil {
+			if biz := AsError(err); biz.Code == CodeClubNotFound || biz.Code == CodeNotClubMember {
+				continue
+			}
+			return UnreadView{}, err
+		}
+		visible[clubID] = count
 		total += count
 	}
-	return UnreadView{Total: total, ByClub: byClub}, nil
+	return UnreadView{Total: total, ByClub: visible}, nil
 }
 
 // MemberPage 是成员列表返回结构。
@@ -291,13 +304,14 @@ type MemberPage struct {
 
 // MemberView 是成员列表项。
 type MemberView struct {
-	Guuid   string `json:"guuid"`
-	Name    string `json:"name"`
-	Note    string `json:"note,omitempty"`
-	Avatar  string `json:"avatar"`
-	Role    string `json:"role"`
-	Online  bool   `json:"online"`
-	CanChat bool   `json:"canChat"`
+	Guuid    string `json:"guuid"`
+	Name     string `json:"name"`
+	Note     string `json:"note,omitempty"`
+	Avatar   string `json:"avatar"`
+	Role     string `json:"role"`
+	RoleName string `json:"roleName,omitempty"`
+	Online   bool   `json:"online"`
+	CanChat  bool   `json:"canChat"`
 }
 
 // Members 分页返回当前俱乐部成员，不包含自己。联盟总群主可查看联盟内任意俱乐部。
@@ -328,7 +342,7 @@ func (s *Service) Members(ctx context.Context, session Session, clubID, keyword 
 		peer := s.peerView(ctx, session, me, clubID, member)
 		views = append(views, MemberView{
 			Guuid: peer.Guuid, Name: peer.Name, Note: peer.Note, Avatar: peer.Avatar,
-			Role: peer.Role, Online: member.Online,
+			Role: peer.Role, RoleName: peer.RoleName, Online: member.Online,
 			CanChat: CanCreateFromMemberList(me.Role) || me.IsUnionOwner,
 		})
 	}
@@ -593,6 +607,8 @@ func (s *Service) lastPreview(ctx context.Context, conv Conversation, guuid stri
 // defaultTargets 返回默认对话入口：本俱乐部老板（盟主/群主）与联盟大盟主。
 // 玩家和合伙人只保留这两级，代理链条上的其他层级（含直属上级合伙人）不再生成默认入口；
 // 他们已有的真实会话仍按普通会话显示。两人为同一人时去重，对方已退出或不存在时跳过。
+// 后台关闭俱乐部 BF 聊天后，只有本俱乐部老板仍保留大盟主入口，
+// 普通合伙人和玩家只能看到所属盟主。
 func (s *Service) defaultTargets(ctx context.Context, club Club, me Member) []Member {
 	result := make([]Member, 0, 2)
 	// 大群主在联盟内没有需要固定置顶的上级/老板入口，直接用成员列表找人。
@@ -613,12 +629,31 @@ func (s *Service) defaultTargets(ctx context.Context, club Club, me Member) []Me
 			add(member)
 		}
 	}
-	if union, ok, err := s.directory.GetUnionByClub(ctx, club.ClubID); err == nil && ok {
+	if union, ok, err := s.directory.GetUnionByClub(ctx, club.ClubID); err == nil && ok &&
+		s.unionOwnerTargetAllowed(ctx, club, me) {
 		if member, ok, err := s.peerForClub(ctx, club.ClubID, union.OwnerGuuid); err == nil && ok {
 			add(member)
 		}
 	}
 	return result
+}
+
+// unionOwnerTargetAllowed 判断当前成员是否保留大盟主固定入口。
+// BF 聊天关闭后仅本俱乐部老板（盟主/群主）保留，普通合伙人和玩家不再显示；
+// 开关读取失败按开启处理，避免数据库抖动时少给入口。
+func (s *Service) unionOwnerTargetAllowed(ctx context.Context, club Club, me Member) bool {
+	if strings.TrimSpace(club.OwnerGuuid) == strings.TrimSpace(me.Guuid) {
+		return true
+	}
+	store, err := s.bfEntryStore()
+	if err != nil {
+		return true
+	}
+	enabled, err := s.bfEntryEnabledForClub(ctx, store, club)
+	if err != nil {
+		return true
+	}
+	return enabled
 }
 
 // isFixedTarget 判断会话是否属于默认入口（不可隐藏）：本俱乐部老板（盟主/群主）与联盟大盟主。
@@ -636,7 +671,7 @@ func (s *Service) isFixedTarget(ctx context.Context, club Club, me Member, peerG
 	}
 	if union, ok, err := s.directory.GetUnionByClub(ctx, club.ClubID); err == nil && ok &&
 		strings.TrimSpace(union.OwnerGuuid) == peerGuuid {
-		return true
+		return s.unionOwnerTargetAllowed(ctx, club, me)
 	}
 	return false
 }

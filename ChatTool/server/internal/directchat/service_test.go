@@ -574,6 +574,36 @@ func TestDefaultTargetsForMember(t *testing.T) {
 	}
 }
 
+// 成员列表的身份名必须按俱乐部是否入盟返回：已入盟创建者=盟主，未入盟=群主。
+func TestMemberListRoleNameUsesUnionState(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	player := env.session(t, "100001")
+
+	ownerRoleName := func() string {
+		t.Helper()
+		page, err := env.service.Members(ctx, player, "111111", "", 1, 30)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range page.Items {
+			if item.Guuid == "100004" {
+				return item.RoleName
+			}
+		}
+		t.Fatalf("club owner missing from member list: %+v", page.Items)
+		return ""
+	}
+
+	if got := ownerRoleName(); got != "群主" {
+		t.Fatalf("owner without union must display 群主, got %q", got)
+	}
+	env.store.addUnion("111111", Union{ID: "900001", Name: "测试联盟", OwnerGuuid: "100009", OwnerClub: "111111"})
+	if got := ownerRoleName(); got != "盟主" {
+		t.Fatalf("owner inside union must display 盟主, got %q", got)
+	}
+}
+
 // 与直属上级合伙人的历史会话保留，但不再是固定入口，按普通会话排序、可删除。
 func TestExistingSuperiorAgentConversationIsNotFixed(t *testing.T) {
 	env := newDevEnv(t)
@@ -756,6 +786,47 @@ func TestUnreadAndReadAreIndependent(t *testing.T) {
 	unread, _ = env.service.Unread(ctx, a)
 	if unread.Total != 1 || unread.ByClub["222222"] != 1 {
 		t.Fatalf("unread must be reported per club, got %+v", unread)
+	}
+}
+
+// 用户退出俱乐部后，会话列表不再显示该俱乐部的会话，未读红点也必须同步消失。
+func TestUnreadIgnoresClubsUserCannotView(t *testing.T) {
+	env := newDevEnv(t)
+	ctx := context.Background()
+	a := env.session(t, "100001")
+	b := env.session(t, "100002")
+	conv, err := env.service.CreateConversation(ctx, a, "222222", "100002")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := env.service.SendMessage(ctx, b, conv.ConversationID, SendRequest{
+		MessageType: MessageText, ClientMessageID: "b-left-club", Text: "退会后的未读"}); err != nil {
+		t.Fatal(err)
+	}
+	unread, err := env.service.Unread(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unread.Total != 1 || unread.ByClub["222222"] != 1 {
+		t.Fatalf("unexpected unread before leaving: %+v", unread)
+	}
+
+	env.store.removeMember("222222", "100001")
+	page, err := env.service.AllConversations(ctx, a, 1, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range page.Items {
+		if item.ClubID == "222222" {
+			t.Fatalf("conversation in left club must not be listed: %+v", item)
+		}
+	}
+	unread, err = env.service.Unread(ctx, a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if unread.Total != 0 || len(unread.ByClub) != 0 {
+		t.Fatalf("unread must ignore clubs the user cannot view: %+v", unread)
 	}
 }
 
@@ -997,6 +1068,81 @@ func TestUnionOwnerAndClubOwnerAreFixedTargets(t *testing.T) {
 	}
 	if err := env.service.Hide(ctx, player, conversation.ConversationID); AsError(err).Code != CodeDeleteForbidden {
 		t.Fatalf("member must not delete union-owner conversation, got %v", err)
+	}
+}
+
+// 后台关闭俱乐部 BF 聊天后，普通合伙人和玩家只保留所属盟主入口，
+// 大盟主固定入口只对本俱乐部老板保留。
+func TestBFEntryOffHidesUnionOwnerFromOrdinaryMembers(t *testing.T) {
+	env, _, player, _ := unionEnv(t)
+	ctx := context.Background()
+	agent := env.session(t, "100002")
+	owner := env.session(t, "100004")
+	env.store.bfClubEntries["111111"] = false
+	env.store.bfClubEntries["222222"] = false
+
+	assertTargets := func(label string, session Session, want []string) {
+		t.Helper()
+		page, err := env.service.Conversations(ctx, session, "111111", 1, 30)
+		if err != nil {
+			t.Fatalf("%s: %v", label, err)
+		}
+		if len(page.Items) != len(want) {
+			t.Fatalf("%s: default targets mismatch, got %d: %+v", label, len(page.Items), page.Items)
+		}
+		for i, guuid := range want {
+			item := page.Items[i]
+			if !item.IsDefaultTarget || item.ConversationID != "" {
+				t.Fatalf("%s: entry %d must be a fixed target: %+v", label, i, item)
+			}
+			if item.Peer.Guuid != guuid {
+				t.Fatalf("%s: target order mismatch at %d: got %s want %s", label, i, item.Peer.Guuid, guuid)
+			}
+		}
+	}
+
+	// BF 关闭：玩家和合伙人只看所属盟主，不再出现大盟主。
+	assertTargets("player", player, []string{"100004"})
+	assertTargets("agent", agent, []string{"100004"})
+	// 本俱乐部盟主仍保留大盟主入口。
+	assertTargets("owner", owner, []string{"100009"})
+
+	// 全局消息首页同样不返回大盟主入口。
+	all, err := env.service.AllConversations(ctx, player, 1, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range all.Items {
+		if item.Peer.Guuid == "100009" {
+			t.Fatalf("BF off must hide union-owner entry from player: %+v", item)
+		}
+	}
+
+	// 重新开启后恢复大盟主入口。
+	env.store.bfClubEntries["111111"] = true
+	env.store.bfClubEntries["222222"] = true
+	assertTargets("player-restored", player, []string{"100004", "100009"})
+
+	// 再次关闭后，已有的大盟主真实会话仍保留，但降为普通会话，不再标记固定入口。
+	env.store.bfClubEntries["111111"] = false
+	if _, err := env.service.CreateConversation(ctx, player, "111111", "100009"); err != nil {
+		t.Fatal(err)
+	}
+	page, err := env.service.Conversations(ctx, player, "111111", 1, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundUnionConversation := false
+	for _, item := range page.Items {
+		if item.Peer.Guuid == "100009" {
+			foundUnionConversation = true
+			if item.IsDefaultTarget {
+				t.Fatalf("BF off must demote union-owner conversation from fixed target: %+v", item)
+			}
+		}
+	}
+	if !foundUnionConversation {
+		t.Fatalf("existing union-owner conversation must stay visible: %+v", page.Items)
 	}
 }
 

@@ -1,8 +1,16 @@
 # qing 当前状态
 
-更新时间：2026-11-13
+更新时间：2026-11-14
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-14 消息页：BF 关闭隐藏大盟主入口 + 盟主/群主显示（服务端已部署，客户端未构建）
+
+- 关闭俱乐部 BF 后，普通合伙人和玩家的默认对话只剩所属盟主；盟主仍见大盟主，重开恢复。只影响默认入口，已有真实会话按普通会话显示。
+- ChatTool 改 `defaultTargets`/`isFixedTarget`；后台 BF 弹窗提示同步；客户端缓存 v4。
+- 修复已入盟创建者在消息列表、聊天标题、成员选择显示“群主”：客户端改用服务端 `roleName`，成员接口补 `roleName`。
+- 修复退会/已删俱乐部的历史未读仍点亮红点：`/unread` 按会话列表可见性过滤俱乐部。
+- 已部署 ChatTool `854d01e6…`（备份 `chattool.previous-unread-visible-20261114-221553`）和后台前端 `index-C3HoOUg9.js`；health 200。客户端未构建/未真机。详见[BF 交接](handoffs/2026-11-14-bf-chat-hide-union-owner.md)、[身份显示交接](handoffs/2026-11-14-chat-role-name-union-owner.md)、[红点交接](handoffs/2026-11-14-unread-visible-clubs.md)。
 
 ## 2026-11-14 后台玩家管理：关联账号/重复玩家（已部署 8891，数据待采集）
 
@@ -74,8 +82,7 @@
 
 ## 2026-11-12 初始化交易密码改独立 Prefab（未构建、未真机）
 
-- 「玩家信息 → 上下分」未设交易密码时的初始化弹窗原为 `panelMain` 子节点，被 Top 层上下分/赠送面板挡住；已抽出 `panelInitTradePwd.prefab`，改以 `ShowPanelMode.Top` 打开，校验/提示同走 Top，回包由 `panelMain` 转发给 `OnSubmitResult`。
-- 已从 `panelMain.prefab` 移除原节点并重排 `__id__`；引用/可达性检查通过。新脚本补 `@ccclass`（漏写则按钮无响应），Creator 编译/构建/真机待验。
+- 初始化弹窗抽成 `panelInitTradePwd.prefab` 并以 `ShowPanelMode.Top` 打开，避免被上下分/赠送面板挡住；`panelMain.prefab` 已移除原节点，Creator/真机待验。
 
 ## 2026-11-12 后台登录接入谷歌验证 TOTP（已部署 8891，待真实账号验收）
 
@@ -96,20 +103,16 @@
 
 ## 2026-11-11 我的红利：新增「业绩股」页签（2026-11-12 按 v6 联盟树改造）
 
-- 我的红利/业绩股双页签；联盟红利仍只有红利页。非业绩股成员只隐藏「业绩股」页签（「我的红利」页签保留并居中），判断用 `ClubPerfInfo.enabled`。
-- v6：渲染 `leaders`（盟主行含俱乐部/整线次数/占比/授权状态），盟主只授权不取消，已授权显示「已授权」；成员行只读；授权后 1.0s/2.4s 刷新。
-- 抓包 775447/267493 已确认是联盟层盟主授权；服务端 v6 需部署重启才有 `scope`/`leaders`。Prefab/TS/JSON 检查通过，Creator/真机/联调待验。详见[交接](handoffs/2026-11-11-my-hongli-perf-tab.md)。
+- 双页签，非业绩股成员只隐藏「业绩股」（判断 `ClubPerfInfo.enabled`）；v6 渲染 `leaders`，盟主只授权不取消、成员只读；服务端需部署后有 `scope`/`leaders`。Creator/真机待验。详见[交接](handoffs/2026-11-11-my-hongli-perf-tab.md)。
 
-## 2026-11-11 后台业绩核心共享：三类奖励统一按业绩股比例（已被 11-13 三阶段发放替代）
+## 2026-11-11 后台业绩核心共享：三类奖励按业绩股比例（已被 11-13 三阶段发放替代）
 
-- 自动分摊权重统一为业绩报表净次数（`left_count`），发放日期默认昨天、未来日期拦截；奖池历史日期优先用批次 `pool_base` 快照。
-- 已部署 8891（二进制 `b2301972…`、前端 `index-DQ5-lFku.js`）；新报表命令待游戏服重启复验。详见[交接](handoffs/2026-11-11-agent-reward-perf-ratio.md)。
+- 自动分摊权重统一为业绩报表净次数（`left_count`），已部署 8891。详见[交接](handoffs/2026-11-11-agent-reward-perf-ratio.md)。
 
 ## 2026-11-11 后台业绩核心共享：改为按联盟发放（已部署）
 
-- 入口先列联盟，点进后才进入原发放页；名单、方案、金额、发放、账单、线数据全部按当前联盟过滤。
-- 迁移 055 给计划表与名单方案加 `union_id` 并改唯一键/回填历史；跨联盟选人由后端拒绝（选人、金额、排除、子账号、账单都会校验），换联盟同步会把 `selected` 置 0。
-- 已部署 8891（二进制 `0c558b28…`、前端 `index-BDfIIHx6.js`）；迁移已执行：7 计划回填、9 无归属，29 代理有联盟、2 无。`go build/test/vet`、`tsc/eslint/vite build` 通过；未登录实操验收。详见[交接](handoffs/2026-11-11-agent-reward-union-scope.md)。
+- 入口先列联盟，名单/方案/金额/发放/账单按当前联盟过滤；迁移 055 加 `union_id` 并回填，跨联盟选人由后端拒绝。
+- 已部署 8891；`go build/test/vet`、前端构建通过，登录态未验。详见[交接](handoffs/2026-11-11-agent-reward-union-scope.md)。
 
 ## 2026-11-11 玩家信息卡片（未构建、未真机）
 

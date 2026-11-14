@@ -471,7 +471,7 @@ export default function ClubsPage({
                       </td>
                       <td>
                         <strong className={club.bfChatEnabled !== false ? "club-quota-value" : "club-quota-missing"}
-                          title="消息页置顶的 BF 聊天（官方客服）入口；默认开启">
+                          title="消息页置顶的 BF 聊天（官方客服）入口；关闭后普通成员只保留盟主默认对话；默认开启">
                           {club.bfChatEnabled !== false ? "开启" : "关闭"}
                         </strong>
                       </td>

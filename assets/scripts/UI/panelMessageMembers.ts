@@ -268,7 +268,7 @@ export default class panelMessageMembers extends UIPanelViewBase {
         {
             let label = roleLabel.getComponent(cc.Label);
             if(label != null)
-                label.string = DirectChatManager.RoleName(member.role);
+                label.string = DirectChatManager.DisplayRoleName(member);
         }
         let onlineNode = Tool.GetChild(node,"在线");
         if(onlineNode != null)

@@ -458,7 +458,8 @@ export default class panelMessageChat extends UIPanelViewBase {
                     name:"BF",
                     note:"",
                     avatar:"",
-                    role:"official"
+                    role:"official",
+                    roleName:""
                 };
             }
             if(data.peer != null && !this.officialMode)
@@ -468,7 +469,8 @@ export default class panelMessageChat extends UIPanelViewBase {
                     name:String(data.peer.name || ""),
                     note:String(data.peer.note || ""),
                     avatar:String(data.peer.avatar || ""),
-                    role:String(data.peer.role || "member")
+                    role:String(data.peer.role || "member"),
+                    roleName:String(data.peer.roleName || "")
                 };
             }
         }
@@ -496,7 +498,7 @@ export default class panelMessageChat extends UIPanelViewBase {
                 }
                 else
                 {
-                    let role = this.peer == null ? "" : DirectChatManager.RoleName(this.peer.role);
+                    let role = this.peer == null ? "" : DirectChatManager.DisplayRoleName(this.peer);
                     label.string = name === "" ? "聊天" : name + " · " + role;
                 }
             }

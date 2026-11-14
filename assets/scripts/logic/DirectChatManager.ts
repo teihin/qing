@@ -41,6 +41,8 @@ export class DirectChatError extends Error
 export interface DirectPeer
 {
     guuid:string; name:string; note:string; avatar:string; role:string;
+    /** 服务端按俱乐部判定的显示身份：盟主/群主/大盟主/合伙人/玩家。 */
+    roleName:string;
 }
 
 export interface DirectClub
@@ -91,7 +93,8 @@ export interface DirectMessage
 
 export interface DirectMember
 {
-    guuid:string; name:string; note:string; avatar:string; role:string; online:boolean; canChat:boolean;
+    guuid:string; name:string; note:string; avatar:string; role:string; roleName:string;
+    online:boolean; canChat:boolean;
 }
 
 export interface DirectMessagePage
@@ -208,6 +211,20 @@ export default class DirectChatManager
         if(key === "manager" || value === "管理员")
             return "管理员";
         return "玩家";
+    }
+
+    /**
+     * 对话身份显示名优先用服务端 roleName：
+     * 已入盟俱乐部创建者=盟主，未入盟=群主；旧回包没有 roleName 时回退到 role。
+     */
+    public static DisplayRoleName(peer:{role?:any; roleName?:any}):string
+    {
+        if(peer == null)
+            return "";
+        let name = peer.roleName == null ? "" : String(peer.roleName).trim();
+        if(name !== "")
+            return name;
+        return DirectChatManager.RoleName(peer.role);
     }
 
     /** 群主、联盟大群主、代理才有「删除（隐藏）聊天」入口；服务端仍会再校验一次。 */
@@ -998,7 +1015,8 @@ export default class DirectChatManager
                                 name:String(peer.name || peer.guuid || ""),
                                 note:String(peer.note || ""),
                                 avatar:String(peer.avatar || ""),
-                                role:String(peer.role || "member")
+                                role:String(peer.role || "member"),
+                                roleName:String(peer.roleName || "")
                             },
                             lastMessage:String(one.lastMessage || ""),
                             lastMessageType:String(one.lastMessageType || ""),
@@ -1050,7 +1068,8 @@ export default class DirectChatManager
                                 name:String(peer.name || peer.guuid || ""),
                                 note:String(peer.note || ""),
                                 avatar:String(peer.avatar || ""),
-                                role:String(peer.role || "member")
+                                role:String(peer.role || "member"),
+                                roleName:String(peer.roleName || "")
                             },
                             lastMessage:String(one.lastMessage || ""),
                             lastMessageType:String(one.lastMessageType || ""),
@@ -1092,7 +1111,8 @@ export default class DirectChatManager
                     name:String(peer.name || peerGuuid),
                     note:String(peer.note || ""),
                     avatar:String(peer.avatar || ""),
-                    role:String(peer.role || "member")
+                    role:String(peer.role || "member"),
+                    roleName:String(peer.roleName || "")
                 },
                 lastMessage:String(view != null ? (view.lastMessage || "") : ""),
                 lastMessageType:String(view != null ? (view.lastMessageType || "") : ""),
@@ -1133,6 +1153,7 @@ export default class DirectChatManager
                         note:String(one.note || ""),
                         avatar:String(one.avatar || ""),
                         role:String(one.role || "member"),
+                        roleName:String(one.roleName || ""),
                         online:one.online === true,
                         canChat:one.canChat === true
                     });
@@ -1227,7 +1248,8 @@ export default class DirectChatManager
                 name:String(data.peer.name || ""),
                 note:String(data.peer.note || ""),
                 avatar:String(data.peer.avatar || ""),
-                role:String(data.peer.role || "member")
+                role:String(data.peer.role || "member"),
+                roleName:String(data.peer.roleName || "")
             };
         }
         return page;
