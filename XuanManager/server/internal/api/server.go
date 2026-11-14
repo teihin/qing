@@ -49,6 +49,12 @@ type Server struct {
 	manageScopeColumnChecked bool
 	manageScopeColumnOK      bool
 
+	// 游戏服靓号表是否已建；未建时玩家列表降级为不显示靓号，避免整页报错。
+	prettyTableMu        sync.Mutex
+	prettyTableChecked   bool
+	prettyTableOK        bool
+	prettyTableNextCheck time.Time
+
 	// club_history_info 的时间列布局（date 是否已含时间 / 是否有独立 time 列），只探测一次。
 	clubHistoryTimeMu      sync.Mutex
 	clubHistoryTimeChecked bool
@@ -112,6 +118,18 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/players/{playerId}/clubs", s.authorized("game.player.view", false, s.handleGetPlayerClubs))
 	s.mux.Handle("GET /api/game/players/{playerId}/clubs/{clubId}/subordinates", s.authorized("game.player.view", false, s.handleGetPlayerClubSubordinates))
 	s.mux.Handle("GET /api/game/players/{playerId}/rooms", s.authorized("game.room_record.view", false, s.handlePlayerRoomHistory))
+	// 靓号拆成两个独立入口：账号ID靓号（uid）与俱乐部邀请码靓号（invite），
+	// 路由段写死类型、权限也按类型分开，避免只该管邀请码的角色去动玩家 ID 靓号。
+	for _, kind := range []string{prettyKindUID, prettyKindInvite} {
+		base := "/api/game/pretty-numbers/" + kind
+		view := "game.pretty_no." + kind + ".view"
+		manage := "game.pretty_no." + kind + ".manage"
+		s.mux.Handle("GET "+base, s.authorized(view, false, s.handleListPrettyNumbers))
+		s.mux.Handle("GET "+base+"/candidates", s.authorized(view, false, s.handlePrettyNumberCandidates))
+		s.mux.Handle("POST "+base, s.authorized(manage, true, s.handleAddPrettyNumber))
+		s.mux.Handle("POST "+base+"/{prettyNo}/bind", s.authorized(manage, true, s.handleBindPrettyNumber))
+		s.mux.Handle("POST "+base+"/{prettyNo}/unbind", s.authorized(manage, true, s.handleUnbindPrettyNumber))
+	}
 	s.mux.Handle("GET /api/game/user-data/profile", s.authorized("game.user_data.view", false, s.handleUserDataProfile))
 	s.mux.Handle("GET /api/game/user-data/records", s.authorized("game.user_data.view", false, s.handleUserDataRecords))
 	s.mux.Handle("GET /api/game/clubs", s.authorized("game.club.view", false, s.handleListClubs))

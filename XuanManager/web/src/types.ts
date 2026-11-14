@@ -273,6 +273,8 @@ export interface PlayerPasswordResetResult {
 export interface PlayerRelationItem {
   playerId: string;
   name: string;
+  /** 已绑定的个人ID靓号；未绑定或游戏服未建表时为空。 */
+  prettyNo?: string;
   /** device=同设备，gps=同GPS网格，ip=同公网IP。 */
   types: string[];
   score: number;
@@ -543,6 +545,8 @@ export interface ManageScopeName {
 export interface PlayerItem {
   id: number;
   playerId: string;
+  /** 已绑定的个人ID靓号；未绑定或游戏服未建表时为空。 */
+  prettyNo?: string;
   loginName: string;
   accountName: string;
   /** 玩家登录密码明文（后台加密收录后解密返回）；passwordRecorded=false 表示历史密码未收录。 */
@@ -1069,6 +1073,8 @@ export interface ClubListResponse {
  */
 export interface ClubMemberNode {
   playerId: string;
+  /** 已绑定的个人ID靓号；未绑定或游戏服未建表时为空。 */
+  prettyNo?: string;
   name: string;
   role: "owner" | "agent" | "member";
   isAgent: boolean;

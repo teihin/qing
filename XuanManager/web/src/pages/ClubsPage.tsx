@@ -796,7 +796,7 @@ function ClubTreeNode({
         <span className={`club-role club-role--${node.role}`}>{labelOf(roleLabels, node.role)}</span>
         <span className="club-tree__name">
           {node.name || node.playerId}
-          <small>ID：{node.playerId}</small>
+          <small>ID：{node.playerId}{node.prettyNo ? `(${node.prettyNo})` : ""}</small>
         </span>
         <span className="club-tree__gold">积分 {clubGoldText(node.clubGold)}</span>
         {node.quotaFen !== null && node.quotaFen !== undefined && (

@@ -1910,6 +1910,11 @@ KBEngine.Entity = KBEngine.Class.extend(
 	{
 		KBEngine.Event.fire("set_guuid", this.guuid);
 	},
+	// 靓号：后台绑定后由服务器以 account 属性下发，客户端只做展示，不参与业务键。
+	set_custom_id(old)
+	{
+		KBEngine.Event.fire("set_custom_id", this.custom_id);
+	},
 	set_club_gold(old)
 	{
 		KBEngine.Event.fire("set_club_gold", this.club_gold);

@@ -17,6 +17,7 @@ interface PlayerResponse {
 interface PlayerFilters {
   keyword: string;
   playerId: string;
+  prettyNo: string;
   name: string;
   loginName: string;
   roomId: string;
@@ -33,6 +34,7 @@ interface PlayerFilters {
 const emptyFilters: PlayerFilters = {
   keyword: "",
   playerId: "",
+  prettyNo: "",
   name: "",
   loginName: "",
   roomId: "",
@@ -175,7 +177,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           <div className="player-filter-primary">
             <div className="search-box search-box--wide">
               <span>⌕</span>
-              <input value={draft.keyword} onChange={(event) => update("keyword", event.target.value)} placeholder="输入玩家ID、登录账号或昵称" />
+              <input value={draft.keyword} onChange={(event) => update("keyword", event.target.value)} placeholder="输入玩家ID、靓号、登录账号或昵称" />
             </div>
             <Button type="submit">查询玩家</Button>
             <Button type="button" variant="secondary" onClick={() => setAdvanced((value) => !value)}>
@@ -187,6 +189,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
           {advanced && (
             <div className="player-filter-advanced">
               <Field label="玩家ID"><input value={draft.playerId} onChange={(event) => update("playerId", event.target.value)} placeholder="精确匹配游戏ID" /></Field>
+              <Field label="靓号" hint="6 位数字；按已绑定的个人ID靓号精确匹配"><input inputMode="numeric" maxLength={6} value={draft.prettyNo} onChange={(event) => update("prettyNo", event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="如 888888" /></Field>
               <Field label="玩家昵称"><input value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="支持部分匹配" /></Field>
               <Field label="登录账号"><input value={draft.loginName} onChange={(event) => update("loginName", event.target.value)} placeholder="登录名或KBE账号" /></Field>
               <Field label="IP短码" hint="6 位字母数字，区分大小写；按数据库最近上报 IP 精确匹配"><input value={draft.ipCode} onChange={(event) => update("ipCode", event.target.value)} placeholder="如 43Ypq1" maxLength={6} /></Field>
@@ -221,7 +224,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
                 <thead><tr><th>玩家</th><th><button type="button" className={`table-sort ${relatedSort !== "none" ? "is-active" : ""}`} onClick={toggleRelatedSort} title="按关联账号数量排序；第三次点击恢复默认顺序">关联账号数量 <span>{relatedSort === "desc" ? "↓" : relatedSort === "asc" ? "↑" : "↕"}</span></button></th><th>登录账号</th>{canViewPassword && <th title="玩家登录密码明文；只有管理员可见。历史账号游戏端只存 MD5 无法还原，未收录时显示「未收录」">用户密码</th>}<th>钻石余额</th><th>所在俱乐部</th><th>房间 / 客户端</th><th title="最近上报 IP 的 6 位短码，与游戏内 BOSS 玩家信息弹窗同一规则">IP短码</th><th>注册时间（北京时间）</th><th>最近登录（北京时间）</th><th className="align-right">操作</th></tr></thead>
                 <tbody>{data.items.map((player) => (
                   <tr key={player.id} className={player.isBoss ? "player-row--boss" : undefined} title={player.isBoss ? `大小BOSS${scopeFullText(player) ? ` · ${scopeFullText(player)}` : ""}` : undefined}>
-                    <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}</small>{player.isBoss && <small className="cell-subtitle scope-summary">大小BOSS · {scopeRowSummary(player)}</small>}</div></div></td>
+                    <td><div className="user-cell"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>ID：{player.playerId}{player.prettyNo ? `(${player.prettyNo})` : ""}</small>{player.isBoss && <small className="cell-subtitle scope-summary">大小BOSS · {scopeRowSummary(player)}</small>}</div></div></td>
                     <td>{player.relatedVisible ? <button type="button" className="relation-count-link" onClick={() => setViewingRelations(player)} title="查看关联账号">{player.relatedCount}</button> : <span className="muted">—</span>}</td>
                     <td><code>{player.loginName || "—"}</code>{player.accountName && player.accountName !== player.loginName && <small className="cell-subtitle">KBE：{player.accountName}</small>}</td>
                     {canViewPassword && <td><PlayerPasswordCell player={player} /></td>}
@@ -584,7 +587,7 @@ function PlayerDetail({ player, can, canViewSensitive, notify, onClose }: { play
     <Modal wide title={player.name || `玩家 ${player.playerId}`} eyebrow="PLAYER PROFILE" onClose={onClose}>
       <div className="player-detail-heading">
         <span>{player.name.slice(0, 1) || "玩"}</span>
-        <div><strong>{player.name || "未设置昵称"}</strong><p>游戏ID：{player.playerId} · 登录账号：{player.loginName || "—"}</p></div>
+        <div><strong>{player.name || "未设置昵称"}</strong><p>游戏ID：{player.playerId}{player.prettyNo ? `(${player.prettyNo})` : ""} · 登录账号：{player.loginName || "—"}</p></div>
         <em>只读</em>
       </div>
       <nav className="player-profile-tabs" aria-label="玩家详情分类">
@@ -635,7 +638,7 @@ function PlayerRelationsModal({ player, onClose, notify }: { player: PlayerItem;
           <tbody>{data.items.map((item) => {
             const strength = relationStrength(item.score);
             return <tr key={item.playerId}>
-              <td><div className="user-cell"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}</small></div></div></td>
+              <td><div className="user-cell"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>ID：{item.playerId}{item.prettyNo ? `(${item.prettyNo})` : ""}</small></div></div></td>
               <td><div className="relation-tags">{item.types.map((type) => <span key={type} className={`relation-tag relation-tag--${type}`}>{relationTypeLabels[type] || type}</span>)}</div></td>
               <td><span className={`relation-strength ${strength.className}`}>{strength.label}</span></td>
               <td>{item.lastSeen || "—"}</td>

@@ -60,7 +60,9 @@ type clubListItem struct {
 }
 
 type clubMemberNode struct {
-	PlayerID  string `json:"playerId"`
+	PlayerID string `json:"playerId"`
+	// PrettyNo 是成员已绑定的个人ID靓号；未绑定或游戏服未建表时为空。
+	PrettyNo  string `json:"prettyNo,omitempty"`
 	Name      string `json:"name"`
 	Role      string `json:"role"`
 	IsAgent   bool   `json:"isAgent"`
@@ -821,6 +823,15 @@ WHERE `+membershipAnyColumnSQL("a"),
 			node.QuotaFen = relation.QuotaFen
 		}
 		members = append(members, node)
+	}
+
+	prettyIDs := make([]string, 0, len(members))
+	for _, member := range members {
+		prettyIDs = append(prettyIDs, member.PlayerID)
+	}
+	prettyNumbers := s.loadPrettyNumbers(ctx, prettyIDs)
+	for index := range members {
+		members[index].PrettyNo = prettyNumbers[members[index].PlayerID]
 	}
 
 	// 创建者 → 代理 → 普通成员；同级按 ID，保证树渲染稳定。

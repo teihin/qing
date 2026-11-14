@@ -277,6 +277,8 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_stone", this, "set_stone");
         KBEngine.Event.register("set_name", this, "set_name");
         KBEngine.Event.register("set_guuid", this, "set_guuid");
+        // 靓号（custom_id）在后台绑定后随账号属性下发，到货即刷新「我的」资料卡 ID。
+        KBEngine.Event.register("set_custom_id", this, "set_custom_id");
         KBEngine.Event.register("set_level", this, "set_level");
         KBEngine.Event.register("set_role", this, "set_role");
         KBEngine.Event.register("set_photo", this, "set_photo");
@@ -1082,10 +1084,33 @@ export default class panelMain extends UIPanelViewBase {
         Tool.GetChild(this.node,"Main/我的/信息/name").getComponent(cc.Label).string = KBEngine.app.player().name;
         MobileManager.getInstance().SetAccount();
     }
+    /**
+     * 「我的」资料卡上的玩家 ID 显示 Account.custom_id（后台绑定的靓号），
+     * 未绑定靓号时回退真实 guuid，保证老账号和未绑号玩家照常有值可看可复制。
+     * 「复制ID」按钮读的就是这个 label，所以不需要另改复制逻辑。
+     */
+    private RefreshMyPlayerId():void
+    {
+        const idNode = Tool.GetChild(this.node,"Main/我的/信息/id");
+        if(idNode == null)
+            return;
+        const label = idNode.getComponent(cc.Label);
+        if(label == null)
+            return;
+        // 未登录/断线重连期间 getAccount() 返回 undefined，不能直接取属性。
+        const account = GameDataManager.getAccount();
+        const customId = account == null || account.custom_id == null ? "" : account.custom_id.toString().trim();
+        const guuid = account == null || account.guuid == null ? "" : account.guuid.toString().trim();
+        label.string = customId !== "" ? customId : guuid;
+    }
     set_guuid(id:string)
     {
-        Tool.GetChild(this.node,"Main/我的/信息/id").getComponent(cc.Label).string = KBEngine.app.player().guuid;
+        this.RefreshMyPlayerId();
         MobileManager.getInstance().SetAccount();
+    }
+    set_custom_id(id:string)
+    {
+        this.RefreshMyPlayerId();
     }
 
     /**

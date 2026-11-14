@@ -15,6 +15,7 @@ import (
 type playerFilters struct {
 	Keyword        string
 	PlayerID       string
+	PrettyNo       string
 	Name           string
 	LoginName      string
 	AgentID        string
@@ -39,8 +40,10 @@ type playerFilters struct {
 }
 
 type playerItem struct {
-	ID          int64  `json:"id"`
-	PlayerID    string `json:"playerId"`
+	ID       int64  `json:"id"`
+	PlayerID string `json:"playerId"`
+	// PrettyNo 是玩家已绑定的个人ID靓号；未绑定或游戏服尚未建表时为空。
+	PrettyNo    string `json:"prettyNo,omitempty"`
 	LoginName   string `json:"loginName"`
 	AccountName string `json:"accountName"`
 	// LoginPassword 是玩家登录密码的明文副本（mgr_player_login_password，AES-GCM 密文解密后）。
@@ -114,13 +117,14 @@ func (s *Server) handleListPlayers(w http.ResponseWriter, r *http.Request, p pri
 	}
 	// 游戏服尚未部署 union_manage 时列不存在；先探测再拼 SQL，避免整个玩家列表报错。
 	hasUnionManage := s.hasManageScopeColumn(r.Context())
-	where, args := buildPlayerWhere(filters, hasUnionManage)
+	hasPretty := s.hasPrettyNumberTable(r.Context())
+	where, args := buildPlayerWhere(filters, hasUnionManage, hasPretty)
 
 	var total int64
 	countQuery := `SELECT COUNT(DISTINCT a.id)
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
-LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
+LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID` + prettyNumberJoin(hasPretty) + `
 WHERE ` + where
 	if err := s.db.QueryRowContext(r.Context(), countQuery, args...).Scan(&total); err != nil {
 		s.logger.Error("count game players", "error", err)
@@ -134,7 +138,7 @@ WHERE ` + where
 
 	if filters.SortBy == "relatedCount" {
 		// 关联数量是实时聚合出来的，必须对筛选后的全部玩家算完再排序，不能只排当前页。
-		ids, err := s.matchingPlayerIDs(r.Context(), where, args, relationSortMaxPlayers)
+		ids, err := s.matchingPlayerIDs(r.Context(), hasPretty, where, args, relationSortMaxPlayers)
 		if err != nil {
 			s.logger.Error("list players for relation sort", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家列表失败")
@@ -152,7 +156,7 @@ WHERE ` + where
 			return
 		}
 		sortPlayerIDsByRelations(ids, relations, filters.SortOrder)
-		items, err = s.queryPlayerItemsByIDs(r.Context(), hasUnionManage, where, args,
+		items, err = s.queryPlayerItemsByIDs(r.Context(), hasUnionManage, hasPretty, where, args,
 			playerIDPage(ids, page, size), p.IsProtectedRoot)
 		if err != nil {
 			s.logger.Error("list game players by relation order", "error", err)
@@ -161,7 +165,7 @@ WHERE ` + where
 		}
 		relationsOK = true
 	} else {
-		items, err = s.queryPlayerItemsPage(r.Context(), hasUnionManage, where, args, size, (page-1)*size, p.IsProtectedRoot)
+		items, err = s.queryPlayerItemsPage(r.Context(), hasUnionManage, hasPretty, where, args, size, (page-1)*size, p.IsProtectedRoot)
 		if err != nil {
 			s.logger.Error("list game players", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取游戏玩家列表失败")
@@ -214,12 +218,16 @@ WHERE ` + where
 // relationSortMaxPlayers 限制按关联账号排序时的候选人数，避免一次拉全量玩家做关联。
 const relationSortMaxPlayers = 2000
 
-func playerListSelectSQL(hasUnionManage bool) string {
+func playerListSelectSQL(hasUnionManage, hasPretty bool) string {
 	unionManageExpr := "''"
 	bossExpr := "COALESCE(TRIM(a.sm_club_manage), '') <> ''"
 	if hasUnionManage {
 		unionManageExpr = "COALESCE(a.sm_union_manage, '')"
 		bossExpr = "(COALESCE(TRIM(a.sm_union_manage), '') <> '' OR COALESCE(TRIM(a.sm_club_manage), '') <> '')"
+	}
+	prettyExpr := "''"
+	if hasPretty {
+		prettyExpr = "COALESCE(p.pretty_no, '')"
 	}
 	return fmt.Sprintf(`SELECT
 a.id, a.sm_guuid, a.sm_wxID, COALESCE(k.accountName, ''), a.sm_name, a.sm_photo,
@@ -231,14 +239,22 @@ a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
 FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
 COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
 COALESCE(a.sm_club_make2, ''), COALESCE(a.sm_club_join2, ''),
-COALESCE(a.sm_club_manage, ''), %s, %s
+COALESCE(a.sm_club_manage, ''), %s, %s, %s
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
-LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID`, unionManageExpr, bossExpr)
+LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID%s`, unionManageExpr, bossExpr, prettyExpr, prettyNumberJoin(hasPretty))
 }
 
-func (s *Server) queryPlayerItemsPage(ctx context.Context, hasUnionManage bool, where string, args []any, size, offset int, protectedRoot bool) ([]playerItem, error) {
-	query := playerListSelectSQL(hasUnionManage) + `
+// prettyNumberJoin 只连已绑定的个人ID靓号；号池唯一索引保证一个账号最多一行。
+func prettyNumberJoin(hasPretty bool) string {
+	if !hasPretty {
+		return ""
+	}
+	return "\nLEFT JOIN kbedm.usr_pretty_no_info p ON p.user_guuid = a.sm_guuid AND p.kind = 'uid' AND p.status = 'used'"
+}
+
+func (s *Server) queryPlayerItemsPage(ctx context.Context, hasUnionManage, hasPretty bool, where string, args []any, size, offset int, protectedRoot bool) ([]playerItem, error) {
+	query := playerListSelectSQL(hasUnionManage, hasPretty) + `
 WHERE ` + where + `
 ORDER BY a.id DESC
 LIMIT ? OFFSET ?`
@@ -246,11 +262,11 @@ LIMIT ? OFFSET ?`
 	return s.queryAndScanPlayerItems(ctx, query, queryArgs, protectedRoot)
 }
 
-func (s *Server) queryPlayerItemsByIDs(ctx context.Context, hasUnionManage bool, where string, args []any, ids []string, protectedRoot bool) ([]playerItem, error) {
+func (s *Server) queryPlayerItemsByIDs(ctx context.Context, hasUnionManage, hasPretty bool, where string, args []any, ids []string, protectedRoot bool) ([]playerItem, error) {
 	if len(ids) == 0 {
 		return []playerItem{}, nil
 	}
-	query := playerListSelectSQL(hasUnionManage) + `
+	query := playerListSelectSQL(hasUnionManage, hasPretty) + `
 WHERE ` + where + `
   AND a.sm_guuid IN (` + placeholders(len(ids)) + `)
 ORDER BY a.id DESC`
@@ -290,7 +306,7 @@ func (s *Server) queryAndScanPlayerItems(ctx context.Context, query string, args
 			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
 			&lastLogin, &item.LoginCount, &item.Remark,
 			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.ClubManage,
-			&item.UnionManage, &item.IsBoss,
+			&item.UnionManage, &item.IsBoss, &item.PrettyNo,
 		); err != nil {
 			return nil, err
 		}
@@ -309,11 +325,11 @@ func (s *Server) queryAndScanPlayerItems(ctx context.Context, query string, args
 	return items, nil
 }
 
-func (s *Server) matchingPlayerIDs(ctx context.Context, where string, args []any, max int) ([]string, error) {
+func (s *Server) matchingPlayerIDs(ctx context.Context, hasPretty bool, where string, args []any, max int) ([]string, error) {
 	query := `SELECT DISTINCT a.sm_guuid
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
-LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID
+LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID` + prettyNumberJoin(hasPretty) + `
 WHERE ` + where + `
 LIMIT ?`
 	queryArgs := append(append([]any{}, args...), max+1)
@@ -382,6 +398,7 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 	filters := playerFilters{
 		Keyword:        strings.TrimSpace(query.Get("keyword")),
 		PlayerID:       strings.TrimSpace(query.Get("playerId")),
+		PrettyNo:       strings.TrimSpace(query.Get("prettyNo")),
 		Name:           strings.TrimSpace(query.Get("name")),
 		LoginName:      strings.TrimSpace(query.Get("loginName")),
 		AgentID:        strings.TrimSpace(query.Get("agentId")),
@@ -414,11 +431,16 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 		filters.IPAddress = ip
 	}
 	for _, value := range []string{
-		filters.Keyword, filters.PlayerID, filters.Name, filters.LoginName, filters.AgentID,
+		filters.Keyword, filters.PlayerID, filters.PrettyNo, filters.Name, filters.LoginName, filters.AgentID,
 		filters.AgentName, filters.Role, filters.ClientStatus, filters.ClientVersion,
 	} {
 		if len([]rune(value)) > 100 {
 			return playerFilters{}, errors.New("查询文字不能超过 100 个字符")
+		}
+	}
+	if filters.PrettyNo != "" {
+		if _, err := normalizePrettyNo(filters.PrettyNo); err != nil {
+			return playerFilters{}, err
 		}
 	}
 	var err error
@@ -458,7 +480,7 @@ func parsePlayerFilters(r *http.Request) (playerFilters, error) {
 	return filters, nil
 }
 
-func buildPlayerWhere(filters playerFilters, hasUnionManage bool) (string, []any) {
+func buildPlayerWhere(filters playerFilters, hasUnionManage, hasPretty bool) (string, []any) {
 	clauses := []string{"1 = 1"}
 	args := []any{}
 	if filters.BossOnly {
@@ -472,9 +494,15 @@ func buildPlayerWhere(filters playerFilters, hasUnionManage bool) (string, []any
 	}
 	if filters.Keyword != "" {
 		like := "%" + filters.Keyword + "%"
-		clauses = append(clauses, `(a.sm_guuid = ? OR a.sm_wxID = ? OR a.sm_name LIKE ? OR
-k.accountName = ? OR a.sm_agentID = ? OR agent.sm_name LIKE ?)`)
+		keywordClause := `(a.sm_guuid = ? OR a.sm_wxID = ? OR a.sm_name LIKE ? OR
+k.accountName = ? OR a.sm_agentID = ? OR agent.sm_name LIKE ?)`
 		args = append(args, filters.Keyword, filters.Keyword, like, filters.Keyword, filters.Keyword, like)
+		if hasPretty {
+			keywordClause = `(a.sm_guuid = ? OR a.sm_wxID = ? OR a.sm_name LIKE ? OR
+k.accountName = ? OR a.sm_agentID = ? OR agent.sm_name LIKE ? OR p.pretty_no = ?)`
+			args = append(args, filters.Keyword)
+		}
+		clauses = append(clauses, keywordClause)
 	}
 	addExact := func(column string, value string) {
 		if value != "" {
@@ -489,6 +517,15 @@ k.accountName = ? OR a.sm_agentID = ? OR agent.sm_name LIKE ?)`)
 		}
 	}
 	addExact("a.sm_guuid", filters.PlayerID)
+	if filters.PrettyNo != "" {
+		if hasPretty {
+			clauses = append(clauses, "p.pretty_no = ?")
+			args = append(args, filters.PrettyNo)
+		} else {
+			// 游戏服还没建靓号表时，按靓号筛选不可能命中，直接返回空集。
+			clauses = append(clauses, "1 = 0")
+		}
+	}
 	addLike("a.sm_name", filters.Name)
 	if filters.LoginName != "" {
 		like := "%" + filters.LoginName + "%"

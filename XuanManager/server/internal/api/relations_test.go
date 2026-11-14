@@ -16,7 +16,7 @@ func TestParsePlayerFiltersIPCode(t *testing.T) {
 	if filters.IPAddress != "221.236.103.129" {
 		t.Fatalf("IPAddress = %q, want 221.236.103.129", filters.IPAddress)
 	}
-	where, args := buildPlayerWhere(filters, true)
+	where, args := buildPlayerWhere(filters, true, false)
 	if !strings.Contains(where, "a.sm_ip = ?") {
 		t.Fatalf("where = %q, want sm_ip clause", where)
 	}

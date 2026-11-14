@@ -40,6 +40,7 @@ type relationAccumulator struct {
 type playerRelation struct {
 	PlayerID string   `json:"playerId"`
 	Name     string   `json:"name"`
+	PrettyNo string   `json:"prettyNo,omitempty"`
 	Types    []string `json:"types"`
 	Score    int      `json:"score"`
 	LastSeen string   `json:"lastSeen"`
@@ -420,6 +421,14 @@ func (s *Server) handlePlayerRelations(w http.ResponseWriter, r *http.Request, p
 	}
 	if items == nil {
 		items = []playerRelation{}
+	}
+	relatedIDs := make([]string, 0, len(items))
+	for _, item := range items {
+		relatedIDs = append(relatedIDs, item.PlayerID)
+	}
+	prettyNumbers := s.loadPrettyNumbers(r.Context(), relatedIDs)
+	for index := range items {
+		items[index].PrettyNo = prettyNumbers[items[index].PlayerID]
 	}
 	writeData(w, http.StatusOK, map[string]any{
 		"playerId": playerID,

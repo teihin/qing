@@ -16,6 +16,7 @@ import ClubsPage from "./pages/ClubsPage";
 import UnionsPage from "./pages/UnionsPage";
 import AgentContributionsPage from "./pages/AgentContributionsPage";
 import PlayersPage from "./pages/PlayersPage";
+import PrettyNumbersPage from "./pages/PrettyNumbersPage";
 import UserDataPage from "./pages/UserDataPage";
 import TransactionsPage from "./pages/TransactionsPage";
 import PlatformRevenuePage from "./pages/PlatformRevenuePage";
@@ -138,6 +139,7 @@ export default function App() {
   const page = useMemo(() => {
     const props = { can, notify };
     if (route === "/game/players" && can("game.player.view")) return <PlayersPage can={can} canViewSensitive={Boolean(session?.user.isProtectedRoot && session.user.username === "admin999")} notify={notify} />;
+    if (route === "/game/pretty-numbers" && (can("game.pretty_no.uid.view") || can("game.pretty_no.invite.view"))) return <PrettyNumbersPage can={can} notify={notify} />;
     if (route === "/game/user-data" && can("game.user_data.view")) return <UserDataPage notify={notify} />;
     if (route === "/game/jackpot" && can("game.jackpot.view")) return <JackpotPerformancePage can={can} notify={notify} />;
     if (route === "/game/club-perf" && can("game.club_perf.view")) return <ClubPerfPage can={can} notify={notify} />;

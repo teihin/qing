@@ -68,7 +68,7 @@ func TestParsePlayerFilters(t *testing.T) {
 	if filters.LoginFrom != "2026-09-01" || filters.LoginTo != "2026-09-19" {
 		t.Fatalf("unexpected login range: %#v", filters)
 	}
-	where, args := buildPlayerWhere(filters, true)
+	where, args := buildPlayerWhere(filters, true, false)
 	if strings.Contains(where, filters.PlayerID) || strings.Contains(where, filters.AgentID) {
 		t.Fatalf("query values must not be interpolated: %s", where)
 	}
@@ -79,7 +79,7 @@ func TestParsePlayerFilters(t *testing.T) {
 }
 
 func TestBuildPlayerWhereLoginRangeUsesBeijingDayBounds(t *testing.T) {
-	where, args := buildPlayerWhere(playerFilters{LoginFrom: "2026-09-01", LoginTo: "2026-09-19"}, true)
+	where, args := buildPlayerWhere(playerFilters{LoginFrom: "2026-09-01", LoginTo: "2026-09-19"}, true, false)
 	for _, expected := range []string{
 		"k.lasttime >= UNIX_TIMESTAMP(CONCAT(?, ' 00:00:00'))",
 		"k.lasttime <= UNIX_TIMESTAMP(CONCAT(?, ' 23:59:59'))",
@@ -102,7 +102,7 @@ func TestBuildPlayerWhereBossOnly(t *testing.T) {
 	if !filters.BossOnly {
 		t.Fatal("boss=1 应当只筛大小BOSS")
 	}
-	where, args := buildPlayerWhere(filters, true)
+	where, args := buildPlayerWhere(filters, true, false)
 	if !strings.Contains(where, "COALESCE(TRIM(a.sm_union_manage), '') <> ''") ||
 		!strings.Contains(where, "COALESCE(TRIM(a.sm_club_manage), '') <> ''") || len(args) != 0 {
 		t.Fatalf("unexpected boss where clause or args: %s %#v", where, args)
@@ -112,7 +112,7 @@ func TestBuildPlayerWhereBossOnly(t *testing.T) {
 	}
 
 	// 游戏服未部署 union_manage 时退回只按 club_manage 筛。
-	where, _ = buildPlayerWhere(filters, false)
+	where, _ = buildPlayerWhere(filters, false, false)
 	if strings.Contains(where, "sm_union_manage") || !strings.Contains(where, "sm_club_manage") {
 		t.Fatalf("missing union column fallback: %s", where)
 	}
@@ -122,7 +122,7 @@ func TestBuildPlayerWhereBossOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse filters: %v", err)
 	}
-	where, _ = buildPlayerWhere(filters, true)
+	where, _ = buildPlayerWhere(filters, true, false)
 	if strings.Contains(where, "sm_union_manage") || strings.Contains(where, "sm_club_manage") {
 		t.Fatalf("boss=0 不应附加大小BOSS条件: %s", where)
 	}
