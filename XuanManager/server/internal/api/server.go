@@ -38,6 +38,7 @@ type Server struct {
 	mux                    *http.ServeMux
 	logger                 *slog.Logger
 	registrationLimiter    *registrationRateLimiter
+	registrationGuard      *registrationGuard
 	passwordAccountLimiter *passwordAttemptLimiter
 	passwordIPLimiter      *passwordAttemptLimiter
 	gameHTTPClient         httpDoer
@@ -68,13 +69,19 @@ func New(db *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 }
 
 func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
+	// 尝试次数限流（防连点）。做成配置项，调参不用重新发二进制。
+	attemptsPer10Min := cfg.RegAttempts10Min
+	if attemptsPer10Min <= 0 {
+		attemptsPer10Min = 20
+	}
 	s := &Server{
 		db:                     db,
 		gameDB:                 gameDB,
 		cfg:                    cfg,
 		mux:                    http.NewServeMux(),
 		logger:                 logger,
-		registrationLimiter:    newRegistrationRateLimiter(10, 10*time.Minute),
+		registrationLimiter:    newRegistrationRateLimiter(attemptsPer10Min, 10*time.Minute),
+		registrationGuard:      newRegistrationGuard(db, cfg, logger),
 		passwordAccountLimiter: newPasswordAttemptLimiter(5, time.Hour, 30*time.Minute),
 		passwordIPLimiter:      newPasswordAttemptLimiter(20, time.Hour, 30*time.Minute),
 		gameHTTPClient:         &http.Client{Timeout: 6 * time.Second},

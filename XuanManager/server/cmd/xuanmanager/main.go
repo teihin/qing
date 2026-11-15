@@ -68,6 +68,8 @@ func main() {
 	}
 	// Worker 节点巡检：心跳断掉的置离线、命令超时回收。
 	go api.RunAutomationWorkerJanitor(workerCtx, db, logger)
+	// 注册事件与 IP 封禁表的每日清理（事件留 7 天）。
+	go api.RunRegistrationJanitor(workerCtx, db, logger)
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
 		Handler:           api.NewWithGameDB(db, gameDB, cfg, logger),

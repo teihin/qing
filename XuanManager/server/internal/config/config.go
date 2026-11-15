@@ -39,6 +39,14 @@ type Config struct {
 	BootstrapAdminUser         string
 	BootstrapAdminPass         string
 	BootstrapAdminName         string
+
+	// 注册防护配额。0 表示关闭该维度，用于「先观察再收紧」。
+	RegAttempts10Min    int
+	RegIPHourly         int
+	RegIPDaily          int
+	RegDeviceDaily      int
+	RegGlobalDaily      int
+	RegHoneypotBanHours int
 }
 
 func Load() (Config, error) {
@@ -81,6 +89,17 @@ func Load() (Config, error) {
 		BootstrapAdminUser:         strings.TrimSpace(os.Getenv("XUAN_BOOTSTRAP_ADMIN_USERNAME")),
 		BootstrapAdminPass:         os.Getenv("XUAN_BOOTSTRAP_ADMIN_PASSWORD"),
 		BootstrapAdminName:         env("XUAN_BOOTSTRAP_ADMIN_NAME", "超级管理员"),
+
+		// 单 IP 一小时/一天最多成功注册几个号；同设备 24 小时几个；全服一天总量兜底。
+		// 默认只开 IP 两档：一个 IP 一小时注册 20 个号已经明显不正常，而网吧/同一 WiFi
+		// 短时间多人注册也很少到 20。设备维度和全局兜底默认关闭，等真被打时
+		// 再用环境变量打开，避免误伤正常玩家。
+		RegAttempts10Min:    envInt("XUAN_REG_ATTEMPTS_10MIN", 20),
+		RegIPHourly:         envInt("XUAN_REG_IP_HOURLY", 20),
+		RegIPDaily:          envInt("XUAN_REG_IP_DAILY", 20),
+		RegDeviceDaily:      envInt("XUAN_REG_DEVICE_DAILY", 0),
+		RegGlobalDaily:      envInt("XUAN_REG_GLOBAL_DAILY", 0),
+		RegHoneypotBanHours: envInt("XUAN_REG_HONEYPOT_BAN_HOURS", 24),
 	}
 
 	if cfg.DBUser == "" || cfg.DBPassword == "" {
@@ -171,4 +190,17 @@ func env(name, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+// envInt 读整数配置：非法值或负数静默回退到默认值，避免一个笔误让服务起不来。
+func envInt(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return fallback
+	}
+	return value
 }

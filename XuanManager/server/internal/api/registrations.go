@@ -34,6 +34,9 @@ type gameRegistrationRequest struct {
 	DeviceID         string `json:"deviceId"`
 	DevicePlatform   string `json:"devicePlatform"`
 	DeviceVersion    int    `json:"deviceVersion"`
+	// Website 是蜜罐字段：注册表单里没有这一项，正常客户端永远不会填。
+	// 批量注册脚本常常照着接口字段表盲填，填了就说明是机器。
+	Website string `json:"website"`
 }
 
 type normalizedGameRegistration struct {
@@ -122,7 +125,8 @@ func (s *Server) handleRegistrationOptions(w http.ResponseWriter, _ *http.Reques
 
 func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Request) {
 	setRegistrationCORS(w)
-	allowed, retryAfter := s.registrationLimiter.allow(clientIP(r), time.Now())
+	ip := clientIP(r)
+	allowed, retryAfter := s.registrationLimiter.allow(ip, time.Now())
 	if !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(max(1, int(retryAfter.Seconds()))))
 		writeError(w, http.StatusTooManyRequests, "REGISTRATION_RATE_LIMITED", "注册请求过于频繁，请稍后再试")
@@ -138,6 +142,41 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 	if !decodeJSON(w, r, &input) {
 		return
 	}
+
+	// 蜜罐：命中直接封 IP。正常玩家不可能填到这一栏，误伤概率接近零。
+	ipHash := registrationIPHash(ip)
+	if strings.TrimSpace(input.Website) != "" {
+		s.registrationGuard.ban(r.Context(), ipHash, "honeypot", time.Now())
+		s.registrationGuard.record(r.Context(), registrationEvent{IPHash: ipHash, Result: registrationResultHoneypot})
+		s.audit(r.Context(), nil, "game.registration.honeypot", "third_marketing_info", "",
+			map[string]any{"honeypot": "website"}, nil, nil, 0, "注册蜜罐命中，已封禁该 IP", ip)
+		writeError(w, http.StatusForbidden, "REGISTRATION_REJECTED", "请求被拒绝，请稍后重试")
+		return
+	}
+
+	// 配额：单 IP 小时/日、单设备、全服日上限。库不可用时放行（fail open），
+	// 因为注册本身要写游戏库，库挂了注册也成功不了。
+	deviceKey := registrationDeviceKey(input.DeviceID)
+	if reason, wait, guardErr := s.registrationGuard.blocked(r.Context(), ipHash, deviceKey); guardErr != nil {
+		s.logger.Warn("registration quota check failed", "error", guardErr)
+	} else if reason != registrationBlockNone {
+		wait = max(wait, time.Second)
+		w.Header().Set("Retry-After", strconv.Itoa(max(1, int(wait.Seconds()))))
+		if reason == registrationBlockIPBanned {
+			// 被封的 IP 不再写事件，避免封禁状态自己把表刷大。
+			writeError(w, http.StatusForbidden, "REGISTRATION_REJECTED", "请求被拒绝，请稍后重试")
+			return
+		}
+		s.registrationGuard.record(r.Context(), registrationEvent{
+			IPHash: ipHash, DeviceKey: deviceKey, LoginName: input.LoginName,
+			Result: registrationResultRateLimited,
+		})
+		s.audit(r.Context(), nil, "game.registration.rate_limited", "third_marketing_info", "",
+			map[string]any{"reason": string(reason), "loginName": input.LoginName}, nil, nil, 0, "注册配额已满，已拒绝", ip)
+		writeError(w, http.StatusTooManyRequests, "REGISTRATION_RATE_LIMITED", "注册请求过于频繁，请稍后再试")
+		return
+	}
+
 	registration, err := normalizeGameRegistration(input)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_REGISTRATION", err.Error())
@@ -192,7 +231,7 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if exists {
-		writeError(w, http.StatusConflict, "NICKNAME_EXISTS", "该昵称已被使用")
+		writeError(w, http.StatusConflict, "ACCOUNT_UNAVAILABLE", "账号或昵称不可用，请更换后重试")
 		return
 	}
 
@@ -203,7 +242,7 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if exists {
-		writeError(w, http.StatusConflict, "LOGIN_NAME_EXISTS", "该登录账号已被使用")
+		writeError(w, http.StatusConflict, "ACCOUNT_UNAVAILABLE", "账号或昵称不可用，请更换后重试")
 		return
 	}
 
@@ -228,7 +267,7 @@ VALUES (CURDATE(), CURTIME(), ?, ?, ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1
 		antiTheftValue, deviceID, devicePlatform, registration.DeviceVersion, antiTheftValue, bindingRevision)
 	if err != nil {
 		if isDuplicateKey(err) {
-			writeError(w, http.StatusConflict, "LOGIN_NAME_EXISTS", "该登录账号已被使用")
+			writeError(w, http.StatusConflict, "ACCOUNT_UNAVAILABLE", "账号或昵称不可用，请更换后重试")
 			return
 		}
 		s.logger.Error("create game registration", "error", err, "loginName", registration.LoginName)
@@ -269,6 +308,13 @@ VALUES (CURDATE(), CURTIME(), ?, ?, ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1
 			"lowerCountsRefreshed": lowerCountsRefreshed,
 		}, 0, "游戏账号注册成功", clientIP(r))
 	go s.applyRegistrationAvatar(id, registration.AvatarIndex)
+	// 只有真正建号成功才计入配额，被拒的请求不会占用正常用户的额度。
+	s.registrationGuard.record(r.Context(), registrationEvent{
+		IPHash:    ipHash,
+		DeviceKey: deviceKey,
+		LoginName: registration.LoginName,
+		Result:    registrationResultOK,
+	})
 	writeData(w, http.StatusCreated, map[string]any{
 		"registrationId":   id,
 		"invitationCode":   registration.InvitationCode,
@@ -430,12 +476,33 @@ func isRegistrationAvatarIndex(value string) bool {
 	return err == nil && strconv.Itoa(index) == value && index >= 1 && index <= 100
 }
 
+// registrationAvatarSlots 限制「等玩家首次登录后补头像」的 goroutine 并发数。
+// 这条链路只有玩家登录游戏、player_guuid 落库之后才有结果，注册完不登录就一直空转；
+// 大批量注册会把这些 goroutine 全堆在这里，每个都在定期打游戏库。
+var registrationAvatarSlots = make(chan struct{}, 16)
+
+// registrationAvatarRetryDelays 分段退避：总时长仍约 2 分钟，
+// 但单次注册的查询次数从每秒 1 次（最多 120 次）降到 8 次以内。
+var registrationAvatarRetryDelays = []time.Duration{
+	time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second,
+	15 * time.Second, 15 * time.Second, 30 * time.Second, 45 * time.Second,
+}
+
 func (s *Server) applyRegistrationAvatar(registrationID int64, avatarIndex string) {
+	select {
+	case registrationAvatarSlots <- struct{}{}:
+		defer func() { <-registrationAvatarSlots }()
+	default:
+		// 队列满说明注册量已经异常，补头像是次要功能，直接放弃，别去和主流程抢数据库。
+		s.logger.Warn("registration avatar queue is full, skipped", "registrationId", registrationID)
+		return
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
 	var lastErr error
-	for {
+	for attempt := 0; attempt <= len(registrationAvatarRetryDelays); attempt++ {
 		var playerGUID string
 		err := s.db.QueryRowContext(ctx, `SELECT player_guuid
 FROM kbedm.third_marketing_info WHERE id = ? LIMIT 1`, registrationID).Scan(&playerGUID)
@@ -450,13 +517,17 @@ FROM kbedm.third_marketing_info WHERE id = ? LIMIT 1`, registrationID).Scan(&pla
 			lastErr = err
 		}
 
+		if attempt == len(registrationAvatarRetryDelays) {
+			break
+		}
 		select {
 		case <-ctx.Done():
 			s.logger.Error("registration avatar apply timed out", "registrationId", registrationID, "avatarIndex", avatarIndex, "error", lastErr)
 			return
-		case <-time.After(time.Second):
+		case <-time.After(registrationAvatarRetryDelays[attempt]):
 		}
 	}
+	s.logger.Warn("registration avatar apply gave up", "registrationId", registrationID, "avatarIndex", avatarIndex, "error", lastErr)
 }
 
 func (s *Server) setRegistrationAvatar(ctx context.Context, playerGUID, avatarIndex string) error {
