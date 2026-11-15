@@ -4,6 +4,13 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-15 后台「业绩股」全局折算百分比配置（已部署 8891）
+
+- 服务端在 `usr_hash_info` 的 `俱乐部业绩全局百分比`（**明文整数**，线上已是 `50`，10 秒热加载）折算业绩次数；后台新增 `GET/PUT /api/game/club-perf/scale` + 页面「全局折算设置」弹窗，新权限 `game.club_perf.config`（迁移 070）。
+- 顺手修三个会露馅的地方：报表次数原用 `int64(anyFloat())`，50% 的 .5 会被截断（改 `float64`，两位小数）；联盟根 `root.My` 原取原始总次数（改按百分比折算）；报表缺 `scale_percent` 时按 100 兜底，避免根节点变 0。
+- 已部署：二进制 `77dbde3c…`（备份 `backups/xuanmanager.20261116-0003-rollback`）、前端 `index-Bg6BsbJD.js` + `index-CCEXCQ45.css`；迁移 070 已执行、`game.club_perf.config` 授 role 1；health 200、新接口未登录 401；覆盖前用 HEAD 基线二进制体积反证同源。登录态实操待验收。详见[交接](handoffs/2026-11-15-club-perf-scale-config.md)。
+
+
 ## 2026-11-15 客户端「我的」新增「逃跑惩罚统计」（大盟主，未构建、未真机）
 
 - 入口：「我的 → 操作」第 10 个按钮（额度授权记录右侧），只对联盟总群主显示；按钮美术新出 `mine_chengfa_exact.png`，同款金币箭头 + 金色描边字，**按钮上不显示金额**。
@@ -106,23 +113,10 @@
 - 后台：玩家管理大小BOSS 改看 `union_manage`/`club_manage`、业绩核心共享按日期框、新增「业绩股」总览、登录接入谷歌验证 TOTP。
 - 部署与回滚信息、逐项交接链接见[11-12 批次归档](archive/2026-11-15/current-nov12-batches.md)。
 
-## 2026-11-11 牌桌「带入积分」V10（未构建、未真机）
+## 2026-11-11 批次（已归档）
 
-- `panelGameView.prefab` / `drh8.fire` 重做 V10 并接入钻石扣费；Creator、构建、真机、回包待验。详见[交接](handoffs/2026-11-11-buyin-points-v9.md)。
-
-## 2026-11-11 我的红利：新增「业绩股」页签（2026-11-12 按 v6 联盟树改造）
-
-- 双页签，非业绩股成员只隐藏「业绩股」（判断 `ClubPerfInfo.enabled`）；v6 渲染 `leaders`，盟主只授权不取消；服务端需部署后有 `scope`/`leaders`。详见[交接](handoffs/2026-11-11-my-hongli-perf-tab.md)。
-
-## 2026-11-11 后台业绩核心共享：改为按联盟发放（已部署）
-
-- 入口先列联盟，名单/方案/金额/发放/账单按当前联盟过滤；迁移 055 加 `union_id` 并回填，跨联盟选人由后端拒绝。
-- 已部署 8891；`go build/test/vet`、前端构建通过，登录态未验。详见[交接](handoffs/2026-11-11-agent-reward-union-scope.md)。
-
-## 2026-11-11 玩家信息卡片（未构建、未真机）
-
-- `panelUserInfo` 统计区改为两排三列蓝卡：上排总手数/总胜率/摊牌率，下排胜利/平局/失败；沿用 `remark[3]`。
-- 统计框调整、道具下移并补 Widget；TS、引用、1334/1624 预览通过，构建/真机/联调待验。详见[交接](handoffs/2026-11-11-userinfo-stats-layout.md)。
+- 牌桌「带入积分」V10、我的红利「业绩股」页签、后台业绩核心共享改按联盟发放、玩家信息卡片两排三列。
+- 逐项状态与交接链接见[11-11 批次归档](archive/2026-11-15/current-nov11-batches.md)。
 
 ## 2026-11-07～11-09 历史批次（已归档）
 
