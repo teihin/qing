@@ -165,6 +165,18 @@
 - 部署：二进制 `b6094314…`、前端 `index-DwMnfzsS.js` + `index-jrUFkdYE.css`，health ok、未登录 401。回滚点
   `bin/xuanmanager.previous-honorrank-validate-20261115-2030`、`web.previous-honorrank-validate-20261115-2030`。
 
+## 排名：含负分 + 靓号显示（2026-11-15 21:07 已部署 8891）
+
+- 赢分榜去掉 `HAVING SUM(score) > 0`：负分 / 0 分玩家也进榜（对齐文档 v2.9「显示所有有结算玩家」）。
+  排序仍是 `SUM(score) DESC`，负分自然排后面。
+- 三条 SQL 都带上 `acc.sm_custom_id`（**字段名是 sm_custom_id，不是 custom_id**），
+  界面按 `496702（333444）` 显示；靓号等于 ID 时不重复展示。
+- `GROUP BY` 同步补了 `acc.sm_custom_id`，否则 ONLY_FULL_GROUP_BY 会报错。
+- `.honor-rank-player small` 加 `white-space: nowrap`，带靓号的长 ID 不折行。
+- 真库验证：三榜 SQL 均跑通，赢分榜已出现 `a3 / -150`，靓号列有值（496702→333444）。
+- 部署：二进制 `4d866bbe…`、前端 `index-C1nOp7Xj.js` + `index-MXHtzGPg.css`；回滚点
+  `bin/xuanmanager.previous-honorrank-rank-20261115-2112`、`web.previous-honorrank-rank-20261115-2112`。
+
 ## 遗留 / 下一步
 
 1. 登录态点一遍：列表 → 创建（选联盟）→ 详情里改配置并保存 → 查看排名 → 结束活动；旧入口（俱乐部/联盟行内）保存一次，确认也进活动列表。

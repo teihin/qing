@@ -299,6 +299,8 @@ type honorRankRawRow struct {
 	Name     string
 	Value    float64
 	Remark   string
+	// sm_custom_id：绑了靓号时界面显示「ID（靓号）」，与后台其它页面一致。
+	CustomID string
 }
 
 // queryHonorRanking 按活动时间窗直读游戏库算榜。
@@ -333,7 +335,8 @@ func (s *Server) queryHonorRanking(ctx context.Context, clubs []string, activity
 		args = append(args, memberArgs...)
 		args = append(args, honorRankRankingMaxRows)
 		query := `
-SELECT a.user_guuid, COALESCE(NULLIF(acc.sm_name, ''), ''), SUM(a.activity_int), COALESCE(MAX(a.remark), '')
+SELECT a.user_guuid, COALESCE(NULLIF(acc.sm_name, ''), ''), SUM(a.activity_int), COALESCE(MAX(a.remark), ''),
+       COALESCE(acc.sm_custom_id, '')
 FROM kbedm.usr_activity_info a
 JOIN kbedm.tbl_Account acc ON acc.sm_guuid = a.user_guuid
 WHERE a.activity_type = '手数'
@@ -342,7 +345,7 @@ WHERE a.activity_type = '手数'
   AND CONCAT(a.date, ' ', a.time) BETWEEN ? AND ?
   AND acc.sm_level < 99
   AND ` + member + `
-GROUP BY a.user_guuid, acc.sm_name
+GROUP BY a.user_guuid, acc.sm_name, acc.sm_custom_id
 ORDER BY SUM(a.activity_int) DESC, a.user_guuid DESC
 LIMIT ?`
 		rows, err := s.queryHonorRankRows(ctx, query, args)
@@ -357,13 +360,14 @@ LIMIT ?`
 		}
 		args = append(args, startDate, endDate, honorRankRankingMaxRows)
 		query := `
-SELECT s.user_guuid, COALESCE(NULLIF(acc.sm_name, ''), ''), SUM(s.score), ''
+SELECT s.user_guuid, COALESCE(NULLIF(acc.sm_name, ''), ''), SUM(s.score), '',
+       COALESCE(acc.sm_custom_id, '')
 FROM kbedm.club_member_score_info s
 LEFT JOIN kbedm.tbl_Account acc ON acc.sm_guuid = s.user_guuid
 WHERE s.club_guuid IN (` + placeholders(len(clubs)) + `)
   AND s.date BETWEEN ? AND ?
-GROUP BY s.user_guuid, acc.sm_name
-HAVING SUM(s.score) > 0
+GROUP BY s.user_guuid, acc.sm_name, acc.sm_custom_id
+-- 不再只取正数：赢分榜要能看到负分/0 分玩家（文档 v2.9 口径）
 ORDER BY SUM(s.score) DESC, s.user_guuid DESC
 LIMIT ?`
 		rows, err := s.queryHonorRankRows(ctx, query, args)
@@ -381,7 +385,8 @@ LIMIT ?`
 		args = append(args, startDate, endDate, startStamp, endStamp, honorRankRankingMaxRows)
 		query := `
 SELECT i.remark1, COALESCE(NULLIF(acc.sm_name, ''), ''),
-       SUM(i.tax_number - COALESCE(i.bonus_tax_number, 0)) / 100, ''
+       SUM(i.tax_number - COALESCE(i.bonus_tax_number, 0)) / 100, '',
+       COALESCE(acc.sm_custom_id, '')
 FROM kbedm.usr_income_info i
 LEFT JOIN kbedm.tbl_Account acc ON acc.sm_guuid = i.remark1
 WHERE i.proxy_guuid IN (` + placeholders(len(clubs)) + `)
@@ -389,7 +394,7 @@ WHERE i.proxy_guuid IN (` + placeholders(len(clubs)) + `)
   AND i.remark1 <> ''
   AND i.date BETWEEN ? AND ?
   AND CONCAT(i.date, ' ', i.time) BETWEEN ? AND ?
-GROUP BY i.remark1, acc.sm_name
+GROUP BY i.remark1, acc.sm_name, acc.sm_custom_id
 HAVING SUM(i.tax_number - COALESCE(i.bonus_tax_number, 0)) > 0
 ORDER BY SUM(i.tax_number - COALESCE(i.bonus_tax_number, 0)) DESC, i.remark1 DESC
 LIMIT ?`
@@ -397,6 +402,17 @@ LIMIT ?`
 		return rows, "元", err
 	}
 	return nil, "", errors.New("rank_type 非法")
+}
+
+// honorRankPlayerLabel 账号 ID 后面带靓号：496702（88888888）。
+// 靓号和 ID 相同时不重复展示（有账号绑的靓号就是自身 ID）。
+func honorRankPlayerLabel(playerID, customID string) string {
+	playerID = strings.TrimSpace(playerID)
+	customID = strings.TrimSpace(customID)
+	if customID == "" || customID == playerID {
+		return playerID
+	}
+	return playerID + "（" + customID + "）"
 }
 
 func (s *Server) queryHonorRankRows(ctx context.Context, query string, args []any) ([]honorRankRawRow, error) {
@@ -408,11 +424,12 @@ func (s *Server) queryHonorRankRows(ctx context.Context, query string, args []an
 	result := []honorRankRawRow{}
 	for rows.Next() {
 		var item honorRankRawRow
-		if err := rows.Scan(&item.PlayerID, &item.Name, &item.Value, &item.Remark); err != nil {
+		if err := rows.Scan(&item.PlayerID, &item.Name, &item.Value, &item.Remark, &item.CustomID); err != nil {
 			return nil, err
 		}
 		item.PlayerID = strings.TrimSpace(item.PlayerID)
 		item.Name = strings.TrimSpace(item.Name)
+		item.CustomID = strings.TrimSpace(item.CustomID)
 		result = append(result, item)
 	}
 	return result, rows.Err()
@@ -1203,7 +1220,7 @@ func (s *Server) handleHonorRankActivityRanking(w http.ResponseWriter, r *http.R
 			row := rows[index]
 			items = append(items, honorRankRankingRow{
 				Rank:     index + 1,
-				PlayerID: row.PlayerID,
+				PlayerID: honorRankPlayerLabel(row.PlayerID, row.CustomID),
 				Name:     row.Name,
 				Value:    row.Value,
 				Reward:   honorRankRewardAt(item.Boards, rankType, dipi, index+1),

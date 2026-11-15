@@ -3143,7 +3143,7 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
 .honor-rank-nowrap { white-space: nowrap; line-height: 1.7; }
 .honor-rank-player { display: grid; gap: 2px; min-width: 150px; }
 .honor-rank-player strong { color: #19343d; font-size: 13px; }
-.honor-rank-player small { color: #7f9398; font-size: 12px; }
+.honor-rank-player small { color: #7f9398; font-size: 12px; white-space: nowrap; }
 .honor-rank-tags { display: flex; flex-wrap: wrap; gap: 6px; }
 .honor-rank-tags span { padding: 2px 8px; border-radius: 999px; color: #176f67; background: #eaf8f5; font-size: 12px; font-weight: 700; }
 .honor-rank-tags span.is-off { color: #8a8f90; background: #f2f5f5; }
