@@ -23,6 +23,8 @@
   新增流水/记录页不要按「绿加红减」写；现存实现是 `cc.Color(255,65,52)` 表示加、`cc.Color(167,231,29)` 表示减。
 
 ## 服务器 154.37.155.17
+- **登录口径固定：`ssh -p 2233 -i ~/.ssh/id_ed25519_newserver client_update@154.37.155.17`**（22 端口直接
+  `Connection closed`，root 和其他 key 一律 publickey 拒绝；多行 ssh 脚本会被掐断，写脚本传上去再 `bash 脚本`）。
 - **该机没有 `ss`、没有 systemd**：`ss | grep 端口` 永远回 "NOT LISTENING"，会误判服务挂了；查端口用
   `(echo >/dev/tcp/127.0.0.1/PORT)`。三服务全靠 crontab `@reboot` 拉起，**pid 文件跨重启残留 + pid 复用
   会让旧 `kill -0` 判断误以为在运行而永久宕机**（客服站 9-27 宕到 10-21 即此因）。详见 `SERVER-NOTES.md`。

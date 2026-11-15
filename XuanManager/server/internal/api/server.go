@@ -143,6 +143,20 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/unions/{unionId}/earnings", s.authorized("game.union.view", false, s.handleUnionEarnings))
 	s.mux.Handle("POST /api/game/unions/{unionId}/quota-adjustments", s.authorized("game.union.quota_adjust", true, s.handleAdjustUnionQuota))
 	s.mux.Handle("PUT /api/game/unions/{unionId}/dark-setting", s.authorized("game.union.dark_setting", true, s.handleSetUnionDarkSetting))
+	// 俱乐部荣耀榜：一个 scope（联盟 / 独立俱乐部）一份配置，读写走游戏服
+	// 异步_查询/设置_俱乐部_活动_配置；俱乐部与联盟共用同一对权限码。
+	s.mux.Handle("GET /api/game/clubs/{clubId}/honor-rank", s.authorized("game.club_honor_rank.view", false, s.handleGetClubHonorRank))
+	s.mux.Handle("PUT /api/game/clubs/{clubId}/honor-rank", s.authorized("game.club_honor_rank.manage", true, s.handleSetClubHonorRank))
+	s.mux.Handle("GET /api/game/unions/{unionId}/honor-rank", s.authorized("game.club_honor_rank.view", false, s.handleGetUnionHonorRank))
+	s.mux.Handle("PUT /api/game/unions/{unionId}/honor-rank", s.authorized("game.club_honor_rank.manage", true, s.handleSetUnionHonorRank))
+	// 排行榜独立模块：历史活动留档 + 实时排名（排名按活动时间窗直读游戏库）。
+	s.mux.Handle("GET /api/game/honor-rank/activities", s.authorized("game.honor_rank.view", false, s.handleListHonorRankActivities))
+	s.mux.Handle("GET /api/game/honor-rank/scopes", s.authorized("game.honor_rank.view", false, s.handleHonorRankScopes))
+	s.mux.Handle("POST /api/game/honor-rank/activities", s.authorized("game.honor_rank.manage", true, s.handleCreateHonorRankActivity))
+	s.mux.Handle("PUT /api/game/honor-rank/activities/{id}", s.authorized("game.honor_rank.manage", true, s.handleUpdateHonorRankActivity))
+	s.mux.Handle("GET /api/game/honor-rank/activities/{id}", s.authorized("game.honor_rank.view", false, s.handleGetHonorRankActivity))
+	s.mux.Handle("GET /api/game/honor-rank/activities/{id}/ranking", s.authorized("game.honor_rank.view", false, s.handleHonorRankActivityRanking))
+	s.mux.Handle("POST /api/game/honor-rank/activities/{id}/close", s.authorized("game.honor_rank.manage", true, s.handleCloseHonorRankActivity))
 	s.mux.Handle("GET /api/game/agent-contributions/clubs/{clubId}/members", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionMembers))
 	s.mux.Handle("POST /api/game/agent-contributions/clubs/{clubId}/display-data", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionDisplayData))
 	s.mux.Handle("GET /api/game/agent-contributions/clubs/{clubId}/agents/{agentId}/rule", s.authorized("game.agent_contribution.view", false, s.handleAgentContributionRuleGet))

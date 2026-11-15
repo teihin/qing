@@ -129,6 +129,14 @@ interface BossListRow {
     totalBonusFen:string;
     /** 已加入的分组名（接口随行下发 `groups[]` / `group_name`，与其他接口同结构）；空串=未分组。 */
     groupName:string;
+    /**
+     * 身份：服务端随行下发 `is_agent` / `is_leader`（"1"/"0"）。
+     * **必须按行判断**——同一玩家在不同俱乐部身份可以不同（A 俱乐部是盟主、B 俱乐部只是普通玩家），
+     * 所以不能按页签一刀切（2026-11-15 代理被显示成「玩家」即此因）。
+     * 老服务端不下发时为 false，退回页签默认身份。
+     */
+    isAgent:boolean;
+    isLeader:boolean;
 }
 
 /**
@@ -1729,7 +1737,10 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             todayBonusFen:text(raw && raw.today_bonus_fen),
             yesterdayBonusFen:text(raw && raw.yesterday_bonus_fen),
             totalBonusFen:text(raw && raw.total_bonus_fen),
-            groupName:this.GroupText(raw)
+            groupName:this.GroupText(raw),
+            // 兼容 "1" / 1 / true 三种写法；缺键=false。
+            isAgent:text(raw && raw.is_agent) === "1" || (raw && raw.is_agent) === true,
+            isLeader:text(raw && raw.is_leader) === "1" || (raw && raw.is_leader) === true
         };
     }
 
@@ -1798,15 +1809,30 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             scrollView.scrollToTop(0);
     }
 
+    /**
+     * 行内「身份」文案：`is_leader` → 盟主，`is_agent` → 代理，否则玩家。
+     * 代理列表（`isAgentList=true`）本身就是代理口径，老服务端不下发 `is_agent` 时兜底成代理。
+     */
+    private RowIdentity(item:BossListRow, isAgentList:boolean):string {
+        if(item.isLeader)
+            return "盟主";
+        if(item.isAgent || isAgentList)
+            return "代理";
+        return "玩家";
+    }
+
     /** 玩家列表行：玩家本人口径，只有输赢三项有数据，贡献/红利接口未下发。 */
     private FillPlayerListRow(row:cc.Node, item:BossListRow):void {
         this.QueueRowAvatar(row, item.id);
         this.Text("姓名", item.name || ("玩家 " + item.id), row);
         this.Text("玩家ID", "ID: " + item.id, row);
-        this.Text("身份", "玩家", row);
+        // 「所有玩家」里也会出现代理和盟主（服务端按俱乐部逐行下发），身份必须看行上的 is_agent/is_leader。
+        const identity = this.RowIdentity(item, false);
+        this.Text("身份", identity, row);
         const identityNode = this.At("身份", row);
         if(identityNode)
-            identityNode.color = new cc.Color(160,220,235);
+            identityNode.color = identity === "玩家" ?
+                new cc.Color(160,220,235) : new cc.Color(255,231,112);
         this.Text("俱乐部", item.clubName || item.clubId || "—", row);
         // 左栏第二行借来放直属上级：全服列表里「这个人归谁」比积分更有用。
         this.Text("积分", "上级 " + (item.upperName || item.upperId || "无"), row);
@@ -1826,7 +1852,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         this.QueueRowAvatar(row, item.id);
         this.Text("姓名", item.name || ("代理 " + item.id), row);
         this.Text("玩家ID", "ID: " + item.id, row);
-        this.Text("身份", "代理", row);
+        // 代理列表里俱乐部创建者显示「盟主」，其余仍是「代理」（身份颜色同为金色）。
+        this.Text("身份", this.RowIdentity(item, true), row);
         const identityNode = this.At("身份", row);
         if(identityNode)
             identityNode.color = new cc.Color(255,231,112);

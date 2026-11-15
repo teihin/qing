@@ -1,8 +1,35 @@
 # qing 当前状态
 
-更新时间：2026-11-14
+更新时间：2026-11-15
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-15 后台「排行榜」独立模块：活动列表 + 创建 + 实时排名（已部署 8891）
+
+- 新菜单 `/game/honor-rank`（模块 `game.honor_rank`，迁移 068）：列表放历史上所有排行榜活动，创建=原有配置 + 选联盟/独立俱乐部，点开可看实时排名（三榜 + 手数 5 档位）。
+- 单个活动**可修改**（`PUT /activities/{id}`，就地更新留档并重下发 7 行；被新活动取代的只读）。
+- 游戏服只有「每个 scope 一份当前配置」，故后台自建留档表 `mgr_honor_rank_activity`；旧入口（俱乐部/联盟行内）保存也留档（开启新增、关闭标记）。
+- 排名**直读游戏库**按活动自己的时间窗统计（后台直调 `查询_俱乐部_活动_*` 客户端命令返回 1280，走不通）。口径见交接。
+- 已部署：二进制 `9a34fd94…`（2026-11-15 18:50 二次部署，含活动修改）、前端 `index-BcwSx34z.js` + `index-D8neILzi.css`；迁移 068 已执行（模块 id 64、权限授予 role 1/4、活动表 0 行）；health 200、新接口未登录 401。登录态实操待验收。详见[交接](handoffs/2026-11-15-honor-rank-module.md)。
+
+## 2026-11-15 后台玩家详情「所在俱乐部」显示完整代理链（已部署 8891）
+
+- 玩家管理 → 查看详情 →「所在俱乐部」页签：每个俱乐部卡片新增「完整代理链」，本人 → 直属上级 → … → 群主/盟主 → 大盟主，逐环显示昵称、ID、角色。
+- 后端 `handleGetPlayerClubs` 返回 `chain`（新增 `buildPlayerClubChain`）：沿 `club_agent_info.upper_guuid` 回溯，最多 16 环；成环截断；上级不在本俱乐部时标 `missing` 并停止回溯，不伪造；末尾按俱乐部归属补创建者与联盟大盟主。
+- 已部署：二进制 `5352ea1f…`、前端 `index-BuFYhlh_.js` + `index-D2TbASBz.css`；备份 `bin/xuanmanager.previous-playerchain-20261115-1740`、`web.previous-playerchain-20261115-1740`。无迁移。登录态人工验收待做。详见[交接](handoffs/2026-11-15-player-club-chain.md)。
+
+## 2026-11-15 俱乐部荣耀榜：后台开关 + 客户端切俱乐部榜（未构建、未部署）
+
+- 需求：大厅全平台排行榜改成俱乐部模式；后台按**联盟/独立俱乐部**单独开榜（总开关 + 手数/赢分/红利三榜开关 + 共用起止时间）。
+- 服务端 v2.6 用「`club_honor_rank_reward` 加 5 列 + 扩展原奖励命令」实现，一行 = 一个（scope, 榜, 档位），共 7 行；后台把「总开关+三榜开关+共用时间」展开成 7 行逐条写，读时聚合并标混合状态。
+- 本轮落地：后台（`club_honor_rank.go`、`067` 迁移、`HonorRankModal`、俱乐部/联盟行内入口）+ 客户端（`panelPaihangbang` 双通道、俱乐部榜不领取、业务文案直接显示、不可用时回落全平台榜）。
+- Go 单测与 `tsc` 通过，客户端未构建；服务端 v2.6 未部署。详见[交接](handoffs/2026-11-15-club-honor-rank.md)。
+
+## 2026-11-15 BF 聊天入口改为默认关闭（已部署 8891/8893）
+
+- 后台「俱乐部管理 → BF聊天」默认值由开启改关闭：无俱乐部记录、无俱乐部账号都看不到消息页置顶入口，需要时后台逐个开启。
+- 存量一并关停：`chat_direct_bf_club` 10 行、旧表 `chat_direct_bf_entry` 2 行全部 `enabled=0`。
+- 已部署 ChatTool `b1ba8f54…`、XuanManager `580586bf…`、前端 `index-Ccu1-Dt0.js`；health 200、公网页面已换新资源。客户端未改代码（只读 `visible`），未构建/未真机；后台登录态实操待验收。详见[交接](handoffs/2026-11-15-bf-chat-default-off.md)。
 
 ## 2026-11-14 后台靓号管理（已部署 8891）
 
@@ -59,48 +86,11 @@
 - 迁移 `061_user_data_query.sql`：模块 `game.user_data`、权限 `game.user_data.view`。接口 `GET /api/game/user-data/profile|records`，默认最近 7 天、单次最多 31 天。
 - 已部署 8891：后端 `c3b81f4f…`、前端 `index-BlT_8jCE.js` + `index-CLlbA0eV.css`；health 200、未登录接口 401。回滚：`backups/xuanmanager.20261113-2244-rollback`（原始 `b6d68684…`）、`web.previous-userdata-20261113-2244`。未做登录态页面视觉验收。详见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
 
-## 2026-11-12 客户端两个 BOSS 入口改按管理范围（已改代码、未构建）
+## 2026-11-12 批次（已归档）
 
-- 「我的→数据统计」和「牌桌点头像进 BOSS 面板」改用 `GameDataManager.HasManageScope()`（`club_manage`/`union_manage` 非空），不再看 `level>=99`/董事长/总裁。
-- 玩家列表/代理列表默认不带 `club_id`，查账号管理的全部俱乐部；手动选「一级过滤：俱乐部」时才带。
-- 修代理链 `club_id`：列表/玩家信息/分组行点「代理链」传被查玩家自己的俱乐部，不再用当前房间俱乐部；按 ID/昵称搜索无俱乐部时回落当前 club。
-- 分组：列表/成员/创建/删除/设置/移除不再传 `club_id`；四处行内恢复「分组名/添加到分组」；删除分组二次确认（继续→确认删除）。
-- 未构建：`build/jsb-link` 仍是 01:21 旧产物，Creator 需重新编译/构建后再生成热更新。详见[交接](handoffs/2026-11-12-client-boss-entry-scope.md)。
-
-## 2026-11-12 后台玩家管理：大小BOSS = union_manage / club_manage（已部署 8891）
-
-- 「大小BOSS」筛选/浅红行改看 `sm_union_manage` 或 `sm_club_manage` 非空；新增「设置管理员」弹窗（迁移 059、权限 `game.player.manage_scope`），调游戏服 `异步_设置_俱乐部_管理范围` 并回读校验/审计。
-- 列表与详情批量补管理范围名称；已部署 8891（二进制 `87a9b52a…`、前端 `index-CnQgFCHa.js` + `index-BXvdQkqt.css`，回滚备份见交接）。详见[交接](handoffs/2026-11-12-admin-player-manage-scope.md)。
-
-## 2026-11-12 业绩核心共享：写操作改用日期框当前日期（已部署 8891）
-
-- 计划总额/分配/分摊/发放改用日期框 `date` + 当前 `kind`，不再用 `data.plan.date`；数据与选择不一致时按钮禁用，`load/loadSummary` 丢弃过期响应。
-- 前端 `index-ClSOsNS9.js` 已部署（回滚 `backups/web.20261112-2105-rollback`），登录态待验；牌局回顾 remark 第 12 段原样显示、缺段隐藏，Prefab 已加节点待验。
-
-## 2026-11-12 后台新增「业绩股」总览（已部署 8891，页面待验）
-
-- 游戏管理 → 业绩股：先列联盟，进入后**只展示已授权人员**（未授权不显示，已授权下级上提），含上下级与业绩比例；默认只展开根。
-- 详情页「＋ 新增开通人员」：只列当前联盟**未开通的所有层级代理**（创建者或有可用邀请码 is_agent；percent=0 也可能是代理），玩家和已开通者不显示；支持ID/昵称搜索，走 `设置_俱乐部_业绩_授权`；迁移 059 加候选/授权接口与权限。
-- `unions|overview`：树读 `club_agent_info`，业绩走 `异步_查询_俱乐部_业绩_报表(union_id)`，未命中即未开通。旧「奖池业绩」菜单迁移 060 隐藏（visible=0，数据和权限保留）。
-- 已部署：`9708117b…`、前端 `index-OJTIozTJ.js`；health 200、未登录 401。回滚：`backups/xuanmanager.20261113-0048-rollback`、前端 `web.previous-club-perf-available-20261113-0048`。
-- 未做登录态验收；报表/授权需真实联盟验证。详见[交接](handoffs/2026-11-12-club-perf-admin-module.md)。
-
-## 2026-11-12 初始化交易密码改独立 Prefab（未构建、未真机）
-
-- 初始化弹窗抽成 `panelInitTradePwd.prefab` 并以 `ShowPanelMode.Top` 打开，避免被上下分/赠送面板挡住；`panelMain.prefab` 已移除原节点，Creator/真机待验。
-
-## 2026-11-12 后台登录接入谷歌验证 TOTP（已部署 8891，待真实账号验收）
-
-- 登录两阶段：已绑定用户密码通过后只返回 5 分钟挑战，不建会话、不踢旧会话；校验动态码后才走原单点登录。
-- 迁移 057 已执行：`mgr_user` 四个 totp 字段、恢复码表、登录挑战表、`user.reset_totp`（id=5818）。密钥 AES-GCM 加密落库；恢复码 10 个、只存哈希、一次性。
-- 前端登录二步 + 顶栏「安全」绑定/恢复码/关闭；每次密码登录后未绑定弹一次提醒（可稍后）；用户管理显示绑定状态并可重置（根账号/超管不可重置）。本轮未做强制开关。
-- 部署：二进制 `195001be…`、前端 `index-Zr6oThDd.js` + `index-CLU3S7Gn.css`（含输入框样式修正）；health 200、未登录接口 401。回滚：`backups/xuanmanager.20261112-1413-rollback`、`web.previous-totp-css-20261112-1436`。
-- 真实绑定/扫码/二步登录/恢复码/重置待主人验收。详见[交接](handoffs/2026-11-12-xuanmanager-totp.md)。
-
-## 2026-11-12 客服系统：谷歌验证 + 隐藏账号（已部署 8893）
-
-- 登录两阶段、绑定/恢复码/关闭、登录提醒、主管重置；迁移 014/015 已执行。
-- 隐藏账号 `admin999`（客服z）对他人不可见，团队/转接/在线数已过滤；前端 `index-DjuST7cE.js`；回滚 `web.previous-no-super-label-20261112-1457`。详见[交接](handoffs/2026-11-12-chattool-totp.md)。
+- 客户端：两个 BOSS 入口改按管理范围、额度授权记录加类型、初始化交易密码改独立 Prefab、客服谷歌验证 + 隐藏账号。
+- 后台：玩家管理大小BOSS 改看 `union_manage`/`club_manage`、业绩核心共享按日期框、新增「业绩股」总览、登录接入谷歌验证 TOTP。
+- 部署与回滚信息、逐项交接链接见[11-12 批次归档](archive/2026-11-15/current-nov12-batches.md)。
 
 ## 2026-11-11 牌桌「带入积分」V10（未构建、未真机）
 

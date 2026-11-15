@@ -4335,11 +4335,17 @@ export default class panelMain extends UIPanelViewBase {
             return;
         // 只接受「本人」的代理信息：服务端若把上级/创建者的记录当成本人的回包，
         // 这条会把人误显示成代理（列表右下角）。
-        const selfGuuid = GameDataManager.getAccount() == null ? "" : String(GameDataManager.getAccount().guuid || "");
-        if(selfGuuid && data.user_id && String(data.user_id) !== selfGuuid)
+        // 注意：后台绑定「账号ID靓号」后，服务端在客户端通道会把下发的个人 ID 值换成靓号，
+        // 报文里的 user_id 与 account.guuid 不再相等（但仍然是本人）。原先只比 guuid，
+        // 绑定后整条记录被当成别人的丢掉，邀请码/身份/比例一起消失（2026-11-15 反馈）。
+        if(data.user_id != null && String(data.user_id).trim() !== "" &&
+            !GameDataManager.IsSelfPlayerId(data.user_id))
             return;
         const clubId = String(data.club_id);
-        this.clubAgentInfo[clubId] = data;
+        // 推送可能只是「精简通知」（只带 club_id / user_id）：整条覆盖会把上一次拿到的
+        // invite_code 冲成空，邀请码行自己消失。完整快照（带 is_agent / is_creator）才是权威。
+        const info = this.MergeClubAgentInfo(this.clubAgentInfo[clubId],data);
+        this.clubAgentInfo[clubId] = info;
         // 本地还没选中任何俱乐部时（刚入会/刚登录），直接选中推送的这家，
         // 否则「我的」卡片会停在「暂无俱乐部」上，看着像没刷新。
         if(!this.ResolveRoomClub() && this.GetMyClubIds().indexOf(clubId) >= 0)
@@ -4359,7 +4365,7 @@ export default class panelMain extends UIPanelViewBase {
         if(this.clubManagementApi) this.clubManagementApi.RefreshBadges();
         // 推广页开着的场合（大厅「我的」里点进去），邀请码这行要跟着刷新。
         this.RefreshPromotionInviteCode();
-        if(Number(data.is_creator) === 1)
+        if(Number(info.is_creator) === 1)
         {
             this.RequestClubStonePool(clubId);
             if(this.currentMainTab === "我的")
@@ -4368,7 +4374,7 @@ export default class panelMain extends UIPanelViewBase {
                 this.schedule(this.clubStonePoolPoll,30);
             }
         }
-        if(!fromPush || Number(data.is_agent) === 1 || Number(data.is_creator) === 1)
+        if(!fromPush || Number(info.is_agent) === 1 || Number(info.is_creator) === 1)
             return;
         const now = Date.now();
         if(now - (this.clubAgentRecheck[clubId] || 0) < 10000)
@@ -4379,6 +4385,27 @@ export default class panelMain extends UIPanelViewBase {
         // 服务端推送常带设置前的快照，补查两次给「生效后」的数据留出落库和推送的时间。
         this.RecheckClubAgent(clubId,0.5);
         this.RecheckClubAgent(clubId,2);
+    }
+
+    /**
+     * 合并代理信息缓存。
+     * 完整快照（带 is_agent / is_creator 身份字段，正常回包都长这样）直接覆盖；
+     * 缺身份的「精简通知」（绑定靓号、改比例后的短推送）只补字段，
+     * 保留已有邀请码、比例、上级，避免整条卡片被刷成空白。
+     */
+    private MergeClubAgentInfo(previous:any,next:any):any
+    {
+        if(!previous || !next)
+            return next || previous || null;
+        if(next.is_agent !== undefined || next.is_creator !== undefined)
+            return next;
+        const merged:any = Object.assign({},previous);
+        for(const key in next)
+        {
+            if(next[key] !== null && next[key] !== undefined)
+                merged[key] = next[key];
+        }
+        return merged;
     }
 
     private RecheckClubAgent(clubId:string,delay:number):void
@@ -5083,7 +5110,10 @@ export default class panelMain extends UIPanelViewBase {
             }
             // 邀请码每人都展示：代理/老板显示自己的码，普通成员回包里带的就是他上级的码（服务端口径）。
             // 注意这个码只影响「展示」，身份判定仍只看 is_agent，两者互不牵连。
-            const inviteCode = agent && agent.invite_code ? String(agent.invite_code).trim() : "";
+            // 代理信息未到（或只有老板的码在俱乐部信息里）时回退一次，避免这一行空白。
+            const agentCode = agent && agent.invite_code ? String(agent.invite_code).trim() : "";
+            const infoCode = info && info.invite_code ? String(info.invite_code).trim() : "";
+            const inviteCode = agentCode || infoCode;
             const inviteLabel = row.getChildByName("邀请码");
             if(inviteLabel)
                 inviteLabel.getComponent(cc.Label).string = inviteCode ? "邀请码 " + inviteCode : "";

@@ -12,6 +12,8 @@ export default class LeaderboardScrollView extends cc.ScrollView {
     private hasMore = true;
     private failed = false;
     private seen: {[id: string]: boolean} = {};
+    /** 已加载的行，按玩家 ID 索引：服务端「我的排名」回包异常时，客户端用榜单数据兜底。 */
+    private loadedRows: {[id: string]: any} = {};
 
     start() {
         super.start();
@@ -30,7 +32,9 @@ export default class LeaderboardScrollView extends cc.ScrollView {
 
     private checkNearEnd() {
         if (!this.node.activeInHierarchy || this.loading || this.failed || !this.hasMore || !this.callBackFresh) return;
-        const remaining = this.getMaxScrollOffset().y - this.getScrollOffset().y;
+        // Cocos 的 offset 是负值：顶部 0、底部等于 maxOffset（也是负的）。
+        // 所以"离底部还剩多少"要拿 offset 减 maxOffset，写成反过来会变成负数、一进列表就判定到底。
+        const remaining = this.getScrollOffset().y - this.getMaxScrollOffset().y;
         if (remaining <= Math.max(360, this.content.parent.height * .75)) this.callBackFresh(this.nextPage);
     }
 
@@ -53,12 +57,34 @@ export default class LeaderboardScrollView extends cc.ScrollView {
         }
     }
 
+    /**
+     * 服务端明确给出业务状态（活动没有开启 / 活动未开始 / 无权查看）时，
+     * 直接把这个文案显示在空列表位置，而不是"加载失败，请滑动重试"。
+     * 已经有数据时不动列表，只停住本次加载。
+     */
+    public notice(text: string) {
+        this.loading = false;
+        this.failed = true;
+        if (!this.loadedCount && text) {
+            const empty = this.node.parent.getChildByName("V8空列表");
+            empty.getComponent(cc.Label).string = text;
+            empty.active = true;
+        }
+    }
+
+    /** 在已加载的榜里按玩家 ID 找这一行；找不到返回 null。 */
+    public findRow(playerId: string): any {
+        const key = playerId == null ? "" : String(playerId).trim();
+        return key === "" ? null : (this.loadedRows[key] || null);
+    }
+
     public clearPage() {
         this.loading = false;
         this.failed = false;
         this.hasMore = true;
         this.nextPage = this.loadedCount = 0;
         this.seen = {};
+        this.loadedRows = {};
         this.content.children.forEach(row => row.active = false);
         this.content.getComponent(cc.Layout).updateLayout();
         this.node.parent.getChildByName("V8空列表").active = false;
@@ -84,7 +110,10 @@ export default class LeaderboardScrollView extends cc.ScrollView {
                 row = cc.instantiate(template);
                 this.content.addChild(row);
             }
-            row.getComponent(PaiHangScrollItem).Refresh(item, key === "ListActivityUserScore");
+            // 赢分榜（大厅全平台 / 俱乐部积分）都是带符号的数值。
+            const signed = key === "ListActivityUserScore" || key === "ClubActivityUserScore";
+            row.getComponent(PaiHangScrollItem).Refresh(item, signed);
+            if (user != null && user !== "") this.loadedRows[String(user)] = item;
             this.seen[identity] = true;
             this.loadedCount++;
         });

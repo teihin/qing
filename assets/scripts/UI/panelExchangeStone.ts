@@ -397,10 +397,15 @@ export default class panelExchangeStone extends UIPanelViewBase
             return;
 
         // 只认本人的代理信息，避免把上级/创建者的记录当成本人的角色。
-        let account:any = GameDataManager.getAccount();
-        if(account != null && data.user_id != null && String(data.user_id) !== String(account.guuid))
+        // 绑定「账号ID靓号」后服务端会把下发的 user_id 换成靓号，不能再只比 account.guuid，
+        // 否则本人记录被丢掉，角色永远退化成「玩家」。
+        if(data.user_id != null && String(data.user_id).trim() !== "" &&
+            !GameDataManager.IsSelfPlayerId(data.user_id))
             return;
 
+        // 精简通知（不带 is_agent / is_creator）只补字段，别把已拿到的身份刷没。
+        if(this.agentInfo && data.is_agent === undefined && data.is_creator === undefined)
+            data = Object.assign({},this.agentInfo,data);
         this.agentInfo = data;
         this.RefreshRole();
     }

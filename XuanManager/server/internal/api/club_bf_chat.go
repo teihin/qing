@@ -16,7 +16,7 @@ import (
 //   - chat_direct_bf_club  后台按俱乐部写入的开关（本文件读写）
 //   - chat_direct_bf_entry 旧版按创建者账号保存的开关，只作为历史数据回退
 //
-// 没有俱乐部记录时回落创建者记录，再没有则默认开启。客户端只读
+// 没有俱乐部记录时回落创建者记录，再没有则默认关闭。客户端只读
 // GET /api/direct/bf-entry 的 visible，不再提供游戏内开关。
 const (
 	clubBFChatAudit = "game.club.bf_chat.update"
@@ -38,7 +38,7 @@ type updateBFChatRequest struct {
 }
 
 // readClubBFChatStates 批量取当前页俱乐部的 BF 入口状态，避免逐行查库。
-// 返回的 map 一定包含每个传入俱乐部，默认 true。
+// 返回的 map 一定包含每个传入俱乐部，默认 false（关闭）。
 func (s *Server) readClubBFChatStates(ctx context.Context, items []clubListItem) (map[string]bool, error) {
 	result := make(map[string]bool, len(items))
 	clubIDs := make([]string, 0, len(items))
@@ -49,7 +49,7 @@ func (s *Server) readClubBFChatStates(ctx context.Context, items []clubListItem)
 		if clubID == "" {
 			continue
 		}
-		result[clubID] = true
+		result[clubID] = false
 		clubIDs = append(clubIDs, clubID)
 		owner := strings.TrimSpace(item.OwnerID)
 		if owner != "" && !ownerSeen[owner] {
@@ -142,7 +142,7 @@ func (s *Server) readClubBFChatState(ctx context.Context, clubID, ownerID string
 	}
 	ownerID = strings.TrimSpace(ownerID)
 	if ownerID == "" {
-		return true, nil
+		return false, nil
 	}
 	err = s.db.QueryRowContext(ctx,
 		`SELECT enabled FROM chat_direct_bf_entry WHERE guuid = ? LIMIT 1`, ownerID).Scan(&enabled)
@@ -152,7 +152,7 @@ func (s *Server) readClubBFChatState(ctx context.Context, clubID, ownerID string
 	if !errors.Is(err, sql.ErrNoRows) {
 		return false, err
 	}
-	return true, nil
+	return false, nil
 }
 
 // writeClubBFChat 写入俱乐部级开关并回读校验。

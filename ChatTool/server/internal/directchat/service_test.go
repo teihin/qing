@@ -1029,6 +1029,9 @@ func unionEnv(t *testing.T) (*testEnv, Session, Session, Session) {
 	union := Union{ID: "900001", Name: "测试联盟", OwnerGuuid: "100009", OwnerClub: "111111"}
 	env.store.addUnion("111111", union)
 	env.store.addUnion("222222", union)
+	// BF 聊天入口默认关闭，关闭时非群主看不到大盟主固定入口；这里模拟后台已开启。
+	env.store.bfClubEntries["111111"] = true
+	env.store.bfClubEntries["222222"] = true
 	unionOwner := env.addSession(t, "100009", "大群主")
 	return env, unionOwner, env.session(t, "100001"), env.session(t, "100003")
 }

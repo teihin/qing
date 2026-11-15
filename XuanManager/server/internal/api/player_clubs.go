@@ -24,7 +24,26 @@ type playerClubMembership struct {
 	ClubGold   *int64 `json:"clubGold"`
 	UpperID    string `json:"upperId"`
 	UpperName  string `json:"upperName"`
+	// Chain 是玩家在这个俱乐部里的完整代理链：本人 → 直属上级 → … → 群主/盟主 → 大盟主。
+	Chain []playerClubChainNode `json:"chain"`
 }
+
+// playerClubChainNode 是代理链上的一环。
+type playerClubChainNode struct {
+	PlayerID  string `json:"playerId"`
+	Name      string `json:"name"`
+	Role      string `json:"role"`
+	RoleLabel string `json:"roleLabel"`
+	// UpperID 是该环节点自己的上级，便于核对链路是否连续。
+	UpperID string `json:"upperId"`
+	IsSelf  bool   `json:"isSelf"`
+	Depth   int    `json:"depth"`
+	// Missing 表示上级账号不在本俱乐部成员里（数据断链），界面必须显式提示，不能静默补成根节点。
+	Missing bool `json:"missing"`
+}
+
+// playerClubChainMaxLength 是代理链的最大回溯长度，防止脏数据成环时无限循环。
+const playerClubChainMaxLength = 16
 
 type playerClubSubordinate struct {
 	PlayerID  string `json:"playerId"`
@@ -179,6 +198,14 @@ func (s *Server) handleGetPlayerClubs(w http.ResponseWriter, r *http.Request, _ 
 	}
 
 	items := make([]playerClubMembership, 0, len(clubIDs))
+	// 代理链要一路指到群主/盟主和大盟主，联盟归属与俱乐部创建者从俱乐部元信息补。
+	chainMeta := s.readUserDataClubMetas(r.Context(), clubIDs)
+	chainExtraIDs := make([]string, 0, len(clubIDs)*2)
+	for _, clubID := range clubIDs {
+		meta := chainMeta[clubID]
+		chainExtraIDs = append(chainExtraIDs, meta.CreatorID, meta.UnionOwnerID)
+	}
+	chainNames := s.readUserDataNames(r.Context(), chainExtraIDs)
 	for _, clubID := range clubIDs {
 		meta, ok := metas[clubID]
 		if !ok {
@@ -205,6 +232,7 @@ func (s *Server) handleGetPlayerClubs(w http.ResponseWriter, r *http.Request, _ 
 			ClubID: meta.ClubID, ClubName: meta.Name, ClubStatus: meta.Status, ClubMode: meta.Mode,
 			Role: self.Role, RoleLabel: clubRoleLabel(self.Role), ClubGold: self.ClubGold,
 			UpperID: self.UpperID, UpperName: names[self.UpperID],
+			Chain: buildPlayerClubChain(playerID, *self, members, chainMeta[clubID], chainNames),
 		}
 		items = append(items, item)
 	}
@@ -215,6 +243,85 @@ func (s *Server) handleGetPlayerClubs(w http.ResponseWriter, r *http.Request, _ 
 		return items[i].ClubID < items[j].ClubID
 	})
 	writeData(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// buildPlayerClubChain 组装玩家在某个俱乐部的完整代理链：本人 → 直属上级 → … → 群主/盟主 → 大盟主。
+// 关系表缺失时按俱乐部创建者和联盟大盟主补齐；上级账号不在本俱乐部时标记 Missing 并停止回溯，
+// 不伪造上级关系。
+func buildPlayerClubChain(playerID string, self clubMemberNode, members []clubMemberNode,
+	meta userDataClubMeta, extraNames map[string]string) []playerClubChainNode {
+	byID := make(map[string]clubMemberNode, len(members))
+	for _, member := range members {
+		byID[member.PlayerID] = member
+	}
+	nameOf := func(id string) string {
+		if member, ok := byID[id]; ok && strings.TrimSpace(member.Name) != "" {
+			return member.Name
+		}
+		return strings.TrimSpace(extraNames[id])
+	}
+
+	chain := make([]playerClubChainNode, 0, 6)
+	seen := map[string]bool{playerID: true}
+	chain = append(chain, playerClubChainNode{
+		PlayerID: playerID, Name: self.Name, Role: self.Role, RoleLabel: clubRoleLabel(self.Role),
+		UpperID: self.UpperID, IsSelf: true, Depth: 0,
+	})
+
+	current := self.UpperID
+	for depth := 1; current != "" && depth <= playerClubChainMaxLength; depth++ {
+		if seen[current] {
+			// 成环：不再重复追加，界面按已显示的链路处理。
+			return chain
+		}
+		seen[current] = true
+		member, ok := byID[current]
+		if !ok {
+			chain = append(chain, playerClubChainNode{
+				PlayerID: current, Name: nameOf(current), Role: "missing",
+				RoleLabel: "上级账号缺失", Depth: depth, Missing: true,
+			})
+			return chain
+		}
+		chain = append(chain, playerClubChainNode{
+			PlayerID: current, Name: member.Name, Role: member.Role,
+			RoleLabel: clubRoleLabel(member.Role), UpperID: member.UpperID, Depth: depth,
+		})
+		current = member.UpperID
+	}
+
+	if meta.CreatorID != "" && !seen[meta.CreatorID] {
+		seen[meta.CreatorID] = true
+		role, label := "owner", "群主"
+		if meta.UnionID != "" {
+			role, label = "leader", "盟主"
+		}
+		chain = append(chain, playerClubChainNode{
+			PlayerID: meta.CreatorID, Name: nameOf(meta.CreatorID), Role: role,
+			RoleLabel: label, Depth: len(chain),
+		})
+	}
+	if meta.UnionID != "" && meta.UnionOwnerID != "" && !seen[meta.UnionOwnerID] {
+		seen[meta.UnionOwnerID] = true
+		chain = append(chain, playerClubChainNode{
+			PlayerID: meta.UnionOwnerID, Name: nameOf(meta.UnionOwnerID), Role: "union_owner",
+			RoleLabel: "大盟主", Depth: len(chain),
+		})
+	}
+	// 成员表里的角色只到群主/代理，联盟内的创建者与大盟主以俱乐部归属为准改名。
+	for index := range chain {
+		switch {
+		case chain[index].PlayerID == meta.UnionOwnerID && meta.UnionID != "":
+			chain[index].Role, chain[index].RoleLabel = "union_owner", "大盟主"
+		case chain[index].PlayerID == meta.CreatorID:
+			if meta.UnionID != "" {
+				chain[index].Role, chain[index].RoleLabel = "leader", "盟主"
+			} else {
+				chain[index].Role, chain[index].RoleLabel = "owner", "群主"
+			}
+		}
+	}
+	return chain
 }
 
 func (s *Server) handleGetPlayerClubSubordinates(w http.ResponseWriter, r *http.Request, _ principal) {

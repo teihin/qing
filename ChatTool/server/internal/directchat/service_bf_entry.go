@@ -25,7 +25,7 @@ func (s *Service) bfEntryStore() (BFEntryStore, error) {
 }
 
 // BFEntryStatus 返回当前账号的入口可见性。
-// 俱乐部级记录优先；没有俱乐部记录时回落到旧版创建者账号记录；都没有则默认显示。
+// 俱乐部级记录优先；没有俱乐部记录时回落到旧版创建者账号记录；都没有则默认关闭。
 func (s *Service) BFEntryStatus(ctx context.Context, session Session) (BFEntryInfo, error) {
 	clubs, err := s.directory.ListMyClubs(ctx, session.Guuid)
 	if err != nil {
@@ -35,18 +35,21 @@ func (s *Service) BFEntryStatus(ctx context.Context, session Session) (BFEntryIn
 	if err != nil {
 		return BFEntryInfo{}, err
 	}
-	info := BFEntryInfo{Enabled: true, Visible: true}
+	info := BFEntryInfo{Enabled: false, Visible: false}
+	if len(clubs) == 0 {
+		return info, nil
+	}
 	for _, club := range clubs {
 		enabled, err := s.bfEntryEnabledForClub(ctx, store, club)
 		if err != nil {
 			return BFEntryInfo{}, err
 		}
 		if !enabled {
-			info.Enabled = false
-			info.Visible = false
 			return info, nil
 		}
 	}
+	info.Enabled = true
+	info.Visible = true
 	return info, nil
 }
 
@@ -60,7 +63,7 @@ func (s *Service) bfEntryEnabledForClub(ctx context.Context, store BFEntryStore,
 	}
 	owner := strings.TrimSpace(club.OwnerGuuid)
 	if owner == "" {
-		return true, nil
+		return false, nil
 	}
 	legacy, ok, err := store.GetBFEntry(ctx, owner)
 	if err != nil {
@@ -69,7 +72,7 @@ func (s *Service) bfEntryEnabledForClub(ctx context.Context, store BFEntryStore,
 	if ok {
 		return legacy.Enabled, nil
 	}
-	return true, nil
+	return false, nil
 }
 
 // SetBFEntry 保留旧版客户端的写入口，但不再允许游戏内设置；开关统一由后台俱乐部管理控制。

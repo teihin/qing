@@ -3,7 +3,7 @@ import { api, ApiError, jsonBody } from "../api";
 import { Button, EmptyState, Field, formatDate, LoadingBlock, Modal, PageHeader } from "../components/ui";
 import { useQueryRefresh } from "../queryRefresh";
 import { formatBeijingDateTime } from "../time";
-import type { ManageScopeName, ManageScopeOption, ManageScopeOptions, PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerManageScopeResult, PlayerPasswordResetResult, PlayerRelationsResponse, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneGrantRecordsResponse, PlayerStoneGrantResult } from "../types";
+import type { ManageScopeName, ManageScopeOption, ManageScopeOptions, PlayerClubChainNode, PlayerClubMembership, PlayerClubSubordinate, PlayerItem, PlayerManageScopeResult, PlayerPasswordResetResult, PlayerRelationsResponse, PlayerRoomHistoryItem, PlayerRoomHistoryResponse, PlayerSensitiveInfo, PlayerStoneGrantRecordsResponse, PlayerStoneGrantResult } from "../types";
 
 interface PlayerResponse {
   items: PlayerItem[];
@@ -766,6 +766,7 @@ function PlayerClubCard({ player, membership }: { player: PlayerItem; membership
       <div><span>上级ID</span><strong>{membership.upperId || "—"}</strong></div>
       <div><span>模式</span><strong>{clubModeLabels[membership.clubMode] || membership.clubMode || "—"}</strong></div>
     </div>
+    <PlayerClubChainCard chain={membership.chain || []} />
     <div className="player-club-subordinates">
       <div className="player-profile-section-title">
         <div><h3>俱乐部下级玩家</h3><p>按当前俱乐部的上下级关系列出该玩家的全部下级</p></div>
@@ -778,6 +779,29 @@ function PlayerClubCard({ player, membership }: { player: PlayerItem; membership
       </>)}
     </div>
   </section>;
+}
+
+// 完整代理链：本人 → 直属上级 → … → 群主/盟主 → 大盟主。
+function PlayerClubChainCard({ chain }: { chain: PlayerClubChainNode[] }) {
+  const upperLevels = chain.filter((node) => !node.isSelf && !node.missing).length;
+  const broken = chain.some((node) => node.missing);
+  return <div className="player-club-chain">
+    <div className="player-club-chain__head">
+      <div><h4>完整代理链</h4><p>从本人逐级向上到群主 / 盟主 / 大盟主</p></div>
+      <span>{chain.length <= 1 ? "无上级" : `本人 + ${upperLevels} 级上级`}</span>
+    </div>
+    {chain.length === 0 ? <p className="player-club-chain__note">暂无代理链数据。</p> : (
+      <ol className="player-club-chain__list">
+        {chain.map((node) => <li key={`${node.playerId}-${node.depth}`} className={`player-club-chain__item${node.isSelf ? " is-self" : ""}${node.missing ? " is-missing" : ""}`}>
+          <span className="player-club-chain__step">{node.isSelf ? "本人" : node.depth === 1 ? "直属上级" : `上 ${node.depth} 级`}</span>
+          <div className="player-club-chain__who"><strong>{node.name || "未设置昵称"}</strong><small>ID：{node.playerId}{node.upperId ? ` · 其上级：${node.upperId}` : ""}</small></div>
+          <span className="club-role-badge">{node.roleLabel}</span>
+        </li>)}
+      </ol>
+    )}
+    {chain.length === 1 && <p className="player-club-chain__note">该玩家在这个俱乐部没有上级，已是链路顶层。</p>}
+    {broken && <p className="player-club-chain__note is-warning">链路在某级断开：该上级账号不在这个俱乐部成员里，需要先在「俱乐部管理」核对代理关系。</p>}
+  </div>;
 }
 
 function PlayerRoomsTab({ player, data, page, loading, onPage }: { player: PlayerItem; data: PlayerRoomHistoryResponse | null; page: number; loading: boolean; onPage: (page: number) => void }) {

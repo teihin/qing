@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import DarkSettingModal from "../components/DarkSettingModal";
+import HonorRankModal from "../components/HonorRankModal";
 import BFChatModal from "../components/BFChatModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
@@ -138,6 +139,7 @@ export default function ClubsPage({
   const [stonePoolClub, setStonePoolClub] = useState<ClubListItem | null>(null);
   const [darkClub, setDarkClub] = useState<ClubListItem | null>(null);
   const [bfChatClub, setBFChatClub] = useState<ClubListItem | null>(null);
+  const [honorClub, setHonorClub] = useState<ClubListItem | null>(null);
   const [earningsClub, setEarningsClub] = useState<ClubListItem | null>(null);
 
   const load = useCallback(async () => {
@@ -205,6 +207,7 @@ export default function ClubsPage({
   const canAdjustStonePool = can("game.club.stone_pool_adjust");
   const canSetDark = can("game.club.dark_setting");
   const canSetBFChat = can("game.club.bf_chat");
+  const canSetHonorRank = can("game.club_honor_rank.manage");
 
   return (
     <div className="page-stack">
@@ -470,9 +473,9 @@ export default function ClubsPage({
                         </strong>
                       </td>
                       <td>
-                        <strong className={club.bfChatEnabled !== false ? "club-quota-value" : "club-quota-missing"}
-                          title="消息页置顶的 BF 聊天（官方客服）入口；关闭后普通成员只保留盟主默认对话；默认开启">
-                          {club.bfChatEnabled !== false ? "开启" : "关闭"}
+                        <strong className={club.bfChatEnabled === true ? "club-quota-value" : "club-quota-missing"}
+                          title="消息页置顶的 BF 聊天（官方客服）入口；关闭后普通成员只保留盟主默认对话；默认关闭">
+                          {club.bfChatEnabled === true ? "开启" : "关闭"}
                         </strong>
                       </td>
                       <td>{club.tax || "—"}</td>
@@ -534,6 +537,20 @@ export default function ClubsPage({
                             }
                           >
                             BF聊天
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setHonorClub(club)}
+                            disabled={!canSetHonorRank || !!club.unionId}
+                            title={
+                              club.unionId
+                                ? "该俱乐部已入盟，荣耀榜按联盟合并统计，请在联盟管理里配置"
+                                : canSetHonorRank
+                                  ? "开启或关闭该独立俱乐部的排行榜，设置起止时间与名次奖励"
+                                  : "当前角色没有荣耀榜配置的权限"
+                            }
+                          >
+                            荣耀榜
                           </button>
                         </div>
                       </td>
@@ -617,10 +634,22 @@ export default function ClubsPage({
         <BFChatModal
           clubId={bfChatClub.clubId}
           clubName={bfChatClub.name}
-          currentEnabled={bfChatClub.bfChatEnabled !== false}
+          currentEnabled={bfChatClub.bfChatEnabled === true}
           canEdit={canSetBFChat}
           notify={notify}
           onClose={() => setBFChatClub(null)}
+          onDone={() => void load()}
+        />
+      )}
+
+      {honorClub && (
+        <HonorRankModal
+          scope="club"
+          targetId={honorClub.clubId}
+          targetName={honorClub.name || honorClub.clubId}
+          canEdit={canSetHonorRank}
+          notify={notify}
+          onClose={() => setHonorClub(null)}
           onDone={() => void load()}
         />
       )}

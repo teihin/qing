@@ -55,7 +55,7 @@ type clubListItem struct {
 	TotalClubGold *int64 `json:"totalClubGold"`
 	// DarkEnabled 是客户端开房页暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。
 	DarkEnabled bool `json:"darkEnabled"`
-	// BFChatEnabled 是消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认开启。
+	// BFChatEnabled 是消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认关闭。
 	BFChatEnabled bool `json:"bfChatEnabled"`
 }
 

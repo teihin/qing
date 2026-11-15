@@ -14,6 +14,7 @@ import AgentRewardsPage from "./pages/AgentRewardsPage";
 import AgentsPage from "./pages/AgentsPage";
 import ClubsPage from "./pages/ClubsPage";
 import UnionsPage from "./pages/UnionsPage";
+import HonorRankPage from "./pages/HonorRankPage";
 import AgentContributionsPage from "./pages/AgentContributionsPage";
 import PlayersPage from "./pages/PlayersPage";
 import PrettyNumbersPage from "./pages/PrettyNumbersPage";
@@ -147,6 +148,7 @@ export default function App() {
     if (route === "/game/agents" && can("game.agent.view")) return <AgentsPage notify={notify} />;
     if (route === "/game/unions" && can("game.union.view")) return <UnionsPage can={can} notify={notify} onNavigate={navigate} />;
     if (route === "/game/clubs" && can("game.club.view")) return <ClubsPage can={can} notify={notify} />;
+    if (route === "/game/honor-rank" && can("game.honor_rank.view")) return <HonorRankPage can={can} notify={notify} />;
     if (route === "/game/agent-contributions" && can("game.agent_contribution.view")) return <AgentContributionsPage can={can} notify={notify} />;
     if (route === "/game/transactions" && can("game.transaction.view")) return <TransactionsPage notify={notify} />;
     if ((route === "/configuration/platform-revenue" || route === "/game/platform-revenue") && session?.user.isSuper) return <PlatformRevenuePage notify={notify} />;

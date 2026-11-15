@@ -121,6 +121,33 @@ export default class GameDataManager extends cc.Component {
             GameDataManager.SplitIdList(account.union_manage).length > 0;
     }
 
+    /**
+     * 这个 ID 值是否代表「本账号」。真实 guuid 与后台绑定的靓号 `custom_id` 都算本人。
+     *
+     * 后台绑定「账号ID靓号」后，服务端在**客户端通道**会把下发的个人 ID 值换成靓号，
+     * 报文里的 `user_id` 就不再等于 `account.guuid`；凡是拿 ID 相等做归属判断的地方
+     * 都必须走这里，否则本人数据会被当成别人的丢掉（2026-11-15 邀请码消失即此因）。
+     * 传空值或自身两个 ID 都拿不到时返回 true（不拦），由调用方其它判据决定。
+     */
+    public static IsSelfPlayerId(value:any):boolean
+    {
+        const text = value == null ? "" : String(value).trim();
+        if(text === "")
+            return true;
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return true;
+        const selfIds:string[] = [];
+        if(account.guuid != null && String(account.guuid).trim() !== "")
+            selfIds.push(String(account.guuid).trim());
+        if(account.custom_id != null && String(account.custom_id).trim() !== "")
+            selfIds.push(String(account.custom_id).trim());
+        // 两个 ID 都没拿到（属性还没下发）时不拦，避免整条链路被误挡。
+        if(selfIds.length === 0)
+            return true;
+        return selfIds.indexOf(text) >= 0;
+    }
+
     /** 逗号分隔编号列表：去空、去重；null/undefined 视为空。 */
     public static SplitIdList(value:any):string[]
     {

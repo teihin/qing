@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import DarkSettingModal from "../components/DarkSettingModal";
+import HonorRankModal from "../components/HonorRankModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
 import type { UnionListItem, UnionListResponse, UnionQuotaAdjustmentResponse } from "../types";
@@ -42,9 +43,11 @@ export default function UnionsPage({
   const [loading, setLoading] = useState(true);
   const [adjustTarget, setAdjustTarget] = useState<{ union: UnionListItem; action: "add" | "subtract" } | null>(null);
   const [darkUnion, setDarkUnion] = useState<UnionListItem | null>(null);
+  const [honorUnion, setHonorUnion] = useState<UnionListItem | null>(null);
   const [earningsUnion, setEarningsUnion] = useState<UnionListItem | null>(null);
   const canAdjust = can("game.union.quota_adjust");
   const canSetDark = can("game.union.dark_setting");
+  const canSetHonorRank = can("game.club_honor_rank.manage");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -240,6 +243,18 @@ export default function UnionsPage({
                           >
                             暗抽设置
                           </button>
+                          <button
+                            type="button"
+                            onClick={() => setHonorUnion(union)}
+                            disabled={!canSetHonorRank}
+                            title={
+                              canSetHonorRank
+                                ? "开启或关闭该联盟的排行榜，设置起止时间与名次奖励（联盟下所有俱乐部合并统计）"
+                                : "当前角色没有荣耀榜配置的权限"
+                            }
+                          >
+                            荣耀榜
+                          </button>
                           <button type="button" onClick={() => openClubs(union)} title="进入俱乐部管理查看该联盟下的俱乐部">
                             详情
                           </button>
@@ -308,6 +323,18 @@ export default function UnionsPage({
           canEdit={canSetDark}
           notify={notify}
           onClose={() => setDarkUnion(null)}
+          onDone={() => void load()}
+        />
+      )}
+
+      {honorUnion && (
+        <HonorRankModal
+          scope="union"
+          targetId={honorUnion.unionId}
+          targetName={honorUnion.name || honorUnion.unionId}
+          canEdit={canSetHonorRank}
+          notify={notify}
+          onClose={() => setHonorUnion(null)}
           onDone={() => void load()}
         />
       )}

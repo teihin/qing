@@ -11,7 +11,7 @@ function errorMessage(reason: unknown, fallback: string): string {
  * 俱乐部 BF 聊天（官方客服）入口开关。
  *
  * 开关存在 ChatTool 的 chat_direct_bf_club 表；客户端消息页只读入口可见性。
- * 关闭后该俱乐部所有层级的代理和玩家都看不到置顶的 BF 聊天，默认开启。
+ * 关闭后该俱乐部所有层级的代理和玩家都看不到置顶的 BF 聊天，默认关闭。
  * 保存成功后关闭弹窗并刷新列表。
  */
 export default function BFChatModal({
@@ -75,7 +75,7 @@ export default function BFChatModal({
           大盟主入口仅盟主保留；重新开启即恢复。
         </p>
         <ul>
-          <li>按俱乐部单独生效，不影响其他俱乐部；新建俱乐部默认开启。</li>
+          <li>按俱乐部单独生效，不影响其他俱乐部；新建俱乐部默认关闭，需要时逐个开启。</li>
           <li>游戏内盟主/群主不再提供该开关，统一由后台设置。</li>
           <li>操作会记入后台审计，保存后客户端重新进入消息页生效。</li>
         </ul>

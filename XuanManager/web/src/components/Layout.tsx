@@ -26,6 +26,7 @@ const iconText: Record<string, string> = {
   "player-optimization": "优",
   clubs: "俱",
   unions: "盟",
+  rank: "榜",
   contribution: "贡",
   configuration: "配",
   announcement: "公",

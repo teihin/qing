@@ -1066,6 +1066,24 @@ td strong { color: #294149; }
 .player-club-meta strong { margin-top: 5px; overflow-wrap: anywhere; color: #2c4e55; font-size: 14px; }
 .player-club-subordinates { padding: 0 16px 16px; }
 .player-club-subordinates .player-profile-section-title { margin: 0 -16px 12px; border-bottom: 1px solid #e8eeee; }
+.player-club-chain { padding: 0 16px 14px; }
+.player-club-chain__head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 13px; border: 1px solid #e2ebec; border-radius: 10px 10px 0 0; background: #f8fbfb; }
+.player-club-chain__head h4 { color: #2b4b52; font-size: 13px; font-weight: 850; }
+.player-club-chain__head p { margin-top: 3px; color: #84969a; font-size: 11px; }
+.player-club-chain__head > span { flex: 0 0 auto; padding: 4px 9px; border-radius: 999px; color: #247d76; background: #edf8f6; font-size: 11px; font-weight: 800; white-space: nowrap; }
+.player-club-chain__list { margin: 0; padding: 10px 13px 12px; border: 1px solid #e2ebec; border-top: 0; border-radius: 0 0 10px 10px; background: #fff; list-style: none; }
+.player-club-chain__item { position: relative; display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 9px; }
+.player-club-chain__item + .player-club-chain__item { margin-top: 14px; }
+.player-club-chain__item + .player-club-chain__item::before { content: "↑"; position: absolute; top: -14px; left: 19px; height: 14px; color: #b9cbcd; font-size: 11px; line-height: 14px; }
+.player-club-chain__item.is-self { background: #eef9f7; box-shadow: inset 0 0 0 1px #cfeae5; }
+.player-club-chain__item.is-missing { background: #fdf3f3; }
+.player-club-chain__step { flex: 0 0 62px; color: #7c9095; font-size: 11px; font-weight: 800; }
+.player-club-chain__who { flex: 1 1 auto; min-width: 0; }
+.player-club-chain__who strong { display: block; overflow-wrap: anywhere; color: #24464d; font-size: 13px; }
+.player-club-chain__who small { display: block; margin-top: 2px; overflow-wrap: anywhere; color: #84969a; font-size: 11px; line-height: 1.45; }
+.player-club-chain__item .club-role-badge { flex: 0 0 auto; }
+.player-club-chain__note { margin-top: 8px; color: #84969a; font-size: 11px; line-height: 1.6; }
+.player-club-chain__note.is-warning { color: #b2543f; }
 .player-club-subordinate-table { min-width: 680px; }
 .player-room-history-table { min-width: 890px; }
 .player-relations-table { min-width: 620px; }
@@ -3109,4 +3127,60 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
 @media (max-width: 700px) {
   .pretty-filter > label { flex: 1 1 100%; }
   .pretty-filter__actions { width: 100%; flex-wrap: wrap; }
+}
+
+/* 排行榜模块：活动列表 + 活动弹窗（配置 / 实时排名） */
+.honor-rank-filters { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid #eef3f3; }
+.honor-rank-filters__right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.honor-rank-filters__right input { min-width: 220px; }
+.honor-rank-filters__right select, .honor-rank-filters__right input { min-height: 34px; padding: 0 10px; border: 1px solid #d8e5e6; border-radius: 7px; color: #3d565d; background: #fff; font-size: 13px; }
+.honor-rank-activity-table, .honor-rank-table { width: 100%; border-collapse: collapse; }
+.honor-rank-activity-table th, .honor-rank-activity-table td,
+.honor-rank-table th, .honor-rank-table td { padding: 10px 12px; border-bottom: 1px solid #e5eded; text-align: left; vertical-align: middle; }
+.honor-rank-activity-table th, .honor-rank-table th { color: #6f858a; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.honor-rank-activity-table tbody tr:hover, .honor-rank-table tbody tr:hover { background: #f7fbfa; }
+.honor-rank-nowrap { white-space: nowrap; line-height: 1.7; }
+.honor-rank-player { display: grid; gap: 2px; min-width: 150px; }
+.honor-rank-player strong { color: #19343d; font-size: 13px; }
+.honor-rank-player small { color: #7f9398; font-size: 12px; }
+.honor-rank-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.honor-rank-tags span { padding: 2px 8px; border-radius: 999px; color: #176f67; background: #eaf8f5; font-size: 12px; font-weight: 700; }
+.honor-rank-tags span.is-off { color: #8a8f90; background: #f2f5f5; }
+.honor-rank-phase { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+.honor-rank-phase--running { color: #146b4a; background: #e4f7ec; }
+.honor-rank-phase--pending { color: #2f5d92; background: #eaf1fb; }
+.honor-rank-phase--finished { color: #7a6a55; background: #f5f0e8; }
+.honor-rank-phase--closed { color: #8a8f90; background: #eff2f2; }
+.honor-rank-activity-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 14px; padding: 13px 14px; border: 1px solid #e2ecec; border-radius: 11px; background: #f8fbfb; }
+.honor-rank-activity-head > div { display: grid; gap: 4px; }
+.honor-rank-activity-head span { color: #7f9398; font-size: 12px; }
+.honor-rank-activity-head strong { color: #29434b; font-size: 13px; }
+.honor-rank-activity-head__warn { grid-column: 1 / -1; padding: 9px 11px; border: 1px solid #f0dfbd; border-radius: 9px; color: #8a6427; background: #fdf8ee; font-size: 12px; line-height: 1.6; }
+.honor-rank-activity-tabs, .honor-rank-dipi-tabs { margin: 12px 0; }
+/* 通用 .balance-action-tabs 是「两列等分」的切换器；这里需要横排的紧凑页签，
+   否则三个筛选（全部/联盟/独立俱乐部）和 5 个手数档位会被拆成两列换行。 */
+.honor-rank-filters .balance-action-tabs,
+.honor-rank-activity-tabs,
+.honor-rank-ranking > .balance-action-tabs,
+.honor-rank-dipi-tabs { display: inline-flex; flex-wrap: wrap; align-items: center; justify-self: start; width: auto; gap: 6px; margin-bottom: 0; }
+.honor-rank-filters .balance-action-tabs button,
+.honor-rank-activity-tabs button,
+.honor-rank-ranking > .balance-action-tabs button { min-height: 34px; padding: 0 16px; }
+.honor-rank-dipi-tabs button { min-height: 32px; padding: 0 12px; }
+.honor-rank-activity-tabs { margin: 12px 0; }
+.honor-rank-dipi-tabs { margin: 0; }
+.honor-rank-scope-list { display: grid; gap: 6px; max-height: 220px; overflow: auto; margin-top: 8px; padding: 8px; border: 1px solid #e3ecec; border-radius: 10px; background: #f8fbfb; }
+.honor-rank-scope-item { display: grid; gap: 2px; width: 100%; padding: 9px 12px; border: 1px solid transparent; border-radius: 8px; background: #fff; text-align: left; color: #3d565d; }
+.honor-rank-scope-item:hover { border-color: #cfe7e3; }
+.honor-rank-scope-item.is-active { border-color: #159b91; background: #eaf8f5; box-shadow: inset 3px 0 #159b91; }
+.honor-rank-scope-item strong { color: #19343d; font-size: 13px; }
+.honor-rank-scope-item small { color: #7f9398; font-size: 12px; }
+.honor-rank-fieldset { margin: 0; padding: 0; border: 0; }
+.honor-rank-fieldset:disabled { opacity: .72; }
+.honor-rank-ranking { display: grid; gap: 12px; }
+.honor-rank-ranking__meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; color: #60777d; font-size: 12px; }
+.honor-rank-ranking__meta > div { display: flex; align-items: center; gap: 10px; }
+@media (max-width: 700px) {
+  .honor-rank-filters { align-items: stretch; flex-direction: column; }
+  .honor-rank-filters__right input { flex: 1 1 auto; min-width: 0; }
 }

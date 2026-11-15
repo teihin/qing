@@ -252,6 +252,19 @@ export interface PlayerClubMembership {
   clubGold: number | null;
   upperId: string;
   upperName: string;
+  chain: PlayerClubChainNode[];
+}
+
+// 玩家在该俱乐部的完整代理链：本人 → 直属上级 → … → 群主/盟主 → 大盟主。
+export interface PlayerClubChainNode {
+  playerId: string;
+  name: string;
+  role: string;
+  roleLabel: string;
+  upperId: string;
+  isSelf: boolean;
+  depth: number;
+  missing: boolean;
 }
 
 export interface PlayerClubSubordinate {
@@ -1056,7 +1069,7 @@ export interface ClubListItem {
   totalClubGold: number | null;
   /** 开房-游戏设置里的暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。 */
   darkEnabled?: boolean;
-  /** 消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认开启。 */
+  /** 消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认关闭。 */
   bfChatEnabled?: boolean;
 }
 
@@ -1493,4 +1506,141 @@ export interface GameCallLogState {
   entries: GameCallLogEntry[];
   file: string;
   updatedAt: string;
+}
+
+/** 俱乐部荣耀榜的三个榜；手数榜 5 个档位各占一行配置。 */
+export type HonorRankType = "play" | "score" | "bonus";
+
+/** 一行 = 一个榜的一个档位：开关 + 起止时间 + 名次奖励，服务端整行覆盖。 */
+export interface HonorRankRow {
+  rankType: HonorRankType;
+  /** 手数榜为 1皮/2皮/5皮/10皮/20皮；赢分/红利榜为空串。 */
+  dipi: string;
+  /** 第 1 名起的奖励金额（元），已按逗号拆好；空数组=未配置。 */
+  rewards: string[];
+  activityOn: boolean;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  updateDate: string;
+  updateTime: string;
+  opterGuuid: string;
+}
+
+/** 榜级汇总：5 个档位一致就是开/关，不一致给 mixed 提示。 */
+export interface HonorRankBoardSummary {
+  rankType: HonorRankType;
+  on: boolean;
+  mixed: boolean;
+}
+
+/** 一个 scope（联盟 / 独立俱乐部）的荣耀榜配置（后台按 7 行聚合）。 */
+export interface HonorRankState {
+  scope: "club" | "union";
+  targetId: string;
+  clubId: string;
+  activityOn: boolean;
+  /** 7 行开关不一致（历史单档配置）时为真。 */
+  mixedOn: boolean;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  /** 7 行起止时间不一致时为真。 */
+  mixedSchedule: boolean;
+  boards: HonorRankBoardSummary[];
+  rows: HonorRankRow[];
+  message: string;
+}
+
+/** 排行榜活动（后台留档的一条历史活动）。 */
+export interface HonorRankActivity {
+  id: number;
+  scopeType: "union" | "club";
+  scopeId: string;
+  scopeName: string;
+  title: string;
+  /** on=运营开着，closed=已结束。 */
+  state: "on" | "closed";
+  /** 由时间推导：pending 未开始 / running 进行中 / finished 已过期 / closed 已结束。 */
+  phase: "pending" | "running" | "finished" | "closed";
+  activityOn: boolean;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  /** 提交给游戏服的榜结构（与创建请求同一份）。 */
+  boards: HonorRankActivityBoard[];
+  openBoards: string[];
+  ranks: HonorRankActivityBoardSummary[];
+  note: string;
+  /** 该范围已有更新的活动时，本活动中止维护。 */
+  superseded: boolean;
+  createdBy: string;
+  createdAt: string;
+  clubId: string;
+}
+
+export interface HonorRankActivityBoard {
+  rankType: HonorRankType;
+  on: boolean;
+  rewards: { dipi: string; list: string }[];
+}
+
+export interface HonorRankActivityBoardSummary {
+  rankType: HonorRankType;
+  name: string;
+  on: boolean;
+  rewards: string;
+}
+
+export interface HonorRankActivityListResponse {
+  items: HonorRankActivity[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface HonorRankActivityDetail {
+  activity: HonorRankActivity;
+  game: HonorRankState;
+  /** 游戏服当前 7 行仍是这次活动配置。 */
+  inSync: boolean;
+  canEdit: boolean;
+  message: string;
+}
+
+export interface HonorRankRankingRow {
+  rank: number;
+  playerId: string;
+  name: string;
+  value: number;
+  /** 第 N 名的展示奖励（元）；未配置为空串。 */
+  reward: string;
+  /** 手数榜为 微/小/中/大，其它榜为空。 */
+  remark: string;
+}
+
+export interface HonorRankRankingResponse {
+  activityId: number;
+  rankType: HonorRankType;
+  dipi: string;
+  /** 局 / 积分 / 元。 */
+  unit: string;
+  startDate: string;
+  endDate: string;
+  phase: string;
+  total: number;
+  page: number;
+  pageSize: number;
+  truncated: boolean;
+  items: HonorRankRankingRow[];
+  count: number;
+}
+
+export interface HonorRankScopeOption {
+  id: string;
+  name: string;
+  note: string;
 }
