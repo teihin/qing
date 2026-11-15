@@ -1111,6 +1111,7 @@ td strong { color: #294149; }
 .field { display: block; }
 .field__label { display: block; margin-bottom: 7px; color: #344f57; font-size: 13px; font-weight: 700; }
 .field__hint { display: block; margin-top: 6px; color: #7f9398; font-size: 12px; line-height: 1.55; }
+.field__hint.is-error { color: #bd4e5b; font-weight: 650; }
 .field > input, .field > select, .field > textarea, .form-grid input, .form-grid select, .form-grid textarea { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid #dbe6e7; border-radius: 8px; outline: 0; color: #29434a; background: #fbfdfd; font-size: 14px; transition: .18s; }
 .field > textarea, .form-grid textarea { padding-top: 10px; resize: vertical; }
 .field > input:focus, .field > select:focus, .field > textarea:focus, .form-grid input:focus, .form-grid select:focus, .form-grid textarea:focus { border-color: #5bbcb5; background: white; box-shadow: 0 0 0 3px rgba(32, 156, 147, .09); }

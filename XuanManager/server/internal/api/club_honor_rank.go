@@ -336,6 +336,10 @@ func normalizeRewardList(value string) (string, error) {
 	if value == "" {
 		return "", nil
 	}
+	// 中文逗号/顿号是运营最容易混进来的字符，单独提示，避免只报"不是整数"。
+	if strings.ContainsAny(value, "，、；;") {
+		return "", errors.New("请用英文逗号分隔金额")
+	}
 	parts := strings.Split(value, ",")
 	if len(parts) > honorRankMaxRewards {
 		return "", fmt.Errorf("名次奖励最多 %d 项", honorRankMaxRewards)
@@ -346,12 +350,15 @@ func normalizeRewardList(value string) (string, error) {
 		if part == "" {
 			return "", errors.New("名次奖励里有空项，请检查逗号")
 		}
+		if strings.Contains(part, ".") {
+			return "", fmt.Errorf("「%s」不是整数金额（单位：元）", part)
+		}
 		amount, err := strconv.ParseInt(part, 10, 64)
 		if err != nil {
 			return "", fmt.Errorf("「%s」不是整数金额", part)
 		}
-		if amount < 0 || amount > honorRankMaxReward {
-			return "", fmt.Errorf("奖励金额必须在 0 到 %d 之间", honorRankMaxReward)
+		if amount <= 0 || amount > honorRankMaxReward {
+			return "", fmt.Errorf("奖励金额必须在 1 到 %d 之间", honorRankMaxReward)
 		}
 		cleaned = append(cleaned, strconv.FormatInt(amount, 10))
 	}
@@ -428,11 +435,26 @@ func buildHonorRankWrites(input *updateHonorRankRequest) ([]honorRankWriteRow, e
 		for _, item := range board.Rewards {
 			rewards[strings.TrimSpace(item.Dipi)] = item.List
 		}
+		enabled := input.ActivityOn && board.On
+		hasReward := false
+		lists := make(map[string]string, len(honorRankDipis(rankType)))
 		for _, dipi := range honorRankDipis(rankType) {
 			list, err := normalizeRewardList(rewards[dipi])
 			if err != nil {
 				return nil, fmt.Errorf("%s%s：%w", honorRankTypeName(rankType), dipi, err)
 			}
+			if list != "" {
+				hasReward = true
+			}
+			lists[dipi] = list
+		}
+		// 开着的榜至少要有一档填了金额：全空等于"有榜无奖"，不能让运营误发一场空活动。
+		// 手数榜允许只给部分档位配奖（运营可能只开 1皮），所以按榜判断而不是按行。
+		if enabled && !hasReward {
+			return nil, fmt.Errorf("%s：名次奖励不能为空", honorRankTypeName(rankType))
+		}
+		for _, dipi := range honorRankDipis(rankType) {
+			list := lists[dipi]
 			writes = append(writes, honorRankWriteRow{
 				RankType:   rankType,
 				Dipi:       dipi,

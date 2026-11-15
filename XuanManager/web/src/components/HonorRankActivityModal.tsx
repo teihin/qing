@@ -68,6 +68,24 @@ function toSubmitBoards(boards: Boards) {
   }));
 }
 
+/** 名次奖励输入校验：空返回 ""，由调用方按"启用的榜必填"决定要不要拦。 */
+export function rewardListError(text: string): string {
+  const raw = (text || "").trim();
+  if (raw === "") return "";
+  if (/[，、；;]/.test(raw)) return "请用英文逗号分隔，例如 100,50,20";
+  const parts = raw.split(",");
+  if (parts.length > 100) return "名次奖励最多 100 项";
+  for (const part of parts) {
+    const value = part.trim();
+    if (value === "") return "有空的项，检查是不是多打了逗号";
+    if (!/^\d+$/.test(value)) return `「${value}」只能填整数金额`;
+    const amount = Number(value);
+    if (amount <= 0) return "金额必须大于 0";
+    if (amount > 1_000_000) return "金额不能超过 1,000,000";
+  }
+  return "";
+}
+
 function splitClock(value: string): string {
   return (value || "").slice(0, 5);
 }
@@ -175,9 +193,23 @@ export default function HonorRankActivityModal({
     [boards],
   );
   const scheduleReady = !!(startDate && startTime && endDate && endTime);
+  // 只有"活动开启 + 该榜开关打开"才要求金额；空=必填，填了但不合法=格式错误。
+  const rewardState = useMemo(() => {
+    const format: Record<string, string[]> = {};
+    const missing: string[] = [];
+    BOARD_SPECS.forEach(spec => {
+      const enabled = activityOn && boards[spec.type].on;
+      const texts = boards[spec.type].rewards;
+      // 逐项只报格式错误；"必填"按榜判断——手数榜允许只给部分档位配奖。
+      format[spec.type] = spec.dipis.map((dipi, index) => rewardListError(texts[index] || ""));
+      if (enabled && !texts.some(text => (text || "").trim() !== "")) missing.push(spec.name);
+    });
+    return { format, missing };
+  }, [boards, activityOn]);
+  const hasRewardFormatError = Object.keys(rewardState.format).some(type => rewardState.format[type].some(Boolean));
   const hasScope = creating ? scopeId.trim() !== "" : true;
   const canSubmit = editable && !busy && !loading && hasScope && confirmed && noteLength >= 2 && noteLength <= 120 &&
-    (!activityOn || (scheduleReady && openedBoards.length > 0));
+    (!activityOn || (scheduleReady && openedBoards.length > 0 && rewardState.missing.length === 0 && !hasRewardFormatError));
 
   const setBoard = (type: HonorRankType, patch: Partial<{ on: boolean; rewards: string[] }>) =>
     setBoards((current) => ({ ...current, [type]: { ...current[type], ...patch } }));
@@ -439,7 +471,8 @@ export default function HonorRankActivityModal({
                     <Field
                       key={dipi || "single"}
                       label={dipi ? `${dipi} · 名次奖励` : "名次奖励"}
-                      hint="第 1 名起，逗号分隔（元），空=不发奖励"
+                      hint="第 1 名起，英文逗号分隔（元），开了榜必填"
+                      error={rewardState.format[spec.type][index] || ""}
                     >
                       <input
                         value={boards[spec.type].rewards[index] || ""}
@@ -479,6 +512,19 @@ export default function HonorRankActivityModal({
               </label>
             </div>
           </fieldset>
+
+          {activityOn && rewardState.missing.length > 0 && (
+            <div className="form-error form-grid__full">
+              <span>!</span>
+              这些榜还没填名次奖励：{rewardState.missing.join("、")}（至少要有一档金额）
+            </div>
+          )}
+          {hasRewardFormatError && (
+            <div className="form-error form-grid__full">
+              <span>!</span>
+              名次奖励格式有误，按输入框下的提示改正后才能提交
+            </div>
+          )}
 
           {/* 按钮放在 fieldset 外：只读时 fieldset 会禁用内部所有控件，连「关闭」都点不动。 */}
           <div className="form-actions form-grid__full">

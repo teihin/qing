@@ -151,6 +151,20 @@
 - 前端用 mock 接口 + 本地 `dist` 在 Chrome 里渲染过一遍：列表、创建弹窗（选联盟 + 完整表单）、详情（信息卡 + 只读配置）、实时排名（榜页签 + 手数档位 + 表格 + 分页）均正常，无 console 报错；顺手修了通用 `.balance-action-tabs`（两列 grid）在筛选/档位上换行的问题。
 - 未做：登录态页面验收、真实创建活动、部署。
 
+## 奖励金额校验（2026-11-15 20:24 已部署 8891）
+
+- 运营反馈：名次奖励是逗号串，容易打错；空着也能建活动。
+- 前端 `HonorRankActivityModal`：
+  - 逐项即时校验（中文逗号/顿号/分号、空项、非整数、小数、≤0、>1,000,000），错误显示在输入框下方红字；
+  - **必填按榜判断**：`活动开启 + 该榜开关打开` 时整榜至少要有一档金额，否则底部红字列出缺的榜名并禁用提交；
+    手数榜允许只给部分档位配奖（运营可能只开 1皮）。
+  - `Field` 组件新增 `error` 属性（有值时红字替代 hint）。
+- 后端 `normalizeRewardList` 同步收紧：中文标点、小数、`<=0` 都直接报错；
+  `buildHonorRankWrites` 对开着的榜做整榜必填校验（关榜不要求）。旧入口（俱乐部/联盟行内）同样生效。
+- 测试：`TestNormalizeRewardListRejectsBadInput`、`TestBuildHonorRankWritesRequiresRewards`（只配一档允许 / 整榜为空拒绝）。
+- 部署：二进制 `b6094314…`、前端 `index-DwMnfzsS.js` + `index-jrUFkdYE.css`，health ok、未登录 401。回滚点
+  `bin/xuanmanager.previous-honorrank-validate-20261115-2030`、`web.previous-honorrank-validate-20261115-2030`。
+
 ## 遗留 / 下一步
 
 1. 登录态点一遍：列表 → 创建（选联盟）→ 详情里改配置并保存 → 查看排名 → 结束活动；旧入口（俱乐部/联盟行内）保存一次，确认也进活动列表。

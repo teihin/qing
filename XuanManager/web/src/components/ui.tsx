@@ -22,14 +22,21 @@ export function Modal({ title, eyebrow, children, onClose, wide = false, xwide =
   );
 }
 
-export function Field({ label, hint, children, as = "label" }: { label: string; hint?: string; children: ReactNode; as?: "label" | "div" }) {
+export function Field({ label, hint, error, children, as = "label" }: {
+  label: string;
+  hint?: string;
+  /** 有值时用红字替代 hint，用于即时校验提示。 */
+  error?: string;
+  children: ReactNode;
+  as?: "label" | "div";
+}) {
   // 一组按钮当控件时不能用 <label> 包，否则点击提示文字会误触第一个按钮，读屏也会并成一整块。
   const Wrapper = as;
   return (
     <Wrapper className="field">
       <span className="field__label">{label}</span>
       {children}
-      {hint && <span className="field__hint">{hint}</span>}
+      {error ? <span className="field__hint is-error">{error}</span> : hint ? <span className="field__hint">{hint}</span> : null}
     </Wrapper>
   );
 }

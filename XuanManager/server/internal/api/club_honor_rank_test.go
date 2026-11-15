@@ -118,7 +118,10 @@ func validHonorRankRequest() updateHonorRankRequest {
 		Boards: []updateHonorRankBoard{
 			{RankType: "play", On: true, Rewards: []updateHonorRankReward{
 				{Dipi: "1皮", List: " 100, 50 ,20 "},
-				{Dipi: "2皮", List: ""},
+				{Dipi: "2皮", List: "80,40"},
+				{Dipi: "5皮", List: "60,30"},
+				{Dipi: "10皮", List: "40,20"},
+				{Dipi: "20皮", List: "20,10"},
 			}},
 			{RankType: "score", On: false, Rewards: []updateHonorRankReward{{Dipi: "", List: "200,100"}}},
 			{RankType: "bonus", On: false, Rewards: []updateHonorRankReward{{Dipi: "", List: ""}}},
@@ -140,7 +143,7 @@ func TestBuildHonorRankWrites(t *testing.T) {
 	if writes[0].Dipi != "1皮" || writes[0].RewardList != "100,50,20" || !writes[0].ActivityOn {
 		t.Fatalf("play 1皮 wrong: %+v", writes[0])
 	}
-	if writes[1].Dipi != "2皮" || writes[1].RewardList != "" || !writes[1].ActivityOn {
+	if writes[1].Dipi != "2皮" || writes[1].RewardList != "80,40" || !writes[1].ActivityOn {
 		t.Fatalf("play 2皮 wrong: %+v", writes[1])
 	}
 	if writes[4].Dipi != "20皮" || !writes[4].ActivityOn {
@@ -155,6 +158,56 @@ func TestBuildHonorRankWrites(t *testing.T) {
 	}
 	if writes[5].StartDate != "2026-11-20" || writes[5].EndTime != "23:59:59" {
 		t.Fatalf("schedule must be kept on closed boards: %+v", writes[5])
+	}
+}
+
+func TestBuildHonorRankWritesRequiresRewards(t *testing.T) {
+	input := validHonorRankRequest()
+	for index := range input.Boards {
+		if input.Boards[index].RankType != "play" {
+			continue
+		}
+		// 手数榜只配一档也允许（运营可能只开 1皮）。
+		for reward := range input.Boards[index].Rewards {
+			input.Boards[index].Rewards[reward].List = ""
+		}
+		input.Boards[index].Rewards[0].List = "100,50"
+	}
+	if _, err := buildHonorRankWrites(&input); err != nil {
+		t.Fatalf("只配一档应该允许: %v", err)
+	}
+	// 整榜一个金额都没有：必须拒绝，否则会发出"有榜无奖"的活动。
+	input = validHonorRankRequest()
+	for index := range input.Boards {
+		if input.Boards[index].RankType != "play" {
+			continue
+		}
+		for reward := range input.Boards[index].Rewards {
+			input.Boards[index].Rewards[reward].List = ""
+		}
+	}
+	if _, err := buildHonorRankWrites(&input); err == nil {
+		t.Fatal("开着的榜没有任何奖励时必须报错")
+	}
+	// 关榜时不要求金额。
+	input.ActivityOn = false
+	if _, err := buildHonorRankWrites(&input); err != nil {
+		t.Fatalf("关闭活动时不该要求奖励: %v", err)
+	}
+}
+
+func TestNormalizeRewardListRejectsBadInput(t *testing.T) {
+	cases := []string{"100，50", "100、50", "100;50", "100,,50", "100,", "-50", "0", "12.5", "一百"}
+	for _, value := range cases {
+		if _, err := normalizeRewardList(value); err == nil {
+			t.Fatalf("%q 应该被判为非法", value)
+		}
+	}
+	if got, err := normalizeRewardList(" 100, 50 ,20 "); err != nil || got != "100,50,20" {
+		t.Fatalf("正常输入被误判: %q %v", got, err)
+	}
+	if got, err := normalizeRewardList("   "); err != nil || got != "" {
+		t.Fatalf("空白应按空处理: %q %v", got, err)
 	}
 }
 
