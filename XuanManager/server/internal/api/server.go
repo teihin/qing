@@ -183,6 +183,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/club-perf/candidates", s.authorized("game.club_perf.view", false, s.handleClubPerfCandidates))
 	s.mux.Handle("GET /api/game/club-perf/player", s.authorized("game.club_perf.view", false, s.handleClubPerfPlayer))
 	s.mux.Handle("POST /api/game/club-perf/grant", s.authorized("game.club_perf.grant", true, s.handleClubPerfGrant))
+	s.mux.Handle("GET /api/game/club-perf/scale", s.authorized("game.club_perf.view", false, s.handleGetClubPerfScale))
+	s.mux.Handle("PUT /api/game/club-perf/scale", s.authorized("game.club_perf.config", true, s.handleUpdateClubPerfScale))
 	s.mux.Handle("GET /api/game/agent-rewards", s.authorized("game.agent_reward.view", false, s.handlerRewardOverview))
 	s.mux.Handle("GET /api/game/agent-rewards/unions", s.authorized("game.agent_reward.view", false, s.handlerRewardUnions))
 	s.mux.Handle("GET /api/game/agent-rewards/summary", s.authorized("game.agent_reward.view", false, s.handlerRewardSummary))

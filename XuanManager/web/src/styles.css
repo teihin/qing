@@ -2994,7 +2994,7 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
 .club-perf-filters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; margin-bottom: 16px; }
 .club-perf-filters .field { min-width: 240px; }
 .club-perf-filters select { width: 100%; min-height: 42px; padding: 0 12px; border: 1px solid #dce8e9; border-radius: 9px; color: #19343d; background: #fff; }
-.club-perf-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }
+.club-perf-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(168px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .club-perf-stats > div { display: grid; gap: 4px; padding: 14px 16px; border: 1px solid #e3ecec; border-radius: 12px; background: #f8fbfb; }
 .club-perf-stats span { color: #7f9398; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
 .club-perf-stats strong { color: #19343d; font-size: 18px; }

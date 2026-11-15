@@ -32,29 +32,32 @@ type clubPerfUnionOption struct {
 }
 
 type clubPerfNode struct {
-	Key          string          `json:"key"`
-	PlayerID     string          `json:"playerId"`
-	Name         string          `json:"name"`
-	Role         string          `json:"role"`
-	ClubID       string          `json:"clubId"`
-	ClubName     string          `json:"clubName"`
-	UnionID      string          `json:"unionId"`
-	UnionName    string          `json:"unionName"`
-	ParentID     string          `json:"parentId"`
-	Enabled      bool            `json:"enabled"`
-	IsLeader     bool            `json:"isLeader"`
-	IsUnionOwner bool            `json:"isUnionOwner"`
-	My           int64           `json:"my"`
-	Granted      int64           `json:"granted"`
-	Left         int64           `json:"left"`
-	Percent      string          `json:"percent"`
-	Children     []*clubPerfNode `json:"children"`
+	Key          string `json:"key"`
+	PlayerID     string `json:"playerId"`
+	Name         string `json:"name"`
+	Role         string `json:"role"`
+	ClubID       string `json:"clubId"`
+	ClubName     string `json:"clubName"`
+	UnionID      string `json:"unionId"`
+	UnionName    string `json:"unionName"`
+	ParentID     string `json:"parentId"`
+	Enabled      bool   `json:"enabled"`
+	IsLeader     bool   `json:"isLeader"`
+	IsUnionOwner bool   `json:"isUnionOwner"`
+	// 次数是游戏服按「俱乐部业绩全局百分比」折算后的值，最多两位小数，
+	// 所以这里必须是 float64：50% 遇到奇数次会出现 .5，用 int64 会被截断。
+	My       float64         `json:"my"`
+	Granted  float64         `json:"granted"`
+	Left     float64         `json:"left"`
+	Percent  string          `json:"percent"`
+	Children []*clubPerfNode `json:"children"`
 }
 
 type clubPerfOverview struct {
 	Union        clubPerfUnionOption `json:"union"`
 	Date         string              `json:"date"`
 	AllCount     int64               `json:"allCount"`
+	ScalePercent int                 `json:"scalePercent"`
 	TotalCount   int                 `json:"totalCount"`
 	EnabledCount int                 `json:"enabledCount"`
 	Tree         []*clubPerfNode     `json:"tree"`
@@ -71,7 +74,7 @@ type clubPerfAgent struct {
 
 type clubPerfReportRow struct {
 	ID, Name, Role, ClubName, Percent string
-	My, Granted, Left                 int64
+	My, Granted, Left                 float64
 }
 
 type clubPerfBuild struct {
@@ -163,7 +166,7 @@ FROM kbedm.club_union_info WHERE union_id = ? AND status <> 'init'`, unionID).
 		return
 	}
 
-	reportDate, allCount, reportRows, err := s.clubPerfReport(ctx, unionID, date)
+	reportDate, scalePercent, allCount, reportRows, err := s.clubPerfReport(ctx, unionID, date)
 	if err != nil {
 		s.logger.Error("load club perf report", "error", err, "union_id", unionID)
 		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", "读取业绩报表失败："+err.Error())
@@ -172,13 +175,18 @@ FROM kbedm.club_union_info WHERE union_id = ? AND status <> 'init'`, unionID).
 	if reportDate == "" {
 		reportDate = date
 	}
+	// 报表没带 scale_percent 说明服务端还没上折算，按 100（不折算）处理，避免根节点被算成 0。
+	if scalePercent < 0 {
+		scalePercent = clubPerfScaleMax
+	}
 
-	root, totalCount, enabledCount := buildClubPerfTree(unionInfo, ownerClubID, clubs, clubOrder, agents, reportRows, allCount)
+	root, totalCount, enabledCount := buildClubPerfTree(unionInfo, ownerClubID, clubs, clubOrder, agents, reportRows, allCount, scalePercent)
 	unionInfo.ClubCount = len(clubOrder)
 	writeData(w, http.StatusOK, clubPerfOverview{
 		Union:        unionInfo,
 		Date:         reportDate,
 		AllCount:     allCount,
+		ScalePercent: scalePercent,
 		TotalCount:   totalCount,
 		EnabledCount: enabledCount,
 		Tree:         []*clubPerfNode{root},
@@ -589,20 +597,21 @@ ORDER BY ca.id`, unionID)
 	return agents, rows.Err()
 }
 
-func (s *Server) clubPerfReport(ctx context.Context, unionID, date string) (string, int64, []clubPerfReportRow, error) {
+// clubPerfReport 返回 实际日期、服务端折算百分比（缺失为 -1）、池原始总次数、报表行。
+func (s *Server) clubPerfReport(ctx context.Context, unionID, date string) (string, int, int64, []clubPerfReportRow, error) {
 	offset := rewardDayOffset(date, time.Now())
 	result, err := s.callGameCommand(ctx, "异步_查询_俱乐部_业绩_报表", map[string]any{
 		"union_id": unionID, "date": offset, "context": "p@" + gameOperationContext("club-perf-overview"),
 	})
 	if err != nil {
-		return "", 0, nil, err
+		return "", -1, 0, nil, err
 	}
 	if result.RetCode != 512 {
-		return "", 0, nil, errors.New(describeGameFailure("异步_查询_俱乐部_业绩_报表", result.RetCode, result.RetResult))
+		return "", -1, 0, nil, errors.New(describeGameFailure("异步_查询_俱乐部_业绩_报表", result.RetCode, result.RetResult))
 	}
-	reportDate, allCount, list, err := decodeClubPerfReport(result.RetResult)
+	reportDate, scalePercent, allCount, list, err := decodeClubPerfReport(result.RetResult)
 	if err != nil {
-		return "", 0, nil, err
+		return "", -1, 0, nil, err
 	}
 	rows := make([]clubPerfReportRow, 0, len(list))
 	for _, row := range list {
@@ -618,27 +627,28 @@ func (s *Server) clubPerfReport(ctx context.Context, unionID, date string) (stri
 			Name:     anyString(row[1]),
 			Role:     anyString(row[2]),
 			ClubName: anyString(row[4]),
-			My:       int64(anyFloat(row[5])),
-			Granted:  int64(anyFloat(row[6])),
-			Left:     int64(anyFloat(row[7])),
+			My:       anyFloat(row[5]),
+			Granted:  anyFloat(row[6]),
+			Left:     anyFloat(row[7]),
 			Percent:  anyString(row[8]),
 		}
 		if item.Percent == "" && allCount > 0 {
-			item.Percent = fmt.Sprintf("%.2f", float64(item.Left)*100/float64(allCount))
+			item.Percent = fmt.Sprintf("%.2f", item.Left*100/float64(allCount))
 		}
 		rows = append(rows, item)
 	}
-	return reportDate, allCount, rows, nil
+	return reportDate, scalePercent, allCount, rows, nil
 }
 
-func decodeClubPerfReport(raw json.RawMessage) (string, int64, [][]any, error) {
+// decodeClubPerfReport 解析报表。scale_percent 缺失时返回 -1（老服务端尚未返回该字段）。
+func decodeClubPerfReport(raw json.RawMessage) (string, int, int64, [][]any, error) {
 	var text string
 	if json.Unmarshal(raw, &text) == nil {
 		raw = json.RawMessage(text)
 	}
 	var envelope map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &envelope); err != nil {
-		return "", 0, nil, errors.New("业绩报表格式不正确")
+		return "", -1, 0, nil, errors.New("业绩报表格式不正确")
 	}
 	// 新格式带 {"context","result"} 包裹；兼容直接返回 ClubPerfReport 的旧结构。
 	if inner, ok := envelope["result"]; ok {
@@ -651,19 +661,24 @@ func decodeClubPerfReport(raw json.RawMessage) (string, int64, [][]any, error) {
 			envelope = nested
 		}
 	}
+	scalePercent := -1
 	var report struct {
-		Date     string  `json:"date"`
-		AllCount int64   `json:"all_count"`
-		List     [][]any `json:"list"`
+		Date         string  `json:"date"`
+		ScalePercent *int    `json:"scale_percent"`
+		AllCount     int64   `json:"all_count"`
+		List         [][]any `json:"list"`
 	}
 	if err := json.Unmarshal(envelope["ClubPerfReport"], &report); err != nil {
-		return "", 0, nil, errors.New("业绩报表缺少 ClubPerfReport")
+		return "", -1, 0, nil, errors.New("业绩报表缺少 ClubPerfReport")
 	}
-	return report.Date, report.AllCount, report.List, nil
+	if report.ScalePercent != nil {
+		scalePercent = *report.ScalePercent
+	}
+	return report.Date, scalePercent, report.AllCount, report.List, nil
 }
 
 func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs map[string]*clubPerfClub,
-	clubOrder []string, agents []clubPerfAgent, reportRows []clubPerfReportRow, allCount int64) (*clubPerfNode, int, int) {
+	clubOrder []string, agents []clubPerfAgent, reportRows []clubPerfReportRow, allCount int64, scalePercent int) (*clubPerfNode, int, int) {
 	builds := map[string]*clubPerfBuild{}
 	clubsByName := map[string][]*clubPerfBuild{}
 	for _, id := range clubOrder {
@@ -866,9 +881,10 @@ func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs 
 		}
 	}
 
-	// 联盟根口径：我 = 联盟池总次数；下放 = A1 已下放 + 已授权盟主的整俱乐部 M_c。
+	// 联盟根口径：我 = 联盟池总次数 × 全局折算百分比；下放 = A1 已下放 + 已授权盟主的整俱乐部 M_c。
+	// 分母（allCount）始终是原始总次数，所以 50% 时根节点占比也是 50%，不是 100%。
 	root.Enabled = true
-	root.My = allCount
+	root.My = scaledClubPerfCount(allCount, scalePercent)
 	granted := root.Granted
 	for _, id := range clubOrder {
 		bc := builds[id]
@@ -877,12 +893,12 @@ func buildClubPerfTree(unionInfo clubPerfUnionOption, ownerClubID string, clubs 
 		}
 	}
 	root.Granted = granted
-	root.Left = allCount - granted
+	root.Left = root.My - granted
 	if root.Left < 0 {
 		root.Left = 0
 	}
 	if allCount > 0 {
-		root.Percent = fmt.Sprintf("%.2f", float64(root.Left)*100/float64(allCount))
+		root.Percent = fmt.Sprintf("%.2f", root.Left*100/float64(allCount))
 	} else {
 		root.Percent = "0.00"
 	}

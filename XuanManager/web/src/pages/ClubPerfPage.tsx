@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, jsonBody } from "../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader } from "../components/ui";
-import { beijingDateInput } from "../time";
+import { beijingDateInput, formatBeijingDateTime } from "../time";
 
 type UnionOption = {
   unionId: string;
@@ -35,9 +35,26 @@ type Overview = {
   union: UnionOption;
   date: string;
   allCount: number;
+  /** 服务端折算百分比；业绩次数已按它折算，分母（allCount）仍是原始次数 */
+  scalePercent: number;
   totalCount: number;
   enabledCount: number;
   tree: PerfNode[];
+};
+
+type ScaleState = {
+  percent: number;
+  defaultPercent: number;
+  maxPercent: number;
+  configured: boolean;
+  storageKey: string;
+  clientContext: string;
+  clientFormat: string;
+  updatedBy: string;
+  updatedAt: string | null;
+  rowCount: number;
+  duplicateRows: number;
+  parseError: string;
 };
 
 type GrantResponse = {
@@ -58,8 +75,11 @@ type PerfCandidate = {
   enabled: boolean;
 };
 
+// 折算后次数最多两位小数（50% 遇到奇数次会出现 .5），不能按整数显示。
 function num(value: number): string {
-  return Number.isFinite(value) ? value.toLocaleString("zh-CN") : "—";
+  return Number.isFinite(value)
+    ? value.toLocaleString("zh-CN", { maximumFractionDigits: 2 })
+    : "—";
 }
 
 // 默认只展开联盟根：盟主这一层可见，更深的代理手动展开。
@@ -91,6 +111,7 @@ export default function ClubPerfPage({ can, notify }: {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [revision, setRevision] = useState(0);
   const [grantOpen, setGrantOpen] = useState(false);
+  const [scaleOpen, setScaleOpen] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -173,16 +194,23 @@ export default function ClubPerfPage({ can, notify }: {
         eyebrow="CLUB PERFORMANCE SHARES"
         title="业绩股"
         description={unionId
-          ? "查看该联盟全部代理的业绩股开通状态、上级下级关系与业绩比例。"
-          : "先选择一个联盟，再进入查看该联盟的完整代理树与业绩股情况。"}
-        actions={unionId ? (
+          ? "查看该联盟全部代理的业绩股开通状态、上级下级关系与业绩比例。次数均按全局折算百分比折算，分母是原始总次数。"
+          : "先选择一个联盟，再进入查看该联盟的完整代理树与业绩股情况。业绩次数按全局折算百分比折算。"}
+        actions={(
           <>
-            <Button variant="secondary" onClick={backToUnions}>返回联盟列表</Button>
-            {can("game.club_perf.grant") && (
-              <Button onClick={() => setGrantOpen(true)}>＋ 新增开通人员</Button>
+            {can("game.club_perf.config") && (
+              <Button variant="secondary" onClick={() => setScaleOpen(true)}>全局折算设置</Button>
+            )}
+            {unionId && (
+              <>
+                <Button variant="secondary" onClick={backToUnions}>返回联盟列表</Button>
+                {can("game.club_perf.grant") && (
+                  <Button onClick={() => setGrantOpen(true)}>＋ 新增开通人员</Button>
+                )}
+              </>
             )}
           </>
-        ) : undefined}
+        )}
       />
 
       {!unionId ? (
@@ -263,7 +291,12 @@ export default function ClubPerfPage({ can, notify }: {
               <div>
                 <span>联盟总次数</span>
                 <strong>{num(data.allCount)}</strong>
-                <small>业绩占比的分母</small>
+                <small>原始次数，业绩占比的分母</small>
+              </div>
+              <div>
+                <span>全局折算</span>
+                <strong>{data.scalePercent}%</strong>
+                <small>各代理占比合计约 {data.scalePercent}%</small>
               </div>
               <div>
                 <span>已开通人员</span>
@@ -285,8 +318,8 @@ export default function ClubPerfPage({ can, notify }: {
                     <th>代理</th>
                     <th>身份</th>
                     <th>俱乐部</th>
-                    <th className="reward-num">我(毛次)</th>
-                    <th className="reward-num">下放</th>
+                    <th className="reward-num">我(折算)</th>
+                    <th className="reward-num">下放(折算)</th>
                     <th className="reward-num">剩(净)</th>
                     <th className="reward-num">业绩占比</th>
                   </tr>
@@ -334,6 +367,7 @@ export default function ClubPerfPage({ can, notify }: {
           {data && (
             <p className="club-perf-note">
               只列出已授权业绩股的人员；未授权人员不显示。未授权盟主的已授权下级会挂到最近的已授权上级。联盟根默认开通，其「我/下放/剩」是联盟树口径。
+              次数已按全局折算 {data.scalePercent}% 折算（分子折算、分母为原始总次数），所以各代理占比合计约 {data.scalePercent}%，不是 100%。
             </p>
           )}
         </section>
@@ -345,6 +379,17 @@ export default function ClubPerfPage({ can, notify }: {
           unionName={selectedUnion?.unionName || data?.union.unionName || unionId}
           onClose={() => setGrantOpen(false)}
           onGranted={handleGranted}
+        />
+      )}
+
+      {scaleOpen && (
+        <ScaleSettingModal
+          onClose={() => setScaleOpen(false)}
+          onSaved={() => {
+            setScaleOpen(false);
+            setRevision((value) => value + 1);
+            notify("折算百分比已保存并回读校验，约 10 秒后对客户端与后台生效");
+          }}
         />
       )}
     </div>
@@ -477,6 +522,126 @@ function GrantMemberModal({ unionId, unionName, onClose, onGranted }: {
         <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>取消</Button>
         <Button type="button" onClick={() => void submit()} disabled={!selected || saving}>
           {saving ? "正在授权…" : "确认开通"}
+        </Button>
+      </div>
+    </Modal>
+  );
+}
+
+// 业绩全局折算百分比：写游戏库 usr_hash_info（hash_key='俱乐部业绩全局百分比'），
+// 服务端约 10 秒热加载；分子折算、分母保持原始次数，所以所有代理合计占比约等于这个值。
+function ScaleSettingModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [state, setState] = useState<ScaleState | null>(null);
+  const [draft, setDraft] = useState("");
+  const [confirmed, setConfirmed] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    api<ScaleState>("/api/game/club-perf/scale")
+      .then((result) => {
+        if (!alive) return;
+        setState(result);
+        setDraft(String(result.percent));
+        setError("");
+      })
+      .catch((reason: unknown) => {
+        if (alive) setError(reason instanceof Error ? reason.message : "读取折算百分比失败");
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const max = state?.maxPercent ?? 100;
+  const parsed = Number(draft);
+  const valid = draft.trim() !== "" && Number.isInteger(parsed) && parsed >= 0 && parsed <= max;
+  const changed = Boolean(state && valid && parsed !== state.percent);
+  const preview = valid ? ((20 * parsed) / 100).toFixed(2) : "—";
+
+  const submit = async () => {
+    if (!valid || !changed || !confirmed || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api<ScaleState>("/api/game/club-perf/scale", {
+        method: "PUT",
+        ...jsonBody({ percent: parsed, confirm: true }),
+      });
+      onSaved();
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "保存折算百分比失败");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal title="业绩全局折算" eyebrow="PERFORMANCE SCALE" onClose={() => { if (!saving) onClose(); }}>
+      <p className="club-perf-grant-note">
+        写入游戏端哈希配置 <code>{state?.storageKey || "俱乐部业绩全局百分比"}</code>。
+        客户端「我的红利 · 业绩股」与后台报表共用这一个值，约 10 秒后生效；历史日期同样按新值折算。
+      </p>
+
+      {loading ? (
+        <LoadingBlock label="正在读取折算百分比" />
+      ) : !state ? (
+        <div className="form-error"><span>!</span>{error || "折算百分比无法加载"}</div>
+      ) : (
+        <>
+          {state.parseError && (
+            <div className="form-error"><span>!</span>现有配置无法解析（{state.parseError}），保存会整体覆盖。</div>
+          )}
+          {state.duplicateRows > 0 && (
+            <div className="form-error"><span>!</span>该配置有 {state.rowCount} 条同名记录，保存会把它们统一成同一个值。</div>
+          )}
+          {!state.configured && !state.parseError && (
+            <div className="form-error"><span>i</span>游戏端还没有这份配置，服务端当前按默认 {state.defaultPercent}% 生效。点「保存」后才会真正下发。</div>
+          )}
+
+          <Field label={`折算百分比（0~${max}）`}>
+            <input
+              type="number"
+              min={0}
+              max={max}
+              step={1}
+              value={draft}
+              disabled={saving}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                setConfirmed(false);
+                setError("");
+              }}
+              style={{ width: 140 }}
+            />
+          </Field>
+
+          <div className="club-perf-verify">
+            <strong>当前生效：{state.percent}%{state.configured ? "" : "（默认值）"}</strong>
+            <p>示例：原始 20 次 → 折算后 {preview} 次。100% 表示恢复原始值，0 表示全部折算为 0。</p>
+            <p>
+              上次修改：{state.updatedBy || "—"}
+              {state.updatedAt ? ` · ${formatBeijingDateTime(state.updatedAt)}` : ""}
+            </p>
+          </div>
+
+          <label className="confirm-check">
+            <input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} disabled={!changed || saving} />
+            <span>我确认修改全服业绩折算百分比</span>
+          </label>
+        </>
+      )}
+
+      {error && <div className="form-error"><span>!</span>{error}</div>}
+      <div className="form-actions">
+        <Button type="button" variant="secondary" onClick={onClose} disabled={saving}>取消</Button>
+        <Button type="button" onClick={() => void submit()} disabled={!valid || !changed || !confirmed || saving}>
+          {saving ? "正在保存并回读…" : "保存"}
         </Button>
       </div>
     </Modal>
