@@ -4,6 +4,20 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-15 客户端「我的」新增「逃跑惩罚统计」（大盟主，未构建、未真机）
+
+- 入口：「我的 → 操作」第 10 个按钮（额度授权记录右侧），只对联盟总群主显示；按钮美术新出 `mine_chengfa_exact.png`，同款金币箭头 + 金色描边字，**按钮上不显示金额**。
+- 面板 `panelEscapePenalty`：列表/分页沿用上下分记录，表头用新美术 `money_v8_table_chengfa.png`（五列），标题与「今日应扣/到账/笔数·人数」汇总仍是 Label。
+- 协议 `查询_逃跑_惩罚_统计`，回包路由 `ClubUnionChengfaStats`（**列表在 `result`，`count` 是当日总条数**），10 条/页。
+- 顺带修 `ClubManagementView.syncProfileScroll`：入口行高按实际行数 ×107.17，第 6 行不再被裁。
+- 未验证：Creator 未导入、未构建、未真机、接口未联调。详见[交接](handoffs/2026-11-15-escape-penalty-stats.md)。
+
+## 2026-11-15 后台「玩家优化」改接胜率目标（代码就绪，未部署，被游戏服阻塞）
+
+- 后台改成与牌桌内运维优化同一套：输赢金额 + 概率（`异步_设置_胜率目标`），不再用 `optimize01_count/chance`。
+- 实测游戏服 4 条命令：`查询_胜率目标_列表`/`查询_胜率目标_日志` 可直接用（3ms 回包）；`设置_胜率目标`/`停止_胜率目标` 走 8890 HTTP **挂死不回包**（12s/45s 超时、无写入），需服务端加 HTTP 同步回包或后台专用命令。
+- 后端/前端已改完（`go build/test/vet`、`tsc`、`vite build` 通过），写路径加了 8s 超时 + 回读兜底与明确报错。**故意不部署**：现在上线会让新增/调整/停止全部报错。详见[交接](handoffs/2026-11-15-admin-player-optimization-win-target.md)。
+
 ## 2026-11-15 后台「排行榜」独立模块：活动列表 + 创建 + 实时排名（已部署 8891）
 
 - 新菜单 `/game/honor-rank`（模块 `game.honor_rank`，迁移 068）：列表放历史上所有排行榜活动，创建=原有配置 + 选联盟/独立俱乐部，点开可看实时排名（三榜 + 手数 5 档位）。
@@ -110,18 +124,9 @@
 - `panelUserInfo` 统计区改为两排三列蓝卡：上排总手数/总胜率/摊牌率，下排胜利/平局/失败；沿用 `remark[3]`。
 - 统计框调整、道具下移并补 Widget；TS、引用、1334/1624 预览通过，构建/真机/联调待验。详见[交接](handoffs/2026-11-11-userinfo-stats-layout.md)。
 
-## 2026-11-09 后台玩家管理：发放钻石 + 发放记录（已部署，游戏服命令待部署）
+## 2026-11-07～11-09 历史批次（已归档）
 
-- 新增「发放钻石」与「发放记录」，走游戏服 `异步_增加_玩家_钻石` 并回读审计；权限 `game.player.grant_stone`，迁移 053/054 已修正权限 id 冲突。
-- XuanManager 已发布 8891；游戏服命令当时探测 769 未注册。详见[交接](handoffs/2026-11-09-admin-player-stone-grant.md)。
-
-## 2026-11-09 我的红利（俱乐部/联盟）：金框 + 金色美术字（未构建、未真机）
-
-- B3 金框版已写入两套 Prefab 与 `hongli_v8_*`，表头 Label 启用、提取按钮 130→150 宽，占位符改 `-`；两档反渲染通过。详见[交接](handoffs/2026-11-09-my-hongli-v8-restyle.md)。
-
-## 2026-11-07 已部署批次（客服在线、密码明文列）
-
-- 客服被误判 offline 后心跳永不恢复已修；托管页加「游戏后台查看」。玩家管理「用户密码」明文列（mgr_player_login_password，AES-GCM）已上线。详见[客服在线交接](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md)、[密码列交接](handoffs/2026-11-07-admin-player-password-column.md)。
+- [玩家管理发放钻石](handoffs/2026-11-09-admin-player-stone-grant.md) · [我的红利金框版](handoffs/2026-11-09-my-hongli-v8-restyle.md) · [客服在线修复](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md) · [密码明文列](handoffs/2026-11-07-admin-player-password-column.md)。
 
 ## 2026-11-03～11-10 历史批次（已归档）
 

@@ -1253,6 +1253,12 @@ export default class panelMain extends UIPanelViewBase {
         const grantNode = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作/额度授权记录");
         if(grantNode != null)
             grantNode.active = hasClub && this.CanViewQuotaGrantRecord(clubId);
+        // 「逃跑惩罚统计」只对大盟主（联盟总群主）开放。
+        const chengfaNode = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作/逃跑惩罚统计");
+        if(chengfaNode != null)
+        {
+            chengfaNode.active = hasClub && this.IsUnionOwnerAccount();
+        }
         const operation = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作");
         const layout = operation == null ? null : operation.getComponent(cc.Layout);
         if(layout != null)
@@ -1660,6 +1666,16 @@ export default class panelMain extends UIPanelViewBase {
                 return;
             }
             UIManager.getInstance().showPanel("panelStonePoolCost",ShowPanelMode.Cover);
+        }
+        else if(button.node.name === "逃跑惩罚统计")
+        {
+            // 只有大盟主（联盟总群主）能看；热更后节点状态残留时再挡一道。
+            if(this.ResolveRoomClub() === "" || !this.IsUnionOwnerAccount())
+            {
+                this.RefreshClubFinanceMenuVisibility();
+                return;
+            }
+            UIManager.getInstance().showPanel("panelEscapePenalty",ShowPanelMode.Cover);
         }
         else if(button.node.name === "额度授权记录")
         {

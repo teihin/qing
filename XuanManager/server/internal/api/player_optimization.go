@@ -15,105 +15,84 @@ import (
 	"unicode/utf8"
 )
 
-type playerOptimizationItem struct {
-	PlayerID          string `json:"playerId"`
-	LoginName         string `json:"loginName"`
-	Name              string `json:"name"`
-	ManagerID         string `json:"managerId"`
-	ManagerName       string `json:"managerName"`
-	ConfiguredBy      string `json:"configuredBy"`
-	ConfiguredSource  string `json:"configuredSource"`
-	ConfiguredBySuper bool   `json:"-"`
-	RemainingCount    int64  `json:"remainingCount"`
-	Chance            int64  `json:"chance"`
-	Active            bool   `json:"active"`
-	LastConfiguredAt  string `json:"lastConfiguredAt"`
+// 后台「玩家优化」与牌桌内「运维优化」使用同一套胜率目标方案：
+// 设置输赢金额（target_value，正=赢、负=输）与触发概率（chance，1~100），
+// 由游戏服按局推进进度，达标自动结束或人工停止。
+const (
+	winTargetListCommand = "异步_查询_胜率目标_列表"
+	winTargetSetCommand  = "异步_设置_胜率目标"
+	winTargetStopCommand = "异步_停止_胜率目标"
+)
+
+const (
+	winTargetMaxAmount   = 100000000
+	winTargetStateActive = "active"
+)
+
+// winTargetWriteTimeout 后台写入命令的短超时。部分游戏服版本的这类命令走客户端推送回包，
+// HTTP 通道调用会一直挂住；超时后用查询命令回读确认真实结果，避免后台请求空转。
+var winTargetWriteTimeout = 8 * time.Second
+
+// winTargetItem 一条目标：当前目标（state=active/done/stopped）或历史快照。
+type winTargetItem struct {
+	ID           int64  `json:"id"`
+	PlayerID     string `json:"playerId"`
+	LoginName    string `json:"loginName"`
+	Name         string `json:"name"`
+	TargetValue  int64  `json:"targetValue"`
+	Chance       int64  `json:"chance"`
+	Progress     int64  `json:"progress"`
+	Remain       int64  `json:"remain"`
+	RoundCount   int64  `json:"roundCount"`
+	PeerCount    int64  `json:"peerCount"`
+	State        string `json:"state"`
+	Active       bool   `json:"active"`
+	Online       bool   `json:"online"`
+	CurChance    int64  `json:"curChance"`
+	CurCount     int64  `json:"curCount"`
+	Man          string `json:"man"`
+	ManName      string `json:"manName"`
+	ScopeType    string `json:"scopeType"`
+	ScopeID      string `json:"scopeId"`
+	GroupID      int64  `json:"groupId"`
+	GroupName    string `json:"groupName"`
+	SetAt        string `json:"setAt"`
+	FinishAt     string `json:"finishAt"`
+	FinishReason string `json:"finishReason"`
 }
 
-type playerOptimizationSummary struct {
-	ActivePlayers  int64   `json:"activePlayers"`
-	TotalRemaining int64   `json:"totalRemaining"`
-	AverageChance  float64 `json:"averageChance"`
+type winTargetSummary struct {
+	ActivePlayers     int64   `json:"activePlayers"`
+	TotalTargetAmount int64   `json:"totalTargetAmount"`
+	AverageChance     float64 `json:"averageChance"`
 }
 
-type playerOptimizationHistoryFilter struct {
-	Keyword   string
-	Operation string
-	Result    string
+type setWinTargetRequest struct {
+	PlayerID            string `json:"playerId"`
+	TargetValue         int64  `json:"targetValue"`
+	Chance              int64  `json:"chance"`
+	Reason              string `json:"reason"`
+	ExpectedTargetValue int64  `json:"expectedTargetValue"`
+	ExpectedChance      int64  `json:"expectedChance"`
+	Confirm             bool   `json:"confirm"`
 }
 
-type playerOptimizationHistoryItem struct {
-	ID                   int64     `json:"id"`
-	PlayerID             string    `json:"playerId"`
-	LoginName            string    `json:"loginName"`
-	Name                 string    `json:"name"`
-	Operation            string    `json:"operation"`
-	HasBefore            bool      `json:"hasBefore"`
-	BeforeRemainingCount int64     `json:"beforeRemainingCount"`
-	BeforeChance         int64     `json:"beforeChance"`
-	HasAfter             bool      `json:"hasAfter"`
-	AfterRemainingCount  int64     `json:"afterRemainingCount"`
-	AfterChance          int64     `json:"afterChance"`
-	Reason               string    `json:"reason"`
-	OperatorName         string    `json:"operatorName"`
-	Success              bool      `json:"success"`
-	ResultCode           int       `json:"resultCode"`
-	ResultMessage        string    `json:"resultMessage"`
-	CreatedAt            time.Time `json:"createdAt"`
+type stopWinTargetRequest struct {
+	Reason              string `json:"reason"`
+	ExpectedTargetValue int64  `json:"expectedTargetValue"`
+	ExpectedChance      int64  `json:"expectedChance"`
+	Confirm             bool   `json:"confirm"`
 }
 
-type playerOptimizationState struct {
-	PlayerID          string `json:"playerId"`
-	LoginName         string `json:"loginName"`
-	Name              string `json:"name"`
-	ManagerID         string `json:"managerId"`
-	ManagerName       string `json:"managerName"`
-	ConfiguredBy      string `json:"configuredBy"`
-	ConfiguredSource  string `json:"configuredSource"`
-	ConfiguredBySuper bool   `json:"-"`
-	RemainingCount    int64  `json:"remainingCount"`
-	Chance            int64  `json:"chance"`
-	Active            bool   `json:"active"`
-	LastConfiguredAt  string `json:"lastConfiguredAt"`
-}
-
-type createPlayerOptimizationRequest struct {
-	PlayerID       string `json:"playerId"`
-	RemainingCount int64  `json:"remainingCount"`
-	Chance         int64  `json:"chance"`
-	Reason         string `json:"reason"`
-	Confirm        bool   `json:"confirm"`
-}
-
-type updatePlayerOptimizationRequest struct {
-	RemainingCount  int64  `json:"remainingCount"`
-	Chance          int64  `json:"chance"`
-	Reason          string `json:"reason"`
-	ExpectedManager string `json:"expectedManager"`
-	ExpectedCount   int64  `json:"expectedCount"`
-	ExpectedChance  int64  `json:"expectedChance"`
-	Confirm         bool   `json:"confirm"`
-}
-
-type deletePlayerOptimizationRequest struct {
-	Reason          string `json:"reason"`
-	ExpectedManager string `json:"expectedManager"`
-	ExpectedCount   int64  `json:"expectedCount"`
-	ExpectedChance  int64  `json:"expectedChance"`
-	Confirm         bool   `json:"confirm"`
-}
-
-type playerOptimizationCommandError struct {
+type winTargetCommandError struct {
 	status  int
 	code    string
 	message string
 }
 
-func (e *playerOptimizationCommandError) Error() string {
-	return e.message
-}
+func (e *winTargetCommandError) Error() string { return e.message }
 
-var playerOptimizationWriteMu sync.Mutex
+var winTargetWriteMu sync.Mutex
 
 func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Request, p principal) {
 	page, size := pageParams(r)
@@ -122,251 +101,60 @@ func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询内容不能超过 100 个字符")
 		return
 	}
-	status := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("status")))
-	if status == "" {
-		status = "active"
+	state := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("state")))
+	if state == "" {
+		state = "all"
 	}
-	if status != "active" && status != "inactive" && status != "all" {
-		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "优化状态只能选择启用、未启用或全部")
-		return
-	}
-	minChance, maxChance, err := parseOptimizationChanceRange(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
-		return
-	}
-	where, args := buildPlayerOptimizationWhere(keyword, status, minChance, maxChance, p)
-
-	var total int64
-	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*)
-FROM kbedm.tbl_Account a
-LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
-LEFT JOIN kbedm.tbl_Account manager ON manager.sm_guuid = a.sm_optimize01_man
-WHERE `+where, args...).Scan(&total); err != nil {
-		s.logger.Error("count player optimizations", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化玩家数量失败")
+	if state != "active" && state != "done" && state != "stopped" && state != "all" {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "优化状态只能选择进行中、已达成、已停止或全部")
 		return
 	}
 
-	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
-	rows, err := s.db.QueryContext(r.Context(), `SELECT
-a.sm_guuid, COALESCE(k.accountName, a.sm_wxID, ''), a.sm_name,
-COALESCE(a.sm_optimize01_man, ''), COALESCE(manager.sm_name, ''),
-COALESCE((SELECT log.operator_name FROM mgr_audit_log log
-  WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
-    AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
-  ORDER BY log.id DESC LIMIT 1), ''),
-COALESCE((SELECT operator_user.username = 'admin999'
-  FROM mgr_audit_log audit_row
-  LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
-  WHERE audit_row.target_type = 'game_player' AND audit_row.target_id = a.sm_guuid AND audit_row.result_code = 0
-    AND audit_row.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')
-  ORDER BY audit_row.id DESC LIMIT 1), 0),
-a.sm_optimize01_count, a.sm_optimize01_chance,
-COALESCE((SELECT DATE_FORMAT(MAX(log.created_at), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
-  WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
-    AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')),
-  (SELECT CONCAT(o.date, ' ', o.time) FROM kbedm.usr_opt_info o
-    WHERE o.user_guuid = a.sm_guuid AND o.option_type = '设置'
-    ORDER BY o.id DESC LIMIT 1), '')
-FROM kbedm.tbl_Account a
-LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
-LEFT JOIN kbedm.tbl_Account manager ON manager.sm_guuid = a.sm_optimize01_man
-WHERE `+where+`
-ORDER BY (a.sm_optimize01_count > 0) DESC, a.sm_optimize01_count DESC, a.id DESC
-LIMIT ? OFFSET ?`, queryArgs...)
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	activeItems, err := s.queryWinTargets(ctx, "", false, winTargetStateActive)
 	if err != nil {
-		s.logger.Error("list player optimizations", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化玩家列表失败")
+		s.logger.Error("query active win targets", "error", err)
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取进行中的玩家优化失败"))
 		return
 	}
-	defer rows.Close()
-	items := make([]playerOptimizationItem, 0, size)
-	for rows.Next() {
-		var item playerOptimizationItem
-		if err := rows.Scan(&item.PlayerID, &item.LoginName, &item.Name, &item.ManagerID, &item.ManagerName,
-			&item.ConfiguredBy, &item.ConfiguredBySuper, &item.RemainingCount, &item.Chance, &item.LastConfiguredAt); err != nil {
-			s.logger.Error("scan player optimization", "error", err)
-			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化玩家数据失败")
+	summary := summarizeWinTargets(activeItems)
+
+	items := activeItems
+	if state != "active" {
+		queryState := ""
+		if state != "all" {
+			queryState = state
+		}
+		items, err = s.queryWinTargets(ctx, "", false, queryState)
+		if err != nil {
+			s.logger.Error("query win targets", "error", err, "state", state)
+			writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家优化列表失败"))
 			return
 		}
-		item.Active = item.RemainingCount > 0
-		applyPlayerOptimizationVisibility(p, &item.ConfiguredBy, &item.ConfiguredSource, &item.LastConfiguredAt, item.ConfiguredBySuper, item.ManagerID)
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化玩家数据失败")
-		return
 	}
 
-	var summary playerOptimizationSummary
-	if err := s.db.QueryRowContext(r.Context(), `SELECT
-COUNT(CASE WHEN sm_optimize01_count > 0 THEN 1 END),
-COALESCE(SUM(CASE WHEN sm_optimize01_count > 0 THEN sm_optimize01_count ELSE 0 END), 0),
-COALESCE(AVG(CASE WHEN sm_optimize01_count > 0 THEN sm_optimize01_chance END), 0)
-FROM kbedm.tbl_Account`).Scan(&summary.ActivePlayers, &summary.TotalRemaining, &summary.AverageChance); err != nil {
-		s.logger.Error("summarize player optimizations", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化汇总失败")
-		return
+	if keyword != "" {
+		items = filterWinTargets(items, keyword)
+	}
+	s.fillWinTargetLogins(ctx, items)
+	if state != "active" {
+		s.fillWinTargetLogins(ctx, activeItems)
+	}
+
+	total := int64(len(items))
+	start := (page - 1) * size
+	if start > len(items) {
+		start = len(items)
+	}
+	end := start + size
+	if end > len(items) {
+		end = len(items)
 	}
 	writeData(w, http.StatusOK, map[string]any{
-		"items": items, "page": page, "pageSize": size, "total": total, "summary": summary,
+		"items": items[start:end], "page": page, "pageSize": size, "total": total, "summary": summary,
 	})
-}
-
-func (s *Server) handleListPlayerOptimizationHistory(w http.ResponseWriter, r *http.Request, p principal) {
-	page, size := pageParams(r)
-	filter, err := parsePlayerOptimizationHistoryFilter(r)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
-		return
-	}
-	where, args := buildPlayerOptimizationHistoryWhere(filter, p)
-
-	var total int64
-	if err := s.db.QueryRowContext(r.Context(), `SELECT COUNT(*)
-FROM mgr_audit_log audit_row
-LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
-LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
-WHERE `+where, args...).Scan(&total); err != nil {
-		s.logger.Error("count player optimization history", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史数量失败")
-		return
-	}
-
-	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
-	rows, err := s.db.QueryContext(r.Context(), `SELECT
-audit_row.id, audit_row.target_id,
-COALESCE(game_login.accountName, game_player.sm_wxID, ''), COALESCE(game_player.sm_name, ''),
-audit_row.action, audit_row.operator_name, audit_row.request_json, audit_row.before_json, audit_row.after_json,
-audit_row.result_code, audit_row.result_message, audit_row.created_at
-FROM mgr_audit_log audit_row
-LEFT JOIN kbedm.tbl_Account game_player ON game_player.sm_guuid = audit_row.target_id
-LEFT JOIN kbedm.kbe_accountinfos game_login ON game_login.entityDBID = game_player.id
-WHERE `+where+`
-ORDER BY audit_row.id DESC
-LIMIT ? OFFSET ?`, queryArgs...)
-	if err != nil {
-		s.logger.Error("list player optimization history", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史失败")
-		return
-	}
-	defer rows.Close()
-
-	items := make([]playerOptimizationHistoryItem, 0, size)
-	for rows.Next() {
-		var item playerOptimizationHistoryItem
-		var action string
-		var requestJSON, beforeJSON, afterJSON sql.NullString
-		if err := rows.Scan(
-			&item.ID, &item.PlayerID, &item.LoginName, &item.Name,
-			&action, &item.OperatorName, &requestJSON, &beforeJSON, &afterJSON,
-			&item.ResultCode, &item.ResultMessage, &item.CreatedAt,
-		); err != nil {
-			s.logger.Error("scan player optimization history", "error", err)
-			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史数据失败")
-			return
-		}
-		item.Operation = playerOptimizationHistoryOperation(action)
-		item.Success = item.ResultCode == 0
-		enrichPlayerOptimizationHistoryItem(&item, requestJSON.String, beforeJSON.String, afterJSON.String)
-		items = append(items, item)
-	}
-	if err := rows.Err(); err != nil {
-		s.logger.Error("iterate player optimization history", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取发牌优化历史数据失败")
-		return
-	}
-
-	writeData(w, http.StatusOK, map[string]any{
-		"items": items, "page": page, "pageSize": size, "total": total,
-	})
-}
-
-func parsePlayerOptimizationHistoryFilter(r *http.Request) (playerOptimizationHistoryFilter, error) {
-	filter := playerOptimizationHistoryFilter{
-		Keyword:   strings.TrimSpace(r.URL.Query().Get("keyword")),
-		Operation: strings.TrimSpace(strings.ToLower(r.URL.Query().Get("operation"))),
-		Result:    strings.TrimSpace(strings.ToLower(r.URL.Query().Get("result"))),
-	}
-	if utf8.RuneCountInString(filter.Keyword) > 100 {
-		return playerOptimizationHistoryFilter{}, errors.New("查询内容不能超过 100 个字符")
-	}
-	if filter.Operation != "" && filter.Operation != "create" && filter.Operation != "update" && filter.Operation != "delete" {
-		return playerOptimizationHistoryFilter{}, errors.New("操作类型不正确")
-	}
-	if filter.Result != "" && filter.Result != "success" && filter.Result != "failed" {
-		return playerOptimizationHistoryFilter{}, errors.New("操作结果不正确")
-	}
-	return filter, nil
-}
-
-func buildPlayerOptimizationHistoryWhere(filter playerOptimizationHistoryFilter, p principal) (string, []any) {
-	clauses := []string{
-		"audit_row.target_type = ?",
-		"audit_row.action IN (?, ?, ?)",
-		"(? = 1 OR " + nonRootAuditVisibilitySQL + ")",
-	}
-	args := []any{
-		"game_player",
-		"game.player_optimization.create",
-		"game.player_optimization.update",
-		"game.player_optimization.delete",
-		canSeeProtectedRootFlag(p),
-	}
-	if filter.Operation != "" {
-		clauses = append(clauses, "audit_row.action = ?")
-		args = append(args, "game.player_optimization."+filter.Operation)
-	}
-	if filter.Result == "success" {
-		clauses = append(clauses, "audit_row.result_code = 0")
-	} else if filter.Result == "failed" {
-		clauses = append(clauses, "audit_row.result_code <> 0")
-	}
-	if filter.Keyword != "" {
-		like := "%" + filter.Keyword + "%"
-		clauses = append(clauses, `(audit_row.target_id LIKE ? OR COALESCE(game_player.sm_wxID, '') LIKE ? OR COALESCE(game_login.accountName, '') LIKE ?
-OR COALESCE(game_player.sm_name, '') LIKE ? OR audit_row.operator_name LIKE ? OR COALESCE(audit_row.request_json, '') LIKE ?
-OR COALESCE(audit_row.before_json, '') LIKE ? OR COALESCE(audit_row.after_json, '') LIKE ?)`)
-		for i := 0; i < 8; i++ {
-			args = append(args, like)
-		}
-	}
-	return strings.Join(clauses, " AND "), args
-}
-
-func playerOptimizationHistoryOperation(action string) string {
-	switch action {
-	case "game.player_optimization.create":
-		return "create"
-	case "game.player_optimization.delete":
-		return "delete"
-	default:
-		return "update"
-	}
-}
-
-func enrichPlayerOptimizationHistoryItem(item *playerOptimizationHistoryItem, requestJSON, beforeJSON, afterJSON string) {
-	var request struct {
-		PlayerID string `json:"playerId"`
-		Reason   string `json:"reason"`
-	}
-	var before, after playerOptimizationState
-	_ = json.Unmarshal([]byte(requestJSON), &request)
-	if json.Unmarshal([]byte(beforeJSON), &before) == nil && strings.TrimSpace(beforeJSON) != "" && beforeJSON != "null" {
-		item.HasBefore = true
-		item.BeforeRemainingCount = before.RemainingCount
-		item.BeforeChance = before.Chance
-	}
-	if json.Unmarshal([]byte(afterJSON), &after) == nil && strings.TrimSpace(afterJSON) != "" && afterJSON != "null" {
-		item.HasAfter = true
-		item.AfterRemainingCount = after.RemainingCount
-		item.AfterChance = after.Chance
-	}
-	item.PlayerID = firstNonEmpty(item.PlayerID, after.PlayerID, before.PlayerID, request.PlayerID)
-	item.LoginName = firstNonEmpty(item.LoginName, after.LoginName, before.LoginName)
-	item.Name = firstNonEmpty(item.Name, after.Name, before.Name)
-	item.Reason = strings.TrimSpace(request.Reason)
 }
 
 func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
@@ -375,21 +163,40 @@ func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
-	state, err := s.readPlayerOptimizationState(r.Context(), playerID, p)
-	if errors.Is(err, sql.ErrNoRows) {
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	item := winTargetItem{PlayerID: playerID}
+	found, err := s.fetchActiveWinTarget(ctx, playerID, &item)
+	if err != nil {
+		s.logger.Error("read player win target", "error", err, "playerId", playerID)
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家优化状态失败"))
+		return
+	}
+	loginName, name, exists, err := s.readGamePlayerIdentity(ctx, playerID)
+	if err != nil {
+		s.logger.Error("read player identity", "error", err, "playerId", playerID)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家信息失败")
+		return
+	}
+	if !exists {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
 		return
 	}
-	if err != nil {
-		s.logger.Error("read player optimization", "error", err, "playerId", playerID)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家发牌优化参数失败")
-		return
+	item.PlayerID = playerID
+	item.LoginName = loginName
+	if name != "" {
+		item.Name = name
 	}
-	writeData(w, http.StatusOK, state)
+	if !found {
+		item.Active = false
+		item.State = ""
+	}
+	writeData(w, http.StatusOK, item)
 }
 
 func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
-	var input createPlayerOptimizationRequest
+	var input setWinTargetRequest
 	if !decodeJSON(w, r, &input) {
 		return
 	}
@@ -398,90 +205,36 @@ func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
-	if err := normalizeAndValidateCreateOptimizationRequest(&input); err != nil {
+	if err := normalizeAndValidateWinTargetRequest(&input); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_OPTIMIZATION", err.Error())
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
-	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家发牌优化参数失败")
-		return
-	}
-	if before.Active {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_ALREADY_EXISTS", "该玩家已启用发牌优化，请使用调整参数操作")
-		return
-	}
-	// 游戏服只按 optimize01_chance/count 判定，optimize01_man 是可选标记位，不再要求唯一 BOSS。
-	target := playerOptimizationState{
-		PlayerID: playerID, LoginName: before.LoginName, Name: before.Name,
-		RemainingCount: input.RemainingCount, Chance: input.Chance, Active: true,
-	}
-	message := fmt.Sprintf("已为玩家 %s 新增发牌优化：剩余 %d 次、概率 %d%%", playerID, target.RemainingCount, target.Chance)
-	s.completePlayerOptimizationMutation(w, r, p, ctx, "game.player_optimization.create", input.Reason, before, target, message)
-}
 
-func parseOptimizationChanceRange(r *http.Request) (*int64, *int64, error) {
-	parse := func(name string) (*int64, error) {
-		value := strings.TrimSpace(r.URL.Query().Get(name))
-		if value == "" {
-			return nil, nil
-		}
-		parsed, err := strconv.ParseInt(value, 10, 64)
-		if err != nil || parsed < -100 || parsed > 100 {
-			return nil, errors.New("概率范围必须是 -100 到 100 的整数")
-		}
-		return &parsed, nil
-	}
-	minimum, err := parse("minChance")
+	current := winTargetItem{PlayerID: playerID}
+	found, err := s.fetchActiveWinTarget(ctx, playerID, &current)
 	if err != nil {
-		return nil, nil, err
+		s.logger.Error("read player win target", "error", err, "playerId", playerID)
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前优化失败"))
+		return
 	}
-	maximum, err := parse("maxChance")
-	if err != nil {
-		return nil, nil, err
+	if found {
+		writeError(w, http.StatusConflict, "OPTIMIZATION_ALREADY_EXISTS",
+			fmt.Sprintf("该玩家已有进行中的优化（%s，概率 %d%%），请使用调整或停止操作", describeWinTargetValue(current.TargetValue), current.Chance))
+		return
 	}
-	if minimum != nil && maximum != nil && *minimum > *maximum {
-		return nil, nil, errors.New("最低概率不能大于最高概率")
-	}
-	return minimum, maximum, nil
-}
 
-func buildPlayerOptimizationWhere(keyword, status string, minChance, maxChance *int64, p principal) (string, []any) {
-	clauses := []string{"1=1"}
-	args := []any{}
-	switch status {
-	case "active":
-		clauses = append(clauses, "a.sm_optimize01_count > 0")
-	case "inactive":
-		clauses = append(clauses, "a.sm_optimize01_count <= 0")
+	after, err := s.applyWinTarget(ctx, "game.player_optimization.create", p, r, playerID, input.TargetValue, input.Chance, input.Reason, current, false)
+	if err != nil {
+		s.writeWinTargetFailure(w, p, r, "game.player_optimization.create", playerID, input.TargetValue, input.Chance, input.Reason, current, false, err)
+		return
 	}
-	if keyword != "" {
-		like := "%" + keyword + "%"
-		clauses = append(clauses, `(a.sm_guuid = ? OR a.sm_wxID = ? OR k.accountName = ? OR a.sm_name LIKE ? OR a.sm_optimize01_man = ? OR manager.sm_name LIKE ?
-OR EXISTS (SELECT 1 FROM mgr_audit_log operator_log
-  WHERE operator_log.target_type = 'game_player' AND operator_log.target_id = a.sm_guuid AND operator_log.result_code = 0
-    AND operator_log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
-    AND (? = 1 OR NOT EXISTS (SELECT 1 FROM mgr_user hidden_super
-      WHERE hidden_super.username = 'admin999' AND hidden_super.id = operator_log.operator_id))
-    AND operator_log.operator_name LIKE ?))`)
-		args = append(args, keyword, keyword, keyword, like, keyword, like, canSeeProtectedRootFlag(p), like)
-	}
-	if minChance != nil {
-		clauses = append(clauses, "a.sm_optimize01_chance >= ?")
-		args = append(args, *minChance)
-	}
-	if maxChance != nil {
-		clauses = append(clauses, "a.sm_optimize01_chance <= ?")
-		args = append(args, *maxChance)
-	}
-	return strings.Join(clauses, " AND "), args
+	writeData(w, http.StatusOK, map[string]any{
+		"player":  after,
+		"message": fmt.Sprintf("已为玩家 %s 设置优化：%s，概率 %d%%", playerID, describeWinTargetValue(after.TargetValue), after.Chance),
+	})
 }
 
 func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
@@ -490,64 +243,159 @@ func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
-	var input updatePlayerOptimizationRequest
+	var input setWinTargetRequest
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if err := normalizeAndValidateOptimizationRequest(&input); err != nil {
+	input.PlayerID = playerID
+	if err := normalizeAndValidateWinTargetRequest(&input); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_OPTIMIZATION", err.Error())
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
 	defer cancel()
-	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
-		return
-	}
+
+	current := winTargetItem{PlayerID: playerID}
+	found, err := s.fetchActiveWinTarget(ctx, playerID, &current)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家发牌优化参数失败")
+		s.logger.Error("read player win target", "error", err, "playerId", playerID)
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前优化失败"))
 		return
 	}
-	if !before.Active {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家尚未启用发牌优化，请使用新增操作")
+	if !found {
+		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家当前没有进行中的优化，请使用新增操作")
 		return
 	}
-	if before.ManagerID != strings.TrimSpace(input.ExpectedManager) || before.RemainingCount != input.ExpectedCount || before.Chance != input.ExpectedChance {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家发牌优化参数已变化，请刷新列表后重新操作")
+	if current.TargetValue != input.ExpectedTargetValue || current.Chance != input.ExpectedChance {
+		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家优化参数已变化，请刷新列表后重新操作")
 		return
 	}
-	target := playerOptimizationState{
-		PlayerID: playerID, LoginName: before.LoginName, Name: before.Name,
-		ManagerID: before.ManagerID, ManagerName: before.ManagerName,
-		RemainingCount: input.RemainingCount, Chance: input.Chance, Active: true,
-	}
-	if optimizationStateMatches(before, target) {
-		writeError(w, http.StatusBadRequest, "OPTIMIZATION_UNCHANGED", "发牌优化参数没有变化")
+	if current.TargetValue == input.TargetValue && current.Chance == input.Chance {
+		writeError(w, http.StatusBadRequest, "OPTIMIZATION_UNCHANGED", "优化参数没有变化")
 		return
 	}
 
-	message := fmt.Sprintf("玩家 %s 的发牌优化已调整为剩余 %d 次、概率 %d%%", playerID, target.RemainingCount, target.Chance)
-	s.completePlayerOptimizationMutation(w, r, p, ctx, "game.player_optimization.update", input.Reason, before, target, message)
+	after, err := s.applyWinTarget(ctx, "game.player_optimization.update", p, r, playerID, input.TargetValue, input.Chance, input.Reason, current, true)
+	if err != nil {
+		s.writeWinTargetFailure(w, p, r, "game.player_optimization.update", playerID, input.TargetValue, input.Chance, input.Reason, current, true, err)
+		return
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"player": after,
+		"message": fmt.Sprintf("已调整玩家 %s 的优化：%s，概率 %d%%（进度从 0 重新计算）",
+			playerID, describeWinTargetValue(after.TargetValue), after.Chance),
+	})
 }
 
-func normalizeAndValidateOptimizationRequest(input *updatePlayerOptimizationRequest) error {
-	if err := validateActiveOptimizationValues(input.RemainingCount, input.Chance); err != nil {
-		return err
+func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
+	playerID, err := normalizeGamePlayerID(r.PathValue("playerId"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
+		return
+	}
+	var input stopWinTargetRequest
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if strings.TrimSpace(input.Reason) != "" {
+		if err := normalizeOptimizationReason(&input.Reason); err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_OPTIMIZATION", err.Error())
+			return
+		}
+	} else {
+		input.Reason = ""
 	}
 	if !input.Confirm {
-		return errors.New("请确认本次操作会改变玩家发牌优化参数")
+		writeError(w, http.StatusBadRequest, "OPTIMIZATION_CONFIRM_REQUIRED", "请确认停止会立即结束该玩家的优化")
+		return
 	}
-	if input.ExpectedCount < 0 || input.ExpectedChance < -100 || input.ExpectedChance > 100 {
-		return errors.New("页面基准参数不正确，请刷新后重试")
+
+	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
+	defer cancel()
+
+	current := winTargetItem{PlayerID: playerID}
+	found, err := s.fetchActiveWinTarget(ctx, playerID, &current)
+	if err != nil {
+		s.logger.Error("read player win target", "error", err, "playerId", playerID)
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前优化失败"))
+		return
 	}
-	return nil
+	if !found {
+		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家没有进行中的优化")
+		return
+	}
+	if input.ExpectedTargetValue != 0 && (current.TargetValue != input.ExpectedTargetValue || current.Chance != input.ExpectedChance) {
+		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家优化参数已变化，请刷新列表后重新操作")
+		return
+	}
+
+	winTargetWriteMu.Lock()
+	defer winTargetWriteMu.Unlock()
+	operationContext := gameOperationContext("player-optimization")
+	stopCtx, cancelStop := context.WithTimeout(ctx, winTargetWriteTimeout)
+	result, err := s.callGameCommand(stopCtx, winTargetStopCommand, map[string]any{
+		"guuids": playerID, "remark": winTargetRemark(input.Reason, "后台停止优化"), "context": operationContext,
+	})
+	cancelStop()
+	if err != nil {
+		if stopped, _ := s.confirmWinTargetStopped(ctx, playerID); stopped {
+			after := current
+			after.State = "stopped"
+			after.Active = false
+			after.FinishReason = "stop"
+			message := fmt.Sprintf("已停止玩家 %s 的优化", playerID)
+			requestAudit := map[string]any{"playerId": playerID, "writeMode": "win-target-command", "context": operationContext}
+			if input.Reason != "" {
+				requestAudit["reason"] = input.Reason
+			}
+			s.audit(ctx, &p, "game.player_optimization.delete", "game_player", playerID, requestAudit, current, after, 0, message, clientIP(r))
+			writeData(w, http.StatusOK, map[string]any{"player": after, "message": message})
+			return
+		}
+		err = &winTargetCommandError{status: http.StatusBadGateway, code: "OPTIMIZATION_GAME_COMMAND_UNREACHABLE",
+			message: "游戏服停止接口未响应（该命令当前仅支持牌桌内客户端调用），优化没有停止；请联系游戏服开放后台写入后重试"}
+		s.writeWinTargetFailure(w, p, r, "game.player_optimization.delete", playerID, 0, 0, input.Reason, current, true, err)
+		return
+	}
+	if result.RetCode != 512 {
+		err = &winTargetCommandError{status: http.StatusBadRequest, code: "OPTIMIZATION_GAME_COMMAND_REJECTED",
+			message: describeGameFailure(winTargetStopCommand, result.RetCode, result.RetResult)}
+		s.writeWinTargetFailure(w, p, r, "game.player_optimization.delete", playerID, 0, 0, input.Reason, current, true, err)
+		return
+	}
+	if err := parseWinTargetReplyError(result.RetResult); err != nil {
+		err = &winTargetCommandError{status: http.StatusBadRequest, code: "OPTIMIZATION_GAME_COMMAND_REJECTED", message: err.Error()}
+		s.writeWinTargetFailure(w, p, r, "game.player_optimization.delete", playerID, 0, 0, input.Reason, current, true, err)
+		return
+	}
+
+	after := current
+	after.State = "stopped"
+	after.Active = false
+	after.FinishReason = "stop"
+	after.FinishAt = time.Now().Format("2006-01-02 15:04:05")
+	message := fmt.Sprintf("已停止玩家 %s 的优化", playerID)
+	requestAudit := map[string]any{
+		"playerId": playerID, "writeMode": "win-target-command", "context": operationContext,
+		"expectedTargetValue": input.ExpectedTargetValue, "expectedChance": input.ExpectedChance,
+	}
+	if input.Reason != "" {
+		requestAudit["reason"] = input.Reason
+	}
+	s.audit(ctx, &p, "game.player_optimization.delete", "game_player", playerID, requestAudit, current, after, 0, message, clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"player": after, "message": message})
 }
 
-func normalizeAndValidateCreateOptimizationRequest(input *createPlayerOptimizationRequest) error {
-	if err := validateActiveOptimizationValues(input.RemainingCount, input.Chance); err != nil {
-		return err
+func normalizeAndValidateWinTargetRequest(input *setWinTargetRequest) error {
+	if input.TargetValue == 0 {
+		return errors.New("输赢金额不能为 0，请选择赢或输并填写金额")
+	}
+	if input.TargetValue > winTargetMaxAmount || input.TargetValue < -winTargetMaxAmount {
+		return fmt.Errorf("输赢金额必须是 1 到 %s 之间的整数", formatThousands(winTargetMaxAmount))
+	}
+	if input.Chance < 1 || input.Chance > 100 {
+		return errors.New("触发概率必须是 1 到 100 的整数")
 	}
 	if strings.TrimSpace(input.Reason) != "" {
 		if err := normalizeOptimizationReason(&input.Reason); err != nil {
@@ -557,17 +405,7 @@ func normalizeAndValidateCreateOptimizationRequest(input *createPlayerOptimizati
 		input.Reason = ""
 	}
 	if !input.Confirm {
-		return errors.New("请确认新增发牌优化会影响玩家牌局结果")
-	}
-	return nil
-}
-
-func validateActiveOptimizationValues(remainingCount, chance int64) error {
-	if remainingCount < 1 || remainingCount > 1000000 {
-		return errors.New("剩余次数必须是 1 到 1,000,000 的整数")
-	}
-	if chance == 0 || chance < -100 || chance > 100 {
-		return errors.New("触发概率必须是 -100 到 -1 或 1 到 100 的整数")
+		return errors.New("请确认本次操作会改变玩家牌局结果")
 	}
 	return nil
 }
@@ -585,261 +423,487 @@ func normalizeOptimizationReason(reason *string) error {
 	return nil
 }
 
-func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.Request, p principal) {
-	playerID, err := normalizeGamePlayerID(r.PathValue("playerId"))
+// queryWinTargets 走游戏服命令读取目标；history=true 读历史快照表。
+func (s *Server) queryWinTargets(ctx context.Context, guuids string, history bool, state string) ([]winTargetItem, error) {
+	params := map[string]any{
+		"guuids":  guuids,
+		"state":   state,
+		"context": gameOperationContext("win-target-list"),
+	}
+	if history {
+		params["history"] = 1
+	}
+	result, err := s.callGameCommand(ctx, winTargetListCommand, params)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
-		return
+		return nil, &winTargetCommandError{status: http.StatusBadGateway, code: "GAME_COMMAND_FAILED", message: "游戏服未返回玩家优化数据，请稍后重试"}
 	}
-	var input deletePlayerOptimizationRequest
-	if !decodeJSON(w, r, &input) {
-		return
+	if result.RetCode != 512 {
+		return nil, &winTargetCommandError{status: http.StatusBadGateway, code: "GAME_COMMAND_FAILED",
+			message: describeGameFailure(winTargetListCommand, result.RetCode, result.RetResult)}
 	}
-	if strings.TrimSpace(input.Reason) != "" {
-		if err := normalizeOptimizationReason(&input.Reason); err != nil {
-			writeError(w, http.StatusBadRequest, "INVALID_OPTIMIZATION", err.Error())
-			return
+	payload := decodeGameObject(result.RetResult)
+	if message := gameValueString(payload, "error"); message != "" {
+		return nil, errors.New(message)
+	}
+	rawList, _ := payload["list"].([]any)
+	items := make([]winTargetItem, 0, len(rawList))
+	for _, raw := range rawList {
+		object, ok := raw.(map[string]any)
+		if !ok {
+			continue
 		}
-	} else {
-		input.Reason = ""
+		items = append(items, winTargetItemFromGame(object))
 	}
-	if !input.Confirm {
-		writeError(w, http.StatusBadRequest, "OPTIMIZATION_CONFIRM_REQUIRED", "请确认删除会立即停用该玩家的发牌优化")
-		return
-	}
-	if input.ExpectedCount < 1 || input.ExpectedChance < -100 || input.ExpectedChance > 100 {
-		writeError(w, http.StatusBadRequest, "INVALID_OPTIMIZATION", "页面基准参数不正确，请刷新后重试")
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(r.Context(), 25*time.Second)
-	defer cancel()
-	before, err := s.readPlayerOptimizationState(ctx, playerID, p)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏玩家 ID")
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取玩家发牌优化参数失败")
-		return
-	}
-	if !before.Active {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家没有可删除的发牌优化")
-		return
-	}
-	if before.ManagerID != strings.TrimSpace(input.ExpectedManager) || before.RemainingCount != input.ExpectedCount || before.Chance != input.ExpectedChance {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家发牌优化参数已变化，请刷新列表后重新操作")
-		return
-	}
-	target := playerOptimizationState{PlayerID: playerID, LoginName: before.LoginName, Name: before.Name}
-	message := fmt.Sprintf("已删除玩家 %s 的发牌优化", playerID)
-	s.completePlayerOptimizationMutation(w, r, p, ctx, "game.player_optimization.delete", input.Reason, before, target, message)
+	return items, nil
 }
 
-func (s *Server) completePlayerOptimizationMutation(w http.ResponseWriter, r *http.Request, p principal, ctx context.Context, action, reason string, before, target playerOptimizationState, message string) {
+func (s *Server) fetchActiveWinTarget(ctx context.Context, playerID string, target *winTargetItem) (bool, error) {
+	items, err := s.queryWinTargets(ctx, playerID, false, winTargetStateActive)
+	if err != nil {
+		return false, err
+	}
+	for _, item := range items {
+		if item.PlayerID == playerID && item.Active {
+			*target = item
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (s *Server) applyWinTarget(ctx context.Context, action string, p principal, r *http.Request, playerID string, targetValue, chance int64, reason string, before winTargetItem, hasBefore bool) (winTargetItem, error) {
+	winTargetWriteMu.Lock()
+	defer winTargetWriteMu.Unlock()
 	operationContext := gameOperationContext("player-optimization")
+	remark := winTargetRemark(reason, "后台设置优化")
+	// 部分游戏服版本的客户端命令在 HTTP 通道不回包（请求会一直挂住），
+	// 因此给写入单独一个短超时：超时后回读目标列表确认是否实际生效。
+	setCtx, cancelSet := context.WithTimeout(ctx, winTargetWriteTimeout)
+	result, err := s.callGameCommand(setCtx, winTargetSetCommand, map[string]any{
+		"guuids": playerID, "target_value": targetValue, "chance": chance,
+		"remark": remark, "context": operationContext,
+	})
+	cancelSet()
+	if err != nil {
+		if confirmed, found := s.confirmWinTargetAfterTimeout(ctx, playerID, targetValue, chance); found {
+			return s.recordWinTargetSuccess(ctx, p, r, action, playerID, confirmed, reason, before, hasBefore, operationContext)
+		}
+		return before, &winTargetCommandError{status: http.StatusBadGateway, code: "OPTIMIZATION_GAME_COMMAND_UNREACHABLE",
+			message: "游戏服设置接口未响应（该命令当前仅支持牌桌内客户端调用），参数没有修改；请联系游戏服开放后台写入后重试"}
+	}
+	if result.RetCode != 512 {
+		return before, &winTargetCommandError{status: http.StatusBadRequest, code: "OPTIMIZATION_GAME_COMMAND_REJECTED",
+			message: describeGameFailure(winTargetSetCommand, result.RetCode, result.RetResult)}
+	}
+	if err := parseWinTargetReplyError(result.RetResult); err != nil {
+		return before, &winTargetCommandError{status: http.StatusBadRequest, code: "OPTIMIZATION_GAME_COMMAND_REJECTED", message: err.Error()}
+	}
+
+	after := winTargetItem{
+		PlayerID: playerID, Name: before.Name, LoginName: before.LoginName,
+		TargetValue: targetValue, Chance: chance, State: winTargetStateActive, Active: true,
+		Progress: 0, Remain: absInt64(targetValue), Man: before.Man, ManName: before.ManName,
+		SetAt: time.Now().Format("2006-01-02 15:04:05"),
+	}
+	confirmed, found, verifyErr := s.waitForWinTarget(ctx, playerID, targetValue, chance)
+	if verifyErr == nil && found {
+		after = mergeWinTarget(after, confirmed)
+	} else if verifyErr != nil {
+		s.logger.Warn("verify win target", "error", verifyErr, "playerId", playerID)
+	}
+	return s.recordWinTargetSuccess(ctx, p, r, action, playerID, after, reason, before, hasBefore, operationContext)
+}
+
+func mergeWinTarget(base, confirmed winTargetItem) winTargetItem {
+	base.Progress = confirmed.Progress
+	base.Remain = confirmed.Remain
+	base.SetAt = firstNonEmpty(confirmed.SetAt, base.SetAt)
+	base.Man = firstNonEmpty(confirmed.Man, base.Man)
+	base.ManName = firstNonEmpty(confirmed.ManName, base.ManName)
+	base.RoundCount = confirmed.RoundCount
+	base.PeerCount = confirmed.PeerCount
+	base.Online = confirmed.Online
+	return base
+}
+
+// confirmWinTargetAfterTimeout 写入命令超时后，用列表命令确认目标是否已经生效。
+func (s *Server) confirmWinTargetAfterTimeout(ctx context.Context, playerID string, targetValue, chance int64) (winTargetItem, bool) {
+	checkCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	item, found, err := s.waitForWinTarget(checkCtx, playerID, targetValue, chance)
+	if err != nil || !found {
+		return winTargetItem{}, false
+	}
+	return item, true
+}
+
+func (s *Server) recordWinTargetSuccess(ctx context.Context, p principal, r *http.Request, action, playerID string, after winTargetItem, reason string, before winTargetItem, hasBefore bool, operationContext string) (winTargetItem, error) {
+	message := fmt.Sprintf("已设置玩家 %s 的优化：%s，概率 %d%%", playerID, describeWinTargetValue(after.TargetValue), after.Chance)
 	requestAudit := map[string]any{
-		"playerId": target.PlayerID, "remainingCount": target.RemainingCount, "chance": target.Chance,
-		"writeMode": "game-command", "context": operationContext,
+		"playerId": playerID, "targetValue": after.TargetValue, "chance": after.Chance,
+		"writeMode": "win-target-command", "context": operationContext,
 	}
-	if strings.TrimSpace(reason) != "" {
-		requestAudit["reason"] = strings.TrimSpace(reason)
+	if reason != "" {
+		requestAudit["reason"] = reason
 	}
-	playerOptimizationWriteMu.Lock()
-	defer playerOptimizationWriteMu.Unlock()
-	after, err := s.writePlayerOptimizationViaGameCommand(ctx, action, operationContext, before, target)
-	if err != nil {
-		status := http.StatusInternalServerError
-		code := "OPTIMIZATION_UPDATE_FAILED"
-		resultMessage := "游戏服未确认发牌优化写入，参数没有修改"
-		var commandErr *playerOptimizationCommandError
-		if errors.As(err, &commandErr) {
-			status = commandErr.status
-			code = commandErr.code
-			resultMessage = commandErr.message
-		}
-		s.logger.Error("write player optimization via game command", "action", action, "error", err, "playerId", target.PlayerID)
-		s.audit(ctx, &p, action, "game_player", target.PlayerID, requestAudit, before, nil, status, resultMessage, clientIP(r))
-		writeError(w, status, code, resultMessage)
-		return
+	var beforeValue any
+	if hasBefore {
+		beforeValue = before
 	}
-	s.audit(ctx, &p, action, "game_player", target.PlayerID, requestAudit, before, after, 0, message, clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"player": after, "message": message})
-}
-
-func (s *Server) readPlayerOptimizationState(ctx context.Context, playerID string, p principal) (playerOptimizationState, error) {
-	var state playerOptimizationState
-	err := s.db.QueryRowContext(ctx, `SELECT
-a.sm_guuid, COALESCE(k.accountName, a.sm_wxID, ''), a.sm_name,
-COALESCE(a.sm_optimize01_man, ''), COALESCE(manager.sm_name, ''),
-COALESCE((SELECT log.operator_name FROM mgr_audit_log log
-  WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
-    AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update')
-  ORDER BY log.id DESC LIMIT 1), ''),
-COALESCE((SELECT operator_user.username = 'admin999'
-  FROM mgr_audit_log audit_row
-  LEFT JOIN mgr_user operator_user ON operator_user.id = audit_row.operator_id
-  WHERE audit_row.target_type = 'game_player' AND audit_row.target_id = a.sm_guuid AND audit_row.result_code = 0
-    AND audit_row.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')
-  ORDER BY audit_row.id DESC LIMIT 1), 0),
-a.sm_optimize01_count, a.sm_optimize01_chance,
-COALESCE((SELECT DATE_FORMAT(MAX(log.created_at), '%Y-%m-%d %H:%i:%s') FROM mgr_audit_log log
-  WHERE log.target_type = 'game_player' AND log.target_id = a.sm_guuid AND log.result_code = 0
-    AND log.action IN ('game.player_optimization.create', 'game.player_optimization.update', 'game.player_optimization.delete')),
-  (SELECT CONCAT(o.date, ' ', o.time) FROM kbedm.usr_opt_info o
-    WHERE o.user_guuid = a.sm_guuid AND o.option_type = '设置'
-    ORDER BY o.id DESC LIMIT 1), '')
-FROM kbedm.tbl_Account a
-LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
-	LEFT JOIN kbedm.tbl_Account manager ON manager.sm_guuid = a.sm_optimize01_man
-WHERE a.sm_guuid = ? LIMIT 1`, playerID).Scan(
-		&state.PlayerID, &state.LoginName, &state.Name, &state.ManagerID, &state.ManagerName,
-		&state.ConfiguredBy, &state.ConfiguredBySuper, &state.RemainingCount, &state.Chance, &state.LastConfiguredAt,
-	)
-	state.Active = state.RemainingCount > 0
-	applyPlayerOptimizationVisibility(p, &state.ConfiguredBy, &state.ConfiguredSource, &state.LastConfiguredAt, state.ConfiguredBySuper, state.ManagerID)
-	return state, err
-}
-
-func applyPlayerOptimizationVisibility(p principal, configuredBy, configuredSource, configuredAt *string, configuredBySuper bool, managerID string) {
-	if hideSuperUserFrom(p, configuredBySuper) {
-		*configuredBy = ""
-		*configuredSource = "hidden"
-		*configuredAt = ""
-		return
-	}
-	*configuredSource = playerOptimizationConfiguredSource(*configuredBy, managerID)
-}
-
-func playerOptimizationConfiguredSource(configuredBy, managerID string) string {
-	if strings.TrimSpace(configuredBy) != "" {
-		return "admin"
-	}
-	if strings.TrimSpace(managerID) != "" {
-		return "game"
-	}
-	return ""
-}
-
-func (s *Server) writePlayerOptimizationViaGameCommand(ctx context.Context, action, operationContext string, before, target playerOptimizationState) (playerOptimizationState, error) {
-	if action == "game.player_optimization.delete" {
-		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_count", 0, operationContext); err != nil {
-			return before, err
-		}
-		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_chance", 0, operationContext); err != nil {
-			return before, s.rollbackPlayerOptimization(before, err)
-		}
-	} else {
-		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_chance", target.Chance, operationContext); err != nil {
-			return before, err
-		}
-		if err := s.setPlayerOptimizationValue(ctx, target.PlayerID, "optimize01_count", target.RemainingCount, operationContext); err != nil {
-			return before, s.rollbackPlayerOptimization(before, err)
-		}
-	}
-
-	verified, err := s.waitForPlayerOptimization(ctx, target.PlayerID, target.RemainingCount, target.Chance)
-	if err != nil {
-		s.logger.Error("verify player optimization", "error", err, "playerId", target.PlayerID)
-		return before, s.rollbackPlayerOptimization(before, &playerOptimizationCommandError{
-			status: http.StatusBadGateway, code: "OPTIMIZATION_VERIFY_FAILED",
-			message: "游戏服已接受命令，但未回读到目标参数",
-		})
-	}
-	after, err := s.readPlayerOptimizationState(ctx, target.PlayerID, principal{IsSuper: true, IsProtectedRoot: true})
-	if err != nil {
-		after = verified
-		after.LastConfiguredAt = time.Now().Format("2006-01-02 15:04:05")
-	}
+	s.audit(ctx, &p, action, "game_player", playerID, requestAudit, beforeValue, after, 0, message, clientIP(r))
 	return after, nil
 }
 
-func (s *Server) setPlayerOptimizationValue(ctx context.Context, playerID, name string, value int64, operationContext string) error {
-	result, err := s.callGameCommand(ctx, "异步_设置_玩家_属性", map[string]any{
-		"guuid": playerID, "name": name, "value": value, "context": operationContext,
-	})
-	if err != nil {
-		return &playerOptimizationCommandError{
-			status: http.StatusBadGateway, code: "OPTIMIZATION_GAME_COMMAND_FAILED",
-			message: "游戏服未确认发牌优化写入，参数没有修改",
+func (s *Server) writeWinTargetFailure(w http.ResponseWriter, p principal, r *http.Request, action, playerID string, targetValue, chance int64, reason string, before winTargetItem, hasBefore bool, err error) {
+	status := http.StatusInternalServerError
+	code := "OPTIMIZATION_UPDATE_FAILED"
+	message := "游戏服未确认优化写入，参数没有修改"
+	var commandErr *winTargetCommandError
+	if errors.As(err, &commandErr) {
+		status = commandErr.status
+		code = commandErr.code
+		message = commandErr.message
+	}
+	s.logger.Error("write win target via game command", "action", action, "error", err, "playerId", playerID)
+	requestAudit := map[string]any{"playerId": playerID, "targetValue": targetValue, "chance": chance, "writeMode": "win-target-command"}
+	if reason != "" {
+		requestAudit["reason"] = reason
+	}
+	var beforeValue any
+	if hasBefore {
+		beforeValue = before
+	}
+	s.audit(r.Context(), &p, action, "game_player", playerID, requestAudit, beforeValue, nil, status, message, clientIP(r))
+	writeError(w, status, code, message)
+}
+
+func (s *Server) confirmWinTargetStopped(ctx context.Context, playerID string) (bool, bool) {
+	checkCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+	for attempt := 0; attempt < 4; attempt++ {
+		item := winTargetItem{PlayerID: playerID}
+		found, err := s.fetchActiveWinTarget(checkCtx, playerID, &item)
+		if err == nil && !found {
+			return true, true
+		}
+		if attempt < 3 {
+			select {
+			case <-checkCtx.Done():
+				return false, false
+			case <-time.After(400 * time.Millisecond):
+			}
 		}
 	}
-	if result.RetCode != 512 {
-		message := gameCommandErrorMessage(result, "游戏服拒绝写入发牌优化")
-		if optimizationCommandResultEmpty(result) {
-			message = "游戏服尚未开放发牌优化设置命令（异步_设置_玩家_属性），请先完成游戏服部署后重试"
+	return false, false
+}
+
+func (s *Server) waitForWinTarget(ctx context.Context, playerID string, targetValue, chance int64) (winTargetItem, bool, error) {
+	var lastErr error
+	for attempt := 0; attempt < 4; attempt++ {
+		item := winTargetItem{PlayerID: playerID}
+		found, err := s.fetchActiveWinTarget(ctx, playerID, &item)
+		if err == nil && found && item.TargetValue == targetValue && item.Chance == chance {
+			return item, true, nil
 		}
-		return &playerOptimizationCommandError{
-			status: http.StatusBadRequest, code: "OPTIMIZATION_GAME_COMMAND_REJECTED", message: message,
+		if err != nil {
+			lastErr = err
+		}
+		if attempt < 3 {
+			select {
+			case <-ctx.Done():
+				return item, false, ctx.Err()
+			case <-time.After(400 * time.Millisecond):
+			}
+		}
+	}
+	return winTargetItem{PlayerID: playerID}, false, lastErr
+}
+
+func parseWinTargetReplyError(raw json.RawMessage) error {
+	payload := decodeGameObject(raw)
+	if message := gameValueString(payload, "error"); message != "" {
+		return errors.New(message)
+	}
+	failed, _ := payload["failed"].([]any)
+	for _, entry := range failed {
+		object, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		if message := gameValueString(object, "error"); message != "" {
+			return errors.New(message)
 		}
 	}
 	return nil
 }
 
-func optimizationCommandResultEmpty(result gameCommandResponse) bool {
-	raw := strings.TrimSpace(string(result.RetResult))
-	return raw == "" || raw == "null" || raw == "{}"
+func winTargetItemFromGame(object map[string]any) winTargetItem {
+	item := winTargetItem{
+		ID:           anyInt(object["id"]),
+		PlayerID:     gameValueString(object, "guuid"),
+		Name:         gameValueString(object, "name"),
+		TargetValue:  anyInt(object["target_value"]),
+		Chance:       anyInt(object["chance"]),
+		Progress:     anyInt(object["progress"]),
+		Remain:       anyInt(object["remain"]),
+		RoundCount:   anyInt(object["round_count"]),
+		PeerCount:    anyInt(object["peer_count"]),
+		State:        gameValueString(object, "state"),
+		Online:       anyInt(object["online"]) == 1,
+		CurChance:    anyInt(object["cur_chance"]),
+		CurCount:     anyInt(object["cur_count"]),
+		Man:          gameValueString(object, "man"),
+		ManName:      gameValueString(object, "man_name"),
+		ScopeType:    gameValueString(object, "scope_type"),
+		ScopeID:      gameValueString(object, "scope_id"),
+		GroupID:      anyInt(object["group_id"]),
+		GroupName:    gameValueString(object, "group_name"),
+		SetAt:        gameValueString(object, "set_time"),
+		FinishAt:     gameValueString(object, "finish_time"),
+		FinishReason: gameValueString(object, "finish_reason"),
+	}
+	if item.Chance < 0 {
+		item.Chance = -item.Chance
+	}
+	item.Active = item.State == winTargetStateActive
+	if item.Remain == 0 && item.TargetValue != 0 {
+		item.Remain = absInt64(item.TargetValue) - absInt64(item.Progress)
+	}
+	return item
 }
 
-func (s *Server) rollbackPlayerOptimization(before playerOptimizationState, cause error) error {
-	if err := s.restorePlayerOptimization(before); err != nil {
-		s.logger.Error("restore player optimization", "error", err, "playerId", before.PlayerID)
-		return &playerOptimizationCommandError{
-			status: http.StatusBadGateway, code: "OPTIMIZATION_ROLLBACK_FAILED",
-			message: "游戏服写入中断且自动恢复失败，请立即人工核对该玩家参数",
+func summarizeWinTargets(items []winTargetItem) winTargetSummary {
+	var summary winTargetSummary
+	var chanceTotal int64
+	for _, item := range items {
+		if !item.Active {
+			continue
 		}
+		summary.ActivePlayers++
+		summary.TotalTargetAmount += absInt64(item.TargetValue)
+		chanceTotal += item.Chance
 	}
-	var commandErr *playerOptimizationCommandError
-	if errors.As(cause, &commandErr) {
-		return &playerOptimizationCommandError{
-			status: commandErr.status, code: commandErr.code, message: commandErr.message + "，已恢复原参数",
-		}
+	if summary.ActivePlayers > 0 {
+		summary.AverageChance = float64(chanceTotal) / float64(summary.ActivePlayers)
 	}
-	return cause
+	return summary
 }
 
-func (s *Server) restorePlayerOptimization(state playerOptimizationState) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-	defer cancel()
-	restoreContext := gameOperationContext("player-optimization-restore")
-	if err := s.setPlayerOptimizationValue(ctx, state.PlayerID, "optimize01_chance", state.Chance, restoreContext); err != nil {
-		return err
+func filterWinTargets(items []winTargetItem, keyword string) []winTargetItem {
+	lower := strings.ToLower(keyword)
+	result := make([]winTargetItem, 0, len(items))
+	for _, item := range items {
+		haystack := strings.ToLower(strings.Join([]string{
+			item.PlayerID, item.Name, item.LoginName, item.Man, item.ManName, item.GroupName, item.SetAt,
+		}, "\x00"))
+		if strings.Contains(haystack, lower) {
+			result = append(result, item)
+		}
 	}
-	return s.setPlayerOptimizationValue(ctx, state.PlayerID, "optimize01_count", state.RemainingCount, restoreContext)
+	return result
 }
 
-func (s *Server) waitForPlayerOptimization(ctx context.Context, playerID string, expectedCount, expectedChance int64) (playerOptimizationState, error) {
-	var last playerOptimizationState
-	var lastErr error
-	for attempt := 0; attempt < 16; attempt++ {
-		last = playerOptimizationState{PlayerID: playerID}
-		lastErr = s.db.QueryRowContext(ctx, `SELECT COALESCE(sm_optimize01_man, ''), sm_optimize01_count, sm_optimize01_chance
-FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, playerID).Scan(
-			&last.ManagerID, &last.RemainingCount, &last.Chance,
-		)
-		if lastErr == nil && optimizationsMatch(last.RemainingCount, last.Chance, expectedCount, expectedChance) {
-			last.Active = last.RemainingCount > 0
-			return last, nil
+// fillWinTargetLogins 按 guuid 补登录账号，便于后台核对玩家。
+func (s *Server) fillWinTargetLogins(ctx context.Context, items []winTargetItem) {
+	if s.gameDB == nil || len(items) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(items))
+	index := make(map[string][]int, len(items))
+	for position := range items {
+		id := items[position].PlayerID
+		if id == "" {
+			continue
 		}
-		if attempt < 15 {
-			select {
-			case <-ctx.Done():
-				return last, ctx.Err()
-			case <-time.After(300 * time.Millisecond):
+		if _, ok := index[id]; !ok {
+			ids = append(ids, id)
+		}
+		index[id] = append(index[id], position)
+	}
+	if len(ids) == 0 {
+		return
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",")
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := s.gameDB.QueryContext(ctx, `SELECT a.sm_guuid, COALESCE(k.accountName, a.sm_wxID, ''), COALESCE(a.sm_name, '')
+FROM kbedm.tbl_Account a
+LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
+WHERE a.sm_guuid IN (`+placeholders+`)`, args...)
+	if err != nil {
+		s.logger.Warn("load player logins for win targets", "error", err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id, loginName, name string
+		if err := rows.Scan(&id, &loginName, &name); err != nil {
+			continue
+		}
+		for _, position := range index[id] {
+			items[position].LoginName = loginName
+			if items[position].Name == "" {
+				items[position].Name = name
 			}
 		}
 	}
-	if lastErr != nil {
-		return last, lastErr
+}
+
+func (s *Server) readGamePlayerIdentity(ctx context.Context, playerID string) (string, string, bool, error) {
+	if s.gameDB == nil {
+		return "", "", false, nil
 	}
-	return last, fmt.Errorf("player optimization count %d / chance %d does not match expected %d / %d",
-		last.RemainingCount, last.Chance, expectedCount, expectedChance)
+	var loginName, name string
+	err := s.gameDB.QueryRowContext(ctx, `SELECT COALESCE(k.accountName, a.sm_wxID, ''), COALESCE(a.sm_name, '')
+FROM kbedm.tbl_Account a
+LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
+WHERE a.sm_guuid = ? LIMIT 1`, playerID).Scan(&loginName, &name)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", "", false, nil
+	}
+	if err != nil {
+		return "", "", false, err
+	}
+	return loginName, name, true, nil
 }
 
-func optimizationsMatch(actualCount, actualChance, expectedCount, expectedChance int64) bool {
-	return actualCount == expectedCount && actualChance == expectedChance
+// handleListPlayerOptimizationHistory 直读游戏库目标历史表：每次设置一条，
+// 覆盖、停止、达标都会落库，含游戏内与后台两侧的操作。
+func (s *Server) handleListPlayerOptimizationHistory(w http.ResponseWriter, r *http.Request, p principal) {
+	page, size := pageParams(r)
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	if utf8.RuneCountInString(keyword) > 100 {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询内容不能超过 100 个字符")
+		return
+	}
+	state := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("state")))
+	if state != "" && state != "active" && state != "done" && state != "stopped" {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "优化状态只能选择进行中、已达成或已停止")
+		return
+	}
+
+	clauses := []string{"1=1"}
+	args := []any{}
+	if state != "" {
+		clauses = append(clauses, "state = ?")
+		args = append(args, state)
+	}
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		clauses = append(clauses, "(guuid LIKE ? OR name LIKE ? OR man LIKE ? OR man_name LIKE ? OR group_name LIKE ?)")
+		for i := 0; i < 5; i++ {
+			args = append(args, like)
+		}
+	}
+	where := strings.Join(clauses, " AND ")
+
+	var total int64
+	if err := s.gameDB.QueryRowContext(r.Context(),
+		`SELECT COUNT(*) FROM kbedm.usr_opt_target_history WHERE `+where, args...).Scan(&total); err != nil {
+		s.logger.Error("count win target history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史数量失败")
+		return
+	}
+
+	queryArgs := append(append([]any{}, args...), size, (page-1)*size)
+	rows, err := s.gameDB.QueryContext(r.Context(), `SELECT id, guuid, name, state, target_value, chance, progress,
+round_count, peer_count, man, man_name, scope_type, scope_id, group_id, group_name, set_time, finish_time, finish_reason
+FROM kbedm.usr_opt_target_history
+WHERE `+where+`
+ORDER BY id DESC
+LIMIT ? OFFSET ?`, queryArgs...)
+	if err != nil {
+		s.logger.Error("list win target history", "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史失败")
+		return
+	}
+	defer rows.Close()
+
+	items := make([]winTargetItem, 0, size)
+	for rows.Next() {
+		var item winTargetItem
+		if err := rows.Scan(&item.ID, &item.PlayerID, &item.Name, &item.State, &item.TargetValue, &item.Chance,
+			&item.Progress, &item.RoundCount, &item.PeerCount, &item.Man, &item.ManName,
+			&item.ScopeType, &item.ScopeID, &item.GroupID, &item.GroupName,
+			&item.SetAt, &item.FinishAt, &item.FinishReason); err != nil {
+			s.logger.Error("scan win target history", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史数据失败")
+			return
+		}
+		item.Active = item.State == winTargetStateActive
+		item.Remain = absInt64(item.TargetValue) - absInt64(item.Progress)
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史数据失败")
+		return
+	}
+	s.fillWinTargetLogins(r.Context(), items)
+	writeData(w, http.StatusOK, map[string]any{"items": items, "page": page, "pageSize": size, "total": total})
 }
 
-func optimizationStateMatches(actual, expected playerOptimizationState) bool {
-	return optimizationsMatch(actual.RemainingCount, actual.Chance, expected.RemainingCount, expected.Chance)
+// gameValueString 取游戏服回包里的字符串字段；缺失/null 返回空串，
+// 避免 anyString(nil) 退化成 "<nil>" 污染玩家昵称或错误文案。
+func gameValueString(object map[string]any, key string) string {
+	value, ok := object[key]
+	if !ok || value == nil {
+		return ""
+	}
+	text := anyString(value)
+	if text == "<nil>" {
+		return ""
+	}
+	return text
+}
+
+func winTargetRemark(reason, fallback string) string {	if strings.TrimSpace(reason) != "" {
+		return reason
+	}
+	return fallback
+}
+
+func describeWinTargetValue(targetValue int64) string {
+	if targetValue >= 0 {
+		return "赢 " + formatThousands(targetValue)
+	}
+	return "输 " + formatThousands(-targetValue)
+}
+
+func formatThousands(value int64) string {
+	text := strconv.FormatInt(absInt64(value), 10)
+	if len(text) <= 3 {
+		return text
+	}
+	var builder strings.Builder
+	prefix := len(text) % 3
+	if prefix > 0 {
+		builder.WriteString(text[:prefix])
+	}
+	for index := prefix; index < len(text); index += 3 {
+		if builder.Len() > 0 {
+			builder.WriteString(",")
+		}
+		builder.WriteString(text[index : index+3])
+	}
+	return builder.String()
+}
+
+func absInt64(value int64) int64 {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func errorText(err error, fallback string) string {
+	if err == nil {
+		return fallback
+	}
+	text := strings.TrimSpace(err.Error())
+	if text == "" {
+		return fallback
+	}
+	return text
 }

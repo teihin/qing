@@ -394,23 +394,40 @@ export interface TransactionBlacklistState {
   warnings: string[];
 }
 
+export type PlayerOptimizationState = "active" | "done" | "stopped" | "";
+
 export interface PlayerOptimizationItem {
+  id: number;
   playerId: string;
   loginName: string;
   name: string;
-  managerId: string;
-  managerName: string;
-  configuredBy: string;
-  configuredSource: "admin" | "game" | "hidden" | "";
-  remainingCount: number;
+  /** 正=让玩家赢，负=让玩家输；绝对值即输赢金额。 */
+  targetValue: number;
+  /** 触发概率 1~100，方向由 targetValue 决定。 */
   chance: number;
+  progress: number;
+  remain: number;
+  roundCount: number;
+  peerCount: number;
+  state: PlayerOptimizationState;
   active: boolean;
-  lastConfiguredAt: string;
+  online: boolean;
+  curChance: number;
+  curCount: number;
+  man: string;
+  manName: string;
+  scopeType: string;
+  scopeId: string;
+  groupId: number;
+  groupName: string;
+  setAt: string;
+  finishAt: string;
+  finishReason: string;
 }
 
 export interface PlayerOptimizationSummary {
   activePlayers: number;
-  totalRemaining: number;
+  totalTargetAmount: number;
   averageChance: number;
 }
 
@@ -422,28 +439,8 @@ export interface PlayerOptimizationsResponse {
   summary: PlayerOptimizationSummary;
 }
 
-export interface PlayerOptimizationHistoryItem {
-  id: number;
-  playerId: string;
-  loginName: string;
-  name: string;
-  operation: "create" | "update" | "delete";
-  hasBefore: boolean;
-  beforeRemainingCount: number;
-  beforeChance: number;
-  hasAfter: boolean;
-  afterRemainingCount: number;
-  afterChance: number;
-  reason: string;
-  operatorName: string;
-  success: boolean;
-  resultCode: number;
-  resultMessage: string;
-  createdAt: string;
-}
-
 export interface PlayerOptimizationHistoryResponse {
-  items: PlayerOptimizationHistoryItem[];
+  items: PlayerOptimizationItem[];
   page: number;
   pageSize: number;
   total: number;

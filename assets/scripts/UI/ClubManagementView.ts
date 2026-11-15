@@ -592,7 +592,9 @@ export default class ClubManagementView {
         const operation = this.at("Main/我的/滚动区/view/content/操作");
         const opRows = operation == null ? 0 :
             Math.ceil(operation.children.filter(child => child.active).length / 2);
-        const opHeight = hasClub ? (opRows >= 5 ? 529.13 : 421.96) : 314.05;
+        // 行高 = 按钮 101.17 + Grid spacingY 6。入口从 11 涨到 12（逃跑惩罚统计）后固定档位不够，
+        // 第 6 行会被 content 高度裁掉，所以直接按实际行数算。
+        const opHeight = hasClub ? Math.max(opRows * 107.17,314.05) : 314.05;
         if(operation && Math.abs(operation.height - opHeight) > 0.5)
             operation.height = opHeight;
 

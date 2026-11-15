@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "9d1f7297-37f7-4f26-9df3-43f045bf4a5e",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 892,
+  "height": 111,
+  "platformSettings": {},
+  "subMetas": {
+    "money_v8_table_chengfa": {
+      "ver": "1.0.6",
+      "uuid": "275d937a-90be-4c4b-9cf9-40857486ecda",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "9d1f7297-37f7-4f26-9df3-43f045bf4a5e",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 892,
+      "height": 111,
+      "rawWidth": 892,
+      "rawHeight": 111,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}
