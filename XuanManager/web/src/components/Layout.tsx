@@ -23,7 +23,7 @@ const iconText: Record<string, string> = {
   bans: "封",
   "anti-theft": "盾",
   "room-maintenance": "房",
-  "player-optimization": "优",
+  "player-optimization": "控",
   clubs: "俱",
   unions: "盟",
   rank: "榜",

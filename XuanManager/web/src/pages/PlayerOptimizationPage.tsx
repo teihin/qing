@@ -37,7 +37,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
       const pages = Math.max(1, Math.ceil(result.total / pageSize));
       if (page > pages) setPage(pages);
     } catch (cause) {
-      notify(errorMessage(cause, "玩家优化数据加载失败"), "error");
+      notify(errorMessage(cause, "玩家控制数据加载失败"), "error");
     } finally {
       setLoading(false);
     }
@@ -78,11 +78,11 @@ export default function PlayerOptimizationPage({ can, notify }: {
   return <div className="page-stack optimization-page">
     <PageHeader
       eyebrow="WIN TARGET CONTROL"
-      title="玩家优化"
-      description="与牌桌内「运维优化」同一套胜率目标方案：设置输赢金额与触发概率，由游戏服按局推进，达成自动结束。"
+      title="玩家控制"
+      description="与牌桌内「牌局胜率目标」同一套方案：设置输赢金额与触发概率，由游戏服按局推进，达成自动结束。"
       actions={<>
         <span className="configuration-status is-live"><i />游戏服实时目标</span>
-        {canCreate && <Button type="button" onClick={() => setAdding(true)}>＋ 新增玩家优化</Button>}
+        {canCreate && <Button type="button" onClick={() => setAdding(true)}>＋ 新增玩家控制</Button>}
       </>}
     />
 
@@ -90,7 +90,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
       <article><span>进行中目标</span><strong>{data?.summary.activePlayers ?? "—"}</strong><p>状态为进行中的玩家数</p></article>
       <article><span>目标金额合计</span><strong>{data ? data.summary.totalTargetAmount.toLocaleString("zh-CN") : "—"}</strong><p>进行中目标绝对值合计</p></article>
       <article><span>平均触发概率</span><strong>{data ? `${data.summary.averageChance.toFixed(1)}%` : "—"}</strong><p>仅统计进行中目标</p></article>
-      <article className="optimization-risk"><span>服务端方案</span><strong>胜率目标</strong><p>与牌桌内运维优化共用同一套命令与数据</p></article>
+      <article className="optimization-risk"><span>服务端方案</span><strong>胜率目标</strong><p>与牌桌内胜率目标共用同一套命令与数据</p></article>
     </section>
 
     <section className="panel optimization-filter-panel">
@@ -106,9 +106,9 @@ export default function PlayerOptimizationPage({ can, notify }: {
     </section>
 
     <section className="panel optimization-list-panel">
-      <header className="panel__header"><div><span className="eyebrow">PLAYER WIN TARGETS</span><h2>玩家优化目标</h2></div><span>{data?.total ?? 0}</span></header>
-      {loading && !data ? <LoadingBlock label="正在读取玩家优化目标" /> : !data || data.items.length === 0 ? (
-        <EmptyState title={filtersActive ? "没有匹配的玩家目标" : "当前没有进行中的玩家优化"} description={canCreate ? "可点击页面右上角「新增玩家优化」按玩家 ID 设置输赢金额与概率。" : "当前账号只有查看权限。"} />
+      <header className="panel__header"><div><span className="eyebrow">PLAYER WIN TARGETS</span><h2>玩家控制目标</h2></div><span>{data?.total ?? 0}</span></header>
+      {loading && !data ? <LoadingBlock label="正在读取玩家控制目标" /> : !data || data.items.length === 0 ? (
+        <EmptyState title={filtersActive ? "没有匹配的玩家目标" : "当前没有进行中的玩家控制"} description={canCreate ? "可点击页面右上角「新增玩家控制」按玩家 ID 设置输赢金额与概率。" : "当前账号只有查看权限。"} />
       ) : <>
         <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
           <table className="optimization-table optimization-target-table"><thead><tr><th>玩家</th><th>状态</th><th>目标</th><th>概率</th><th>进度</th><th>局数</th><th>设置人</th><th>设置时间</th><th className="align-right">操作</th></tr></thead><tbody>
@@ -169,7 +169,7 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
       const pages = Math.max(1, Math.ceil(response.total / pageSize));
       if (page > pages) setPage(pages);
     } catch (cause) {
-      notify(errorMessage(cause, "优化历史加载失败"), "error");
+      notify(errorMessage(cause, "控制历史加载失败"), "error");
     } finally {
       setLoading(false);
     }
@@ -196,7 +196,7 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
 
   return <section className="panel optimization-history-panel">
     <header className="optimization-history-header">
-      <div><span>WIN TARGET HISTORY</span><h2>优化历史记录</h2><p>每次设置单独留档；牌桌内和后台设置的目标都会出现在这里。</p></div>
+      <div><span>WIN TARGET HISTORY</span><h2>控制历史记录</h2><p>每次设置单独留档；牌桌内和后台设置的目标都会出现在这里。</p></div>
       <strong>{data?.total ?? "—"}<small>条记录</small></strong>
     </header>
     <form className="optimization-history-filters" onSubmit={submitGuard(async () => search())}>
@@ -206,7 +206,7 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
       {filtersActive && <Button type="button" variant="secondary" onClick={reset}>重置</Button>}
     </form>
 
-    {loading && !data ? <LoadingBlock label="正在读取优化历史记录" /> : !data || data.items.length === 0 ? <EmptyState title={filtersActive ? "没有匹配的优化记录" : "暂无优化历史记录"} description={filtersActive ? "可以修改或重置查询条件。" : "设置、覆盖、停止或达标后，记录会显示在这里。"} /> : <>
+    {loading && !data ? <LoadingBlock label="正在读取控制历史记录" /> : !data || data.items.length === 0 ? <EmptyState title={filtersActive ? "没有匹配的控制记录" : "暂无控制历史记录"} description={filtersActive ? "可以修改或重置查询条件。" : "设置、覆盖、停止或达标后，记录会显示在这里。"} /> : <>
       <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
         <table className="optimization-history-table"><thead><tr><th>设置时间（北京时间）</th><th>玩家</th><th>目标</th><th>概率</th><th>结果</th><th>局数</th><th>状态</th><th>结束时间</th></tr></thead><tbody>{data.items.map((item) => <tr key={item.id}>
           <td><strong>{formatOptimizationDate(item.setAt)}</strong><small className="cell-subtitle">记录 #{item.id}</small></td>
@@ -253,7 +253,7 @@ function AddOptimizationModal({ initialItem, notify, onClose, onDone }: {
     try {
       const result = await api<PlayerOptimizationItem>(`/api/game/player-optimization/${encodeURIComponent(playerId.trim())}`);
       setPlayer(result);
-      if (result.active) setError(`该玩家已有进行中的优化（${describeTarget(result.targetValue)}，概率 ${Math.abs(result.chance)}%），请到列表中使用「调整」或「停止」。`);
+      if (result.active) setError(`该玩家已有进行中的控制（${describeTarget(result.targetValue)}，概率 ${Math.abs(result.chance)}%），请到列表中使用「调整」或「停止」。`);
     } catch (cause) {
       setError(errorMessage(cause, "玩家查询失败"));
     } finally {
@@ -278,12 +278,12 @@ function AddOptimizationModal({ initialItem, notify, onClose, onDone }: {
       notify(result.message);
       await onDone();
     } catch (cause) {
-      setError(errorMessage(cause, "新增玩家优化失败"));
+      setError(errorMessage(cause, "新增玩家控制失败"));
       setBusy(false);
     }
   };
 
-  return <Modal wide eyebrow="CREATE WIN TARGET" title="新增玩家优化" onClose={busy ? () => undefined : onClose}>
+  return <Modal wide eyebrow="CREATE WIN TARGET" title="新增玩家控制" onClose={busy ? () => undefined : onClose}>
     <form className="optimization-modal" onSubmit={submitGuard(submit)}>
       <div className="optimization-lookup">
         <Field label="玩家 ID" hint="输入 6 位游戏玩家 ID 或靓号，先核对玩家与当前状态"><input inputMode="numeric" maxLength={6} value={playerId} disabled={busy || lookingUp} onChange={(event) => { setPlayerId(event.target.value.replace(/\D/g, "").slice(0, 6)); setPlayer(null); setConfirmed(false); setError(""); }} placeholder="请输入玩家 ID" /></Field>
@@ -292,11 +292,11 @@ function AddOptimizationModal({ initialItem, notify, onClose, onDone }: {
       {error && <div className="form-error"><span>!</span>{error}</div>}
       {player && <div className="optimization-player-summary"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><small>玩家 ID：{player.playerId} · 登录账号：{player.loginName || "—"}</small></div><em>{player.active ? `进行中：${describeTarget(player.targetValue)} / ${Math.abs(player.chance)}%` : "可以新增"}</em></div>}
       {player && !player.active && <>
-        <div className="operation-warning"><strong>与牌桌内运维优化同一套方案</strong><p>后台通过服务器本机游戏服接口「异步_设置_胜率目标」写入输赢金额与概率；游戏服每局按概率挂上优化，进度达标后自动结束并恢复原设置。玩家离线也可以设置，进房后生效。</p></div>
+        <div className="operation-warning"><strong>与牌桌内胜率目标同一套方案</strong><p>后台通过服务器本机游戏服接口「异步_设置_胜率目标」写入输赢金额与概率；游戏服每局按概率挂上控制，进度达标后自动结束并恢复原设置。玩家离线也可以设置，进房后生效。</p></div>
         <TargetForm direction={direction} onDirection={setDirection} amount={amount} onAmount={(value) => { setAmount(value); setConfirmed(false); }} chance={chance} onChance={(value) => { setChance(value); setConfirmed(false); }} reason={reason} onReason={(value) => { setReason(value); setConfirmed(false); }} disabled={busy} validAmount={validAmount} validChance={validChance} />
-        <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={!valid || busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家、输赢金额和触发概率，确认新增玩家优化</span></label>
+        <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={!valid || busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家、输赢金额和触发概率，确认新增玩家控制</span></label>
       </>}
-      <div className="form-actions"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>取消</Button>{player && !player.active && <Button type="submit" disabled={!valid || !confirmed || busy}>{busy ? "正在写入并回读校验…" : "确认新增优化"}</Button>}</div>
+      <div className="form-actions"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>取消</Button>{player && !player.active && <Button type="submit" disabled={!valid || !confirmed || busy}>{busy ? "正在写入并回读校验…" : "确认新增控制"}</Button>}</div>
     </form>
   </Modal>;
 }
@@ -337,19 +337,19 @@ function OptimizationModal({ item, notify, onClose, onDone }: {
       notify(result.message);
       await onDone();
     } catch (cause) {
-      setError(errorMessage(cause, "调整玩家优化失败"));
+      setError(errorMessage(cause, "调整玩家控制失败"));
       setBusy(false);
     }
   };
 
-  return <Modal wide eyebrow="UPDATE WIN TARGET" title={`调整玩家 ${item.playerId} 的优化`} onClose={busy ? () => undefined : onClose}>
+  return <Modal wide eyebrow="UPDATE WIN TARGET" title={`调整玩家 ${item.playerId} 的控制`} onClose={busy ? () => undefined : onClose}>
     <form className="optimization-modal" onSubmit={submitGuard(submit)}>
       <div className="optimization-player-summary"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>玩家 ID：{item.playerId} · 登录账号：{item.loginName || "—"}</small></div><em>当前 {describeTarget(item.targetValue)} / {Math.abs(item.chance)}%</em></div>
       <div className="operation-warning operation-warning--danger"><strong>调整会用新目标覆盖当前目标</strong><p>游戏服会把旧目标按「被替换」结束并恢复原设置，新目标的进度从 0 重新累计。当前进度 {signedAmount(item.progress)}，已累计 {item.roundCount} 局。</p></div>
       {error && <div className="form-error"><span>!</span>{error}</div>}
       <TargetForm direction={direction} onDirection={(value) => { setDirection(value); markChanged(); }} amount={amount} onAmount={(value) => { setAmount(value); markChanged(); }} chance={chance} onChance={(value) => { setChance(value); markChanged(); }} reason={reason} onReason={(value) => { setReason(value); markChanged(); }} disabled={busy} validAmount={validAmount} validChance={validChance} />
       <div className="optimization-preview"><div><span>修改前</span><strong>{describeTarget(item.targetValue)} · {Math.abs(item.chance)}%</strong></div><i>→</i><div className="is-active"><span>修改后</span><strong>{validAmount ? describeTarget(targetValue) : "—"} · {validChance ? chanceValue : "—"}%</strong></div></div>
-      <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={!valid || !changed || busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家、输赢金额和触发概率，确认用新目标覆盖当前优化</span></label>
+      <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={!valid || !changed || busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家、输赢金额和触发概率，确认用新目标覆盖当前控制</span></label>
       <div className="form-actions"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>取消</Button><Button type="submit" disabled={!valid || !changed || !confirmed || busy}>{busy ? "正在写入并回读校验…" : "确认保存调整"}</Button></div>
     </form>
   </Modal>;
@@ -379,19 +379,19 @@ function StopOptimizationModal({ item, notify, onClose, onDone }: {
       notify(result.message);
       await onDone();
     } catch (cause) {
-      setError(errorMessage(cause, "停止玩家优化失败"));
+      setError(errorMessage(cause, "停止玩家控制失败"));
       setBusy(false);
     }
   };
 
-  return <Modal eyebrow="STOP WIN TARGET" title="停止玩家优化" onClose={busy ? () => undefined : onClose}>
+  return <Modal eyebrow="STOP WIN TARGET" title="停止玩家控制" onClose={busy ? () => undefined : onClose}>
     <form className="optimization-modal" onSubmit={submitGuard(submit)}>
       <div className="optimization-player-summary"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "未设置昵称"}</strong><small>玩家 ID：{item.playerId} · 登录账号：{item.loginName || "—"}</small></div><em>{describeTarget(item.targetValue)} / {Math.abs(item.chance)}%</em></div>
-      <div className="operation-warning operation-warning--danger"><strong>停止后立即结束目标</strong><p>游戏服会恢复设置前的优化参数，当前进度 {signedAmount(item.progress)}、累计 {item.roundCount} 局将作为记录留档，不可继续。</p></div>
+      <div className="operation-warning operation-warning--danger"><strong>停止后立即结束目标</strong><p>游戏服会恢复设置前的控制参数，当前进度 {signedAmount(item.progress)}、累计 {item.roundCount} 局将作为记录留档，不可继续。</p></div>
       {error && <div className="form-error"><span>!</span>{error}</div>}
       <Field label="停止原因（选填）" hint="2 到 120 个字符，会写进操作日志"><input maxLength={120} value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} placeholder="例如：活动结束" /></Field>
-      <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家和目标，确认停止该优化</span></label>
-      <div className="form-actions"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>取消</Button><Button type="submit" variant="danger" disabled={!confirmed || busy}>{busy ? "正在停止…" : "确认停止优化"}</Button></div>
+      <label className={`confirm-check optimization-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={busy} onChange={(event) => setConfirmed(event.target.checked)} /><span>我已核对玩家和目标，确认停止该玩家控制</span></label>
+      <div className="form-actions"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>取消</Button><Button type="submit" variant="danger" disabled={!confirmed || busy}>{busy ? "正在停止…" : "确认停止控制"}</Button></div>
     </form>
   </Modal>;
 }
@@ -420,7 +420,7 @@ function TargetForm({ direction, onDirection, amount, onAmount, chance, onChance
       <Field label="目标金额" hint={validAmount ? "1 到 100,000,000 的整数，单位与牌局内一致" : "目标金额必须是 1 到 100,000,000 的整数"} error={validAmount ? undefined : "请输入 1 到 100,000,000 的整数"}>
         <input type="number" min={1} max={100000000} step={1} value={amount} disabled={disabled} onChange={(event) => onAmount(event.target.value)} />
       </Field>
-      <Field label="触发概率（%）" hint={validChance ? "1 到 100 的整数；每局按该概率挂上优化" : "概率必须是 1 到 100 的整数"} error={validChance ? undefined : "请输入 1 到 100 的整数"}>
+      <Field label="触发概率（%）" hint={validChance ? "1 到 100 的整数；每局按该概率挂上控制" : "概率必须是 1 到 100 的整数"} error={validChance ? undefined : "请输入 1 到 100 的整数"}>
         <input type="number" min={1} max={100} step={1} value={chance} disabled={disabled} onChange={(event) => onChance(event.target.value)} />
       </Field>
       <Field label="操作原因（选填）" hint="2 到 120 个字符，会写进操作日志">

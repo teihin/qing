@@ -15,7 +15,7 @@ import (
 	"unicode/utf8"
 )
 
-// 后台「玩家优化」与牌桌内「运维优化」使用同一套胜率目标方案：
+// 后台「玩家控制」与牌桌内牌局胜率目标使用同一套方案：
 // 设置输赢金额（target_value，正=赢、负=输）与触发概率（chance，1~100），
 // 由游戏服按局推进进度，达标自动结束或人工停止。
 const (
@@ -108,7 +108,7 @@ func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Re
 		state = "all"
 	}
 	if state != "active" && state != "done" && state != "stopped" && state != "all" {
-		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "优化状态只能选择进行中、已达成、已停止或全部")
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "控制状态只能选择进行中、已达成、已停止或全部")
 		return
 	}
 
@@ -118,7 +118,7 @@ func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Re
 	activeItems, err := s.queryWinTargets(ctx, "", false, winTargetStateActive)
 	if err != nil {
 		s.logger.Error("query active win targets", "error", err)
-		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取进行中的玩家优化失败"))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取进行中的玩家控制失败"))
 		return
 	}
 	summary := summarizeWinTargets(activeItems)
@@ -132,7 +132,7 @@ func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Re
 		items, err = s.queryWinTargets(ctx, "", false, queryState)
 		if err != nil {
 			s.logger.Error("query win targets", "error", err, "state", state)
-			writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家优化列表失败"))
+			writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家控制列表失败"))
 			return
 		}
 	}
@@ -174,7 +174,7 @@ func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Requ
 	found, err := s.fetchActiveWinTarget(ctx, playerID, &item)
 	if err != nil {
 		s.logger.Error("read player win target", "error", err, "playerId", playerID)
-		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家优化状态失败"))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家控制状态失败"))
 		return
 	}
 	loginName, name, exists, err := s.readGamePlayerIdentity(ctx, playerID)
@@ -224,12 +224,12 @@ func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.R
 	found, err := s.fetchActiveWinTarget(ctx, playerID, &current)
 	if err != nil {
 		s.logger.Error("read player win target", "error", err, "playerId", playerID)
-		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前优化失败"))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前控制失败"))
 		return
 	}
 	if found {
 		writeError(w, http.StatusConflict, "OPTIMIZATION_ALREADY_EXISTS",
-			fmt.Sprintf("该玩家已有进行中的优化（%s，概率 %d%%），请使用调整或停止操作", describeWinTargetValue(current.TargetValue), current.Chance))
+			fmt.Sprintf("该玩家已有进行中的控制（%s，概率 %d%%），请使用调整或停止操作", describeWinTargetValue(current.TargetValue), current.Chance))
 		return
 	}
 
@@ -240,7 +240,7 @@ func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.R
 	}
 	writeData(w, http.StatusOK, map[string]any{
 		"player":  after,
-		"message": fmt.Sprintf("已为玩家 %s 设置优化：%s，概率 %d%%", playerID, describeWinTargetValue(after.TargetValue), after.Chance),
+		"message": fmt.Sprintf("已为玩家 %s 设置控制：%s，概率 %d%%", playerID, describeWinTargetValue(after.TargetValue), after.Chance),
 	})
 }
 
@@ -267,19 +267,19 @@ func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.R
 	found, err := s.fetchActiveWinTarget(ctx, playerID, &current)
 	if err != nil {
 		s.logger.Error("read player win target", "error", err, "playerId", playerID)
-		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前优化失败"))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前控制失败"))
 		return
 	}
 	if !found {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家当前没有进行中的优化，请使用新增操作")
+		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家当前没有进行中的控制，请使用新增操作")
 		return
 	}
 	if current.TargetValue != input.ExpectedTargetValue || current.Chance != input.ExpectedChance {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家优化参数已变化，请刷新列表后重新操作")
+		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家控制参数已变化，请刷新列表后重新操作")
 		return
 	}
 	if current.TargetValue == input.TargetValue && current.Chance == input.Chance {
-		writeError(w, http.StatusBadRequest, "OPTIMIZATION_UNCHANGED", "优化参数没有变化")
+		writeError(w, http.StatusBadRequest, "OPTIMIZATION_UNCHANGED", "控制参数没有变化")
 		return
 	}
 
@@ -290,7 +290,7 @@ func (s *Server) handleUpdatePlayerOptimization(w http.ResponseWriter, r *http.R
 	}
 	writeData(w, http.StatusOK, map[string]any{
 		"player": after,
-		"message": fmt.Sprintf("已调整玩家 %s 的优化：%s，概率 %d%%（进度从 0 重新计算）",
+		"message": fmt.Sprintf("已调整玩家 %s 的控制：%s，概率 %d%%（进度从 0 重新计算）",
 			playerID, describeWinTargetValue(after.TargetValue), after.Chance),
 	})
 }
@@ -314,7 +314,7 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 		input.Reason = ""
 	}
 	if !input.Confirm {
-		writeError(w, http.StatusBadRequest, "OPTIMIZATION_CONFIRM_REQUIRED", "请确认停止会立即结束该玩家的优化")
+		writeError(w, http.StatusBadRequest, "OPTIMIZATION_CONFIRM_REQUIRED", "请确认停止会立即结束该玩家的控制")
 		return
 	}
 
@@ -325,15 +325,15 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 	found, err := s.fetchActiveWinTarget(ctx, playerID, &current)
 	if err != nil {
 		s.logger.Error("read player win target", "error", err, "playerId", playerID)
-		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前优化失败"))
+		writeError(w, http.StatusBadGateway, "GAME_COMMAND_FAILED", errorText(err, "读取玩家当前控制失败"))
 		return
 	}
 	if !found {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家没有进行中的优化")
+		writeError(w, http.StatusConflict, "OPTIMIZATION_NOT_FOUND", "该玩家没有进行中的控制")
 		return
 	}
 	if input.ExpectedTargetValue != 0 && (current.TargetValue != input.ExpectedTargetValue || current.Chance != input.ExpectedChance) {
-		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家优化参数已变化，请刷新列表后重新操作")
+		writeError(w, http.StatusConflict, "OPTIMIZATION_CHANGED", "玩家控制参数已变化，请刷新列表后重新操作")
 		return
 	}
 
@@ -342,7 +342,7 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 	operationContext := gameOperationContext("player-optimization")
 	stopCtx, cancelStop := context.WithTimeout(ctx, winTargetWriteTimeout)
 	result, err := s.callGameCommand(stopCtx, winTargetStopCommand, map[string]any{
-		"guuids": playerID, "remark": winTargetRemark(input.Reason, "后台停止优化"), "context": operationContext,
+		"guuids": playerID, "remark": winTargetRemark(input.Reason, "后台停止控制"), "context": operationContext,
 	})
 	cancelStop()
 	if err != nil {
@@ -351,7 +351,7 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 			after.State = "stopped"
 			after.Active = false
 			after.FinishReason = "stop"
-			message := fmt.Sprintf("已停止玩家 %s 的优化", playerID)
+			message := fmt.Sprintf("已停止玩家 %s 的控制", playerID)
 			requestAudit := map[string]any{"playerId": playerID, "writeMode": "win-target-command", "context": operationContext}
 			if input.Reason != "" {
 				requestAudit["reason"] = input.Reason
@@ -361,7 +361,7 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 			return
 		}
 		err = &winTargetCommandError{status: http.StatusBadGateway, code: "OPTIMIZATION_GAME_COMMAND_UNREACHABLE",
-			message: "游戏服停止接口未响应（该命令当前仅支持牌桌内客户端调用），优化没有停止；请联系游戏服开放后台写入后重试"}
+			message: "游戏服停止接口未响应（该命令当前仅支持牌桌内客户端调用），控制没有停止；请联系游戏服开放后台写入后重试"}
 		s.writeWinTargetFailure(w, p, r, "game.player_optimization.delete", playerID, 0, 0, input.Reason, current, true, err)
 		return
 	}
@@ -382,7 +382,7 @@ func (s *Server) handleDeletePlayerOptimization(w http.ResponseWriter, r *http.R
 	after.Active = false
 	after.FinishReason = "stop"
 	after.FinishAt = time.Now().Format("2006-01-02 15:04:05")
-	message := fmt.Sprintf("已停止玩家 %s 的优化", playerID)
+	message := fmt.Sprintf("已停止玩家 %s 的控制", playerID)
 	requestAudit := map[string]any{
 		"playerId": playerID, "writeMode": "win-target-command", "context": operationContext,
 		"expectedTargetValue": input.ExpectedTargetValue, "expectedChance": input.ExpectedChance,
@@ -442,7 +442,7 @@ func (s *Server) queryWinTargets(ctx context.Context, guuids string, history boo
 	}
 	result, err := s.callGameCommand(ctx, winTargetListCommand, params)
 	if err != nil {
-		return nil, &winTargetCommandError{status: http.StatusBadGateway, code: "GAME_COMMAND_FAILED", message: "游戏服未返回玩家优化数据，请稍后重试"}
+		return nil, &winTargetCommandError{status: http.StatusBadGateway, code: "GAME_COMMAND_FAILED", message: "游戏服未返回玩家控制数据，请稍后重试"}
 	}
 	if result.RetCode != 512 {
 		return nil, &winTargetCommandError{status: http.StatusBadGateway, code: "GAME_COMMAND_FAILED",
@@ -482,7 +482,7 @@ func (s *Server) applyWinTarget(ctx context.Context, action string, p principal,
 	winTargetWriteMu.Lock()
 	defer winTargetWriteMu.Unlock()
 	operationContext := gameOperationContext("player-optimization")
-	remark := winTargetRemark(reason, "后台设置优化")
+	remark := winTargetRemark(reason, "后台设置控制")
 	// 部分游戏服版本的客户端命令在 HTTP 通道不回包（请求会一直挂住），
 	// 因此给写入单独一个短超时：超时后回读目标列表确认是否实际生效。
 	setCtx, cancelSet := context.WithTimeout(ctx, winTargetWriteTimeout)
@@ -545,7 +545,7 @@ func (s *Server) confirmWinTargetAfterTimeout(ctx context.Context, playerID stri
 }
 
 func (s *Server) recordWinTargetSuccess(ctx context.Context, p principal, r *http.Request, action, playerID string, after winTargetItem, reason string, before winTargetItem, hasBefore bool, operationContext string) (winTargetItem, error) {
-	message := fmt.Sprintf("已设置玩家 %s 的优化：%s，概率 %d%%", playerID, describeWinTargetValue(after.TargetValue), after.Chance)
+	message := fmt.Sprintf("已设置玩家 %s 的控制：%s，概率 %d%%", playerID, describeWinTargetValue(after.TargetValue), after.Chance)
 	requestAudit := map[string]any{
 		"playerId": playerID, "targetValue": after.TargetValue, "chance": after.Chance,
 		"writeMode": "win-target-command", "context": operationContext,
@@ -564,7 +564,7 @@ func (s *Server) recordWinTargetSuccess(ctx context.Context, p principal, r *htt
 func (s *Server) writeWinTargetFailure(w http.ResponseWriter, p principal, r *http.Request, action, playerID string, targetValue, chance int64, reason string, before winTargetItem, hasBefore bool, err error) {
 	status := http.StatusInternalServerError
 	code := "OPTIMIZATION_UPDATE_FAILED"
-	message := "游戏服未确认优化写入，参数没有修改"
+	message := "游戏服未确认控制写入，参数没有修改"
 	var commandErr *winTargetCommandError
 	if errors.As(err, &commandErr) {
 		status = commandErr.status
@@ -789,7 +789,7 @@ func (s *Server) handleListPlayerOptimizationHistory(w http.ResponseWriter, r *h
 	keyword = s.resolvePlayerInput(r.Context(), keyword)
 	state := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("state")))
 	if state != "" && state != "active" && state != "done" && state != "stopped" {
-		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "优化状态只能选择进行中、已达成或已停止")
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "控制状态只能选择进行中、已达成或已停止")
 		return
 	}
 
@@ -812,7 +812,7 @@ func (s *Server) handleListPlayerOptimizationHistory(w http.ResponseWriter, r *h
 	if err := s.gameDB.QueryRowContext(r.Context(),
 		`SELECT COUNT(*) FROM kbedm.usr_opt_target_history WHERE `+where, args...).Scan(&total); err != nil {
 		s.logger.Error("count win target history", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史数量失败")
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取控制历史数量失败")
 		return
 	}
 
@@ -825,7 +825,7 @@ ORDER BY id DESC
 LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		s.logger.Error("list win target history", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史失败")
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取控制历史失败")
 		return
 	}
 	defer rows.Close()
@@ -838,7 +838,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 			&item.ScopeType, &item.ScopeID, &item.GroupID, &item.GroupName,
 			&item.SetAt, &item.FinishAt, &item.FinishReason); err != nil {
 			s.logger.Error("scan win target history", "error", err)
-			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史数据失败")
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取控制历史数据失败")
 			return
 		}
 		item.Active = item.State == winTargetStateActive
@@ -846,7 +846,7 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取优化历史数据失败")
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取控制历史数据失败")
 		return
 	}
 	s.fillWinTargetLogins(r.Context(), items)
