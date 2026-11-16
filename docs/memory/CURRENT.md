@@ -1,8 +1,19 @@
 # qing 当前状态
 
-更新时间：2026-11-16
+更新时间：2026-11-17
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-17 后台「玩家优化」更名「玩家控制」（代码就绪，未部署）
+
+- 只改显示文案：页面 30 处中文（标题/按钮/空态/校验/消息）、菜单图标字 `优`→`控`、服务端返回消息与游戏服操作备注 31 处、迁移 `071_player_control_rename.sql` 改菜单名与 4 条权限名/描述。模块 code、路由、权限 code、接口路径不变，角色授权不受影响。
+- 文案里指向牌桌内的「运维优化」改为「牌桌内胜率目标」——客户端那个面板实际叫「牌局优化」，旧文案本就指错。`go vet`/`tsc -b` 通过；未部署 8891，菜单名要等迁移 071 在启动时执行。详见[交接](handoffs/2026-11-17-player-control-rename.md)。
+
+## 2026-11-17 客户端「我的」10 个操作按钮统一美术（已替换资源，待导入/构建/真机）
+
+- 用户确认新版效果后，将 `assets/V7/` 下 10 张正式按钮 PNG 按确认预览统一替换：上下记录、钻石池消耗、赠送金币、金币流向、兑换钻石、钻石流向、我的战绩、系统设置、额度授权记录、逃跑惩罚统计。
+- 新稿统一深蓝玻璃底、金色描边、立体金色图标、字体和文字阴影；保留原 `.meta`、UUID、Prefab 节点、Button 事件和动态权限显隐，因此未改 `panelMain.prefab` 或业务脚本。
+- 静态核对通过：10 个 Prefab SpriteFrame 仍指向对应正式资源 UUID，PNG 尺寸与原 `.meta` 一致，四角透明；全量 `validate_v7_responsive_layout.py` 在既有 `panelLogin.prefab/登录LOGO` alignFlags=18 与预期17处失败，未归因于本轮按钮资源。Creator 导入、网页实际预览、构建、真机和真实账号交互仍待验证。详见[交接](handoffs/2026-11-17-my-buttons-v9.md)。
 
 ## 2026-11-16 后台各模块支持按靓号查询（已部署 8891）
 
@@ -71,18 +82,12 @@
 
 ## 2026-11-14 消息页：BF 关闭隐藏大盟主入口 + 盟主/群主显示（服务端已部署，客户端未构建）
 
-- 关闭俱乐部 BF 后普通合伙人和玩家默认对话只剩所属盟主；盟主仍见大盟主，重开恢复；已有真实会话按普通会话显示。
-- ChatTool 改 `defaultTargets`/`isFixedTarget`；后台 BF 弹窗提示同步；客户端缓存 v4。
-- 修复已入盟创建者在消息列表、聊天标题、成员选择显示“群主”：客户端改用服务端 `roleName`，成员接口补 `roleName`。
-- 修复退会/已删俱乐部的历史未读仍点亮红点：`/unread` 按会话列表可见性过滤俱乐部。
-- 已部署 ChatTool `854d01e6…`（备份 `chattool.previous-unread-visible-20261114-221553`）和后台前端 `index-C3HoOUg9.js`；health 200。客户端未构建/未真机。详见[BF 交接](handoffs/2026-11-14-bf-chat-hide-union-owner.md)、[身份显示交接](handoffs/2026-11-14-chat-role-name-union-owner.md)、[红点交接](handoffs/2026-11-14-unread-visible-clubs.md)。
+- 关闭俱乐部 BF 后普通合伙人和玩家默认对话只剩所属盟主，盟主仍见大盟主，重开恢复；群主显示改读服务端 `roleName`；退会/已删俱乐部的历史未读不再点亮红点。已部署 ChatTool `854d01e6…`（备份 `chattool.previous-unread-visible-20261114-221553`）与后台前端 `index-C3HoOUg9.js`；health 200。客户端未构建/未真机。详见[BF 交接](handoffs/2026-11-14-bf-chat-hide-union-owner.md)、[身份显示交接](handoffs/2026-11-14-chat-role-name-union-owner.md)、[红点交接](handoffs/2026-11-14-unread-visible-clubs.md)。
 
 ## 2026-11-14 后台玩家管理：关联账号/重复玩家（已部署 8891，数据待采集）
 
-- 按《重复玩家识别-IP设备关联方案》聚合同设备（90天）、同GPS网格（7天）、同公网IP（7天）；单IP>20人、单网格>50人不参与。
-- 玩家列表「关联账号数量」列在「玩家」后，表头可点按数量排序（desc→asc→默认，全局计算，上限 2000）；点「关联账号」查看全部关联玩家、方式与强度（最多200条）。
-- 已部署：二进制 `bb8bdf37…`、前端 `index-magx5XK-.js` + `index-DeSwv4Lg.css`；备份 `backups/xuanmanager.20261114-005539-rollback`、`web.previous-20261114-005539`。
-- 首版误用 `s.db`（webcm）导致 1146「读取关联账号失败」，已改 `s.gameDB`；两表 00:36:56 起已有写入（718968，web/127.0.0.1），采集端正常。正式设备表无 `last_ip`/`last_ip_public`，方案 §4.2/§5.3 不能原样套用。详见[交接](handoffs/2026-11-14-admin-player-relations.md)。
+- 按同设备（90天）、同GPS网格（7天）、同公网IP（7天）聚合，单IP>20人、单网格>50人不参与；列表新增「关联账号数量」列（在「玩家」后，可点表头按数量排序，全局计算上限 2000），点开看全部关联玩家、方式与强度（最多200条）。
+- 已部署：二进制 `bb8bdf37…`、前端 `index-magx5XK-.js` + `index-DeSwv4Lg.css`；备份 `backups/xuanmanager.20261114-005539-rollback`、`web.previous-20261114-005539`。首版误用 `s.db`（webcm）报 1146，已改 `s.gameDB`；正式设备表无 `last_ip`/`last_ip_public`。详见[交接](handoffs/2026-11-14-admin-player-relations.md)。
 
 ## 2026-11-14 后台玩家管理支持 IP 短码（已部署 8891）
 
@@ -114,15 +119,9 @@
 - 牌桌「带入积分」V10、我的红利「业绩股」页签、后台业绩核心共享改按联盟发放、玩家信息卡片两排三列。
 - 逐项状态与交接链接见[11-11 批次归档](archive/2026-11-15/current-nov11-batches.md)。
 
-## 2026-11-07～11-09 历史批次（已归档）
+## 更早批次
 
-- [玩家管理发放钻石](handoffs/2026-11-09-admin-player-stone-grant.md) · [我的红利金框版](handoffs/2026-11-09-my-hongli-v8-restyle.md) · [客服在线修复](handoffs/2026-11-07-agent-online-and-hosted-admin-link.md) · [密码明文列](handoffs/2026-11-07-admin-player-password-column.md)。
-
-## 2026-11-03～11-10 历史批次（已归档）
-
-- 客户端：[11-10 客户端批次](archive/2026-11-12/current-nov10-client-batches.md) · [带入钻石开关](archive/2026-11-11/current-nov10-club-seat-stone.md) · [付费输赢统计](archive/2026-11-11/current-nov10-userinfo-stats.md) · [牌局优化](archive/2026-11-11/current-nov10-game-optimize.md) · [后台发牌优化](archive/2026-11-12/current-nov10-player-optimization.md)。
-- 业绩/徽章/额度：[业绩占比与徽章](archive/2026-11-11/current-nov09-agent-reward-and-badges.md) · [钻石池入口](archive/2026-11-10/current-nov09-stone-pool-entry.md) · [额度授权记录](archive/2026-11-12/current-nov09-quota-grant-record.md)。
-- 其它：[11-08 交互与键盘](archive/2026-11-10/current-nov08-client-ui-and-keyboard.md) · [11-07 数据统计/杂项](archive/2026-11-10/current-nov07-misc.md) · [11-07 代理贡献两项](archive/2026-11-12/current-nov07-agent-contrib-two-fields.md) · [11-03～11-06](archive/2026-11-12/current-nov03-to-nov06-batches.md)。
+- 2026-11-03～11-09 的历史客户端、额度、牌局和后台批次见 [`docs/memory/archive/`](archive/2026-11-15/)。
 
 ## 本轮实时核对：记忆整理
 

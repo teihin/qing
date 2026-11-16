@@ -18,14 +18,19 @@
 | --- | --- |
 | `assets/scripts/common/GameDef.ts` | `DrhPlayerInfo` 新增 `mang_*`、`buy_in_*` 与本地字段 `buyin_update_time` |
 | `assets/scripts/logic/DrhPlayerLogic.ts` | 解析 `当前_玩家_消息` 新增字段并记录更新时间；本人字段更新后通知牌桌面板重算带入弹窗 |
-| `assets/scripts/common/BuyinDisplay.ts` | `configure(min, step, max, default, already, balance, displayScale, preserveAmount)`；可选金额 = `min + k*step ≤ max`；默认值定位；余额不足禁用确定；刷新时保留已选金额；新增 `isCurrentAmountValid()` |
+| `assets/scripts/common/BuyinDisplay.ts` | `configure(min, step, max, default, already, balance, displayScale, preserveAmount)`；可选金额按 `min + k*step ≤ max`，末档按条件追加全部余额；默认值定位；余额不足禁用确定；刷新时保留已选金额；新增 `isCurrentAmountValid()` |
 | `assets/scripts/UI/panelGameView.ts` | 弹窗参数优先级（新字段 > 较新的 PromptInfo2 提示 > 房间旧配置）；`已带入` 行显示服务端 `mang_paid`（缺失时用 `begin_score`）；提示补芒数大于最低带入时抬高最低分；本人状态更新刷新弹窗并保留选择；确认带入提交前校验；成功后关窗、在座补分失败保留并刷新；新错误文案走模态并回查补芒；`PromptInfo2` 兼容数组与 `{word,context}` 两种形态 |
 | `tools/tests/buyin_v8_regression.js` | 适配新 `configure` 签名、默认值/最低值用例；补 RoomClubContext 桩 |
+
+## 2026-11-16 追加：滑条末档支持全部余额
+
+- `BuyinDisplay` 在余额位于最后一个步长档与服务端 `buy_in_max` 之间时追加末档，末档提交当前可用余额；余额刚好整档不重复，余额超过服务端上限不越界。
+- 回归用例覆盖「余额 5200、步长 500 → 末档 5200」、服务端上限拦截和整档去重；13 个功能用例通过。完整脚本仍会在历史 Prefab/场景基线对比处失败，原因是快照与当前文件已有对象 ID/根节点漂移。
 
 ## 校验
 
 - 四个改动脚本 `typescript.transpileModule` 语法诊断 0。
-- `node tools/tests/buyin_v8_regression.js`：11 个功能用例全部 PASS（含补芒数抬高最低分、刷新保留已选金额）。
+- `node tools/tests/buyin_v8_regression.js`：13 个功能用例 PASS（含末档全部余额、补芒数抬高最低分、刷新保留已选金额）。
 - 最后一个「prefab/场景基线对比」失败：`art_sources/v8-repairs/buyin/before` 快照早于当前 prefab（本次未改 prefab），属既有漂移，未改快照。
 - `git diff --check` 通过。
 
