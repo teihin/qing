@@ -233,6 +233,7 @@ export class DrhPlayerInfo extends PlayerInfoBase
     public mang_required = ""; //当前周期累计需要
     public mang_paid = ""; //该玩家已付
     public mang_need = ""; //还差多少
+    public mang_pi_current = ""; //本局每个在座玩家要投的芒皮数（圈芒动画用，皮数不做 0.1/0.3 折算）
     public buy_in_min = ""; //本次最少带入
     public buy_in_step = ""; //该房一簸
     public buy_in_max = ""; //本次可带入上限
