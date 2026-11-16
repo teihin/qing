@@ -138,8 +138,8 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
         <RoomOverview data={data} />
         <PlayerStandings data={data} />
         <section className="panel room-round-panel">
-          <div className="toolbar room-round-toolbar"><div><strong>逐局牌局记录</strong><span>点击任意一局查看玩家牌面、庄闲身份、输赢和每轮操作</span></div><div className="room-round-search"><span>第</span><input inputMode="numeric" value={roundQuery} onChange={(event) => { setRoundQuery(event.target.value.replace(/\D/g, "")); setRoundPage(1); }} placeholder="局数" /><span>局</span><button type="button" onClick={() => { setRoundQuery(""); setRoundPage(1); }}>全部</button></div></div>
-          {visibleRounds.length === 0 ? <EmptyState title="没有找到该局记录" description="请检查局数，或点击“全部”恢复完整列表。" /> : <div className="room-round-list">{visibleRounds.map((round) => <RoundRow key={round.round} round={round} onOpen={() => void openRound(round.round)} />)}</div>}
+          <div className="toolbar room-round-toolbar"><div><strong>逐局牌局记录</strong><span>每局显示奖池、芒果、输赢和下注，点击任意一局查看玩家牌面、庄闲身份与每轮操作</span></div><div className="room-round-search"><span>第</span><input inputMode="numeric" value={roundQuery} onChange={(event) => { setRoundQuery(event.target.value.replace(/\D/g, "")); setRoundPage(1); }} placeholder="局数" /><span>局</span><button type="button" onClick={() => { setRoundQuery(""); setRoundPage(1); }}>全部</button></div></div>
+          {visibleRounds.length === 0 ? <EmptyState title="没有找到该局记录" description="请检查局数，或点击“全部”恢复完整列表。" /> : <div className="table-wrap room-round-table-wrap"><table className="room-round-table"><thead><tr><th>局数 / 时间</th><th>本局奖池</th><th>本局芒果</th><th>本局下注</th><th>赢分</th><th>输分</th><th>差额</th><th>人数 / 操作</th><th>牌面</th></tr></thead><tbody>{visibleRounds.map((round) => <RoundRow key={round.round} round={round} onOpen={() => void openRound(round.round)} />)}</tbody></table></div>}
           <footer className="table-pagination"><span>共 {filteredRounds.length} 局，当前第 {roundPage} / {totalRoundPages} 页</span><div><button type="button" disabled={roundPage <= 1} onClick={() => setRoundPage((value) => value - 1)}>上一页</button><strong>{roundPage} / {totalRoundPages}</strong><button type="button" disabled={roundPage >= totalRoundPages} onClick={() => setRoundPage((value) => value + 1)}>下一页</button></div></footer>
         </section>
       </>}
@@ -178,18 +178,37 @@ function PlayerStandings({ data }: { data: RoomRecordResponse }) {
 }
 
 function RoundRow({ round, onOpen }: { round: RoomRecordRound; onOpen: () => void }) {
-  return <article className="room-round-row"><div className="room-round-number"><span>ROUND</span><strong>{round.round}</strong></div><div className="room-round-time"><strong>第 {round.round} 局</strong><span>{formatBeijingDateTime(round.playedAt)}</span></div><div className="room-round-stat room-round-stat--win"><span>本局赢分</span><strong>+{scoreFormatter.format(round.totalWin)}</strong></div><div className="room-round-stat room-round-stat--loss"><span>本局输分</span><strong>−{scoreFormatter.format(round.totalLoss)}</strong></div><div className="room-round-stat"><span>参与 / 操作</span><strong>{round.playerCount} 人 · {round.actionCount} 次</strong></div><div className="room-round-net"><span>差额</span><strong className={`room-score room-score--${round.netScore > 0 ? "win" : round.netScore < 0 ? "loss" : "draw"}`}>{formatScore(round.netScore)}</strong></div><button type="button" onClick={onOpen}>查看牌面与过程</button></article>;
+  const mango = round.mangoTotal !== 0 ? round.mangoTotal : round.mangoNetTotal;
+  const mangoLabel = round.mangoTotal !== 0 ? "芒果" : "芒果净";
+  return <tr className="room-round-row" tabIndex={0} onClick={onOpen} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onOpen(); } }} aria-label={`查看第 ${round.round} 局牌面`}><td><strong className="room-round-index">第 {round.round} 局</strong><small className="cell-subtitle">{formatBeijingDateTime(round.playedAt)}</small></td><td><strong className={`room-score room-score--${scoreTone(round.poolScore)}`}>{formatScore(round.poolScore)}</strong><small className="cell-subtitle">进 / 出奖池</small></td><td>{mango !== 0 ? <><strong className={`room-score room-score--${scoreTone(mango)}`}>{formatScore(mango)}</strong><small className="cell-subtitle">{mangoLabel}合计</small></> : <span className="room-round-empty">—</span>}</td><td><strong>{scoreFormatter.format(round.totalBet)}</strong><small className="cell-subtitle">下注合计</small></td><td><strong className={`room-score room-score--${scoreTone(round.totalWin)}`}>{formatScore(round.totalWin)}</strong><small className="cell-subtitle">赢分</small></td><td><strong className={`room-score room-score--${scoreTone(-round.totalLoss)}`}>{formatScore(-round.totalLoss)}</strong><small className="cell-subtitle">输分</small></td><td><strong className={`room-score room-score--${scoreTone(round.netScore)}`}>{formatScore(round.netScore)}</strong><small className="cell-subtitle">差额</small></td><td><strong>{round.playerCount} 人</strong><small className="cell-subtitle">{round.actionCount} 次操作</small></td><td><button type="button" className="room-round-open" onClick={(event) => { event.stopPropagation(); onOpen(); }}>牌面回顾</button></td></tr>;
 }
 
 function RoundDetail({ detail }: { detail: RoomRecordRoundResponse }) {
   const stages = useMemo(() => groupActions(detail.actions), [detail.actions]);
-  return <div className="room-round-detail"><section className="room-round-detail__summary"><span>第 {detail.round} 局</span><strong>{detail.players.length} 名玩家有战绩</strong><p>逐局分数取自服务器结算记录，牌面按结算顺序展示为两组两张牌。</p></section><section className="room-round-player-grid">{detail.players.map((player) => <RoundPlayerCard key={player.id} player={player} />)}</section><section className="player-detail-section"><div className="room-action-title"><div><h3>本局操作牌谱</h3><p>按服务器记录的操作轮次和时间顺序排列</p></div><span>{detail.actions.length} 次操作</span></div>{stages.length === 0 ? <EmptyState title="本局没有操作牌谱" description="服务器没有保存这一局的下注操作日志。" /> : <div className="room-action-stages">{stages.map(([stage, actions]) => <div className="room-action-stage" key={stage}><div><span>第 {stage} 轮操作</span><strong>{actions.length} 条</strong></div><div>{actions.map((action) => <ActionItem key={action.id} action={action} />)}</div></div>)}</div>}</section></div>;
+  const summary = useMemo(() => roundSummary(detail.players), [detail.players]);
+  return <div className="room-round-detail"><section className="room-round-detail__summary"><span>第 {detail.round} 局</span><strong>{detail.players.length} 名玩家有战绩</strong><p>逐局分数取自服务器结算记录；奖池、芒果、下注与客户端牌局回顾同口径，牌面按结算顺序展示为两组两张牌。</p><div className="room-round-detail__stats"><RoundStat label="本局奖池" value={formatScore(summary.poolScore)} tone={scoreTone(summary.poolScore)} note="本局进出奖池分数" /><RoundStat label="本局芒池" value={summary.mangoPool !== 0 ? scoreFormatter.format(summary.mangoPool) : "—"} note="本局芒果池总额" /><RoundStat label="本局下注" value={scoreFormatter.format(summary.totalBet)} note="全部玩家下注合计" /><RoundStat label="本局芒果" value={summary.mangoTotal !== 0 || summary.mangoNetTotal !== 0 ? formatScore(summary.mangoTotal !== 0 ? summary.mangoTotal : summary.mangoNetTotal) : "—"} tone={scoreTone(summary.mangoTotal !== 0 ? summary.mangoTotal : summary.mangoNetTotal)} note={summary.mangoTotal !== 0 ? "芒果输赢合计" : "芒果净合计"} /></div></section><section className="room-round-player-grid">{detail.players.map((player) => <RoundPlayerCard key={player.id} player={player} />)}</section><section className="player-detail-section"><div className="room-action-title"><div><h3>本局操作牌谱</h3><p>按服务器记录的操作轮次和时间顺序排列</p></div><span>{detail.actions.length} 次操作</span></div>{stages.length === 0 ? <EmptyState title="本局没有操作牌谱" description="服务器没有保存这一局的下注操作日志。" /> : <div className="room-action-stages">{stages.map(([stage, actions]) => <div className="room-action-stage" key={stage}><div><span>第 {stage} 轮操作</span><strong>{actions.length} 条</strong></div><div>{actions.map((action) => <ActionItem key={action.id} action={action} />)}</div></div>)}</div>}</section></div>;
+}
+
+function RoundStat({ label, value, note, tone = "default" }: { label: string; value: string; note: string; tone?: string }) {
+  return <div className={`room-round-stat-card room-round-stat-card--${tone}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></div>;
+}
+
+function roundSummary(players: RoomRecordRoundPlayer[]) {
+  const summary = { poolScore: 0, mangoPool: 0, totalBet: 0, mangoTotal: 0, mangoNetTotal: 0 };
+  for (const player of players) {
+    if (summary.poolScore === 0) summary.poolScore = player.poolScore;
+    if (summary.mangoPool === 0) summary.mangoPool = player.mangoPool;
+    summary.totalBet += player.betScore;
+    summary.mangoTotal += player.mangoScore;
+    summary.mangoNetTotal += player.mangoNet;
+  }
+  return summary;
 }
 
 function RoundPlayerCard({ player }: { player: RoomRecordRoundPlayer }) {
   const arranged = player.cards.length > 0 ? player.cards : player.dealtCards;
   const dealtDiffers = player.dealtCards.length > 0 && cardKey(player.dealtCards) !== cardKey(arranged);
-  return <article className={`round-player-card round-player-card--${player.result}`}><header><div><span className="round-player-seat">{player.seat + 1} 号位</span><strong>{player.playerName || "未设置昵称"}</strong><small>ID {player.playerId}</small></div><div><span className="round-player-role">{player.role || "未记录身份"}</span><strong className={`room-score room-score--${player.result}`}>{formatScore(player.score)}</strong></div></header><div className="round-player-state"><span>{player.state || "未记录结果"}</span><span>下注 {scoreFormatter.format(player.betScore)}</span><span>芒果 {formatScore(player.mangoScore)}</span>{player.remainingMango !== 0 && <span>剩余芒果 {player.remainingMango}</span>}</div><CardGroups cards={arranged} label={arranged.length === 4 ? "结算牌组" : "已记录牌面"} />{dealtDiffers && <CardGroups cards={player.dealtCards} label="完整发牌" compact />}</article>;
+  return <article className={`round-player-card round-player-card--${player.result}`}><header><div><span className="round-player-seat">{player.seat + 1} 号位</span><strong>{player.playerName || "未设置昵称"}</strong><small>ID {player.playerId}</small></div><div><span className="round-player-role">{player.role || "未记录身份"}</span><strong className={`room-score room-score--${player.result}`}>{formatScore(player.score)}</strong></div></header><div className="round-player-state"><span>{player.state || "未记录结果"}</span><span>下注 {scoreFormatter.format(player.betScore)}</span><span>芒果 {formatScore(player.mangoScore)}</span>{player.mangoNet !== 0 && <span>芒果净 {formatScore(player.mangoNet)}</span>}{player.remainingMango !== 0 && <span>剩余芒果 {player.remainingMango}</span>}<span className={`room-score room-score--${scoreTone(player.poolScore)}`}>奖池 {formatScore(player.poolScore)}</span></div><CardGroups cards={arranged} label={arranged.length === 4 ? "结算牌组" : "已记录牌面"} />{dealtDiffers && <CardGroups cards={player.dealtCards} label="完整发牌" compact />}</article>;
 }
 
 function CardGroups({ cards, label, compact = false }: { cards: RoomRecordCard[]; label: string; compact?: boolean }) {
@@ -216,6 +235,10 @@ function groupActions(actions: RoomRecordAction[]) {
 }
 
 function cardKey(cards: RoomRecordCard[]) { return cards.map((card) => `${card.suit}-${card.rank}`).join("|"); }
+
+function scoreTone(value: number) {
+  return value > 0 ? "win" : value < 0 ? "loss" : "draw";
+}
 
 function formatScore(value: number) {
   if (value > 0) return `+${scoreFormatter.format(value)}`;

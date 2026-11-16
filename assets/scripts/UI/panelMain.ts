@@ -323,6 +323,9 @@ export default class panelMain extends UIPanelViewBase {
         KBEngine.Event.register("set_union_manage", this, "OnClubMembershipChanged");
         KBEngine.Event.register("set_club_gold", this, "OnClubGoldChanged");
         KBEngine.Event.register("ClubAgentInfo", this, "OnClubAgentInfo");
+        // 线上服务端把「查询_俱乐部_代理_信息」的推送发在 ClubAgentReqInfo 路由上（文档 §4.4 规定 ClubAgentInfo）。
+        // 只监听 ClubAgentInfo 会整条丢包：代理缓存永远空 → 邀请码/身份/比例全空，还会不停补查刷屏。
+        KBEngine.Event.register("ClubAgentReqInfo", this, "OnClubAgentReqInfo");
         KBEngine.Event.register("ClubUnionQuota", this, "OnClubUnionQuota");
         KBEngine.Event.register("ClubUnionCreate", this, "OnClubUnionCreate");
         KBEngine.Event.register("ClubMyUnion", this, "OnClubMyUnion");
@@ -639,7 +642,10 @@ export default class panelMain extends UIPanelViewBase {
         if(copyButton)
             copyButton.active = rowVisible;
         // 刚登录 / 刚入会时代理信息还没回包，有俱乐部却没码就先补查一次（10 秒内不重复发）。
-        if(rowVisible && !code)
+        // 只在「完全没有缓存」时补查：有缓存但 invite_code 为空是服务端口径
+        // （管理员/普通成员没有可用码，§4.4 invite_code 取值规则），不是没拿到，
+        // 否则会永远查不到、永远在发，控制台被刷满。
+        if(rowVisible && !code && !this.clubAgentInfo[clubId])
             this.RequestCurrentClubAgent(clubId);
     }
 
@@ -1253,11 +1259,12 @@ export default class panelMain extends UIPanelViewBase {
         const grantNode = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作/额度授权记录");
         if(grantNode != null)
             grantNode.active = hasClub && this.CanViewQuotaGrantRecord(clubId);
-        // 「逃跑惩罚统计」只对大盟主（联盟总群主）开放。
+        // 「逃跑惩罚统计」只对大盟主开放，且必须是「当前俱乐部所在联盟」的总群主：
+        // 走到别人联盟的俱乐部里不能亮（2026-11-16）。
         const chengfaNode = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作/逃跑惩罚统计");
         if(chengfaNode != null)
         {
-            chengfaNode.active = hasClub && this.IsUnionOwnerAccount();
+            chengfaNode.active = hasClub && this.CanViewEscapePenalty(clubId);
         }
         const operation = Tool.GetChild(this.node,"Main/我的/滚动区/view/content/操作");
         const layout = operation == null ? null : operation.getComponent(cc.Layout);
@@ -1669,8 +1676,9 @@ export default class panelMain extends UIPanelViewBase {
         }
         else if(button.node.name === "逃跑惩罚统计")
         {
-            // 只有大盟主（联盟总群主）能看；热更后节点状态残留时再挡一道。
-            if(this.ResolveRoomClub() === "" || !this.IsUnionOwnerAccount())
+            // 只有当前俱乐部所在联盟的总群主能看；热更后节点状态残留时再挡一道。
+            const punishClubId = this.ResolveRoomClub();
+            if(punishClubId === "" || !this.CanViewEscapePenalty(punishClubId))
             {
                 this.RefreshClubFinanceMenuVisibility();
                 return;
@@ -4331,6 +4339,38 @@ export default class panelMain extends UIPanelViewBase {
         return code !== "";
     }
 
+    /**
+     * 兼容路由：服务端「查询_俱乐部_代理_信息」的推送实际走 ClubAgentReqInfo。
+     * 报文 {number,count,result:{club_id,...}}（与文档 §4.4 一致，只有路由名不同），
+     * 而 ClubAgentReqInfo 的数组形态才是待审申请 —— 这里只挑「单条代理信息」转交，
+     * 其余留给 ClubManagementApi 的申请列表处理。
+     */
+    public OnClubAgentReqInfo(raw:any):void
+    {
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        if(!data || typeof data !== "object")
+            return;
+        const body:any = data.result !== undefined ? data.result : data;
+        const single:any = Array.isArray(body) ?
+            (body.length === 1 && body[0] && typeof body[0] === "object" ? body[0] : null) :
+            (body && typeof body === "object" ? body : null);
+        if(!single || single.club_id == null)
+            return;
+        // 申请行（ClubAgentReq）只有 req_id/user_id/date/invite_code/agent_*，没有身份字段；
+        // 代理信息带 is_agent / is_creator / is_leader / downline —— 只认后者，别把申请吃掉。
+        // 不能用 user_id 或 invite_code 判：代理信息本身也带 user_id，申请行也带 invite_code。
+        if(single.is_agent === undefined && single.is_creator === undefined &&
+            single.is_leader === undefined && single.downline === undefined)
+            return;
+        // fromPush=false：不再触发 RecheckClubAgent 的两次补查，避免「查不到→再查」的回声。
+        this.OnClubAgentInfo(data,undefined,false);
+    }
+
     /** 俱乐部代理接口只返回当前玩家自己的邀请码，列表不得展示下级邀请码。 */
     public OnClubAgentInfo(raw:any, secondaryRaw?:any, fromPush:boolean = true)
     {
@@ -4604,6 +4644,10 @@ export default class panelMain extends UIPanelViewBase {
             undefined;
         this.clubUnionStatus[clubId] = {known:true,hasUnion:unionId !== "",unionId:unionId || undefined,
             unionName:unionName || undefined,isOwner,ownerConfirmed:ownerConfirmed || undefined,quotaFen,unionPercent};
+        // 记下「哪个联盟是我当总群主的」：联盟级入口要按当前俱乐部所属联盟判断，
+        // 不能只看账号级结论（2026-11-16）。未知（undefined）不动缓存。
+        if(typeof isOwner === "boolean")
+            this.RememberOwnedUnion(unionId,isOwner);
         // 「上下分记录」「钻石池消耗」的入口跟着大群主/盟主身份走，身份结论一变就重算，
         // 否则首次进「我的」时状态还没回来，藏起来的入口不会再出现。
         if((previous ? previous.isOwner : undefined) !== isOwner)
@@ -4808,6 +4852,8 @@ export default class panelMain extends UIPanelViewBase {
         if(pending)
         {
             this.clubUnionNameAsked[pending] = Date.now();
+            // 查询_我的_联盟 只有总群主能成功，回包本身就能确认这个联盟是我的。
+            this.RememberOwnedUnion(unionId,true);
             // 查询_我的_联盟 成功本身就证明调用者是总群主；只有目标俱乐部确实属于这个联盟时
             // 才落到它头上，避免多俱乐部账号串到别家联盟。
             const pendingUnionId = this.ResolveClubUnionId(pending);
@@ -4877,6 +4923,8 @@ export default class panelMain extends UIPanelViewBase {
         this.unionCreatePushReceived = true;
         const unionName = this.unionCreateName.trim();
         this.clubUnionStatus[clubId] = {known:true,hasUnion:true,unionId,unionName:unionName || undefined,isOwner:true,ownerConfirmed:true};
+        // 自己创建的联盟一定是我当总群主，联盟级入口按联盟归属判断时要认这一条。
+        this.RememberOwnedUnion(unionId,true);
         // 创建成功即把 union_id 写回俱乐部信息，后续额度查询即使竞态失败也不会把入口改回创建/加入。
         if(!this.clubDetails[clubId])
             this.clubDetails[clubId] = {club_id:clubId,club_name:""};
@@ -5077,6 +5125,10 @@ export default class panelMain extends UIPanelViewBase {
             const account = GameDataManager.getAccount();
             const ownerIds = String(account.club_make || "").split(",");
             const isOwner = ownerIds.indexOf(id) >= 0 || !!(agent && Number(agent.is_creator) === 1);
+            // 管理员（club_manage）只表示被创建者授权管理这家俱乐部，和创建者/代理是两个维度；
+            // 身份牌优先级沿用「我的」卡片口径：创建者 > 管理员 > 合伙人。
+            const manageIds = String((account && account.club_manage) || "").split(",");
+            const isManager = !isOwner && manageIds.indexOf(id) >= 0;
             const isAgent = this.IsClubAgent(agent);
             const status = this.clubUnionStatus[id];
             const infoUnionId = String(info && info.union_id || "").trim();
@@ -5158,6 +5210,13 @@ export default class panelMain extends UIPanelViewBase {
             const roleLabel = row.getChildByName("身份");
             if(roleLabel)
                 roleLabel.getComponent(cc.Label).string = role;
+            // 「我是这家俱乐部的管理员」是独立标记，不占身份牌：管理员兼合伙人/群主时两者同时显示。
+            // 图标贴在条目右下角（身份牌右侧 46px），没有身份牌时落在空着的右下角。
+            const adminIcon = row.getChildByName("管理员图标");
+            if(adminIcon)
+                adminIcon.active = isManager;
+            console.log("[俱乐部列表]",id,"club_manage=",String((account && account.club_manage) || ""),
+                "isManager=",isManager,"图标=",!!adminIcon);
             if(requestDetails && !info)
             {
                 const request = {header:"查询_俱乐部_信息",club_id:id};
@@ -5165,8 +5224,9 @@ export default class panelMain extends UIPanelViewBase {
             }
             if(requestDetails && !agent)
             {
-                const request = {header:"查询_俱乐部_代理_信息",club_id:id};
-                GameDataManager.getAccount().reqHallCommand(JSON.stringify(request),"p@club:agent:" + id);
+                // 走统一节流：以前这里每次都直发，代理信息又因为路由名不对收不回来，
+                // 于是「发查询→空回包→再发」无限循环，控制台被刷满。
+                this.RequestCurrentClubAgent(id);
             }
         });
         list.getComponent(cc.ScrollView).scrollToTop(0);
@@ -6025,45 +6085,87 @@ export default class panelMain extends UIPanelViewBase {
     }
 
     /**
-     * 账号级「大群主」判定：联盟创建者（大盟主 / 联盟总群主）。
-     * 身份不跟随当前选中的俱乐部，只要任一已知联盟的 is_owner=1 就算。
+     * 我当总群主的联盟号（本机持久化）。
+     *
+     * 联盟级入口（上下分记录 / 钻石池消耗 / 逃跑惩罚统计）必须按「当前俱乐部所属的联盟」
+     * 判断，不能只看账号级「任一联盟 is_owner=1」：大盟主走到别人联盟的俱乐部里，
+     * 那几个入口照样亮，而俱乐部级入口（我的成员 / 我的收益）按俱乐部身份全藏，
+     * 界面看着像身份识别坏了（2026-11-16 反馈：在别人俱乐部「踩踩踩」里以为按钮丢了）。
+     * 归属结论按联盟号落本地存储，重启/重连不用等 `查询_我的_联盟` 重新确认；
+     * 回包明确 is_owner=0 时会把对应联盟号摘掉。
      */
-    private IsUnionOwnerAccount():boolean
+    private OwnedUnionIds():string[]
     {
-        for(const key in this.clubUnionStatus)
-        {
-            const status = this.clubUnionStatus[key];
-            if(status && status.isOwner === true)
-                return true;
-        }
-        return false;
+        const raw = cc.sys.localStorage.getItem("unionOwned") || "";
+        return raw.split(",").map(id=>id.trim()).filter(id=>id !== "");
+    }
+    private RememberOwnedUnion(unionId:any,owned:boolean):void
+    {
+        const id = unionId == null ? "" : String(unionId).trim();
+        if(id === "")
+            return;
+        const list = this.OwnedUnionIds();
+        const index = list.indexOf(id);
+        if(owned && index < 0)
+            list.push(id);
+        else if(!owned && index >= 0)
+            list.splice(index,1);
+        else
+            return;
+        cc.sys.localStorage.setItem("unionOwned",list.join(","));
     }
 
     /**
-     * 「上下分记录」入口可见性：只有大群主（联盟总群主）和盟主（已入盟的俱乐部创建者）能看，
-     * 管理员 / 合伙人 / 普通玩家一律不显示。未知状态沿用额度授权记录的口径——
-     * 对俱乐部创建者先放行，等联盟状态回包后再纠正，避免查询慢把入口闪没。
+     * 当前俱乐部的联盟是不是我自己当总群主的那个。
+     * 联盟归属还不知道时只对自己的俱乐部放行（不能一上来就把入口藏掉，等回包再纠正）。
+     */
+    private IsUnionOwnerOfClub(clubId:string):boolean
+    {
+        const id = clubId == null ? "" : String(clubId).trim();
+        if(id === "")
+            return false;
+        const status = this.clubUnionStatus[id];
+        if(status && status.isOwner === true)
+            return true;
+        const unionId = this.ResolveClubUnionId(id);
+        if(unionId === "")
+            return this.IsClubOwner(id);
+        return this.OwnedUnionIds().indexOf(unionId) >= 0;
+    }
+
+    /**
+     * 「上下分记录」入口可见性：只有大群主（当前俱乐部所在联盟的总群主）和盟主
+     * （已入盟的俱乐部创建者）能看，管理员 / 合伙人 / 普通玩家一律不显示。
      */
     private CanViewUpDownRecord(clubId:string):boolean
     {
-        if(this.IsUnionOwnerAccount())
+        if(this.IsUnionOwnerOfClub(clubId))
             return true;
         return this.CanViewQuotaGrantRecord(clubId);
     }
 
     /**
-     * 「钻石池消耗」入口可见性：只给大群主（联盟总群主）。
-     * 已确认「不是总群主」才收起；联盟状态已知但 is_owner 尚未回包时仍对俱乐部创建者放行，
-     * 等 `查询_联盟_额度` / `查询_我的_联盟` 的结论回来再纠正，避免大盟主入口被首屏状态藏掉。
+     * 「钻石池消耗」入口可见性：只给大群主（当前俱乐部所在联盟的总群主）。
+     * 联盟归属未知时仍对俱乐部创建者放行，等 `查询_联盟_额度` / `查询_我的_联盟`
+     * 的结论回来再纠正，避免大盟主入口被首屏状态藏掉。
      */
     private CanViewStonePoolCost(clubId:string):boolean
     {
-        if(this.IsUnionOwnerAccount())
+        if(this.IsUnionOwnerOfClub(clubId))
             return true;
         if(!this.IsClubOwner(clubId))
             return false;
         const status = this.clubUnionStatus[clubId];
         return !(status && status.known && status.isOwner === false);
+    }
+
+    /**
+     * 「逃跑惩罚统计」入口可见性：只给大盟主（当前俱乐部所在联盟的总群主）。
+     * 与「钻石池消耗」同口径：联盟归属还没回包时先对俱乐部创建者放行，结论回来再纠正。
+     */
+    private CanViewEscapePenalty(clubId:string):boolean
+    {
+        return this.CanViewStonePoolCost(clubId);
     }
 
     /**

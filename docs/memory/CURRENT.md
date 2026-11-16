@@ -1,8 +1,14 @@
 # qing 当前状态
 
-更新时间：2026-11-15
+更新时间：2026-11-16
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-16 后台「房间战绩」逐局显示奖池 / 芒果 / 输赢 / 下注（已部署 8891）
+
+- 逐局列表改成表格：局数/时间、本局奖池、本局芒果、本局下注、赢分、输分、差额、人数/操作、牌面；点开的每局弹窗新增奖池/芒池/下注/芒果四张摘要卡，每人卡片补「芒果净」「奖池」。
+- 口径与客户端牌局回顾一致，全部取自 `usr_round_score.remark` 的 `@` 分段：2=下注、4=芒果（旧）、9=本局奖池、11=芒池、13=芒果净（11-14 起取代下标 4，页面自动择一）。同局奖池/芒池全表一致，聚合用 MAX，不会翻倍。
+- 已部署：二进制 `76bc5489…`（备份 `bin/xuanmanager.previous-roomround-20261116-0112`）、前端 `index-CFeY8ZgU.js` + `index-0JIJmIWM.css`（web 备份 `web.previous-roomround2-20261116-0115`）；无迁移；health 200、战绩接口未登录 401。登录态实操待验收。详见[交接](handoffs/2026-11-16-room-round-jackpot-mango.md)。
 
 ## 2026-11-15 后台「业绩股」全局折算百分比配置（已部署 8891）
 
@@ -84,28 +90,12 @@
 - 服务端未改，回包仍是明文；解码规则见[接口文档 §8](../../服务器文档整理/玩家扩展信息查询-客户端接口文档.md)。后台后续还原按同一规则实现。
 - 未运行 Creator 编译/构建/热更/真机。详见[交接](handoffs/2026-11-14-client-player-ip-shortcode.md)。
 
-## 2026-11-13 BF 聊天开关移交后台（已部署 8891/8893）
+## 2026-11-13 批次（已部署 8891 / 8893，细节见各自交接）
 
-- 隐藏开关，置顶入口保留；后台按俱乐部开关，默认开启。ChatTool 迁移 014 建 `chat_direct_bf_club`，拒绝客户端写入；XuanManager 迁移 063 建 `game.club.bf_chat` 与 `PUT /api/game/clubs/{clubId}/bf-chat`。两端 health 200；客户端未构建。见[交接](handoffs/2026-11-13-club-bf-chat-admin.md)。
-
-## 2026-11-13 业绩核心共享：发放改三阶段（已部署 8891，真实发放待验）
-
-- 「确认并发放」改为：① `发放_总群主_奖励` 把本批总额（元×100=额度分）注入大盟主联盟池；② 按俱乐部汇总下属成员金额，`发放_盟主_奖励` 下划到各盟主俱乐部；③ `异步_发放_玩家_奖励` 给成员发俱乐部积分（同俱乐部同金额合并、单批 20 人）。
-- 迁移 `062_agent_reward_club_payout.sql` 给 `mgr_agent_reward_payout` 加 `stage/club_id/club_name/subject_name/description/quota_before/quota_after`；账单按「平台→大盟主→盟主→成员」分组展示并给出详细说明。
-- 批次一旦产生 `paid/pending/waiting/mismatch` 流水，总额/金额/重新分摊全部锁定；重试按额度余额、积分流水与房间状态幂等处理。
-- 已部署：二进制 `b6d68684…`、前端 `index-BIGNTpl-.js`；迁移已自动执行，health 200、账单未登录 401。账单弹窗已改为 1180px 宽 + 6 列合并 + 吸顶表头；名单新增「代理链」列并同步导出 CSV（按 `upper_id` 回溯，超长省略/悬停看全链）。回滚：`backups/xuanmanager.20261113-2221-rollback`、`backups/web.20261113-2223-rollback`。
-- 未做真实发放（未动真实资金/积分）；登录态页面与到账需用测试联盟实测。详见[交接](handoffs/2026-11-13-agent-reward-club-payout.md)。
-
-## 2026-11-13 客户端「额度授权记录」增加类型显示（未构建、未真机）
-
-- 行模板新增 `typelabel` 显示授信/收回/注资/注资扣减/额度奖励；未构建/热更/真机。详见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
-
-## 2026-11-13 后台「用户端数据查询」（已部署 8891）
-
-- 游戏管理只读入口 `/game/user-data`：按玩家 ID 查看基本信息（角色、注册时间、版本、管理范围）、所在俱乐部与身份、代理链，以及上下分、赠送金币、金币流向、钻石流向、收益红利（排除 `clubtotal` 基线）五类明细。
-- 大盟主 / 盟主（已入盟俱乐部的创建者）额外显示「额度变化记录」：`club_history_info` 的 `opt_type LIKE '额度%' AND user_quota<>0`，分→元，涵盖带入/结算/联盟授信/平台注资/平台奖励；其他玩家请求返回 403。代理链按每个俱乐部独立回溯 `club_agent_info.upper_guuid` 到创建者再到大盟主，合伙人以 used 邀请码为准。
-- 迁移 `061_user_data_query.sql`：模块 `game.user_data`、权限 `game.user_data.view`。接口 `GET /api/game/user-data/profile|records`，默认最近 7 天、单次最多 31 天。
-- 已部署 8891：后端 `c3b81f4f…`、前端 `index-BlT_8jCE.js` + `index-CLlbA0eV.css`；health 200、未登录接口 401。回滚：`backups/xuanmanager.20261113-2244-rollback`（原始 `b6d68684…`）、`web.previous-userdata-20261113-2244`。未做登录态页面视觉验收。详见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
+- **BF 聊天开关移交后台**：ChatTool 迁移 014 建 `chat_direct_bf_club` 并拒绝客户端写入，XuanManager 迁移 063 建 `game.club.bf_chat` 与 `PUT /api/game/clubs/{clubId}/bf-chat`；客户端未构建。见[交接](handoffs/2026-11-13-club-bf-chat-admin.md)。
+- **业绩核心共享发放改三阶段**：总额注入大盟主联盟池 → 下划各盟主俱乐部 → 给成员发积分；迁移 `062` 加 `stage/club_id/…` 与账单分组；有流水后总额/分摊锁定、重试幂等；**未做真实发放**。见[交接](handoffs/2026-11-13-agent-reward-club-payout.md)。
+- **额度授权记录加类型显示**：行模板新增 `typelabel`（授信/收回/注资/注资扣减/额度奖励）；未构建/真机。见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
+- **后台用户端数据查询** `/game/user-data`（迁移 `061`）：玩家信息/俱乐部/代理链 + 五类明细，大盟主与盟主额外看额度变化；默认 7 天、单次 ≤31 天。见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
 
 ## 2026-11-12 批次（已归档）
 

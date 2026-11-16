@@ -835,6 +835,19 @@ export default class HallClubManagementApi implements ClubManagementApi {
         const data=this.parse(raw);
         if(!data)return;
         if(!Array.isArray(data.result) && Array.isArray(data.ClubAgentReqInfo))data.result=data.ClubAgentReqInfo;
+        // 服务端把「查询_俱乐部_代理_信息」的推送也发在 ClubAgentReqInfo 上（文档 §4.4 应为 ClubAgentInfo），
+        // result 是单条代理信息（带 is_agent / is_creator / downline）。不跳过的话会被包成
+        // 「1 条待审申请」，污染红点并顶替真正的申请回包。
+        // 申请行（ClubAgentReq）没有这些身份字段，所以能用它们区分，也不能用 invite_code 判（申请行也有）。
+        {
+            const single:any = Array.isArray(data.result) ?
+                (data.result.length === 1 ? data.result[0] : null) :
+                (data.result && typeof data.result === "object" ? data.result : null);
+            if(single && single.club_id != null &&
+                (single.is_agent !== undefined || single.is_creator !== undefined ||
+                    single.is_leader !== undefined || single.downline !== undefined))
+                return;
+        }
         // 服务端在 count=1 时可能把单条申请包成对象（与 ClubAgentInfo 一致），不能当成空列表丢掉。
         if(data.result && !Array.isArray(data.result) && typeof data.result === "object") {
             const inner=data.result;

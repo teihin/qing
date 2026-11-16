@@ -66,6 +66,9 @@ export default class panelExchangeStone extends UIPanelViewBase
 
         KBEngine.Event.register("onExChange", this, "onExChange");
         KBEngine.Event.register("ClubAgentInfo", this, "OnClubAgentInfo");
+        // 线上服务端把「查询_俱乐部_代理_信息」的推送发在 ClubAgentReqInfo 上（文档 §4.4 是 ClubAgentInfo），
+        // 不兼容接收的话角色永远退化成「玩家」。
+        KBEngine.Event.register("ClubAgentReqInfo", this, "OnClubAgentReqInfo");
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         // 兑换成功后服务端主动同步属性，余额跟着刷新。
         KBEngine.Event.register("set_gold", this, "RefreshUser");
@@ -377,6 +380,26 @@ export default class panelExchangeStone extends UIPanelViewBase
         if(param == null || param.indexOf("ClubAgentInfo") < 0)
             return;
         this.OnClubAgentInfo(param);
+    }
+
+    /** 兼容路由：单条代理信息走 ClubAgentReqInfo 到达；数组形态是待审申请，不属于本面板。 */
+    public OnClubAgentReqInfo(raw:any)
+    {
+        let data:any = raw;
+        if(typeof data === "string")
+        {
+            try { data = JSON.parse(data); }
+            catch(error) { return; }
+        }
+        const body:any = data && data.result !== undefined ? data.result : data;
+        const single:any = Array.isArray(body) ?
+            (body.length === 1 && body[0] && typeof body[0] === "object" ? body[0] : null) : body;
+        if(!single || typeof single !== "object" || single.club_id == null)
+            return;
+        if(single.is_agent === undefined && single.is_creator === undefined &&
+            single.is_leader === undefined && single.downline === undefined)
+            return;
+        this.OnClubAgentInfo(data);
     }
 
     public OnClubAgentInfo(raw:any)

@@ -938,6 +938,11 @@ export interface RoomRecordRound {
   totalLoss: number;
   netScore: number;
   actionCount: number;
+  poolScore: number;
+  mangoTotal: number;
+  mangoNetTotal: number;
+  mangoPool: number;
+  totalBet: number;
 }
 
 export interface RoomRecordCard {
@@ -963,6 +968,9 @@ export interface RoomRecordRoundPlayer {
   revealFlags: string;
   poolScore: number;
   compensation: string;
+  mangoPool: number;
+  displayScore: number;
+  mangoNet: number;
 }
 
 export interface RoomRecordAction {

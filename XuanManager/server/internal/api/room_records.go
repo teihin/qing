@@ -79,13 +79,18 @@ type roomRecordPlayer struct {
 }
 
 type roomRecordRound struct {
-	Round       int64  `json:"round"`
-	PlayedAt    string `json:"playedAt"`
-	PlayerCount int64  `json:"playerCount"`
-	TotalWin    int64  `json:"totalWin"`
-	TotalLoss   int64  `json:"totalLoss"`
-	NetScore    int64  `json:"netScore"`
-	ActionCount int64  `json:"actionCount"`
+	Round         int64   `json:"round"`
+	PlayedAt      string  `json:"playedAt"`
+	PlayerCount   int64   `json:"playerCount"`
+	TotalWin      int64   `json:"totalWin"`
+	TotalLoss     int64   `json:"totalLoss"`
+	NetScore      int64   `json:"netScore"`
+	ActionCount   int64   `json:"actionCount"`
+	PoolScore     int64   `json:"poolScore"`
+	MangoTotal    int64   `json:"mangoTotal"`
+	MangoNetTotal int64   `json:"mangoNetTotal"`
+	MangoPool     int64   `json:"mangoPool"`
+	TotalBet      float64 `json:"totalBet"`
 }
 
 type roomRecordCard struct {
@@ -111,6 +116,9 @@ type roomRecordRoundPlayer struct {
 	RevealFlags    string           `json:"revealFlags"`
 	PoolScore      int64            `json:"poolScore"`
 	Compensation   string           `json:"compensation"`
+	MangoPool      int64            `json:"mangoPool"`
+	DisplayScore   int64            `json:"displayScore"`
+	MangoNet       int64            `json:"mangoNet"`
 }
 
 type roomRecordAction struct {
@@ -413,12 +421,19 @@ WHERE t.roomID = ? ORDER BY t.number ASC, t.id ASC`, roomID, roomID)
 }
 
 func (s *Server) queryRoomRecordRounds(r *http.Request, roomID string) ([]roomRecordRound, error) {
+	// remark 用 @ 分段（0 起）：2=下注、4=芒果、9=本局奖池、11=芒池、13=芒果净。
+	// 同局所有玩家的奖池、芒池取值一致，取 MAX 即可；芒果/下注按玩家累加。
 	rows, err := s.db.QueryContext(r.Context(), `SELECT r.rounds,
 MIN(CONCAT(r.date, ' ', r.time)), COUNT(*),
 COALESCE(SUM(CASE WHEN r.score > 0 THEN r.score ELSE 0 END), 0),
 COALESCE(ABS(SUM(CASE WHEN r.score < 0 THEN r.score ELSE 0 END)), 0),
 COALESCE(SUM(r.score), 0),
-(SELECT COUNT(*) FROM kbedm.usr_paipu_log p WHERE p.roomID = r.roomID AND p.round_count = r.rounds)
+(SELECT COUNT(*) FROM kbedm.usr_paipu_log p WHERE p.roomID = r.roomID AND p.round_count = r.rounds),
+COALESCE(MAX(`+roomRemarkIntExpr(9)+`), 0),
+COALESCE(SUM(`+roomRemarkIntExpr(4)+`), 0),
+COALESCE(SUM(`+roomRemarkIntExpr(13)+`), 0),
+COALESCE(MAX(`+roomRemarkIntExpr(11)+`), 0),
+COALESCE(SUM(`+roomRemarkDecimalExpr(2)+`), 0)
 FROM kbedm.usr_round_score r WHERE r.roomID = ?
 GROUP BY r.rounds ORDER BY r.rounds DESC`, roomID)
 	if err != nil {
@@ -428,12 +443,26 @@ GROUP BY r.rounds ORDER BY r.rounds DESC`, roomID)
 	items := []roomRecordRound{}
 	for rows.Next() {
 		var item roomRecordRound
-		if err := rows.Scan(&item.Round, &item.PlayedAt, &item.PlayerCount, &item.TotalWin, &item.TotalLoss, &item.NetScore, &item.ActionCount); err != nil {
+		if err := rows.Scan(&item.Round, &item.PlayedAt, &item.PlayerCount, &item.TotalWin, &item.TotalLoss, &item.NetScore, &item.ActionCount,
+			&item.PoolScore, &item.MangoTotal, &item.MangoNetTotal, &item.MangoPool, &item.TotalBet); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+// roomRemarkIntExpr 取 remark 第 index 段（0 起）的冒号后整数，缺失或非数字按 0。
+func roomRemarkIntExpr(index int) string {
+	return `COALESCE(CAST(NULLIF(TRIM(SUBSTRING_INDEX(` + roomRemarkSegment(index) + `, ':', -1)), '') AS SIGNED), 0)`
+}
+
+func roomRemarkDecimalExpr(index int) string {
+	return `COALESCE(CAST(NULLIF(TRIM(SUBSTRING_INDEX(` + roomRemarkSegment(index) + `, ':', -1)), '') AS DECIMAL(20, 2)), 0)`
+}
+
+func roomRemarkSegment(index int) string {
+	return `SUBSTRING_INDEX(SUBSTRING_INDEX(r.remark, '@', ` + strconv.Itoa(index+1) + `), '@', -1)`
 }
 
 func (s *Server) handleRoomRecordRound(w http.ResponseWriter, r *http.Request, _ principal) {
@@ -525,6 +554,9 @@ func parseRoundPlayerRemark(remark string, item *roomRecordRoundPlayer) {
 	item.RevealFlags = stringAt(parts, 8)
 	item.PoolScore, _ = strconv.ParseInt(strings.TrimSpace(stringAt(parts, 9)), 10, 64)
 	item.Compensation = stringAt(parts, 10)
+	item.MangoPool = labeledInt(strings.TrimSpace(stringAt(parts, 11)), "芒果:")
+	item.DisplayScore, _ = strconv.ParseInt(strings.TrimSpace(stringAt(parts, 12)), 10, 64)
+	item.MangoNet = labeledInt(strings.TrimSpace(stringAt(parts, 13)), "芒果净:")
 }
 
 func parseRoomCards(raw string) []roomRecordCard {
