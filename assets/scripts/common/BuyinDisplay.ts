@@ -16,8 +16,11 @@ export default class BuyinDisplay extends cc.Component {
     @property(cc.Label) stoneCost: cc.Label = null;
     @property(cc.Button) confirm: cc.Button = null;
 
+    private minimumValue = 0;
     private step = 0;
+    private maximumValue = 0;
     private count = 0;
+    private displayScale = 1;
     private stoneRatio = 1;
     public currentAmount = 0;
 
@@ -34,18 +37,41 @@ export default class BuyinDisplay extends cc.Component {
             this.slider.node.off('slide', this.onSlide, this);
     }
 
-    public configure(minimum: number, balance: number, already: number) {
-        this.step = Number.isFinite(minimum) && minimum > 0 ? minimum : 0;
+    /**
+     * minimum/step/maximum/defaultValue 都是服务端原值；displayScale 只影响分数显示
+     * （0.1/0.3、0.2/0.5 房按 1/10 显示），提交仍用原值。
+     */
+    public configure(minimum: number, step: number, maximum: number, defaultValue: number,
+        already: number, balance: number, displayScale: number = 1, preserveAmount: number = 0) {
+        this.displayScale = Number.isFinite(displayScale) && displayScale > 0 ? displayScale : 1;
+        this.minimumValue = Number.isFinite(minimum) && minimum > 0 ? minimum : 0;
+        this.step = Number.isFinite(step) && step > 0 ? step : this.minimumValue;
+        this.maximumValue = Number.isFinite(maximum) && maximum > 0 ? maximum : 0;
         const available = Number.isFinite(balance) && balance > 0 ? balance : 0;
-        this.count = this.step ? Math.max(0, Math.floor(available / this.step + 1e-8)) : 0;
-        this.minimum.string = this.format(this.step);
-        this.maximum.string = this.format(this.count ? this.value(this.count - 1) : 0);
-        this.already.string = this.format(Number.isFinite(already) ? already : 0);
+        this.count = this.minimumValue > 0 && this.step > 0 && this.maximumValue >= this.minimumValue
+            ? Math.floor((this.maximumValue - this.minimumValue) / this.step + 1e-8) + 1
+            : 0;
+        this.minimum.string = this.formatScaled(this.minimumValue);
+        this.maximum.string = this.formatScaled(this.count ? this.value(this.count - 1) : 0);
+        this.already.string = this.formatScaled(Number.isFinite(already) ? already : 0);
         this.balance.string = this.format(available);
         // One valid amount needs no dragging and must never divide by zero.
         this.slider.enabled = this.count > 1;
-        this.confirm.interactable = this.count > 0;
-        this.select(0);
+        // 余额不够最低值时由面板显示余额不足提示，这里同步禁用确定。
+        this.confirm.interactable = this.count > 0 && available >= this.minimumValue;
+        let index = 0;
+        if (this.count > 0 && Number.isFinite(preserveAmount) && preserveAmount > 0)
+            index = Math.round((preserveAmount - this.minimumValue) / this.step);
+        else if (this.count > 0 && Number.isFinite(defaultValue) && defaultValue > 0)
+            index = Math.round((defaultValue - this.minimumValue) / this.step);
+        this.select(index);
+    }
+
+    /** 金额已按最低值和步长生成，这里只做提交前的兜底校验。 */
+    public isCurrentAmountValid():boolean {
+        return this.count > 0
+            && this.currentAmount >= this.minimumValue - 1e-8
+            && this.currentAmount <= this.maximumValue + 1e-8;
     }
 
     /** 房间开启「入座扣钻」时显示钻石余额和当前选择会扣的钻石；其它房间隐藏两行。 */
@@ -76,7 +102,7 @@ export default class BuyinDisplay extends cc.Component {
     }
 
     private value(index: number): number {
-        return Number((this.step * (index + 1)).toPrecision(12));
+        return Number((this.minimumValue + this.step * index).toPrecision(12));
     }
 
     private onSlide() {
@@ -88,13 +114,17 @@ export default class BuyinDisplay extends cc.Component {
         this.currentAmount = this.count ? this.value(index) : 0;
         this.slider.progress = this.count > 1 ? index / (this.count - 1) : 0;
         this.fill.progress = this.slider.progress;
-        this.amount.string = this.format(this.currentAmount);
+        this.amount.string = this.formatScaled(this.currentAmount);
         if (this.stoneCost != null)
             this.stoneCost.string = "落座钻石：" + this.format(this.currentStoneCost());
     }
 
+    private formatScaled(value: number): string {
+        return this.format(value * this.displayScale);
+    }
+
     private format(value: number): string {
-        const parts = String(value).split('.');
+        const parts = String(Number.isFinite(value) ? Number(value.toPrecision(12)) : 0).split('.');
         parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
         return parts.join('.');
     }

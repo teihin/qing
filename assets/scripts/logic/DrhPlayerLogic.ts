@@ -834,6 +834,43 @@ export default class DrhPlayerLogic extends cc.Component {
                 this.info.xiu_mang_count = data["xiu_mang_count"].toString();
                 this.UpdateMangpiXiumang();
             }
+            if(data.hasOwnProperty("mang_required"))
+            {
+                this.info.mang_required = data["mang_required"].toString();
+            }
+            if(data.hasOwnProperty("mang_paid"))
+            {
+                this.info.mang_paid = data["mang_paid"].toString();
+            }
+            if(data.hasOwnProperty("mang_need"))
+            {
+                this.info.mang_need = data["mang_need"].toString();
+            }
+            if(data.hasOwnProperty("buy_in_min"))
+            {
+                this.info.buy_in_min = data["buy_in_min"].toString();
+            }
+            if(data.hasOwnProperty("buy_in_step"))
+            {
+                this.info.buy_in_step = data["buy_in_step"].toString();
+            }
+            if(data.hasOwnProperty("buy_in_max"))
+            {
+                this.info.buy_in_max = data["buy_in_max"].toString();
+            }
+            if(data.hasOwnProperty("buy_in_default"))
+            {
+                this.info.buy_in_default = data["buy_in_default"].toString();
+            }
+            if(data.hasOwnProperty("mang_required") || data.hasOwnProperty("mang_paid")
+                || data.hasOwnProperty("mang_need") || data.hasOwnProperty("buy_in_min")
+                || data.hasOwnProperty("buy_in_step") || data.hasOwnProperty("buy_in_max")
+                || data.hasOwnProperty("buy_in_default"))
+            {
+                this.info.buyin_update_time = Date.now();
+                if(this.playerPos == PlayerPos.self && this.gameLogic != null && this.gameLogic.playingView != null)
+                    this.gameLogic.playingView.OnSelfBuyinInfoUpdated();
+            }
             if(data.hasOwnProperty("last_add_xiazhu_score"))
             {
                 this.info.last_add_xiazhu_score = data["last_add_xiazhu_score"].toString();

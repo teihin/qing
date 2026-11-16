@@ -229,6 +229,15 @@ export class DrhPlayerInfo extends PlayerInfoBase
     public mang_pi_times = ""; //芒皮
     public xiu_mang_times = ""; //休芒
     public xiu_mang_count = "";// 几芒
+    // 补芒账本与本次带入约束，服务端下发，老服务端不下发时保持空值走旧逻辑
+    public mang_required = ""; //当前周期累计需要
+    public mang_paid = ""; //该玩家已付
+    public mang_need = ""; //还差多少
+    public buy_in_min = ""; //本次最少带入
+    public buy_in_step = ""; //该房一簸
+    public buy_in_max = ""; //本次可带入上限
+    public buy_in_default = ""; //带入弹窗默认值
+    public buyin_update_time = 0; //本地：最近一次收到补芒/带入字段的时间
     public last_add_xiazhu_score = "0"; //本轮最近一次下注分数
 
     //结算信息消息

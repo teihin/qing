@@ -1092,10 +1092,18 @@ export default class panelGameView extends UIPanelViewBase {
     {
         const buyin = Tool.GetChild(this.node,"带入窗口");
         if(buyin != null && buyin.active)
-            this.RefreshBuyinBalance();
+            this.RefreshBuyinBalance(true);
     }
 
-    private RefreshBuyinBalance():void
+    /** 本人「当前_玩家_消息」里的补芒/带入字段更新后，已打开的弹窗按最新值重算。 */
+    public OnSelfBuyinInfoUpdated():void
+    {
+        const buyin = Tool.GetChild(this.node,"带入窗口");
+        if(buyin != null && buyin.active)
+            this.RefreshBuyinBalance(true);
+    }
+
+    private RefreshBuyinBalance(preserveSelection:boolean = false):void
     {
         const account:any = GameDataManager.getAccount();
         const buyin = Tool.GetChild(this.node,"带入窗口");
@@ -1103,26 +1111,28 @@ export default class panelGameView extends UIPanelViewBase {
         if(account == null || buyin == null || display == null || this.gameLogic == null)
             return;
 
-        const roomSetting = account.roomSetting == null ? "" : String(account.roomSetting);
-        const minimumMatch = roomSetting.match(/最小带入\s*([0-9]+(?:\.[0-9]+)?)/);
-        const strMin = minimumMatch ? minimumMatch[1] : "0";
         const balance = this.GetCurrentRoomGold();
-        const clubId = this.GetCurrentRoomClubId();
-        const unionRoom = isUnionRoom(account);
-        const clubRoom = clubId !== "";
-        const nHisIn = Number(this.gameLogic.GetPlayerCtlByID(0).info.begin_score);
-        display.configure(Number(strMin),balance,Number(this.CheckSmallPlay(nHisIn.toString())));
+        const params = this.GetSelfBuyinParams(balance);
+        const scale = this.GetBuyinDisplayScale();
+        const keepAmount = preserveSelection ? Number(display.currentAmount) : 0;
+        display.configure(params.min, params.step, params.max, params.defaultValue,
+            params.paid, balance, scale, keepAmount);
         // 房间模板带「入座扣钻」时，带入会同步扣玩家钻石；窗口同时展示余额和当前选择的实时扣除量。
         const nStone = Number(account.stone);
-        const seatStone = roomSetting.indexOf("入座扣钻") >= 0;
+        const seatStone = String(account.roomSetting == null ? "" : account.roomSetting).indexOf("入座扣钻") >= 0;
         const stoneRatio = ConfigManager.getInstance().GetClubSeatStoneRatio();
-        Debug.Log("[BUYIN] seatStone=" + seatStone + " stone=" + nStone + " ratio=" + stoneRatio);
+        Debug.Log("[BUYIN] seatStone=" + seatStone + " stone=" + nStone + " ratio=" + stoneRatio
+            + " min=" + params.min + " step=" + params.step + " max=" + params.max
+            + " default=" + params.defaultValue + " need=" + params.need + " server=" + params.fromServer);
         display.setStoneBalance(Number.isFinite(nStone) ? nStone : 0, seatStone, stoneRatio);
 
         const shortage = Tool.GetChild(this.node,"带入窗口/余额不足提示");
         if(shortage == null)
             return;
-        shortage.active = (unionRoom && clubId === "") || balance < Number(strMin);
+        const clubId = this.GetCurrentRoomClubId();
+        const unionRoom = isUnionRoom(account);
+        const clubRoom = clubId !== "";
+        shortage.active = (unionRoom && clubId === "") || balance < params.min;
         const label = Tool.GetChild(this.node,"带入窗口/余额不足提示/txt");
         if(label != null)
         {
@@ -1131,8 +1141,130 @@ export default class panelGameView extends UIPanelViewBase {
             else
                 label.getComponent(cc.Label).string = clubRoom
                     ? "俱乐部金币不足，请联系合伙人上分！"
-                    : "金币余额不足" + Number(strMin) + "，请先充值！";
+                    : "金币余额不足" + this.FormatBuyinAmount(params.min, scale) + "，请先充值！";
         }
+    }
+
+    private static ToBuyinNumber(value:any):number
+    {
+        const n = Number(value);
+        return Number.isFinite(n) ? n : 0;
+    }
+
+    /** 0.1/0.3、0.2/0.5 房的分数按 1/10 显示，提交仍用服务端原值。 */
+    private GetBuyinDisplayScale():number
+    {
+        const account:any = GameDataManager.getAccount();
+        const roomSetting = account == null || account.roomSetting == null ? "" : String(account.roomSetting);
+        return roomSetting.indexOf("0.1/0.3") >= 0 || roomSetting.indexOf("0.2/0.5") >= 0 ? 0.1 : 1;
+    }
+
+    private GetBuyinHintKey():string
+    {
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return "";
+        // 房间号在进出房时最稳定；房间配置可能在进房后才补齐，不能作为主键。
+        const roomID = account.roomID == null ? "" : String(account.roomID);
+        if(roomID !== "" && roomID !== "0")
+            return "room:" + roomID;
+        return "setting:" + String(account.roomSetting == null ? "" : account.roomSetting);
+    }
+
+    /**
+     * 本人带入参数：优先 当前_玩家_消息 的新字段；没有时用最近一次 PromptInfo2 的
+     * 后三位；老服务端都没有时退回房间配置里的「最小带入 + 余额」。
+     */
+    private GetSelfBuyinParams(balance:number)
+    {
+        const account:any = GameDataManager.getAccount();
+        const roomSetting = account == null || account.roomSetting == null ? "" : String(account.roomSetting);
+        const self = this.gameLogic == null ? null : this.gameLogic.GetPlayerCtlByID(0);
+        const info:any = self == null ? null : self.info;
+
+        let min = info == null ? 0 : panelGameView.ToBuyinNumber(info.buy_in_min);
+        let step = info == null ? 0 : panelGameView.ToBuyinNumber(info.buy_in_step);
+        let max = info == null ? 0 : panelGameView.ToBuyinNumber(info.buy_in_max);
+        let defaultValue = info == null ? 0 : panelGameView.ToBuyinNumber(info.buy_in_default);
+        let fromServer = min > 0;
+
+        // 补芒查询直接回传的值比普通状态消息更新时优先使用。
+        if(this.lastBuyinHint != null && this.lastBuyinHint.min > 0
+            && (this.lastBuyinHint.key === this.GetBuyinHintKey() || Date.now() - this.lastBuyinHint.time < 10000)
+            && (!fromServer || this.lastBuyinHint.time > (info == null ? 0 : panelGameView.ToBuyinNumber(info.buyin_update_time))))
+        {
+            min = this.lastBuyinHint.min;
+            step = this.lastBuyinHint.step;
+            max = this.lastBuyinHint.max;
+            fromServer = true;
+        }
+
+        let paid = info == null ? 0 : panelGameView.ToBuyinNumber(info.begin_score);
+        if(info != null && ((info.mang_required != null && String(info.mang_required) !== "")
+            || (info.mang_need != null && String(info.mang_need) !== "")))
+        {
+            paid = panelGameView.ToBuyinNumber(info.mang_paid);
+        }
+
+        if(!fromServer)
+        {
+            const match = roomSetting.match(/最小带入\s*([0-9]+(?:\.[0-9]+)?)/);
+            min = match == null ? 0 : Number(match[1]);
+            step = min;
+            max = balance;
+            defaultValue = min;
+        }
+        else
+        {
+            if(step <= 0)
+                step = min;
+            // 上限同时受服务端与当前余额约束，避免把选不动的金额摆出来。
+            if(max <= 0)
+                max = balance;
+            else if(balance > 0 && max > balance)
+                max = balance;
+            if(defaultValue <= 0)
+                defaultValue = min;
+        }
+
+        // 提示的补芒数大于当前最低带入时，最低分必须覆盖补芒数（按一簸向上取整）。
+        const infoHasNeed = info != null && info.mang_need != null && String(info.mang_need) !== "";
+        let need = infoHasNeed ? panelGameView.ToBuyinNumber(info.mang_need) : 0;
+        if(this.lastMangNeed != null && this.lastMangNeed.need > 0
+            && (this.lastMangNeed.key === this.GetBuyinHintKey() || Date.now() - this.lastMangNeed.time < 10000)
+            && (!infoHasNeed || this.lastMangNeed.time > panelGameView.ToBuyinNumber(info.buyin_update_time)))
+        {
+            need = this.lastMangNeed.need;
+        }
+        if(need > 0 && need > min)
+        {
+            // 最低分必须大于补芒数：取严格大于 need 的下一个一簸倍数。
+            const requiredMin = step > 0
+                ? (Math.floor(need / step + 1e-8) + 1) * step
+                : need + 1;
+            min = requiredMin;
+            if(defaultValue < min)
+                defaultValue = min;
+        }
+
+        return {
+            min: min,
+            step: step,
+            max: max,
+            defaultValue: defaultValue,
+            paid: paid,
+            need: need,
+            fromServer: fromServer
+        };
+    }
+
+    private FormatBuyinAmount(value:number, scale:number):string
+    {
+        const factor = Number.isFinite(scale) && scale > 0 ? scale : 1;
+        const scaled = (Number.isFinite(value) ? value : 0) * factor;
+        const parts = String(Number(scaled.toPrecision(12))).split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+        return parts.join('.');
     }
 
     onButtonClick(button:cc.Button)
@@ -1228,11 +1360,17 @@ export default class panelGameView extends UIPanelViewBase {
         else if(button.node.name === "确认带入")
         {
             // Submit the numeric value, never the display string with thousands separators.
-            let strMsg = String(Tool.GetChild(this.node,"带入窗口").getComponent(BuyinDisplay).currentAmount);
+            const buyinDisplay = Tool.GetChild(this.node,"带入窗口").getComponent(BuyinDisplay);
+            let strMsg = String(buyinDisplay.currentAmount);
 
             if (!Number.isFinite(Number(strMsg)) || Number(strMsg) <= 0)
             {
                 this.ShowMsg("带入积分必须大于0！");
+                return;
+            }
+            if (!buyinDisplay.isCurrentAmountValid())
+            {
+                this.ShowMsg("带入金额不符合本次要求，请重新选择！");
                 return;
             }
 
@@ -1269,7 +1407,7 @@ export default class panelGameView extends UIPanelViewBase {
                 return;
             }
 
-            button.node.parent.active = false;            
+            // 服务端校验通过才关窗；失败时保留弹窗并按最新字段刷新。
         }
         else if (button.node.name == "丢")
         {
@@ -2319,6 +2457,78 @@ export default class panelGameView extends UIPanelViewBase {
         }
     }
 
+    /**
+     * PromptInfo2 文档里是数组 ["文本","context","buy_in_min","buy_in_step","buy_in_max"]，
+     * 旧代码按 {word, context} 对象解析；两种形态都兼容。
+     */
+    private ParsePromptInfo2(strMsg:any):any
+    {
+        let json:any = typeof strMsg === "string" ? this.ParsePromptInfo(strMsg) : strMsg;
+        if(json === null || json == null)
+            return null;
+        if(Array.isArray(json))
+        {
+            return {
+                word: json[0],
+                context: json[1],
+                buy_in_min: json[2],
+                buy_in_step: json[3],
+                buy_in_max: json[4]
+            };
+        }
+        if(json["buy_in_min"] == null && json["2"] != null)
+        {
+            json["buy_in_min"] = json["2"];
+            if(json["buy_in_step"] == null)
+                json["buy_in_step"] = json["3"];
+            if(json["buy_in_max"] == null)
+                json["buy_in_max"] = json["4"];
+        }
+        return json;
+    }
+
+    private CacheBuyinHint(json:any):void
+    {
+        if(json == null)
+            return;
+        const min = panelGameView.ToBuyinNumber(json["buy_in_min"]);
+        // 0 表示「不补芒」，不能覆盖已经拿到的有效最低值。
+        if(min <= 0)
+            return;
+        const step = panelGameView.ToBuyinNumber(json["buy_in_step"]);
+        const max = panelGameView.ToBuyinNumber(json["buy_in_max"]);
+        this.lastBuyinHint = {
+            key: this.GetBuyinHintKey(),
+            min: min,
+            step: step > 0 ? step : min,
+            max: max,
+            time: Date.now()
+        };
+        const buyin = Tool.GetChild(this.node,"带入窗口");
+        if(buyin != null && buyin.active)
+            this.RefreshBuyinBalance();
+    }
+
+    /** 提示文本里的「需要补芒 X 分」是本次带入最低分的下限。 */
+    private CacheMangNeed(word:any):void
+    {
+        const text = word == null ? "" : String(word);
+        const match = text.match(/需要补芒\s*([0-9][0-9,]*(?:\.[0-9]+)?)/);
+        if(match == null)
+            return;
+        const need = panelGameView.ToBuyinNumber(match[1].replace(/,/g,""));
+        if(need <= 0)
+            return;
+        this.lastMangNeed = {
+            key: this.GetBuyinHintKey(),
+            need: need,
+            time: Date.now()
+        };
+        const buyin = Tool.GetChild(this.node,"带入窗口");
+        if(buyin != null && buyin.active)
+            this.RefreshBuyinBalance();
+    }
+
     private ShowModalPrompt(strMsg:string)
     {
         let nNow = Date.now();
@@ -2412,13 +2622,28 @@ export default class panelGameView extends UIPanelViewBase {
             {
 
             }
+            else if(strWord.indexOf("至少需要")>=0 || strWord.indexOf("一簸")>=0 ||
+                strWord.indexOf("带入必须")>=0 || strWord.indexOf("可带入额度不足")>=0)
+            {
+                // 服务端已按新公式重算并拒绝；人还在座位上就按最新字段重开弹窗，
+                // 金额不在本地猜，文案原样展示服务端结果。
+                const account = GameDataManager.getAccount();
+                const self = this.gameLogic == null ? null : this.gameLogic.GetPlayerCtlByID(0);
+                if(account != null && self != null && self.info.strUserID == account.guuid)
+                {
+                    this.OpenBuyinWindowFromPrompt();
+                    // 服务端刚按最新簸箕余额重算过，重新查一次拿到权威最低值。
+                    this.checkBuMang("补分");
+                }
+                this.ShowModalPrompt(strWord);
+            }
             else
                 this.showMsg(strWord);
         }
     }
     onPromptInfo2(strMsg:string)
     {
-        let json = this.ParsePromptInfo(strMsg);
+        let json = this.ParsePromptInfo2(strMsg);
         if(json === null)
         {
             Debug.Log("Json 格式异常！");
@@ -2426,6 +2651,8 @@ export default class panelGameView extends UIPanelViewBase {
         }
         let strWord = json["word"];
         let strContext = json["context"];
+        this.CacheBuyinHint(json);
+        this.CacheMangNeed(strWord);
         if(strWord!=null && strWord != "")
         {
             if(strWord.indexOf("不补芒")>=0 || strWord.indexOf("已结算")>=0)
@@ -2548,6 +2775,7 @@ export default class panelGameView extends UIPanelViewBase {
                 if(param == "坐下_事件1")
                 {
                     this.ClearPreSitState(false);
+                    Tool.GetChild(this.node,"带入窗口").active = false;
                     this.RefreshRoomInviteEntry();
                     this.ShowMsg("带入成功!");
                 }
@@ -2570,6 +2798,11 @@ export default class panelGameView extends UIPanelViewBase {
                     this.ShowSitFailureFallback(clubRoom
                         ? "带入失败，请检查俱乐部额度或积分"
                         : "带入失败，请重新选择座位！");
+                }
+                else if(param == "坐下_事件1")
+                {
+                    // 已在座补分被拒：保留弹窗，按服务端最新字段刷新可选金额。
+                    this.RefreshBuyinBalance();
                 }
             }
         }
@@ -4997,6 +5230,8 @@ export default class panelGameView extends UIPanelViewBase {
     //在位置上检查是否补芒
     private lastBuMangQueryType = "";
     private lastBuMangQueryTime = 0;
+    private lastBuyinHint:{key:string;min:number;step:number;max:number;time:number} = null;
+    private lastMangNeed:{key:string;need:number;time:number} = null;
     public checkBuMang(strType:string = "补分"){
         // 同一类补芒查询 1.5 秒内只发一次。服务端会把 context 原样回传，客户端按 context
         // 分发；只要有一处响应分支又发起同类查询，就会自激成每秒一轮的死循环（见 11-07）。
