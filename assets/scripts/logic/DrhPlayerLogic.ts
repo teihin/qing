@@ -20,6 +20,15 @@ export default class DrhPlayerLogic extends cc.Component {
     playerPos:PlayerPos = null;
 
     info:DrhPlayerInfo = new DrhPlayerInfo();
+    /** 芒果行左侧名称美术字当前挂的资源（圈芒 / 休芒 / 揍芒 / 芒果），用于避免重复 loadRes */
+    private strMangNameRes = "V7/游戏内/圈芒_100x60";
+    /** 三张分类美术字直接序列化到场景，避免从非 resources 目录 loadRes 失败后仍保留默认圈芒。 */
+    @property(cc.SpriteFrame)
+    private mangCircleFrame:cc.SpriteFrame = null;
+    @property(cc.SpriteFrame)
+    private mangXiuFrame:cc.SpriteFrame = null;
+    @property(cc.SpriteFrame)
+    private mangZouFrame:cc.SpriteFrame = null;
     private transHand:cc.Node;    //手牌控件
     private arrayHand:PKCardInfoScript[];   //手牌组件列表
     private transHandEnd:cc.Node; //比牌是显示的手牌控件
@@ -666,7 +675,9 @@ export default class DrhPlayerLogic extends cc.Component {
             }
         }
         else if (strMsg == "当前_玩家_消息")
-        {            
+        {
+            // 新协议必须带 mang_show_state；缺少该字段时本次按老客户端口径处理，避免沿用上一条新状态。
+            let bHasMangShowState = this.ParseMangShowFields(data);
             if(data.hasOwnProperty("is_show_tou_pai")) //是否能看第一二张牌
             {
                 this.info.is_show_tou_pai = data["is_show_tou_pai"]
@@ -827,7 +838,7 @@ export default class DrhPlayerLogic extends cc.Component {
             }
             if(data.hasOwnProperty("mang_pi_times"))
             {
-                this.info.mang_pi_times = data["mang_pi_times"].toString();
+                this.info.mang_pi_times = data["mang_pi_times"] == null ? "0" : data["mang_pi_times"].toString();
             }
             if(data.hasOwnProperty("xiu_mang_times"))
             {
@@ -837,6 +848,19 @@ export default class DrhPlayerLogic extends cc.Component {
             if(data.hasOwnProperty("xiu_mang_count"))
             {
                 this.info.xiu_mang_count = data["xiu_mang_count"].toString();
+                if(!bHasMangShowState)
+                    this.UpdateMangpiXiumang();
+            }
+            //最新协议由 mang_show_state 决定只显示一行；状态存在时，其他缺失字段按 0 处理。
+            if(bHasMangShowState)
+            {
+                if(!data.hasOwnProperty("mang_pi_times"))
+                    this.info.mang_pi_times = "0";
+                this.UpdateMangpiXiumang();
+            }
+            else
+            {
+                // 当前消息没有状态字段时立即回到老合并显示，不能残留上一条新协议的单状态行。
                 this.UpdateMangpiXiumang();
             }
             if(data.hasOwnProperty("mang_required"))
@@ -2132,9 +2156,18 @@ export default class DrhPlayerLogic extends cc.Component {
     }
     public UpdateDiFenShow(bShow:boolean)
     {
+        // RoomFrame/底分 是牌桌公共的皮池行，只允许选定的公共显示源刷新。
+        if(this.gameLogic == null || !this.gameLogic.IsSharedMangDisplaySource(this))
+            return;
         let transFen =  Tool.GetChild(this.gameLogic.node,"RoomFrame/底分");
         if(transFen != null)
         {
+            //新协议下「皮池」始终独立显示，不能再被 all_bei_shu 的旧底分刷新覆盖。
+            if(this.info.mang_show_state != "")
+            {
+                this.UpdateMangPiShow();
+                return;
+            }
             transFen.active = bShow;
             if(bShow)
             {
@@ -3151,40 +3184,154 @@ export default class DrhPlayerLogic extends cc.Component {
     }
     public UpdateMangpiXiumang()
     {
-        let strMsg = "";
+        // ExShow/芒池 是牌桌公共的分类行，不能由每个座位的玩家消息轮流覆盖。
+        if(this.gameLogic == null || !this.gameLogic.IsSharedMangDisplaySource(this))
+            return;
         let strSet:string = GameDataManager.getAccount().roomSetting;
-        if (strSet.indexOf("没有休芒")>=0&&strSet.indexOf("没有芒皮")>=0)
-        {
-            Tool.GetChild(this.gameLogic.node,"ExShow/芒池").active = false;            
-        }
-        else
-        {
-            
-            let nMangPi = Number(this.info.mang_pi_times);
-            let nXiuMang = Number(this.info.xiu_mang_times);
-            if (nMangPi == -1)
-                nMangPi = 0;
-            if (nXiuMang == -1)
-                nXiuMang = 0;
-            Tool.GetChild(this.gameLogic.node,"ExShow/芒池/num").getComponent(cc.Label).string = this.CheckSmallPlay((nMangPi + nXiuMang).toString());
-            
+        let transMang = Tool.GetChild(this.gameLogic.node,"ExShow/芒池");
+        if (transMang == null)
+            return;
 
-            if((nMangPi+nXiuMang)>0)
-                Tool.GetChild(this.gameLogic.node,"ExShow/芒池").active = true;                
-            else
-                Tool.GetChild(this.gameLogic.node,"ExShow/芒池").active = false;
+        //新协议是单状态显示：0 圈芒，1 休芒，2 揍芒。不要按三个 count 猜测状态。
+        if(this.info.mang_show_state != "")
+        {
+            let nState = Number(this.info.mang_show_state);
+            if(isNaN(nState) || nState < 0 || nState > 2)
+                nState = 0;
+
+            let strRes = "V7/游戏内/圈芒_100x60";
+            let strCount = "1";
+            let strAmount = this.info.mang_show_quan_amount;
+            if(nState == 1)
+            {
+                strRes = "V7/游戏内/休芒_100x60";
+                strCount = this.GetMangShowNumber(this.info.mang_show_xiu_count).toString();
+                strAmount = this.info.mang_show_xiu_amount;
+            }
+            else if(nState == 2)
+            {
+                strRes = "V7/游戏内/揍芒_100x60";
+                strCount = this.GetMangShowNumber(this.info.mang_show_zou_count).toString();
+                strAmount = this.info.mang_show_zou_amount;
+            }
+
+            let transName = Tool.GetChild(transMang,"名称");
+            let transJi = Tool.GetChild(transMang,"几芒");
+            let transNum = Tool.GetChild(transMang,"num");
+            this.SetMangNameRes(transName, strRes);
+            if(transJi != null && transJi.getComponent(cc.Label) != null)
+                transJi.getComponent(cc.Label).string = "x" + strCount;
+            if(transNum != null && transNum.getComponent(cc.Label) != null)
+                transNum.getComponent(cc.Label).string = this.CheckSmallPlay(this.GetMangShowNumber(strAmount).toString());
+
+            //状态决定当前唯一的芒果分类行；即使 count/amount 缺失，也显示 x0/0，不留空白。
+            transMang.active = true;
+            this.UpdateMangPiShow();
+            return;
         }
 
+        //房间规则里同时关掉休芒和芒皮：整行不显示
+        if (strSet.indexOf("没有休芒")>=0 && strSet.indexOf("没有芒皮")>=0)
+        {
+            transMang.active = false;
+            return;
+        }
 
-        if (Number(this.info.xiu_mang_count)>0)
+        let transName = Tool.GetChild(transMang,"名称");
+        let transJi = Tool.GetChild(transMang,"几芒");
+        let transNum = Tool.GetChild(transMang,"num");
+
+        //老服务端：保持原「芒果」合并口径（芒皮 + 休芒）
+        this.SetMangNameRes(transName, "V7/游戏内/芒果_100x60");
+
+        let nMangPi = Number(this.info.mang_pi_times);
+        let nXiuMang = Number(this.info.xiu_mang_times);
+        if (nMangPi == -1)
+            nMangPi = 0;
+        if (nXiuMang == -1)
+            nXiuMang = 0;
+        if (transNum != null)
+            transNum.getComponent(cc.Label).string = this.CheckSmallPlay((nMangPi + nXiuMang).toString());
+
+        if (transJi != null)
         {
-            let nNum = Number(this.info.xiu_mang_count);
-            Tool.GetChild(this.gameLogic.node,"ExShow/芒池/几芒").getComponent(cc.Label).string = "x" + this.info.xiu_mang_count;  
+            let nCount = Number(this.info.xiu_mang_count);
+            transJi.getComponent(cc.Label).string = (isNaN(nCount) || nCount <= 0) ? "" : ("x" + nCount);
         }
-        else
+
+        transMang.active = (nMangPi + nXiuMang) > 0;
+    }
+    private GetMangShowNumber(strValue:string):number
+    {
+        let nValue = Number(strValue);
+        if(isNaN(nValue) || nValue < 0)
+            return 0;
+        return nValue;
+    }
+    /** 解析当前玩家消息的单状态芒果字段；缺字段时清空新协议并回退旧口径。 */
+    private ParseMangShowFields(data:any):boolean
+    {
+        let bHasMangShowState = data != null && data.hasOwnProperty("mang_show_state");
+        if(!bHasMangShowState)
         {
-            Tool.GetChild(this.gameLogic.node,"ExShow/芒池/几芒").getComponent(cc.Label).string = "";            
+            this.info.mang_show_state = "";
+            this.info.mang_show_xiu_count = "";
+            this.info.mang_show_xiu_amount = "";
+            this.info.mang_show_quan_count = "";
+            this.info.mang_show_quan_amount = "";
+            this.info.mang_show_zou_count = "";
+            this.info.mang_show_zou_amount = "";
+            return false;
         }
+        this.info.mang_show_state = data["mang_show_state"] == null ? "0" : data["mang_show_state"].toString();
+        this.info.mang_show_xiu_count = data.hasOwnProperty("mang_show_xiu_count") && data["mang_show_xiu_count"] != null ? data["mang_show_xiu_count"].toString() : "0";
+        this.info.mang_show_xiu_amount = data.hasOwnProperty("mang_show_xiu_amount") && data["mang_show_xiu_amount"] != null ? data["mang_show_xiu_amount"].toString() : "0";
+        this.info.mang_show_quan_count = data.hasOwnProperty("mang_show_quan_count") && data["mang_show_quan_count"] != null ? data["mang_show_quan_count"].toString() : "0";
+        this.info.mang_show_quan_amount = data.hasOwnProperty("mang_show_quan_amount") && data["mang_show_quan_amount"] != null ? data["mang_show_quan_amount"].toString() : "0";
+        this.info.mang_show_zou_count = data.hasOwnProperty("mang_show_zou_count") && data["mang_show_zou_count"] != null ? data["mang_show_zou_count"].toString() : "0";
+        this.info.mang_show_zou_amount = data.hasOwnProperty("mang_show_zou_amount") && data["mang_show_zou_amount"] != null ? data["mang_show_zou_amount"].toString() : "0";
+        return true;
+    }
+    /** 新协议下皮池独立显示，始终保留该行，不参与分类行显隐。 */
+    private UpdateMangPiShow()
+    {
+        let transFen = Tool.GetChild(this.gameLogic.node,"RoomFrame/底分");
+        if(transFen == null)
+            return;
+        let transNum = transFen.getChildByName("num");
+        if(transNum != null && transNum.getComponent(cc.Label) != null)
+            transNum.getComponent(cc.Label).string = this.CheckSmallPlay(this.GetMangShowNumber(this.info.mang_pi_times).toString());
+        transFen.active = true;
+    }
+    /** 切换芒果行左侧名称美术字；同一资源不重复加载 */
+    private SetMangNameRes(transName:cc.Node, strRes:string)
+    {
+        if (transName == null || this.strMangNameRes == strRes)
+            return;
+        let spr = transName.getComponent(cc.Sprite);
+        if (spr == null)
+            return;
+        this.strMangNameRes = strRes;
+        let directFrame = this.GetMangNameFrame(strRes);
+        if(directFrame != null)
+        {
+            spr.spriteFrame = directFrame;
+            return;
+        }
+        cc.loader.loadRes(strRes, cc.SpriteFrame, (err, frame:cc.SpriteFrame)=>{
+            if (err == null && frame != null && cc.isValid(transName) && this.strMangNameRes == strRes)
+                spr.spriteFrame = frame;
+        });
+    }
+    private GetMangNameFrame(strRes:string):cc.SpriteFrame
+    {
+        if(strRes.indexOf("圈芒_") >= 0)
+            return this.mangCircleFrame;
+        if(strRes.indexOf("休芒_") >= 0)
+            return this.mangXiuFrame;
+        if(strRes.indexOf("揍芒_") >= 0)
+            return this.mangZouFrame;
+        return null;
     }
     //搓牌窗口的牌面：搓开前用没点图，揭开后切回有点图
     private GetCuoCardResPath(nPos:number, bRealFace:boolean):string

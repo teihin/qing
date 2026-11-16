@@ -229,6 +229,14 @@ export class DrhPlayerInfo extends PlayerInfoBase
     public mang_pi_times = ""; //芒皮
     public xiu_mang_times = ""; //休芒
     public xiu_mang_count = "";// 几芒
+    // 芒果分类显示字段（服务端 当前_玩家_消息 追加，字符串数值；有 mang_show_state 才走新单状态口径）
+    public mang_show_state = ""; // 0=圈芒，1=休芒，2=揍芒
+    public mang_show_xiu_count = ""; //当前链休芒次数
+    public mang_show_xiu_amount = ""; //当前链休芒本类型累计实际金额
+    public mang_show_quan_count = ""; //圈芒固定次数（默认 1）
+    public mang_show_quan_amount = ""; //当前消息圈芒基础金额
+    public mang_show_zou_count = ""; //当前链揍芒事件次数
+    public mang_show_zou_amount = ""; //当前链揍芒本类型累计实际金额
     // 补芒账本与本次带入约束，服务端下发，老服务端不下发时保持空值走旧逻辑
     public mang_required = ""; //当前周期累计需要
     public mang_paid = ""; //该玩家已付

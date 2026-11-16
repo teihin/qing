@@ -63,8 +63,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
     private mode:string = "player";          // player / group
     private direction:number = 1;            // 1=赢，-1=输
     private filter:string = "";              // ""=全部 / active / done / stopped
-    /** 默认查 usr_opt_target_history（每次设置一条）；点「历史」切回当前目标。 */
-    private historyMode:boolean = true;
+    /** 默认查当前目标；点「历史」才查 usr_opt_target_history 快照。 */
+    private historyMode:boolean = false;
     private historyPage:number = 0;
     private readonly historyPageSize:number = 20;
     private listTotal:number = 0;
@@ -498,7 +498,7 @@ export default class panelGameOptimize extends UIPanelViewBase {
         let progress = "进度 " + this.Signed(row.progress) + " / " + (row.targetValue === 0 ? "—" : this.Signed(row.targetValue));
         if(row.state === "active") {
             if(row.remain > 0)
-                progress += " · 剩 " + row.remain;
+                progress += " · 剩余 " + row.remain;
             else if(row.remain < 0)
                 progress += " · 超 " + Math.abs(row.remain);
             progress += " · " + row.roundCount + "局";
@@ -539,11 +539,11 @@ export default class panelGameOptimize extends UIPanelViewBase {
                     stateText.color = cc.color(120, 235, 150, 255);
                 }
                 else if(row.state === "stopped") {
-                    label.string = "未达成";
+                    label.string = "未完成";
                     stateText.color = cc.color(170, 202, 224, 255);
                 }
                 else {
-                    label.string = "进行中";
+                    label.string = "未完成";
                     stateText.color = cc.color(255, 227, 117, 255);
                 }
             }
@@ -868,15 +868,24 @@ export default class panelGameOptimize extends UIPanelViewBase {
             const parsed = Number(value);
             return isFinite(parsed) ? parsed : 0;
         };
+        const numberOr = (value:any, fallback:number):number => {
+            if(value === undefined || value === null || value === "")
+                return fallback;
+            const parsed = Number(value);
+            return isFinite(parsed) ? parsed : fallback;
+        };
+        const targetValue = number(raw && raw.target_value);
+        const progress = number(raw && raw.progress);
         return {
             id:text(raw && raw.id),
             guuid:text(raw && raw.guuid),
             name:text(raw && raw.name),
             state:text(raw && raw.state),
-            targetValue:number(raw && raw.target_value),
+            targetValue:targetValue,
             chance:number(raw && raw.chance),
-            progress:number(raw && raw.progress),
-            remain:number(raw && raw.remain),
+            progress:progress,
+            // 兼容旧服务端未返回 remain 的回包，按目标和累计金额补出剩余值。
+            remain:numberOr(raw && raw.remain, Math.abs(targetValue) - Math.abs(progress)),
             roundCount:number(raw && raw.round_count),
             peerCount:number(raw && raw.peer_count),
             groupName:text(raw && raw.group_name),

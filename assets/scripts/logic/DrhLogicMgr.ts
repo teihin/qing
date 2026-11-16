@@ -1118,6 +1118,37 @@ export default class DrhLogicMgr extends cc.Component {
     {
         return this.arrayPlayer[nIndex];
     }
+
+    /**
+     * 芒果分类行和皮池行是牌桌公共显示。
+     * 优先使用本地账号对应的玩家；旁观或本地未入座时，回退到数组中第一个有效座位，
+     * 不能简单依赖 PlayerPos.self，因为该位置可能没有玩家数据。
+     */
+    public IsSharedMangDisplaySource(player:DrhPlayerLogic):boolean
+    {
+        if(player == null || this.arrayPlayer == null || this.arrayPlayer.length <= 0)
+            return false;
+
+        let account = GameDataManager.getAccount();
+        let strSelfID = account != null && account.guuid != null ? account.guuid.toString() : "";
+        if(strSelfID != "" && strSelfID != "init")
+        {
+            for(let one of this.arrayPlayer)
+            {
+                if(one != null && one.info != null && one.info.strUserID == strSelfID)
+                    return one == player;
+            }
+        }
+
+        for(let one of this.arrayPlayer)
+        {
+            if(one != null && one.info != null && one.info.strUserID != "" && one.info.strUserID != "init")
+                return one == player;
+        }
+
+        // PlayerList 尚未到达时保留原始首位作为临时显示源，避免公共行完全不刷新。
+        return this.arrayPlayer[0] == player;
+    }
    //转换字符串到玩家状态
    public GetStateFromString(strState:string):PlayerState
    {
