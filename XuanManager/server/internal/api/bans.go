@@ -86,6 +86,8 @@ func (s *Server) handleListBannedPlayers(w http.ResponseWriter, r *http.Request,
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询内容不能超过 100 个字符")
 		return
 	}
+	// 玩家/客服报的可能是个人ID 靓号，先换回真实 ID 再查。
+	keyword = s.resolvePlayerInput(r.Context(), keyword)
 	where, args := buildBannedPlayerWhere(keyword)
 
 	var total int64
@@ -154,6 +156,8 @@ func (s *Server) handleListPlayerBanHistory(w http.ResponseWriter, r *http.Reque
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	// 审计表里 target_id 落的是真实 ID；关键字是靓号时先反解再匹配。
+	filter.Keyword = s.resolvePlayerInput(r.Context(), filter.Keyword)
 	where, args := buildPlayerBanHistoryWhere(filter, p)
 
 	var total int64
@@ -372,6 +376,8 @@ func (s *Server) handleCreatePlayerBan(w http.ResponseWriter, r *http.Request, p
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
+	// 允许直接填个人ID 靓号：写库与命令统一用反解后的真实 ID。
+	playerID = s.resolvePlayerInput(r.Context(), playerID)
 	reason, err := normalizeBanReason(input.Reason)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_BAN_REASON", err.Error())

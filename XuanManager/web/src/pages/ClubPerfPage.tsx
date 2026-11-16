@@ -65,6 +65,8 @@ type GrantResponse = {
 
 type PerfCandidate = {
   playerId: string;
+  /** 该代理已绑定的个人ID 靓号，没有则为空；按 ID 搜索时一并匹配。 */
+  prettyNo?: string;
   name: string;
   role: string;
   clubId: string;
@@ -435,7 +437,9 @@ function GrantMemberModal({ unionId, unionName, onClose, onGranted }: {
   const filtered = keyword === ""
     ? available
     : available.filter((item) =>
-        item.playerId.includes(keyword) || (item.name || "").toLowerCase().includes(keyword));
+        item.playerId.includes(keyword) ||
+        (item.prettyNo || "").includes(keyword) ||
+        (item.name || "").toLowerCase().includes(keyword));
 
   const submit = async () => {
     if (!selected || selected.enabled || saving) return;
@@ -463,7 +467,7 @@ function GrantMemberModal({ unionId, unionName, onClose, onGranted }: {
         <input
           value={search}
           disabled={saving}
-          placeholder="输入玩家ID或昵称"
+          placeholder="输入玩家ID、靓号或昵称"
           onChange={(event) => {
             setSearch(event.target.value);
             setSelected(null);
@@ -501,7 +505,7 @@ function GrantMemberModal({ unionId, unionName, onClose, onGranted }: {
                 >
                   <span className="club-perf-candidate__name">
                     <strong>{item.name || `ID ${item.playerId}`}</strong>
-                    <small>ID {item.playerId}</small>
+                    <small>ID {item.playerId}{item.prettyNo ? `（靓号 ${item.prettyNo}）` : ""}</small>
                   </span>
                   <span>{item.clubName || item.clubId || "—"}</span>
                   <span>{item.role || "—"}</span>

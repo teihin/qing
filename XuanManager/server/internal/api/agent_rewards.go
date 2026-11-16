@@ -468,6 +468,8 @@ func (s *Server) handlerRewardCandidates(w http.ResponseWriter, r *http.Request,
 	}
 	clubID := strings.TrimSpace(r.URL.Query().Get("clubId"))
 	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	// 名单表存的是真实代理 ID：关键字是个人ID 靓号时先反解，再按真实 ID 匹配。
+	keyword = s.resolvePlayerInput(r.Context(), keyword)
 
 	rows, err := s.db.QueryContext(r.Context(), `SELECT agent_id, name, role, level, club_id, club_name,
 union_id, union_name, authorized, selected
@@ -2230,7 +2232,8 @@ func (s *Server) handlerRewardMemberAdd(w http.ResponseWriter, r *http.Request, 
 	ids := make([]string, 0, len(raw))
 	seen := map[string]bool{}
 	for _, item := range raw {
-		item = strings.TrimSpace(item)
+		// 「按 ID 直接加入」常被运营填成玩家手机上的靓号，先换回真实账号 ID 再校验。
+		item = s.resolvePlayerInput(r.Context(), strings.TrimSpace(item))
 		if item == "" || seen[item] {
 			continue
 		}
@@ -2448,8 +2451,8 @@ func (s *Server) handlerRewardSubAdd(w http.ResponseWriter, r *http.Request, p p
 		writeError(w, http.StatusBadRequest, "INVALID_UNION_ID", err.Error())
 		return
 	}
-	input.AgentID = strings.TrimSpace(input.AgentID)
-	input.SubGuuid = strings.TrimSpace(input.SubGuuid)
+	input.AgentID = s.resolvePlayerInput(r.Context(), strings.TrimSpace(input.AgentID))
+	input.SubGuuid = s.resolvePlayerInput(r.Context(), strings.TrimSpace(input.SubGuuid))
 	if !validAgentID(input.AgentID) || !validAgentID(input.SubGuuid) {
 		writeError(w, http.StatusBadRequest, "INVALID_AGENT_ID", "代理 ID 或子账号 ID 不正确")
 		return

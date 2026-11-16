@@ -31,6 +31,8 @@ func (s *Server) handleJackpotAgents(w http.ResponseWriter, r *http.Request, p p
 		writeError(w, 400, "INVALID_ID", "玩家ID过长")
 		return
 	}
+	// 支持按个人ID 靓号查/开通：业务表里存真实 ID。
+	id = s.resolvePlayerInput(r.Context(), id)
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	if id != "" {
@@ -86,6 +88,8 @@ func (s *Server) handleSetJackpotAgent(w http.ResponseWriter, r *http.Request, p
 		writeError(w, 400, "INVALID_INPUT", "必须提供玩家ID、开通状态与原状态")
 		return
 	}
+	// 手输靓号也允许开通/关闭奖池权限，命令一律用真实 ID。
+	id = s.resolvePlayerInput(r.Context(), id)
 	ctx, cancel := context.WithTimeout(r.Context(), 8*time.Second)
 	defer cancel()
 	before, err := s.jackpotAgent(ctx, id)

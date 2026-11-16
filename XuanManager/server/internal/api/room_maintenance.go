@@ -192,6 +192,8 @@ func (s *Server) handleListClubRooms(w http.ResponseWriter, r *http.Request, _ p
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询文字不能超过 100 个字符")
 		return
 	}
+	// 创建者 ID 按真实值匹配：输入个人ID 靓号时先反解；邀请码靓号本来就在码表里，原样即可命中。
+	keyword = s.resolvePlayerInput(r.Context(), keyword)
 
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()

@@ -141,6 +141,8 @@ func (s *Server) handleUserDataProfile(w http.ResponseWriter, r *http.Request, _
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", "请输入正确的游戏用户ID")
 		return
 	}
+	// 玩家报的号可能是个人ID 靓号，统一换成真实 ID 再查。
+	playerID = s.resolvePlayerInput(r.Context(), playerID)
 	profile, err := s.readUserDataProfile(r.Context(), playerID)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏用户ID")
@@ -160,6 +162,8 @@ func (s *Server) handleUserDataRecords(w http.ResponseWriter, r *http.Request, _
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	// 与资料页口径一致：明细查询同样接受个人ID 靓号。
+	filters.PlayerID = s.resolvePlayerInput(r.Context(), filters.PlayerID)
 	profile, err := s.readUserDataProfile(r.Context(), filters.PlayerID)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "PLAYER_NOT_FOUND", "没有找到这个游戏用户ID")

@@ -85,7 +85,7 @@ export default function JackpotPerformancePage({ can, notify }: { can: (permissi
     <section className="panel jackpot-section">
       <h2>业绩开通配置</h2><p>开通后，玩家代理中心显示「业绩比例」。比例由服务器计算；关闭后入口隐藏，上级下发口径相应变化。</p>
       <form className="jackpot-filters" onSubmit={event => { event.preventDefault(); setFilter({ id: playerId.trim(), page: 1, revision: filter.revision + 1 }); }}>
-        <Field label="玩家ID"><input value={playerId} maxLength={64} placeholder="输入完整玩家ID查询，留空显示已开通名单" onChange={event => setPlayerId(event.target.value)} /></Field>
+        <Field label="玩家ID"><input value={playerId} maxLength={64} placeholder="输入完整玩家ID或靓号查询，留空显示已开通名单" onChange={event => setPlayerId(event.target.value)} /></Field>
         <Button type="submit" disabled={loading || saving}>查询状态</Button>
       </form>
       {loading ? <p>正在查询…</p> : agents && agents.items.length > 0 ? <>
@@ -148,9 +148,9 @@ function AddJackpotAgent({ onClose, onSaved }: { onClose: () => void; onSaved: (
     } finally { saveLock.current = false; setSaving(false); }
   };
   return <Modal title="新增开通人员" onClose={() => { if (!saveLock.current) onClose(); }}>
-    <p>为现有玩家开通「业绩比例」入口。输入玩家ID，核对昵称和身份后确认开通。</p>
+    <p>为现有玩家开通「业绩比例」入口。输入玩家ID或靓号，核对昵称和身份后确认开通。</p>
     <form className="jackpot-filters" onSubmit={event => { event.preventDefault(); void lookup(); }}>
-      <Field label="待开通玩家ID"><input autoFocus required maxLength={64} value={id} disabled={saving} placeholder="请输入完整玩家ID" onChange={event => {
+      <Field label="待开通玩家ID"><input autoFocus required maxLength={64} value={id} disabled={saving} placeholder="请输入完整玩家ID或靓号" onChange={event => {
         sequence.current += 1; setLoading(false); setId(event.target.value); setPlayer(null); setError("");
       }} /></Field>
       <Button type="submit" variant="secondary" disabled={!id.trim() || loading || saving}>{loading ? "查询中…" : "核对玩家"}</Button>

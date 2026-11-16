@@ -110,6 +110,8 @@ func (s *Server) handleListTransactions(w http.ResponseWriter, r *http.Request, 
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	// 支持直接输入个人ID 靓号（业务流水里存的是真实 ID）。
+	filters.PlayerID = s.resolvePlayerInput(r.Context(), filters.PlayerID)
 
 	var player transactionPlayer
 	err = s.db.QueryRowContext(r.Context(), `SELECT sm_guuid, sm_wxID, sm_name,

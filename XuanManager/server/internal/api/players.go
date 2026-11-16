@@ -115,6 +115,8 @@ func (s *Server) handleListPlayers(w http.ResponseWriter, r *http.Request, p pri
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	// 「玩家ID」精确框也接受个人ID靓号：运营常直接抄玩家手机上显示的数字。
+	filters.PlayerID = s.resolvePlayerInput(r.Context(), filters.PlayerID)
 	// 游戏服尚未部署 union_manage 时列不存在；先探测再拼 SQL，避免整个玩家列表报错。
 	hasUnionManage := s.hasManageScopeColumn(r.Context())
 	hasPretty := s.hasPrettyNumberTable(r.Context())

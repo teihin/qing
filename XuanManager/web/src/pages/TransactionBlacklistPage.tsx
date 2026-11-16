@@ -93,7 +93,7 @@ export default function TransactionBlacklistPage({ can, notify }: {
         <p>输入准确的 6 位游戏玩家 ID。后台会先核对玩家资料，再写入游戏配置并回读确认。</p>
       </div>
       {canCreate ? <form onSubmit={submitGuard(add)}>
-        <label><span>游戏玩家 ID</span><input inputMode="numeric" maxLength={6} value={newPlayerId} disabled={adding || writesBlocked} onChange={(event) => { setNewPlayerId(event.target.value.replace(/\D/g, "").slice(0, 6)); setAddConfirmed(false); }} placeholder="例如 648425" /><small className={newPlayerId && !validId ? "is-error" : ""}>{newPlayerId && !validId ? "请输入完整的 6 位数字" : "精确匹配游戏玩家，不支持昵称"}</small></label>
+        <label><span>游戏玩家 ID</span><input inputMode="numeric" maxLength={6} value={newPlayerId} disabled={adding || writesBlocked} onChange={(event) => { setNewPlayerId(event.target.value.replace(/\D/g, "").slice(0, 6)); setAddConfirmed(false); }} placeholder="例如 648425" /><small className={newPlayerId && !validId ? "is-error" : ""}>{newPlayerId && !validId ? "请输入完整的 6 位数字" : "精确匹配游戏玩家，支持靓号，不支持昵称"}</small></label>
         <label className={`transaction-blacklist-confirm ${addConfirmed ? "is-checked" : ""}`}><input type="checkbox" checked={addConfirmed} disabled={!validId || adding || writesBlocked} onChange={(event) => setAddConfirmed(event.target.checked)} /><span><strong>确认加入交易黑名单</strong><small>启用总开关时，该玩家将不能赠送金币。</small></span></label>
         <Button type="submit" disabled={!validId || !addConfirmed || adding || writesBlocked}>{adding ? "正在写入并校验…" : "＋ 加入黑名单"}</Button>
       </form> : <span className="readonly-badge"><i />当前角色无新增权限</span>}
@@ -150,7 +150,7 @@ function EditBlacklistPlayerModal({ item, revision, onClose, onDone, onReload }:
     <div className="transaction-blacklist-player-summary"><span>{item.name.slice(0, 1) || "玩"}</span><div><strong>{item.name || "当前黑名单玩家"}</strong><small>当前玩家 ID：{item.playerId}</small></div></div>
     <p className="transaction-blacklist-modal__note">修改会用新的玩家 ID 替换当前记录，不会同时保留两名玩家。后台会核对新玩家确实存在。</p>
     {error && <div className="form-error"><span>!</span>{error}</div>}
-    <label className="transaction-blacklist-modal__field"><span>新的游戏玩家 ID</span><input autoFocus inputMode="numeric" maxLength={6} value={playerId} disabled={busy} onChange={(event) => { setPlayerId(event.target.value.replace(/\D/g, "").slice(0, 6)); setConfirmed(false); setError(""); }} placeholder="请输入新的 6 位玩家 ID" /><small>{normalized === item.playerId ? "新玩家 ID 不能与原玩家相同" : "精确匹配 6 位游戏玩家 ID"}</small></label>
+    <label className="transaction-blacklist-modal__field"><span>新的游戏玩家 ID</span><input autoFocus inputMode="numeric" maxLength={6} value={playerId} disabled={busy} onChange={(event) => { setPlayerId(event.target.value.replace(/\D/g, "").slice(0, 6)); setConfirmed(false); setError(""); }} placeholder="请输入新的 6 位玩家 ID" /><small>{normalized === item.playerId ? "新玩家 ID 不能与原玩家相同" : "精确匹配 6 位游戏玩家 ID 或靓号"}</small></label>
     <label className={`transaction-blacklist-confirm ${confirmed ? "is-checked" : ""}`}><input type="checkbox" checked={confirmed} disabled={!valid || busy} onChange={(event) => setConfirmed(event.target.checked)} /><span><strong>确认替换黑名单用户</strong><small>{item.playerId} 将恢复资格，新玩家 {valid ? normalized : "—"} 将受到限制。</small></span></label>
     <div className="form-actions"><Button type="button" variant="secondary" disabled={busy} onClick={onClose}>取消</Button><Button type="submit" disabled={!valid || !confirmed || busy}>{busy ? "正在修改并校验…" : "确认修改"}</Button></div>
   </form></Modal>;

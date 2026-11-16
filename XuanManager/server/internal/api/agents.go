@@ -163,6 +163,9 @@ func (s *Server) handleListAgents(w http.ResponseWriter, r *http.Request, _ prin
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	// 代理ID / 上级ID 都可能是玩家手机上显示的个人ID 靓号。
+	filters.Keyword = s.resolvePlayerInput(r.Context(), filters.Keyword)
+	filters.ParentID = s.resolvePlayerInput(r.Context(), filters.ParentID)
 	where, args := buildAgentWhere(filters)
 
 	var total int64
@@ -579,6 +582,8 @@ func (s *Server) handleAgentChildren(w http.ResponseWriter, r *http.Request, _ p
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询文字不能超过 100 个字符")
 		return
 	}
+	// 下级列表按真实 ID 匹配，输入靓号时先换成真实 ID 再比。
+	keyword = s.resolvePlayerInput(r.Context(), keyword)
 	page, size := pageParams(r)
 	items, truncated, err := s.collectAgentChildren(r.Context(), agentID, scope == "all")
 	if err != nil {

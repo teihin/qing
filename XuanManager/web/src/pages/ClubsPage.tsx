@@ -281,8 +281,8 @@ export default function ClubsPage({
                   <input
                     value={draft.playerId}
                     onChange={(event) => update("playerId", event.target.value)}
-                    placeholder="玩家游戏 ID（精确）"
-                    aria-label="玩家游戏 ID"
+                    placeholder="玩家游戏 ID / 靓号（精确）"
+                    aria-label="玩家游戏 ID / 靓号"
                   />
                 </div>
                 <div className="search-box search-box--wide">
@@ -301,8 +301,8 @@ export default function ClubsPage({
                 <input
                   value={draft.keyword}
                   onChange={(event) => update("keyword", event.target.value)}
-                  placeholder="俱乐部 ID 或名称"
-                  aria-label="俱乐部 ID 或名称"
+                  placeholder="俱乐部 ID、名称或代理邀请码"
+                  aria-label="俱乐部 ID、名称或代理邀请码"
                 />
               </div>
             )}
@@ -327,9 +327,9 @@ export default function ClubsPage({
             <div className="club-filter-advanced">
               {draft.mode === "club" ? (
                 <>
-                  <Field label="俱乐部 ID"><input value={draft.clubId} onChange={(event) => update("clubId", event.target.value)} placeholder="精确匹配，6 位" /></Field>
+                  <Field label="俱乐部 ID"><input value={draft.clubId} onChange={(event) => update("clubId", event.target.value)} placeholder="俱乐部 ID 或邀请码，6 位" /></Field>
                   <Field label="俱乐部名称"><input value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="支持部分匹配" /></Field>
-                  <Field label="群主 ID"><input value={draft.ownerId} onChange={(event) => update("ownerId", event.target.value)} placeholder="按创建者反查" /></Field>
+                  <Field label="群主 ID"><input value={draft.ownerId} onChange={(event) => update("ownerId", event.target.value)} placeholder="群主真实 ID 或靓号" /></Field>
                 </>
               ) : (
                 <Field label="同时限定俱乐部" hint="留空则查该玩家所在的全部俱乐部">
@@ -378,7 +378,7 @@ export default function ClubsPage({
         ) : !data || data.items.length === 0 ? (
           <EmptyState
             title="没有找到俱乐部"
-            description="可以改用俱乐部 ID 精确查询，或清空关键字后重新加载。"
+            description="可用俱乐部 ID、名称、代理邀请码或玩家靓号精确查询；邀请码/靓号必须已绑定到俱乐部才能查到。"
           />
         ) : (
           <>

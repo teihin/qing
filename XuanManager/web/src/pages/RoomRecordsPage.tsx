@@ -112,8 +112,8 @@ export default function RoomRecordsPage({ notify }: { notify: (message: string, 
         <section className="panel room-list-filter">
           <div className="room-list-filter__copy"><span>ROOM DIRECTORY</span><strong>筛选已结算房间</strong><p>支持房间号、房间名、参与玩家、俱乐部 ID/名称和创建者邀请码，默认按最新战绩排序。</p></div>
           <form onSubmit={(event) => { event.preventDefault(); submitFilters(); }}>
-            <label className="room-list-keyword"><span>房间或玩家</span><input value={draftFilters.keyword} onChange={(event) => setDraftFilters((value) => ({ ...value, keyword: event.target.value }))} placeholder="房间号 / 房间名 / 玩家" autoComplete="off" /></label>
-            <label><span>俱乐部 ID / 名称</span><input value={draftFilters.club} onChange={(event) => setDraftFilters((value) => ({ ...value, club: event.target.value }))} placeholder="例如 535696 或 功能测试" autoComplete="off" /></label>
+            <label className="room-list-keyword"><span>房间或玩家</span><input value={draftFilters.keyword} onChange={(event) => setDraftFilters((value) => ({ ...value, keyword: event.target.value }))} placeholder="房间号 / 房间名 / 玩家ID或靓号" autoComplete="off" /></label>
+            <label><span>俱乐部 ID / 名称 / 邀请码</span><input value={draftFilters.club} onChange={(event) => setDraftFilters((value) => ({ ...value, club: event.target.value }))} placeholder="例如 535696、功能测试 或邀请码" autoComplete="off" /></label>
             <label><span>创建者邀请码</span><input value={draftFilters.inviteCode} onChange={(event) => setDraftFilters((value) => ({ ...value, inviteCode: event.target.value }))} placeholder="例如 928882" autoComplete="off" /></label>
             <label><span>开始日期</span><input type="date" value={draftFilters.dateFrom} onChange={(event) => setDraftFilters((value) => ({ ...value, dateFrom: event.target.value }))} /></label>
             <label><span>结束日期</span><input type="date" value={draftFilters.dateTo} onChange={(event) => setDraftFilters((value) => ({ ...value, dateTo: event.target.value }))} /></label>

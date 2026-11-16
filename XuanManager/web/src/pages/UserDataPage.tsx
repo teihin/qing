@@ -247,7 +247,7 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
         <form onSubmit={(event) => { event.preventDefault(); searchPlayer(); }}>
           <div className="search-box search-box--wide">
             <span>ID</span>
-            <input value={playerIdDraft} onChange={(event) => setPlayerIdDraft(event.target.value)} placeholder="例如 292989" autoComplete="off" />
+            <input value={playerIdDraft} onChange={(event) => setPlayerIdDraft(event.target.value)} placeholder="游戏用户ID 或靓号，例如 292989" autoComplete="off" />
             <button type="submit">查询用户明细</button>
           </div>
         </form>

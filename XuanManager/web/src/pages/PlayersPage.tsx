@@ -188,7 +188,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
 
           {advanced && (
             <div className="player-filter-advanced">
-              <Field label="玩家ID"><input value={draft.playerId} onChange={(event) => update("playerId", event.target.value)} placeholder="精确匹配游戏ID" /></Field>
+              <Field label="玩家ID"><input value={draft.playerId} onChange={(event) => update("playerId", event.target.value)} placeholder="精确匹配游戏ID，支持靓号" /></Field>
               <Field label="靓号" hint="6 位数字；按已绑定的个人ID靓号精确匹配"><input inputMode="numeric" maxLength={6} value={draft.prettyNo} onChange={(event) => update("prettyNo", event.target.value.replace(/\D/g, "").slice(0, 6))} placeholder="如 888888" /></Field>
               <Field label="玩家昵称"><input value={draft.name} onChange={(event) => update("name", event.target.value)} placeholder="支持部分匹配" /></Field>
               <Field label="登录账号"><input value={draft.loginName} onChange={(event) => update("loginName", event.target.value)} placeholder="登录名或KBE账号" /></Field>

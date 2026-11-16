@@ -54,6 +54,8 @@ func (s *Server) handleListAntiTheftAccounts(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "设备平台必须是 android、ios 或 web")
 		return
 	}
+	// 设备绑定表按真实玩家 ID 存，关键字是个人ID 靓号时先反解。
+	keyword = s.resolvePlayerInput(r.Context(), keyword)
 	where, args := buildAntiTheftWhere(keyword, status, platform)
 
 	var total int64

@@ -17,6 +17,9 @@ type roomRecordListFilters struct {
 	InviteCode string
 	DateFrom   string
 	DateTo     string
+	// KeywordPlayerID 是「房间或玩家」关键字被识别成个人ID 靓号后的真实玩家 ID，
+	// 由调用方反解后填充；为空表示关键字不是靓号。
+	KeywordPlayerID string
 }
 
 type roomRecordListItem struct {
@@ -171,6 +174,11 @@ func (s *Server) handleListRoomRecords(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	// 「房间或玩家」里的玩家号可能是个人ID 靓号；「俱乐部」框可能直接填邀请码（含邀请码靓号）。
+	if resolved := s.resolvePlayerInput(r.Context(), filters.Keyword); resolved != filters.Keyword {
+		filters.KeywordPlayerID = resolved
+	}
+	filters.Club = s.resolveClubInput(r.Context(), filters.Club)
 	where, args := buildRoomRecordListWhere(filters)
 
 	var total int64
@@ -281,14 +289,24 @@ func buildRoomRecordListWhere(filters roomRecordListFilters) (string, []any) {
 	args := []any{}
 	if filters.Keyword != "" {
 		like := "%" + filters.Keyword + "%"
-		clauses = append(clauses, `EXISTS (
+		base := `EXISTS (
   SELECT 1 FROM kbedm.usr_total_score x
   WHERE x.roomID = t.roomID AND (
     x.roomID = ? OR x.user_guuid = ? OR x.user_name LIKE ? OR
     TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(x.remark2, ',', 5), ',', -1)) LIKE ?
   )
-)`)
-		args = append(args, filters.Keyword, filters.Keyword, like, like)
+)`
+		// 关键字是个人ID 靓号时，额外按真实玩家 ID 精确命中（参数顺序必须与 SQL 占位符一致）。
+		if filters.KeywordPlayerID != "" {
+			clauses = append(clauses, `(EXISTS (
+  SELECT 1 FROM kbedm.usr_total_score x
+  WHERE x.roomID = t.roomID AND x.user_guuid = ?
+) OR `+base+`)`)
+			args = append(args, filters.KeywordPlayerID, filters.Keyword, filters.Keyword, like, like)
+		} else {
+			clauses = append(clauses, base)
+			args = append(args, filters.Keyword, filters.Keyword, like, like)
+		}
 	}
 	if filters.Club != "" {
 		if isSixDigitCode(filters.Club) {

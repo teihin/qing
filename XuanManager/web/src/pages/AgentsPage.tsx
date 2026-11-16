@@ -117,7 +117,7 @@ export default function AgentsPage({ notify }: { notify: (message: string, kind?
           <div className="player-filter-primary">
             <div className="search-box search-box--wide">
               <span>⌕</span>
-              <input value={draft.keyword} onChange={(event) => update("keyword", event.target.value)} placeholder="输入代理ID、登录账号、名字、上级ID或上级名字" />
+              <input value={draft.keyword} onChange={(event) => update("keyword", event.target.value)} placeholder="输入代理ID/靓号、登录账号、名字、上级ID或上级名字" />
             </div>
             <label className="agent-type-select">
               <span>类型</span>
@@ -134,7 +134,7 @@ export default function AgentsPage({ notify }: { notify: (message: string, kind?
           </div>
           {advanced && (
             <div className="player-filter-advanced">
-              <Field label="直属上级ID"><input value={draft.parentId} onChange={(event) => update("parentId", event.target.value)} placeholder="精确匹配" /></Field>
+              <Field label="直属上级ID"><input value={draft.parentId} onChange={(event) => update("parentId", event.target.value)} placeholder="精确匹配，支持靓号" /></Field>
               <Field label="直属上级名字"><input value={draft.parentName} onChange={(event) => update("parentName", event.target.value)} placeholder="支持部分匹配" /></Field>
               <Field label="游戏等级"><input type="number" min="0" value={draft.level} onChange={(event) => update("level", event.target.value)} placeholder="例如 98 / 99" /></Field>
               <Field label="最低盟主比例"><input type="number" min="0" max="100" value={draft.minPercent} onChange={(event) => update("minPercent", event.target.value)} placeholder="0–100" /></Field>
@@ -306,7 +306,7 @@ function AgentRelationshipModal({ agent, notify, onClose }: { agent: AgentItem; 
             <button type="button" className={scope === "all" ? "is-active" : ""} onClick={() => { setScope("all"); setPage(1); }}>全部后代</button>
           </div>
           <label><span>显示</span><select value={childType} onChange={(event) => { setChildType(event.target.value); setPage(1); }}><option value="all">代理和玩家</option><option value="agents">仅代理</option><option value="leaders">仅盟主</option><option value="players">仅玩家</option></select></label>
-          <form onSubmit={(event) => { event.preventDefault(); setAppliedKeyword(childKeyword.trim()); setPage(1); refreshChildrenQuery(); }}><input value={childKeyword} onChange={(event) => setChildKeyword(event.target.value)} placeholder="搜索下级ID、账号或名字" /><button type="submit">搜索</button></form>
+          <form onSubmit={(event) => { event.preventDefault(); setAppliedKeyword(childKeyword.trim()); setPage(1); refreshChildrenQuery(); }}><input value={childKeyword} onChange={(event) => setChildKeyword(event.target.value)} placeholder="搜索下级ID/靓号、账号或名字" /><button type="submit">搜索</button></form>
         </div>
         {children?.truncated && <div className="chain-message chain-message--broken">下级超过 20,000 条，本次已停止继续展开，请缩小查询范围。</div>}
         <div className="child-summary"><span>代理 <strong>{children?.agentCount ?? 0}</strong></span><span>玩家 <strong>{children?.playerCount ?? 0}</strong></span><span>最深 <strong>{children?.maxDepth ?? 0}</strong> 层</span></div>
@@ -386,7 +386,7 @@ function AgentBonusPanel({ agentId, notify }: { agentId: string; notify: (messag
 
         <form className="agent-bonus-filters" onSubmit={(event) => { event.preventDefault(); applyFilters(); }}>
           <label><span>流水类型</span><select value={draft.type} onChange={(event) => setDraft((value) => ({ ...value, type: event.target.value as AgentBonusFilters["type"] }))}><option value="all">全部流水</option><option value="income">红利收入</option><option value="withdrawal">红利提取</option></select></label>
-          <label><span>来源玩家ID</span><input value={draft.sourcePlayerId} onChange={(event) => setDraft((value) => ({ ...value, sourcePlayerId: event.target.value }))} placeholder="精确查询来源玩家" /></label>
+          <label><span>来源玩家ID</span><input value={draft.sourcePlayerId} onChange={(event) => setDraft((value) => ({ ...value, sourcePlayerId: event.target.value }))} placeholder="精确查询来源玩家（支持靓号）" /></label>
           <label><span>房间号</span><input inputMode="numeric" value={draft.roomId} onChange={(event) => setDraft((value) => ({ ...value, roomId: event.target.value }))} placeholder="查询产生红利的房间" /></label>
           <label><span>开始日期</span><input type="date" value={draft.dateFrom} onChange={(event) => setDraft((value) => ({ ...value, dateFrom: event.target.value }))} /></label>
           <label><span>结束日期</span><input type="date" value={draft.dateTo} onChange={(event) => setDraft((value) => ({ ...value, dateTo: event.target.value }))} /></label>

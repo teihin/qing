@@ -111,6 +111,10 @@ type clubFilters struct {
 	// 玩家维度
 	PlayerID   string
 	PlayerName string
+	// KeywordClubID / KeywordPlayerID 是主搜索框的 6 位数字被识别成「邀请码（含邀请码靓号）」
+	// 或「个人ID靓号」后的精确命中目标，由 resolveClubFilters 填充，不来自请求参数。
+	KeywordClubID   string
+	KeywordPlayerID string
 	// 成员规模
 	MinMembers *int64
 	MaxMembers *int64
@@ -189,6 +193,28 @@ func parseClubFilters(r *http.Request) (clubFilters, error) {
 	return filters, nil
 }
 
+// resolveClubFilters 把俱乐部列表里的 6 位数字入参反解成真实 ID。
+//
+// 运营拿到的号码往往是玩家手机上显示的：俱乐部维度可能是邀请码（普通码或邀请码靓号），
+// 群主/玩家维度可能是个人ID 靓号。反解只在命中号池时生效，其余输入原样保留。
+func (s *Server) resolveClubFilters(ctx context.Context, filters *clubFilters) {
+	if filters == nil {
+		return
+	}
+	if filters.ClubID != "" {
+		filters.ClubID = s.resolveClubInput(ctx, filters.ClubID)
+	}
+	if filters.PlayerID != "" {
+		filters.PlayerID = s.resolvePlayerInput(ctx, filters.PlayerID)
+	}
+	if filters.OwnerID != "" {
+		filters.OwnerID = s.resolvePlayerInput(ctx, filters.OwnerID)
+	}
+	if filters.Keyword != "" {
+		filters.KeywordClubID, filters.KeywordPlayerID = s.resolveSearchInputs(ctx, filters.Keyword)
+	}
+}
+
 // buildClubWhere 生成 WHERE 片段。
 // 玩家维度不是直接查 tbl_Account 再回来拼 ID，而是用 EXISTS 子查询，让分页与计数仍然作用在俱乐部上，
 // 同一个人出现在多个俱乐部时也不会重复出行。
@@ -203,9 +229,22 @@ func buildClubWhere(filters clubFilters) (string, []any) {
 	}
 	if filters.Keyword != "" {
 		like := "%" + escapeLike(filters.Keyword) + "%"
-		conditions = append(conditions,
-			"(c.club_guuid LIKE ? ESCAPE '\\\\' OR c.club_name LIKE ? ESCAPE '\\\\')")
+		// 整个关键字条件必须由一对括号包住：末尾还有 AND 其它条件，
+		// 追加的 OR 若落到括号外会绕过 club_status 过滤，把 init/del 的空壳俱乐部捞出来。
+		clause := "(c.club_guuid LIKE ? ESCAPE '\\\\' OR c.club_name LIKE ? ESCAPE '\\\\'"
 		args = append(args, like, like)
+		// 关键字是 6 位数字时可能填的是邀请码（含邀请码靓号）或某个玩家的个人ID靓号：
+		// 邀请码额外按真实俱乐部 ID 精确命中，个人ID靓号按「该玩家是这个俱乐部的成员/代理/群主」命中。
+		if filters.KeywordClubID != "" {
+			clause += " OR c.club_guuid = ?"
+			args = append(args, filters.KeywordClubID)
+		}
+		if filters.KeywordPlayerID != "" {
+			clause += ` OR EXISTS(SELECT 1 FROM kbedm.tbl_Account kp
+WHERE kp.sm_guuid = ? AND (` + membershipColumnSQL("kp", "c.club_guuid") + `))`
+			args = append(args, filters.KeywordPlayerID)
+		}
+		conditions = append(conditions, clause+")")
 	}
 	if filters.ClubID != "" {
 		conditions = append(conditions, "c.club_guuid = ?")
@@ -274,6 +313,7 @@ func (s *Server) handleListClubs(w http.ResponseWriter, r *http.Request, _ princ
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	s.resolveClubFilters(r.Context(), &filters)
 	where, args := buildClubWhere(filters)
 
 	var total int64
@@ -640,7 +680,14 @@ func (s *Server) handleGetClub(w http.ResponseWriter, r *http.Request, _ princip
 		writeError(w, http.StatusBadRequest, "INVALID_CLUB_ID", err.Error())
 		return
 	}
+	// 先按原值当俱乐部 ID 查（init/del 的俱乐部也要能打开）；查不到再按邀请码（含邀请码靓号）反解一次。
 	detail, err := s.readClubDetail(r.Context(), clubID)
+	if errors.Is(err, sql.ErrNoRows) {
+		if resolved := s.resolveClubInput(r.Context(), clubID); resolved != clubID {
+			clubID = resolved
+			detail, err = s.readClubDetail(r.Context(), clubID)
+		}
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		writeError(w, http.StatusNotFound, "CLUB_NOT_FOUND", "没有找到这个俱乐部")
 		return

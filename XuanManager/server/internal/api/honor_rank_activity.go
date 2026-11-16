@@ -525,8 +525,15 @@ FROM kbedm.club_union_info WHERE status <> 'init'`
 		query = `SELECT club_guuid, COALESCE(club_name, '')
 FROM kbedm.club_guuid_info WHERE COALESCE(union_id, '') = ''`
 		if keyword != "" {
-			query += ` AND (club_guuid LIKE ? OR club_name LIKE ?)`
+			// 俱乐部 ID 框也接受邀请码（含邀请码靓号）：反解出的真实 ID 额外精确命中。
+			resolved := s.resolveClubInput(r.Context(), keyword)
+			query += ` AND (club_guuid LIKE ? OR club_name LIKE ?`
 			args = append(args, "%"+keyword+"%", "%"+keyword+"%")
+			if resolved != keyword {
+				query += ` OR club_guuid = ?`
+				args = append(args, resolved)
+			}
+			query += `)`
 		}
 		query += ` ORDER BY id DESC LIMIT 50`
 	}
@@ -601,8 +608,14 @@ func (s *Server) handleListHonorRankActivities(w http.ResponseWriter, r *http.Re
 	}
 	if keyword != "" {
 		like := "%" + keyword + "%"
-		where = append(where, "(a.scope_id LIKE ? OR a.scope_name LIKE ? OR a.title LIKE ? OR a.note LIKE ?)")
+		clause := "(a.scope_id LIKE ? OR a.scope_name LIKE ? OR a.title LIKE ? OR a.note LIKE ?"
 		args = append(args, like, like, like, like)
+		// 关键字是邀请码（含邀请码靓号）时，额外按反解出的俱乐部 ID 命中活动范围。
+		if clubID := s.resolveClubInput(r.Context(), keyword); clubID != keyword {
+			clause += " OR a.scope_id = ?"
+			args = append(args, clubID)
+		}
+		where = append(where, clause+")")
 	}
 	// 阶段用字符串比较近似（时间列都是定长文本），避免逐行解析。
 	nowIn := time.Now().In(honorRankBeijingLocation)

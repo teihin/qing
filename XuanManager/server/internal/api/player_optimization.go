@@ -101,6 +101,8 @@ func (s *Server) handleListPlayerOptimizations(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询内容不能超过 100 个字符")
 		return
 	}
+	// 列表与历史都按真实 ID 存/比：关键字若是个人ID 靓号，先换回真实 ID。
+	keyword = s.resolvePlayerInput(r.Context(), keyword)
 	state := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("state")))
 	if state == "" {
 		state = "all"
@@ -163,6 +165,8 @@ func (s *Server) handleGetPlayerOptimization(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
+	// 运营直接粘玩家手机上的个人ID 靓号也能核对。
+	playerID = s.resolvePlayerInput(r.Context(), playerID)
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
 
@@ -205,6 +209,9 @@ func (s *Server) handleCreatePlayerOptimization(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
+	// 「设置胜率目标」只认真实 ID，输入靓号时先反解，再写命令与审计。
+	playerID = s.resolvePlayerInput(r.Context(), playerID)
+	input.PlayerID = playerID
 	if err := normalizeAndValidateWinTargetRequest(&input); err != nil {
 		writeError(w, http.StatusBadRequest, "INVALID_OPTIMIZATION", err.Error())
 		return
@@ -778,6 +785,8 @@ func (s *Server) handleListPlayerOptimizationHistory(w http.ResponseWriter, r *h
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "查询内容不能超过 100 个字符")
 		return
 	}
+	// 列表与历史都按真实 ID 存/比：关键字若是个人ID 靓号，先换回真实 ID。
+	keyword = s.resolvePlayerInput(r.Context(), keyword)
 	state := strings.TrimSpace(strings.ToLower(r.URL.Query().Get("state")))
 	if state != "" && state != "active" && state != "done" && state != "stopped" {
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "优化状态只能选择进行中、已达成或已停止")

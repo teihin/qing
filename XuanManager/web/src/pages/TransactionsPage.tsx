@@ -100,7 +100,7 @@ export default function TransactionsPage({ notify }: { notify: (message: string,
       <section className="panel transaction-player-search">
         <div className="transaction-search-copy"><span>STEP 01</span><strong>输入游戏用户ID</strong><p>精确查询该玩家全部金币变化记录，不接受昵称代替用户ID。</p></div>
         <form onSubmit={(event) => { event.preventDefault(); searchPlayer(); }}>
-          <div className="search-box transaction-id-input"><span>ID</span><input value={playerIdDraft} onChange={(event) => setPlayerIdDraft(event.target.value)} placeholder="例如 292989" autoComplete="off" /><button type="submit">查询金币记录</button></div>
+          <div className="search-box transaction-id-input"><span>ID</span><input value={playerIdDraft} onChange={(event) => setPlayerIdDraft(event.target.value)} placeholder="游戏用户ID 或靓号，例如 292989" autoComplete="off" /><button type="submit">查询金币记录</button></div>
         </form>
       </section>
 

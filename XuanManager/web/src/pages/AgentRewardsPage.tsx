@@ -1227,7 +1227,7 @@ function SubModal({ member, amount, splits, canConfigure, busy, onBind, onUnbind
       {canConfigure && (
         <Field label="绑定新的子账号（游戏玩家 ID）" hint="绑定关系存后台自有表，不改游戏账号">
           <div style={{ display: "flex", gap: 8 }}>
-            <input value={subId} onChange={event => setSubId(event.target.value.trim())} placeholder="例如 725838" />
+            <input value={subId} onChange={event => setSubId(event.target.value.trim())} placeholder="例如 725838（也支持靓号）" />
             <Button variant="secondary" disabled={busy || !subId} onClick={() => { void onBind(member.agentId, subId); setSubId(""); }}>绑定</Button>
           </div>
         </Field>
@@ -1526,7 +1526,7 @@ function CandidateModal({ unionId, unionName, notify, onClose, onDone, onChanged
       </p>
 
       <div className="reward-tools" style={{ marginBottom: 10 }}>
-        <input placeholder="搜代理 ID 或昵称" value={keyword} onChange={event => setKeyword(event.target.value.trim())} />
+        <input placeholder="搜代理 ID / 靓号 或昵称" value={keyword} onChange={event => setKeyword(event.target.value.trim())} />
         <select value={clubId} onChange={event => setClubId(event.target.value)}>
           <option value="all">全部俱乐部</option>
           {clubs.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
@@ -1537,7 +1537,7 @@ function CandidateModal({ unionId, unionName, notify, onClose, onDone, onChanged
 
       <div className="reward-tools reward-direct-add" style={{ marginBottom: 12 }}>
         <span className="reward-dim">按 ID 直接加入（限本联盟）</span>
-        <input placeholder="例如 725838，多个用逗号或空格分隔" value={directIds}
+        <input placeholder="例如 725838（也支持靓号），多个用逗号或空格分隔" value={directIds}
           onChange={event => setDirectIds(event.target.value)} style={{ flex: 1, minWidth: 240 }} />
         <Button variant="secondary" disabled={saving || !directIds.trim()} onClick={() => void addDirect()}>
           加入名单

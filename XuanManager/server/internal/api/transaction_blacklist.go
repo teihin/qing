@@ -83,6 +83,8 @@ func (s *Server) handleCreateTransactionBlacklist(w http.ResponseWriter, r *http
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
+	// 黑名单按真实 ID 存：输入个人ID 靓号时先反解。
+	playerID = s.resolvePlayerInput(r.Context(), playerID)
 	if !input.Confirm {
 		writeError(w, http.StatusBadRequest, "TRANSACTION_BLACKLIST_CONFIRM_REQUIRED", "请确认加入后该玩家将不能赠送金币")
 		return
@@ -156,6 +158,8 @@ func (s *Server) handleUpdateTransactionBlacklist(w http.ResponseWriter, r *http
 		writeError(w, http.StatusBadRequest, "INVALID_PLAYER_ID", err.Error())
 		return
 	}
+	// 「新的游戏玩家 ID」也接受个人ID 靓号。
+	newPlayerID = s.resolvePlayerInput(r.Context(), newPlayerID)
 	if oldPlayerID == newPlayerID {
 		writeError(w, http.StatusBadRequest, "TRANSACTION_BLACKLIST_UNCHANGED", "新玩家 ID 与当前玩家 ID 相同")
 		return

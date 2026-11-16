@@ -194,7 +194,9 @@ FROM kbedm.club_union_info WHERE union_id = ? AND status <> 'init'`, unionID).
 }
 
 type clubPerfCandidate struct {
-	PlayerID  string `json:"playerId"`
+	PlayerID string `json:"playerId"`
+	// PrettyNo 是该代理已绑定的个人ID 靓号（没有则空），前端按 ID 搜索时一并参与匹配。
+	PrettyNo  string `json:"prettyNo,omitempty"`
 	Name      string `json:"name"`
 	Role      string `json:"role"`
 	ClubID    string `json:"clubId"`
@@ -214,7 +216,13 @@ func (s *Server) handleClubPerfCandidates(w http.ResponseWriter, r *http.Request
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	rows, err := s.gameDB.QueryContext(ctx, `SELECT ca.user_guuid,
+	// 靓号表可能还没建：带上它就能让「搜索玩家」同时按靓号命中，没建表时降级为只按真实 ID。
+	prettyJoin, prettyColumn := "", "''"
+	if s.hasPrettyNumberTable(r.Context()) {
+		prettyJoin = "\nLEFT JOIN kbedm.usr_pretty_no_info pn ON pn.user_guuid = ca.user_guuid AND pn.kind = 'uid' AND pn.status = 'used'"
+		prettyColumn = "COALESCE(pn.pretty_no, '')"
+	}
+	rows, err := s.gameDB.QueryContext(ctx, `SELECT ca.user_guuid, `+prettyColumn+`,
 COALESCE(NULLIF(ca.user_name,''), a.sm_name, ''),
 ca.club_guuid, COALESCE(c.club_name,''),
 COALESCE(c.union_id,''), COALESCE(u.union_name,''),
@@ -222,7 +230,7 @@ COALESCE(c.union_id,''), COALESCE(u.union_name,''),
 FROM kbedm.club_agent_info ca
 JOIN kbedm.tbl_Account a ON a.sm_guuid = ca.user_guuid
 JOIN kbedm.club_guuid_info c ON c.club_guuid = ca.club_guuid
-LEFT JOIN kbedm.club_union_info u ON u.union_id = c.union_id AND u.status='used'
+LEFT JOIN kbedm.club_union_info u ON u.union_id = c.union_id AND u.status='used'`+prettyJoin+`
 WHERE ca.status = 'used' AND c.union_id = ? AND c.club_status NOT IN ('init','del')
   AND ((c.account_id = a.id) OR EXISTS(
         SELECT 1 FROM kbedm.club_invite_code_info ic
@@ -238,7 +246,7 @@ ORDER BY (c.account_id = a.id) DESC, ca.id`, unionID)
 	items := make([]clubPerfCandidate, 0, 128)
 	for rows.Next() {
 		var item clubPerfCandidate
-		if err := rows.Scan(&item.PlayerID, &item.Name, &item.ClubID, &item.ClubName,
+		if err := rows.Scan(&item.PlayerID, &item.PrettyNo, &item.Name, &item.ClubID, &item.ClubName,
 			&item.UnionID, &item.UnionName, &item.IsLeader); err != nil {
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "解析联盟成员失败")
 			return
@@ -343,7 +351,7 @@ type clubPerfPlayer struct {
 // handleClubPerfPlayer 核对联盟内的目标玩家，供后台「新增开通人员」弹窗使用。
 func (s *Server) handleClubPerfPlayer(w http.ResponseWriter, r *http.Request, p principal) {
 	unionID := strings.TrimSpace(r.URL.Query().Get("union_id"))
-	playerID := strings.TrimSpace(r.URL.Query().Get("player_id"))
+	playerID := s.resolvePlayerInput(r.Context(), strings.TrimSpace(r.URL.Query().Get("player_id")))
 	if unionID == "" || playerID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_PARAMS", "请选择联盟并输入玩家ID")
 		return
@@ -373,7 +381,7 @@ func (s *Server) handleClubPerfGrant(w http.ResponseWriter, r *http.Request, p p
 		return
 	}
 	unionID := strings.TrimSpace(input.UnionID)
-	playerID := strings.TrimSpace(input.PlayerID)
+	playerID := s.resolvePlayerInput(r.Context(), strings.TrimSpace(input.PlayerID))
 	if unionID == "" || playerID == "" {
 		writeError(w, http.StatusBadRequest, "INVALID_PARAMS", "请选择联盟并输入玩家ID")
 		return

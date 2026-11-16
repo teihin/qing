@@ -81,6 +81,8 @@ func (s *Server) handleAgentBonuses(w http.ResponseWriter, r *http.Request, _ pr
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", err.Error())
 		return
 	}
+	// 「来源玩家ID」可能是个人ID 靓号，流水里存的是真实 ID。
+	filters.SourcePlayerID = s.resolvePlayerInput(r.Context(), filters.SourcePlayerID)
 	page, size := pageParams(r)
 
 	var remainingRaw, totalRaw, withdrawnRaw int64

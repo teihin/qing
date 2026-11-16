@@ -105,8 +105,14 @@ func (s *Server) handleListAutomationClubs(w http.ResponseWriter, r *http.Reques
 	conditions = append(conditions, scopeSQL)
 	args = append(args, scopeArgs...)
 	if keyword != "" {
-		conditions = append(conditions, "(c.club_id LIKE ? OR c.name LIKE ?)")
-		args = append(args, "%"+keyword+"%", "%"+keyword+"%")
+		// 镜像表里存过邀请码：直接按邀请码（含邀请码靓号）也能搜，另把反解出的俱乐部 ID 一起命中。
+		clause := "(c.club_id LIKE ? OR c.name LIKE ? OR c.invite_code LIKE ?"
+		args = append(args, "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+		if resolved := s.resolveClubInput(r.Context(), keyword); resolved != keyword {
+			clause += " OR c.club_id = ?"
+			args = append(args, resolved)
+		}
+		conditions = append(conditions, clause+")")
 	}
 	if status == "enabled" || status == "disabled" {
 		conditions = append(conditions, "c.status = ?")

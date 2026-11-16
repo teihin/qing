@@ -96,7 +96,7 @@ export default function PlayerOptimizationPage({ can, notify }: {
     <section className="panel optimization-filter-panel">
       <form onSubmit={submitGuard(async () => search())}>
         <div className="optimization-search-row">
-          <label className="search-box search-box--wide"><span>⌕</span><input maxLength={100} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家 ID、昵称、登录账号或设置人" /><button type="submit">查询</button></label>
+          <label className="search-box search-box--wide"><span>⌕</span><input maxLength={100} value={keyword} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家 ID/靓号、昵称、登录账号或设置人" /><button type="submit">查询</button></label>
           <label><span>目标状态</span><select value={status} onChange={(event) => { setStatus(event.target.value as StatusFilter); setPage(1); }}><option value="active">进行中</option><option value="done">已达成</option><option value="stopped">已停止</option><option value="all">全部</option></select></label>
           <Button type="submit">应用条件</Button>
           {filtersActive && <Button type="button" variant="secondary" onClick={reset}>重置</Button>}
@@ -200,7 +200,7 @@ function OptimizationHistoryPanel({ refreshVersion, notify }: {
       <strong>{data?.total ?? "—"}<small>条记录</small></strong>
     </header>
     <form className="optimization-history-filters" onSubmit={submitGuard(async () => search())}>
-      <label className="optimization-history-search"><span>⌕</span><input value={keyword} maxLength={100} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家ID、昵称、设置人或分组" /></label>
+      <label className="optimization-history-search"><span>⌕</span><input value={keyword} maxLength={100} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家ID/靓号、昵称、设置人或分组" /></label>
       <label><span>结束状态</span><select value={state} onChange={(event) => setState(event.target.value as "" | PlayerOptimizationState)}><option value="">全部状态</option><option value="active">进行中</option><option value="done">已达成</option><option value="stopped">已停止</option></select></label>
       <Button type="submit">查询记录</Button>
       {filtersActive && <Button type="button" variant="secondary" onClick={reset}>重置</Button>}
@@ -286,7 +286,7 @@ function AddOptimizationModal({ initialItem, notify, onClose, onDone }: {
   return <Modal wide eyebrow="CREATE WIN TARGET" title="新增玩家优化" onClose={busy ? () => undefined : onClose}>
     <form className="optimization-modal" onSubmit={submitGuard(submit)}>
       <div className="optimization-lookup">
-        <Field label="玩家 ID" hint="输入 6 位游戏玩家 ID，先核对玩家与当前状态"><input inputMode="numeric" maxLength={6} value={playerId} disabled={busy || lookingUp} onChange={(event) => { setPlayerId(event.target.value.replace(/\D/g, "").slice(0, 6)); setPlayer(null); setConfirmed(false); setError(""); }} placeholder="请输入玩家 ID" /></Field>
+        <Field label="玩家 ID" hint="输入 6 位游戏玩家 ID 或靓号，先核对玩家与当前状态"><input inputMode="numeric" maxLength={6} value={playerId} disabled={busy || lookingUp} onChange={(event) => { setPlayerId(event.target.value.replace(/\D/g, "").slice(0, 6)); setPlayer(null); setConfirmed(false); setError(""); }} placeholder="请输入玩家 ID" /></Field>
         <Button type="button" variant="secondary" disabled={!validId || busy || lookingUp} onClick={() => void lookup()}>{lookingUp ? "正在查询…" : "查询玩家"}</Button>
       </div>
       {error && <div className="form-error"><span>!</span>{error}</div>}

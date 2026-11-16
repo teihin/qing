@@ -66,7 +66,7 @@ export default function AntiTheftPage({ can, notify }: {
 
     <section className="panel anti-theft-list-panel">
       <form className="anti-theft-toolbar" onSubmit={submitGuard(async () => search())}>
-        <label className="anti-theft-keyword"><span>查询账号</span><input value={keyword} maxLength={100} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家 ID、登录账号或昵称" /></label>
+        <label className="anti-theft-keyword"><span>查询账号</span><input value={keyword} maxLength={100} onChange={(event) => setKeyword(event.target.value)} placeholder="玩家 ID/靓号、登录账号或昵称" /></label>
         <label><span>绑定状态</span><select value={status} onChange={(event) => { setStatus(event.target.value); setPage(1); }}><option value="">全部状态</option><option value="enabled">已开启</option><option value="disabled">未开启</option></select></label>
         <label><span>设备平台</span><select value={platform} onChange={(event) => { setPlatform(event.target.value); setPage(1); }}><option value="">全部平台</option><option value="android">Android</option><option value="ios">iOS</option><option value="web">网页版</option></select></label>
         <div className="anti-theft-toolbar__actions"><Button type="submit">查询</Button>{hasFilters && <Button type="button" variant="secondary" onClick={reset}>清空</Button>}</div>
