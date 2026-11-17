@@ -1,0 +1,12 @@
+{
+  "design": "design-previews/排行榜-V9-待确认/排行榜-V9-三榜统一效果图-待确认.png",
+  "assets": [
+    "leaderboard_v9_row.png",
+    "leaderboard_v9_table.png"
+  ],
+  "scope": [
+    "assets/resources/Prefabs/排行榜.prefab",
+    "assets/resources/Prefabs/排行榜对象.prefab"
+  ],
+  "notes": "Keeps the existing three boards, live data labels and infinite scroll."
+}
