@@ -1126,26 +1126,38 @@ func TestBFEntryOffHidesUnionOwnerFromOrdinaryMembers(t *testing.T) {
 	env.store.bfClubEntries["222222"] = true
 	assertTargets("player-restored", player, []string{"100004", "100009"})
 
-	// 再次关闭后，已有的大盟主真实会话仍保留，但降为普通会话，不再标记固定入口。
+	// 开启期间先建立一条历史大盟主会话，模拟用户曾经聊过大盟主。
+	historic, err := env.service.CreateConversation(ctx, player, "111111", "100009")
+	if err != nil {
+		t.Fatalf("BF on must allow creating union-owner conversation: %v", err)
+	}
+
+	// 再次关闭后，历史大盟主会话也必须从列表消失，不能只降为普通会话。
 	env.store.bfClubEntries["111111"] = false
-	if _, err := env.service.CreateConversation(ctx, player, "111111", "100009"); err != nil {
-		t.Fatal(err)
+	env.store.bfClubEntries["222222"] = false
+	if _, err := env.service.CreateConversation(ctx, player, "111111", "100009"); AsError(err).Code != CodeConversationForbid {
+		t.Fatalf("BF off must reject reopening union-owner conversation, got %v", err)
 	}
 	page, err := env.service.Conversations(ctx, player, "111111", 1, 30)
 	if err != nil {
 		t.Fatal(err)
 	}
-	foundUnionConversation := false
 	for _, item := range page.Items {
 		if item.Peer.Guuid == "100009" {
-			foundUnionConversation = true
-			if item.IsDefaultTarget {
-				t.Fatalf("BF off must demote union-owner conversation from fixed target: %+v", item)
-			}
+			t.Fatalf("BF off must hide historical union-owner conversation: %+v", item)
 		}
 	}
-	if !foundUnionConversation {
-		t.Fatalf("existing union-owner conversation must stay visible: %+v", page.Items)
+	all, err = env.service.AllConversations(ctx, player, 1, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range all.Items {
+		if item.Peer.Guuid == "100009" {
+			t.Fatalf("BF off must hide historical union-owner conversation globally: %+v", item)
+		}
+	}
+	if _, err := env.service.Messages(ctx, player, historic.ConversationID, "", "", 30); AsError(err).Code != CodeConversationForbid {
+		t.Fatalf("BF off must reject direct access to hidden union-owner conversation, got %v", err)
 	}
 }
 

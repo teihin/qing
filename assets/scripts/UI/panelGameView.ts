@@ -1132,18 +1132,25 @@ export default class panelGameView extends UIPanelViewBase {
             return;
         const clubId = this.GetCurrentRoomClubId();
         const unionRoom = isUnionRoom(account);
-        const clubRoom = clubId !== "";
         shortage.active = (unionRoom && clubId === "") || balance < params.min;
         const label = Tool.GetChild(this.node,"带入窗口/余额不足提示/txt");
         if(label != null)
-        {
-            if(unionRoom && clubId === "")
-                label.getComponent(cc.Label).string = "正在确认俱乐部信息，请稍候";
-            else
-                label.getComponent(cc.Label).string = clubRoom
-                    ? "俱乐部金币不足，请联系合伙人上分！"
-                    : "金币余额不足" + this.FormatBuyinAmount(params.min, scale) + "，请先充值！";
-        }
+            label.getComponent(cc.Label).string = this.GetBuyinShortageText(params.min, scale);
+    }
+
+    /**
+     * 余额不足时给玩家看的同一句话：面板内红字和点击确定后的弹窗共用一套文案，
+     * 避免「弹窗里写金币不足、点击后又弹另一句」。
+     */
+    private GetBuyinShortageText(min:number, scale:number):string
+    {
+        const account:any = GameDataManager.getAccount();
+        const clubId = this.GetCurrentRoomClubId();
+        if(isUnionRoom(account) && clubId === "")
+            return "正在确认俱乐部信息，请稍候";
+        return clubId !== ""
+            ? "俱乐部金币不足，请联系合伙人上分！"
+            : "金币余额不足" + this.FormatBuyinAmount(min, scale) + "，请先充值！";
     }
 
     private static ToBuyinNumber(value:any):number
@@ -1366,12 +1373,19 @@ export default class panelGameView extends UIPanelViewBase {
 
             if (!Number.isFinite(Number(strMsg)) || Number(strMsg) <= 0)
             {
-                this.ShowMsg("带入积分必须大于0！");
+                this.ShowModalPrompt("带入积分必须大于0！");
                 return;
             }
             if (!buyinDisplay.isCurrentAmountValid())
             {
-                this.ShowMsg("带入金额不符合本次要求，请重新选择！");
+                this.ShowModalPrompt("带入金额不符合本次要求，请重新选择！");
+                return;
+            }
+            // 已在座位上补分时「确定」原先是按余额置灰，玩家点下去毫无反馈；
+            // 现在统一在这里给出原因（俱乐部积分不足 / 金币不足），不发无效请求。
+            if (!buyinDisplay.hasEnoughBalance())
+            {
+                this.ShowModalPrompt(this.GetBuyinShortageText(buyinDisplay.minimumAmount(), this.GetBuyinDisplayScale()));
                 return;
             }
 
@@ -1388,7 +1402,7 @@ export default class panelGameView extends UIPanelViewBase {
             const strClubID = this.GetCurrentRoomClubId();
             if(isUnionRoom(account) && strClubID === "")
             {
-                this.ShowMsg("正在确认俱乐部信息，请稍候！");
+                this.ShowModalPrompt("正在确认俱乐部信息，请稍候！");
                 return;
             }
 
@@ -1404,7 +1418,7 @@ export default class panelGameView extends UIPanelViewBase {
             else
             {
                 this.ClearPreSitState(true);
-                this.ShowMsg("占座已失效，请重新选择座位！");
+                this.ShowModalPrompt("占座已失效，请重新选择座位！");
                 return;
             }
 
@@ -2545,13 +2559,15 @@ export default class panelGameView extends UIPanelViewBase {
     /**
      * 坐下失败时服务端会另发 PromptInfo 区分“俱乐部金币不足”和“该俱乐部额度不足”。
      * 先给专用提示留出到达时间；没有专用提示再弹中性的兜底文案。
+     * onFallback 只在兜底真正弹出时执行（有专用文案时让服务端那条路径自己收尾）。
      */
-    private ShowSitFailureFallback(strMsg:string)
+    private ShowSitFailureFallback(strMsg:string, onFallback:()=>void = null)
     {
         const serial = this.promptInfoSerial;
         this.scheduleOnce(() => {
             if (this.promptInfoSerial !== serial) return;
             if (Date.now() - this.lastPromptInfoTime < 1500) return;
+            if (onFallback != null) onFallback();
             this.ShowModalPrompt(strMsg);
         }, 0.6);
     }
@@ -2802,8 +2818,19 @@ export default class panelGameView extends UIPanelViewBase {
                 }
                 else if(param == "坐下_事件1")
                 {
-                    // 已在座补分被拒：保留弹窗，按服务端最新字段刷新可选金额。
+                    // 已在座补分被拒：刷新可选金额后弹提示。
+                    // 以前这里只刷新不提示，玩家点「确定」像没反应、弹窗一直挂着。
+                    // 服务端若另发 PromptInfo（额度不足等）会先弹专用文案，
+                    // 这里只做 0.6s 后的中性兜底，并把带入窗口一起收掉——
+                    // 提示已经说明带不进，窗口留着只会挡牌桌。
                     this.RefreshBuyinBalance();
+                    const account = GameDataManager.getAccount();
+                    const clubRoom = this.GetCurrentRoomClubId() !== "" || isUnionRoom(account);
+                    this.ShowSitFailureFallback(clubRoom
+                        ? "带入失败，请检查俱乐部额度或积分"
+                        : "带入失败，请重新选择带入金额！", () => {
+                            this.CloseBuyinWindowWithoutSeat();
+                        });
                 }
             }
         }

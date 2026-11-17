@@ -4,6 +4,22 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-17 后台排行榜名次奖励改成「名次区间 + 奖励」列表（已部署，仅前端）
+
+- 名次奖励从「逗号分隔一整串」改成行列表（最高名次/最低名次/奖励/删除，可新增区间），相邻同额自动合并、改最低名次时下一行顺延。**协议不变**：提交前展开回「第 1 名起、逗号分隔」原串，后端零改动；空洞/重叠/超限红字拦住。
+- 活动弹窗与行内配置两处共用 `RankRewardTiers.tsx`；前端 `index-BMTdl6pi.js`（备份 `web.previous-honorrank-tiers-20261117-1320`）。详见[交接](handoffs/2026-11-17-honor-rank-reward-tiers.md)。
+
+## 2026-11-17 带入弹窗：在座补分积分不足也要弹提示（脚本就绪，未构建/热更）
+
+- 根因两条：`BuyinDisplay` 在余额不够最低带入时把「确认带入」置灰（点击无事件）；`坐下_事件1` 在座补分被拒时只刷新弹窗、不弹任何提示。
+- 现在「确定」恒可点，余额不足/金额非法/区间不符统一走模态提示（俱乐部房弹「俱乐部金币不足，请联系合伙人上分！」），余额不足不再发无效请求；在座补分被服务端拒绝时刷新金额 + 0.6s 中性兜底提示（服务端 PromptInfo 先到则让位），兜底弹出时**同步关掉带入窗口**。面板内红字与弹窗共用 `GetBuyinShortageText` 一套文案。
+- `node tools/tests/buyin_v8_regression.js` 14 条功能用例 PASS（新增 2 条）；prefab 基线对比为既有漂移。未启动 Creator 构建，热更 manifest 仍 6.0.13。详见[交接](handoffs/2026-11-17-buyin-insufficient-prompt.md)。
+
+## 2026-11-17 直聊：隐藏普通成员的历史大盟主会话（服务端已部署）
+
+- 根因：旧实现只隐藏 BF 关闭后的大盟主默认入口，已有真实会话仍返回；生产只读统计有 24 条活跃大盟主会话，分布在 11 个俱乐部。
+- 服务端已按 BF 关闭规则过滤会话列表、创建/恢复和消息详情，部署二进制 `a6ecd8b2…`，health 200。客户端缓存版本 `4→5`，首屏等待服务端结果，源码未构建热更；真实账号/真机待验收。详见[交接](handoffs/2026-11-17-direct-chat-union-owner-history-filter.md)。
+
 ## 2026-11-17 后台「玩家优化」更名「玩家控制」（代码就绪，未部署）
 
 - 只改显示文案：页面 30 处中文（标题/按钮/空态/校验/消息）、菜单图标字 `优`→`控`、服务端返回消息与游戏服操作备注 31 处、迁移 `071_player_control_rename.sql` 改菜单名与 4 条权限名/描述。模块 code、路由、权限 code、接口路径不变，角色授权不受影响。
@@ -75,31 +91,12 @@
 - 存量一并关停：`chat_direct_bf_club` 10 行、旧表 `chat_direct_bf_entry` 2 行全部 `enabled=0`。
 - 已部署 ChatTool `b1ba8f54…`、XuanManager `580586bf…`、前端 `index-Ccu1-Dt0.js`；health 200、公网页面已换新资源。客户端未改代码（只读 `visible`），未构建/未真机；后台登录态实操待验收。详见[交接](handoffs/2026-11-15-bf-chat-default-off.md)。
 
-## 2026-11-14 后台靓号管理（已部署 8891）
+## 2026-11-14 批次（后台已部署 8891，客户端未构建，细节见各自交接）
 
-- 命令代理、号池/绑定/解绑、玩家/俱乐部展示，页面待验收；单菜单内两页签（账号ID/俱乐部邀请码，权限各自独立），迁移 065/066 已执行、8891 已部署。详见[交接](handoffs/2026-11-14-pretty-numbers.md)。
-- 2026-11-15 「我的」ID 改读 `custom_id`（回退 guuid）；未构建/真机。
-
-## 2026-11-14 消息页：BF 关闭隐藏大盟主入口 + 盟主/群主显示（服务端已部署，客户端未构建）
-
-- 关闭俱乐部 BF 后普通合伙人和玩家默认对话只剩所属盟主，盟主仍见大盟主，重开恢复；群主显示改读服务端 `roleName`；退会/已删俱乐部的历史未读不再点亮红点。已部署 ChatTool `854d01e6…`（备份 `chattool.previous-unread-visible-20261114-221553`）与后台前端 `index-C3HoOUg9.js`；health 200。客户端未构建/未真机。详见[BF 交接](handoffs/2026-11-14-bf-chat-hide-union-owner.md)、[身份显示交接](handoffs/2026-11-14-chat-role-name-union-owner.md)、[红点交接](handoffs/2026-11-14-unread-visible-clubs.md)。
-
-## 2026-11-14 后台玩家管理：关联账号/重复玩家（已部署 8891，数据待采集）
-
-- 按同设备（90天）、同GPS网格（7天）、同公网IP（7天）聚合，单IP>20人、单网格>50人不参与；列表新增「关联账号数量」列（在「玩家」后，可点表头按数量排序，全局计算上限 2000），点开看全部关联玩家、方式与强度（最多200条）。
-- 已部署：二进制 `bb8bdf37…`、前端 `index-magx5XK-.js` + `index-DeSwv4Lg.css`；备份 `backups/xuanmanager.20261114-005539-rollback`、`web.previous-20261114-005539`。首版误用 `s.db`（webcm）报 1146，已改 `s.gameDB`；正式设备表无 `last_ip`/`last_ip_public`。详见[交接](handoffs/2026-11-14-admin-player-relations.md)。
-
-## 2026-11-14 后台玩家管理支持 IP 短码（已部署 8891）
-
-- 玩家列表新增「IP短码」列（6 位 Base62，与客户端同规则），高级筛选新增「IP短码」精确匹配 `tbl_Account.sm_ip`；`admin999` 额外收到原始 `ip` 并在短码下方显示，其他账号无该字段。
-- 玩家详情保持原样：明文 IP/GPS 仍仅 `admin999` 可见。
-- 已部署修正版：二进制 `f2c47066…`、前端 `index-B_pOglF-.js`；备份 `backups/xuanmanager.20261114-002434-rollback`、`web.previous-20261114-002434`；health 200、未登录接口 401。详见[交接](handoffs/2026-11-14-admin-player-ip-shortcode.md)。
-
-## 2026-11-14 BOSS 玩家信息弹窗 IP 改短码（未构建、未真机）
-
-- `panelClubPlayerInfo.ts` 上屏前把 `ip` 转成 6 位无损可逆短码（Base62），弹窗不再出现明文 IP；IP 行右侧新增「复制」按钮，复制短码本身；非 IPv4 显示「—」。
-- 服务端未改，回包仍是明文；解码规则见[接口文档 §8](../../服务器文档整理/玩家扩展信息查询-客户端接口文档.md)。后台后续还原按同一规则实现。
-- 未运行 Creator 编译/构建/热更/真机。详见[交接](handoffs/2026-11-14-client-player-ip-shortcode.md)。
+- **后台靓号管理**：命令代理、号池/绑定/解绑、玩家/俱乐部展示，单菜单两页签（账号ID/俱乐部邀请码，权限独立），迁移 065/066 已执行；2026-11-15「我的」ID 改读 `custom_id`（回退 guuid）。见[交接](handoffs/2026-11-14-pretty-numbers.md)。
+- **消息页 BF 关闭规则**：普通合伙人与玩家只剩所属盟主、盟主仍见大盟主、重开恢复；群主显示改读服务端 `roleName`；退会/已删俱乐部的历史未读不再点红点。ChatTool `854d01e6…` 已部署、health 200。见[BF 交接](handoffs/2026-11-14-bf-chat-hide-union-owner.md)、[身份](handoffs/2026-11-14-chat-role-name-union-owner.md)、[红点](handoffs/2026-11-14-unread-visible-clubs.md)。
+- **后台玩家管理**：新增「关联账号数量」（同设备 90 天 / 同 GPS 网格 7 天 / 同公网 IP 7 天，单 IP>20、单网格>50 不参与，全局上限 2000）与「IP短码」列（6 位 Base62，精确匹配 `sm_ip`，仅 `admin999` 额外可见原始 IP）；详情仍只 `admin999` 见明文 IP/GPS。二进制 `bb8bdf37…`、前端 `index-magx5XK-.js`。见[关联账号](handoffs/2026-11-14-admin-player-relations.md)、[IP 短码](handoffs/2026-11-14-admin-player-ip-shortcode.md)。
+- **客户端 BOSS 玩家信息弹窗**：`ip` 上屏前转 6 位无损可逆短码并加「复制」按钮，非 IPv4 显示「—」；服务端回包仍是明文。见[交接](handoffs/2026-11-14-client-player-ip-shortcode.md)。
 
 ## 2026-11-13 批次（已部署 8891 / 8893，细节见各自交接）
 
@@ -107,17 +104,6 @@
 - **业绩核心共享发放改三阶段**：总额注入大盟主联盟池 → 下划各盟主俱乐部 → 给成员发积分；迁移 `062` 加 `stage/club_id/…` 与账单分组；有流水后总额/分摊锁定、重试幂等；**未做真实发放**。见[交接](handoffs/2026-11-13-agent-reward-club-payout.md)。
 - **额度授权记录加类型显示**：行模板新增 `typelabel`（授信/收回/注资/注资扣减/额度奖励）；未构建/真机。见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
 - **后台用户端数据查询** `/game/user-data`（迁移 `061`）：玩家信息/俱乐部/代理链 + 五类明细，大盟主与盟主额外看额度变化；默认 7 天、单次 ≤31 天。见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
-
-## 2026-11-12 批次（已归档）
-
-- 客户端：两个 BOSS 入口改按管理范围、额度授权记录加类型、初始化交易密码改独立 Prefab、客服谷歌验证 + 隐藏账号。
-- 后台：玩家管理大小BOSS 改看 `union_manage`/`club_manage`、业绩核心共享按日期框、新增「业绩股」总览、登录接入谷歌验证 TOTP。
-- 部署与回滚信息、逐项交接链接见[11-12 批次归档](archive/2026-11-15/current-nov12-batches.md)。
-
-## 2026-11-11 批次（已归档）
-
-- 牌桌「带入积分」V10、我的红利「业绩股」页签、后台业绩核心共享改按联盟发放、玩家信息卡片两排三列。
-- 逐项状态与交接链接见[11-11 批次归档](archive/2026-11-15/current-nov11-batches.md)。
 
 ## 更早批次
 

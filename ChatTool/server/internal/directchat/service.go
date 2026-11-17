@@ -496,7 +496,7 @@ func (s *Service) AllConversations(ctx context.Context, session Session, page, p
 	return AllConversationPage{Items: items, Page: page, PageSize: pageSize, HasMore: end < len(all)}, nil
 }
 
-// conversationView 把一个真实会话转成列表项。俱乐部或查看者权限已失效时跳过。
+// conversationView 把一个真实会话转成列表项。俱乐部、查看者或会话对方权限已失效时跳过。
 func (s *Service) conversationView(ctx context.Context, session Session, item ConversationItem) (ConversationView, bool) {
 	conv := item.Conversation
 	club, err := s.directory.GetClub(ctx, conv.ClubID)
@@ -517,6 +517,9 @@ func (s *Service) conversationView(ctx context.Context, session Session, item Co
 		if strings.TrimSpace(item.Peer.Guuid) != "" {
 			peer = item.Peer
 		}
+	}
+	if !s.peerConversationAllowed(ctx, club, me, peer.Guuid) {
+		return ConversationView{}, false
 	}
 	return ConversationView{
 		ConversationID:  conv.ID,
@@ -606,9 +609,9 @@ func (s *Service) lastPreview(ctx context.Context, conv Conversation, guuid stri
 
 // defaultTargets 返回默认对话入口：本俱乐部老板（盟主/群主）与联盟大盟主。
 // 玩家和合伙人只保留这两级，代理链条上的其他层级（含直属上级合伙人）不再生成默认入口；
-// 他们已有的真实会话仍按普通会话显示。两人为同一人时去重，对方已退出或不存在时跳过。
+// 两人为同一人时去重，对方已退出或不存在时跳过。
 // 后台关闭俱乐部 BF 聊天后，只有本俱乐部老板仍保留大盟主入口，
-// 普通合伙人和玩家只能看到所属盟主。
+// 普通合伙人和玩家只能看到所属盟主，历史大盟主会话也不再显示。
 func (s *Service) defaultTargets(ctx context.Context, club Club, me Member) []Member {
 	result := make([]Member, 0, 2)
 	// 大群主在联盟内没有需要固定置顶的上级/老板入口，直接用成员列表找人。
@@ -654,6 +657,25 @@ func (s *Service) unionOwnerTargetAllowed(ctx context.Context, club Club, me Mem
 		return true
 	}
 	return enabled
+}
+
+// peerConversationAllowed 判断当前查看者是否还能看到与指定对方的会话。
+// BF 关闭后，普通成员不仅不生成大盟主默认入口，已有的大盟主会话也必须隐藏；
+// 否则新账号测试正常，已有历史会话的账号仍会看到大盟主窗口。
+func (s *Service) peerConversationAllowed(ctx context.Context, club Club, me Member, peerGuuid string) bool {
+	peerGuuid = strings.TrimSpace(peerGuuid)
+	if peerGuuid == "" {
+		return false
+	}
+	// 俱乐部老板可能同时是联盟大盟主；对本俱乐部成员来说，此人仍是所属盟主。
+	if strings.TrimSpace(club.OwnerGuuid) == peerGuuid {
+		return true
+	}
+	union, ok, err := s.directory.GetUnionByClub(ctx, club.ClubID)
+	if err != nil || !ok || strings.TrimSpace(union.OwnerGuuid) != peerGuuid {
+		return true
+	}
+	return s.unionOwnerTargetAllowed(ctx, club, me)
 }
 
 // isFixedTarget 判断会话是否属于默认入口（不可隐藏）：本俱乐部老板（盟主/群主）与联盟大盟主。
@@ -740,7 +762,7 @@ func (s *Service) canSeeMemberNote(ctx context.Context, clubID string, viewer, t
 // CreateConversation 创建或获取会话（幂等）。同时清除当前用户的隐藏状态。
 //
 // clubID 是会话归属俱乐部：同俱乐部聊天就是该俱乐部；联盟总群主跨俱乐部
-// 聊天时是对方所在的俱乐部。普通成员只能和本俱乐部成员、以及本联盟大群主
+// 聊天时是对方所在的俱乐部。普通成员只能和本俱乐部成员、以及当前允许的大盟主
 // 建会话；大群主可以和联盟内任意成员建会话。
 func (s *Service) CreateConversation(ctx context.Context, session Session, clubID, peerGuuid string) (ConversationView, error) {
 	peerGuuid = strings.TrimSpace(peerGuuid)
@@ -764,6 +786,9 @@ func (s *Service) CreateConversation(ctx context.Context, session Session, clubI
 	}
 	if !ok {
 		return ConversationView{}, errPeerNotClubMember
+	}
+	if !s.peerConversationAllowed(ctx, club, me, peer.Guuid) {
+		return ConversationView{}, errConvForbidden
 	}
 	conv, err := s.store.EnsureConversation(ctx, clubID, session.Guuid, peerGuuid)
 	if err != nil {
@@ -1410,10 +1435,17 @@ func (s *Service) requireConversation(ctx context.Context, session Session, conv
 	if err != nil {
 		return Conversation{}, Member{}, PeerView{}, err
 	}
+	club, err := s.directory.GetClub(ctx, conv.ClubID)
+	if err != nil {
+		return Conversation{}, Member{}, PeerView{}, err
+	}
 	peerGuuid := conv.PeerGuuid(session.Guuid)
 	peer := PeerView{Guuid: peerGuuid, Name: peerGuuid, Role: RoleMember}
 	if member, ok, err := s.peerForClub(ctx, conv.ClubID, peerGuuid); err == nil && ok {
 		peer = s.peerView(ctx, session, me, conv.ClubID, member)
+	}
+	if !s.peerConversationAllowed(ctx, club, me, peer.Guuid) {
+		return Conversation{}, Member{}, PeerView{}, errConvForbidden
 	}
 	return conv, me, peer, nil
 }

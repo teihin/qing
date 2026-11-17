@@ -67,8 +67,9 @@ export default class BuyinDisplay extends cc.Component {
         this.balance.string = this.format(available);
         // One valid amount needs no dragging and must never divide by zero.
         this.slider.enabled = this.count > 1;
-        // 余额不够最低值时由面板显示余额不足提示，这里同步禁用确定。
-        this.confirm.interactable = this.count > 0 && available >= this.minimumValue;
+        // 余额不够最低值时不再禁用「确定」：禁用后点击毫无反馈，玩家会以为按钮坏了。
+        // 现在按钮始终可点，由面板在点击时弹出具体原因（俱乐部金币不足 / 余额不足）。
+        this.confirm.interactable = true;
         let index = 0;
         if (this.count > 0 && Number.isFinite(preserveAmount) && preserveAmount > 0)
             index = this.indexForAmount(preserveAmount);
@@ -82,6 +83,16 @@ export default class BuyinDisplay extends cc.Component {
         return this.count > 0
             && this.currentAmount >= this.minimumValue - 1e-8
             && this.currentAmount <= this.maximumValue + 1e-8;
+    }
+
+    /** 当前可用余额是否够最低带入；不够时面板要弹「金币不足」而不是静默不响应。 */
+    public hasEnoughBalance():boolean {
+        return this.count > 0 && this.availableValue >= this.minimumValue - 1e-8;
+    }
+
+    /** 服务端原值口径的最低带入，供面板拼余额不足文案。 */
+    public minimumAmount():number {
+        return this.minimumValue;
     }
 
     /** 房间开启「入座扣钻」时显示钻石余额和当前选择会扣的钻石；其它房间隐藏两行。 */
