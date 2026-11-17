@@ -854,9 +854,9 @@ export default class DrhPlayerLogic extends cc.Component {
             //最新协议由 mang_show_state 决定只显示一行；状态存在时，其他缺失字段按 0 处理。
             if(bHasMangShowState)
             {
-                // 皮池展示优先用 mang_pi_hand_amount；两个皮池字段都缺失时才清 0，避免回退值被误清零。
-                if(!data.hasOwnProperty("mang_pi_hand_amount") && !data.hasOwnProperty("mang_pi_times"))
-                    this.info.mang_pi_times = "0";
+                // 新协议字段缺失按 0 处理，不能沿用上一条当前玩家消息的展示值。
+                if(!data.hasOwnProperty("mang_pi_hand_amount"))
+                    this.info.mang_pi_hand_amount = "0";
                 this.UpdateMangpiXiumang();
             }
             else
@@ -3209,18 +3209,17 @@ export default class DrhPlayerLogic extends cc.Component {
 
             let strRes = "V7/游戏内/圈芒_100x60";
             let strCount = "1";
-            let strAmount = this.info.mang_show_quan_amount;
+            // 最新协议三种分类统一显示当前真实芒果池，不再分别读取旧的 amount/total 字段。
+            let strAmount = this.info.mang_show_pool_amount;
             if(nState == 1)
             {
                 strRes = "V7/游戏内/休芒_100x60";
                 strCount = this.GetMangShowNumber(this.info.mang_show_xiu_count).toString();
-                strAmount = this.GetMangShowTotalAmount(this.info.mang_show_xiu_total_amount, this.info.mang_show_xiu_amount);
             }
             else if(nState == 2)
             {
                 strRes = "V7/游戏内/揍芒_100x60";
                 strCount = this.GetMangShowNumber(this.info.mang_show_zou_count).toString();
-                strAmount = this.GetMangShowTotalAmount(this.info.mang_show_zou_total_amount, this.info.mang_show_zou_amount);
             }
 
             let transName = Tool.GetChild(transMang,"名称");
@@ -3276,14 +3275,6 @@ export default class DrhPlayerLogic extends cc.Component {
             return 0;
         return nValue;
     }
-    /** 休芒/揍芒展示金额：优先 total（已含首手圈芒基数）；老服务端无 total 时回退实际累计 */
-    private GetMangShowTotalAmount(strTotal:string, strAmount:string):string
-    {
-        let strValue = strTotal == null ? "" : strTotal.toString().trim();
-        if(strValue == "")
-            strValue = strAmount == null ? "" : strAmount.toString().trim();
-        return strValue;
-    }
     /** 解析当前玩家消息的单状态芒果字段；缺字段时清空新协议并回退旧口径。 */
     private ParseMangShowFields(data:any):boolean
     {
@@ -3291,29 +3282,24 @@ export default class DrhPlayerLogic extends cc.Component {
         if(!bHasMangShowState)
         {
             this.info.mang_show_state = "";
+            this.info.mang_show_pool_amount = "";
             this.info.mang_show_xiu_count = "";
             this.info.mang_show_xiu_amount = "";
-            this.info.mang_show_xiu_total_amount = "";
             this.info.mang_show_quan_count = "";
-            this.info.mang_show_quan_amount = "";
             this.info.mang_show_zou_count = "";
             this.info.mang_show_zou_amount = "";
-            this.info.mang_show_zou_total_amount = "";
             this.info.mang_pi_hand_amount = "";
             return false;
         }
         this.info.mang_show_state = data["mang_show_state"] == null ? "0" : data["mang_show_state"].toString();
+        this.info.mang_show_pool_amount = data.hasOwnProperty("mang_show_pool_amount") && data["mang_show_pool_amount"] != null ? data["mang_show_pool_amount"].toString() : "0";
         this.info.mang_show_xiu_count = data.hasOwnProperty("mang_show_xiu_count") && data["mang_show_xiu_count"] != null ? data["mang_show_xiu_count"].toString() : "0";
         this.info.mang_show_xiu_amount = data.hasOwnProperty("mang_show_xiu_amount") && data["mang_show_xiu_amount"] != null ? data["mang_show_xiu_amount"].toString() : "0";
-        // 展示总额 = 首手圈芒基数 + 实际累计；老服务端缺该字段时留空，显示层回退实际累计
-        this.info.mang_show_xiu_total_amount = data.hasOwnProperty("mang_show_xiu_total_amount") && data["mang_show_xiu_total_amount"] != null ? data["mang_show_xiu_total_amount"].toString() : "";
         this.info.mang_show_quan_count = data.hasOwnProperty("mang_show_quan_count") && data["mang_show_quan_count"] != null ? data["mang_show_quan_count"].toString() : "0";
-        this.info.mang_show_quan_amount = data.hasOwnProperty("mang_show_quan_amount") && data["mang_show_quan_amount"] != null ? data["mang_show_quan_amount"].toString() : "0";
         this.info.mang_show_zou_count = data.hasOwnProperty("mang_show_zou_count") && data["mang_show_zou_count"] != null ? data["mang_show_zou_count"].toString() : "0";
         this.info.mang_show_zou_amount = data.hasOwnProperty("mang_show_zou_amount") && data["mang_show_zou_amount"] != null ? data["mang_show_zou_amount"].toString() : "0";
-        this.info.mang_show_zou_total_amount = data.hasOwnProperty("mang_show_zou_total_amount") && data["mang_show_zou_total_amount"] != null ? data["mang_show_zou_total_amount"].toString() : "";
-        // 每手皮池展示值；服务端未下发时留空，显示层回退累计池兼容
-        this.info.mang_pi_hand_amount = data.hasOwnProperty("mang_pi_hand_amount") && data["mang_pi_hand_amount"] != null ? data["mang_pi_hand_amount"].toString() : "";
+        // 皮池行只显示每手值；缺失按 0，不能回退到实际累计池 mang_pi_times。
+        this.info.mang_pi_hand_amount = data.hasOwnProperty("mang_pi_hand_amount") && data["mang_pi_hand_amount"] != null ? data["mang_pi_hand_amount"].toString() : "0";
         return true;
     }
     /** 新协议下皮池独立显示，始终保留该行，不参与分类行显隐。 */
@@ -3325,11 +3311,8 @@ export default class DrhPlayerLogic extends cc.Component {
         let transNum = transFen.getChildByName("num");
         if(transNum != null && transNum.getComponent(cc.Label) != null)
         {
-            // 皮池行显示「每手皮池」mang_pi_hand_amount（底注 di_times × 在座人数），不吃累计池 mang_pi_times；
-            // 老服务端未下发该字段时回退累计池，避免显示空白。
+            // 皮池行只显示「每手皮池」mang_pi_hand_amount（底注 di_times × 在座人数），不吃累计池 mang_pi_times。
             let strPi = this.info.mang_pi_hand_amount == null ? "" : this.info.mang_pi_hand_amount.toString().trim();
-            if(strPi == "")
-                strPi = this.info.mang_pi_times;
             transNum.getComponent(cc.Label).string = this.CheckSmallPlay(this.GetMangShowNumber(strPi).toString());
         }
         transFen.active = true;

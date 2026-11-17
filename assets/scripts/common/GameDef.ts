@@ -232,14 +232,12 @@ export class DrhPlayerInfo extends PlayerInfoBase
     public xiu_mang_count = "";// 几芒
     // 芒果分类显示字段（服务端 当前_玩家_消息 追加，字符串数值；有 mang_show_state 才走新单状态口径）
     public mang_show_state = ""; // 0=圈芒，1=休芒，2=揍芒
+    public mang_show_pool_amount = ""; // 圈/休/揍统一显示的当前真实芒果池
     public mang_show_xiu_count = ""; //休芒倍率等级（圈 x1、首休 x2、后续 x3/x4）
     public mang_show_xiu_amount = ""; //休芒实际累计扣款（内部/对账用，不直接显示）
-    public mang_show_xiu_total_amount = ""; //休芒展示总额 = 首手圈芒基数 + 实际累计
     public mang_show_quan_count = ""; //圈芒固定次数（默认 1）
-    public mang_show_quan_amount = ""; //当前消息圈芒基础金额
     public mang_show_zou_count = ""; //揍芒倍率等级（圈 x1、首揍 x2、后续 x3/x4）
     public mang_show_zou_amount = ""; //揍芒实际累计扣款（内部/对账用，不直接显示）
-    public mang_show_zou_total_amount = ""; //揍芒展示总额 = 首手圈芒基数 + 实际累计
     // 补芒账本与本次带入约束，服务端下发，老服务端不下发时保持空值走旧逻辑
     public mang_required = ""; //当前周期累计需要
     public mang_paid = ""; //该玩家已付
