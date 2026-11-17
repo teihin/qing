@@ -226,17 +226,20 @@ export class DrhPlayerInfo extends PlayerInfoBase
     public bei_shu_type = "";   //下注类型 0:正常 -1：跟    -3：敲    -6：滚
     public oney_score = "";  //簸箕外资产
     public gen_score = "0"; //跟得分
-    public mang_pi_times = ""; //芒皮
+    public mang_pi_times = ""; //芒皮（实际累计皮池，仅兼容/内部用，不作为每手皮池展示）
+    public mang_pi_hand_amount = ""; //每手皮池展示值 = di_times(底注) × 在座人数（皮池行显示用）
     public xiu_mang_times = ""; //休芒
     public xiu_mang_count = "";// 几芒
     // 芒果分类显示字段（服务端 当前_玩家_消息 追加，字符串数值；有 mang_show_state 才走新单状态口径）
     public mang_show_state = ""; // 0=圈芒，1=休芒，2=揍芒
-    public mang_show_xiu_count = ""; //当前链休芒次数
-    public mang_show_xiu_amount = ""; //当前链休芒本类型累计实际金额
+    public mang_show_xiu_count = ""; //休芒倍率等级（圈 x1、首休 x2、后续 x3/x4）
+    public mang_show_xiu_amount = ""; //休芒实际累计扣款（内部/对账用，不直接显示）
+    public mang_show_xiu_total_amount = ""; //休芒展示总额 = 首手圈芒基数 + 实际累计
     public mang_show_quan_count = ""; //圈芒固定次数（默认 1）
     public mang_show_quan_amount = ""; //当前消息圈芒基础金额
-    public mang_show_zou_count = ""; //当前链揍芒事件次数
-    public mang_show_zou_amount = ""; //当前链揍芒本类型累计实际金额
+    public mang_show_zou_count = ""; //揍芒倍率等级（圈 x1、首揍 x2、后续 x3/x4）
+    public mang_show_zou_amount = ""; //揍芒实际累计扣款（内部/对账用，不直接显示）
+    public mang_show_zou_total_amount = ""; //揍芒展示总额 = 首手圈芒基数 + 实际累计
     // 补芒账本与本次带入约束，服务端下发，老服务端不下发时保持空值走旧逻辑
     public mang_required = ""; //当前周期累计需要
     public mang_paid = ""; //该玩家已付
