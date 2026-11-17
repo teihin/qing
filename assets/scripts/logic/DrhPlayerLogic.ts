@@ -1648,6 +1648,13 @@ export default class DrhPlayerLogic extends cc.Component {
         let transCmd6 = this.gameLogic.node.getChildByName("cmd6");     
         let transCmdCuo7 = this.gameLogic.node.getChildByName("搓牌窗口");
 
+        // 这次调用会重排甚至收起下注区，「大」按钮一旦失活，上滑拖拽就收不到 TOUCH_END，
+        // 全屏「大进度」遮罩会一直挂着把界面挡死（倒计时到点自动下注就是这个时序）。
+        // 面板每次切换都先取消拖拽，宁可让玩家重滑，也不能锁死界面或按旧额度误下注。
+        let view:any = this.gameLogic.node.getComponent("panelGameView");
+        if(view != null && typeof view.CancelDaDrag === "function")
+            view.CancelDaDrag();
+
 
 
         if (bShow)

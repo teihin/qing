@@ -60,6 +60,8 @@ export default class panelGameView extends UIPanelViewBase {
     private transShowBegin:cc.Node; //开始位置
     private transShowEnd:cc.Node; //结束位置
     private txtCurDa:cc.Label;
+    /** cmd1/大：上滑下注入口，update 里靠它判断拖拽中面板是否已被收起。 */
+    private transDaBtn:cc.Node = null;
     private imgBattery:cc.ProgressBar;
     private txtBattery:cc.Label;
     /** 电量连点入口：记连击次数与上次点击时间，800ms 内点满 3 次打开牌局优化。 */
@@ -435,6 +437,7 @@ export default class panelGameView extends UIPanelViewBase {
 
         //大拖拽响应
         let transDa = Tool.GetChild(this.node,"cmd1/大");
+        this.transDaBtn = transDa;
         transDa.on(cc.Node.EventType.TOUCH_START,(event:cc.Event.EventTouch)=>{
             this.bBeginDa = true;
             if (this.transShow == null)
@@ -647,23 +650,47 @@ export default class panelGameView extends UIPanelViewBase {
     {
         if (this.bBeginDa)
         {
-            
-            this.bBeginDa = false;
-
-            this.node.getChildByName("大进度").active = false;
-            if (this.txtCurDa.string == "敲")
+            let strDa = this.txtCurDa == null ? "" : this.txtCurDa.string;
+            this.CancelDaDrag();
+            if (strDa == "敲")
             {
                 this.gameLogic.GetPlayerCtlByID(0).reqRaise("-3");
             }
-            else if (this.txtCurDa.string == "0")
+            else if (strDa == "0")
             {
 
             }
             else
             {
-                this.gameLogic.GetPlayerCtlByID(0).reqRaise(this.txtCurDa.string);
+                this.gameLogic.GetPlayerCtlByID(0).reqRaise(strDa);
             }
         }
+    }
+
+    /**
+     * 收起「大」上滑选注的拖拽状态和全屏「大进度」遮罩。
+     *
+     * 倒计时到点服务端自动下注后，cmd1 会被整块隐藏（ShowCmdPad(false,0)），
+     * 触摸目标「cmd1/大」随之失活，TOUCH_END/TOUCH_CANCEL 都不会再派发，
+     * 于是 750×1334 的「大进度」一直留在屏幕上吞掉所有触摸，界面彻底没法操作。
+     * 所以面板收起时必须主动取消拖拽，这里统一出口。
+     */
+    public CancelDaDrag():void
+    {
+        this.bBeginDa = false;
+        let progress = this.node.getChildByName("大进度");
+        if (progress != null && progress.active)
+            progress.active = false;
+    }
+
+    update()
+    {
+        if (!this.bBeginDa)
+            return;
+        // 兜底：任何路径把下注区藏掉（服务端推送、断线重连、直接改节点）都收不到 TOUCH_END，
+        // 只要「大」按钮不在激活层级里就立刻取消拖拽，别让全屏遮罩把界面锁死。
+        if (this.transDaBtn == null || !cc.isValid(this.transDaBtn) || !this.transDaBtn.activeInHierarchy)
+            this.CancelDaDrag();
     }
 
 
@@ -1007,7 +1034,7 @@ export default class panelGameView extends UIPanelViewBase {
         }
     }
 
-    // update (dt) {}
+    // update 见上（「大进度」遮罩兜底）
 
     /**
      * 按当前实际显示的按钮数，把牌局菜单的底板图和高度切到 4 行或 5 行。
