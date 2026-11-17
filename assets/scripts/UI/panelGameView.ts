@@ -589,7 +589,7 @@ export default class panelGameView extends UIPanelViewBase {
         Tool.GetChild(this.node,"带入窗口").active = false;
     }
 
-    /** 奖池未开启时隐藏桌内奖池条、实时战绩/牌局回顾里的奖池信息。 */
+    /** 奖池未开启时隐藏桌内奖池条、牌局回顾里的奖池信息；实时战绩顶部的奖池已不再展示。 */
     public SetJackpotVisible(visible:boolean)
     {
         this.jackpotVisible = visible;
@@ -600,8 +600,9 @@ export default class panelGameView extends UIPanelViewBase {
     {
         const visible = this.jackpotVisible;
         this.SetNodeActive("奖池条", visible);
-        this.SetNodeActive("实时战绩/奖池", visible);
-        this.SetNodeActive("实时战绩/V8奖池标题", visible);
+        // 实时战绩顶部的奖池（「奖池」美术字 + 金额）所有模式一律不显示。
+        this.SetNodeActive("实时战绩/奖池", false);
+        this.SetNodeActive("实时战绩/V8奖池标题", false);
         this.SetNodeActive("牌局回顾/奖池", visible);
         this.SetNodeActive("牌局回顾/奖池背景", visible);
         if (!visible)
