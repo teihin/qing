@@ -4,6 +4,13 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-17 搓牌开关：标价 `20 钻/次` + 每次搓牌扣钻（后台已部署，客户端未构建/热更）
+
+- 「记录」抽屉的搓牌开关右侧加价签 `20 钻/次`（金色小字，状态行上移 `y=9` 与其成两行；开关下方只有 15px，放不下第三行）。金额实时取后台「钻石消费价格」的 `搓牌` 项，配 0 显示「免费」。
+- 扣费点＝搓牌窗口**松手揭开**那一刻（`DelayShowCuoInfo` 开头）发 `玩家_消费_命令`（`consume_type=搓牌`、`money_type=stone`）；按 `round_count` 去重，同一手牌只扣一次，直接点「看牌」不扣。
+- 开关是付费开关：余额 < 单价时提示并复位，不下发 `player_setting=True`。
+- 后台 catalog 新增 `搓牌`（默认 20，`stone_consume_price.go`），后台页动态渲染无需改前端。**2026-11-17 22:10 已部署 8891**（二进制 `91c44480…`，备份 `xuanmanager.20261117-2210-rollback`，health 200），后台「钻石消费价格」页需保存一次才写进 `usr_hash_info`。服务端是否对 `consume_type` 有白名单待确认。详见[交接](handoffs/2026-11-17-cuo-squeeze-stone-charge.md)。
+
 ## 2026-11-17 牌局优化入口改成「当前俱乐部的管理员」（脚本就绪，未构建/热更）
 
 - 电量连点 3 下开「牌局优化」的门禁由 `IsBossAccount()`（level≥99 / 董事长 / 总裁）换成新增的 `GameDataManager.IsCurrentClubAdmin()`：`club_manage` 或 `union_manage` 任一非空（= 后台「设置管理员」的大小BOSS），再按 `roomSetting.club_id` / `union_id` 尽量比对范围。`panelGameView`（电量兜底 + `RoomFrame/完成` 热区）与 `panelGameOptimize.start()` 三处同步。
@@ -26,10 +33,10 @@
 - 根因：旧实现只隐藏 BF 关闭后的大盟主默认入口，已有真实会话仍返回；生产只读统计有 24 条活跃大盟主会话，分布在 11 个俱乐部。
 - 服务端已按 BF 关闭规则过滤会话列表、创建/恢复和消息详情，部署二进制 `a6ecd8b2…`，health 200。客户端缓存版本 `4→5`，首屏等待服务端结果，源码未构建热更；真实账号/真机待验收。详见[交接](handoffs/2026-11-17-direct-chat-union-owner-history-filter.md)。
 
-## 2026-11-17 后台「玩家优化」更名「玩家控制」（代码就绪，未部署）
+## 2026-11-17 后台「玩家优化」更名「玩家控制」（已部署 8891）
 
 - 只改显示文案：页面 30 处中文（标题/按钮/空态/校验/消息）、菜单图标字 `优`→`控`、服务端返回消息与游戏服操作备注 31 处、迁移 `071_player_control_rename.sql` 改菜单名与 4 条权限名/描述。模块 code、路由、权限 code、接口路径不变，角色授权不受影响。
-- 文案里指向牌桌内的「运维优化」改为「牌桌内胜率目标」——客户端那个面板实际叫「牌局优化」，旧文案本就指错。`go vet`/`tsc -b` 通过；未部署 8891，菜单名要等迁移 071 在启动时执行。详见[交接](handoffs/2026-11-17-player-control-rename.md)。
+- 文案里指向牌桌内的「运维优化」改为「牌桌内胜率目标」——客户端那个面板实际叫「牌局优化」，旧文案本就指错。`go vet`/`tsc -b`/`go test` 通过；**2026-11-17 22:10 已随搓牌价目项一起部署 8891**，迁移 071 启动时执行完毕（回读 `mgr_module.name=玩家控制`、4 条权限名已改）。前端线上包 `index-BMTdl6pi.js` 与 HEAD 构建同名同大小，无需重发。详见[交接](handoffs/2026-11-17-player-control-rename.md)。
 
 ## 2026-11-17 客户端「我的」10 个操作按钮统一美术（已替换资源，待导入/构建/真机）
 
@@ -97,15 +104,9 @@
 - 存量一并关停：`chat_direct_bf_club` 10 行、旧表 `chat_direct_bf_entry` 2 行全部 `enabled=0`。
 - 已部署 ChatTool `b1ba8f54…`、XuanManager `580586bf…`、前端 `index-Ccu1-Dt0.js`；health 200、公网页面已换新资源。客户端未改代码（只读 `visible`），未构建/未真机；后台登录态实操待验收。详见[交接](handoffs/2026-11-15-bf-chat-default-off.md)。
 
-## 2026-11-14 批次（后台已部署 8891，客户端未构建，细节见各自交接）
-
-- **后台靓号管理**：命令代理、号池/绑定/解绑、玩家/俱乐部展示，单菜单两页签（账号ID/俱乐部邀请码，权限独立），迁移 065/066 已执行；2026-11-15「我的」ID 改读 `custom_id`（回退 guuid）。见[交接](handoffs/2026-11-14-pretty-numbers.md)。
-- **消息页 BF 关闭规则**：普通合伙人与玩家只剩所属盟主、盟主仍见大盟主、重开恢复；群主显示改读服务端 `roleName`；退会/已删俱乐部的历史未读不再点红点。ChatTool `854d01e6…` 已部署、health 200。见[BF 交接](handoffs/2026-11-14-bf-chat-hide-union-owner.md)、[身份](handoffs/2026-11-14-chat-role-name-union-owner.md)、[红点](handoffs/2026-11-14-unread-visible-clubs.md)。
-- **后台玩家管理**：新增「关联账号数量」（同设备 90 天 / 同 GPS 网格 7 天 / 同公网 IP 7 天，单 IP>20、单网格>50 不参与，全局上限 2000）与「IP短码」列（6 位 Base62，精确匹配 `sm_ip`，仅 `admin999` 额外可见原始 IP）；详情仍只 `admin999` 见明文 IP/GPS。二进制 `bb8bdf37…`、前端 `index-magx5XK-.js`。见[关联账号](handoffs/2026-11-14-admin-player-relations.md)、[IP 短码](handoffs/2026-11-14-admin-player-ip-shortcode.md)。
-- **客户端 BOSS 玩家信息弹窗**：`ip` 上屏前转 6 位无损可逆短码并加「复制」按钮，非 IPv4 显示「—」；服务端回包仍是明文。见[交接](handoffs/2026-11-14-client-player-ip-shortcode.md)。
-
 ## 更早批次
 
+- 2026-11-14 批次（后台靓号、BF 消息规则、玩家关联账号/IP 短码、客户端 BOSS IP 短码）见 [`archive/2026-11-17/current-nov14-batches.md`](archive/2026-11-17/current-nov14-batches.md)。
 - 2026-11-13 批次（BF 聊天开关移交后台、业绩核心共享三阶段发放、额度授权记录类型、后台用户端数据查询）见 [`archive/2026-11-15/current-nov13-batches.md`](archive/2026-11-15/current-nov13-batches.md)。
 - 2026-11-03～11-09 的历史客户端、额度、牌局和后台批次见 [`docs/memory/archive/`](archive/2026-11-15/)。
 

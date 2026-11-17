@@ -14,6 +14,8 @@
 | 已有 V7 实现、资源、长屏、钱包、公告、后续模块 | [V7 实施记录](topics/v7-ui.md) | Prefab、UUID、四档高度、历史实现；旧图不再作为设计依据 |
 | BY→BF 游戏美术批量替换 | [替换交接](handoffs/2026-11-03-by-bf-art-replacement.md) | 原图合成、BF、透明边界、索引色 PNG、`.meta` |
 | 客户端房间、网络、排队、状态恢复、动态资源 | [客户端与协议](topics/client-game-network.md) | QueueMatchManager、onKicked、roomTransition |
+| 客户端排行榜 V9 三榜视觉、编辑器示例行、头像绑定 | [排行榜 V9 交接](handoffs/2026-11-17-leaderboard-v9.md) | 三榜、10皮、奖牌、头像、无限滚动、Prefab |
+| 游戏内牌型展示 Q 牌花色 | [Q 牌修复交接](handoffs/2026-11-17-poker-type-q-card-color.md) | `imagesKK/公用/2.png`、Q♥、Q♦、静态牌型图 |
 | 运营后台、权限、接口、数据及部署 | [XuanManager](topics/xuanmanager.md) | RBAC、分页、北京时区、旧二进制 |
 | 后台俱乐部管理（俱乐部列表、成员代理树、群主额度） | [俱乐部管理交接](handoffs/2026-11-01-admin-club-management.md)、[V2 联盟改造交接](handoffs/2026-11-03-admin-union-management.md) | game.clubs、club_agent_info、quota_fen、增加_俱乐部_额度、-99、orphan、union_id、union_quota |
 | 后台联盟管理（联盟列表/详情、联盟池加/减额度、俱乐部按联盟筛选） | [联盟管理交接](handoffs/2026-11-03-admin-union-management.md) | game.unions、club_union_info、增加_联盟_额度、负数扣减、game.union.quota_adjust、V2 |
