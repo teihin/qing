@@ -1,7 +1,7 @@
 import GameDataManager from "../GameDataManager";
 import {ClubManagementApi,ClubListKind,ClubAction,ClubPeoplePage,
     ClubUnionApplication,ClubUnionApplicationPage,ClubUnionMember,ClubUnionMemberPage,
-    ClubRecord,ClubRecordPage,ClubRecordKind} from "./ClubManagementView";
+    ClubRecord,ClubRecordPage,ClubRecordKind,ClubSummary} from "./ClubManagementView";
 const KBEngine = require("kbengine");
 interface Pending {
     account:string; club:string; kind:string; header:string; page:number; user:string;
@@ -165,6 +165,8 @@ export default class HallClubManagementApi implements ClubManagementApi {
     /** 单次只允许一条记录查询在途，ClubGoldWater 推送不带 context 时按它配对。 */
     private recordsPending:{key:string;account:string;club:string;user:string;kind:ClubRecordKind;
         resolve:(v:ClubRecordPage)=>void;reject:(e:Error)=>void;timer:any} = null;
+    /** 查询_俱乐部_汇总：先推 ClubSummary（带 context），再回 0x200 空壳。 */
+    private summaryPush:{context:string;club:string;data:ClubSummary} = null;
     /** 快速切换上下分/牌局时排队，避免两条无 context 的流水推送互相顶替。 */
     private recordsQueue:Array<{club:string;user:string;kind:ClubRecordKind;page:number;count:number;
         account:string;resolve:(v:ClubRecordPage)=>void;reject:(e:Error)=>void}> = [];
@@ -186,6 +188,8 @@ export default class HallClubManagementApi implements ClubManagementApi {
         // 上下分流水走 ClubGoldWater；牌局流水走 ClubQuotaWater（查询_俱乐部_额度流水）。
         KBEngine.Event.register("ClubGoldWater",this,"OnClubGoldWater");
         KBEngine.Event.register("ClubQuotaWater",this,"OnClubQuotaWater");
+        // 盟主整线汇总：ClubSummary 先到，随后 0x200 才回包。
+        KBEngine.Event.register("ClubSummary",this,"OnSummary");
     }
     public Dispose():void {
         this.disposed = true;
@@ -289,6 +293,48 @@ export default class HallClubManagementApi implements ClubManagementApi {
         // 文档中的新命令同时支持代理、创建者和管理员；统一走该命令，
         // 避免代理信息异步返回前误判身份而回退到旧的全量申请命令。
         return this.request(club,kind,"查询_俱乐部_代理_申请",{page,count});
+    }
+    /**
+     * 查询_俱乐部_汇总：管理者专用，无分页。服务端先推 ClubSummary，再回 0x200 空壳；
+     * 结果由 OnCommand 用 pending 的 context 配对后 resolve。
+     */
+    public summary(club:string):Promise<ClubSummary> {
+        // 上一次的迟到推送不能拿来作答这一次的请求。
+        this.summaryPush=null;
+        return this.request(club,"summary","查询_俱乐部_汇总",{});
+    }
+    /** ClubSummary：字段全是字符串，这里只做数值化，不做任何折扣/比例换算。 */
+    public OnSummary(raw:any):void {
+        const data=this.parse(raw);if(!data)return;
+        // 服务端是"扁平"下发（没有包一层 ClubSummary/result），必须兼容，
+        // 否则整条推送会被丢掉，界面只能等 0x200 到点判超时再把汇总条撤掉。
+        let body:any=data.ClubSummary;
+        if(body === undefined) body=data.result;
+        if(body === undefined) body=data;
+        if(typeof body === "string") body=this.parse(body);
+        if(body && typeof body === "object" && body.ClubSummary !== undefined) body=body.ClubSummary;
+        if(!body || typeof body !== "object" || Array.isArray(body))return;
+        // 至少要有汇总字段才认，避免把别的推送当成汇总。
+        if(body.total_club_gold === undefined && body.total_unclaimed_bonus_fen === undefined &&
+            body.member_count === undefined)return;
+        const clubText=String(body.club_id === undefined || body.club_id === null ? "" : body.club_id).trim();
+        // 服务端目前会把 club_id 发成字符串 "undefined"，这种值当"未知"处理，不参与配对。
+        const clubId=["","undefined","null","0"].indexOf(clubText.toLowerCase()) < 0 ? clubText : "";
+        const context=this.context(body) || this.context(data);
+        const summarize=(value:any):number=>{
+            const text=String(value === undefined || value === null ? "" : value).trim();
+            const number=Number(text);
+            return text !== "" && Number.isFinite(number) ? number : NaN;
+        };
+        this.summaryPush={
+            context,
+            club:clubId,
+            data:{
+                memberCount:summarize(body.member_count),
+                totalGold:summarize(body.total_club_gold),
+                unclaimedBonusFen:summarize(body.total_unclaimed_bonus_fen)
+            }
+        };
     }
     public async act(club:string,action:ClubAction,user:string,value?:string):Promise<{message?:string}> {
         const commands={
@@ -707,7 +753,7 @@ export default class HallClubManagementApi implements ClubManagementApi {
         // 因此只在唯一的额度变更请求上兜底，避免把无标签的旧回包交给其他操作。
         if(!p && !key) {
             const candidates=Object.keys(this.pending).filter(k=>
-                ["grantQuota","increaseQuota","decreaseQuota","unionQuota"].indexOf(this.pending[k].kind) >= 0);
+                ["grantQuota","increaseQuota","decreaseQuota","unionQuota","summary"].indexOf(this.pending[k].kind) >= 0);
             if(candidates.length === 1) { key=candidates[0];p=this.pending[key]; }
         }
         if(!p)return;
@@ -715,6 +761,26 @@ export default class HallClubManagementApi implements ClubManagementApi {
         if(error || (code !== 0x200 && code !== 0x500)) {
             this.finish(key,new Error(String(error ||
                 (p.kind === "unionAct" ? "联盟审批失败，请稍后重试" : p.kind === "unionQuota" ? "联盟额度调整失败，请稍后重试" : "俱乐部操作失败"))));return;
+        }
+        // 汇总：ClubSummary 推送先到，用 context 配对；没有推送就等一个短窗口，超时按失败处理。
+        if(p.kind === "summary") {
+            const push=this.summaryPush;
+            // 推送也会兜底：服务端漏带 context 时按 club_id 认。
+            const same=!!push && (push.context === key || (!push.context && (!push.club || push.club === p.club)));
+            if(same) {
+                this.summaryPush=null;
+                this.finish(key,null,push.data);
+                return;
+            }
+            clearTimeout(p.timer);
+            p.timer=setTimeout(()=>{
+                const waiting=this.pending[key];
+                if(!waiting)return;
+                const late=this.summaryPush;
+                if(late && late.context === key) { this.summaryPush=null;this.finish(key,null,late.data);return; }
+                this.finish(key,new Error("汇总数据未返回"));
+            },1500);
+            return;
         }
         if(["members","applications","verify","badges"].indexOf(p.kind)>=0)return;
         // 0x500 只对列表请求保留兼容；操作命令按当前协议只接受最终 0x200。

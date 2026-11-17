@@ -66,6 +66,11 @@ export interface ClubUnionApplicationPage { items:ClubUnionApplication[]; total:
 export interface ClubUnionMember { clubId:string; clubName:string; ownerId?:string; ownerName?:string;
     quotaFen?:number; unionPercent?:number; }
 export interface ClubUnionMemberPage { items:ClubUnionMember[]; total:number; poolQuotaFen?:number; }
+/**
+ * 盟主整线汇总（查询_俱乐部_汇总 / ClubSummary）：管理者专用，单位——积分=积分，
+ * 红利=分。数值字段服务端一律发字符串，这里统一转成 number 交给界面。
+ */
+export interface ClubSummary { memberCount:number; totalGold:number; unclaimedBonusFen:number; }
 /** Adapt server payloads here. Resolve act only after the business result, not an async acceptance code. */
 export interface ClubManagementApi {
     /** 成员列表自 2026-10-26 起为代理直属口径；传 agentId 下钻到指定下级代理的直属成员。 */
@@ -77,6 +82,8 @@ export interface ClubManagementApi {
     unionQuotaAdjust(targetClubId:string,quotaFen:number):Promise<{message?:string}>;
     /** 上下分查积分流水；牌局查查询_俱乐部_额度流水（agent_id=目标成员 ID，代理返回其当前子树）。 */
     records(clubId:string,userId:string,kind:ClubRecordKind,page:number,count:number):Promise<ClubRecordPage>;
+    /** 盟主整线汇总：全体成员积分余额合计 + 未提取红利合计（仅管理者可用）。 */
+    summary?(clubId:string):Promise<ClubSummary>;
 }
 
 /** UI-only controller. All art/layout lives in panelMain.prefab. No adapter means no network writes. */
@@ -117,6 +124,9 @@ export default class ClubManagementView {
     private items:ClubPlayer[] = [];
     private simNoticeShown:boolean = false;
     private hasSimData:boolean = false;
+    /** 成员页顶部「整线积分 / 未提红利」汇总条的在途版本号；换俱乐部要作废旧回包。 */
+    private summaryVersion:number = 0;
+    private summaryLoading:boolean = false;
     /** 卡片加高显示联盟行时子节点要整体上移，避免卡片顶部留出大空白。 */
     private cardBaseY:{[name:string]:number} = {};
     private goldRefreshTimer:any = null;
@@ -424,6 +434,10 @@ export default class ClubManagementView {
             this.unionCount = 0;
             this.unionBadgeQueried = false;
             this.unionBadgeAttempts = 0;
+            // 换俱乐部后汇总条作废，避免旧俱乐部的数字留在新弹窗上。
+            ++this.summaryVersion;
+            this.summaryLoading = false;
+            this.applySummaryLayout(false);
             // 换账号/换俱乐部后，列表快照与「我有没有额度」都必须重新取，不能沿用上一家的结论。
             this.items = [];
             if(this.goldRefreshTimer != null) { clearTimeout(this.goldRefreshTimer);this.goldRefreshTimer = null; }
@@ -809,6 +823,9 @@ export default class ClubManagementView {
         this.applyDialogLayout(kind === "allies");
         this.syncDialogText();
         this.load(0);
+        // 成员页顶部汇总条只在进入时查一次（接口全表扫，不随翻页刷新）。
+        if(kind === "members") this.loadSummary();
+        else { ++this.summaryVersion;this.applySummaryLayout(false); }
     }
     private openUnionApplications():void {
         this.open("union");
@@ -1163,6 +1180,76 @@ export default class ClubManagementView {
         if(!Number.isFinite(number)) return "—";
         const yuan = number / 100;
         return Number.isInteger(yuan) ? String(yuan) : yuan.toFixed(2).replace(/\.?0+$/,"");
+    }
+    /** 千分位：汇总条用位图数字，必须带逗号分隔，否则长数字读不出来。 */
+    private grouped(value:number):string {
+        // 位图字体缺字形时会画成空白/长条，异常值宁可不显示也不要画错。
+        if(!Number.isFinite(value)) return "";
+        const negative = value < 0;
+        const text = Math.abs(value).toFixed(2).replace(/\.?0+$/,"");
+        const parts = text.split(".");
+        const head = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g,",");
+        return (negative ? "-" : "") + head + (parts[1] ? "." + parts[1] : "");
+    }
+    /**
+     * 汇总条只对创建者/管理员显示：服务端 `查询_俱乐部_汇总` 的权限就是
+     * 创建者 / 联盟总群主 / club_manage 授权账号，其他人一律「无权访问」。
+     */
+    private canSeeSummary(c:ClubContext = this.context):boolean {
+        return this.manager(c);
+    }
+    private applySummaryLayout(show:boolean):void {
+        const panel = this.at("俱乐部成员弹窗/面板");
+        if(!panel) return;
+        const bar = this.at("成员概况底板",panel);
+        if(bar) bar.active = show;
+        // 汇总条高 100；列表与底板让位 104（条高 + 与搜索行/列表之间的间距差）。
+        const extra = show ? 104 : 0;
+        for(const item of [["成员列表底板",260],["列表",260.5]] as [string,number][]) {
+            const listNode = this.at(item[0],panel);
+            const widget = listNode && listNode.getComponent(cc.Widget);
+            if(widget && widget.top !== item[1] + extra) {
+                widget.top = item[1] + extra;
+                widget.updateAlignment();
+            }
+        }
+        const empty = this.at("空状态",panel);
+        if(empty && Math.abs(empty.y - (show ? -64 : -12)) > 0.5) empty.y = show ? -64 : -12;
+    }
+    private writeSummary(goldText:string,bonusText:string):void {
+        const bar = this.at("俱乐部成员弹窗/面板/成员概况底板");
+        this.text("积分数值",goldText,bar);
+        this.text("红利数值",bonusText,bar);
+    }
+    /**
+     * 进成员页查一次整线汇总。接口是全表扫描，文档明确要求只在进入时调用，
+     * 不跟翻页/轮询；失败或无权时整条撤掉，把高度还给列表，不显示假的 0。
+     */
+    private async loadSummary():Promise<void> {
+        const ctx = {...this.context};
+        const version = ++this.summaryVersion;
+        const api = this.api as any;
+        if(!api || typeof api.summary !== "function" || !this.canSeeSummary(ctx)) {
+            this.applySummaryLayout(false);
+            return;
+        }
+        this.summaryLoading = true;
+        // 占位必须是空串：位图字体里「—」是一根长金条，画出来像一条横线。
+        this.writeSummary("","");
+        this.applySummaryLayout(true);
+        // 汇总有自己的版本号，不能用列表的 valid()（那个比的是 this.version）。
+        const stillValid = ()=>cc.isValid(this.root) && version === this.summaryVersion &&
+            this.sameContext(ctx,this.getContext());
+        try {
+            const data:ClubSummary = await api.summary(ctx.id);
+            if(!stillValid()) return;
+            if(!data) throw new Error("汇总数据为空");
+            this.writeSummary(this.grouped(Number(data.totalGold)),this.grouped(Number(data.unclaimedBonusFen) / 100));
+        } catch(error) {
+            if(stillValid()) this.applySummaryLayout(false);
+        } finally {
+            if(version === this.summaryVersion) this.summaryLoading = false;
+        }
     }
     /** 复用卡片上「入盟申请」按钮的图标作为俱乐部行徽记，避免再引一份大图。 */
     private unionIconFrame():cc.SpriteFrame {
