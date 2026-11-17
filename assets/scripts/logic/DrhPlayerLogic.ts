@@ -880,6 +880,10 @@ export default class DrhPlayerLogic extends cc.Component {
             {
                 this.info.mang_pi_current = data["mang_pi_current"].toString();
             }
+            if(data.hasOwnProperty("mang_xiu_current"))
+            {
+                this.info.mang_xiu_current = data["mang_xiu_current"].toString();
+            }
             if(data.hasOwnProperty("buy_in_min"))
             {
                 this.info.buy_in_min = data["buy_in_min"].toString();
@@ -4044,14 +4048,15 @@ export default class DrhPlayerLogic extends cc.Component {
             return false;
         return true;
     }
-    /** 圈芒阶段每个玩家本手要投的芒皮数：服务端 当前_玩家_消息 的 mang_pi_current
-     *  （2 皮房=5、10 皮房=20；这是皮数不是分数，不能走 0.1/0.3 房 ÷10 的折算）。
+    /** 开局投芒动画每个玩家本手要投的芒数：服务端 当前_玩家_消息 的 mang_xiu_current
+     *  （原来是 mang_pi_current，已按新口径切到 mang_xiu_current；这是皮数不是分数，
+     *  不能走 0.1/0.3 房 ÷10 的折算）。
      *  取不到返回空串，调用方保持原来“不显示”的行为。 */
-    private GetMangPiCurrent():string
+    private GetMangCurrent():string
     {
         if(this.info == null)
             return "";
-        let strPi = this.info.mang_pi_current == null ? "" : this.info.mang_pi_current.toString().trim();
+        let strPi = this.info.mang_xiu_current == null ? "" : this.info.mang_xiu_current.toString().trim();
         if(strPi.length > 0 && Number(strPi) > 0)
             return strPi;
         return "";
@@ -4114,7 +4119,7 @@ export default class DrhPlayerLogic extends cc.Component {
             return;
         }
 
-        let strMang = this.GetMangPiCurrent();
+        let strMang = this.GetMangCurrent();
         if(strMang != "")
         {
             this.ShowMangPayCount(strMang, false);
@@ -4144,11 +4149,12 @@ export default class DrhPlayerLogic extends cc.Component {
             });
             //筹码从头像飞向下注区的同一时刻，显示本手要投的芒皮数
             let showMang = cc.callFunc(()=>{
-                let strMang = this.GetMangPiCurrent();
+                let strMang = this.GetMangCurrent();
                 if(strMang != "")
                     this.ShowMangPayCount(strMang);
                 else
-                    Debug.Log("[MANG] 圈芒取不到芒皮数 " + this.info.strUserName + " mang_pi_current=" + this.info.mang_pi_current
+                    Debug.Log("[MANG] 投芒取不到芒数 " + this.info.strUserName + " mang_xiu_current=" + this.info.mang_xiu_current
+                        + " mang_pi_current=" + this.info.mang_pi_current
                         + " paid=" + this.info.mang_paid + " required=" + this.info.mang_required
                         + " need=" + this.info.mang_need + " state=" + this.info.strServerState);
             },this);
@@ -4180,7 +4186,7 @@ export default class DrhPlayerLogic extends cc.Component {
 
         this.scheduleOnce(()=>{
             //兜底：动画因为切后台/丢帧没跑完时，也别让下注区空着
-            if(this.GetMangPiCurrent() == "")
+            if(this.GetMangCurrent() == "")
                 this.UpdateFenAnimate(true,this.info.beicount,false);
             //Debug.Error("显示金币");
         },1.5);
