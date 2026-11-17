@@ -11,10 +11,10 @@ const {ccclass} = cc._decorator;
 
 /** 服务端全局会话分页固定 30 条；客户端只按页追加，避免一次拉全量。 */
 const PAGE_SIZE = 30;
-/** 本地缓存只保留第一页，进页面时先出列表；多页数据仍由服务端分页保证。 */
+/** 本地缓存只保留第一页；首屏以服务端结果为准，避免权限变化时闪现过期会话。 */
 const LIST_CACHE_MAX = 30;
-/** v4：缓存需带服务端 roleName（盟主/群主），旧缓存按 role 回退会误显示群主。 */
-const LIST_CACHE_VERSION = 4;
+/** v5：关闭 BF 后历史大盟主会话也不再显示，作废旧缓存里的会话行。 */
+const LIST_CACHE_VERSION = 5;
 /** 距离底部小于该高度时自动请求下一页。 */
 const LOAD_MORE_DISTANCE = 260;
 /** 顶部负向回弹超过该距离（设计像素）后松手触发刷新。 */
@@ -197,8 +197,8 @@ export default class panelMessage extends UIPanelViewBase {
         this.LoadBFEntryStatus(true);
         if(this.list.length === 0)
         {
-            let restored = this.RestoreManagerCache() || this.RestoreCachedList();
-            this.LoadFirstPageMode(!restored,false);
+            // 空列表重新启用时也直接请求服务端，避免再次把过期缓存闪到首屏。
+            this.LoadFirstPageMode(false,false);
         }
         else
             this.ScheduleSilentRefresh();
@@ -252,9 +252,9 @@ export default class panelMessage extends UIPanelViewBase {
         }
         if(this.list.length === 0)
         {
-            // 先用大厅启动时预取的会话或本地缓存把界面填上，服务端第一页回来时整表替换。
-            let restored = this.RestoreManagerCache() || this.RestoreCachedList();
-            this.LoadFirstPageMode(!restored && force,false);
+            // 首次进入必须以服务端第一页作为首屏，不能先渲染大厅预取缓存或本地缓存；
+            // 旧缓存可能仍含已被权限过滤的大盟主会话，先显示再替换会造成闪现。
+            this.LoadFirstPageMode(force,false);
             return;
         }
         this.LoadFirstPageMode(force,!force);
