@@ -1,8 +1,17 @@
 # qing 当前状态
 
-更新时间：2026-11-17
+更新时间：2026-11-18
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-18 俱乐部「我的成员」加整线积分 / 未提红利汇总条（未构建/未热更，服务端待联调）
+
+- 成员弹窗搜索行与列表之间新增 690x100 汇总条：金币 +「整线积分」+ 数字 / 分隔线 / 钱袋(BF) +「未提红利」+ 数字，底框、两个图标、两处美术字五张图全部用图片技能出图后抠透明落到 `assets/V7/club_v8_summary_*.png`；数字用位图字体 `jackpot_v8_serif_digits`（42 号）。
+- 复用废弃节点 `成员概况底板`（原本是压在俱乐部名上的一块 714x86 列表底色残留）：`y=364`、Widget 贴顶 253；列表让位 104（top 260→364、空状态 -12→-64）。位置尺寸按效果图元素包围盒反算，1334/1624 两档离屏渲染核对无压叠。
+- 数据接 `查询_俱乐部_汇总`（服务端 2026-11-18 新增，文档状态"待重启 baseapp"）：进成员页查一次、失败或 `无权访问` 整条撤掉并把高度还给列表；只对创建者/管理员显示。`ClubSummary` 推送按 context 配对，无 context 时按 club_id 兜底。
+- **坑**：位图字体里「—」是一根 499px 金条，占位文案写「—」会画成一条横贯屏幕的金线；占位必须空串。Creator 导入会重写 `.meta` 并换掉 sprite-frame 子 uuid，导入后要回读回填 Prefab。详见[交接](handoffs/2026-11-18-club-member-summary-bar.md)。
+- **首次联调修了两处**：服务端 `ClubSummary` 是扁平下发（没有 `ClubSummary`/`result` 包装），`OnSummary` 必须兜底 `body=data`，否则推送被丢、界面等 1.5s 超时后撤条（表现为"闪一下就没"）；`club_id` 发成 `"undefined"` 时按未知值处理不参与配对。
+- **服务端仍阻塞**：回包 `club_id="undefined"`、两个合计恒 `"0"`（`member_count=3` 却是对的），判定 `GetClubSummary` 组装回包用错变量，需服务端修完才能出真实数值。
 
 ## 2026-11-17 搓牌开关：标价 `20 钻/次` + 每次搓牌扣钻（后台已部署，客户端未构建/热更）
 
@@ -56,56 +65,9 @@
 - 口径与客户端牌局回顾一致，全部取自 `usr_round_score.remark` 的 `@` 分段：2=下注、4=芒果（旧）、9=本局奖池、11=芒池、13=芒果净（11-14 起取代下标 4，页面自动择一）。同局奖池/芒池全表一致，聚合用 MAX，不会翻倍。
 - 已部署：二进制 `76bc5489…`（备份 `bin/xuanmanager.previous-roomround-20261116-0112`）、前端 `index-CFeY8ZgU.js` + `index-0JIJmIWM.css`（web 备份 `web.previous-roomround2-20261116-0115`）；无迁移；health 200、战绩接口未登录 401。登录态实操待验收。详见[交接](handoffs/2026-11-16-room-round-jackpot-mango.md)。
 
-## 2026-11-15 后台「业绩股」全局折算百分比配置（已部署 8891）
-
-- 服务端在 `usr_hash_info` 的 `俱乐部业绩全局百分比`（**明文整数**，线上已是 `50`，10 秒热加载）折算业绩次数；后台新增 `GET/PUT /api/game/club-perf/scale` + 页面「全局折算设置」弹窗，新权限 `game.club_perf.config`（迁移 070）。
-- 顺手修三个会露馅的地方：报表次数原用 `int64(anyFloat())`，50% 的 .5 会被截断（改 `float64`，两位小数）；联盟根 `root.My` 原取原始总次数（改按百分比折算）；报表缺 `scale_percent` 时按 100 兜底，避免根节点变 0。
-- 已部署：二进制 `77dbde3c…`（备份 `backups/xuanmanager.20261116-0003-rollback`）、前端 `index-Bg6BsbJD.js` + `index-CCEXCQ45.css`；迁移 070 已执行、`game.club_perf.config` 授 role 1；health 200、新接口未登录 401；覆盖前用 HEAD 基线二进制体积反证同源。登录态实操待验收。详见[交接](handoffs/2026-11-15-club-perf-scale-config.md)。
-
-
-## 2026-11-15 客户端「我的」新增「逃跑惩罚统计」（大盟主，未构建、未真机）
-
-- 入口：「我的 → 操作」第 10 个按钮（额度授权记录右侧），只对联盟总群主显示；按钮美术新出 `mine_chengfa_exact.png`，同款金币箭头 + 金色描边字，**按钮上不显示金额**。
-- 面板 `panelEscapePenalty`：列表/分页沿用上下分记录，表头用新美术 `money_v8_table_chengfa.png`（五列），标题与「今日应扣/到账/笔数·人数」汇总仍是 Label。
-- 协议 `查询_逃跑_惩罚_统计`，回包路由 `ClubUnionChengfaStats`（**列表在 `result`，`count` 是当日总条数**），10 条/页。
-- 顺带修 `ClubManagementView.syncProfileScroll`：入口行高按实际行数 ×107.17，第 6 行不再被裁。
-- 未验证：Creator 未导入、未构建、未真机、接口未联调。详见[交接](handoffs/2026-11-15-escape-penalty-stats.md)。
-
-## 2026-11-15 后台「玩家优化」改接胜率目标（代码就绪，未部署，被游戏服阻塞）
-
-- 后台改成与牌桌内运维优化同一套：输赢金额 + 概率（`异步_设置_胜率目标`），不再用 `optimize01_count/chance`。
-- 实测游戏服 4 条命令：`查询_胜率目标_列表`/`查询_胜率目标_日志` 可直接用（3ms 回包）；`设置_胜率目标`/`停止_胜率目标` 走 8890 HTTP **挂死不回包**（12s/45s 超时、无写入），需服务端加 HTTP 同步回包或后台专用命令。
-- 后端/前端已改完（`go build/test/vet`、`tsc`、`vite build` 通过），写路径加了 8s 超时 + 回读兜底与明确报错。**故意不部署**：现在上线会让新增/调整/停止全部报错。详见[交接](handoffs/2026-11-15-admin-player-optimization-win-target.md)。
-
-## 2026-11-15 后台「排行榜」独立模块：活动列表 + 创建 + 实时排名（已部署 8891）
-
-- 新菜单 `/game/honor-rank`（模块 `game.honor_rank`，迁移 068）：列表放历史上所有排行榜活动，创建=原有配置 + 选联盟/独立俱乐部，点开可看实时排名（三榜 + 手数 5 档位）。
-- 单个活动**可修改**（`PUT /activities/{id}`，就地更新留档并重下发 7 行；被新活动取代的只读）。
-- 游戏服只有「每个 scope 一份当前配置」，故后台自建留档表 `mgr_honor_rank_activity`；旧入口（俱乐部/联盟行内）保存也留档（开启新增、关闭标记）。
-- 排名**直读游戏库**按活动自己的时间窗统计（后台直调 `查询_俱乐部_活动_*` 客户端命令返回 1280，走不通）。口径见交接。
-- 已部署：二进制 `9a34fd94…`（2026-11-15 18:50 二次部署，含活动修改）、前端 `index-BcwSx34z.js` + `index-D8neILzi.css`；迁移 068 已执行（模块 id 64、权限授予 role 1/4、活动表 0 行）；health 200、新接口未登录 401。登录态实操待验收。详见[交接](handoffs/2026-11-15-honor-rank-module.md)。
-
-## 2026-11-15 后台玩家详情「所在俱乐部」显示完整代理链（已部署 8891）
-
-- 玩家管理 → 查看详情 →「所在俱乐部」页签：每个俱乐部卡片新增「完整代理链」，本人 → 直属上级 → … → 群主/盟主 → 大盟主，逐环显示昵称、ID、角色。
-- 后端 `handleGetPlayerClubs` 返回 `chain`（新增 `buildPlayerClubChain`）：沿 `club_agent_info.upper_guuid` 回溯，最多 16 环；成环截断；上级不在本俱乐部时标 `missing` 并停止回溯，不伪造；末尾按俱乐部归属补创建者与联盟大盟主。
-- 已部署：二进制 `5352ea1f…`、前端 `index-BuFYhlh_.js` + `index-D2TbASBz.css`；备份 `bin/xuanmanager.previous-playerchain-20261115-1740`、`web.previous-playerchain-20261115-1740`。无迁移。登录态人工验收待做。详见[交接](handoffs/2026-11-15-player-club-chain.md)。
-
-## 2026-11-15 俱乐部荣耀榜：后台开关 + 客户端切俱乐部榜（未构建、未部署）
-
-- 需求：大厅全平台排行榜改成俱乐部模式；后台按**联盟/独立俱乐部**单独开榜（总开关 + 手数/赢分/红利三榜开关 + 共用起止时间）。
-- 服务端 v2.6 用「`club_honor_rank_reward` 加 5 列 + 扩展原奖励命令」实现，一行 = 一个（scope, 榜, 档位），共 7 行；后台把「总开关+三榜开关+共用时间」展开成 7 行逐条写，读时聚合并标混合状态。
-- 本轮落地：后台（`club_honor_rank.go`、`067` 迁移、`HonorRankModal`、俱乐部/联盟行内入口）+ 客户端（`panelPaihangbang` 双通道、俱乐部榜不领取、业务文案直接显示、不可用时回落全平台榜）。
-- Go 单测与 `tsc` 通过，客户端未构建；服务端 v2.6 未部署。详见[交接](handoffs/2026-11-15-club-honor-rank.md)。
-
-## 2026-11-15 BF 聊天入口改为默认关闭（已部署 8891/8893）
-
-- 后台「俱乐部管理 → BF聊天」默认值由开启改关闭：无俱乐部记录、无俱乐部账号都看不到消息页置顶入口，需要时后台逐个开启。
-- 存量一并关停：`chat_direct_bf_club` 10 行、旧表 `chat_direct_bf_entry` 2 行全部 `enabled=0`。
-- 已部署 ChatTool `b1ba8f54…`、XuanManager `580586bf…`、前端 `index-Ccu1-Dt0.js`；health 200、公网页面已换新资源。客户端未改代码（只读 `visible`），未构建/未真机；后台登录态实操待验收。详见[交接](handoffs/2026-11-15-bf-chat-default-off.md)。
-
 ## 更早批次
 
+- 2026-11-15 批次（业绩股全局折算、逃跑惩罚统计、玩家优化接胜率目标、排行榜独立模块、代理链、俱乐部荣耀榜、BF 聊天默认关闭）见 [`archive/2026-11-18/current-nov15-batches.md`](archive/2026-11-18/current-nov15-batches.md)。
 - 2026-11-14 批次（后台靓号、BF 消息规则、玩家关联账号/IP 短码、客户端 BOSS IP 短码）见 [`archive/2026-11-17/current-nov14-batches.md`](archive/2026-11-17/current-nov14-batches.md)。
 - 2026-11-13 批次（BF 聊天开关移交后台、业绩核心共享三阶段发放、额度授权记录类型、后台用户端数据查询）见 [`archive/2026-11-15/current-nov13-batches.md`](archive/2026-11-15/current-nov13-batches.md)。
 - 2026-11-03～11-09 的历史客户端、额度、牌局和后台批次见 [`docs/memory/archive/`](archive/2026-11-15/)。
