@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, Field, LoadingBlock, Modal, submitGuard } from "./ui";
+import {
+  RankRewardTierEditor,
+  listFromTiers,
+  tiersEmpty,
+  tiersError,
+  tiersFromList,
+  type RewardTier,
+} from "./RankRewardTiers";
 import { beijingDateInput } from "../time";
 import type {
   HonorRankActivity,
@@ -36,12 +44,12 @@ const PHASE_LABELS: Record<HonorRankActivity["phase"], string> = {
   closed: "已关闭",
 };
 
-type Boards = Record<HonorRankType, { on: boolean; rewards: string[] }>;
+type Boards = Record<HonorRankType, { on: boolean; rewards: RewardTier[][] }>;
 function emptyBoards(): Boards {
   return {
-    play: { on: false, rewards: PLAY_DIPIS.map(() => "") },
-    score: { on: false, rewards: [""] },
-    bonus: { on: false, rewards: [""] },
+    play: { on: false, rewards: PLAY_DIPIS.map(() => []) },
+    score: { on: false, rewards: [[]] },
+    bonus: { on: false, rewards: [[]] },
   };
 }
 
@@ -53,7 +61,7 @@ function boardsFromActivity(activity: HonorRankActivity): Boards {
       on: !!board?.on,
       rewards: spec.dipis.map((dipi) => {
         const row = board?.rewards?.find((item) => item.dipi === dipi);
-        return row?.list || "";
+        return tiersFromList(row?.list || "");
       }),
     };
   }
@@ -64,26 +72,8 @@ function toSubmitBoards(boards: Boards) {
   return BOARD_SPECS.map((spec) => ({
     rankType: spec.type,
     on: boards[spec.type].on,
-    rewards: spec.dipis.map((dipi, index) => ({ dipi, list: boards[spec.type].rewards[index] || "" })),
+    rewards: spec.dipis.map((dipi, index) => ({ dipi, list: listFromTiers(boards[spec.type].rewards[index] || []) })),
   }));
-}
-
-/** 名次奖励输入校验：空返回 ""，由调用方按"启用的榜必填"决定要不要拦。 */
-export function rewardListError(text: string): string {
-  const raw = (text || "").trim();
-  if (raw === "") return "";
-  if (/[，、；;]/.test(raw)) return "请用英文逗号分隔，例如 100,50,20";
-  const parts = raw.split(",");
-  if (parts.length > 100) return "名次奖励最多 100 项";
-  for (const part of parts) {
-    const value = part.trim();
-    if (value === "") return "有空的项，检查是不是多打了逗号";
-    if (!/^\d+$/.test(value)) return `「${value}」只能填整数金额`;
-    const amount = Number(value);
-    if (amount <= 0) return "金额必须大于 0";
-    if (amount > 1_000_000) return "金额不能超过 1,000,000";
-  }
-  return "";
 }
 
 function splitClock(value: string): string {
@@ -199,10 +189,10 @@ export default function HonorRankActivityModal({
     const missing: string[] = [];
     BOARD_SPECS.forEach(spec => {
       const enabled = activityOn && boards[spec.type].on;
-      const texts = boards[spec.type].rewards;
-      // 逐项只报格式错误；"必填"按榜判断——手数榜允许只给部分档位配奖。
-      format[spec.type] = spec.dipis.map((dipi, index) => rewardListError(texts[index] || ""));
-      if (enabled && !texts.some(text => (text || "").trim() !== "")) missing.push(spec.name);
+      const groups = boards[spec.type].rewards;
+      // 逐档只报行内格式错误；"必填"按榜判断——手数榜允许只给部分档位配奖。
+      format[spec.type] = spec.dipis.map((dipi, index) => tiersError(groups[index] || []));
+      if (enabled && !groups.some((group) => !tiersEmpty(group))) missing.push(spec.name);
     });
     return { format, missing };
   }, [boards, activityOn]);
@@ -211,13 +201,13 @@ export default function HonorRankActivityModal({
   const canSubmit = editable && !busy && !loading && hasScope && confirmed && noteLength >= 2 && noteLength <= 120 &&
     (!activityOn || (scheduleReady && openedBoards.length > 0 && rewardState.missing.length === 0 && !hasRewardFormatError));
 
-  const setBoard = (type: HonorRankType, patch: Partial<{ on: boolean; rewards: string[] }>) =>
+  const setBoard = (type: HonorRankType, patch: Partial<{ on: boolean; rewards: RewardTier[][] }>) =>
     setBoards((current) => ({ ...current, [type]: { ...current[type], ...patch } }));
 
-  const setBoardReward = (type: HonorRankType, index: number, value: string) =>
+  const setBoardReward = (type: HonorRankType, index: number, tiers: RewardTier[]) =>
     setBoards((current) => {
       const rewards = current[type].rewards.slice();
-      rewards[index] = value;
+      rewards[index] = tiers;
       return { ...current, [type]: { ...current[type], rewards } };
     });
 
@@ -466,21 +456,20 @@ export default function HonorRankActivityModal({
                     <strong>{spec.name}</strong> · {spec.hint}
                   </span>
                 </label>
-                <div className="form-grid" style={{ marginTop: 10 }}>
+                <div className="rank-tier-list">
                   {spec.dipis.map((dipi, index) => (
-                    <Field
-                      key={dipi || "single"}
-                      label={dipi ? `${dipi} · 名次奖励` : "名次奖励"}
-                      hint="第 1 名起，英文逗号分隔（元），开了榜必填"
-                      error={rewardState.format[spec.type][index] || ""}
-                    >
-                      <input
-                        value={boards[spec.type].rewards[index] || ""}
+                    <div className="rank-tier-list__item" key={dipi || "single"}>
+                      <div className="rank-tier-list__title">
+                        <strong>{dipi ? `${dipi} · 名次奖励` : "名次奖励"}</strong>
+                        <span>{dipi ? `${dipi} 档位` : "该榜所有成员"}</span>
+                      </div>
+                      <RankRewardTierEditor
+                        tiers={boards[spec.type].rewards[index] || []}
                         disabled={!activityOn || !boards[spec.type].on || !editable}
-                        placeholder="例如 100,50,20"
-                        onChange={(event) => setBoardReward(spec.type, index, event.target.value)}
+                        error={rewardState.format[spec.type][index] || ""}
+                        onChange={(tiers) => setBoardReward(spec.type, index, tiers)}
                       />
-                    </Field>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -522,7 +511,7 @@ export default function HonorRankActivityModal({
           {hasRewardFormatError && (
             <div className="form-error form-grid__full">
               <span>!</span>
-              名次奖励格式有误，按输入框下的提示改正后才能提交
+              名次奖励有误，按每档下面的红字提示改正后才能提交
             </div>
           )}
 

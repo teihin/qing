@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import { Button, Field, LoadingBlock, Modal, submitGuard } from "./ui";
+import {
+  RankRewardTierEditor,
+  listFromTiers,
+  tiersError,
+  tiersFromList,
+  type RewardTier,
+} from "./RankRewardTiers";
 import type { HonorRankState, HonorRankType } from "../types";
 
 function errorMessage(reason: unknown, fallback: string): string {
   return reason instanceof ApiError ? reason.message : fallback;
 }
 
-type Boards = Record<HonorRankType, { on: boolean; rewards: string[] }>;
+type Boards = Record<HonorRankType, { on: boolean; rewards: RewardTier[][] }>;
 
 interface BoardSpec {
   type: HonorRankType;
@@ -29,25 +36,21 @@ const BOARD_SPECS: BoardSpec[] = [
   { type: "bonus", name: "代理红利榜", hint: "按代理红利（元）排名，代理查看按展示折扣缩放", dipis: [""] },
 ];
 
-const EMPTY_BOARDS: Boards = {
-  play: { on: false, rewards: PLAY_DIPIS.map(() => "") },
-  score: { on: false, rewards: [""] },
-  bonus: { on: false, rewards: [""] },
-};
+const emptyBoards = (): Boards => ({
+  play: { on: false, rewards: PLAY_DIPIS.map(() => []) },
+  score: { on: false, rewards: [[]] },
+  bonus: { on: false, rewards: [[]] },
+});
 
 function boardsFrom(state: HonorRankState): Boards {
-  const result: Boards = {
-    play: { on: false, rewards: PLAY_DIPIS.map(() => "") },
-    score: { on: false, rewards: [""] },
-    bonus: { on: false, rewards: [""] },
-  };
+  const result = emptyBoards();
   for (const spec of BOARD_SPECS) {
     const summary = state.boards?.find((item) => item.rankType === spec.type);
     result[spec.type] = {
       on: !!summary?.on,
       rewards: spec.dipis.map((dipi) => {
         const row = state.rows?.find((item) => item.rankType === spec.type && item.dipi === dipi);
-        return row ? row.rewards.join(",") : "";
+        return tiersFromList(row ? row.rewards.join(",") : "");
       }),
     };
   }
@@ -101,7 +104,7 @@ export default function HonorRankModal({
   const [startTime, setStartTime] = useState("");
   const [endDate, setEndDate] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [boards, setBoards] = useState<Boards>(EMPTY_BOARDS);
+  const [boards, setBoards] = useState<Boards>(emptyBoards);
   const [note, setNote] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -142,16 +145,25 @@ export default function HonorRankModal({
   }, [endpoint]);
 
   const scheduleReady = !!(startDate && startTime && endDate && endTime);
+  // 每个 (榜, 档位) 一组区间行；有一处不合规就拦下提交，避免把坏串发给后端。
+  const rewardErrors = useMemo(() => {
+    const result: Record<string, string[]> = {};
+    BOARD_SPECS.forEach((spec) => {
+      result[spec.type] = spec.dipis.map((dipi, index) => tiersError(boards[spec.type].rewards[index] || []));
+    });
+    return result;
+  }, [boards]);
+  const hasRewardError = Object.keys(rewardErrors).some((type) => rewardErrors[type].some(Boolean));
   const canSubmit = canEdit && !busy && !loading && confirmed && noteLength >= 2 && noteLength <= 120 &&
-    (!activityOn || (scheduleReady && openedBoards.length > 0));
+    (!activityOn || (scheduleReady && openedBoards.length > 0 && !hasRewardError));
 
-  const setBoard = (type: HonorRankType, patch: Partial<{ on: boolean; rewards: string[] }>) =>
+  const setBoard = (type: HonorRankType, patch: Partial<{ on: boolean; rewards: RewardTier[][] }>) =>
     setBoards((current) => ({ ...current, [type]: { ...current[type], ...patch } }));
 
-  const setBoardReward = (type: HonorRankType, index: number, value: string) =>
+  const setBoardReward = (type: HonorRankType, index: number, tiers: RewardTier[]) =>
     setBoards((current) => {
       const rewards = current[type].rewards.slice();
-      rewards[index] = value;
+      rewards[index] = tiers;
       return { ...current, [type]: { ...current[type], rewards } };
     });
 
@@ -172,7 +184,7 @@ export default function HonorRankModal({
           boards: BOARD_SPECS.map((spec) => ({
             rankType: spec.type,
             on: boards[spec.type].on,
-            rewards: spec.dipis.map((dipi, index) => ({ dipi, list: boards[spec.type].rewards[index] || "" })),
+            rewards: spec.dipis.map((dipi, index) => ({ dipi, list: listFromTiers(boards[spec.type].rewards[index] || []) })),
           })),
           note: note.trim(),
           confirm: true,
@@ -287,20 +299,21 @@ export default function HonorRankModal({
                   <strong>{spec.name}</strong> · {spec.hint}
                 </span>
               </label>
-              <div className="form-grid" style={{ marginTop: 10 }}>
+              <div className="rank-tier-list">
                 {spec.dipis.map((dipi, index) => (
-                  <Field
-                    key={dipi || "single"}
-                    label={dipi ? `${dipi} · 名次奖励` : "名次奖励"}
-                    hint="第 1 名起，逗号分隔（元），空=不发奖励"
-                  >
-                    <input
-                      value={boards[spec.type].rewards[index] || ""}
+                  <div className="rank-tier-list__item" key={dipi || "single"}>
+                    <div className="rank-tier-list__title">
+                      <strong>{dipi ? `${dipi} · 名次奖励` : "名次奖励"}</strong>
+                      <span>{dipi ? `${dipi} 档位` : "该榜所有成员"}</span>
+                    </div>
+                    <RankRewardTierEditor
+                      tiers={boards[spec.type].rewards[index] || []}
                       disabled={!activityOn || !boards[spec.type].on}
-                      placeholder="例如 100,50,20"
-                      onChange={(event) => setBoardReward(spec.type, index, event.target.value)}
+                      error={rewardErrors[spec.type][index] || ""}
+                      hint="按名次区间配奖，空=不发奖励；同一金额可合并成区间"
+                      onChange={(tiers) => setBoardReward(spec.type, index, tiers)}
                     />
-                  </Field>
+                  </div>
                 ))}
               </div>
             </div>
@@ -315,6 +328,13 @@ export default function HonorRankModal({
               />
             </Field>
           </div>
+
+          {hasRewardError && (
+            <div className="form-error form-grid__full">
+              <span>!</span>
+              名次奖励有误，按每档下面的红字提示改正后才能提交
+            </div>
+          )}
 
           <div className="form-grid__full">
             <label className="confirm-check">

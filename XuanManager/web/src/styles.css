@@ -3205,3 +3205,28 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
   .honor-rank-filters { align-items: stretch; flex-direction: column; }
   .honor-rank-filters__right input { flex: 1 1 auto; min-width: 0; }
 }
+
+/* 名次奖励的区间列表编辑：一行一段名次（最高~最低）+ 金额，可选新增/删除。 */
+.rank-tier-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 10px; margin-top: 10px; }
+.rank-tier-list__item { display: grid; gap: 7px; padding: 10px 11px 11px; border: 1px solid #e4eded; border-radius: 10px; background: #fafcfc; }
+.rank-tier-list__title { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.rank-tier-list__title strong { color: #19343d; font-size: 13px; }
+.rank-tier-list__title span { color: #8b9da2; font-size: 12px; }
+.rank-tier-editor { display: grid; gap: 6px; }
+.rank-tier-editor__head, .rank-tier-editor__row { display: grid; grid-template-columns: 76px 76px minmax(96px, 1fr) 54px; align-items: center; gap: 7px; }
+.rank-tier-editor__head { color: #7f9398; font-size: 11px; font-weight: 700; letter-spacing: .02em; }
+.rank-tier-editor__head span:last-child { text-align: center; }
+.rank-tier-editor__row input { width: 100%; min-height: 36px; padding: 0 9px; border: 1px solid #dbe6e7; border-radius: 7px; color: #29434a; background: #fff; font-size: 13px; }
+.rank-tier-editor__row input:focus { outline: 0; border-color: #5bbcb5; box-shadow: 0 0 0 3px rgba(32, 156, 147, .09); }
+.rank-tier-editor__row input:disabled { color: #889a9e; background: #f2f5f5; }
+.rank-tier-editor__remove { height: 36px; padding: 0 6px; border: 1px solid #f0ccd1; border-radius: 7px; color: #c04a58; background: #fff5f6; font-size: 12px; font-weight: 700; }
+.rank-tier-editor__remove:hover:enabled { border-color: #dd8b96; background: #fdeef0; }
+.rank-tier-editor__foot { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 2px; }
+.rank-tier-editor__add { min-height: 32px; padding: 0 12px; border: 1px dashed #b9dcd8; border-radius: 7px; color: #0f8378; background: #f2fbfa; font-size: 12px; font-weight: 700; }
+.rank-tier-editor__add:hover:enabled { border-color: #159b91; background: #e9f8f5; }
+.rank-tier-editor__hint { flex: 1 1 180px; color: #8b9da2; font-size: 12px; line-height: 1.5; }
+.rank-tier-editor__hint.is-error { color: #bd4e5b; font-weight: 650; }
+@media (max-width: 700px) {
+  .rank-tier-list { grid-template-columns: 1fr; }
+  .rank-tier-editor__head, .rank-tier-editor__row { grid-template-columns: 62px 62px minmax(72px, 1fr) 50px; }
+}
