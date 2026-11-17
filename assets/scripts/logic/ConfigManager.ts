@@ -33,6 +33,11 @@ export default class ConfigManager extends cc.Component {
     public static readonly CONSUME_DELAY_TYPE:string = "延时";
     /** 每手牌允许的加时次数（第 1 次免费，2/3 次收费）。 */
     public static readonly DELAY_MAX_TIMES:number = 3;
+    /**
+     * 搓牌：牌桌「实时战绩」里的搓牌开关打开后，每搓一次扣一次钻（默认 20）。
+     * 扣费点 = 搓牌窗口松手揭开那一刻，见 panelGameView.ConsumeCuoSqueeze。
+     */
+    public static readonly CONSUME_CUO_CARD:string = "搓牌";
     /** 牌局回顾一键翻牌，默认 500 钻；只翻本局已发的牌，见 panelGameView.ConsumeAndFlipReviewCards。 */
     public static readonly CONSUME_FLIP:string = "翻牌";
     /** 创建俱乐部收一次费，默认 10000 钻；成功受理后才扣，见 panelMain.CreateClub。 */
@@ -72,6 +77,7 @@ export default class ConfigManager extends cc.Component {
         "举报":50,
         "延时第2次":200,
         "延时第3次":400,
+        "搓牌":20,
         "翻牌":500,
         "创建俱乐部":10000,
         "创建联盟":10000,

@@ -122,6 +122,13 @@ export default class panelGameView extends UIPanelViewBase {
     /** 点「延时」后选中的档位（第几次），供「确认延时」弹窗回用。 */
     private pendingDelayTimes:number = 0;
 
+    /** 已扣过搓牌费的局号：同一手牌只扣一次，窗口重开/重复松手都不再重复扣。 */
+    private cuoChargedRound:string = "";
+    /** 局号拿不到时的兜底去重时间戳（搓牌扣费）。 */
+    private cuoChargedAt:number = 0;
+    /** 价格不够时程序化把开关复位，避免复位触发的 toggle 事件再走一遍校验。 */
+    private cuoToggleReverting:boolean = false;
+
     private queueEntryLabel:cc.Label = null;
     private queueEntryNode:cc.Node = null;
     private queueEntrySkeleton:sp.Skeleton = null;
@@ -284,7 +291,63 @@ export default class panelGameView extends UIPanelViewBase {
         this.SetConsumePriceLabel("RoomFrame/切牌/label", ConfigManager.CONSUME_CUT_CARD);
         this.SetConsumePriceLabel("cmd6/强制秀牌/label", ConfigManager.CONSUME_FORCE_SHOW);
         this.SetConsumePriceLabel("cmd6/看剩余牌/label copy", ConfigManager.CONSUME_LOOK_NEXT);
+        this.RefreshCuoSqueezePriceLabel();
         this.RefreshReviewFlipButton();
+    }
+
+    /** 搓一次牌扣多少钻（后台「钻石消费价格」的「搓牌」项）；0 = 免费。 */
+    public GetCuoSqueezePrice():number
+    {
+        return ConfigManager.getInstance().GetConsumeStone(ConfigManager.CONSUME_CUO_CARD);
+    }
+
+    /** 搓牌开关下面的价签：`20 钻/次`；后台配成 0 就显示「免费」。 */
+    private RefreshCuoSqueezePriceLabel():void
+    {
+        let node = Tool.GetChild(this.node,"实时战绩/搓牌开关/V8价格");
+        let label = node == null ? null : node.getComponent(cc.Label);
+        if(label == null)
+            return;
+        const nCost = this.GetCuoSqueezePrice();
+        label.string = nCost > 0 ? (nCost + " 钻/次") : "免费";
+    }
+
+    /**
+     * 搓一次牌扣一次钻：搓牌窗口松手揭开时调一次，走统一扣费
+     * `玩家_消费_命令`（`consume_type=搓牌`、`money_type=stone`）。
+     * 同一手牌只扣一次（窗口重开、服务端补推全量都不会重复扣）；
+     * 余额不够则不扣——开关打开时已经拦过，这里只是并发掉钻的兜底。
+     */
+    private ConsumeCuoSqueeze():void
+    {
+        const nCost = this.GetCuoSqueezePrice();
+        if(nCost <= 0)
+            return;
+        let account = GameDataManager.getAccount();
+        if(account == null)
+            return;
+
+        const strRound = this.gameLogic == null ? "" : String(this.gameLogic.round_count || "");
+        const now = Date.now();
+        if(strRound !== "")
+        {
+            if(strRound === this.cuoChargedRound)
+                return;
+        }
+        else if(now - this.cuoChargedAt < 10000)
+        {
+            return;
+        }
+
+        if(Number(account.stone) < nCost)
+        {
+            this.ShowMsg("钻石不足" + nCost + "，本次搓牌未扣费！");
+            return;
+        }
+
+        this.cuoChargedRound = strRound;
+        this.cuoChargedAt = now;
+        account.reqGameCommand(ConfigManager.getInstance().BuildConsumeStoneParam(ConfigManager.CONSUME_CUO_CARD), "玩家_消费_命令");
     }
 
     private SetConsumePriceLabel(strPath:string, strType:string)
@@ -709,6 +772,9 @@ export default class panelGameView extends UIPanelViewBase {
 
     public DelayShowCuoInfo()
     {
+        // 松手＝搓完这一张，搓牌按次收费（后台「钻石消费价格」的「搓牌」项）
+        this.ConsumeCuoSqueeze();
+
         //揭开前先换回有点牌面，遮罩撤走后显示真实牌点
         let player = this.gameLogic == null ? null : this.gameLogic.GetPlayerCtlByID(0);
         if(player != null)
@@ -978,6 +1044,20 @@ export default class panelGameView extends UIPanelViewBase {
         }
         else if(toggle.node.name === "搓牌开关")
         {
+           // 搓牌按次收费：余额不够就不给开，免得开了之后每次搓牌都扣不到钱
+           if(toggle.isChecked && !this.cuoToggleReverting)
+           {
+               const nCost = this.GetCuoSqueezePrice();
+               const account = GameDataManager.getAccount();
+               if(nCost > 0 && account != null && Number(account.stone) < nCost)
+               {
+                   this.ShowMsg("钻石不足" + nCost + "，无法开启搓牌！");
+                   this.cuoToggleReverting = true;
+                   toggle.isChecked = false;
+                   this.cuoToggleReverting = false;
+                   return;
+               }
+           }
            // cc.sys.localStorage.setItem("搓牌开关",toggle.isChecked?"Ture":"False");
            GameDataManager.getAccount().setDefinedProperty("player_setting",toggle.isChecked?"True":"False");
            this.UpdateRealtimeSqueezeState(toggle.isChecked);
@@ -2987,6 +3067,7 @@ export default class panelGameView extends UIPanelViewBase {
     private UpdateRealtimeSqueezeState(checked:boolean)
     {
         Tool.GetChild(this.node,"实时战绩/搓牌开关/V8状态").getComponent(cc.Label).string = checked ? "已开启" : "已关闭";
+        this.RefreshCuoSqueezePriceLabel();
     }
 
     private FormatRealtimeValue(value:string):string

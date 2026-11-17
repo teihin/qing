@@ -2,7 +2,7 @@
 
 - 日期：2026-11-17
 - 目录/分支：`/Volumes/SSD/qing` / `main`
-- 状态：代码与迁移就绪，**未部署 8891**
+- 状态：**已部署 8891**（2026-11-17 22:10 随搓牌价目项一起上线，迁移 071 已在启动时执行）
 
 ## 目标（用户原话）
 
@@ -31,10 +31,13 @@
 
 ## 验证
 
-- `go vet ./internal/api/` 通过；`node node_modules/typescript/bin/tsc -b`（web）通过。
-- 未做：构建、部署、登录态实操。
+- 本地：`go vet ./internal/api/` 通过；`node node_modules/typescript/bin/tsc -b`（web）通过；`go test ./...` 全绿。
+- 2026-11-17 22:10 部署：`xuanmanager` 交叉编译（`-trimpath -ldflags="-s -w"`，11,149,496 B）→ 备份 `backups/xuanmanager.20261117-2210-rollback` → 停/换/启，`/api/health` 200，单进程单端口。
+- 迁移回读：`mgr_module.name`（`game.player_optimization`）= `玩家控制`；4 条 `mgr_permission` 已是「查看/新增/调整/删除发牌控制」。
+- 前端：线上 `assets/index-BMTdl6pi.js` 与本地 `HEAD` 构建产物同名同大小，`grep 玩家控制`=1、`grep 玩家优化`=0 → 包已是新版，**本次无需重发前端**。
+- 未做：登录态页面视觉复核（无管理员凭据，交给主人）。
 
 ## 下一步
 
-1. 下次部署 8891 时迁移 071 会自动执行，菜单与权限名随之更新；**不重启则菜单仍显示「玩家优化」**。
-2. 部署后核对：侧边栏菜单名与图标字、权限管理页 4 条权限名、页面内全部文案、牌桌内设置的记录仍能正常显示。
+1. 主人登录后台核对：侧边栏菜单名与图标字、权限管理页 4 条权限名、页面内全部文案、牌桌内设置的记录仍能正常显示。
+2. 如需回滚：`install` 回 `backups/xuanmanager.20261117-2210-rollback` 再 `start.sh`（数据库里的新名需手工改回）。

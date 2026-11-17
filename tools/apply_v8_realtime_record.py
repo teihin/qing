@@ -210,7 +210,10 @@ def room(relative):
     p.set_active(check,False)
     art(p,R+'/搓牌开关/搓牌','squeeze',x=-353,w=59,h=35)
     art(p,R+'/搓牌开关/V8分隔','rule',x=-196,w=230,h=1)
-    n=txt(p,R+'/搓牌开关/V8状态','已关闭',105,0,104,36,25)
+    # 状态与价签上下两行放在开关右侧：开关下方只有 15px 留白，放不下第三行。
+    # 价签金额由客户端按后台「消费钻石价格」的「搓牌」项实时改写，这里只写默认值。
+    n=txt(p,R+'/搓牌开关/V8状态','已关闭',105,9,104,36,25)
+    n=txt(p,R+'/搓牌开关/V8价格','20 钻/次',105,-14,130,20,18);p.data[n]['_color'].update(r=255,g=214,b=120)
     # Backdrops must precede all preserved dynamic labels, regardless of old order.
     first(p,R,[R+'/V8遮罩',R+'/bg',R+'/bk',R+'/V8战绩底板',R+'/V8围观底板'])
     p.set_active(root,active);p.save()

@@ -53,6 +53,9 @@ var stoneConsumePriceCatalog = []stoneConsumePriceItem{
 	// 客户端扣费走统一接口 `玩家_消费_命令`，流水类型统一记「延时」（不是这两项 code）。
 	{Code: "延时第2次", Name: "对局加时 · 第 2 次", Scene: "牌桌 · 延时（每手牌第 2 次）", Default: 200, LegacyMoney: 200, LegacyUnit: "分"},
 	{Code: "延时第3次", Name: "对局加时 · 第 3 次", Scene: "牌桌 · 延时（每手牌第 3 次）", Default: 400, LegacyMoney: 400, LegacyUnit: "分"},
+	// 搓牌：牌桌「实时战绩」里打开搓牌开关后，每搓一次（松手揭开）扣一次；
+	// 客户端搓完调统一扣费 `玩家_消费_命令`（consume_type=搓牌），开关旁展示本项金额。
+	{Code: "搓牌", Name: "搓牌（每搓一次）", Scene: "牌桌 · 实时战绩 · 搓牌开关", Default: 20, LegacyMoney: 0, LegacyUnit: ""},
 }
 
 // stoneConsumePriceRetired 是已停用的消费项：不再出现在后台页面，也不再写入配置。
