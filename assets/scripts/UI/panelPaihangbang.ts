@@ -129,6 +129,13 @@ export default class panelPaihangbang extends UIPanelViewBase {
         this.restoreAllBoards();
         const firstTab = this.tabNode("玩家手数榜");
         if (firstTab) firstTab.getComponent(cc.Toggle).isChecked = true;
+        ["1皮", "2皮", "5皮", "10皮", "20皮"].forEach((name) => {
+            const filter = Tool.GetChild(this.node, "容器/玩家手数榜/选择手数/" + name);
+            if (!filter) return;
+            filter.getComponent(cc.Toggle).isChecked = name === "1皮";
+            const selectedMark = filter.getChildByName("checkmark");
+            if (selectedMark) selectedMark.active = name === "1皮";
+        });
         // 俱乐部榜先问开关，再决定显示哪几个 tab；大厅模式没有开关概念，照旧直接进第一个榜。
         if (this.mode === "club" && this.requestStatus()) return;
         this.enterBoard("玩家手数榜");
@@ -476,8 +483,8 @@ export default class panelPaihangbang extends UIPanelViewBase {
     }
 
     private resetHeader() {
-        this.header("开始时间", "活动时间 —");
-        this.header("结束时间", "至 —");
+        this.header("开始时间", "开始时间 —");
+        this.header("结束时间", "截止时间 —");
         this.header("V8本人指标", "");
         this.header("V8排名", "—");
         this.header("V8奖励", "—");
@@ -488,8 +495,10 @@ export default class panelPaihangbang extends UIPanelViewBase {
 
     private dates(data: any) {
         const format = (value: any) => value == null || value === "" ? "—" : String(value).replace(/-/g, "/").replace(/(\d{2}:\d{2}):\d{2}$/, "$1");
-        if (data.start_date != null) this.header("开始时间", "活动时间 " + format(data.start_date));
-        if (data.end_date != null) this.header("结束时间", "至 " + format(data.end_date));
+        if (data.start_date != null && data.start_date !== "")
+            this.header("开始时间", "开始时间 " + format(data.start_date));
+        if (data.end_date != null && data.end_date !== "")
+            this.header("结束时间", "截止时间 " + format(data.end_date));
     }
 
     private current(request: RankingRequest): boolean {

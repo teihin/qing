@@ -2,11 +2,31 @@
   "design": "design-previews/排行榜-V9-待确认/排行榜-V9-三榜统一效果图-待确认.png",
   "assets": [
     "leaderboard_v9_row.png",
-    "leaderboard_v9_table.png"
+    "leaderboard_v9_table.png",
+    "leaderboard_v9_avatar_ring.png",
+    "leaderboard_v8_shield.png",
+    "leaderboard_v9_tab_hands_off.png",
+    "leaderboard_v9_tab_hands_on.png",
+    "leaderboard_v9_tab_win_off.png",
+    "leaderboard_v9_tab_win_on.png",
+    "leaderboard_v9_tab_agent_off.png",
+    "leaderboard_v9_tab_agent_on.png",
+    "leaderboard_v9_filter_1_off.png",
+    "leaderboard_v9_filter_1_on.png",
+    "leaderboard_v9_filter_2_off.png",
+    "leaderboard_v9_filter_2_on.png",
+    "leaderboard_v9_filter_5_off.png",
+    "leaderboard_v9_filter_5_on.png",
+    "leaderboard_v9_filter_10_off.png",
+    "leaderboard_v9_filter_10_on.png",
+    "leaderboard_v9_filter_20_off.png",
+    "leaderboard_v9_filter_20_on.png"
   ],
   "scope": [
     "assets/resources/Prefabs/排行榜.prefab",
     "assets/resources/Prefabs/排行榜对象.prefab"
   ],
-  "notes": "Keeps the existing three boards, live data labels and infinite scroll."
+  "referenceSource": "art_sources/v8-repairs/leaderboard/reference-tabs-v1.png",
+  "filterSource": "art_sources/v8-repairs/leaderboard/filter-imagegen-text-v2",
+  "notes": "Board tabs are cut directly from the confirmed three-board reference. The ten filter states are complete imagegen button assets with generated Chinese art lettering; board tabs are 220x64 and filter tabs 132x54. Original dynamic data, avatar binding, toggle events, default 1皮 and infinite scroll remain intact."
 }
