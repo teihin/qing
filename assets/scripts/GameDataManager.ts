@@ -9,6 +9,7 @@ import QueueMatchManager from "./logic/QueueMatchManager";
 import WebSceneLoader from "./common/WebSceneLoader";
 import WebWakeLockManager from "./common/WebWakeLockManager";
 import RoomInviteManager from "./logic/RoomInviteManager";
+import { resolveMyRoomClubId, resolveRoomSettingClubId, resolveRoomSettingUnionId } from "./logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 
@@ -119,6 +120,41 @@ export default class GameDataManager extends cc.Component {
             return false;
         return GameDataManager.SplitIdList(account.club_manage).length > 0 ||
             GameDataManager.SplitIdList(account.union_manage).length > 0;
+    }
+
+    /**
+     * 牌桌内「牌局优化」（电量连点 3 下）的入口口径：账号是否被后台配成了**管理员 / 大小BOSS**。
+     *
+     * 后台「设置管理员」写的是两类范围（见 `XuanManager` 玩家列表「设置管理员」）：
+     * - `club_manage`：可管理的俱乐部编号（俱乐部管理员）；
+     * - `union_manage`：可管理的联盟编号（**联盟小BOSS 走这个**，`club_manage` 是空的）。
+     * 所以只看 `club_manage` 会把联盟小BOSS 挡在门外，两类都要认。level / 角色不再参与。
+     *
+     * 能拿到房间 ID 时尽量按范围比对：
+     * - `roomSetting.club_id` 命中 `club_manage` → 放行；
+     * - 联盟共享房 `roomSetting.union_id` 非空 → 只认管理该联盟的账号（这一步是真拦）。
+     * 普通俱乐部房的 `roomSetting` 里没有 `union_id`，客户端也查不到「本俱乐部属于哪个联盟」，
+     * 无法精确比对联盟范围，此时按「已配置管理范围」放行；服务端仍会按 club_id 再复核。
+     */
+    public static IsCurrentClubAdmin():boolean
+    {
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        const manages = GameDataManager.SplitIdList(account.club_manage);
+        const unions = GameDataManager.SplitIdList(account.union_manage);
+        if(manages.length === 0 && unions.length === 0)
+            return false;
+
+        const clubId = resolveRoomSettingClubId(account) || resolveMyRoomClubId(account, "");
+        if(clubId !== "" && manages.indexOf(clubId) >= 0)
+            return true;
+
+        const unionId = resolveRoomSettingUnionId(account);
+        if(unionId !== "")
+            return unions.indexOf(unionId) >= 0;
+
+        return true;
     }
 
     /**

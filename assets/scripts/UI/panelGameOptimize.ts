@@ -13,7 +13,8 @@ const {ccclass} = cc._decorator;
 
 /**
  * 胜率目标列表一行：对应《胜率目标控制-客户端与后台接口文档》§3.2 list[]。
- * progress/remain 允许为负；target_value 正=让玩家赢，负=让玩家输。
+ * progress 允许为负；target_value 正=让玩家赢，负=让玩家输。
+ * 剩余值不直接用服务端 remain（= |目标| - |进度|，异号时偏小），由 FillRow 按方向重算。
  */
 interface OptimizeRow {
     /** 历史记录 ID，仅 history=1 时下发；当前目标为空。 */
@@ -24,7 +25,6 @@ interface OptimizeRow {
     targetValue:number;
     chance:number;
     progress:number;
-    remain:number;
     roundCount:number;
     peerCount:number;
     groupName:string;
@@ -65,8 +65,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
     private filter:string = "";              // ""=全部 / active / done / stopped
     /** 默认查当前目标；点「历史」才查 usr_opt_target_history 快照。 */
     private historyMode:boolean = false;
-    private historyPage:number = 0;
-    private readonly historyPageSize:number = 20;
+    private listPage:number = 0;
+    private readonly pageSize:number = 20;
     private listTotal:number = 0;
 
     private selectedPlayerId:string = "";
@@ -75,6 +75,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
     private selectedGroupName:string = "";
 
     private listBusy:boolean = false;
+    /** 本次列表请求回包后是否滚回顶部（切筛选/翻页要回顶，轮询刷新不能动用户位置）。 */
+    private listScrollTop:boolean = false;
     private listContext:string = "";
     private listTimer:any = null;
     private listLoadingShown:boolean = false;
@@ -96,7 +98,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
     }
 
     start () {
-        if(!GameDataManager.IsBossAccount()) {
+        // 入口口径与电量三连击一致：当前俱乐部的管理员；服务端仍按自己的名单鉴权。
+        if(!GameDataManager.IsCurrentClubAdmin()) {
             this.ShowStatus("当前账号没有牌局优化权限", true);
             UIManager.getInstance().closePanelByName(this.node.name);
             return;
@@ -116,11 +119,14 @@ export default class panelGameOptimize extends UIPanelViewBase {
         this.RefreshFilterButtons();
         this.RefreshObjectLabel();
         this.ShowStatus("", false);
-        this.SetPagerVisible(this.historyMode);
-        this.QueryList(true);
+        this.LayoutList();
+        this.QueryList(true, true);
         this.schedule(()=>{
+            // 历史表是静态快照，不需要轮询；轮询还会把用户滚动/翻页位置打回顶部。
+            if(this.historyMode)
+                return;
             if(!this.listBusy)
-                this.QueryList(false);
+                this.QueryList(false, false);
         }, panelGameOptimize.POLL_SECONDS);
     }
 
@@ -169,11 +175,11 @@ export default class panelGameOptimize extends UIPanelViewBase {
             return;
         }
         if(name === "历史上一页") {
-            this.ChangeHistoryPage(-1);
+            this.ChangeListPage(-1);
             return;
         }
         if(name === "历史下一页") {
-            this.ChangeHistoryPage(1);
+            this.ChangeListPage(1);
             return;
         }
         if(name.indexOf("筛选_") === 0) {
@@ -199,62 +205,72 @@ export default class panelGameOptimize extends UIPanelViewBase {
     }
 
     private SetFilter(state:string):void {
-        if(this.filter === state)
+        // 状态筛选只作用于当前目标表：点任一状态 chip 就退出历史表。
+        if(this.filter === state && !this.historyMode)
             return;
         this.filter = state;
-        this.historyPage = 0;
+        this.historyMode = false;
+        this.listPage = 0;
         this.RefreshFilterButtons();
-        this.SetPagerVisible(this.historyMode);
+        this.LayoutList();
         this.RefreshListNow();
     }
 
-    /** 「历史」是独立维度：开启后状态筛选仍在历史表内生效；再点一次回到当前目标。 */
+    /** 五个 chip 互斥：进历史查历史表（全部状态），再点一次回到当前目标表的「全部」。 */
     private SetHistoryMode():void {
         this.historyMode = !this.historyMode;
-        this.historyPage = 0;
+        this.filter = "";
+        this.listPage = 0;
         this.RefreshFilterButtons();
-        this.SetPagerVisible(this.historyMode);
+        this.LayoutList();
         this.RefreshListNow();
     }
 
-    private ChangeHistoryPage(delta:number):void {
-        if(!this.historyMode)
+    private ChangeListPage(delta:number):void {
+        const totalPages = this.TotalPages();
+        const next = Math.max(0, Math.min(totalPages - 1, this.listPage + delta));
+        if(next === this.listPage)
             return;
-        const totalPages = this.HistoryTotalPages();
-        const next = Math.max(0, Math.min(totalPages - 1, this.historyPage + delta));
-        if(next === this.historyPage)
-            return;
-        this.historyPage = next;
-        this.RefreshListNow();
+        this.listPage = next;
+        // 翻页不显示加载态，但要把列表滚回顶部。
+        this.RefreshListNow(false);
     }
 
-    private HistoryTotalPages():number {
-        return Math.max(1, Math.ceil(Math.max(this.listTotal, 0) / this.historyPageSize));
+    private TotalPages():number {
+        return Math.max(1, Math.ceil(Math.max(this.listTotal, 0) / this.pageSize));
     }
 
-    private SetPagerVisible(show:boolean):void {
-        this.SetActive("列表区/分页", show);
+    /** 分页条常显（四个状态筛选和历史都有页码）：列表底边固定让出 66，切换时列表高度不跳变。 */
+    private LayoutList():void {
+        this.SetActive("列表区/分页", true);
         const scrollNode = this.At("列表区/列表");
         const widget = scrollNode == null ? null : scrollNode.getComponent(cc.Widget);
         if(widget != null) {
-            widget.bottom = show ? 66 : 10;
+            widget.bottom = 66;
             widget.updateAlignment();
         }
+        // 子节点 view 的 Widget 不会随父节点改高自动重排：不同步的话 view 仍按旧高度
+        // 溢出「列表」，把列表内容顶到筛选栏上面（分页条出现时错位）。
+        const view = scrollNode == null ? null : scrollNode.getChildByName("view");
+        const viewWidget = view == null ? null : view.getComponent(cc.Widget);
+        if(viewWidget != null)
+            viewWidget.updateAlignment();
+        // content 锚点贴顶，view 高度变了要重新贴回顶部，否则首行会被裁掉半行。
+        if(view != null && this.rowContent != null)
+            this.rowContent.setPosition(0, view.height / 2);
     }
 
     private UpdatePager():void {
-        if(!this.historyMode)
-            return;
-        const totalPages = this.HistoryTotalPages();
+        const totalPages = this.TotalPages();
         const label = this.At("列表区/分页/历史页码");
         if(label != null) {
             const text = label.getComponent(cc.Label);
             if(text != null)
-                text.string = "第 " + (this.historyPage + 1) + " / " + totalPages +
+                text.string = "第 " + (this.listPage + 1) + " / " + totalPages +
                     " 页 · 共 " + Math.max(this.listTotal, 0) + " 条";
         }
-        this.SetPageButton("列表区/分页/历史上一页", this.historyPage > 0);
-        this.SetPageButton("列表区/分页/历史下一页", this.historyPage < totalPages - 1);
+        this.SetPageButton("列表区/分页/历史上一页", this.listPage > 0);
+        this.SetPageButton("列表区/分页/历史下一页", this.listPage < totalPages - 1);
     }
 
     private SetPageButton(path:string, enabled:boolean):void {
@@ -284,7 +300,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
     }
 
     private RefreshFilterButtons():void {
-        this.SetChipActive("列表区/筛选_全部", this.filter === "");
+        // 「历史」与四个状态 chip 互斥：进历史时「全部」不能跟着亮。
+        this.SetChipActive("列表区/筛选_全部", this.filter === "" && !this.historyMode);
         this.SetChipActive("列表区/筛选_进行中", this.filter === "active");
         this.SetChipActive("列表区/筛选_已达成", this.filter === "done");
         this.SetChipActive("列表区/筛选_已停止", this.filter === "stopped");
@@ -364,15 +381,15 @@ export default class panelGameOptimize extends UIPanelViewBase {
     // 列表
     // ------------------------------------------------------------------
     /** 用户主动切筛选/翻页/设置后：放弃在途的旧查询，避免旧模式回包覆盖新列表。 */
-    private RefreshListNow():void {
+    private RefreshListNow(showLoading:boolean = true):void {
         this.ClearListTimer();
         this.listBusy = false;
         this.listContext = "";
         this.listLoadingShown = false;
-        this.QueryList(true);
+        this.QueryList(showLoading, true);
     }
 
-    private QueryList(showLoading:boolean):void {
+    private QueryList(showLoading:boolean, scrollTop:boolean = false):void {
         if(this.listBusy)
             return;
         const account:any = GameDataManager.getAccount();
@@ -381,6 +398,7 @@ export default class panelGameOptimize extends UIPanelViewBase {
             return;
         }
         this.listBusy = true;
+        this.listScrollTop = scrollTop;
         this.listContext = "optlist:" + Date.now() + ":" + (++panelGameOptimize.serial);
         this.ClearListTimer();
         if(showLoading && this.listLoadingShown === false) {
@@ -409,8 +427,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
             };
             if(this.historyMode) {
                 param.history = 1;
-                param.count = this.historyPageSize;
-                param.page = this.historyPage;
+                param.count = this.pageSize;
+                param.page = this.listPage;
             }
             account.reqHallCommand(JSON.stringify(param), "P@" + this.listContext);
         }
@@ -462,7 +480,7 @@ export default class panelGameOptimize extends UIPanelViewBase {
         });
         const total = rows.length * (rowHeight + gap) - gap;
         this.ResizeListContent(total);
-        if(this.listScroll != null)
+        if(this.listScrollTop && this.listScroll != null)
             this.listScroll.scrollToTop(0.05);
     }
 
@@ -495,12 +513,19 @@ export default class panelGameOptimize extends UIPanelViewBase {
         this.SetLabel(item, "目标", "目标 " + target);
         this.SetLabel(item, "概率", "概率 " + Math.abs(row.chance) + "%");
 
+        // 朝目标方向推进的部分：目标赢(+200)时 -50 一分没推进；目标输(-200)时 +50 同理。
+        // 服务端 remain = |目标| - |进度| 在异号时会把「还差 250」算成「剩余 150」，这里统一按方向重算。
+        const direction = row.targetValue < 0 ? -1 : 1;
+        const gained = row.progress * direction;
+        const targetAbs = Math.abs(row.targetValue);
+        const remain = targetAbs - gained;
+
         let progress = "进度 " + this.Signed(row.progress) + " / " + (row.targetValue === 0 ? "—" : this.Signed(row.targetValue));
         if(row.state === "active") {
-            if(row.remain > 0)
-                progress += " · 剩余 " + row.remain;
-            else if(row.remain < 0)
-                progress += " · 超 " + Math.abs(row.remain);
+            if(targetAbs > 0 && remain > 0)
+                progress += " · 剩余 " + Math.round(remain);
+            else if(targetAbs > 0 && remain < 0)
+                progress += " · 超 " + Math.round(Math.abs(remain));
             progress += " · " + row.roundCount + "局";
             // 历史行是记录快照，不带在线/实时属性；只在当前目标里判断是否已生效。
             if(!this.historyMode) {
@@ -524,8 +549,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
         if(barNode != null) {
             const bar = barNode.getComponent(cc.ProgressBar);
             if(bar != null) {
-                const targetAbs = Math.abs(row.targetValue);
-                const ratio = targetAbs > 0 ? Math.min(1, Math.abs(row.progress) / targetAbs) : 0;
+                // 只有朝目标方向推进才走进度条：负数进度（反向）一律 0，不能按绝对值铺满。
+                const ratio = targetAbs > 0 ? Math.max(0, Math.min(1, gained / targetAbs)) : 0;
                 bar.progress = ratio;
             }
         }
@@ -711,9 +736,15 @@ export default class panelGameOptimize extends UIPanelViewBase {
                 this.ShowStatus(error !== "" ? error : "目标列表查询失败，请稍后重试", true);
                 return;
             }
-            this.listTotal = Number(data.total) || 0;
+            // 当前目标表接口没有 count/page（一次返回全量），这里按页切片；历史表由服务端分页。
             const rows:any[] = Array.isArray(data.list) ? data.list : [];
-            this.RenderList(rows.map((raw:any)=>this.ParseRow(raw)));
+            this.listTotal = this.historyMode ? Math.max(Number(data.total) || 0, rows.length) : rows.length;
+            const totalPages = this.TotalPages();
+            if(this.listPage > totalPages - 1)
+                this.listPage = totalPages - 1;
+            const start = this.listPage * this.pageSize;
+            const pageRows = this.historyMode ? rows : rows.slice(start, start + this.pageSize);
+            this.RenderList(pageRows.map((raw:any)=>this.ParseRow(raw)));
             return;
         }
 
@@ -746,11 +777,11 @@ export default class panelGameOptimize extends UIPanelViewBase {
                 this.ShowStatus(message, false);
             // 新目标一定是进行中：从历史/已结束筛选切回当前目标列表。
             this.historyMode = false;
-            this.historyPage = 0;
+            this.listPage = 0;
             if(this.filter === "done" || this.filter === "stopped")
                 this.filter = "";
             this.RefreshFilterButtons();
-            this.SetPagerVisible(false);
+            this.LayoutList();
             this.RefreshListNow();
             return;
         }
@@ -868,12 +899,6 @@ export default class panelGameOptimize extends UIPanelViewBase {
             const parsed = Number(value);
             return isFinite(parsed) ? parsed : 0;
         };
-        const numberOr = (value:any, fallback:number):number => {
-            if(value === undefined || value === null || value === "")
-                return fallback;
-            const parsed = Number(value);
-            return isFinite(parsed) ? parsed : fallback;
-        };
         const targetValue = number(raw && raw.target_value);
         const progress = number(raw && raw.progress);
         return {
@@ -884,8 +909,6 @@ export default class panelGameOptimize extends UIPanelViewBase {
             targetValue:targetValue,
             chance:number(raw && raw.chance),
             progress:progress,
-            // 兼容旧服务端未返回 remain 的回包，按目标和累计金额补出剩余值。
-            remain:numberOr(raw && raw.remain, Math.abs(targetValue) - Math.abs(progress)),
             roundCount:number(raw && raw.round_count),
             peerCount:number(raw && raw.peer_count),
             groupName:text(raw && raw.group_name),

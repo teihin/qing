@@ -4,6 +4,12 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-17 牌局优化入口改成「当前俱乐部的管理员」（脚本就绪，未构建/热更）
+
+- 电量连点 3 下开「牌局优化」的门禁由 `IsBossAccount()`（level≥99 / 董事长 / 总裁）换成新增的 `GameDataManager.IsCurrentClubAdmin()`：`club_manage` 或 `union_manage` 任一非空（= 后台「设置管理员」的大小BOSS），再按 `roomSetting.club_id` / `union_id` 尽量比对范围。`panelGameView`（电量兜底 + `RoomFrame/完成` 热区）与 `panelGameOptimize.start()` 三处同步。
+- 首版只判 `club_manage`，**联盟小BOSS（写的是 `union_manage`）被挡**——真机日志 `club_manage=` 为空即此因，已修正。
+- **服务端仍是阻塞**：4 条胜率目标命令只认 `boss` 名单（`opt_target_ctrl.IsBossOnly`），管理员能开面板但设置/停止会回「无权限」，需服务端放行 `club_manage` 并按 `club_id` 限定。详见[交接](handoffs/2026-11-17-game-optimize-club-admin-entry.md)。
+
 ## 2026-11-17 后台排行榜名次奖励改成「名次区间 + 奖励」列表（已部署，仅前端）
 
 - 名次奖励从「逗号分隔一整串」改成行列表（最高名次/最低名次/奖励/删除，可新增区间），相邻同额自动合并、改最低名次时下一行顺延。**协议不变**：提交前展开回「第 1 名起、逗号分隔」原串，后端零改动；空洞/重叠/超限红字拦住。
@@ -98,15 +104,9 @@
 - **后台玩家管理**：新增「关联账号数量」（同设备 90 天 / 同 GPS 网格 7 天 / 同公网 IP 7 天，单 IP>20、单网格>50 不参与，全局上限 2000）与「IP短码」列（6 位 Base62，精确匹配 `sm_ip`，仅 `admin999` 额外可见原始 IP）；详情仍只 `admin999` 见明文 IP/GPS。二进制 `bb8bdf37…`、前端 `index-magx5XK-.js`。见[关联账号](handoffs/2026-11-14-admin-player-relations.md)、[IP 短码](handoffs/2026-11-14-admin-player-ip-shortcode.md)。
 - **客户端 BOSS 玩家信息弹窗**：`ip` 上屏前转 6 位无损可逆短码并加「复制」按钮，非 IPv4 显示「—」；服务端回包仍是明文。见[交接](handoffs/2026-11-14-client-player-ip-shortcode.md)。
 
-## 2026-11-13 批次（已部署 8891 / 8893，细节见各自交接）
-
-- **BF 聊天开关移交后台**：ChatTool 迁移 014 建 `chat_direct_bf_club` 并拒绝客户端写入，XuanManager 迁移 063 建 `game.club.bf_chat` 与 `PUT /api/game/clubs/{clubId}/bf-chat`；客户端未构建。见[交接](handoffs/2026-11-13-club-bf-chat-admin.md)。
-- **业绩核心共享发放改三阶段**：总额注入大盟主联盟池 → 下划各盟主俱乐部 → 给成员发积分；迁移 `062` 加 `stage/club_id/…` 与账单分组；有流水后总额/分摊锁定、重试幂等；**未做真实发放**。见[交接](handoffs/2026-11-13-agent-reward-club-payout.md)。
-- **额度授权记录加类型显示**：行模板新增 `typelabel`（授信/收回/注资/注资扣减/额度奖励）；未构建/真机。见[交接](handoffs/2026-11-13-client-quota-grant-type.md)。
-- **后台用户端数据查询** `/game/user-data`（迁移 `061`）：玩家信息/俱乐部/代理链 + 五类明细，大盟主与盟主额外看额度变化；默认 7 天、单次 ≤31 天。见[交接](handoffs/2026-11-13-admin-user-data-query.md)。
-
 ## 更早批次
 
+- 2026-11-13 批次（BF 聊天开关移交后台、业绩核心共享三阶段发放、额度授权记录类型、后台用户端数据查询）见 [`archive/2026-11-15/current-nov13-batches.md`](archive/2026-11-15/current-nov13-batches.md)。
 - 2026-11-03～11-09 的历史客户端、额度、牌局和后台批次见 [`docs/memory/archive/`](archive/2026-11-15/)。
 
 ## 本轮实时核对：记忆整理

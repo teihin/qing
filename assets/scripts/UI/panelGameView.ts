@@ -708,15 +708,15 @@ export default class panelGameView extends UIPanelViewBase {
     }
 
     /**
-     * 电量位置连续点 3 下打开 BOSS「牌局优化」（800ms 内）。
-     * 客户端只决定入口显隐，服务端仍按 boss 名单鉴权。
+     * 电量位置连续点 3 下打开「牌局优化」（800ms 内）。
+     * 入口口径 = 当前俱乐部的管理员（`GameDataManager.IsCurrentClubAdmin()`），服务端仍会再鉴权。
      */
     private InitBossBatteryEntry():void {
         const battery = Tool.GetChild(this.node,"BK/电量");
         if(battery == null)
             return;
         battery.on(cc.Node.EventType.TOUCH_END, ()=>{
-            if(!GameDataManager.IsBossAccount())
+            if(!GameDataManager.IsCurrentClubAdmin())
                 return;
             const now = Date.now();
             if(now - this.batteryTapAt > 800)
@@ -731,16 +731,18 @@ export default class panelGameView extends UIPanelViewBase {
     }
 
     /**
-     * 「完成」隐形热区的点击：BOSS 三连击开牌局优化；单/双击仍发关闭检查，
+     * 「完成」隐形热区的点击：俱乐部管理员三连击开牌局优化；单/双击仍发关闭检查，
      * 但延迟到连击窗口结束再发，避免三连击时先打出去两条关闭命令。
      */
     private OnBossBatteryTap():void {
         const account:any = GameDataManager.getAccount();
         if(account == null)
             return;
-        if(!GameDataManager.IsBossAccount())
+        if(!GameDataManager.IsCurrentClubAdmin())
         {
-            Debug.Log("电量三连击：非BOSS账号 level=" + account.level + " role=" + account.role);
+            Debug.Log("电量三连击：非管理员 level=" + account.level + " role=" + account.role +
+                " club_manage=" + account.club_manage + " union_manage=" + account.union_manage +
+                " roomSetting=" + account.roomSetting);
             this.SendCloseCheck();
             return;
         }
@@ -759,7 +761,8 @@ export default class panelGameView extends UIPanelViewBase {
         if(this.batteryTapCount >= 3)
         {
             this.batteryTapCount = 0;
-            Debug.Log("电量三连击打开牌局优化 level=" + account.level + " role=" + account.role);
+            Debug.Log("电量三连击打开牌局优化 level=" + account.level + " role=" + account.role +
+                " club_manage=" + account.club_manage + " union_manage=" + account.union_manage);
             UIManager.getInstance().showPanel("panelGameOptimize", ShowPanelMode.Cover);
             return;
         }
