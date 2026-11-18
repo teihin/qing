@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "60387b9f-b69a-472a-a834-13cb828c9014",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 136,
+  "height": 68,
+  "platformSettings": {},
+  "subMetas": {
+    "结算表头字_带入": {
+      "ver": "1.0.6",
+      "uuid": "360d2b98-a5ee-431b-b6fc-68f0d5a4c76f",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "60387b9f-b69a-472a-a834-13cb828c9014",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 136,
+      "height": 68,
+      "rawWidth": 136,
+      "rawHeight": 68,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

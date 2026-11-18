@@ -1,0 +1,38 @@
+{
+  "ver": "2.3.7",
+  "uuid": "0b4d4702-4e36-47bd-a8be-87d797e2130e",
+  "importer": "texture",
+  "type": "sprite",
+  "wrapMode": "clamp",
+  "filterMode": "bilinear",
+  "premultiplyAlpha": false,
+  "genMipmaps": false,
+  "packable": false,
+  "width": 480,
+  "height": 113,
+  "platformSettings": {},
+  "subMetas": {
+    "结算返回大厅字": {
+      "ver": "1.0.6",
+      "uuid": "bc98cac0-8573-4c32-ae0f-1f86becf7566",
+      "importer": "sprite-frame",
+      "rawTextureUuid": "0b4d4702-4e36-47bd-a8be-87d797e2130e",
+      "trimType": "none",
+      "trimThreshold": 1,
+      "rotated": false,
+      "offsetX": 0,
+      "offsetY": 0,
+      "trimX": 0,
+      "trimY": 0,
+      "width": 480,
+      "height": 113,
+      "rawWidth": 480,
+      "rawHeight": 113,
+      "borderTop": 0,
+      "borderBottom": 0,
+      "borderLeft": 0,
+      "borderRight": 0,
+      "subMetas": {}
+    }
+  }
+}

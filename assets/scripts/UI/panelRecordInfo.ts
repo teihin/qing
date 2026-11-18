@@ -53,6 +53,8 @@ export default class panelRecordInfo extends UIPanelViewBase {
 
     private nCurPage = 1;
     private queueButton:cc.Node = null;
+    /** 牌局回顾标题行展示的「芒果」（奖池沿用 strOther9，与牌桌内那份同口径）。 */
+    private strReviewMang:string = "";
 
     onLoad () {
         super.onLoad();
@@ -87,6 +89,7 @@ export default class panelRecordInfo extends UIPanelViewBase {
         if(!entry.browse && cc.director.getScene().name == "drh8")
             QueueMatchManager.getInstance().rememberEnteredRoom(this.strRoomID);
 
+        this.RefreshReviewExtra();
         this.GetCreateRecord();
     }
 
@@ -514,6 +517,11 @@ export default class panelRecordInfo extends UIPanelViewBase {
             ImageManager.getInstance().AddWaitFreshImage2Catch(strID, img);
         }
 
+        // 第一名挂皇冠（新结算设计里用皇冠替代名次数字，其余名次沿用原数字）
+        let crown = node.getChildByName("皇冠");
+        if (crown != null)
+            crown.active = (index === 0);
+
         // 恢复玩家名次，并让个位/后续名次共用同一列位置。
         let idx:number = index+1;
         if(idx<=3)
@@ -598,6 +606,10 @@ export default class panelRecordInfo extends UIPanelViewBase {
     public OnRoundScore(strMsg:string)
     {
         Tool.GetChild(this.node,"牌局回顾/title/平台").getComponent(cc.Label).string = "";
+        // 换一局就清掉上一局的奖池/芒果，避免没有该段数据时残留。
+        this.strOther9 = "";
+        this.strReviewMang = "";
+        this.RefreshReviewExtra();
         let data = JSON.parse(strMsg);
         if(data == null)
             return;
@@ -665,7 +677,13 @@ export default class panelRecordInfo extends UIPanelViewBase {
         let strBank:string = arrayAll[6];
         let strInitCard:string = "{\"hand\":" + arrayAll[7] + "}";
         let strTurn:string = arrayAll[8]; //眼睛
-        this.strOther9 = arrayAll[9]; //奖池
+        // 奖池在 remark 第 10 段(index 9)、芒果在第 12 段(index 11)，
+        // 与牌桌内右上角的牌局回顾同一口径；老记录缺这两段就隐藏。
+        this.strOther9 = arrayAll.length > 9 && arrayAll[9] != null ? arrayAll[9].trim() : "";
+        let strMang = arrayAll.length > 11 && arrayAll[11] != null ? arrayAll[11].trim() : "";
+        if(strMang.length > 0)
+            this.strReviewMang = strMang;
+        this.RefreshReviewExtra();
 
         let strPeiXiaoJia = arrayAll.length<=10?"": arrayAll[10];
 
@@ -922,6 +940,62 @@ export default class panelRecordInfo extends UIPanelViewBase {
            {
                ImageManager.getInstance().AddWaitFreshImage2Catch(strID, img);
            }
+    }
+
+    /**
+     * 刷新牌局回顾标题行的「奖池」「芒果」—— 与牌桌内右上角那份牌局回顾一致：
+     * 奖池 >0 红、=0 白、<0 绿；芒果原样显示服务端字符串，没有就整块隐藏。
+     */
+    private RefreshReviewExtra():void
+    {
+        let title = Tool.GetChild(this.node,"牌局回顾/title");
+        if(title == null)
+            return;
+
+        let jackpotTitle = title.getChildByName("奖池标题");
+        let jackpotValue = title.getChildByName("奖池");
+        let strJackpot = String(this.strOther9 == null ? "" : this.strOther9).trim();
+        let showJackpot = strJackpot.length > 0;
+        if(jackpotTitle != null)
+            jackpotTitle.active = showJackpot;
+        if(jackpotValue != null)
+        {
+            jackpotValue.active = showJackpot;
+            if(showJackpot)
+            {
+                let label = jackpotValue.getComponent(cc.Label);
+                let nJackpot = Number(strJackpot);
+                if(!isFinite(nJackpot))
+                {
+                    label.string = strJackpot;
+                    jackpotValue.color = cc.Color.WHITE;
+                }
+                else if(nJackpot > 0)
+                {
+                    label.string = "+" + strJackpot;
+                    jackpotValue.color = cc.Color.RED;
+                }
+                else if(nJackpot < 0)
+                {
+                    label.string = strJackpot;
+                    jackpotValue.color = cc.Color.GREEN;
+                }
+                else
+                {
+                    label.string = "0";
+                    jackpotValue.color = cc.Color.WHITE;
+                }
+            }
+        }
+
+        let mang = title.getChildByName("芒池");
+        if(mang != null)
+        {
+            let strMang = String(this.strReviewMang == null ? "" : this.strReviewMang).trim();
+            mang.active = strMang.length > 0;
+            if(strMang.length > 0)
+                mang.getComponent(cc.Label).string = strMang;
+        }
     }
 
 
