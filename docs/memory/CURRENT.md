@@ -4,6 +4,12 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-18 牌局结算行底：正分金卡、非正分普通蓝底（脚本就绪，未构建/热更/真机）
+
+- `settlement_card_row.png`（金卡）与 `settlement_card_row_normal.png`（普通，sprite-frame `33f21cbe…`）均 1400×168、RGBA 未量化；内部改为逐行中值重建的平滑渐变并强制不透明——原图内部的半透明条纹就是实机“褶皱”来源。金卡保留原金边/外发光，同名同 UUID，共用 prefab 引用不变。
+- `战绩玩家对象.prefab` 新增首个子节点「底_普通」（700×100、默认隐藏）；`panelRecordInfo.setRecordItemInfo` 按 `nScore > 0` 切换根 Sprite 与普通底。
+- Creator 已导入（prefab 22:02、普通图 22:13、金卡 22:20）；未构建/热更/真机。详见[交接](handoffs/2026-11-18-settlement-row-normal-card.md)。
+
 ## 2026-11-18 下注位「芒N」残留保护性修复（发牌 + 每条消息双触发；脚本就绪，未构建/热更/真机）
 
 - 现象：庄家下注位长期停在「芒12／芒15」，或该显示带分/下注额的位置空着。链路：投芒收尾时 `beicount` 仍为 0 → 走 `ShowMangPayCount(bKeepWhenNoBet)` 把「芒N」写进 `strKeepCoin` 且不设过期 → 庄家走带分、不触发 `东家_下注_事件`，`带分_结束_事件` 分支为空，该座位之后再收不到自己的消息，无人纠正。

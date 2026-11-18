@@ -493,6 +493,14 @@ export default class panelRecordInfo extends UIPanelViewBase {
             node.getChildByName("输赢").color = cc.color(255, 242, 216, 255);
         }
 
+        // 结算行底：只有赢分为正数才用金色卡片底，其余（负数/零）用普通蓝底
+        let bgGold = node.getComponent(cc.Sprite);
+        if (bgGold != null)
+            bgGold.enabled = nScore > 0;
+        let bgNormal = node.getChildByName("底_普通");
+        if (bgNormal != null)
+            bgNormal.active = !(nScore > 0);
+
         //惩罚问题
         if (arrayTemp[9] != "0" && arrayTemp[9] != "")
         {
