@@ -601,11 +601,11 @@ def build_row_prefab(path):
         if ring is not None:
             doc.reparent(ring, root, -238, 0)
     if ring is None:
-        ring = doc.add_node(root, 'ring', x=-251, y=0, w=46, h=46)
-        doc.add_sprite(ring, 'record_avatar_ring.png', 46, 46)
+        ring = doc.add_node(root, 'ring', x=-251, y=0, w=72, h=72)
+        doc.add_sprite(ring, 'record_avatar_ring.png', 72, 72)
     else:
-        doc.set_node(ring, x=-251, y=0, w=46, h=46, active=True)
-        doc.set_sprite(ring, 'record_avatar_ring.png', 46, 46)
+        doc.set_node(ring, x=-251, y=0, w=72, h=72, active=True)
+        doc.set_sprite(ring, 'record_avatar_ring.png', 72, 72)
 
     name = doc.child(root, 'name')
     doc.set_node(name, x=-158, y=0, w=140, h=34, active=True)
@@ -697,11 +697,11 @@ def build_watch_prefab(path):
         if ring is not None:
             doc.reparent(ring, root, -38, 0)
     if ring is None:
-        ring = doc.add_node(root, 'V8头像框', x=-38, y=0, w=64, h=64)
-        doc.add_sprite(ring, 'record_avatar_ring.png', 64, 64)
+        ring = doc.add_node(root, 'V8头像框', x=-38, y=0, w=100, h=100)
+        doc.add_sprite(ring, 'record_avatar_ring.png', 100, 100)
     else:
-        doc.set_node(ring, x=-38, y=0, w=64, h=64)
-        doc.set_sprite(ring, 'record_avatar_ring.png', 64, 64)
+        doc.set_node(ring, x=-38, y=0, w=100, h=100)
+        doc.set_sprite(ring, 'record_avatar_ring.png', 100, 100)
 
     # 根下还有一个旧版 92×92「V8头像框」（V7 环，位置 y=17），和新环叠着画会让头像发糊；
     # 只保留 record_avatar_ring 的那个，其余同名节点隐藏但留在文件里便于回退。
