@@ -8,8 +8,8 @@
   "premultiplyAlpha": false,
   "genMipmaps": false,
   "packable": true,
-  "width": 140,
-  "height": 139,
+  "width": 256,
+  "height": 256,
   "platformSettings": {},
   "subMetas": {
     "Default_Man_Head": {

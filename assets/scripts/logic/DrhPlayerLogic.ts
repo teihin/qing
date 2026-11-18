@@ -65,7 +65,11 @@ export default class DrhPlayerLogic extends cc.Component {
     private transScore:cc.Node;
 
     private nTableNum = 0;      //缓存的桌面分数
-    private strKeepCoin = "";   //下注位当前显示的文本（芒数或下注额），发牌后继续保留，新一局清
+    private strKeepCoin = "";   //本手真实下注额的显示缓存，发牌后继续保留，新一局清
+    private bMangPayShowing = false; //投芒动画期间显示的临时芒数，不参与真实下注缓存
+    private bMangAnimationRunning = false; //同一座位的重复开局推送不能重复启动投芒动画
+    private nMangAnimationSerial = 0;
+    private nMangPayShowExpire = 0;  //临时芒数的有效期（ms 时间戳）；动画被打断时靠它自愈，不能让下注位永久停在「芒N」
 
     public moveAction:cc.Action = null; //状态图标动画实例（每次播放新建，不要复用）
     public moveActionTar:cc.Action = null;
@@ -149,12 +153,29 @@ export default class DrhPlayerLogic extends cc.Component {
        }
        else if(strEvent == "玩家_开局_事件")
        {
-           //新一手开始：清掉上手的下注额缓存
-           this.ResetKeepBet();
+           //同一手重复补推开局消息时，不要清掉已经收到的真实下注额缓存。
+           let bMangAlreadyRunning = this.bMangAnimationRunning;
+           if(!bMangAlreadyRunning)
+           {
+               //新一手开始：清掉上手的下注额缓存
+               this.ResetKeepBet();
+               // 芒数属于本手投芒数据。开局消息未携带新值时不能沿用上一手的旧值。
+               if(data.hasOwnProperty("mang_xiu_current"))
+                   this.info.mang_xiu_current = data["mang_xiu_current"].toString();
+               else
+                   this.info.mang_xiu_current = "";
+               // 新一手尚未下注时不能沿用上一手的倍数，等后续下注事件再写入真实值。
+               if(data.hasOwnProperty("bei_shu"))
+                   this.info.beicount = data["bei_shu"].toString();
+               else
+                   this.info.beicount = "";
+               this.info.one_bei_shu = data.hasOwnProperty("one_bei_shu") ? Number(data["one_bei_shu"]) : 0;
+           }
            this.ShowRoundCardsHandArea();
            this.gameLogic.BeginBettingSpotlightDealAnimation();
            //投钱入芒池
-           this.ThrowGold2Mang();
+           if(!bMangAlreadyRunning)
+               this.ThrowGold2Mang();
        }
        else if(strEvent == "玩家_带分_事件")
        {           
@@ -678,6 +699,17 @@ export default class DrhPlayerLogic extends cc.Component {
         {
             // 新协议必须带 mang_show_state；缺少该字段时本次按老客户端口径处理，避免沿用上一条新状态。
             let bHasMangShowState = this.ParseMangShowFields(data);
+            // 下注位刷新发生在 MsgJieXi 返回后，必须先写入当前消息的 bei_shu，
+            // 否则庄位会先按开局的 0 隐藏筹码，再错过本条带分结束消息里的真实下注额。
+            if (data.hasOwnProperty("bei_shu"))
+            {
+                this.info.beicount = data["bei_shu"].toString();
+                this.UpdatePlayerTotleFen();
+            }
+            if (data.hasOwnProperty("one_bei_shu"))
+            {
+                this.info.one_bei_shu = Number(data["one_bei_shu"]);
+            }
             if(data.hasOwnProperty("is_show_tou_pai")) //是否能看第一二张牌
             {
                 this.info.is_show_tou_pai = data["is_show_tou_pai"]
@@ -1119,17 +1151,6 @@ export default class DrhPlayerLogic extends cc.Component {
             }
 
 
-
- 
-            if (data.hasOwnProperty("bei_shu"))
-            {
-                this.info.beicount = data["bei_shu"].toString();
-                this.UpdatePlayerTotleFen();
-            }
-            if(data.hasOwnProperty("one_bei_shu"))
-            {
-                this.info.one_bei_shu = Number(data["one_bei_shu"]);
-            }
             if (data.hasOwnProperty("is_proxy"))
             {
                 this.info.is_proxy = data["is_proxy"].toString();
@@ -2544,6 +2565,20 @@ export default class DrhPlayerLogic extends cc.Component {
 
         if (strBei == "0" || strBei == "")
         {
+            //投芒动画还在下注位停留时，状态消息里的 0 不能提前把临时芒数收掉。
+            //但只在动画窗口内有效：动画被切后台/离座/重连打断后标记可能一直为 true，
+            //此时必须放行，否则下注位会永久停在「芒N」，真实下注额永远刷不出来。
+            if(this.bMangPayShowing && Date.now() < this.nMangPayShowExpire)
+            {
+                transGold.active = true;
+                let transCoin = Tool.GetChild(this.node,"goldshow/coin");
+                if(transCoin != null)
+                    transCoin.active = true;
+                return;
+            }
+            //窗口已过：动画要么已收尾、要么被打断，复位标记后继续按真实下注额刷新
+            this.bMangPayShowing = false;
+
             //本手已经显示过筹码（芒数或下注额）时，发牌/看牌阶段后续消息会把 bei_shu 带成 0，
             //这里把原来的数字留着，否则下注位会突然空掉（结算、新一局会清掉）。
             if (this.strKeepCoin != "" && this.CanKeepBetShow())
@@ -2599,6 +2634,8 @@ export default class DrhPlayerLogic extends cc.Component {
     public ResetKeepBet():void
     {
         this.strKeepCoin = "";
+        this.bMangPayShowing = false;
+        this.nMangPayShowExpire = 0;
     }
     public ThrowCoinAnimate(strPath:string,bAnimate:boolean = true,nDelay:number=0)
     {
@@ -4027,8 +4064,12 @@ export default class DrhPlayerLogic extends cc.Component {
 
     public PrepareLeaveRoom()
     {
+        this.bMangAnimationRunning = false;
+        this.nMangAnimationSerial++;
         this.unscheduleAllCallbacks();
         this.StopNodeActions(this.node);
+        //投芒动画被停掉时不会执行收尾回调，这里把临时芒数撤掉，避免留坐/重连回来后下注位一直显示「芒N」
+        this.HideMangPayCount();
     }
 
     private StopNodeActions(root:cc.Node)
@@ -4064,7 +4105,7 @@ export default class DrhPlayerLogic extends cc.Component {
 
     /** 圈芒：把本手要投的芒皮数显示在各自下注位（“芒5”）。
      *  皮数直接显示，不走 CheckSmallPlay 的 0.1/0.3 房折算。 */
-    public ShowMangPayCount(strNum:string, bPop:boolean = true):void
+    public ShowMangPayCount(strNum:string, bPop:boolean = true, bKeepWhenNoBet:boolean = false):void
     {
         if(!this.CanRunRoomAnimation())
             return;
@@ -4082,7 +4123,19 @@ export default class DrhPlayerLogic extends cc.Component {
         if(transCoin != null)
             transCoin.active = true;
         label.string = "芒" + strNum;
-        this.strKeepCoin = label.string;
+        if(bKeepWhenNoBet)
+        {
+            //庄家本手没有下注额时，芒数是下注位的有效占位，后续 bei_shu=0 仍需保留。
+            this.strKeepCoin = label.string;
+            this.bMangPayShowing = false;
+            this.nMangPayShowExpire = 0;
+        }
+        else
+        {
+            this.bMangPayShowing = true;
+            //整段投芒动画 1.04s、兜底 1.5s；留 1.6s 窗口，超时后即使标记没复位也不再阻挡真实下注额刷新
+            this.nMangPayShowExpire = Date.now() + 1600;
+        }
         if(bPop)
             this.PlayBeiCountPopAnimate();
     }
@@ -4090,6 +4143,9 @@ export default class DrhPlayerLogic extends cc.Component {
     /** 筹码从下注区起飞去桌面芒池时，把下注区的筹码和芒数一起收掉（马上要飞出去了，不留在原地）。 */
     private HideMangPayCount():void
     {
+        //标记必须无条件复位：节点取不到时也不能让「芒数停留」守卫永久挡住下注额刷新
+        this.bMangPayShowing = false;
+        this.nMangPayShowExpire = 0;
         if(!cc.isValid(this.node))
             return;
 
@@ -4098,6 +4154,8 @@ export default class DrhPlayerLogic extends cc.Component {
         if(transGold == null || transBei == null)
             return;
         let label = transBei.getComponent(cc.Label);
+        if(this.strKeepCoin.indexOf("芒") == 0)
+            this.strKeepCoin = "";
         if(label == null || label.string.indexOf("芒") != 0)
             return;
 
@@ -4108,41 +4166,49 @@ export default class DrhPlayerLogic extends cc.Component {
         transGold.active = false;
     }
 
-    /** 圈芒筹码飞回下注区后：有下注额就换成本手下注额；这一手没下注（例如庄家不押）就把芒数留在这里，
-     *  不要让下注区空着——空着看起来像漏了一个人的筹码。 */
+    /** 圈芒筹码飞回下注区后，按当前真实下注额刷新下注位。没有下注额时隐藏临时芒数。 */
     private RefreshCoinAreaAfterMang():void
     {
+        //收尾前必须先撤掉临时芒数：否则 UpdateFenAnimate 里的「芒数停留」守卫会把
+        //这一手 beicount 为 0/空的刷新直接挡回去，下注位就永久停在「芒N」。
+        this.HideMangPayCount();
         let strBet = this.info.beicount == null ? "" : this.info.beicount.toString().trim();
-        if(strBet != "" && strBet != "0")
+        if((strBet == "" || strBet == "0") && this.info.bBanker)
         {
-            this.UpdateFenAnimate(true, this.info.beicount, false);
-            return;
+            let strMang = this.GetMangCurrent();
+            if(strMang != "")
+            {
+                this.ShowMangPayCount(strMang, false, true);
+                return;
+            }
         }
-
-        let strMang = this.GetMangCurrent();
-        if(strMang != "")
-        {
-            this.ShowMangPayCount(strMang, false);
-            return;
-        }
-
         this.UpdateFenAnimate(true, this.info.beicount, false);
     }
 
-    //投钱入芒池动画：头像 -> 下注区(显示芒X) -> 桌面中心芒池(起飞时收起) -> 下注区(下注额或芒X)
+    //投钱入芒池动画：头像 -> 下注区(显示芒X) -> 桌面中心芒池(起飞时收起) -> 下注区(真实下注额或隐藏)
     public ThrowGold2Mang()
     {
+        //服务端补推同一条开局消息时，不能在同一座位叠加两套投芒动作。
+        if(this.bMangAnimationRunning)
+            return;
+        this.bMangAnimationRunning = true;
+        const nAnimationSerial = ++this.nMangAnimationSerial;
+
         let trasnCoinTar = Tool.GetChild(this.node,"goldshow/coin");
         let transHead = this.node.getChildByName("PlayerInfo");
         let transTar = Tool.GetChild(this.gameLogic.node,"ExShow/芒果标记");
         cc.loader.loadRes("Prefabs/drh/coin",(err,obj)=>{
             if(err)
             {
+                this.bMangAnimationRunning = false;
                 cc.error(err.message || err);
                 return null;
             }
-            if(this.node == null)
+            if(this.node == null || nAnimationSerial != this.nMangAnimationSerial)
+            {
+                this.bMangAnimationRunning = false;
                 return
+            }
 
             let call = cc.callFunc(()=>{
                 this.PlayAudio(0,"下注");
@@ -4166,7 +4232,9 @@ export default class DrhPlayerLogic extends cc.Component {
             let add:cc.Node = cc.instantiate(obj);
             add.parent = this.node;
             add.position = this.node.convertToNodeSpaceAR(transHead.convertToWorldSpaceAR(cc.v2(0,0)));
+            // 同一个 Action 实例不能在同一个 Sequence 中重复使用，否则第二段可能沿用第一段的内部状态。
             let move2Coin = cc.moveTo(0.26,this.node.convertToNodeSpaceAR(trasnCoinTar.convertToWorldSpaceAR(cc.v2(0,0))))
+            let move2CoinBack = cc.moveTo(0.26,this.node.convertToNodeSpaceAR(trasnCoinTar.convertToWorldSpaceAR(cc.v2(0,0))))
 
             let move2Desk = cc.moveTo(0.26,this.node.convertToNodeSpaceAR(transTar.convertToWorldSpaceAR(cc.v2(0,0))));
             let end2Desk = cc.callFunc(()=>{
@@ -4175,19 +4243,25 @@ export default class DrhPlayerLogic extends cc.Component {
 
             let end = cc.callFunc(()=>{
                 add.destroy();
+                if(nAnimationSerial != this.nMangAnimationSerial)
+                    return;
                 transTar.active = true;
-                //筹码飞回下注区：有下注额就显示下注额，这一手没下注就把芒数留在这里，不能空着
+                //筹码飞回下注区：有真实下注额就显示，没有下注额就隐藏临时芒数
                 this.RefreshCoinAreaAfterMang();
             },this);
             //整段走完：显示芒数 -> 飞下注区 -> 飞桌面 -> 飞回下注区，共 1.04s（原来 1.26s），给发牌留时间
-            let action = cc.sequence(call,showMang,move2Coin,cc.delayTime(0.26),hideMang,move2Desk,end2Desk,call,move2Coin,end);
+            let action = cc.sequence(call,showMang,move2Coin,cc.delayTime(0.26),hideMang,move2Desk,end2Desk,call,move2CoinBack,end);
             add.runAction(action);
         });
 
         this.scheduleOnce(()=>{
-            //兜底：动画因为切后台/丢帧没跑完时，也别让下注区空着
-            if(this.GetMangCurrent() == "")
-                this.UpdateFenAnimate(true,this.info.beicount,false);
+            if(nAnimationSerial != this.nMangAnimationSerial)
+                return;
+            //兜底：动画被切后台、丢帧或状态刷新打断时，按最新下注额收尾，不能遗留芒数。
+            // 延迟重复的开局推送也在这个冷却窗口内忽略。
+            this.bMangAnimationRunning = false;
+            this.HideMangPayCount();
+            this.RefreshCoinAreaAfterMang();
             //Debug.Error("显示金币");
         },1.5);
     }

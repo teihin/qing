@@ -70,6 +70,16 @@
 |---|---|---|---|---|
 | D-01 | `assets/ImagesLuck/游戏内/pai_1.png` | `panelGameView.prefab` / `drh8.fire` 的 `pai_1` 节点（spriteFrame `a0014597-2780-460f-b62a-f26c6665bc37`）、`Prefabs/drh/coin.prefab`、`panelTalk.prefab` | 红白筹码中心白圆内的红色 `BY` | 已替换（2026-11-06） |
 
+### E 组：默认头像（2026-11-18 补充）
+
+| 编号 | 正式运行资源 | 图内 BY 位置 / 替换范围 | 状态 |
+|---|---|---|---|
+| E-01 | `assets/resources/other/Default_Man_Head.png` | 金色盾徽中央 `BY` → `BF` | 已替换（2026-11-18） |
+| E-02 | `assets/resources/other/head.png` | 同上（与原图同一文件） | 已替换（2026-11-18） |
+| E-03 | `assets/resources/other/默认头像.png` | 同上（与原图同一文件） | 已替换（2026-11-18） |
+
+> 三张图替换前 MD5 完全一致（`3431d6ee…`），改后仍一致（`1c33daf3…`），均 256×256 RGBA。做法：图片技能按原图重绘 `BF` 后，只取字母区域（半径 ≤94、含投影，边界羽化）回贴原图，金环、深蓝渐变与透明边缘保留原像素；alpha 通道逐字节未变。
+
 ## 并行制作分组
 
 为后续多个对话同时处理，建议按下列互不重叠的分组分配：
