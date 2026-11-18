@@ -1123,12 +1123,49 @@ export default class DrhLogicMgr extends cc.Component {
      * 芒果分类行和皮池行是牌桌公共显示。
      * 优先使用本地账号对应的玩家；旁观或本地未入座时，回退到数组中第一个有效座位，
      * 不能简单依赖 PlayerPos.self，因为该位置可能没有玩家数据。
+     *
+     * 这两行只在收到 当前_玩家_消息 时刷新，所以数据源必须是「本手会产生消息的座位」：
+     * 起立围观时自己的座位还留着（本手没结束前仍在 PlayerList 里）、留坐位、
+     * 离线位都收不到这条消息，绑在它们身上公共行就永久停在旧值上。
      */
     public IsSharedMangDisplaySource(player:DrhPlayerLogic):boolean
     {
         if(player == null || this.arrayPlayer == null || this.arrayPlayer.length <= 0)
             return false;
 
+        let source = this.GetSharedMangDisplaySource();
+        if(source == null)
+        {
+            //所有座位都不在局中（例如全房留坐）：退回「第一个有人的座位」，
+            //至少让公共行还能跟着消息刷新，不要直接放弃。
+            for(let one of this.arrayPlayer)
+            {
+                if(one != null && one.info != null && one.info.strUserID != "" && one.info.strUserID != "init")
+                {
+                    source = one;
+                    break;
+                }
+            }
+        }
+        if(source != null)
+            return source == player;
+
+        // PlayerList 尚未到达时保留原始首位作为临时显示源，避免公共行完全不刷新。
+        return this.arrayPlayer[0] == player;
+    }
+
+    /** 公共芒果/皮池行的数据源：本人座位优先，其次第一个在局中的座位；都不在局中返回 null。
+     *  先按严格口径挑（连起立保留的座位都排除），挑不到再放宽，避免某个字段口径不符时整行冻死。 */
+    private GetSharedMangDisplaySource():DrhPlayerLogic
+    {
+        let source = this.PickSharedMangSource(true);
+        if(source == null)
+            source = this.PickSharedMangSource(false);
+        return source;
+    }
+
+    private PickSharedMangSource(bStrict:boolean):DrhPlayerLogic
+    {
         let account = GameDataManager.getAccount();
         let strSelfID = account != null && account.guuid != null ? account.guuid.toString() : "";
         if(strSelfID != "" && strSelfID != "init")
@@ -1136,18 +1173,42 @@ export default class DrhLogicMgr extends cc.Component {
             for(let one of this.arrayPlayer)
             {
                 if(one != null && one.info != null && one.info.strUserID == strSelfID)
-                    return one == player;
+                {
+                    //自己在局中就用自己；起立围观/留坐时不能占住这个数据源。
+                    if(this.IsSeatInRound(one, bStrict))
+                        return one;
+                    break;
+                }
             }
         }
 
         for(let one of this.arrayPlayer)
         {
-            if(one != null && one.info != null && one.info.strUserID != "" && one.info.strUserID != "init")
-                return one == player;
+            if(this.IsSeatInRound(one, bStrict))
+                return one;
         }
+        return null;
+    }
 
-        // PlayerList 尚未到达时保留原始首位作为临时显示源，避免公共行完全不刷新。
-        return this.arrayPlayer[0] == player;
+    /** 该座位本手还会不会收到 当前_玩家_消息：已入座、没起立/没留坐/没离线。
+     *  统一用「排除法」，未知状态一律当作在局中，避免服务端新增状态值时把所有人排掉。 */
+    public IsSeatInRound(player:DrhPlayerLogic, bStrict:boolean = true):boolean
+    {
+        if(player == null || player.info == null)
+            return false;
+        let info = player.info;
+        if(info.strUserID == "" || info.strUserID == "init")
+            return false;
+        //起立围观时座位会被保留、is_can_return 置 True，本手不再产生玩家消息。
+        //放宽口径时忽略这条，只留状态和留坐倒计时两个判据。
+        if(bStrict && info.is_can_return == "True")
+            return false;
+        //site_countdown 非 0 是留坐倒计时，同样不产生本手消息
+        if(info.site_countdown != null && info.site_countdown != "" && info.site_countdown != "0")
+            return false;
+        if(info.emState == PlayerState.init || info.emState == PlayerState.offline || info.emState == PlayerState.leave)
+            return false;
+        return true;
     }
    //转换字符串到玩家状态
    public GetStateFromString(strState:string):PlayerState

@@ -2201,6 +2201,10 @@ export default class DrhPlayerLogic extends cc.Component {
                 this.UpdateMangPiShow();
                 return;
             }
+            //老口径显示的是本座位的个人桌面分 table_times，数据源换人后会显示别人的分，
+            //所以老口径仍然只认本人座位（新协议字段才是房间级公共值）。
+            if(!this.IsSelfSeat())
+                return;
             transFen.active = bShow;
             if(bShow)
             {
@@ -2214,6 +2218,16 @@ export default class DrhPlayerLogic extends cc.Component {
                 }
             }
         }
+    }
+    /** 本组件是不是本地账号坐的那个座位。老口径的个人字段（table_times/mang_pi_times）只能由它来刷。 */
+    public IsSelfSeat():boolean
+    {
+        if(this.info == null)
+            return false;
+        let account = GameDataManager.getAccount();
+        if(account == null || account.guuid == null)
+            return false;
+        return this.info.strUserID == account.guuid.toString();
     }
     // 显示隐藏准备
     public ShowHidePrepare()
@@ -3290,6 +3304,10 @@ export default class DrhPlayerLogic extends cc.Component {
         let transNum = Tool.GetChild(transMang,"num");
 
         //老服务端：保持原「芒果」合并口径（芒皮 + 休芒）
+        //这里读的 mang_pi_times / xiu_mang_times 是个人累计值，换数据源会显示别人的数字，
+        //所以老口径仍只认本人座位；新协议字段是房间级公共值，观战/观众照常刷新。
+        if(!this.IsSelfSeat())
+            return;
         this.SetMangNameRes(transName, "V7/游戏内/芒果_100x60");
 
         let nMangPi = Number(this.info.mang_pi_times);
