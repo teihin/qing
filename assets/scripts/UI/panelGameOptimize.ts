@@ -533,8 +533,6 @@ export default class panelGameOptimize extends UIPanelViewBase {
                     progress += " · 离线";
                 else if(row.curCount > 0)
                     progress += " · 已生效";
-                else
-                    progress += " · 待生效";
             }
         }
         else {

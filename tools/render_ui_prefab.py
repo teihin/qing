@@ -60,14 +60,19 @@ class Digits:
             cls.cache[key] = cls(png, fnt_path)
         return cls.cache[key]
 
-    def draw(self, canvas, text, cx, cy, size):
+    def draw(self, canvas, text, cx, cy, size, align=1, box_w=0.0):
         scale = size / self.base
         glyphs = [self.chars.get(ord(c)) for c in text]
         total = sum(g[6] for g in glyphs if g) * scale
         top = min((g[5] for g in glyphs if g), default=0)
         bottom = max((g[5] + g[3] for g in glyphs if g), default=self.base)
         vc = (top + bottom) / 2 * scale
-        x = cx - total / 2
+        if align == 0:      # LEFT
+            x = cx - box_w / 2
+        elif align == 2:    # RIGHT
+            x = cx + box_w / 2 - total
+        else:               # CENTER
+            x = cx - total / 2
         for g in glyphs:
             if not g:
                 x += size * 0.3
@@ -203,7 +208,8 @@ def main(prefab_path):
                 fnt = fnt_for(font_ref)
                 layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
                 if fnt:
-                    Digits.get(fnt).draw(layer, value, x, y, size)
+                    Digits.get(fnt).draw(layer, value, x, y, size,
+                                         align=comp.get("_N$horizontalAlign", 1), box_w=w)
                 else:
                     d = ImageDraw.Draw(layer)
                     font = ImageFont.truetype(TTF, size)

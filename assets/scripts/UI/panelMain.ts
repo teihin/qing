@@ -4905,15 +4905,15 @@ export default class panelMain extends UIPanelViewBase {
         this.clubUnionNamePendingClubId = "";
         if(pending)
         {
-            // 「查询_我的_联盟」成功通常证明调用者是总群主，但这个俱乐部**已经有服务端 is_owner 结论时
-            // 不作数**：后台给小BOSS / 管理员开了联盟读权限的账号，这条命令照样成功返回联盟数据，
-            // 拿它去顶服务端的 is_owner=0 就会把盟主显示成大盟主（2026-11-18 A3）。
+            // 「查询_我的_联盟」只用来补联盟号 / 名称 / 成员归属，**不能当总群主证据**：
+            // 文档写的是「仅总群主」，但后台开过联盟读权限的账号（小BOSS、管理员）照样成功返回，
+            // 盟主也可能被放行。总群主身份唯一权威来源是 ClubUnionQuota 的 is_owner 和「创建_联盟」。
+            // 旧写法在没有 is_owner 结论时直接写 isOwner=true，A3 这类已入盟盟主会被亮成联盟创始人
+            // （游戏设置入口、大盟主身份牌一起错，2026-11-18）。
             const decided = this.clubUnionStatus[pending];
             const quotaDecided = !!(decided && decided.known && typeof decided.isOwner === "boolean");
             // 身份已有权威结论时，这条命令只剩补联盟名的用途，冷却 5 分钟，别每 10 秒问一遍。
             this.clubUnionNameAsked[pending] = quotaDecided ? Date.now() + 300000 : Date.now();
-            if(!quotaDecided)
-                this.RememberOwnedUnion(unionId,true);
             // 只有目标俱乐部确实属于这个联盟时才落到它头上，避免多俱乐部账号串到别家联盟。
             const pendingUnionId = this.ResolveClubUnionId(pending);
             if(!pendingUnionId || pendingUnionId === unionId)
@@ -4924,17 +4924,12 @@ export default class panelMain extends UIPanelViewBase {
                     status.known = true;
                     status.hasUnion = true;
                     status.unionId = unionId;
-                    if(!quotaDecided)
-                    {
-                        status.isOwner = true;
-                        status.ownerConfirmed = true;
-                    }
                     if(unionName) status.unionName = unionName;
-                    if(poolKnown) status.quotaFen = poolNumber;
+                    // 联盟池只有总群主能看（is_owner=1）；盟主拿到的池值不能写进自己的额度。
+                    if(poolKnown && status.isOwner === true) status.quotaFen = poolNumber;
                 }
                 else this.clubUnionStatus[pending] = {known:true,hasUnion:true,unionId:unionId,
-                    unionName:unionName || undefined,isOwner:true,ownerConfirmed:true,
-                    quotaFen:poolKnown ? poolNumber : undefined};
+                    unionName:unionName || undefined};
                 const info = this.clubDetails[pending];
                 if(info)
                 {
@@ -4943,7 +4938,7 @@ export default class panelMain extends UIPanelViewBase {
                 }
             }
         }
-        // 查询_我的_联盟 成功即确认总群主身份，入口（钻石池消耗等）要按新身份立即重算。
+        // 联盟归属/名称可能刚被补齐，入口与卡片按新状态立即重算（身份仍只等 is_owner 结论）。
         this.RefreshClubFinanceMenuVisibility();
         if(this.clubManagement) this.clubManagement.Refresh();
         this.RefreshDiscoveryClubFunds(false);
@@ -5302,7 +5297,17 @@ export default class panelMain extends UIPanelViewBase {
             this.OpenJoinUnionDialog();
     }
 
-    /** 游戏设置入口：仅联盟盟主，或未加入联盟的俱乐部老板可见。 */
+    /**
+     * 游戏设置入口：只有两种身份可见（2026-11-18 A3 第二次修正）。
+     * ① 当前俱乐部所属联盟的总群主（大盟主）；
+     * ② 当前俱乐部确认未加入联盟，且我是这家俱乐部的创建者（群主）。
+     * 已入盟的盟主一律不显示——联盟是别人办的，游戏设置归联盟创始人管。
+     * 判定必须落到「当前俱乐部 / 当前联盟」这一级：多俱乐部账号（一家盟主 + 一家大盟主）里，
+     * 旧写法扫账号级「任意一个 status.isOwner===true」就把入口亮出来了，选中的明明是盟主那家；
+     * 首次进大厅时另一家的 is_owner=1 还没回包所以藏对了，点进「我的」补查回包后 1 秒内又冒出来。
+     * 这里与「上下分记录」「钻石池消耗」统一用 IsUnionOwnerOfClub，口径一致。
+     * 联盟归属未知时一律藏，只补查不猜（known=false 的失败兜底不算结论）。
+     */
     private RefreshGameSettingsEntry():void
     {
         const entry = Tool.GetChild(this.node,"Main/发现/游戏设置入口");
@@ -5313,21 +5318,19 @@ export default class panelMain extends UIPanelViewBase {
         if(clubId)
         {
             const union:any = this.clubUnionStatus[clubId];
-            const info:any = this.clubDetails[clubId];
-            const hasUnion = !!(union && union.hasUnion) ||
-                !!(info && String(info.union_id || "").trim() !== "");
-            // 联盟盟主是账号级身份，不因当前选中的俱乐部不同而消失。
-            let isUnionOwner = false;
-            for(const key in this.clubUnionStatus)
+            const unionId = this.ResolveClubUnionId(clubId);
+            const unionKnown = !!(union && union.known) || unionId !== "";
+            const hasUnion = unionId !== "" || !!(union && union.known && union.hasUnion);
+            // 只认当前俱乐部所在的这个联盟；别的俱乐部（哪怕是我自己办的联盟）不参与判断。
+            const unionOwner = this.IsUnionOwnerOfClub(clubId);
+            show = unionKnown && (unionOwner || (!hasUnion && this.IsClubCreator(clubId)));
+            if(!unionKnown)
             {
-                if(this.clubUnionStatus[key] && this.clubUnionStatus[key].isOwner === true)
-                {
-                    isUnionOwner = true;
-                    break;
-                }
+                const asked = this.clubUnionAsked[clubId] || 0;
+                // 接口失败时不每秒重试，30 秒补一次，等回包再定。
+                if(Date.now() - asked >= 30000)
+                    this.RequestClubUnionStatus(clubId,false);
             }
-            // 已入盟只认联盟盟主；未入盟才给俱乐部老板。
-            show = isUnionOwner || (!hasUnion && this.IsClubCreator(clubId));
         }
         if(entry.active !== show)
             entry.active = show;

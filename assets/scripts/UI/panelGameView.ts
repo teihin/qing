@@ -3067,6 +3067,14 @@ export default class panelGameView extends UIPanelViewBase {
     private UpdateRealtimeSqueezeState(checked:boolean)
     {
         Tool.GetChild(this.node,"实时战绩/搓牌开关/V8状态").getComponent(cc.Label).string = checked ? "已开启" : "已关闭";
+        // 新美术的开关是「轨道 + 滑块」：滑块按状态左右滑动，轨道本身不动。
+        const knob = Tool.GetChild(this.node,"实时战绩/搓牌开关/滑块");
+        if (knob !== null)
+            knob.x = checked ? 24 : -24;
+        // 关闭态把发光轨道压暗，避免"已关闭"却仍是亮蓝轨道。
+        const track = Tool.GetChild(this.node,"实时战绩/搓牌开关/Background");
+        if (track !== null)
+            track.color = checked ? cc.Color.WHITE : new cc.Color(110, 132, 165, 255);
         this.RefreshCuoSqueezePriceLabel();
     }
 
@@ -3223,8 +3231,8 @@ export default class panelGameView extends UIPanelViewBase {
     private MakeRealtimeHintRow(parent:cc.Node, text:string, color:cc.Color, fontSize:number = 22):cc.Node
     {
         const node = this.MakeRealtimeRow(parent);
-        node.height = 56;
-        for (const name of ["in", "score", "countdown", "V8分隔"])
+        node.height = 48;
+        for (const name of ["in", "score", "countdown", "V8分隔", "底", "V8结算底", "head"])
         {
             const child = node.getChildByName(name);
             if (child !== null) child.active = false;
@@ -3244,6 +3252,25 @@ export default class panelGameView extends UIPanelViewBase {
         return node;
     }
 
+    /** 战绩行头像：和围观列表一样按玩家 id 取本地头像，没拿到时先显示默认头像并等服务端回包。 */
+    private FillRealtimeAvatar(node:cc.Node, one:any)
+    {
+        const head = node.getChildByName("head");
+        if (head === null) return;
+        const hasId = one !== null && one !== undefined && one.id !== undefined && one.id !== null && String(one.id) !== "";
+        // 没拿到 id 也保留默认头像，避免行内出现空洞。
+        head.active = true;
+        if (!hasId) return;
+        const imgNode = head.getChildByName("img");
+        if (imgNode === null) return;
+        const img = imgNode.getComponent(cc.Sprite);
+        if (img === null) return;
+        const avatarIndex = one.photo !== undefined && one.photo !== null ? one.photo.toString() : "";
+        const strID = String(one.id);
+        if (!ImageManager.getInstance().GetImageByName(strID, avatarIndex, img))
+            ImageManager.getInstance().AddWaitFreshImage2Catch(strID, img);
+    }
+
     private FillRealtimeSeatedRow(node:cc.Node, one:any, index:number, strUserID:string)
     {
         const id = String(one.id);
@@ -3260,6 +3287,8 @@ export default class panelGameView extends UIPanelViewBase {
         this.realtimeCountdowns.set(id, {label:countdown.getComponent(cc.Label), endAt: Date.now() / 1000 + Math.max(0, remain)});
         node.getChildByName("V8隔行").active = index % 2 === 1;
         node.getChildByName("V8本人底").active = isSelf && seated;
+        node.getChildByName("V8结算底").active = false;
+        this.FillRealtimeAvatar(node, one);
         // 只用整行底色高亮自己，「我」字图标不再显示。
         node.getChildByName("V8本人").active = false;
         node.getChildByName("V8离桌").active = !seated;
@@ -3282,6 +3311,8 @@ export default class panelGameView extends UIPanelViewBase {
         node.getChildByName("countdown").getComponent(cc.Label).string = "—";
         node.getChildByName("V8隔行").active = index % 2 === 1;
         node.getChildByName("V8本人底").active = false;
+        node.getChildByName("V8结算底").active = true;
+        this.FillRealtimeAvatar(node, one);
         node.getChildByName("V8本人").active = false;
         node.getChildByName("V8离桌").active = false;
         // 昵称/带入/倒计时灰化表示已结算，输赢仍保留红绿，方便一眼看出这轮赢亏。
