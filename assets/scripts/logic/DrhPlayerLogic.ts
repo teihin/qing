@@ -4185,6 +4185,73 @@ export default class DrhPlayerLogic extends cc.Component {
         this.UpdateFenAnimate(true, this.info.beicount, false);
     }
 
+    /** 保护性修复：把下注位的显示对齐到 info 里的真实下注额。
+     *  调用时机：发牌落到该座位、以及每条状态消息之后（见 DrhLogicMgr.RepairBetShowGuards）。
+     *  覆盖三类脏显示：
+     *  ① 残留「芒N」——芒数只允许活到投芒动画窗口结束，窗口外一律撤掉（连 strKeepCoin 一起清），
+     *    否则后续 bei_shu=0 的消息还会把它从缓存里复活；
+     *  ② 下注位没显示 / 显示 0，但 beicount 已有值；
+     *  ③ 显示的还是上一手/上一步的旧数字。
+     *  没有真实下注额、也没有芒数时不动，避免把正常留空的下注位点亮。 */
+    public RepairBetShowAfterDeal():void
+    {
+        if(this.info == null || !this.CanRunRoomAnimation() || !this.CanKeepBetShow())
+            return;
+
+        let transGold = this.node.getChildByName("goldshow");
+        let transBei = Tool.GetChild(this.node,"goldshow/count");
+        if(transGold == null || transBei == null)
+            return;
+        let label = transBei.getComponent(cc.Label);
+        if(label == null)
+            return;
+
+        let strShow = label.string == null ? "" : label.string.trim();
+        let strBet = this.info.beicount == null ? "" : this.info.beicount.toString().trim();
+        let bHasBet = strBet != "" && Number(strBet) > 0;
+
+        let bShowMang = strShow.indexOf("芒") == 0;
+        //投芒动画窗口内的芒数是正常过渡，让动画自己收尾
+        if(bShowMang && this.bMangPayShowing && Date.now() < this.nMangPayShowExpire)
+            return;
+
+        if(bShowMang)
+        {
+            //窗口外的芒数属于脏显示：标记、缓存、文本一起撤掉
+            this.bMangPayShowing = false;
+            this.nMangPayShowExpire = 0;
+            if(this.strKeepCoin.indexOf("芒") == 0)
+                this.strKeepCoin = "";
+            if(!bHasBet)
+            {
+                label.string = "0";
+                transGold.active = false;
+                let transCoinHide = Tool.GetChild(this.node,"goldshow/coin");
+                if(transCoinHide != null)
+                    transCoinHide.active = false;
+                return;
+            }
+        }
+        else if(!bHasBet)
+        {
+            //没有下注额也没有芒数：保持原样
+            return;
+        }
+
+        let strExpect = this.CheckSmallPlay(strBet);
+        let bStale = !transGold.active || strShow == "" || strShow == "0" || strShow != strExpect;
+        if(!bStale)
+            return;
+
+        //直接写真实下注额，不走 UpdateFenAnimate：这里不需要飞币动作，也不触发 bei_shu_type 判断
+        this.strKeepCoin = strExpect;
+        transGold.active = true;
+        let transCoin = Tool.GetChild(this.node,"goldshow/coin");
+        if(transCoin != null)
+            transCoin.active = true;
+        label.string = strExpect;
+    }
+
     //投钱入芒池动画：头像 -> 下注区(显示芒X) -> 桌面中心芒池(起飞时收起) -> 下注区(真实下注额或隐藏)
     public ThrowGold2Mang()
     {

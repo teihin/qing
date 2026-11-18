@@ -1271,7 +1271,25 @@ export default class DrhLogicMgr extends cc.Component {
             if(one == null || one == undefined)
                 return
             this.mapID2PlayerCtl.get(nSitNum).DeelMsg(data);
+            //每条状态消息之后兜一次下注位：带分结束/下注事件都不刷新显示，只能靠这里对齐
+            this.RepairBetShowGuards();
         }
+    }
+
+    /** 下注位保护性自愈：把 info 里的真实下注额同步到显示上，覆盖三类脏显示——
+     *  「芒N」残留、该显示却空着、显示的还是旧数字。
+     *  为什么每条消息扫全部座位：下注位原本只在「东家_下注_事件」和投芒动画收尾时刷新，
+     *  而「带分_结束_事件」分支是空的、庄家又永远不触发下注事件，某个人一旦错过那次收尾就再没有刷新点。
+     *  RepairBetShowAfterDeal 内部有阶段闸门 + 不需要改就不写，全扫不会误伤。 */
+    private RepairBetShowGuards()
+    {
+        if(this.bLeavingRoom || this.bRoundSettled)
+            return;
+        this.mapID2PlayerCtl.forEach((one:DrhPlayerLogic)=>{
+            if(one == null || !cc.isValid(one.node) || one.info == null)
+                return;
+            one.RepairBetShowAfterDeal();
+        });
     }
 
     //开始游戏结算前比牌
@@ -1557,7 +1575,9 @@ export default class DrhLogicMgr extends cc.Component {
                     if(!cc.isValid(transHand))
                         return;
                     transHand.opacity = 255;
-                    one.AnimateMoveOneCard(nIndex);                    
+                    one.AnimateMoveOneCard(nIndex);
+                    //发牌落到这个座位时兜一次：下注区空着或还停在「芒N」，用真实下注额顶掉
+                    one.RepairBetShowAfterDeal();                    
                     
                 }));
 
@@ -1585,7 +1605,9 @@ export default class DrhLogicMgr extends cc.Component {
                     if(!cc.isValid(transHand))
                         return;
                     transHand.opacity = 255;
-                    one.AnimateMoveOneCard(nIndex);                    
+                    one.AnimateMoveOneCard(nIndex);
+                    //发牌落到这个座位时兜一次：下注区空着或还停在「芒N」，用真实下注额顶掉
+                    one.RepairBetShowAfterDeal();                    
                     
                 }));
                 arrayAction.push(cc.delayTime(fOneTime));

@@ -4,6 +4,13 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-18 下注位「芒N」残留保护性修复（发牌 + 每条消息双触发；脚本就绪，未构建/热更/真机）
+
+- 现象：庄家下注位长期停在「芒12／芒15」，或该显示带分/下注额的位置空着。链路：投芒收尾时 `beicount` 仍为 0 → 走 `ShowMangPayCount(bKeepWhenNoBet)` 把「芒N」写进 `strKeepCoin` 且不设过期 → 庄家走带分、不触发 `东家_下注_事件`，`带分_结束_事件` 分支为空，该座位之后再收不到自己的消息，无人纠正。
+- 修复分两层：① `DrhPlayerLogic.RepairBetShowAfterDeal()` 把显示对齐到 `beicount`——动画窗口外的「芒N」直接撤掉（连 `strKeepCoin` 一起清），下注位未激活/空/「0」/旧值一律用 `CheckSmallPlay(beicount)` 覆盖；② 触发点两处——`DrhLogicMgr.ThrowCard2Player` 两段发牌回调（落位玩家）+ `OnServerPlayEvent` 每条消息后经 `RepairBetShowGuards()` 扫**全部座位**（不限本条消息座位/庄家：任何座位都可能错过收尾那一次，比如四人里只有一人显示下注额）。
+- 只在 `CanKeepBetShow()` 为真（发牌/带分/决策/看牌，非结算/准备）且 `bRoundSettled=false` 时生效，避免结算后把数字重新点亮。**副作用：`bKeepWhenNoBet` 的庄家芒数长期占位实际失效**——庄家本手真没有 `bei_shu` 时下注位留空，不再显示芒数。
+- 只做 TypeScript 转译与 diff 检查，需 Creator 导入后按「庄家带分 + 投芒」多局复测。
+
 ## 2026-11-18 牌桌投芒动画收尾修复（脚本就绪，未构建/热更/真机）
 
 - `DrhPlayerLogic` 不再把临时「芒X」写入真实下注缓存；有真实 `bei_shu` 时动画结束或 1.5 秒兜底切换成下注额，无下注的庄位保留本手芒数作为有效占位，其他无下注位隐藏。开局消息缺字段时清空上一手的 `mang_xiu_current` 和下注值，动画的两个回程 Action 改为独立实例。
