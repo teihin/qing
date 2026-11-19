@@ -68,6 +68,11 @@ static const NSUInteger QingVoiceCacheLimit = 20;
 @property(nonatomic, assign) NSInteger roomGeneration;
 @property(nonatomic, strong, nullable) AVAudioPlayer *player;
 @property(nonatomic, assign) NSInteger playerGeneration;
+// 切换到录音/语音播放前记录的游戏音频会话配置，用完必须还原，否则游戏音效会静音。
+@property(nonatomic, copy) NSString *gameAudioCategory;
+@property(nonatomic, copy) NSString *gameAudioMode;
+@property(nonatomic, assign) NSUInteger gameAudioOptions;
+@property(nonatomic, assign) BOOL hasGameAudioSnapshot;
 @property(nonatomic) dispatch_queue_t networkQueue;
 
 - (void)cancelRecordSession:(QingVoiceRecordSession *)record;
@@ -161,6 +166,11 @@ static const NSUInteger QingVoiceCacheLimit = 20;
 + (void)ApplicationWillResignActive
 {
     [[QingVoiceBridge sharedBridge] applicationWillResignActive];
+}
+
++ (void)ApplicationDidBecomeActive
+{
+    [[QingVoiceBridge sharedBridge] applicationDidBecomeActive];
 }
 
 + (void)shutdownBridge
@@ -264,6 +274,7 @@ static const NSUInteger QingVoiceCacheLimit = 20;
 
     NSError *sessionError = nil;
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [self captureGameAudioSession];
     BOOL configured = [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord
                                            mode:AVAudioSessionModeVoiceChat
                                         options:(AVAudioSessionCategoryOptionDefaultToSpeaker |
@@ -464,6 +475,10 @@ static const NSUInteger QingVoiceCacheLimit = 20;
     @try {
         [inputNode removeTapOnBus:0];
     } @catch (NSException *exception) {
+    }
+    if (self.player == nil) {
+        // 录音已停且没有语音在播，把会话还给游戏，否则音效会哑掉。
+        [self restoreGameAudioSession];
     }
     if (self.activeRecord == record) {
         self.activeRecord = nil;
@@ -978,6 +993,7 @@ didCompleteWithError:(NSError *)error
     [self stopPlayer:NO];
     NSError *sessionError = nil;
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [self captureGameAudioSession];
     [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord
                          mode:AVAudioSessionModeVoiceChat
                       options:(AVAudioSessionCategoryOptionDefaultToSpeaker |
@@ -989,6 +1005,7 @@ didCompleteWithError:(NSError *)error
     AVAudioPlayer *player = [[AVAudioPlayer alloc] initWithContentsOfURL:fileURL
                                                                   error:&playerError];
     if (player == nil || playerError != nil) {
+        [self restoreGameAudioSession];
         [self notifyJs:@"语音播放失败"
                message:playerError.localizedDescription ?: @"语音解码失败"];
         return;
@@ -999,6 +1016,7 @@ didCompleteWithError:(NSError *)error
     [player prepareToPlay];
     if (![player play]) {
         [self stopPlayer:NO];
+        [self restoreGameAudioSession];
         [self notifyJs:@"语音播放失败" message:@"语音播放失败"];
     }
 }
@@ -1010,6 +1028,7 @@ didCompleteWithError:(NSError *)error
     }
     NSInteger generation = self.playerGeneration;
     [self stopPlayer:NO];
+    [self restoreGameAudioSession];
     if (generation == self.roomGeneration) {
         [self notifyJs:(flag ? @"语音播放完成" : @"语音播放失败")
                message:(flag ? @"" : @"语音播放未正常完成")];
@@ -1024,6 +1043,7 @@ didCompleteWithError:(NSError *)error
     }
     NSInteger generation = self.playerGeneration;
     [self stopPlayer:NO];
+    [self restoreGameAudioSession];
     if (generation == self.roomGeneration) {
         [self notifyJs:@"语音播放失败"
                message:error.localizedDescription ?: @"语音解码失败"];
@@ -1065,10 +1085,12 @@ didCompleteWithError:(NSError *)error
         [self stopPlayer:NO];
         [self.preparedEngine stop];
         self.preparedEngine = nil;
-        [[AVAudioSession sharedInstance]
-            setActive:NO
-          withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
-                error:nil];
+        // 注意：这里绝对不能 setActive:NO。
+        // 引擎的音频走 OpenAL，会话一旦停用，ALCcontext 就会断开；重连只发生在
+        // 引擎收到 UIApplicationDidBecomeActive 且内部 resumeOnBecomingActive 为真时，
+        // 进出房间不会触发，于是 setActive:YES 也救不回来，表现为"出房间后彻底没声音"。
+        // 只把分类交还游戏，保持会话激活即可。
+        [self restoreGameAudioSession];
     });
 }
 
@@ -1089,6 +1111,15 @@ didCompleteWithError:(NSError *)error
             setActive:NO
           withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
                 error:nil];
+        [self restoreGameAudioSession];
+    });
+}
+
+- (void)applicationDidBecomeActive
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        // 回到前台时会话可能仍是停用状态，补一次恢复，否则游戏没有声音。
+        [self restoreGameAudioSession];
     });
 }
 
@@ -1103,16 +1134,59 @@ didCompleteWithError:(NSError *)error
     if (self.preparedEngine != nil || self.activeRecord != nil) {
         return;
     }
-    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord
-                         mode:AVAudioSessionModeVoiceChat
-                      options:(AVAudioSessionCategoryOptionDefaultToSpeaker |
-                               AVAudioSessionCategoryOptionAllowBluetooth)
-                        error:nil];
-    [audioSession setPreferredSampleRate:QingVoiceSampleRate error:nil];
-    [audioSession setPreferredIOBufferDuration:0.01 error:nil];
+    // 只预创建引擎，不碰 AVAudioSession。
+    // 进牌桌时若把会话切成 PlayAndRecord + VoiceChat，游戏音效会走通话通道，
+    // 音量被压到通话档、非语音内容还会被 AEC 压制，表现为"进房后音效没了"。
+    // 会话配置只在实际录音（beginRecord）和播放语音（startPlayer）时设置。
     self.preparedEngine = [[AVAudioEngine alloc] init];
-    (void)self.preparedEngine.inputNode;
+}
+
+#pragma mark - Game audio session
+
+- (void)captureGameAudioSession
+{
+    if (self.hasGameAudioSnapshot) {
+        return;
+    }
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    // 已经是录音分类，说明快照被污染，不记录，恢复时回落到 Ambient。
+    if ([session.category isEqualToString:AVAudioSessionCategoryPlayAndRecord]) {
+        return;
+    }
+    self.gameAudioCategory = session.category;
+    self.gameAudioMode = session.mode;
+    self.gameAudioOptions = session.categoryOptions;
+    self.hasGameAudioSnapshot = YES;
+}
+
+- (void)restoreGameAudioSession
+{
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    NSError *error = nil;
+    BOOL switched = NO;
+    if ([session.category isEqualToString:AVAudioSessionCategoryPlayAndRecord]) {
+        NSString *category = self.gameAudioCategory.length > 0 ? self.gameAudioCategory
+                                                               : AVAudioSessionCategoryAmbient;
+        NSString *mode = self.gameAudioMode.length > 0 ? self.gameAudioMode
+                                                       : AVAudioSessionModeDefault;
+        if (![session setCategory:category mode:mode options:self.gameAudioOptions error:&error]) {
+            NSLog(@"[QingVoiceBridge] 恢复游戏音频会话分类失败: %@", error);
+        } else {
+            switched = YES;
+        }
+    }
+    // 后台不激活；前台补一次激活 —— 会话被停用后引擎的 OpenAL 不会自己重连。
+    if ([UIApplication sharedApplication].applicationState != UIApplicationStateActive) {
+        return;
+    }
+    if (![session setActive:YES error:&error]) {
+        NSLog(@"[QingVoiceBridge] 重新激活游戏音频会话失败: %@", error);
+        return;
+    }
+    if (switched) {
+        NSLog(@"[QingVoiceBridge] 音频会话已交还游戏: category=%@ mode=%@",
+              session.category, session.mode);
+    }
 }
 
 #pragma mark - Helpers

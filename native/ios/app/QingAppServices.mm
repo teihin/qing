@@ -64,6 +64,13 @@ static QingAppLocationService *QingSharedLocationService(void)
 
 @implementation AppController (QingAppServices)
 
++ (void)QingAppStartup
+{
+    // Android 靠 AppActivity 里的 FLAG_KEEP_SCREEN_ON 天然常亮，iOS 没有等价默认行为，
+    // 不显式设置的话对局中会自动锁屏。这里全局禁止自动锁屏，与 Android 表现对齐。
+    [UIApplication sharedApplication].idleTimerDisabled = YES;
+}
+
 + (NSString *)GetCurGps
 {
     QingAppLocationService *service = QingSharedLocationService();

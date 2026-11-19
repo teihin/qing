@@ -13,6 +13,7 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)PreloadFile:(NSString *)serverBase voiceId:(NSString *)voiceId;
 + (void)LeaveRoom;
 + (void)ApplicationWillResignActive;
++ (void)ApplicationDidBecomeActive;
 + (void)shutdownBridge;
 
 @end

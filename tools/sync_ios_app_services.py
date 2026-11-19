@@ -15,6 +15,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_DIR = ROOT / "native/ios/app"
 IOS_ROOT = ROOT / "build/jsb-link/frameworks/runtime-src/proj.ios_mac/ios"
+APP_CONTROLLER = IOS_ROOT / "AppController.mm"
 INFO_PLIST = IOS_ROOT / "Info.plist"
 IOS_PROJECT_ROOT = ROOT / "build/jsb-link/frameworks/runtime-src/proj.ios_mac"
 
@@ -65,6 +66,22 @@ def main() -> int:
 
     shutil.copy2(header, IOS_ROOT / header.name)
     shutil.copy2(implementation, IOS_ROOT / implementation.name)
+
+    controller = APP_CONTROLLER.read_text(encoding="utf-8")
+    controller = replace_once(
+        controller,
+        '#import "QingVoiceBridge.h"\n',
+        '#import "QingVoiceBridge.h"\n#import "QingAppServices.h"\n',
+        "app services import",
+    )
+    controller = replace_once(
+        controller,
+        "    [QingVoiceBridge initializeBridge];\n",
+        "    [QingVoiceBridge initializeBridge];\n"
+        "    [AppController QingAppStartup];\n",
+        "app startup hook",
+    )
+    APP_CONTROLLER.write_text(controller, encoding="utf-8")
 
     with INFO_PLIST.open("rb") as stream:
         info = plistlib.load(stream)

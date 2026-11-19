@@ -87,6 +87,15 @@ def main() -> int:
     )
     controller = replace_once(
         controller,
+        "    app->onResume();\n"
+        "    [[SDKWrapper getInstance] applicationDidBecomeActive:application];\n",
+        "    [QingVoiceBridge ApplicationDidBecomeActive];\n"
+        "    app->onResume();\n"
+        "    [[SDKWrapper getInstance] applicationDidBecomeActive:application];\n",
+        "voice foreground handling",
+    )
+    controller = replace_once(
+        controller,
         "    [[SDKWrapper getInstance] applicationWillTerminate:application];\n"
         "    delete app;\n",
         "    [QingVoiceBridge shutdownBridge];\n"
@@ -163,12 +172,17 @@ def main() -> int:
         "\t\t\t\tPRODUCT_BUNDLE_IDENTIFIER = com.fireball.qing;\n"
     )
     if ios_target_settings not in project:
-        count = project.count(ios_target_anchor)
-        if count != 2:
-            raise RuntimeError(
-                f"iOS target settings: expected exactly two anchors, found {count}"
-            )
-        project = project.replace(ios_target_anchor, ios_target_settings)
+        already_applied = (
+            project.count("IPHONEOS_DEPLOYMENT_TARGET = 12.0;") == 2
+            and project.count("PRODUCT_BUNDLE_IDENTIFIER = com.fireball.qing;") == 2
+        )
+        if not already_applied:
+            count = project.count(ios_target_anchor)
+            if count != 2:
+                raise RuntimeError(
+                    f"iOS target settings: expected exactly two anchors, found {count}"
+                )
+            project = project.replace(ios_target_anchor, ios_target_settings)
     pbxproj.write_text(deduplicate_bridge_lines(project), encoding="utf-8")
 
     print("iOS voice bridge synchronized")
