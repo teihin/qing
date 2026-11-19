@@ -137,3 +137,18 @@
 - 做法：原图打底，只把 AI 生成的新字 `BF` 缩到原字 bbox（x29–72 / y36–63）贴回，红盘、8 个白方块、白圈全部保留原始像素。
 - 验收：尺寸 100×100 不变；alpha 逐字节一致；RGB 改动仅落在字区（958 px）；体积 17.2 KB → 16.0 KB；`.meta`/UUID/引用未改。
 - Creator 已重新导入（`library/imports/34/346818b0-…png` mtime 与体积对应新图，`.meta` 内容无变化）。网页构建产物与真机仍待验证。
+
+## F 组：iOS 应用名与图标（2026-11-19 补充）
+
+用户反馈「iPhone 版本名字和图标还没换到 BF」。
+
+| 编号 | 位置 | 改动 | 状态 |
+|---|---|---|---|
+| F-01 | `build/jsb-link/frameworks/runtime-src/proj.ios_mac/ios/Info.plist` | `CFBundleDisplayName`、`CFBundleName`：`8L` → `BF` | 已改 |
+| F-02 | `…/proj.ios_mac/ios/Images.xcassets/AppIcon.appiconset/`（21 张 × 25 条目，含 `Icon-1024.png`） | 整组替换为 BF 新版图标 | 已替换 |
+
+- 图标来源：以 Android 现行 BF 图标（`proj.android-studio/res/mipmap-xxxhdpi/ic_launcher.png`）为风格基准，AI 重绘 1024×1024 满幅方图（深蓝盾牌 + 金色 `BF` / `BF POKER` + 黑桃，牌桌筹码背景），再逐级减半下采样到各尺寸，全部保持 RGB 无 alpha、四角不透明，符合 App Store 图标要求。
+- 持久化：Cocos 重新构建会从引擎模板重铺 `proj.ios_mac`，已同步到 `build-templates/jsb-link/frameworks/runtime-src/proj.ios_mac/ios/`（`Info.plist` + `AppIcon.appiconset`），与 Android 侧既有做法一致。
+- 未改：`8L.xcodeproj/project.pbxproj` 里的 target 名与 `productName`（产物仍是 `8L-mobile.app`，打包脚本按该路径取包）；`CFBundleIdentifier` 仍为 `com.fireball.qing`。
+- 验证：`plutil -lint` 通过，`PlistBuddy` 读回 `BF`；21 张图标尺寸/模式/清单引用逐项核对一致。`build/ios-unsigned/` 下的 `.xcarchive`/`.ipa` 仍是旧名字旧图标的产物，**需重新 archive 才生效**；真机桌面显示待验收。
+- 未处理：`ios/LaunchScreenBackground.png` 仍是 Cocos2d-x 默认启动图（不含 `8L`/`BY` 字样，属独立议题）。
