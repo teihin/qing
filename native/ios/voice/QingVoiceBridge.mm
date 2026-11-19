@@ -994,10 +994,14 @@ didCompleteWithError:(NSError *)error
     NSError *sessionError = nil;
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     [self captureGameAudioSession];
+    // 播放语音必须用 Default mode：VoiceChat 会启用通话语音处理（AEC/降噪/窄带），
+    // 把输出电平压到"电话级"，音量还跟随通话音量而不是媒体音量，听起来又小又闷。
+    // 同时允许 A2DP，避免蓝牙耳机下回落到 HFP 通话音质。
     [audioSession setCategory:AVAudioSessionCategoryPlayAndRecord
-                         mode:AVAudioSessionModeVoiceChat
+                         mode:AVAudioSessionModeDefault
                       options:(AVAudioSessionCategoryOptionDefaultToSpeaker |
-                               AVAudioSessionCategoryOptionAllowBluetooth)
+                               AVAudioSessionCategoryOptionAllowBluetooth |
+                               AVAudioSessionCategoryOptionAllowBluetoothA2DP)
                         error:&sessionError];
     [audioSession setActive:YES error:&sessionError];
 
@@ -1013,6 +1017,7 @@ didCompleteWithError:(NSError *)error
     self.player = player;
     self.playerGeneration = generation;
     player.delegate = self;
+    player.volume = 1.0;
     [player prepareToPlay];
     if (![player play]) {
         [self stopPlayer:NO];
