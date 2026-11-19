@@ -1,0 +1,98 @@
+{
+	admin localhost:2019
+}
+
+(security_headers) {
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+	}
+}
+
+(hide_rules) {
+	hide .git .env .audio-server _incoming _processed _failed .extracting .xuanmanager .*
+}
+
+:28800 {
+	import security_headers
+
+	# 热更：清单会随版本变化，必须禁止缓存；资源路径不带内容哈希，要求每次重新验证。
+	# 原配置用的 immutable 会让客户端一年内不再请求，导致热更永远生效不了。
+	handle /up/* {
+		root * /www/html
+
+		@up_manifest path /up/project.manifest /up/version.manifest
+		header @up_manifest {
+			Cache-Control "no-store, max-age=0"
+			Pragma "no-cache"
+			Expires "0"
+		}
+
+		@up_payload {
+			path /up/*
+			not path /up/project.manifest /up/version.manifest
+		}
+		header @up_payload Cache-Control "no-cache"
+
+		file_server {
+			import hide_rules
+		}
+	}
+
+	# 后台管理 → 8891
+	handle_path /xuanmanager/* {
+		reverse_proxy 127.0.0.1:8891 {
+			transport http {
+				dial_timeout 5s
+				read_timeout 300s
+				write_timeout 300s
+			}
+		}
+	}
+
+	# 聊天 → 8893
+	handle_path /chattool/* {
+		reverse_proxy 127.0.0.1:8893 {
+			flush_interval -1
+			transport http {
+				dial_timeout 5s
+				read_timeout 600s
+				write_timeout 600s
+			}
+		}
+	}
+
+	# 语音 → 18080
+	handle_path /audio/* {
+		reverse_proxy 127.0.0.1:18080 {
+			transport http {
+				dial_timeout 5s
+				read_timeout 300s
+				write_timeout 300s
+			}
+		}
+	}
+
+	# 其余静态（H5、latest.json 等）
+	handle {
+		root * /www/html
+
+		@manifest path /latest.json /version.json
+		header @manifest Cache-Control "no-cache, no-store, must-revalidate"
+
+		@html path *.html *.htm / */
+		header @html Cache-Control "no-cache, must-revalidate"
+
+		file_server {
+			import hide_rules
+		}
+	}
+
+	log {
+		output file /var/log/caddy/web-access.log {
+			roll_size 50MiB
+			roll_keep 10
+			roll_keep_for 720h
+		}
+	}
+}

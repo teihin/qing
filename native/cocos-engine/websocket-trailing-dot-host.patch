@@ -1,0 +1,73 @@
+--- native/cocos-engine/WebSocket-libwebsockets.cpp.orig	2023-09-06 14:04:02
++++ /Applications/Cocos/Creator/2.4.13/CocosCreator.app/Contents/Resources/cocos2d-x/cocos/network/WebSocket-libwebsockets.cpp	2026-11-20 01:54:00
+@@ -33,6 +33,9 @@
+ #include <atomic>
+ #include <condition_variable>
+ #include <errno.h>
++#include <netdb.h>
++#include <arpa/inet.h>
++#include <sys/socket.h>
+ #include <list>
+ #include <mutex>
+ #include <memory>  // for std::shared_ptr
+@@ -306,11 +309,14 @@
+     info.uid = -1;
+     if (peerServerCert)
+     {
+-        info.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS | LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT;
++        // 禁用 IPv6：libwebsockets 会把 IPv4 目标「uplevelling」成 IPv6(v4-mapped) 连接，
++        // 这条路径在部分 CDN/高防上能完成 TCP 握手但不转发应用数据。
++        // 走纯 IPv4 与浏览器、系统 socket 的行为保持一致。
++        info.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS | LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT | LWS_SERVER_OPTION_DISABLE_IPV6;
+     }
+     else
+     {
+-        info.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS | LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT | LWS_SERVER_OPTION_PEER_CERT_NOT_REQUIRED;
++        info.options = LWS_SERVER_OPTION_EXPLICIT_VHOSTS | LWS_SERVER_OPTION_DO_SSL_GLOBAL_INIT | LWS_SERVER_OPTION_PEER_CERT_NOT_REQUIRED | LWS_SERVER_OPTION_DISABLE_IPV6;
+     }
+     info.user = nullptr;
+ 
+@@ -1043,11 +1049,41 @@
+         struct lws_client_connect_info connectInfo;
+         memset(&connectInfo, 0, sizeof(connectInfo));
+         connectInfo.context = __wsContext;
+-        connectInfo.address = hostName.c_str();
++        // 尾点域名（如 xxx.hcnamedns.com.）会让 libwebsockets 的域名解析失败。
++        // 这里自己解析成 IPv4 字面量交给 lws，让它完全跳过自身的 DNS 逻辑；
++        // 下面的 connectInfo.host 仍用原始域名，保证握手时 Host 头带域名、CDN/高防照常识别。
++        std::string connectHost = hostName;
++        if (!connectHost.empty() && connectHost.back() == '.')
++            connectHost.pop_back();
++        if (!connectHost.empty() && connectHost.find_first_not_of("0123456789.") != std::string::npos)
++        {
++            struct addrinfo hints;
++            struct addrinfo* resolved = nullptr;
++            memset(&hints, 0, sizeof(hints));
++            hints.ai_family = AF_INET;
++            hints.ai_socktype = SOCK_STREAM;
++            if (::getaddrinfo(connectHost.c_str(), nullptr, &hints, &resolved) == 0 && resolved != nullptr)
++            {
++                char ipText[INET_ADDRSTRLEN] = {0};
++                struct sockaddr_in* sa = reinterpret_cast<struct sockaddr_in*>(resolved->ai_addr);
++                if (::inet_ntop(AF_INET, &sa->sin_addr, ipText, sizeof(ipText)) != nullptr)
++                    connectHost.assign(ipText);
++                ::freeaddrinfo(resolved);
++            }
++        }
++        connectInfo.address = connectHost.c_str();
+         connectInfo.port = port;
+         connectInfo.ssl_connection = sslConnection;
+         connectInfo.path = path.c_str();
+-        connectInfo.host = hostName.c_str();
++        // lws 默认不加端口；而 CDN/高防按「域名:端口」匹配站点，
++        // 只带域名的 Host 会被 403 拒绝。非默认端口显式补上。
++        std::string hostHeader = hostName;
++        if (port != 80 && port != 443)
++        {
++            hostHeader += ":";
++            hostHeader += std::to_string(port);
++        }
++        connectInfo.host = hostHeader.c_str();
+         connectInfo.origin = authority.c_str();
+         connectInfo.protocol = _clientSupportedProtocols.empty() ? nullptr : _clientSupportedProtocols.c_str();
+         connectInfo.ietf_version_or_minus_one = -1;

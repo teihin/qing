@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -107,6 +108,11 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("CHAT_DIRECT_ALLOW_DEV_LOGIN 必须是 true 或 false")
 	}
+	// 数据库与应用分离部署时显式打开；默认关闭，保持「只允许本机数据库」的原有安全基线。
+	allowRemoteDB, err := strconv.ParseBool(env("CHAT_DB_ALLOW_REMOTE", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("CHAT_DB_ALLOW_REMOTE 必须是 true 或 false")
+	}
 	directCORSOrigins, err := originList("CHAT_DIRECT_CORS_ORIGINS", "http://localhost:7456,http://127.0.0.1:7456,https://154-37-155-17.nip.io")
 	if err != nil {
 		return Config{}, err
@@ -169,7 +175,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("必须通过运行环境提供 CHAT_DB_USER 和 CHAT_DB_PASSWORD")
 	}
 	if cfg.DBHost != "127.0.0.1" && cfg.DBHost != "localhost" {
-		return Config{}, fmt.Errorf("CHAT_DB_HOST 只允许 127.0.0.1 或 localhost")
+		if err := validateRemoteDBHost("CHAT_DB_HOST", cfg.DBHost, allowRemoteDB); err != nil {
+			return Config{}, err
+		}
 	}
 	if cfg.DBName != "webcm" {
 		return Config{}, fmt.Errorf("CHAT_DB_NAME 必须是 webcm")
@@ -178,7 +186,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("必须通过运行环境提供 CHAT_GAME_DB_USER 和 CHAT_GAME_DB_PASSWORD")
 	}
 	if cfg.GameDBHost != "127.0.0.1" && cfg.GameDBHost != "localhost" {
-		return Config{}, fmt.Errorf("CHAT_GAME_DB_HOST 只允许 127.0.0.1 或 localhost")
+		if err := validateRemoteDBHost("CHAT_GAME_DB_HOST", cfg.GameDBHost, allowRemoteDB); err != nil {
+			return Config{}, err
+		}
 	}
 	if cfg.GameDBName != "kbedm" {
 		return Config{}, fmt.Errorf("CHAT_GAME_DB_NAME 必须是 kbedm")
@@ -211,6 +221,19 @@ func Load() (Config, error) {
 }
 
 // validateXuanManagerURL 只允许本机后台服务，ChatTool 不直接访问游戏管理通道。
+// validateRemoteDBHost 在 CHAT_DB_ALLOW_REMOTE=true 时放行局域网私有地址，
+// 其余情况保持原有「只允许本机」限制，避免把公网地址误配成数据库主机。
+func validateRemoteDBHost(name, host string, allowRemote bool) error {
+	if !allowRemote {
+		return fmt.Errorf("%s 只允许 127.0.0.1 或 localhost；数据库分离部署请显式设置 CHAT_DB_ALLOW_REMOTE=true", name)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsPrivate() {
+		return fmt.Errorf("%s 在 CHAT_DB_ALLOW_REMOTE=true 时只允许局域网私有地址（10.x / 172.16-31.x / 192.168.x）", name)
+	}
+	return nil
+}
+
 func validateXuanManagerURL(raw string) error {
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil || parsed.Scheme != "http" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {

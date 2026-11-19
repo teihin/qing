@@ -155,13 +155,54 @@ def build_sftp_batch(archive_path: Path, version: str, remote_dir: str) -> str:
         # 批处理模式下 sftp 默认关闭进度显示，显式打开后会输出
         # 百分比 / 已传大小 / 实时速率 / ETA。
         "progress",
-        f"ls {sftp_quote(str(remote_root))}",
         f"-rm {sftp_quote(str(temporary_path))}",
         f"put {sftp_quote(str(archive_path))} {sftp_quote(str(temporary_path))}",
         f"rename {sftp_quote(str(temporary_path))} {sftp_quote(str(final_path))}",
         "bye",
     ]
     return "\n".join(lines) + "\n"
+
+
+def build_default_unzip_command(remote_dir: str, version: str) -> str:
+    """脚本自带的解压命令：解压到临时目录后原子替换 /up，并把 ZIP 归档到 _processed。
+
+    不依赖服务器上是否存在解压脚本（该机器上的 /www 根目录会被外部清理）。
+    """
+    zip_path = f"{remote_dir.rstrip('/')}/ver_{version.replace('.', '_')}.zip"
+    return (
+        "set -e; cd /www/html; "
+        "rm -rf .extracting/up.new .extracting/up.old; "
+        "mkdir -p .extracting/up.new; "
+        f"unzip -oq {zip_path} -d .extracting/up.new; "
+        "if [ -d up ]; then mv up .extracting/up.old; fi; "
+        "mv .extracting/up.new up; "
+        "rm -rf .extracting/up.old; "
+        f"mv {zip_path} _processed/"
+    )
+
+
+def run_remote_ssh(host: str, port: int, user: str, identity_file: Path, command_text: str, purpose: str) -> None:
+    """在服务器上执行一条命令（不依赖服务器端的定时任务）。"""
+    command = [
+        "ssh",
+        "-p",
+        str(port),
+        "-i",
+        str(identity_file),
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "ConnectTimeout=15",
+        f"{user}@{host}",
+        command_text,
+    ]
+    print(f"\n{purpose}：{command_text}", flush=True)
+    result = subprocess.run(command, check=False)
+    if result.returncode != 0:
+        raise RuntimeError(f"{purpose}失败，退出码: {result.returncode}")
+    print(f"{purpose}完成。", flush=True)
 
 
 def fetch_http(url: str, attempt: int) -> bytes:
@@ -290,6 +331,11 @@ def main() -> int:
     version, version_dir, manifest = find_latest_version(args.output_dir.resolve())
     package_url = manifest.get("packageUrl", "")
 
+    raw_config = load_config(config_path)
+    # 解压方式的优先级：显式命令 > 内置解压（remote_unzip=true）> 交给服务器端自行解压。
+    remote_unzip_command = str(raw_config.get("remote_unzip_command") or "").strip()
+    if not remote_unzip_command and raw_config.get("remote_unzip"):
+        remote_unzip_command = build_default_unzip_command(remote_dir, version)
     config = {
         "host": host,
         "port": port,
@@ -297,7 +343,8 @@ def main() -> int:
         "identity_file": identity_text,
         "remote_dir": remote_dir,
     }
-    write_config(config_path, config)
+    # 只覆盖这几个连接参数，保留 remote_unzip_command 这类自定义键。
+    write_config(config_path, {**raw_config, **config})
 
     batch_path = None
     try:
@@ -315,6 +362,10 @@ def main() -> int:
         print(f"  ZIP 大小: {archive_bytes / 1024 / 1024:.2f} MB")
         print(f"  Manifest 地址: {package_url}")
         print(f"  SFTP 目标: {user}@{host}:{remote_dir}")
+        if remote_unzip_command:
+            print(f"  解压方式: 上传后由本机触发 {remote_unzip_command}")
+        else:
+            print("  解压方式: 服务器端自动解压（本脚本不干预）")
 
         with tempfile.NamedTemporaryFile("w", encoding="utf-8", prefix="qing-sftp-", suffix=".txt", delete=False) as stream:
             stream.write(batch_text)
@@ -331,7 +382,7 @@ def main() -> int:
         ]
         if not sys.stderr.isatty():
             print("提示：当前输出不是交互终端，实时进度不会被刷新；请在终端窗口内运行本脚本。")
-        print("\n开始上传 ZIP（下方为实时进度、速率与剩余时间）；完成后服务器会自动解压到 /up...\n", flush=True)
+        print("\n开始上传 ZIP（下方为实时进度、速率与剩余时间）；上传完成后解压替换 /up ...\n", flush=True)
         upload_started = time.monotonic()
         result = subprocess.run(command, check=False)
         upload_elapsed = max(time.monotonic() - upload_started, 0.001)
@@ -344,6 +395,9 @@ def main() -> int:
     finally:
         if batch_path is not None:
             batch_path.unlink(missing_ok=True)
+
+    if remote_unzip_command:
+        run_remote_ssh(host, port, user, identity_file, remote_unzip_command, "服务器端解压")
 
     verify_deployment(version, manifest)
     print(f"\n上传并部署成功：版本 {version} 已解压并替换到 {package_url}")

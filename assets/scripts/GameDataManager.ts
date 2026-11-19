@@ -276,7 +276,7 @@ export default class GameDataManager extends cc.Component {
         Debug.Error("初始化了一次KB");
 
         var args = new KBEngine.KBEngineArgs();
-        const useWebWss = cc.sys.isBrowser;
+        const useWebWss = false//cc.sys.isBrowser;
     
         args.ip = GameDataManager.GetSerVerIP();
         args.port = SERVER_PORT;

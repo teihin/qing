@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -65,6 +66,12 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("XUAN_NOTIFICATION_CAROUSEL_WORKER 必须是 true 或 false")
 	}
 
+	// 数据库与应用分离部署时显式打开；默认关闭，保持「只允许本机数据库」的原有安全基线。
+	allowRemoteDB, err := strconv.ParseBool(env("XUAN_DB_ALLOW_REMOTE", "false"))
+	if err != nil {
+		return Config{}, fmt.Errorf("XUAN_DB_ALLOW_REMOTE 必须是 true 或 false")
+	}
+
 	cfg := Config{
 		HTTPAddr:                   env("XUAN_HTTP_ADDR", "127.0.0.1:8891"),
 		StaticDir:                  env("XUAN_STATIC_DIR", "../web/dist"),
@@ -106,7 +113,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("必须通过运行环境提供 XUAN_DB_USER 和 XUAN_DB_PASSWORD")
 	}
 	if cfg.DBHost != "127.0.0.1" && cfg.DBHost != "localhost" {
-		return Config{}, fmt.Errorf("XUAN_DB_HOST 只允许 127.0.0.1 或 localhost")
+		if err := validateRemoteDBHost("XUAN_DB_HOST", cfg.DBHost, allowRemoteDB); err != nil {
+			return Config{}, err
+		}
 	}
 	if cfg.DBName != "webcm" {
 		return Config{}, fmt.Errorf("XUAN_DB_NAME 必须是 webcm")
@@ -115,7 +124,9 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("必须通过运行环境提供 XUAN_GAME_DB_USER 和 XUAN_GAME_DB_PASSWORD")
 	}
 	if cfg.GameDBHost != "127.0.0.1" && cfg.GameDBHost != "localhost" {
-		return Config{}, fmt.Errorf("XUAN_GAME_DB_HOST 只允许 127.0.0.1 或 localhost")
+		if err := validateRemoteDBHost("XUAN_GAME_DB_HOST", cfg.GameDBHost, allowRemoteDB); err != nil {
+			return Config{}, err
+		}
 	}
 	if cfg.GameDBName != "kbedm" {
 		return Config{}, fmt.Errorf("XUAN_GAME_DB_NAME 必须是 kbedm")
@@ -135,6 +146,19 @@ func Load() (Config, error) {
 		cfg.CredentialKey = cfg.DBPassword
 	}
 	return cfg, nil
+}
+
+// validateRemoteDBHost 在 XUAN_DB_ALLOW_REMOTE=true 时放行局域网私有地址，
+// 其余情况保持原有「只允许本机」限制，避免把公网地址误配成数据库主机。
+func validateRemoteDBHost(name, host string, allowRemote bool) error {
+	if !allowRemote {
+		return fmt.Errorf("%s 只允许 127.0.0.1 或 localhost；数据库分离部署请显式设置 XUAN_DB_ALLOW_REMOTE=true", name)
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsPrivate() {
+		return fmt.Errorf("%s 在 XUAN_DB_ALLOW_REMOTE=true 时只允许局域网私有地址（10.x / 172.16-31.x / 192.168.x）", name)
+	}
+	return nil
 }
 
 func validateGameAdminURL(raw string) error {
