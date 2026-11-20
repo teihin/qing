@@ -69,6 +69,29 @@ func New(db *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 }
 
 func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
+	s := newServer(db, gameDB, cfg, logger)
+	s.routes()
+	return s.securityHeaders(s.mux)
+}
+
+// NewRegistrationOnly 只挂注册接口，供独立端口使用。
+//
+// 该端口直接对外、不经过反向代理，所以调用方要同时关闭 keep-alive：
+// 四层代理只能看到 TCP 连接，看不到 HTTP 请求，只有让「一次注册 = 一条连接」，
+// 代理侧按「单 IP 连接数」限速才等价于按「注册次数」限速。
+func NewRegistrationOnly(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
+	s := newServer(db, gameDB, cfg, logger)
+	mux := http.NewServeMux()
+	// 这个端口是直连的，不经过 Caddy 的 /xuanmanager 前缀剥离，
+	// 所以两种路径都要挂：带前缀（客户端实际请求）和不带前缀（与主服务保持一致）。
+	for _, prefix := range []string{"", "/xuanmanager"} {
+		mux.HandleFunc("OPTIONS "+prefix+"/api/game/registrations", s.handleRegistrationOptions)
+		mux.HandleFunc("POST "+prefix+"/api/game/registrations", s.handleCreateGameRegistration)
+	}
+	return s.securityHeaders(mux)
+}
+
+func newServer(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) *Server {
 	// 尝试次数限流（防连点）。做成配置项，调参不用重新发二进制。
 	// 显式配 0 表示关闭：高防接入后源 IP 统一为节点地址，按 IP 限流会误伤整节点玩家。
 	attemptsPer10Min := cfg.RegAttempts10Min
@@ -89,8 +112,7 @@ func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) h
 		platformRevenueSem:     make(chan struct{}, 1),
 		totpKey:                security.DeriveTOTPKey(cfg.CredentialKey),
 	}
-	s.routes()
-	return s.securityHeaders(s.mux)
+	return s
 }
 
 func (s *Server) routes() {
@@ -103,8 +125,11 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/auth/totp/disable", s.authorized("", true, s.handleTOTPDisable))
 	s.mux.Handle("POST /api/auth/totp/recovery", s.authorized("", true, s.handleTOTPRegenerateRecovery))
 	s.mux.Handle("POST /api/service/clubs/{clubId}/members/{userId}/gold", s.serviceAuthorized(s.handleServiceClubMemberGold))
+	// 注册接口已迁到独立端口（见 NewRegistrationOnly / XUAN_REGISTRATION_ADDR）。
+	// 主服务保留这两个路径，但只返回明确的升级提示：
+	// 旧客户端如果不升级会表现为「点了没反应」，给一句话比给 404 好排查。
 	s.mux.HandleFunc("OPTIONS /api/game/registrations", s.handleRegistrationOptions)
-	s.mux.HandleFunc("POST /api/game/registrations", s.handleCreateGameRegistration)
+	s.mux.HandleFunc("POST /api/game/registrations", s.handleRegistrationMoved)
 	s.mux.HandleFunc("OPTIONS /api/game/change-login-password", s.handleChangePasswordOptions)
 	s.mux.HandleFunc("POST /api/game/change-login-password", s.handleChangePlayerLoginPassword)
 	s.mux.HandleFunc("OPTIONS /api/game/change-pay-password", s.handleChangePayPasswordOptions)

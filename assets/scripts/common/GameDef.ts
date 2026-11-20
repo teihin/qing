@@ -43,7 +43,7 @@ export const BASE_SERVER_IP:string = "72679781.tjkdplus.com.cname.hcnamedns.com.
 export const LOGIN_BY_IP:boolean = true;
 export const IS_USE_WSS:boolean = false;
 export const SERVER_URL:string = "";
-
+  
 // Web Mobile/浏览器专用的KB WSS入口。原生客户端继续使用上面的IP、端口和WS配置。
 // BaseApp端口来自登录服下发，只允许连接服务器已明确开放的代理端口。
 export const WEB_PUBLIC_HOST:string = "154-37-155-17.nip.io";
@@ -54,6 +54,8 @@ export const WEB_KB_WSS_ALLOWED_PORTS:number[] = [20013, 20015, 20016, 20017, 20
 
 
 export const HHHH:string = "72679781.tjkdplus.com.cname.hcnamedns.com.:28800"
+/** 注册独立端口：后端只挂注册接口并关闭 keep-alive，便于四层高防按连接数限速。 */
+export const REG_HOST:string = "72679781.tjkdplus.com.cname.hcnamedns.com.:28802"
 // 自研语音和客服：浏览器统一使用已确认的 nip.io HTTPS/WSS 域名。
 export const AUDIO_SERVER_HTTP_BASE:string = "http://"+HHHH+"/audio";
 export const AUDIO_SERVER_WS_URL:string = "ws://"+HHHH+"/audio/v1/stream";

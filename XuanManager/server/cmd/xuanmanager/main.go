@@ -79,6 +79,27 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 	}
 
+	// 注册独立端口：只挂注册接口、不经反向代理、关闭 keep-alive。
+	// 目的是让四层高防能按「单 IP 连接数」限速等价地限制注册次数——
+	// 代理层看不到 HTTP 请求，只能统计 TCP 连接，所以必须一次注册一条连接。
+	var regServer *http.Server
+	if cfg.RegistrationAddr != "" {
+		regServer = &http.Server{
+			Addr:              cfg.RegistrationAddr,
+			Handler:           api.NewRegistrationOnly(db, gameDB, cfg, logger),
+			ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout:       15 * time.Second,
+			WriteTimeout:      30 * time.Second,
+		}
+		regServer.SetKeepAlivesEnabled(false)
+		go func() {
+			logger.Info("registration endpoint started", "address", cfg.RegistrationAddr)
+			if err := regServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.Error("registration endpoint stopped unexpectedly", "error", err)
+			}
+		}()
+	}
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
@@ -94,5 +115,8 @@ func main() {
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer shutdownCancel()
 	_ = server.Shutdown(shutdownCtx)
+	if regServer != nil {
+		_ = regServer.Shutdown(shutdownCtx)
+	}
 	logger.Info("XuanManager stopped")
 }

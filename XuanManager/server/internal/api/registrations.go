@@ -864,3 +864,12 @@ func isDuplicateKey(err error) bool {
 	var mysqlError *mysql.MySQLError
 	return errors.As(err, &mysqlError) && mysqlError.Number == 1062
 }
+
+// handleRegistrationMoved 处理主服务上的旧注册路径。
+//
+// 注册接口已经迁到独立端口（四层代理只能按连接数限速，需要一次注册一条连接），
+// 这里不再受理，只回一句可读的提示，避免旧客户端停在注册页反复重试。
+func (s *Server) handleRegistrationMoved(w http.ResponseWriter, r *http.Request) {
+	setRegistrationCORS(w)
+	writeError(w, http.StatusBadRequest, "REGISTRATION_MOVED", "注册服务已升级，请更新客户端到最新版本后再试")
+}

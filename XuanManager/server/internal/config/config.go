@@ -48,6 +48,10 @@ type Config struct {
 	RegDeviceDaily      int
 	RegGlobalDaily      int
 	RegHoneypotBanHours int
+	// RegistrationAddr 是注册接口的独立监听地址（例如 ":28802"）。
+	// 配了就在这个端口上只开放注册接口并关闭 keep-alive，便于四层代理按连接数限速；
+	// 留空表示不单独开端口，注册仍走主服务。
+	RegistrationAddr string
 }
 
 func Load() (Config, error) {
@@ -107,6 +111,7 @@ func Load() (Config, error) {
 		RegDeviceDaily:      envInt("XUAN_REG_DEVICE_DAILY", 0),
 		RegGlobalDaily:      envInt("XUAN_REG_GLOBAL_DAILY", 0),
 		RegHoneypotBanHours: envInt("XUAN_REG_HONEYPOT_BAN_HOURS", 24),
+		RegistrationAddr:    strings.TrimSpace(env("XUAN_REGISTRATION_ADDR", "")),
 	}
 
 	if cfg.DBUser == "" || cfg.DBPassword == "" {
