@@ -35,6 +35,22 @@ interface BubbleUnit
     /** 系统通报条（上下分成功）的两行文字。 */
     systemTime:cc.Label;
     systemText:cc.Label;
+    /** 文字节点原始颜色：链接消息会临时染蓝，节点复用时要还原。 */
+    textColor:cc.Color;
+}
+
+/**
+ * 聊天气泡里的链接识别。
+ *
+ * 只认「http(s)://」和「www.」开头的地址：裸域名（如 abc.com）无法和普通英文短句区分，
+ * 贸然识别会把正常聊天内容变成可点跳转。
+ */
+const LINK_PATTERN = /(https?:\/\/[^\s<>"'`，。、；：！？（）【】「」『』]+|www\.[^\s<>"'`，。、；：！？（）【】「」『』]+)/i;
+
+/** 链接文字的高亮色（气泡底是深色，用偏亮的蓝）；按需创建，避免模块加载期依赖 cc。 */
+function LinkColor():cc.Color
+{
+    return cc.color(94,178,255);
 }
 
 /**
@@ -916,11 +932,14 @@ export default class panelMessageChat extends UIPanelViewBase {
             status:null,
             dividerLabel:null,
             systemTime:null,
-            systemText:null
+            systemText:null,
+            textColor:null
         };
         unit.bubbleSprite = unit.bubble == null ? null : unit.bubble.getComponent(cc.Sprite);
         let textNode = Tool.GetChild(node,"文字");
         unit.text = textNode == null ? null : textNode.getComponent(cc.Label);
+        // 记下美术给的原始字色，链接消息染色后复用到别的消息要能还原。
+        unit.textColor = unit.text == null ? null : unit.text.node.color.clone();
         let imageNode = Tool.GetChild(node,"图片");
         unit.image = imageNode == null ? null : imageNode.getComponent(cc.Sprite);
         let voiceNode = Tool.GetChild(node,"语音");
@@ -1165,6 +1184,11 @@ export default class panelMessageChat extends UIPanelViewBase {
                 unit.text.overflow = cc.Label.Overflow.CLAMP;
                 unit.text.enableWrapText = true;
                 unit.text.string = text;
+                // 整条消息就是一条链接时染成链接蓝，给用户「这里能点」的提示；
+                // 链接夹在长句里保持原色，避免整段客服话术变成蓝色。
+                let link = this.ParseLink(text);
+                if(unit.textColor != null)
+                    unit.text.node.color = link.whole ? LinkColor() : unit.textColor;
                 height = Math.max(height,bubbleHeight);
             }
         }
@@ -1279,6 +1303,47 @@ export default class panelMessageChat extends UIPanelViewBase {
         return Math.max(56,height);
     }
 
+    /**
+     * 从文字消息里取出第一个链接。
+     *
+     * 返回值 `whole` 表示整条消息只有一个链接（用来决定是否染色），
+     * `url` 已补全协议（www. 开头补 https://），可直接交给系统浏览器。
+     */
+    private ParseLink(text:string):{url:string, whole:boolean}
+    {
+        let empty = {url:"", whole:false};
+        if(text == null || text === "")
+            return empty;
+        let match = LINK_PATTERN.exec(text);
+        if(match == null)
+            return empty;
+        // 句末的英文/中文标点和右括号常被一起粘进来，这里从尾部剥掉。
+        let raw = match[0].replace(/[.,;:!?)\]}>。，、；：！？）】」』”’]+$/g,"");
+        if(raw === "")
+            return empty;
+        let url = /^https?:\/\//i.test(raw) ? raw : "https://" + raw;
+        // 整条消息只有这个链接（允许尾部带句读）才算「纯链接」，用于染色。
+        let trimmed = text.trim().replace(/[.,;:!?)\]}>。，、；：！？）】」』]+$/g,"");
+        return {url:url, whole:trimmed === raw};
+    }
+
+    /** 用系统浏览器打开链接：网页版走 window.open，原生走 jsb.openURL（由引擎统一封装）。 */
+    private OpenExternalLink(url:string):void
+    {
+        if(url == null || url === "")
+            return;
+        try
+        {
+            cc.sys.openURL(url);
+        }
+        catch(error)
+        {
+            // 个别容器（内嵌 WebView / 小游戏）没有浏览器能力，至少别把异常抛到点击事件里。
+            if(typeof window !== "undefined" && (window as any).open != null)
+                (window as any).open(url,"_blank");
+        }
+    }
+
     /** 估算单行文字宽度，用于让短消息收缩成效果图中的紧凑气泡。 */
     private EstimateTextWidth(text:string,fontSize:number):number
     {
@@ -1385,6 +1450,16 @@ export default class panelMessageChat extends UIPanelViewBase {
         {
             this.Resend(message);
             return;
+        }
+        // 文字消息里带链接时，点击气泡直接用浏览器打开（整条或夹在句子里都支持）。
+        if(message.messageType === "text")
+        {
+            let link = this.ParseLink(message.text);
+            if(link.url !== "")
+            {
+                this.OpenExternalLink(link.url);
+                return;
+            }
         }
         if(message.messageType === "image" && message.attachment != null)
         {
