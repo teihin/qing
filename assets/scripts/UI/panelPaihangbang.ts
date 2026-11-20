@@ -117,6 +117,14 @@ export default class panelPaihangbang extends UIPanelViewBase {
         });
     }
 
+    /** 打开/重连时的首屏复位：清掉 Prefab 预览行和上次残留的行与头部，避免状态探测空窗期显示不存在的数据。 */
+    private resetView() {
+        BOARDS.forEach(board => {
+            if (this.lists[board]) this.lists[board].clearPage();
+        });
+        this.resetHeader();
+    }
+
     onEnable() {
         this.epoch++;
         this.probePending = [];
@@ -127,6 +135,9 @@ export default class panelPaihangbang extends UIPanelViewBase {
         this.statusPending = false;
         // 上一次可能把没开的榜 tab 藏了，重新打开先全部恢复，再由这次探测决定隐藏哪些。
         this.restoreAllBoards();
+        // 状态接口回包前不会 selectBoard/clearPage，这里先清干净，
+        // 否则首屏会露出 Prefab 里的 V9 预览行和写死的开始/截止时间。
+        this.resetView();
         const firstTab = this.tabNode("玩家手数榜");
         if (firstTab) firstTab.getComponent(cc.Toggle).isChecked = true;
         ["1皮", "2皮", "5皮", "10皮", "20皮"].forEach((name) => {
@@ -163,6 +174,8 @@ export default class panelPaihangbang extends UIPanelViewBase {
         this.probeHeaders = {};
         this.statusPending = false;
         this.restoreAllBoards();
+        // 重连前的行已失效，同样先清空再等状态/榜单回包。
+        this.resetView();
         if (this.mode === "club" && this.requestStatus()) return;
         this.enterBoard(this.selected);
     }
@@ -369,6 +382,9 @@ export default class panelPaihangbang extends UIPanelViewBase {
                 const view = Tool.GetChild(this.node, "容器/" + board);
                 if (view) view.active = board === this.selected;
             });
+            // notice 只换文案不清列表，这里必须先清，
+            // 否则「本次活动还没有开启任何榜单」会跟 Prefab 预览行同时显示并永久残留。
+            this.resetView();
             if (this.lists[this.selected]) this.lists[this.selected].notice("本次活动还没有开启任何榜单");
             return;
         }
