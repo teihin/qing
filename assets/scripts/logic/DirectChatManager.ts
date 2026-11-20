@@ -461,6 +461,23 @@ export default class DirectChatManager
             if(generation !== this.accountGeneration)
                 throw new DirectChatError("账号已切换","DIRECT_ACCOUNT_CHANGED");
             return data;
+        }).catch((error:any)=>{
+            // 令牌失效（切换了服务器、服务端清理过会话、或本地未感知过期）时返回 401。
+            // 清掉本地令牌重建会话后重试一次，避免 401 死循环。
+            if(error instanceof DirectChatError && error.status === 401 && opts.authRetried !== true)
+            {
+                Debug.Log("直聊令牌失效(401)，清除本地令牌并重建会话: " + path);
+                this.token = "";
+                this.tokenGuuid = "";
+                this.tokenExpiresAt = 0;
+                this.authPromise = null;
+                this.ClearStoredToken();
+                let retryOptions:any = {};
+                for(let key in opts) retryOptions[key] = opts[key];
+                retryOptions.authRetried = true;
+                return this.Request(method,path,body,retryOptions);
+            }
+            throw error;
         });
     }
 
@@ -586,9 +603,25 @@ export default class DirectChatManager
 
     private ClearStoredToken():void
     {
-        if(this.guuid === "")
-            return;
-        try { cc.sys.localStorage.removeItem(this.TokenStorageKey(this.guuid)); }
+        try
+        {
+            if(this.guuid !== "")
+                cc.sys.localStorage.removeItem(this.TokenStorageKey(this.guuid));
+            // 兜底：guuid 尚未就绪或与写入时不一致会导致按 key 删不掉，
+            // 这时残留的令牌让 401 重试读回同一个失效令牌、形成死循环。
+            // 直聊令牌本身就是可再生的，这里统一清干净。
+            let stale:string[] = [];
+            let storage:any = cc.sys.localStorage;
+            let total = Number(storage.length) || 0;
+            for(let i = 0; i < total; i++)
+            {
+                let key = storage.key(i);
+                if(key != null && String(key).indexOf("directChatToken:") === 0)
+                    stale.push(String(key));
+            }
+            for(let key of stale)
+                cc.sys.localStorage.removeItem(key);
+        }
         catch(error) {}
     }
 

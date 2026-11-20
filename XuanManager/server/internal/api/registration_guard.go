@@ -57,8 +57,9 @@ func newRegistrationGuard(db *sql.DB, cfg config.Config, logger *slog.Logger) *r
 		memory:      make(map[string][]time.Time),
 		banMemory:   make(map[string]time.Time),
 	}
-	if guard.honeypotBan <= 0 {
-		guard.honeypotBan = 24 * time.Hour
+	// 0 表示关闭蜜罐 IP 封禁（高防后面接时源 IP 全是节点地址，按 IP 封会误伤整节点）。
+	if guard.honeypotBan < 0 {
+		guard.honeypotBan = 0
 	}
 	return guard
 }
@@ -92,8 +93,11 @@ const (
 )
 
 func (g *registrationGuard) blocked(ctx context.Context, ipHash, deviceKey string) (registrationBlockReason, time.Duration, error) {
-	if until, banned := g.bannedUntil(ctx, ipHash); banned {
-		return registrationBlockIPBanned, time.Until(until), nil
+	// 蜜罐封禁默认开启；honeypotBan=0 时跳过（见 newRegistrationGuard）。
+	if g.honeypotBan > 0 {
+		if until, banned := g.bannedUntil(ctx, ipHash); banned {
+			return registrationBlockIPBanned, time.Until(until), nil
+		}
 	}
 
 	now := time.Now()
@@ -235,6 +239,9 @@ func (g *registrationGuard) record(ctx context.Context, event registrationEvent)
 }
 
 func (g *registrationGuard) ban(ctx context.Context, ipHash, reason string, now time.Time) {
+	if g.honeypotBan <= 0 {
+		return
+	}
 	until := now.Add(g.honeypotBan)
 	if g.db == nil {
 		g.mu.Lock()

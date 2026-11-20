@@ -70,9 +70,10 @@ func New(db *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 
 func NewWithGameDB(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) http.Handler {
 	// 尝试次数限流（防连点）。做成配置项，调参不用重新发二进制。
+	// 显式配 0 表示关闭：高防接入后源 IP 统一为节点地址，按 IP 限流会误伤整节点玩家。
 	attemptsPer10Min := cfg.RegAttempts10Min
-	if attemptsPer10Min <= 0 {
-		attemptsPer10Min = 20
+	if attemptsPer10Min < 0 {
+		attemptsPer10Min = 0
 	}
 	s := &Server{
 		db:                     db,

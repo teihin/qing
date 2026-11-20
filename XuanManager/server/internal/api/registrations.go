@@ -90,6 +90,11 @@ func newRegistrationRateLimiter(limit int, window time.Duration) *registrationRa
 }
 
 func (l *registrationRateLimiter) allow(key string, now time.Time) (bool, time.Duration) {
+	// limit <= 0 表示关闭尝试次数限制。高防接入后源 IP 统一是节点地址，
+	// 按 IP 计数会把同节点下所有玩家算成一个来源，造成大面积误伤。
+	if l.limit <= 0 {
+		return true, 0
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 

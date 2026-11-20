@@ -102,6 +102,14 @@ export default class panelMessageChat extends UIPanelViewBase {
     private recordCancelLabel:cc.Label = null;
     private previewNode:cc.Node = null;
     private previewSprite:cc.Sprite = null;
+    /** 大图预览的当前缩放（1 = 等比铺满后的原始比例）。 */
+    private previewScale:number = 1;
+    private previewPinchStartDist:number = 0;
+    private previewPinchStartScale:number = 1;
+    private previewGestureBound:boolean = false;
+    /** 等比适配后的基准尺寸，缩放时按它乘倍数，避免逐次累积误差。 */
+    private previewBaseWidth:number = 0;
+    private previewBaseHeight:number = 0;
     private previewMask:cc.Node = null;
     private clubGoldButton:cc.Node = null;
     private clubGiveButton:cc.Node = null;
@@ -1333,6 +1341,7 @@ export default class panelMessageChat extends UIPanelViewBase {
         {
             node.__mediaUrl = url;
             sprite.spriteFrame = cached;
+            this.FitPreviewSize(sprite,cached.getTexture());
             return;
         }
         // 节点会被池复用：记下它当前要显示哪张图，迟到回调靠这个判断自己是否还有效，
@@ -1361,7 +1370,10 @@ export default class panelMessageChat extends UIPanelViewBase {
             this.imageTextureCache[key] = frame;
             this.imageUrlByKey[key] = url;
             if(cc.isValid(sprite) && sprite.node != null && sprite.node["__mediaUrl"] === url)
+            {
                 sprite.spriteFrame = frame;
+                this.FitPreviewSize(sprite,texture);
+            }
         });
     }
 
@@ -1423,7 +1435,102 @@ export default class panelMessageChat extends UIPanelViewBase {
         if(this.previewNode.parent != null)
             this.previewNode.setSiblingIndex(this.previewNode.parent.children.length - 1);
         this.previewSprite.spriteFrame = null;
+        this.previewScale = 1;
+        let spriteNode = this.previewSprite.node;
+        if(spriteNode != null)
+            spriteNode.scale = 1;
+        this.BindPreviewGesture();
         this.LoadImageInto(this.previewSprite,attachment.url,"full");
+    }
+
+    /** 绑定大图预览的双指缩放（只绑一次，节点常驻）。 */
+    private BindPreviewGesture():void
+    {
+        if(this.previewGestureBound || this.previewSprite == null || this.previewSprite.node == null)
+            return;
+        this.previewGestureBound = true;
+        // 双指缩放依赖多点触控；部分工程会在启动脚本里关掉它，这里显式打开。
+        (cc.macro as any).ENABLE_MULTI_TOUCH = true;
+        let node = this.previewSprite.node;
+        node.on(cc.Node.EventType.TOUCH_START,this.OnPreviewTouchStart,this);
+        node.on(cc.Node.EventType.TOUCH_MOVE,this.OnPreviewTouchMove,this);
+        node.on(cc.Node.EventType.TOUCH_END,this.ResetPreviewPinch,this);
+        node.on(cc.Node.EventType.TOUCH_CANCEL,this.ResetPreviewPinch,this);
+    }
+
+    private OnPreviewTouchStart(event:cc.Event.EventTouch):void
+    {
+        let touches = event.getTouches();
+        if(touches == null || touches.length < 2)
+            return;
+        this.previewPinchStartDist = this.TouchDistance(touches[0],touches[1]);
+        this.previewPinchStartScale = this.previewScale;
+    }
+
+    private OnPreviewTouchMove(event:cc.Event.EventTouch):void
+    {
+        let touches = event.getTouches();
+        if(touches == null || touches.length < 2)
+            return;
+        let distance = this.TouchDistance(touches[0],touches[1]);
+        if(this.previewPinchStartDist <= 0)
+        {
+            this.previewPinchStartDist = distance;
+            this.previewPinchStartScale = this.previewScale;
+            return;
+        }
+        // 以双指起始距离为基准计算倍数，限制在 1x~4x：小于 1x 会让图缩到看不全。
+        let next = this.previewPinchStartScale * (distance / this.previewPinchStartDist);
+        this.ApplyPreviewScale(next);
+    }
+
+    private ResetPreviewPinch():void
+    {
+        this.previewPinchStartDist = 0;
+        this.previewPinchStartScale = this.previewScale;
+    }
+
+    private TouchDistance(a:cc.Event.EventTouch,b:cc.Event.EventTouch):number
+    {
+        let dx = a.getLocationX() - b.getLocationX();
+        let dy = a.getLocationY() - b.getLocationY();
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    private ApplyPreviewScale(scale:number):void
+    {
+        let spriteNode = this.previewSprite == null ? null : this.previewSprite.node;
+        if(spriteNode == null)
+            return;
+        this.previewScale = Math.max(1,Math.min(4,scale));
+        spriteNode.scale = this.previewScale;
+    }
+
+    /**
+     * 大图预览按图片原始宽高比等比缩放到可视区域内（contain），
+     * 不再套用 Prefab 里的固定宽高，避免非等比拉伸。
+     */
+    private FitPreviewSize(sprite:cc.Sprite,texture:cc.Texture2D):void
+    {
+        if(sprite == null || sprite !== this.previewSprite || texture == null)
+            return;
+        let node = sprite.node;
+        if(node == null || this.previewNode == null)
+            return;
+        let texWidth = texture.width;
+        let texHeight = texture.height;
+        if(texWidth <= 0 || texHeight <= 0)
+            return;
+        // 留一点边距，避免图片紧贴屏幕边缘。
+        let maxWidth = this.previewNode.width * 0.92;
+        let maxHeight = this.previewNode.height * 0.92;
+        let ratio = Math.min(maxWidth / texWidth,maxHeight / texHeight);
+        this.previewBaseWidth = Math.max(1,Math.round(texWidth * ratio));
+        this.previewBaseHeight = Math.max(1,Math.round(texHeight * ratio));
+        sprite.sizeMode = cc.Sprite.SizeMode.CUSTOM;
+        node.width = this.previewBaseWidth;
+        node.height = this.previewBaseHeight;
+        node.scale = this.previewScale;
     }
 
     /** 语音同一时间只播放一条，切换消息时先停上一条。 */
@@ -1548,6 +1655,11 @@ export default class panelMessageChat extends UIPanelViewBase {
         {
             if(this.previewNode != null)
                 this.previewNode.active = false;
+            // 关闭时把缩放置回 1，下次打开从等比尺寸开始。
+            this.previewScale = 1;
+            this.previewPinchStartDist = 0;
+            if(this.previewSprite != null && this.previewSprite.node != null)
+                this.previewSprite.node.scale = 1;
         }
         else if(name === "录音取消")
         {

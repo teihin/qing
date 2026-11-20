@@ -8,6 +8,8 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
 import android.media.ExifInterface;
 import android.net.Uri;
@@ -29,17 +31,23 @@ import java.util.concurrent.Executors;
  * 原生直聊图片桥：相册选图与拍照。
  *
  * 两条路径都把结果落到 cache/direct_chat 下的本地文件，再把绝对路径交给 JS
- * 读取上传，避免把大图塞进 JS 字符串里过桥。拍照会按 EXIF 方向纠正并把最长边
- * 压到 {@link #PHOTO_MAX_EDGE}，否则原图很容易撞上服务端 10MB 上限。
+ * 读取上传，避免把大图塞进 JS 字符串里过桥。
+ *
+ * 落地的图片会统一规整到聊天尺寸（长边 {@link #CHAT_IMAGE_MAX_EDGE}、JPEG
+ * {@link #CHAT_IMAGE_JPEG_QUALITY}）。这一步不是省流量，而是保命：手机相册原图
+ * 动辄几 MB，原样上传会占满上行带宽几十秒，KBEngine 的心跳包排不上队，
+ * 22 秒收不到回包就判定掉线，表现就是发完图客户端转圈重连。
  */
 public final class DirectChatImageBridge {
     public static final int PICK_REQUEST = 9993;
     public static final int PHOTO_REQUEST = 9994;
     public static final int CAMERA_PERMISSION_REQUEST = 9995;
 
-    /** 拍照落地的长边上限。聊天看图不需要相机原始分辨率。 */
-    private static final int PHOTO_MAX_EDGE = 2560;
-    private static final int PHOTO_JPEG_QUALITY = 90;
+    /** 聊天图片的最长边。看图气泡只有 240 宽，1600 已经远超需要。 */
+    private static final int CHAT_IMAGE_MAX_EDGE = 1600;
+    private static final int CHAT_IMAGE_JPEG_QUALITY = 85;
+    /** 低于该体积且不超长边的图片原样上传，避免把小图（含透明 PNG）白白重编码。 */
+    private static final long CHAT_IMAGE_RAW_LIMIT = 400 * 1024;
 
     public static final String ERROR_DENIED = "denied";
     public static final String ERROR_UNSUPPORTED = "unsupported";
@@ -248,81 +256,28 @@ public final class DirectChatImageBridge {
         activity = null;
     }
 
-    /** 拍照结果：纠正 EXIF 方向、限制最长边后回调 JS。 */
+    /**
+     * 拍照结果：纠正 EXIF 方向、限制最长边后回调 JS。
+     *
+     * 相机原图落在 {@code requestId.jpg}，规整后的成品是同目录下的
+     * {@code requestId.c.jpg}；原图在成功后删除，避免 cache 里留两份几 MB 的图。
+     */
     private static void finishPhoto(AppActivity current, String requestId, File file) {
-        int orientation = ExifInterface.ORIENTATION_NORMAL;
-        try {
-            ExifInterface exif = new ExifInterface(file.getAbsolutePath());
-            orientation = exif.getAttributeInt(
-                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
-        } catch (Throwable ignored) {
-            // API 24 以下没有 android.media.ExifInterface，按无需旋转处理。
-        }
-
-        BitmapFactory.Options bounds = new BitmapFactory.Options();
-        bounds.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
-        int sourceWidth = bounds.outWidth;
-        int sourceHeight = bounds.outHeight;
-        if (sourceWidth <= 0 || sourceHeight <= 0) {
-            notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
-            return;
-        }
-
-        boolean needRotate = orientation != ExifInterface.ORIENTATION_NORMAL
-                && orientation != ExifInterface.ORIENTATION_UNDEFINED;
-        int longEdge = Math.max(sourceWidth, sourceHeight);
-        boolean needScale = longEdge > PHOTO_MAX_EDGE;
-        if (!needRotate && !needScale) {
+        File directory = file.getParentFile();
+        PreparedImage prepared = prepareChatImage(file, directory, requestId, "image/jpeg");
+        if (prepared == null) {
+            // 解码/编码失败时退回原文件，至少保证能发出去（服务端还会再校验一次）。
             notifyPicked(requestId, file.getAbsolutePath(), "image/jpeg",
-                    sourceWidth, sourceHeight, file.length(), "");
+                    decodeWidth(file), decodeHeight(file), file.length(), "");
             return;
         }
-
-        Bitmap bitmap = null;
-        try {
-            BitmapFactory.Options options = new BitmapFactory.Options();
-            if (needScale) {
-                options.inSampleSize = 1;
-                while (longEdge / (options.inSampleSize * 2) >= PHOTO_MAX_EDGE) {
-                    options.inSampleSize *= 2;
-                }
-            }
-            bitmap = BitmapFactory.decodeFile(file.getAbsolutePath(), options);
-            if (bitmap == null) {
-                notifyPicked(requestId, file.getAbsolutePath(), "image/jpeg",
-                        sourceWidth, sourceHeight, file.length(), "");
-                return;
-            }
-            bitmap = applyOrientation(bitmap, orientation);
-            bitmap = limitLongEdge(bitmap, PHOTO_MAX_EDGE);
-            File temp = new File(file.getParentFile(), requestId + ".tmp");
-            try (OutputStream output = new FileOutputStream(temp, false)) {
-                if (!bitmap.compress(Bitmap.CompressFormat.JPEG, PHOTO_JPEG_QUALITY, output)) {
-                    temp.delete();
-                    notifyPicked(requestId, file.getAbsolutePath(), "image/jpeg",
-                            sourceWidth, sourceHeight, file.length(), "");
-                    return;
-                }
-            }
-            if (!temp.renameTo(file)) {
-                temp.delete();
-            }
-        } catch (Throwable error) {
-            notifyPicked(requestId, file.getAbsolutePath(), "image/jpeg",
-                    sourceWidth, sourceHeight, file.length(), "");
-            return;
-        } finally {
-            if (bitmap != null && !bitmap.isRecycled()) {
-                bitmap.recycle();
-            }
+        if (!prepared.file.getAbsolutePath().equals(file.getAbsolutePath())) {
+            // 删除原图前先确认成品确实落在磁盘上。
+            if (prepared.file.isFile() && prepared.file.length() > 0)
+                file.delete();
         }
-
-        BitmapFactory.Options result = new BitmapFactory.Options();
-        result.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(file.getAbsolutePath(), result);
-        notifyPicked(requestId, file.getAbsolutePath(), "image/jpeg",
-                result.outWidth, result.outHeight, file.length(), "");
+        notifyPicked(requestId, prepared.file.getAbsolutePath(), prepared.mime,
+                prepared.width, prepared.height, prepared.file.length(), "");
     }
 
     private static Bitmap applyOrientation(Bitmap bitmap, int orientation) {
@@ -390,8 +345,8 @@ public final class DirectChatImageBridge {
     private static void copyToCache(AppActivity current, String requestId, Uri uri) {
         ContentResolver resolver = current.getContentResolver();
         String mime = normalizeMime(resolver.getType(uri));
-        boolean reencodeAsJpeg = mime.length() == 0;
-        if (reencodeAsJpeg)
+        boolean unknownMime = mime.length() == 0;
+        if (unknownMime)
             mime = "image/jpeg";
         File directory = new File(current.getCacheDir(), "direct_chat");
         if (!directory.exists() && !directory.mkdirs()) {
@@ -400,51 +355,204 @@ public final class DirectChatImageBridge {
         }
         String extension = mime.equals("image/png") ? ".png"
                 : (mime.equals("image/webp") ? ".webp" : ".jpg");
-        File target = new File(directory, requestId + extension);
+        // 先原样落到 .src，再由 prepareChatImage 决定是否重编码，两条路径共用同一套逻辑。
+        File raw = new File(directory, requestId + ".src");
+        try (InputStream input = resolver.openInputStream(uri);
+             OutputStream output = new FileOutputStream(raw, false)) {
+            if (input == null) {
+                raw.delete();
+                notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
+                return;
+            }
+            byte[] buffer = new byte[64 * 1024];
+            int count;
+            while ((count = input.read(buffer)) >= 0) {
+                if (count > 0)
+                    output.write(buffer, 0, count);
+            }
+            output.flush();
+        } catch (Exception error) {
+            raw.delete();
+            notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
+            return;
+        }
+        if (!raw.isFile() || raw.length() <= 0) {
+            raw.delete();
+            notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
+            return;
+        }
+
+        // 部分机型/文件管理器给不出 mime，这里按 JPEG 尝试解码；解不出来就原样上传，
+        // 让服务端按文件头判定，不能因为本地识图失败就让用户发不出图。
+        PreparedImage prepared = prepareChatImage(raw, directory, requestId, mime);
+        File result;
+        String resultMime;
+        int width = 0;
+        int height = 0;
+        if (prepared == null) {
+            result = new File(directory, requestId + extension);
+            result.delete();
+            if (!raw.renameTo(result)) {
+                raw.delete();
+                notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
+                return;
+            }
+            resultMime = mime;
+            width = decodeWidth(result);
+            height = decodeHeight(result);
+        } else if (prepared.file.getAbsolutePath().equals(raw.getAbsolutePath())) {
+            // 尺寸体积都达标：保留原始字节（含 PNG/WebP 的透明通道），只改回正常扩展名。
+            result = new File(directory, requestId + extension);
+            result.delete();
+            if (!raw.renameTo(result)) {
+                raw.delete();
+                notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
+                return;
+            }
+            resultMime = mime;
+            width = prepared.width;
+            height = prepared.height;
+        } else {
+            raw.delete();
+            result = prepared.file;
+            resultMime = prepared.mime;
+            width = prepared.width;
+            height = prepared.height;
+        }
+        if (!result.isFile() || result.length() <= 0) {
+            notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
+            return;
+        }
+        notifyPicked(requestId, result.getAbsolutePath(), resultMime,
+                width, height, result.length(), "");
+    }
+
+    /** prepareChatImage 的产物：落地文件、真实 mime 与服务端需要的像素尺寸。 */
+    private static final class PreparedImage {
+        final File file;
+        final String mime;
+        final int width;
+        final int height;
+
+        PreparedImage(File file, String mime, int width, int height) {
+            this.file = file;
+            this.mime = mime;
+            this.width = width;
+            this.height = height;
+        }
+    }
+
+    /**
+     * 把本地图片规整到聊天尺寸：纠 EXIF 方向 → 限制最长边 → 重编码 JPEG。
+     *
+     * 尺寸和体积都达标时直接返回 source 本身（调用方按原文件上传）；无法解码时返回
+     * null，由调用方退回原文件。产物固定落在 {@code requestId.c.jpg}，不会覆盖 source。
+     */
+    private static PreparedImage prepareChatImage(File source, File directory, String requestId, String mime) {
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(source.getAbsolutePath(), bounds);
+        int sourceWidth = bounds.outWidth;
+        int sourceHeight = bounds.outHeight;
+        if (sourceWidth <= 0 || sourceHeight <= 0)
+            return null;
+
+        int orientation = readOrientation(source);
+        boolean needRotate = orientation != ExifInterface.ORIENTATION_NORMAL
+                && orientation != ExifInterface.ORIENTATION_UNDEFINED;
+        int longEdge = Math.max(sourceWidth, sourceHeight);
+        boolean needScale = longEdge > CHAT_IMAGE_MAX_EDGE;
+        boolean needShrink = source.length() > CHAT_IMAGE_RAW_LIMIT;
+        if (!needRotate && !needScale && !needShrink)
+            return new PreparedImage(source, mime, sourceWidth, sourceHeight);
+
+        Bitmap bitmap = null;
         try {
-            if (reencodeAsJpeg) {
-                try (InputStream input = resolver.openInputStream(uri);
-                     OutputStream output = new FileOutputStream(target, false)) {
-                    if (input == null) {
-                        notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
-                        return;
-                    }
-                    Bitmap bitmap = BitmapFactory.decodeStream(input);
-                    if (bitmap == null || !bitmap.compress(Bitmap.CompressFormat.JPEG, 92, output)) {
-                        notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
-                        return;
-                    }
-                    bitmap.recycle();
-                }
-            } else {
-                try (InputStream input = resolver.openInputStream(uri);
-                     OutputStream output = new FileOutputStream(target, false)) {
-                    if (input == null) {
-                        notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
-                        return;
-                    }
-                    byte[] buffer = new byte[64 * 1024];
-                    int count;
-                    while ((count = input.read(buffer)) >= 0) {
-                        if (count > 0)
-                            output.write(buffer, 0, count);
-                    }
-                    output.flush();
+            BitmapFactory.Options options = new BitmapFactory.Options();
+            if (needScale) {
+                options.inSampleSize = 1;
+                while (longEdge / (options.inSampleSize * 2) >= CHAT_IMAGE_MAX_EDGE) {
+                    options.inSampleSize *= 2;
                 }
             }
-        } catch (Exception error) {
-            notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
-            return;
+            bitmap = BitmapFactory.decodeFile(source.getAbsolutePath(), options);
+            if (bitmap == null)
+                return null;
+            if (needRotate)
+                bitmap = applyOrientation(bitmap, orientation);
+            if (Math.max(bitmap.getWidth(), bitmap.getHeight()) > CHAT_IMAGE_MAX_EDGE)
+                bitmap = limitLongEdge(bitmap, CHAT_IMAGE_MAX_EDGE);
+
+            // PNG/WebP 可能带透明通道，JPEG 不支持，透明区域会变黑，先铺白底。
+            boolean flattenAlpha = mime.equals("image/png") || mime.equals("image/webp");
+            File target = new File(directory, requestId + ".c.jpg");
+            File temp = new File(directory, requestId + ".tmp");
+            if (!encodeJpeg(bitmap, temp, flattenAlpha)) {
+                temp.delete();
+                return null;
+            }
+            target.delete();
+            if (!temp.renameTo(target)) {
+                temp.delete();
+                return null;
+            }
+            return new PreparedImage(target, "image/jpeg",
+                    decodeWidth(target), decodeHeight(target));
+        } catch (Throwable error) {
+            return null;
+        } finally {
+            if (bitmap != null && !bitmap.isRecycled())
+                bitmap.recycle();
         }
-        if (!target.isFile() || target.length() <= 0) {
-            notifyPicked(requestId, "", "", 0, 0, 0, ERROR_UNSUPPORTED);
-            return;
+    }
+
+    private static boolean encodeJpeg(Bitmap bitmap, File target, boolean flattenAlpha) {
+        Bitmap source = bitmap;
+        Bitmap flattened = null;
+        try {
+            if (flattenAlpha) {
+                flattened = Bitmap.createBitmap(
+                        bitmap.getWidth(), bitmap.getHeight(), Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(flattened);
+                canvas.drawColor(Color.WHITE);
+                canvas.drawBitmap(bitmap, 0f, 0f, null);
+                source = flattened;
+            }
+            try (OutputStream output = new FileOutputStream(target, false)) {
+                return source.compress(Bitmap.CompressFormat.JPEG,
+                        CHAT_IMAGE_JPEG_QUALITY, output);
+            }
+        } catch (Throwable error) {
+            return false;
+        } finally {
+            if (flattened != null && !flattened.isRecycled())
+                flattened.recycle();
         }
+    }
+
+    private static int readOrientation(File file) {
+        try {
+            ExifInterface exif = new ExifInterface(file.getAbsolutePath());
+            return exif.getAttributeInt(
+                    ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+        } catch (Throwable ignored) {
+            // API 24 以下没有 android.media.ExifInterface，按无需旋转处理。
+            return ExifInterface.ORIENTATION_NORMAL;
+        }
+    }
+
+    private static int decodeWidth(File file) {
         BitmapFactory.Options options = new BitmapFactory.Options();
         options.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(target.getAbsolutePath(), options);
-        notifyPicked(requestId, target.getAbsolutePath(), mime,
-                options.outWidth, options.outHeight, target.length(), "");
+        BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+        return options.outWidth;
+    }
+
+    private static int decodeHeight(File file) {
+        BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file.getAbsolutePath(), options);
+        return options.outHeight;
     }
 
     private static String normalizeMime(String value) {

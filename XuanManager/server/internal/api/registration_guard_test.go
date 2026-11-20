@@ -142,7 +142,8 @@ func TestRegistrationGuardBanBlocksEvenBelowQuota(t *testing.T) {
 }
 
 func TestGameRegistrationHoneypotRejectsAndBansIP(t *testing.T) {
-	handler := New(nil, config.Config{}, slog.Default())
+	// 显式开启蜜罐封禁：0 现在表示「关闭」，不再是「回落到 24 小时」。
+	handler := New(nil, config.Config{RegHoneypotBanHours: 24}, slog.Default())
 
 	post := func(body string) *httptest.ResponseRecorder {
 		request := httptest.NewRequest(http.MethodPost, "/api/game/registrations", strings.NewReader(body))

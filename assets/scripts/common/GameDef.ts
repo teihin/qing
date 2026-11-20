@@ -58,21 +58,21 @@ export const HHHH:string = "72679781.tjkdplus.com.cname.hcnamedns.com.:28800"
 export const AUDIO_SERVER_HTTP_BASE:string = "http://"+HHHH+"/audio";
 export const AUDIO_SERVER_WS_URL:string = "ws://"+HHHH+"/audio/v1/stream";
 export const AUDIO_SERVER_PROXY_PATH:string = "/audio";
-export const WEB_AUDIO_SERVER_HTTP_BASE:string = WEB_PUBLIC_HTTPS_ORIGIN + AUDIO_SERVER_PROXY_PATH;
-export const WEB_AUDIO_SERVER_WS_URL:string = WEB_PUBLIC_WSS_ORIGIN + AUDIO_SERVER_PROXY_PATH + "/v1/stream";
-export const WEB_CUSTOMER_SERVICE_URL:string = WEB_PUBLIC_HTTPS_ORIGIN + "/chattool/player?d={info}";
+export const WEB_AUDIO_SERVER_HTTP_BASE:string = "http://"+HHHH + AUDIO_SERVER_PROXY_PATH;
+export const WEB_AUDIO_SERVER_WS_URL:string = "ws://"+HHHH + AUDIO_SERVER_PROXY_PATH + "/v1/stream";
+export const WEB_CUSTOMER_SERVICE_URL:string = "http://"+HHHH + "/chattool/player?d={info}";
 // 游戏内官方客服直聊复用客服玩家端接口（同一 ChatTool 进程），与直聊 /api/direct 独立。
 export const KEFU_CHAT_HTTP_BASE:string = "http://"+HHHH+"/chattool";
-export const WEB_KEFU_CHAT_HTTP_BASE:string = WEB_PUBLIC_HTTPS_ORIGIN + "/chattool";
+export const WEB_KEFU_CHAT_HTTP_BASE:string = "http://"+HHHH + "/chattool";
 
 // 俱乐部 1 对 1 私聊（direct chat）。与客服 /chattool/player 共用同一个 ChatTool 进程，
 // 但走独立的 /api/direct/* 路由和独立令牌；客服入口和接口不受影响。
 export const DIRECT_CHAT_API_PATH:string = "/chattool/api/direct";
 export const DIRECT_CHAT_HTTP_BASE:string = "http://"+HHHH + DIRECT_CHAT_API_PATH;
-export const WEB_DIRECT_CHAT_HTTP_BASE:string = WEB_PUBLIC_HTTPS_ORIGIN + DIRECT_CHAT_API_PATH;
+export const WEB_DIRECT_CHAT_HTTP_BASE:string = "http://"+HHHH + DIRECT_CHAT_API_PATH;
 // 直聊使用独立 WebSocket 长连接；历史、媒体、已读和断线补偿仍走 HTTP。
 export const DIRECT_CHAT_WS_URL:string = "ws://"+HHHH + DIRECT_CHAT_API_PATH + "/ws";
-export const WEB_DIRECT_CHAT_WS_URL:string = WEB_PUBLIC_WSS_ORIGIN + DIRECT_CHAT_API_PATH + "/ws";
+export const WEB_DIRECT_CHAT_WS_URL:string = "ws://"+HHHH + DIRECT_CHAT_API_PATH + "/ws";
 export const DIRECT_CHAT_WS_CONNECT_TIMEOUT_MS:number = 10000;
 export const DIRECT_CHAT_WS_REQUEST_TIMEOUT_MS:number = 12000;
 export const DIRECT_CHAT_WS_RECONNECT_BASE_MS:number = 1000;
