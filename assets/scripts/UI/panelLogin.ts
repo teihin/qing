@@ -8,6 +8,7 @@ import Tool from "../common/Tool";
 import ConfigManager from "../logic/ConfigManager";
 import ImageManager from "../logic/ImageManager";
 import DeviceIdentityManager from "../logic/DeviceIdentityManager";
+import { SliderCaptcha, CaptchaAnswer } from "../logic/SliderCaptcha";
 
 var KBEngine = require("kbengine");
 
@@ -563,7 +564,7 @@ export default class panelLogin extends UIPanelViewBase {
 
         if(!data.antiTheftEnabled)
         {
-            this.requestRegister(data);
+            this.beginRegister(data);
             return;
         }
 
@@ -587,7 +588,7 @@ export default class panelLogin extends UIPanelViewBase {
             let submit = ()=>{
                 if(!this._registerPanel.active)
                     return;
-                this.requestRegister(data);
+                this.beginRegister(data);
             };
             if(identity.platform === "web")
             {
@@ -633,7 +634,69 @@ export default class panelLogin extends UIPanelViewBase {
             this._registerStatusIcon.active = true;
     }
 
-    private requestRegister(data:RegisterFormData)
+    /**
+     * 注册入口：先问后台要不要滑动验证，避免"先发一个必然 400 的请求"。
+     * 需要验证就直接弹码，不需要就原样提交。
+     */
+    private beginRegister(data:RegisterFormData):void
+    {
+        this.CheckCaptchaRequirement((required:boolean)=>{
+            if(!cc.isValid(this.node) || this._registerPanel == null || !this._registerPanel.active)
+                return;
+            if(!required)
+            {
+                this.requestRegister(data);
+                return;
+            }
+            this.showRegisterStatus("请完成滑动验证",false);
+            SliderCaptcha.Show(this.node,(answer:CaptchaAnswer)=>{
+                if(!cc.isValid(this.node) || !this._registerPanel.active)
+                    return;
+                if(answer == null)
+                {
+                    this.showRegisterStatus("已取消验证，注册未完成，可重新点击注册",true);
+                    return;
+                }
+                this.requestRegister(data,answer);
+            });
+        });
+    }
+
+    /** 查后台开关：返回 true 表示本次注册必须先过滑动验证。 */
+    private CheckCaptchaRequirement(done:(required:boolean)=>void):void
+    {
+        let request = new XMLHttpRequest();
+        let finished = false;
+        let finish = (required:boolean)=>{
+            if(finished)
+                return;
+            finished = true;
+            done(required);
+        };
+        request.onreadystatechange = ()=>{
+            if(request.readyState !== 4)
+                return;
+            let required = false;
+            try
+            {
+                let parsed = JSON.parse(request.responseText);
+                if(parsed != null && parsed.ok && parsed.data != null && parsed.data.captchaRequired === true)
+                    required = true;
+            }
+            catch(error)
+            {
+                required = false;
+            }
+            finish(required);
+        };
+        request.onerror = ()=>finish(false);
+        request.ontimeout = ()=>finish(false);
+        request.open("GET",ConfigManager.getInstance().registrationConfigUrl,true);
+        request.timeout = 8000;
+        request.send();
+    }
+
+    private requestRegister(data:RegisterFormData,captcha?:CaptchaAnswer)
     {
         this._registerSubmitting = true;
         this.showRegisterStatus("正在提交注册资料…",true);
@@ -676,6 +739,39 @@ export default class panelLogin extends UIPanelViewBase {
                 return;
             }
 
+            // 滑动验证相关结果统一处理：给出具体原因，并自动换一张新码。
+            // 玩家不用重新填表，也不用再点一次注册，失败后直接继续拖。
+            let captchaCode = (!networkError && response != null && response.error != null)
+                ? response.error.code : "";
+            if(captchaCode === "CAPTCHA_REQUIRED" || captchaCode === "CAPTCHA_INVALID" ||
+                captchaCode === "CAPTCHA_TOO_FAST")
+            {
+                this._registerSubmitting = false;
+                let hint = "请完成滑动验证";
+                if(captchaCode === "CAPTCHA_INVALID")
+                    hint = "拼图位置没对准，再试一次";
+                else if(captchaCode === "CAPTCHA_TOO_FAST")
+                    hint = "拖得太快了，慢一点再拖";
+                this.showRegisterStatus(hint,true);
+
+                // 留一点时间让玩家看清提示，再弹新的一张，避免"一闪而过"。
+                setTimeout(()=>{
+                    if(!cc.isValid(this.node) || this._registerPanel == null || !this._registerPanel.active)
+                        return;
+                    SliderCaptcha.Show(this.node,(answer:CaptchaAnswer)=>{
+                        if(!this._registerPanel.active)
+                            return;
+                        if(answer == null)
+                        {
+                            this.showRegisterStatus("已取消验证，注册未完成，可重新点击注册",true);
+                            return;
+                        }
+                        this.requestRegister(data,answer);
+                    });
+                },600);
+                return;
+            }
+
             let errorMessage = "注册失败，请稍后再试";
             if(networkError || request.status === 0)
                 errorMessage = "无法连接注册服务器，请检查网络后重试";
@@ -702,7 +798,11 @@ export default class panelLogin extends UIPanelViewBase {
             antiTheftEnabled:data.antiTheftEnabled,
             deviceId:data.antiTheftEnabled ? data.deviceId : undefined,
             devicePlatform:data.antiTheftEnabled ? data.devicePlatform : undefined,
-            deviceVersion:data.antiTheftEnabled ? data.deviceVersion : undefined
+            deviceVersion:data.antiTheftEnabled ? data.deviceVersion : undefined,
+            captchaId:captcha == null ? undefined : captcha.captchaId,
+            captchaOffset:captcha == null ? undefined : captcha.captchaOffset,
+            captchaElapsed:captcha == null ? undefined : captcha.captchaElapsed,
+            captchaTrack:captcha == null ? undefined : captcha.captchaTrack
         }));
     }
 

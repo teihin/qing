@@ -100,6 +100,7 @@ export default class ConfigManager extends cc.Component {
     public resetPwdUrl:string = "http://www.163.com";
     public kefuUrl:string = WEB_CUSTOMER_SERVICE_URL;
     public registrationUrl:string = "http://"+REG_HOST+"/xuanmanager/api/game/registrations";
+    public registrationConfigUrl:string = "http://"+REG_HOST+"/xuanmanager/api/game/registration-config";
     public changeLoginPasswordUrl:string = "http://"+HHHH+"/xuanmanager/api/game/change-login-password";
     public changePayPasswordUrl:string = "http://"+HHHH+"/xuanmanager/api/game/change-pay-password";
 

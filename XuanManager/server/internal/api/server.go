@@ -45,6 +45,14 @@ type Server struct {
 	platformRevenueSem     chan struct{}
 	totpKey                []byte
 
+	// 注册滑动验证码：一次一码，内存存储，定期清理。
+	captcha *captchaStore
+
+	// 平台开关缓存（mgr_platform_setting），避免每条注册都查库。
+	settingMu       sync.Mutex
+	settingValues   map[string]string
+	settingLoadedAt time.Time
+
 	// 游戏服 union_manage 列是否已部署；只在首次查询时探测一次，避免每条玩家列表都查 information_schema。
 	manageScopeColumnMu      sync.Mutex
 	manageScopeColumnChecked bool
@@ -85,9 +93,13 @@ func NewRegistrationOnly(db, gameDB *sql.DB, cfg config.Config, logger *slog.Log
 	// 这个端口是直连的，不经过 Caddy 的 /xuanmanager 前缀剥离，
 	// 所以两种路径都要挂：带前缀（客户端实际请求）和不带前缀（与主服务保持一致）。
 	for _, prefix := range []string{"", "/xuanmanager"} {
+		mux.HandleFunc("GET "+prefix+"/api/game/registration-config", s.handleRegistrationConfig)
+		mux.HandleFunc("GET "+prefix+"/api/game/registration-captcha", s.handleRegistrationCaptcha)
 		mux.HandleFunc("OPTIONS "+prefix+"/api/game/registrations", s.handleRegistrationOptions)
 		mux.HandleFunc("POST "+prefix+"/api/game/registrations", s.handleCreateGameRegistration)
 	}
+	// 验证码清理：进程退出即结束，无需外部生命周期管理。
+	go s.captchaJanitor()
 	return s.securityHeaders(mux)
 }
 
@@ -111,6 +123,7 @@ func newServer(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) *Serv
 		gameHTTPClient:         &http.Client{Timeout: 6 * time.Second},
 		platformRevenueSem:     make(chan struct{}, 1),
 		totpKey:                security.DeriveTOTPKey(cfg.CredentialKey),
+		captcha:                newCaptchaStore(),
 	}
 	return s
 }
@@ -128,6 +141,10 @@ func (s *Server) routes() {
 	// 注册接口已迁到独立端口（见 NewRegistrationOnly / XUAN_REGISTRATION_ADDR）。
 	// 主服务保留这两个路径，但只返回明确的升级提示：
 	// 旧客户端如果不升级会表现为「点了没反应」，给一句话比给 404 好排查。
+	s.mux.HandleFunc("GET /api/game/registration-config", s.handleRegistrationConfig)
+	s.mux.HandleFunc("GET /api/game/registration-captcha", s.handleRegistrationCaptcha)
+	s.mux.Handle("GET /api/configuration/security", s.authorized("configuration.security.view", false, s.handleGetPlatformSecurity))
+	s.mux.Handle("PUT /api/configuration/security", s.authorized("configuration.security.update", true, s.handleUpdatePlatformSecurity))
 	s.mux.HandleFunc("OPTIONS /api/game/registrations", s.handleRegistrationOptions)
 	s.mux.HandleFunc("POST /api/game/registrations", s.handleRegistrationMoved)
 	s.mux.HandleFunc("OPTIONS /api/game/change-login-password", s.handleChangePasswordOptions)

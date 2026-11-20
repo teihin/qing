@@ -34,6 +34,11 @@ type gameRegistrationRequest struct {
 	DeviceID         string `json:"deviceId"`
 	DevicePlatform   string `json:"devicePlatform"`
 	DeviceVersion    int    `json:"deviceVersion"`
+	// 滑动验证：仅后台开关打开时校验，一次性使用。
+	CaptchaID      string `json:"captchaId"`
+	CaptchaOffset  int    `json:"captchaOffset"`
+	CaptchaElapsed int    `json:"captchaElapsed"`
+	CaptchaTrack   []int  `json:"captchaTrack"`
 	// Website 是蜜罐字段：注册表单里没有这一项，正常客户端永远不会填。
 	// 批量注册脚本常常照着接口字段表盲填，填了就说明是机器。
 	Website string `json:"website"`
@@ -146,6 +151,15 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 	var input gameRegistrationRequest
 	if !decodeJSON(w, r, &input) {
 		return
+	}
+
+	// 滑动验证：后台开关打开时强制校验。放在蜜罐和配额之前，
+	// 避免未通过验证的请求消耗配额或触发蜜罐封禁。
+	if s.registrationCaptchaEnabled(r.Context()) {
+		if code := s.checkRegistrationCaptcha(input.CaptchaID, input.CaptchaOffset, input.CaptchaElapsed, input.CaptchaTrack); code != "" {
+			writeError(w, http.StatusBadRequest, code, captchaErrorMessage(code))
+			return
+		}
 	}
 
 	// 蜜罐：命中直接封 IP。正常玩家不可能填到这一栏，误伤概率接近零。

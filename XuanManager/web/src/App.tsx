@@ -26,6 +26,7 @@ import RoomRecordsPage from "./pages/RoomRecordsPage";
 import GameAnnouncementPage from "./pages/GameAnnouncementPage";
 import GameNotificationsPage from "./pages/GameNotificationsPage";
 import RewardPoolsPage from "./pages/RewardPoolsPage";
+import SecurityConfigurationPage from "./pages/SecurityConfigurationPage";
 import BansPage from "./pages/BansPage";
 import AntiTheftPage from "./pages/AntiTheftPage";
 import RoomMaintenancePage from "./pages/RoomMaintenancePage";
@@ -161,6 +162,7 @@ export default function App() {
     if (route === "/configuration/announcement" && can("configuration.announcement.view")) return <GameAnnouncementPage can={can} notify={notify} />;
     if (route === "/configuration/notifications" && can("configuration.notification.view")) return <GameNotificationsPage can={can} notify={notify} />;
     if (route === "/configuration/reward-pools" && can("configuration.reward_pool.view")) return <RewardPoolsPage can={can} notify={notify} />;
+    if (route === "/configuration/security" && can("configuration.security.view")) return <SecurityConfigurationPage can={can} notify={notify} />;
     if (route === "/configuration/payments" && can("configuration.payment.view")) return <PaymentConfigurationPage can={can} notify={notify} />;
     if (route === "/configuration/activities" && can("configuration.activity.view")) return <ActivityConfigurationPage can={can} notify={notify} />;
     if (route === "/configuration/stone-consume" && can("configuration.stone_consume.view")) return <StoneConsumePricePage can={can} notify={notify} />;
