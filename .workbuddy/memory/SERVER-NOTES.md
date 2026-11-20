@@ -60,3 +60,21 @@
 - **cron watchdog 每分钟 `start.sh`**：kill 后 2 秒内它就能把**旧二进制**拉起来，`./start.sh` 会报
   "already running" 让人误判。稳妥做法是一条命令里做完 `kill → mv → ./start.sh → sha256sum /proc/<pid>/exe`，
   发现 sha 不对就再 kill 一次重启。
+
+## 正式服 8.153.70.197（与测试服 154.37.155.17 不是一台）
+
+- 登录同测试服：`ssh -p 2233 -i ~/.ssh/id_ed25519_newserver client_update@8.153.70.197`
+  （`~/.hot-update-upload-config.prod.json` 里记的就是这台）。
+- **后台部署根目录是 `/www/.xuanmanager`**（注意没有 `html`），测试服才是 `/www/html/.xuanmanager`。
+  脚本一族（start/stop/supervise/run/runtime.env/web/bin）结构相同，别拿错路径。
+- Caddy：`/etc/caddy/Caddyfile` 只有一个站点块 `:28800`，`handle_path /xuanmanager/* → 127.0.0.1:8891`
+  （剥前缀），静态站 `/up/*` 与 `/www/html` 同机；`install-caddy-route.sh` 在这台是 `exit 0` 的空脚本
+  （往共用 srv0 挂路由会给整站启自动 HTTPS，把纯 HTTP 打死）。
+- **公网入口只能从白名单网络访问**：本机直连 `8.153.70.197:28800` 和域名都连不上（000），
+  但从 `/var/log/caddy/web-access.log` 的 `"host"` 字段能看到真实 Host：
+  `72679781.tjkdplus.com.cname.hcnamedns.com:28800`。
+- **数据库是远程的**（`XUAN_DB_HOST=172.22.161.126`），本机**没有 mysql 客户端**，
+  想核对迁移/表结构不能用 `mysql` 命令；只能靠「迁移失败会 `os.Exit(1)`」这条：
+  服务起来了 = 迁移都执行成功了。
+- 正式服后台二进制和测试服同为 `codex/club-ui` 线（不是 main）；`main` 停在 2026-10-24，
+  缺 honor-rank / club-perf 等路由，别把 main 的构建往上发。
