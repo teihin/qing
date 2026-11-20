@@ -1649,3 +1649,102 @@ export interface HonorRankScopeOption {
   name: string;
   note: string;
 }
+
+// ---------------------------------------------------------------- 网页支付
+
+export interface PayChannel {
+  code: string;
+  name: string;
+  enabled: boolean;
+  presetAmounts: string[];
+  requirePayer: boolean;
+  /** 服务商硬性要求带付款人姓名，后台开关锁定为开。 */
+  payerLocked?: boolean;
+  minAmount: string;
+  maxAmount: string;
+  sortOrder: number;
+}
+
+export interface PayProvider {
+  id: number;
+  code: string;
+  name: string;
+  kind: string;
+  gatewayBase: string;
+  requestPrefix: string;
+  merchantCode: string;
+  callbackIp: string;
+  remark: string;
+  minAmount: string;
+  maxAmount: string;
+  enabled: boolean;
+  sortOrder: number;
+  hasSecureKey: boolean;
+  channels: PayChannel[];
+}
+
+export interface PayProvidersResponse {
+  items: PayProvider[];
+  baseUrl: string;
+  baseUrlFromEnv: boolean;
+  statusLabels: Record<string, string>;
+}
+
+export interface PayOrderItem {
+  id: number;
+  orderNo: string;
+  providerId: number;
+  providerName: string;
+  channelCode: string;
+  channelName: string;
+  amount: string;
+  status: string;
+  statusLabel: string;
+  gamerOrderId: string;
+  payUrl: string;
+  playerId: string;
+  playerName: string;
+  operatorName: string;
+  payerIp: string;
+  remark: string;
+  paidAt: string;
+  createdAt: string;
+}
+
+export interface PayStatBucket {
+  orders: number;
+  paidOrders: number;
+  paidAmount: string;
+  successPct: string;
+}
+
+export interface PayOrderResponse {
+  items: PayOrderItem[];
+  total: number;
+  page: number;
+  pageSize: number;
+  summary: PayStatBucket;
+}
+
+export interface PayChannelStat {
+  channelCode: string;
+  channelName: string;
+  orders: number;
+  paidOrders: number;
+  paidAmount: string;
+}
+
+export interface PayStatsResponse {
+  today: PayStatBucket;
+  yesterday: PayStatBucket;
+  week: PayStatBucket;
+  month: PayStatBucket;
+  total: PayStatBucket;
+  channels: PayChannelStat[];
+  pending: number;
+}
+
+export interface PayLinkResponse {
+  url: string;
+  expiresAt: string;
+}

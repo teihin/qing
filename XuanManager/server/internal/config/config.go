@@ -52,6 +52,10 @@ type Config struct {
 	// 配了就在这个端口上只开放注册接口并关闭 keep-alive，便于四层代理按连接数限速；
 	// 留空表示不单独开端口，注册仍走主服务。
 	RegistrationAddr string
+
+	// PayBaseURL 是玩家付款链接的对外域名前缀（例如 https://pay.example.com），
+	// 留空则用后台自己所在的域名；后台在「网页支付 → 付款链接域名」里改的值优先。
+	PayBaseURL string
 }
 
 func Load() (Config, error) {
@@ -96,6 +100,7 @@ func Load() (Config, error) {
 		GameMode:                   strings.ToLower(env("XUAN_GAME_MODE", "club")),
 		GameExchangeSign:           strings.TrimSpace(os.Getenv("XUAN_GAME_EXCHANGE_SIGN")),
 		CredentialKey:              strings.TrimSpace(os.Getenv("XUAN_CREDENTIAL_KEY")),
+		PayBaseURL:                 strings.TrimRight(strings.TrimSpace(os.Getenv("XUAN_PAY_BASE_URL")), "/"),
 		NotificationCarouselWorker: carouselWorker,
 		BootstrapAdminUser:         strings.TrimSpace(os.Getenv("XUAN_BOOTSTRAP_ADMIN_USERNAME")),
 		BootstrapAdminPass:         os.Getenv("XUAN_BOOTSTRAP_ADMIN_PASSWORD"),

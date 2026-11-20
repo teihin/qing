@@ -33,6 +33,7 @@ const iconText: Record<string, string> = {
   notifications: "通",
   "reward-pools": "池",
   payments: "支",
+  "pay-web": "付",
   activities: "活",
   downloads: "下",
   automation: "机",

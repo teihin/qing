@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#eef2f9">
+<title>账户充值</title>
+<style>
+  :root {
+    --bg: #eef2f9;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --faint: #94a3b8;
+    --line: #e6ecf5;
+    --accent: #1d4ed8;
+    --accent-soft: #eef3ff;
+    --accent-border: #cfdcff;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 15px;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px 14px 40px;
+  }
+  .card {
+    width: 100%;
+    max-width: 430px;
+    background: #fff;
+    border: 1px solid #dbe4f2;
+    border-radius: 18px;
+    box-shadow: 0 16px 40px rgba(23, 43, 77, .10), 0 2px 6px rgba(23, 43, 77, .04);
+    overflow: hidden;
+  }
+
+  .head { padding: 18px 20px 15px; border-bottom: 1px solid var(--line); }
+  .head__row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+  .head h1 { margin: 0; font-size: 17.5px; font-weight: 600; letter-spacing: -.01em; }
+  .head p { margin: 5px 0 0; font-size: 12.5px; color: var(--muted); }
+  .badge {
+    display: inline-flex; align-items: center; gap: 4px; flex: 0 0 auto;
+    padding: 5px 9px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent);
+    font-size: 11.5px; font-weight: 600;
+  }
+  .badge svg { width: 11px; height: 11px; }
+
+  .zone { padding: 14px 16px 16px; border-bottom: 1px solid var(--line); background: #f6f9fe; }
+  .zone__head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 2px 10px; }
+  .zone__head span { font-size: 12px; color: var(--faint); letter-spacing: .04em; }
+  .zone__head small { font-size: 11.5px; color: var(--faint); }
+  .channels { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+  .tab {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    border: 1px solid #dde5f1; background: #fff; color: #475569; border-radius: 10px;
+    padding: 8px 10px; font-size: 12.5px; font-family: inherit; cursor: pointer;
+    white-space: nowrap; overflow: hidden; transition: background .15s, border-color .15s, color .15s;
+  }
+  .tab__logo {
+    flex: 0 0 auto; width: 20px; height: 20px; border-radius: 5px;
+    display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 600;
+  }
+  .tab__name { overflow: hidden; text-overflow: ellipsis; }
+  .tab.is-active {
+    border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 600;
+    box-shadow: 0 1px 6px rgba(23, 43, 77, .06);
+  }
+
+  .body { padding: 18px 20px 20px; }
+  .label { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; }
+  .label span { font-size: 12px; color: var(--faint); letter-spacing: .04em; }
+  .label small { font-size: 11.5px; color: var(--faint); }
+
+  .amounts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .amount {
+    position: relative; overflow: hidden; border: 1px solid #dde5f1; background: #fff;
+    border-radius: 12px; padding: 15px 6px 11px; cursor: pointer; font-family: inherit;
+    transition: background .15s, border-color .15s, box-shadow .15s;
+  }
+  .amount b { display: block; font-size: 20px; font-weight: 600; color: var(--ink); line-height: 1.1; letter-spacing: -.01em; }
+  .amount i { display: block; margin-top: 5px; font-size: 11px; font-style: normal; color: var(--faint); }
+  .amount.is-active {
+    border-color: var(--accent); background: var(--accent-soft);
+    box-shadow: 0 0 0 1px var(--accent) inset;
+  }
+  .amount.is-active b { color: var(--accent); }
+  .amount.is-active::after {
+    content: "✓"; position: absolute; top: 0; right: 0; width: 18px; height: 18px;
+    border-radius: 0 11px 0 10px; background: var(--accent); color: #fff;
+    font-size: 10px; line-height: 18px; text-align: center;
+  }
+
+  .link-row { margin: 12px 0 0; text-align: center; }
+  .link-row button { border: 0; background: none; color: var(--accent); font-size: 13px; font-family: inherit; cursor: pointer; padding: 6px 4px; }
+
+  .custom, .payer { margin-top: 12px; display: none; }
+  .custom.is-open, .payer.is-open { display: block; }
+  .payer label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .custom input, .payer input {
+    width: 100%; height: 46px; padding: 0 14px; font-size: 15px; font-family: inherit; color: var(--ink);
+    border: 1px solid #dde5f1; border-radius: 10px; outline: none; background: #fbfcff;
+    transition: border-color .15s, box-shadow .15s, background .15s;
+  }
+  .custom input::placeholder, .payer input::placeholder { color: #b3bccb; }
+  .custom input:focus, .payer input:focus { border-color: var(--accent); background: #fff; box-shadow: 0 0 0 3px rgba(29, 78, 216, .09); }
+
+  .summary {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 16px; padding: 13px 16px; border-radius: 12px;
+    background: #f5f8fd; border: 1px solid #e6ecf6;
+  }
+  .summary span { font-size: 12.5px; color: var(--muted); }
+  .summary strong { font-size: 21px; font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
+  .summary strong em { font-style: normal; font-size: 13px; font-weight: 500; margin-right: 3px; color: var(--muted); }
+  .summary strong.is-empty { color: var(--faint); font-size: 18px; font-weight: 500; }
+  .summary.is-set { background: var(--accent-soft); border-color: var(--accent-border); }
+  .summary.is-set strong { color: var(--accent); }
+  .summary.is-set strong em { color: var(--accent); }
+
+  .tips {
+    margin-top: 14px; padding: 13px 15px 14px; border-radius: 12px;
+    background: #fffaec; border: 1px solid #f6e3b6;
+  }
+  .tips h3 {
+    display: flex; align-items: center; gap: 6px;
+    margin: 0 0 7px; font-size: 12.5px; font-weight: 600; color: #a9700e; letter-spacing: .02em;
+  }
+  .tips h3 svg { width: 13px; height: 13px; flex: 0 0 auto; }
+  .tips ul { margin: 0; padding-left: 16px; }
+  .tips li { font-size: 12.5px; color: #8a6a2b; line-height: 1.85; }
+  .tips li::marker { color: #d9a33a; }
+
+  .pay {
+    margin-top: 18px; width: 100%; height: 50px; border: 0; border-radius: 12px;
+    background: var(--accent); color: #fff; font-size: 15.5px; font-weight: 600; font-family: inherit;
+    letter-spacing: .01em; cursor: pointer; transition: filter .15s, transform .1s;
+    box-shadow: 0 6px 16px rgba(23, 43, 77, .14);
+  }
+  .pay:disabled { background: #e9edf3; color: #9aa6b6; box-shadow: none; cursor: not-allowed; }
+  .pay:not(:disabled):active { transform: translateY(1px); }
+  .pay.is-busy { filter: saturate(.6); }
+
+  .foot { margin-top: 14px; text-align: center; font-size: 11.5px; color: var(--faint); line-height: 1.9; }
+  .foot__secure { display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .foot__secure svg { width: 10px; height: 10px; }
+  .foot__valid { margin-top: 2px; color: #a8b3c4; }
+
+  .state { padding: 60px 26px; text-align: center; }
+  .state .mark {
+    width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 50%;
+    display: grid; place-items: center; font-size: 22px; line-height: 1; background: #eef2f9; color: var(--muted);
+  }
+  .state.ok .mark { background: #e7f7ee; color: #0f9d58; }
+  .state.fail .mark { background: #fdeceb; color: #cf3434; }
+  .state.wait .mark { background: var(--accent-soft); color: var(--accent); }
+  .state h2 { margin: 0 0 8px; font-size: 16.5px; font-weight: 600; }
+  .state p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.8; }
+
+  .spin {
+    display: inline-block; width: 22px; height: 22px; border-radius: 50%;
+    border: 2.5px solid #dbe6f7; border-top-color: var(--accent); animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%);
+    background: rgba(15, 23, 42, .93); color: #fff; font-size: 13px; padding: 11px 18px;
+    border-radius: 12px; max-width: 84vw; text-align: center; z-index: 20;
+  }
+
+  @media (max-width: 374px) {
+    .channels { grid-template-columns: repeat(auto-fit, minmax(124px, 1fr)); gap: 7px; }
+    .tab { font-size: 12px; padding: 7px 8px; }
+    .amount b { font-size: 18px; }
+    .body { padding: 16px 16px 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="card" id="app">
+  <div class="state wait"><div class="spin"></div><p style="margin-top:16px">正在加载付款信息</p></div>
+</div>
+<script>
+(function () {
+  var token = new URLSearchParams(location.search).get("t") || "";
+  var base = location.pathname.replace(/\/pay$/, "");
+  var app = document.getElementById("app");
+  var state = { link: null, channel: null, amount: "", custom: false };
+  var lastOrder = null;
+  try { lastOrder = JSON.parse(localStorage.getItem("pay_last_order") || "null"); } catch (e) { lastOrder = null; }
+  if (lastOrder && (!lastOrder.token || lastOrder.token !== token)) lastOrder = null;
+
+  var LOCK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="4" y="10" width="16" height="10" rx="2.5"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
+  var WARN_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="#d99a1a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.6 21 19.2H3L12 3.6Z"/><path d="M12 9.6v4"/><path d="M12 16.6h.01"/></svg>';
+
+  // 通道配色：按代码猜品牌色，未识别的走默认蓝。
+  function brandOf(code) {
+    var c = String(code || "").toUpperCase();
+    // 先判支付宝：ALIPAYTOBANK 里也含 BANK，顺序错了会被当成银联。
+    if (c.indexOf("ALIPAY") === 0) return { accent: "#1677ff", soft: "#eaf2ff", border: "#c6dcff", mark: "支" };
+    if (c.indexOf("WECHAT") === 0) return { accent: "#0aa85c", soft: "#e9f8f0", border: "#b9e7d1", mark: "微" };
+    if (c.indexOf("USDT") === 0) return { accent: "#1c9c78", soft: "#e8f7f1", border: "#b7e4d7", mark: "U" };
+    if (c.indexOf("MICRO") === 0 || c.indexOf("BANK") >= 0 || c.indexOf("REALNAME") >= 0 || c.indexOf("GRC") >= 0) {
+      return { accent: "#cf2b2b", soft: "#fdecec", border: "#f6c4c4", mark: "银" };
+    }
+    return { accent: "#1d4ed8", soft: "#eef3ff", border: "#cfdcff", mark: "付" };
+  }
+
+  function money(value) {
+    var text = String(value || "0.00");
+    return text.replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+  }
+  function escapeHtml(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+  function toast(message) {
+    var old = document.querySelector(".toast");
+    if (old) old.remove();
+    var node = document.createElement("div");
+    node.className = "toast";
+    node.textContent = message;
+    document.body.appendChild(node);
+    setTimeout(function () { node.remove(); }, 2600);
+  }
+  function renderState(kind, mark, title, text, extra) {
+    app.innerHTML = '<div class="state ' + kind + '"><div class="mark">' + mark + "</div><h2>" +
+      escapeHtml(title) + "</h2><p>" + escapeHtml(text) + "</p>" + (extra || "") + "</div>";
+  }
+  function applyBrand(brand) {
+    app.style.setProperty("--accent", brand.accent);
+    app.style.setProperty("--accent-soft", brand.soft);
+    app.style.setProperty("--accent-border", brand.border || brand.soft);
+  }
+
+  function loadLink() {
+    if (!token) { renderState("fail", "!", "链接不完整", "请让客服重新发一条付款链接给你。"); return; }
+    fetch(base + "/api/pay/public/link?t=" + encodeURIComponent(token), { headers: { Accept: "application/json" } })
+      .then(function (resp) { return resp.json().then(function (body) { return { status: resp.status, body: body }; }); })
+      .then(function (result) {
+        if (!result.body || !result.body.ok) {
+          renderState("fail", "!", "链接已失效", (result.body && result.body.error && result.body.error.message) || "请让客服重新发一条付款链接给你。");
+          return;
+        }
+        state.link = result.body.data;
+        state.channel = state.link.channels[0];
+        if (lastOrder && lastOrder.status !== "paid") { watchOrder(lastOrder.orderNo); return; }
+        render();
+      })
+      .catch(function () { renderState("fail", "!", "网络异常", "请检查网络后重新打开这个链接。"); });
+  }
+
+  function render() {
+    var link = state.link;
+    var brand = brandOf(state.channel.code);
+    applyBrand(brand);
+    var tabs = link.channels.map(function (item, index) {
+      var own = brandOf(item.code);
+      var active = item.code === state.channel.code ? " is-active" : "";
+      return '<button class="tab' + active + '" data-channel="' + index + '">' +
+        '<span class="tab__logo" style="background:' + own.accent + '">' + own.mark + "</span>" +
+        '<span class="tab__name">' + escapeHtml(item.name) + "</span></button>";
+    }).join("");
+    var amounts = state.channel.presetAmounts.map(function (value) {
+      var active = state.amount === value ? " is-active" : "";
+      return '<button class="amount' + active + '" data-amount="' + value + '"><b>' + money(value) + "</b><i>元</i></button>";
+    }).join("");
+    var hint = link.playerName ? "你好，" + link.playerName : "请选择充值金额";
+    var summary = state.amount
+      ? '<div class="summary is-set"><span>应付金额</span><strong><em>¥</em>' + money(state.amount) + "</strong></div>"
+      : '<div class="summary"><span>应付金额</span><strong class="is-empty">—</strong></div>';
+
+    app.innerHTML =
+      '<header class="head"><div class="head__row"><div>' +
+        "<h1>账户充值</h1><p>" + escapeHtml(hint) + "</p>" +
+      '</div><span class="badge">' + LOCK_SVG + "安全支付</span></div></header>" +
+      '<section class="zone"><div class="zone__head"><span>充值方式</span><small>' + link.channels.length + " 个可用</small></div>" +
+        '<div class="channels">' + tabs + "</div></section>" +
+      '<div class="body">' +
+        '<div class="label"><span>充值金额</span><small>' + escapeHtml(state.channel.name) + "</small></div>" +
+        '<div class="amounts">' + amounts + "</div>" +
+        '<div class="link-row"><button id="toggle-custom">' + (state.custom ? "收起自定义金额" : "输入其他金额") + "</button></div>" +
+        '<div class="custom' + (state.custom ? " is-open" : "") + '"><input id="custom-amount" inputmode="decimal" placeholder="输入金额（' +
+          money(state.channel.minAmount) + " ~ " + money(state.channel.maxAmount) + '）" value="' + escapeHtml(state.custom ? state.amount : "") + '"></div>' +
+        '<div class="payer' + (state.channel.requirePayer ? " is-open" : "") + '"><label>付款人姓名（须与付款账户一致）</label>' +
+          '<input id="payer-name" maxlength="50" placeholder="请输入真实姓名"></div>' +
+        summary +
+        '<div class="tips"><h3>' + WARN_SVG + "重要提醒</h3><ul>" +
+          "<li>请严格按照所选金额付款，勿多付或少付</li>" +
+          "<li>付款完成后请保留截图，以便客服核对到账情况</li>" +
+          "<li>如遇问题请及时联系客服处理</li></ul></div>" +
+        '<button class="pay" id="pay-btn"' + (state.amount ? "" : " disabled") + ">" +
+          (state.amount ? "立即支付 ¥" + money(state.amount) : "请选择充值金额") + "</button>" +
+        '<div class="foot"><div class="foot__secure">' + LOCK_SVG + "支付由第三方支付机构提供</div>" +
+          '<div class="foot__valid">链接有效期至 ' + escapeHtml(link.expiresAt) + "</div></div>" +
+      "</div>";
+
+    Array.prototype.forEach.call(document.querySelectorAll(".tab"), function (node) {
+      node.addEventListener("click", function () {
+        state.channel = link.channels[Number(node.dataset.channel)];
+        state.amount = "";
+        state.custom = false;
+        render();
+      });
+    });
+    Array.prototype.forEach.call(document.querySelectorAll(".amount"), function (node) {
+      node.addEventListener("click", function () {
+        state.amount = node.dataset.amount;
+        state.custom = false;
+        render();
+      });
+    });
+    document.getElementById("toggle-custom").addEventListener("click", function () {
+      state.custom = !state.custom;
+      if (!state.custom && state.channel.presetAmounts.indexOf(state.amount) < 0) state.amount = "";
+      render();
+    });
+    var customInput = document.getElementById("custom-amount");
+    if (customInput) {
+      customInput.addEventListener("input", function () {
+        var raw = customInput.value.replace(/[^\d.]/g, "");
+        state.amount = raw;
+        var button = document.getElementById("pay-btn");
+        var ok = /^\d+(\.\d{1,2})?$/.test(raw) && Number(raw) >= Number(state.channel.minAmount) && Number(raw) <= Number(state.channel.maxAmount);
+        button.disabled = !ok;
+        button.textContent = ok ? "立即支付 ¥" + money(raw) : (raw ? "金额需在 " + money(state.channel.minAmount) + " ~ " + money(state.channel.maxAmount) + " 元" : "请选择充值金额");
+      });
+    }
+    document.getElementById("pay-btn").addEventListener("click", submit);
+  }
+
+  function submit() {
+    var button = document.getElementById("pay-btn");
+    if (!state.amount || button.disabled) return;
+    var payerInput = document.getElementById("payer-name");
+    var payerName = payerInput ? payerInput.value.trim() : "";
+    if (state.channel.requirePayer && !payerName) { toast("请填写付款人姓名"); return; }
+    button.disabled = true;
+    button.classList.add("is-busy");
+    button.textContent = "正在创建订单…";
+    fetch(base + "/api/pay/public/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: token, channel: state.channel.code, amount: state.amount, payerName: payerName })
+    }).then(function (resp) { return resp.json().then(function (body) { return { status: resp.status, body: body }; }); })
+      .then(function (result) {
+        if (!result.body || !result.body.ok) {
+          toast((result.body && result.body.error && result.body.error.message) || "下单失败，请联系客服");
+          button.disabled = false;
+          button.classList.remove("is-busy");
+          button.textContent = "立即支付 ¥" + money(state.amount);
+          return;
+        }
+        var order = result.body.data;
+        lastOrder = { orderNo: order.orderNo, token: token, status: order.status, at: Date.now() };
+        try { localStorage.setItem("pay_last_order", JSON.stringify(lastOrder)); } catch (e) { /* 隐私模式忽略 */ }
+        if (!order.payUrl) { toast("支付通道没有返回收银台地址，请联系客服"); return; }
+        location.href = order.payUrl;
+      })
+      .catch(function () {
+        toast("网络异常，请重试");
+        button.disabled = false;
+        button.classList.remove("is-busy");
+        button.textContent = "立即支付 ¥" + money(state.amount);
+      });
+  }
+
+  function watchOrder(orderNo) {
+    var tries = 0;
+    renderState("wait", "…", "等待支付结果", "如果你已经付款，请稍等几秒；还没有付款的话，重新打开客服给的链接即可继续。",
+      '<div style="margin-top:20px"><button class="pay" id="again">重新选择金额</button></div>');
+    var again = document.getElementById("again");
+    if (again) again.addEventListener("click", function () {
+      localStorage.removeItem("pay_last_order");
+      lastOrder = null;
+      render();
+    });
+    var timer = setInterval(function () {
+      tries += 1;
+      fetch(base + "/api/pay/public/orders/" + encodeURIComponent(orderNo) + "?t=" + encodeURIComponent(token))
+        .then(function (resp) { return resp.json(); })
+        .then(function (body) {
+          if (!body || !body.ok) return;
+          var order = body.data;
+          if (order.status === "paid") {
+            clearInterval(timer);
+            localStorage.removeItem("pay_last_order");
+            renderState("ok", "✓", "支付成功", "金额 " + money(order.amount) + " 元，已通知客服核对到账。");
+          } else if (order.status === "failed" || order.status === "closed") {
+            clearInterval(timer);
+            localStorage.removeItem("pay_last_order");
+            renderState("fail", "!", "本次支付未完成", "可以重新打开链接再试一次，或联系客服协助处理。");
+          } else if (tries > 100) {
+            clearInterval(timer);
+          }
+        })
+        .catch(function () { /* 轮询失败继续重试 */ });
+    }, 3000);
+    setTimeout(function () { clearInterval(timer); }, 5 * 60 * 1000);
+  }
+
+  loadLink();
+})();
+</script>
+</body>
+</html>

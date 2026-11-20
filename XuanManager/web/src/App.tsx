@@ -34,6 +34,7 @@ import PaymentConfigurationPage from "./pages/PaymentConfigurationPage";
 import ActivityConfigurationPage from "./pages/ActivityConfigurationPage";
 import StoneConsumePricePage from "./pages/StoneConsumePricePage";
 import PromotionDownloadPage from "./pages/PromotionDownloadPage";
+import PayWebPage from "./pages/PayWebPage";
 import PlayerOptimizationPage from "./pages/PlayerOptimizationPage";
 import RolesPage from "./pages/RolesPage";
 import UsersPage from "./pages/UsersPage";
@@ -159,6 +160,7 @@ export default function App() {
     if (route === "/game/anti-theft" && can("game.anti_theft.view")) return <AntiTheftPage can={can} notify={notify} />;
     if (route === "/game/room-maintenance" && session?.user.isSuper) return <RoomMaintenancePage can={can} notify={notify} />;
     if (route === "/game/player-optimization" && can("game.player_optimization.view")) return <PlayerOptimizationPage can={can} notify={notify} />;
+    if (route === "/game/pay" && can("game.pay_web.view")) return <PayWebPage can={can} notify={notify} />;
     if (route === "/configuration/announcement" && can("configuration.announcement.view")) return <GameAnnouncementPage can={can} notify={notify} />;
     if (route === "/configuration/notifications" && can("configuration.notification.view")) return <GameNotificationsPage can={can} notify={notify} />;
     if (route === "/configuration/reward-pools" && can("configuration.reward_pool.view")) return <RewardPoolsPage can={can} notify={notify} />;

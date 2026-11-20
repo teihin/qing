@@ -321,6 +321,7 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/system/game-logs", s.authorized("system.game_log.view", false, s.handleGameCallLogs))
 
 	s.registerAutomationRoutes()
+	s.registerPayRoutes()
 
 	s.mux.HandleFunc("/", s.handleStatic)
 }
