@@ -55,6 +55,9 @@ type clubListItem struct {
 	TotalClubGold *int64 `json:"totalClubGold"`
 	// DarkEnabled 是客户端开房页暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。
 	DarkEnabled bool `json:"darkEnabled"`
+	// LeaderboardEnabled 是大厅「发现」页排行榜入口开关。独立俱乐部读
+	// 「排行榜_俱乐部_<clubId>」，已入盟读「排行榜_联盟_<unionId>」，这里给的是生效值。
+	LeaderboardEnabled bool `json:"leaderboardEnabled"`
 	// BFChatEnabled 是消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认关闭。
 	BFChatEnabled bool `json:"bfChatEnabled"`
 }
@@ -422,6 +425,18 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		}
 	} else {
 		s.logger.Error("read club bf chat states", "error", bfErr)
+	}
+	leaderboardKeys := make([]string, 0, len(items))
+	for _, item := range items {
+		leaderboardKeys = append(leaderboardKeys, leaderboardEntryKeyForClub(item.ClubID, item.UnionID))
+	}
+	if leaderboardEntries, entryErr := s.readLeaderboardEntryStates(r.Context(), leaderboardKeys); entryErr == nil {
+		for index := range items {
+			key := leaderboardEntryKeyForClub(items[index].ClubID, items[index].UnionID)
+			items[index].LeaderboardEnabled = leaderboardEntries[key]
+		}
+	} else {
+		s.logger.Error("read club leaderboard entries", "error", entryErr)
 	}
 	writeData(w, http.StatusOK, map[string]any{
 		"items": items, "total": total, "page": page, "pageSize": size,

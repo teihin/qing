@@ -4,13 +4,22 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
-## 2026-11-21 iOS 未签名包重出（BF 品牌 + 热更基线 7.0.4；待企业签名/真机）
+## 2026-11-21 大厅排行榜入口按俱乐部/联盟开关（客户端 + 后台就绪，未构建/未部署/未真机）
 
-- 20:16 Creator 构建完 jsb-link，20:17「1生成热更新包」跑完（版本 7.0.4、PNG 加密、main.js 补丁在位、native manifest 同步），据此直接 archive。
-- `xcodebuild -project 8L.xcodeproj -scheme 8L-mobile -configuration Release -sdk iphoneos -archivePath build/ios-unsigned/qing-unsigned-20261121.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO` → **ARCHIVE SUCCEEDED**（46s）。
-- 产物 `build/ios-unsigned/qing-unsigned-20261121.ipa`（136 MB，SHA-256 `439a2b28…`），Payload 手动打包、无 `._*`/`__MACOSX`，`unzip -t` 通过。
-- 核验：`codesign -dv` = not signed at all、无 `_CodeSignature`/`embedded.mobileprovision`；`CFBundleDisplayName=BF`、`CFBundleIdentifier=com.fireball.qing`、1.0.0(1)、最低 iOS 12.0、arm64；图标为 BF 盾牌（Assets.car 2.4M + AppIcon60x60@2x）；包内 `assets/main/index.jsc` 与 build 同哈希；native manifest 版本 7.0.4。
-- 线上 `/up` 仍是 6.0.26（本地 7.0.4 更新，首启不会补下载；7.0.4 未上传）。dSYMs 为空（未生成），企业签名不依赖，崩溃分析需要时另出。真机未验。
+- 大厅「发现」页「排行榜」按钮原来一直显示。现在后台按俱乐部放行：独立俱乐部自己设，已入盟由联盟统一设，玩家切俱乐部后按新归属重判。
+- 存储沿用哈希表，**不改游戏服命令**：`kbedm.usr_hash_info` 的 `排行榜_俱乐部_<clubId>` / `排行榜_联盟_<unionId>`（1=显示）。客户端读 `查询_哈希_信息`；后台后端直接读写并回读校验。
+- 客户端（`panelMain.ts`）：`union_id` 非空读联盟 key、确认未入盟读俱乐部 key、归属未知先隐藏并补查 `查询_俱乐部_信息`；进大厅/进发现页/切俱乐部/入盟推送/关系变化都会重算；5 秒超时按隐藏，同 key 10 秒节流，迟到回包按 key 丢弃。只切 `Main/发现/排行榜` 的 `active`，未改 Prefab。
+- 后台：新增 `PUT /api/game/{clubs|unions}/{id}/leaderboard-entry` + 权限迁移 074；俱乐部/联盟列表回 `leaderboardEnabled`；行内加「排行榜」按钮与状态列，**旧「荣耀榜」按钮已去掉**（配置仍走独立模块「排行榜」，`HonorRankModal.tsx` 已删）。
+- 验证：`go build`、`go vet`、排行榜/暗抽相关测试、`npx tsc --noEmit` 全通过；`go test ./internal/api/` 仅剩既有失败 `TestGameRegistrationHoneypotRejectsAndBansIP`（`REGISTRATION_MOVED`，与本次无关）。客户端只做语法转译。详见[交接](handoffs/2026-11-21-lobby-leaderboard-entry.md)。
+- 后台**两台都已部署**：测试服 22:15（`154.37.155.17:/www/html/.xuanmanager`，权限角色 1/4）、正式服 22:17（`8.153.70.197:/www/.xuanmanager`，只有 super_admin）。同一二进制 `9c76aa1d…`，health 200，迁移 074 均已应用，新路由 401、页面已换 `index-BD8zmkfA.js`。回滚点：测试服 `backups/20261121-2218-rollback/`，正式服 `bin/xuanmanager.previous-leaderboardentry-20261121-2220` + `web.previous-leaderboardentry-20261121-2220/`。
+- 待办：默认全隐藏，需运营逐个放开；客户端构建后测三种情况（独立俱乐部开/关、入盟跟随联盟、切俱乐部切换）。
+
+## 2026-11-21 iOS 未签名包（BF 品牌，热更基线 7.0.6，含声音修复；待企业签名/真机）
+
+- 三次出包都在 `build/ios-unsigned/`，均在 Creator 构建 jsb-link + 「1生成热更新包」之后直接 archive（不重复构建，44–50s）：`unsigned-20261121.ipa`（20:22，基线 7.0.4，**缺声音修复**）、`qing-unsigned-20261121-2322.ipa`（7.0.6）、`qing-unsigned-20261121-2325.ipa`（7.0.6 + 声音修复，**交付这版**，SHA-256 `eb3fa9e8…`）。忽略 2322 中间版，只发 2325。
+- 共同核验：136 MB、`CODE_SIGNING_ALLOWED=NO` 且 `codesign -dv` = not signed at all（无 `_CodeSignature`/描述文件）、arm64、`CFBundleDisplayName=BF`/`com.fireball.qing`/1.0.0(1)/最低 iOS 12.0、包内 `index.jsc` 与 build 同哈希、`unzip -t` 通过、无 AppleDouble。
+- 声音修复只改 `build-templates/.../proj.ios_mac/ios/QingVoiceBridge.{h,mm}`（22:03/22:43，出房间静音 + 切后台回前台 `end()`/`lazyInit()` 重建引擎 + 1.2s 补恢复），Creator 23:18 构建已自动同步（两侧 diff 一致），archive 日志确认 `QingVoiceBridge.mm`/`AppController.mm` 重新 CompileC。**判据：二进制 `RestoreGameAudio` 旧包 count=0、新包 count=1**（Objective-C 方法名在 `__objc_methname` 段，strip 不掉；二进制大小差 104 字节、中文字符串零差异都不可当判据）。
+- 线上 `/up` 仍 6.0.26，7.0.6 未上传；dSYMs 为空（该配置不产，企业签名不依赖）。真机未验。
 
 ## 2026-11-19 实时战绩头像框：环不再缩在头像里（Prefab 就绪，未导入/构建/热更/真机）
 

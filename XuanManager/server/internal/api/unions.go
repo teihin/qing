@@ -43,6 +43,9 @@ type unionListItem struct {
 	// DarkEnabled 是联盟总群主俱乐部的开房暗抽开关：
 	// usr_hash_info 的「暗抽_俱乐部_<ownerClubId>」。
 	DarkEnabled bool `json:"darkEnabled"`
+	// LeaderboardEnabled 是该联盟成员俱乐部的大厅排行榜入口开关：
+	// usr_hash_info 的「排行榜_联盟_<unionId>」。
+	LeaderboardEnabled bool `json:"leaderboardEnabled"`
 }
 
 type unionClubItem struct {
@@ -151,6 +154,17 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		}
 	} else {
 		s.logger.Error("read union dark settings", "error", darkErr)
+	}
+	leaderboardKeys := make([]string, 0, len(items))
+	for _, item := range items {
+		leaderboardKeys = append(leaderboardKeys, leaderboardEntryUnionKey(item.UnionID))
+	}
+	if leaderboardEntries, entryErr := s.readLeaderboardEntryStates(r.Context(), leaderboardKeys); entryErr == nil {
+		for index := range items {
+			items[index].LeaderboardEnabled = leaderboardEntries[leaderboardEntryUnionKey(items[index].UnionID)]
+		}
+	} else {
+		s.logger.Error("read union leaderboard entries", "error", entryErr)
 	}
 
 	writeData(w, http.StatusOK, map[string]any{

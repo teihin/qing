@@ -1076,6 +1076,11 @@ export interface ClubListItem {
   darkEnabled?: boolean;
   /** 消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认关闭。 */
   bfChatEnabled?: boolean;
+  /**
+   * 大厅「发现」页排行榜入口开关的生效值：独立俱乐部取「排行榜_俱乐部_<clubId>」，
+   * 已入盟取「排行榜_联盟_<unionId>」。
+   */
+  leaderboardEnabled?: boolean;
 }
 
 export interface ClubListResponse {
@@ -1267,6 +1272,8 @@ export interface UnionListItem {
   createdAt: string;
   /** 总群主俱乐部的开房暗抽开关：usr_hash_info 的「暗抽_俱乐部_<ownerClubId>」。 */
   darkEnabled?: boolean;
+  /** 联盟所有俱乐部的大厅排行榜入口开关：usr_hash_info 的「排行榜_联盟_<unionId>」。 */
+  leaderboardEnabled?: boolean;
 }
 
 export interface UnionListResponse {
@@ -1309,6 +1316,15 @@ export interface DarkSettingState {
   scope: "club" | "union";
   targetId: string;
   ownerClubId?: string;
+  enabled: boolean;
+  verified: boolean;
+  message: string;
+}
+
+/** 大厅排行榜入口开关保存结果。 */
+export interface LeaderboardEntryState {
+  scope: "club" | "union";
+  targetId: string;
   enabled: boolean;
   verified: boolean;
   message: string;

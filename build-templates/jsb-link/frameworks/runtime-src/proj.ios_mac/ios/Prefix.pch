@@ -1,0 +1,8 @@
+//
+// Prefix header for all source files of the '8L' target in the '8L' project
+//
+
+#ifdef __OBJC__
+	#import <Foundation/Foundation.h>
+	#import <UIKit/UIKit.h>
+#endif

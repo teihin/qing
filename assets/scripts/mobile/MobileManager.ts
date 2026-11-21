@@ -155,6 +155,26 @@ export default class MobileManager extends cc.Component {
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,tt+msg);
     }
 
+    /**
+     * iOS 原生端：把音频会话和 OpenAL context 还给游戏。
+     *
+     * 录音/播报语音会把 AVAudioSession 切成 PlayAndRecord，切后台时会 setActive:NO，
+     * 两种情况都会重建底层 audio unit；Cocos 的 OpenAL 引擎收不到中断回调，
+     * context 一直悬空，之后所有音效都静默失败（只能重启 App）。
+     * 这里在切页、回前台等时机主动让原生侧重连一次，原生内部有 1 秒节流。
+     */
+    public static RestoreIOSAudio():void
+    {
+        if(cc.sys.isBrowser || cc.sys.os !== cc.sys.OS_IOS)
+            return;
+        if(typeof jsb === "undefined" || jsb.reflection == null)
+            return;
+        try {
+            jsb.reflection.callStaticMethod("QingVoiceBridge", "RestoreGameAudio");
+        } catch(error) {
+        }
+    }
+
 
     //-------------------------------------------语音相关------------------------------------------------
 

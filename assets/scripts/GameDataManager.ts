@@ -258,6 +258,10 @@ export default class GameDataManager extends cc.Component {
             Debug.Log("程序恢复前台了！！！！！！！！！！！！！！");
             this.dtLastSuccess = new Date().getTime();
 
+            // 回前台补一次 iOS 音频会话恢复：切后台时原生侧会停用会话，
+            // OpenAL 的 context 不会自己重连，等引擎恢复运行后再让原生接管一次。
+            setTimeout(()=>{ MobileManager.RestoreIOSAudio(); },800);
+
             //检验退出时长
             let span = new Date().getTime()-this.dtLastExit;
             Debug.Log("退出时长:"+span);

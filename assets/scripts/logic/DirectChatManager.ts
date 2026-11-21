@@ -510,6 +510,10 @@ export default class DirectChatManager
                     this.tokenExpiresAt = 0;
                     this.tokenGuuid = "";
                     this.authPromise = null;
+                    // 必须连 localStorage 一起清：EnsureSession 在内存令牌为空时会
+                    // LoadStoredToken 把同一个失效令牌读回来，且 expiresAt 未到就判定
+                    // 「有效」直接返回，重建会话根本不会发生 —— 表现为重连一次撞两次 401。
+                    this.ClearStoredToken();
                     this.EnsureSession().then(()=>{
                         return this.Send(method,url,body,opts,true);
                     }).then(resolve,reject);
@@ -1792,8 +1796,11 @@ export default class DirectChatManager
         if(this.realtimeTicketPromise != null)
             return this.realtimeTicketPromise;
         let generation = this.accountGeneration;
-        let request = this.Send("POST",this.ApiBase() + "/ws-ticket",{},
-            {timeout:DIRECT_CHAT_WS_CONNECT_TIMEOUT_MS},false).then((data:any)=>{
+        // 必须走 Request 而不是 Send：会话令牌可能已被服务端清掉（清库、换服、过期），
+        // Request 的 401 分支会清本地令牌、重建会话后重试一次；直接 Send 会让 WS
+        // 每次重连都拿着失效令牌打 /ws-ticket，形成永久 401 死循环。
+        let request = this.Request("POST",this.ApiBase() + "/ws-ticket",{},
+            {timeout:DIRECT_CHAT_WS_CONNECT_TIMEOUT_MS}).then((data:any)=>{
             if(generation !== this.accountGeneration || !this.realtimeWanted || this.realtimePaused)
                 throw new DirectChatError("账号已切换","DIRECT_ACCOUNT_CHANGED",0);
             this.realtimeTicket = String(data != null ? (data.ticket || "") : "");

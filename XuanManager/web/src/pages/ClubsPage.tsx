@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import DarkSettingModal from "../components/DarkSettingModal";
-import HonorRankModal from "../components/HonorRankModal";
+import LeaderboardEntryModal from "../components/LeaderboardEntryModal";
 import BFChatModal from "../components/BFChatModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
@@ -139,7 +139,7 @@ export default function ClubsPage({
   const [stonePoolClub, setStonePoolClub] = useState<ClubListItem | null>(null);
   const [darkClub, setDarkClub] = useState<ClubListItem | null>(null);
   const [bfChatClub, setBFChatClub] = useState<ClubListItem | null>(null);
-  const [honorClub, setHonorClub] = useState<ClubListItem | null>(null);
+  const [leaderboardClub, setLeaderboardClub] = useState<ClubListItem | null>(null);
   const [earningsClub, setEarningsClub] = useState<ClubListItem | null>(null);
 
   const load = useCallback(async () => {
@@ -207,7 +207,7 @@ export default function ClubsPage({
   const canAdjustStonePool = can("game.club.stone_pool_adjust");
   const canSetDark = can("game.club.dark_setting");
   const canSetBFChat = can("game.club.bf_chat");
-  const canSetHonorRank = can("game.club_honor_rank.manage");
+  const canSetLeaderboardEntry = can("game.club.leaderboard_entry");
 
   return (
     <div className="page-stack">
@@ -397,6 +397,7 @@ export default function ClubsPage({
                     <th>俱乐部总积分</th>
                     <th>暗抽</th>
                     <th>BF聊天</th>
+                    <th>排行榜</th>
                     <th>抽成</th>
                     <th className="align-right">操作</th>
                   </tr>
@@ -478,6 +479,19 @@ export default function ClubsPage({
                           {club.bfChatEnabled === true ? "开启" : "关闭"}
                         </strong>
                       </td>
+                      <td>
+                        <strong
+                          className={club.leaderboardEnabled ? "club-quota-value" : "club-quota-missing"}
+                          title={
+                            club.unionId
+                              ? "已入盟，大厅排行榜入口由联盟管理统一控制"
+                              : "大厅「发现」页的排行榜入口；关闭后该俱乐部玩家看不到按钮"
+                          }
+                        >
+                          {club.leaderboardEnabled ? "开启" : "关闭"}
+                        </strong>
+                        {club.unionId ? <small className="cell-subtitle">随联盟</small> : null}
+                      </td>
                       <td>{club.tax || "—"}</td>
                       <td>
                         <div className="row-actions">
@@ -540,17 +554,17 @@ export default function ClubsPage({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setHonorClub(club)}
-                            disabled={!canSetHonorRank || !!club.unionId}
+                            onClick={() => setLeaderboardClub(club)}
+                            disabled={!canSetLeaderboardEntry || !!club.unionId}
                             title={
                               club.unionId
-                                ? "该俱乐部已入盟，荣耀榜按联盟合并统计，请在联盟管理里配置"
-                                : canSetHonorRank
-                                  ? "开启或关闭该独立俱乐部的排行榜，设置起止时间与名次奖励"
-                                  : "当前角色没有荣耀榜配置的权限"
+                                ? "该俱乐部已入盟，请在联盟管理里设置排行榜入口"
+                                : canSetLeaderboardEntry
+                                  ? "开启或关闭该俱乐部大厅「发现」页的排行榜入口"
+                                  : "当前角色没有排行榜入口的权限"
                             }
                           >
-                            荣耀榜
+                            排行榜
                           </button>
                         </div>
                       </td>
@@ -642,14 +656,15 @@ export default function ClubsPage({
         />
       )}
 
-      {honorClub && (
-        <HonorRankModal
+      {leaderboardClub && (
+        <LeaderboardEntryModal
           scope="club"
-          targetId={honorClub.clubId}
-          targetName={honorClub.name || honorClub.clubId}
-          canEdit={canSetHonorRank}
+          targetId={leaderboardClub.clubId}
+          targetName={leaderboardClub.name || leaderboardClub.clubId}
+          currentEnabled={leaderboardClub.leaderboardEnabled === true}
+          canEdit={canSetLeaderboardEntry}
           notify={notify}
-          onClose={() => setHonorClub(null)}
+          onClose={() => setLeaderboardClub(null)}
           onDone={() => void load()}
         />
       )}

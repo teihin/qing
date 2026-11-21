@@ -188,6 +188,10 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/game/clubs/{clubId}/stone-pool-adjustments", s.authorized("game.club.stone_pool_adjust", true, s.handleAdjustClubStonePool))
 	s.mux.Handle("PUT /api/game/clubs/{clubId}/dark-setting", s.authorized("game.club.dark_setting", true, s.handleSetClubDarkSetting))
 	s.mux.Handle("PUT /api/game/clubs/{clubId}/bf-chat", s.authorized("game.club.bf_chat", true, s.handleSetClubBFChat))
+	// 大厅排行榜入口：独立俱乐部写「排行榜_俱乐部_<clubId>」，已入盟的俱乐部由联盟写
+	// 「排行榜_联盟_<unionId>」，客户端用 查询_哈希_信息 读取后决定「发现」页按钮显隐。
+	s.mux.Handle("PUT /api/game/clubs/{clubId}/leaderboard-entry", s.authorized("game.club.leaderboard_entry", true, s.handleSetClubLeaderboardEntry))
+	s.mux.Handle("PUT /api/game/unions/{unionId}/leaderboard-entry", s.authorized("game.union.leaderboard_entry", true, s.handleSetUnionLeaderboardEntry))
 	s.mux.Handle("GET /api/game/unions", s.authorized("game.union.view", false, s.handleListUnions))
 	s.mux.Handle("GET /api/game/unions/{unionId}", s.authorized("game.union.view", false, s.handleGetUnion))
 	s.mux.Handle("GET /api/game/unions/{unionId}/earnings", s.authorized("game.union.view", false, s.handleUnionEarnings))

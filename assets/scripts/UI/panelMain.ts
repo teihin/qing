@@ -36,6 +36,19 @@ interface RoomPushEntry {
     index:number;
 }
 
+/**
+ * 大厅「发现」页排行榜入口：后台按俱乐部/联盟放行，存 usr_hash_info
+ * 「排行榜_俱乐部_<clubId>」/「排行榜_联盟_<unionId>」，值为 1 才显示。
+ * 口径与暗抽开关一致：独立俱乐部自己设置，入盟后由联盟统一设置。
+ */
+const LEADERBOARD_ENTRY_CLUB_PREFIX = "排行榜_俱乐部_";
+const LEADERBOARD_ENTRY_UNION_PREFIX = "排行榜_联盟_";
+const LEADERBOARD_ENTRY_CONTEXT_PREFIX = "排行榜入口_";
+/** 哈希查询超过 5 秒没回包就按关闭处理，避免入口一直停留在上一家俱乐部的状态。 */
+const LEADERBOARD_ENTRY_TIMEOUT = 5;
+/** 同一 key 的重复查询节流；后台开关变化不需要秒级感知，切页/切俱乐部会强制刷新。 */
+const LEADERBOARD_ENTRY_ASK_INTERVAL = 10000;
+
 @ccclass
 export default class panelMain extends UIPanelViewBase {
 
@@ -188,6 +201,22 @@ export default class panelMain extends UIPanelViewBase {
     private clubAgentRecheck:{[clubId:string]:number} = {};
     /** 推广页缺邀请码时补查代理信息的时间戳，同样按俱乐部节流。 */
     private clubInviteCodeAsked:{[clubId:string]:number} = {};
+
+    /** 排行榜入口：已读到的哈希值，key = 排行榜_俱乐部_/排行榜_联盟_ + ID。 */
+    private leaderboardEntryValues:{[key:string]:boolean} = {};
+    /** 排行榜入口哈希查询节流与在途标记。 */
+    private leaderboardEntryAsked:{[key:string]:number} = {};
+    private leaderboardEntryPendingKey:string = "";
+    /** 正在生效（按钮当前按它显示）的配置 key，用于丢弃切俱乐部后迟到的回包。 */
+    private leaderboardEntryActiveKey:string = "";
+    private leaderboardEntryTimeoutHandler = ()=>{
+        if(this.leaderboardEntryPendingKey === "")
+            return;
+        this.leaderboardEntryPendingKey = "";
+        const key = this.leaderboardEntryActiveKey;
+        if(key === "" || this.leaderboardEntryValues[key] === undefined)
+            this.ApplyLeaderboardEntry(false);
+    };
 
     private ClearGiftInputs():void
     {
@@ -499,6 +528,9 @@ export default class panelMain extends UIPanelViewBase {
         this.scrollCFNotify = Tool.GetChild(this.node,"惩罚列表/list").getComponent(ScrollViewEx);
         this.scrollCFNotify.callBackFresh = this.GetCFNotifyInfo.bind(this);
         RoomInviteManager.getInstance().onLobbyReady();
+        // 排行榜入口默认隐藏，进大厅先按当前俱乐部/联盟查一次（俱乐部信息未到时延后一秒再核）。
+        this.RefreshLeaderboardEntry(true);
+        this.scheduleOnce(()=>this.RefreshLeaderboardEntry(),1);
     }
 
 
@@ -561,6 +593,8 @@ export default class panelMain extends UIPanelViewBase {
         this.SetupDirectChatEntry();
         this.HidePromotionPanelOnLobbyOpen();
         this.RefreshClubFinanceMenuVisibility();
+        // 从牌局/其它面板回到大厅：后台可能刚改过开关，按当前俱乐部再核一次（同 key 有 10 秒节流）。
+        this.RefreshLeaderboardEntry();
         GameDataManager.getInstance().dtLastSend = new Date().getTime();
         GameDataManager.getInstance().dtLastSuccess = new Date().getTime();
     }
@@ -1329,6 +1363,9 @@ export default class panelMain extends UIPanelViewBase {
             if(this.roomClubAccountKey) cc.sys.localStorage.setItem(this.roomClubAccountKey,id);
             this.clubManagement.Refresh();
             this.RequestClubUnionStatus(id,true);
+            // 换俱乐部后排行榜入口按新俱乐部重判：独立俱乐部看自己的开关，入盟的看联盟开关。
+            this.RequestClubInfo(id);
+            this.RefreshLeaderboardEntry(true);
             // 切换俱乐部后顶部金币要跟着换成新俱乐部的积分，不能留着上一家的数字。
             this.set_gold(0);
             this.switchTabSel("发现");
@@ -2794,6 +2831,9 @@ export default class panelMain extends UIPanelViewBase {
 
     switchTabSel(strName:string)
     {
+        // 大厅切页顺带把 iOS 的音频会话还给游戏：录音/播报语音、切后台都可能
+        // 让 OpenAL 的 context 断开，回不到前台就整局没音效。原生侧有节流。
+        MobileManager.RestoreIOSAudio();
         if(strName === "我的" && this.clubManagement)
         {
             this.clubManagement.Refresh();
@@ -2844,7 +2884,11 @@ export default class panelMain extends UIPanelViewBase {
         if(strName === "我的" && this.IsClubOwner(this.ResolveRoomClub()))
             this.schedule(this.clubStonePoolPoll,30);
         if(strName === "发现")
+        {
             this.RefreshDiscoveryClubFunds(true);
+            // 排行榜入口按当前俱乐部/联盟放行，进发现页时再核一次（切俱乐部也会强制刷新）。
+            this.RefreshLeaderboardEntry();
+        }
 
         //复位Toggle
         let arrayToggle = this.node.getChildByName("Down").getComponentsInChildren(cc.Toggle);
@@ -4530,6 +4574,9 @@ export default class panelMain extends UIPanelViewBase {
             this.ResolveLobbyEntryTab();
         // 刚创建 / 刚入会的俱乐部在这里落成默认俱乐部，后面的卡片、列表、房间筛选都取新值。
         this.ApplyPendingDefaultClub();
+        // 关系变化后俱乐部归属（union_id）要重新取，排行榜入口跟着新归属重判。
+        this.RequestClubInfo(this.ResolveRoomClub());
+        this.RefreshLeaderboardEntry(true);
         this.RefreshClubFinanceMenuVisibility();
         this.RefreshDiscoveryClubFunds(true);
         if(this.clubManagement) this.clubManagement.Refresh();
@@ -4721,6 +4768,9 @@ export default class panelMain extends UIPanelViewBase {
         // 发现页顶部「额度」也依赖这次推送；不刷新的话要切一次俱乐部页再回来才显示。
         this.RefreshDiscoveryClubFunds(false);
         this.RefreshClubList(false);
+        // 入盟/换盟后排行榜入口改为读联盟开关，身份结论更新就重算一次。
+        if(clubId === this.ResolveRoomClub())
+            this.RefreshLeaderboardEntry();
     }
 
     /** 联盟名缓存：内存 + localStorage，重启后仍能显示名称而不是退化成联盟号。 */
@@ -5137,6 +5187,102 @@ export default class panelMain extends UIPanelViewBase {
         account.reqHallCommand(JSON.stringify({
             header:"查询_俱乐部_信息",club_id:clubId
         }),"p@club:info:" + clubId);
+    }
+
+    /**
+     * 当前俱乐部生效的排行榜入口配置 key：
+     * 已入盟读联盟 key（联盟统一设置），未入盟读俱乐部 key。
+     * 联盟归属未知时返回空串——俱乐部信息没回来前不能按「未入盟」处理，
+     * 否则独立俱乐部开过榜、后来入盟的，会拿残留的俱乐部 key 继续显示入口。
+     */
+    private LeaderboardEntryKey(clubId:string):string
+    {
+        if(!clubId)
+            return "";
+        const unionId = this.ResolveClubUnionId(clubId);
+        if(unionId !== "")
+            return LEADERBOARD_ENTRY_UNION_PREFIX + unionId;
+        const info = this.clubDetails[clubId];
+        const status = this.clubUnionStatus[clubId];
+        if(!info && !(status && status.known))
+            return "";
+        return LEADERBOARD_ENTRY_CLUB_PREFIX + clubId;
+    }
+
+    /** 只切换「发现」页排行榜按钮的显隐，别的入口状态一律不动。 */
+    private ApplyLeaderboardEntry(show:boolean):void
+    {
+        const node = Tool.GetChild(this.node,"Main/发现/排行榜");
+        if(node && node.active !== show)
+            node.active = show;
+    }
+
+    /**
+     * 按当前俱乐部/联盟刷新排行榜入口。默认关闭：没有配置、查询失败、超时都不显示。
+     * 切俱乐部、入盟/退盟、进入发现页都会调这里；同 key 10 秒内不重复发哈希查询。
+     */
+    private RefreshLeaderboardEntry(force:boolean = false):void
+    {
+        const account:any = GameDataManager.getAccount();
+        if(!account || !account.guuid)
+            return;
+        const clubId = this.ResolveRoomClub();
+        if(!clubId)
+        {
+            this.leaderboardEntryActiveKey = "";
+            this.ApplyLeaderboardEntry(false);
+            return;
+        }
+        // 联盟归属决定读哪个 key，没拿到俱乐部信息就先补一次，回包后会自动重算。
+        if(!this.clubDetails[clubId])
+            this.RequestClubInfo(clubId);
+        const key = this.LeaderboardEntryKey(clubId);
+        if(key === "")
+        {
+            this.leaderboardEntryActiveKey = "";
+            this.ApplyLeaderboardEntry(false);
+            return;
+        }
+        this.leaderboardEntryActiveKey = key;
+        this.ApplyLeaderboardEntry(this.leaderboardEntryValues[key] === true);
+        const now = Date.now();
+        if(!force && now - (this.leaderboardEntryAsked[key] || 0) < LEADERBOARD_ENTRY_ASK_INTERVAL)
+            return;
+        this.leaderboardEntryAsked[key] = now;
+        this.leaderboardEntryPendingKey = key;
+        this.unschedule(this.leaderboardEntryTimeoutHandler);
+        this.scheduleOnce(this.leaderboardEntryTimeoutHandler,LEADERBOARD_ENTRY_TIMEOUT);
+        ConfigManager.getInstance().GetOneHashKey(key,LEADERBOARD_ENTRY_CONTEXT_PREFIX + clubId);
+    }
+
+    /** 后台哈希查询回包：按 context/key 认领，只有仍对应当前俱乐部时才改按钮。 */
+    private OnLeaderboardEntryHash(key:string,content:string,context:string):boolean
+    {
+        // Hall 可能把命令 context 拼成「P@排行榜入口_x」，按包含判断，两种形式都认。
+        if(!context || context.indexOf(LEADERBOARD_ENTRY_CONTEXT_PREFIX) < 0)
+            return false;
+        if(key.indexOf(LEADERBOARD_ENTRY_CLUB_PREFIX) !== 0 &&
+            key.indexOf(LEADERBOARD_ENTRY_UNION_PREFIX) !== 0)
+            return false;
+        const enabled = this.IsLeaderboardEntryOn(content);
+        this.leaderboardEntryValues[key] = enabled;
+        if(key === this.leaderboardEntryActiveKey)
+        {
+            this.leaderboardEntryPendingKey = "";
+            this.unschedule(this.leaderboardEntryTimeoutHandler);
+            this.ApplyLeaderboardEntry(enabled);
+        }
+        return true;
+    }
+
+    /** 兼容 1 / "1" / true / "True" / 开；其余（含空串）一律按关闭。 */
+    private IsLeaderboardEntryOn(content:any):boolean
+    {
+        if(content === null || content === undefined)
+            return false;
+        const text = String(content).trim().toLowerCase();
+        return text === "1" || text === "true" || text === "on" ||
+            text === "yes" || text === "开" || text === "开启";
     }
 
     private RefreshClubList(requestDetails:boolean = true)
@@ -5701,6 +5847,9 @@ export default class panelMain extends UIPanelViewBase {
                 if(this.clubManagement) this.clubManagement.Refresh();
                 this.RefreshDiscoveryClubFunds(false);
                 this.RefreshClubList(false);
+                // 俱乐部信息带回 union_id：入盟/未入盟决定排行榜入口读联盟 key 还是俱乐部 key。
+                if(id === this.ResolveRoomClub())
+                    this.RefreshLeaderboardEntry();
             }
             return true;
         }
@@ -6517,6 +6666,10 @@ export default class panelMain extends UIPanelViewBase {
         let strKey:string = info["key"];
         let strContent:string = info["content"];
         let context:string = info["context"];
+        // 大厅排行榜入口的哈希回包（排行榜_俱乐部_/排行榜_联盟_），与公告等其它 key 互不影响。
+        if(this.OnLeaderboardEntryHash(strKey == null ? "" : strKey,strContent == null ? "" : strContent,
+            context == null ? "" : context))
+            return;
         if(context === "大厅查询公告")
         {
             if(strContent!="")

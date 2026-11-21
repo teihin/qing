@@ -52,6 +52,13 @@
   要持久化就镜像到 `build-templates/<构建输出目录名>/`（约定：`build-templates/web-mobile/` ↔ `build/web-mobile`，
   故原生 link 用 `build-templates/jsb-link/...`）；**软链接没法靠模板复制**。
   日常的 1/2/3/4 号 `.command`（热更/上传）**不会**重建原生工程，所以平时碰不到这个口子。
+- **iOS 原生工程同理，且已做持久化**：手工维护的 `proj.ios_mac/ios/*`（QingVoiceBridge /
+  QingAppServices / 各 Bridge / AppController.mm / Info.plist）和 `8L.xcodeproj/project.pbxproj`
+  已整体镜像到 `build-templates/jsb-link/frameworks/runtime-src/proj.ios_mac/`。
+  在 Creator 里重建 iOS 后，凡是原生行为异常（语音、分享、保存图片、音频会话）先跑
+  `python3 tools/ios/check_ios_native.py` 看有没有被冲掉；确认后 `--restore` 一键恢复
+  （会先备份整个工程）。pbxproj 里 bundle id `com.fireball.qing`、team `7Q54T2MBWP` 是写死的，
+  换 Creator 大版本后别直接覆盖这份 pbxproj。
 
 ## 代码排查（本项目特有）
 - `GameDataManager.getAccount()` = `KBEngine.app.player()` = `entities[entity_id]`。
