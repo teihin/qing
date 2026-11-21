@@ -3283,3 +3283,7 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
   .pay-link-grid, .pay-filter-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .pay-provider-card dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+.pay-link-actions .button.is-done { box-shadow: 0 0 0 3px rgba(18, 133, 124, .18); }
+.pay-link-copied { display: block; margin-top: 6px; font-size: 12px; font-weight: 600; }
+.pay-link-copied.is-ok { color: #12857c; }
+.pay-link-copied.is-warn { color: #bf4655; }

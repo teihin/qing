@@ -98,6 +98,9 @@ function OrdersTab({ can, providers, baseUrl, notify }: {
 }) {
   const [link, setLink] = useState<PayLinkResponse | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  // 刚生成成功时给一个短时的视觉确认，避免点了没反应的错觉。
+  const [linkJustDone, setLinkJustDone] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [draftProvider, setDraftProvider] = useState("");
   const [draftPlayerId, setDraftPlayerId] = useState("");
   const [draftPlayerName, setDraftPlayerName] = useState("");
@@ -163,7 +166,10 @@ function OrdersTab({ can, providers, baseUrl, notify }: {
       });
       setLink(result);
       const copied = await copyText(result.url);
-      notify(copied ? "付款链接已生成并复制，直接粘贴发给玩家" : "付款链接已生成，请点右下角复制按钮");
+      setLinkCopied(copied);
+      setLinkJustDone(true);
+      window.setTimeout(() => setLinkJustDone(false), 3000);
+      notify(copied ? "✓ 生成成功，链接已复制到剪贴板，直接粘贴发给玩家" : "链接已生成，但复制没成功，请手动选中上面的链接复制", copied ? "success" : "error");
     } catch (reason) {
       notify(reason instanceof ApiError ? reason.message : "生成付款链接失败", "error");
     } finally {
@@ -218,8 +224,9 @@ function OrdersTab({ can, providers, baseUrl, notify }: {
           <input value={draftRemark} onChange={(event) => setDraftRemark(event.target.value)} placeholder="客服内部备注，玩家看不到" autoComplete="off" disabled={!canLink} />
         </Field>
         <div className="pay-link-actions">
-          <Button disabled={!canLink || linkBusy || usable.length === 0} onClick={() => void createLink()}>
-            {linkBusy ? "正在生成…" : "生成并复制链接"}
+          <Button disabled={!canLink || linkBusy || usable.length === 0} onClick={() => void createLink()}
+            className={linkJustDone ? "is-done" : ""}>
+            {linkBusy ? "正在生成…" : linkJustDone ? "✓ 已生成并复制" : "生成并复制链接"}
           </Button>
         </div>
       </div>
@@ -228,10 +235,12 @@ function OrdersTab({ can, providers, baseUrl, notify }: {
           <span className="pay-link-result__label">付款链接</span>
           <code>{link.url}</code>
           <small>有效期至 {link.expiresAt}</small>
+          <span className={`pay-link-copied ${linkCopied ? "is-ok" : "is-warn"}`}>
+            {linkCopied ? "✓ 已复制到剪贴板，直接粘贴发送" : "！复制没成功，请手动选中上面的链接"}
+          </span>
         </div>
         <div className="pay-link-result__actions">
           <Button variant="secondary" onClick={() => void openLink(link.url)}>预览</Button>
-          <Button variant="secondary" onClick={async () => notify(await copyText(link.url) ? "已复制" : "复制失败，请手动选中复制", "success")}>复制</Button>
         </div>
       </div>}
       {!canLink && <div className="form-error" style={{ margin: "0 18px 16px" }}><span>i</span>当前角色没有「生成付款链接」权限，只能查看订单。</div>}
