@@ -53,9 +53,12 @@ type Config struct {
 	// 留空表示不单独开端口，注册仍走主服务。
 	RegistrationAddr string
 
-	// PayBaseURL 是玩家付款链接的对外域名前缀（例如 https://pay.example.com），
+	// PayBaseURL 是玩家付款链接的对外域名（只到域名/端口，不含路径），
 	// 留空则用后台自己所在的域名；后台在「网页支付 → 付款链接域名」里改的值优先。
 	PayBaseURL string
+	// PayPath 是玩家付款页与公开支付接口的路径前缀，默认 /pgw。
+	// 刻意与后台的 /xuanmanager 分开：玩家拿到的链接里不该出现后台入口。
+	PayPath string
 }
 
 func Load() (Config, error) {
@@ -155,6 +158,11 @@ func Load() (Config, error) {
 	if cfg.CredentialKey == "" {
 		cfg.CredentialKey = cfg.DBPassword
 	}
+	payPath, err := normalizePayPath(env("XUAN_PAY_PATH", "/pgw"))
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.PayPath = payPath
 	return cfg, nil
 }
 
@@ -169,6 +177,28 @@ func validateRemoteDBHost(name, host string, allowRemote bool) error {
 		return fmt.Errorf("%s 在 XUAN_DB_ALLOW_REMOTE=true 时只允许局域网私有地址（10.x / 172.16-31.x / 192.168.x）", name)
 	}
 	return nil
+}
+
+// normalizePayPath 校验玩家付款页的路径前缀：只允许小写字母、数字、下划线和短横线，
+// 并且不能占用后台或接口已使用的段，避免把后台入口又暴露回玩家链接里。
+func normalizePayPath(raw string) (string, error) {
+	value := strings.Trim(strings.TrimSpace(raw), "/")
+	if value == "" {
+		value = "pgw"
+	}
+	if len(value) < 2 || len(value) > 32 {
+		return "", fmt.Errorf("XUAN_PAY_PATH 需要 2~32 个字符")
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '_' && r != '-' {
+			return "", fmt.Errorf("XUAN_PAY_PATH 只能用小写字母、数字、下划线和短横线")
+		}
+	}
+	switch value {
+	case "xuanmanager", "api", "up", "chattool", "audio":
+		return "", fmt.Errorf("XUAN_PAY_PATH 不能占用已有的路径段 %q", value)
+	}
+	return "/" + value, nil
 }
 
 func validateGameAdminURL(raw string) error {

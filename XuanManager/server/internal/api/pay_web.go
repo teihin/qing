@@ -97,6 +97,8 @@ type payChannel struct {
 	Enabled       bool     `json:"enabled"`
 	PresetAmounts []string `json:"presetAmounts"`
 	RequirePayer  bool     `json:"requirePayer"`
+	// AllowCustom 控制付款页是否给「输入其他金额」入口，默认关闭。
+	AllowCustom bool `json:"allowCustom"`
 	// PayerLocked 表示这个通道在服务商侧必须带付款人姓名，后台不能关。
 	PayerLocked bool   `json:"payerLocked"`
 	MinAmount   string `json:"minAmount"`
@@ -298,6 +300,14 @@ func (s *Server) parsePayLinkToken(token string) (payLinkPayload, error) {
 
 // ---------------------------------------------------------------- 支付商读取
 
+// payPagePath 是玩家付款页的路径前缀，回调也挂在同一前缀下。
+func (s *Server) payPagePath() string {
+	if s.cfg.PayPath != "" {
+		return s.cfg.PayPath
+	}
+	return "/pgw"
+}
+
 func (s *Server) payBaseURL(ctx context.Context, r *http.Request) string {
 	if value := strings.TrimSpace(s.platformSetting(ctx, paySettingBaseURL)); value != "" {
 		return strings.TrimRight(value, "/")
@@ -347,7 +357,7 @@ FROM mgr_pay_provider ORDER BY sort_order, id`)
 		return items, nil
 	}
 	channelRows, err := s.db.QueryContext(ctx, `SELECT provider_id, code, name, enabled, preset_amounts, require_payer,
-min_amount, max_amount, sort_order FROM mgr_pay_channel ORDER BY sort_order, id`)
+allow_custom, min_amount, max_amount, sort_order FROM mgr_pay_channel ORDER BY sort_order, id`)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +368,7 @@ min_amount, max_amount, sort_order FROM mgr_pay_channel ORDER BY sort_order, id`
 		var preset string
 		var minAmount, maxAmount float64
 		if err := channelRows.Scan(&providerID, &item.Code, &item.Name, &item.Enabled, &preset, &item.RequirePayer,
-			&minAmount, &maxAmount, &item.SortOrder); err != nil {
+			&item.AllowCustom, &minAmount, &maxAmount, &item.SortOrder); err != nil {
 			return nil, err
 		}
 		item.PresetAmounts = splitPresetAmounts(preset)
@@ -539,6 +549,7 @@ func (s *Server) handleSavePayChannels(w http.ResponseWriter, r *http.Request, p
 			Name:          strings.TrimSpace(item.Name),
 			Enabled:       item.Enabled,
 			RequirePayer:  item.RequirePayer || payChannelNeedsPayer(item.Code),
+			AllowCustom:   item.AllowCustom,
 			PresetAmounts: normalizePresetAmounts(item.PresetAmounts),
 			MinAmount:     formatAmount(parseAmountOr(item.MinAmount, 1)),
 			MaxAmount:     formatAmount(parseAmountOr(item.MaxAmount, 50000)),
@@ -564,9 +575,9 @@ func (s *Server) handleSavePayChannels(w http.ResponseWriter, r *http.Request, p
 	}
 	for _, item := range normalized {
 		if _, err := tx.ExecContext(r.Context(), `INSERT INTO mgr_pay_channel
-(provider_id, code, name, enabled, preset_amounts, require_payer, min_amount, max_amount, sort_order)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, item.Code, item.Name, item.Enabled,
-			strings.Join(item.PresetAmounts, ","), item.RequirePayer, item.MinAmount, item.MaxAmount, item.SortOrder); err != nil {
+(provider_id, code, name, enabled, preset_amounts, require_payer, allow_custom, min_amount, max_amount, sort_order)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, item.Code, item.Name, item.Enabled,
+			strings.Join(item.PresetAmounts, ","), item.RequirePayer, item.AllowCustom, item.MinAmount, item.MaxAmount, item.SortOrder); err != nil {
 			s.logger.Error("save pay channel", "error", err)
 			writeError(w, http.StatusInternalServerError, "PAY_CHANNEL_SAVE_FAILED", "保存通道失败")
 			return
@@ -637,7 +648,7 @@ func (s *Server) handleCreatePayLink(w http.ResponseWriter, r *http.Request, p p
 		writeError(w, http.StatusInternalServerError, "PAY_LINK_FAILED", "生成付款链接失败")
 		return
 	}
-	link := s.payBaseURL(r.Context(), r) + "/pay?t=" + url.QueryEscape(token)
+	link := s.payBaseURL(r.Context(), r) + s.payPagePath() + "?t=" + url.QueryEscape(token)
 	s.audit(r.Context(), &p, "game.pay_web.link", "pay_link", numericID(provider.ID), nil, nil,
 		map[string]any{"playerId": payload.PlayerID, "playerName": payload.PlayerName, "provider": provider.Code},
 		0, "生成付款链接", clientIP(r))
@@ -999,7 +1010,7 @@ func (s *Server) handlePayPublicCreateOrder(w http.ResponseWriter, r *http.Reque
 	}
 
 	orderNo := newPayOrderNo()
-	notifyURL := s.payBaseURL(r.Context(), r) + "/api/pay/notify/" + provider.Code
+	notifyURL := s.payBaseURL(r.Context(), r) + s.payPagePath() + "/notify/" + provider.Code
 	currency := payChannelCurrency(channel.Code)
 	checkout, err := s.sdmpayCreateOrder(r.Context(), provider, secret, sdmpayOrderRequest{
 		MerchantOrderID: orderNo,
@@ -1090,8 +1101,15 @@ func (s *Server) handlePayNotify(w http.ResponseWriter, r *http.Request) {
 	err = s.db.QueryRowContext(r.Context(), `SELECT id, code, kind, merchant_code, secure_key FROM mgr_pay_provider WHERE code = ?`, code).
 		Scan(&providerID, &providerCode, &kind, &merchantCode, &sealed)
 	if err != nil {
-		s.logger.Warn("pay notify for unknown provider", "code", code)
-		http.Error(w, "FAIL", http.StatusNotFound)
+		// 查不到和查出错要分开记：之前一律打 unknown provider，数据库抖一下会被误读成
+		// 「回调的支付商不存在」，排查方向全歪。
+		if errors.Is(err, sql.ErrNoRows) {
+			s.logger.Warn("pay notify for unknown provider", "code", code)
+			http.Error(w, "FAIL", http.StatusNotFound)
+			return
+		}
+		s.logger.Error("pay notify provider query failed", "error", err, "code", code)
+		http.Error(w, "FAIL", http.StatusInternalServerError)
 		return
 	}
 	if kind != payProviderKindSdmpay {

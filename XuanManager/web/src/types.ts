@@ -1658,6 +1658,8 @@ export interface PayChannel {
   enabled: boolean;
   presetAmounts: string[];
   requirePayer: boolean;
+  /** 付款页是否给「输入其他金额」入口，默认关闭。 */
+  allowCustom: boolean;
   /** 服务商硬性要求带付款人姓名，后台开关锁定为开。 */
   payerLocked?: boolean;
   minAmount: string;

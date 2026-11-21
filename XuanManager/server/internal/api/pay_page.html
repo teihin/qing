@@ -191,7 +191,9 @@
 <script>
 (function () {
   var token = new URLSearchParams(location.search).get("t") || "";
-  var base = location.pathname.replace(/\/pay$/, "");
+  // 页面可能挂在 /pgw（新）或 /xuanmanager/pay（老链接）下，接口都跟页面同前缀。
+  var base = location.pathname.replace(/\/+$/, "");
+  if (/\/pay$/.test(base)) base = base.slice(0, -4);
   var app = document.getElementById("app");
   var state = { link: null, channel: null, amount: "", custom: false };
   var lastOrder = null;
@@ -288,9 +290,11 @@
       '<div class="body">' +
         '<div class="label"><span>充值金额</span><small>' + escapeHtml(state.channel.name) + "</small></div>" +
         '<div class="amounts">' + amounts + "</div>" +
-        '<div class="link-row"><button id="toggle-custom">' + (state.custom ? "收起自定义金额" : "输入其他金额") + "</button></div>" +
-        '<div class="custom' + (state.custom ? " is-open" : "") + '"><input id="custom-amount" inputmode="decimal" placeholder="输入金额（' +
-          money(state.channel.minAmount) + " ~ " + money(state.channel.maxAmount) + '）" value="' + escapeHtml(state.custom ? state.amount : "") + '"></div>' +
+        (state.channel.allowCustom
+          ? '<div class="link-row"><button id="toggle-custom">' + (state.custom ? "收起自定义金额" : "输入其他金额") + "</button></div>" +
+            '<div class="custom' + (state.custom ? " is-open" : "") + '"><input id="custom-amount" inputmode="decimal" placeholder="输入金额（' +
+              money(state.channel.minAmount) + " ~ " + money(state.channel.maxAmount) + '）" value="' + escapeHtml(state.custom ? state.amount : "") + '"></div>'
+          : "") +
         '<div class="payer' + (state.channel.requirePayer ? " is-open" : "") + '"><label>付款人姓名（须与付款账户一致）</label>' +
           '<input id="payer-name" maxlength="50" placeholder="请输入真实姓名"></div>' +
         summary +
@@ -319,7 +323,8 @@
         render();
       });
     });
-    document.getElementById("toggle-custom").addEventListener("click", function () {
+    var toggle = document.getElementById("toggle-custom");
+    if (toggle) toggle.addEventListener("click", function () {
       state.custom = !state.custom;
       if (!state.custom && state.channel.presetAmounts.indexOf(state.amount) < 0) state.amount = "";
       render();

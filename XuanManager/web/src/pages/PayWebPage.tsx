@@ -369,7 +369,7 @@ function ProvidersTab({ can, providers, baseUrl, reload, notify }: {
   return <>
     <section className="panel">
       <div className="toolbar">
-        <div><strong>付款链接域名</strong><span>玩家拿到的链接用这个域名开头。后台在 /xuanmanager 子路径下时，一般填成 https://你的域名/xuanmanager</span></div>
+        <div><strong>付款链接域名</strong><span>玩家拿到的链接用这个域名开头，路径固定为 /pgw，不会暴露后台的 /xuanmanager</span></div>
       </div>
       <BaseURLForm baseUrl={baseUrl} canConfig={canConfig} reload={reload} notify={notify} />
     </section>
@@ -439,8 +439,8 @@ function BaseURLForm({ baseUrl, canConfig, reload, notify }: {
     }
   };
   return <div className="pay-link-grid pay-link-grid--narrow">
-    <Field label="对外域名" hint="留空则用后台当前访问的域名。玩家点开的链接是「域名 + /pay?t=…」。">
-      <input value={value} onChange={(event) => setValue(event.target.value)} placeholder="https://admin.example.com/xuanmanager" disabled={!canConfig} spellCheck={false} />
+    <Field label="对外域名" hint="只填域名和端口，不要带路径（路径固定为 /pgw，与后台的 /xuanmanager 分开）。留空则用后台当前访问的域名。">
+      <input value={value} onChange={(event) => setValue(event.target.value)} placeholder="https://pay.example.com" disabled={!canConfig} spellCheck={false} />
     </Field>
     <div className="pay-link-actions">
       <Button disabled={!canConfig || busy || value.trim() === baseUrl} onClick={() => void save()}>{busy ? "保存中…" : "保存域名"}</Button>
@@ -541,7 +541,7 @@ function ChannelsModal({ provider, onClose, onSaved, notify }: {
     <p className="pay-modal-hint">玩家付款页上的每个 Tab 就是这里的一条通道；关掉就看不到，档位决定页面上那排金额按钮。金额直接填整数，例如 <code>500,1000,2000,5000</code>。</p>
     <div className="table-wrap">
       <table className="pay-table pay-channel-table">
-        <thead><tr><th>启用</th><th>通道代码</th><th>显示名称</th><th>金额档位</th><th>最小</th><th>最大</th><th>需填姓名</th></tr></thead>
+        <thead><tr><th>启用</th><th>通道代码</th><th>显示名称</th><th>金额档位</th><th>最小</th><th>最大</th><th>需填姓名</th><th>可自定义</th></tr></thead>
         <tbody>{items.map((item, index) => <tr key={item.code}>
           <td><input type="checkbox" checked={item.enabled} onChange={(event) => patch(index, { enabled: event.target.checked })} /></td>
           <td><code>{item.code}</code></td>
@@ -554,10 +554,14 @@ function ChannelsModal({ provider, onClose, onSaved, notify }: {
           <td><input type="checkbox" checked={item.requirePayer || item.payerLocked} disabled={item.payerLocked}
             title={item.payerLocked ? "该通道在服务商侧必须带付款人姓名，不能关闭" : "打开后玩家必须填写付款人姓名"}
             onChange={(event) => patch(index, { requirePayer: event.target.checked })} /></td>
+          <td><input type="checkbox" checked={item.allowCustom}
+            title="打开后玩家页会多出「输入其他金额」入口；默认关闭，只让玩家点选档位"
+            onChange={(event) => patch(index, { allowCustom: event.target.checked })} /></td>
         </tr>)}</tbody>
       </table>
     </div>
     <p className="pay-modal-hint">「需填姓名」用于网关实名制/小额/转账这类必须核对付款人的通道：<strong>网关实名制、小额、包司抗投、转账、固码通道由系统锁定为必填</strong>（灰色勾选框），关掉会导致建单被服务商拒绝；其他通道可以自己开关。</p>
+    <p className="pay-modal-hint">「可自定义」默认关闭，玩家只能点选金额档位；打开后付款页会多出「输入其他金额」。</p>
     <div className="form-actions">
       <Button variant="secondary" onClick={onClose}>取消</Button>
       <Button disabled={busy} onClick={() => void submit()}>{busy ? "保存中…" : "保存通道"}</Button>

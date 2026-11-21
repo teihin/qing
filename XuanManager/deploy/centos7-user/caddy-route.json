@@ -6,7 +6,9 @@
         "154.37.155.17"
       ],
       "path": [
-        "/xuanmanager/*"
+        "/xuanmanager/*",
+        "/pgw",
+        "/pgw/*"
       ]
     }
   ],
