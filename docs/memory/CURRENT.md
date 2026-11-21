@@ -1,8 +1,16 @@
 # qing 当前状态
 
-更新时间：2026-11-19
+更新时间：2026-11-21
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-21 iOS 未签名包重出（BF 品牌 + 热更基线 7.0.4；待企业签名/真机）
+
+- 20:16 Creator 构建完 jsb-link，20:17「1生成热更新包」跑完（版本 7.0.4、PNG 加密、main.js 补丁在位、native manifest 同步），据此直接 archive。
+- `xcodebuild -project 8L.xcodeproj -scheme 8L-mobile -configuration Release -sdk iphoneos -archivePath build/ios-unsigned/qing-unsigned-20261121.xcarchive CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO` → **ARCHIVE SUCCEEDED**（46s）。
+- 产物 `build/ios-unsigned/qing-unsigned-20261121.ipa`（136 MB，SHA-256 `439a2b28…`），Payload 手动打包、无 `._*`/`__MACOSX`，`unzip -t` 通过。
+- 核验：`codesign -dv` = not signed at all、无 `_CodeSignature`/`embedded.mobileprovision`；`CFBundleDisplayName=BF`、`CFBundleIdentifier=com.fireball.qing`、1.0.0(1)、最低 iOS 12.0、arm64；图标为 BF 盾牌（Assets.car 2.4M + AppIcon60x60@2x）；包内 `assets/main/index.jsc` 与 build 同哈希；native manifest 版本 7.0.4。
+- 线上 `/up` 仍是 6.0.26（本地 7.0.4 更新，首启不会补下载；7.0.4 未上传）。dSYMs 为空（未生成），企业签名不依赖，崩溃分析需要时另出。真机未验。
 
 ## 2026-11-19 实时战绩头像框：环不再缩在头像里（Prefab 就绪，未导入/构建/热更/真机）
 

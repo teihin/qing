@@ -23,6 +23,14 @@
   新增流水/记录页不要按「绿加红减」写；现存实现是 `cc.Color(255,65,52)` 表示加、`cc.Color(167,231,29)` 表示减。
 
 ## 服务器 154.37.155.17
+- **先分清哪台是正式服**：`154.37.155.17` = **测试服**（`/www/html/.xuanmanager`，本机 MySQL 有 mysql/mysqldump）；
+  正式服 = **`8.153.70.197`**（`/www/.xuanmanager`，Caddy :28800，MySQL 远程 `172.22.161.126:3306`，
+  **本机无 mysql 客户端**，只能 `python3 + pymysql`；该机 python3.6 的 stdout 是 ascii，
+  读 env 要 `encoding='utf-8'`、打印中文要包 `io.TextIOWrapper(sys.stdout.buffer)`）。
+  涉及「线上/正式服」一律先确认 IP。
+- **`webcm_user` 没有 `LOCK TABLES` 权限**：`mysqldump` 的备份直接 `mysql <` 导入会 `ERROR 1044`
+  （每张表都带 `LOCK TABLES ... WRITE`）。先 `sed -e "/^LOCK TABLES/d" -e "/^UNLOCK TABLES/d"` 过滤再导；
+  mysql 客户端没有跳过它的开关，且遇错即停、前面的 `DROP/CREATE` 已生效 → 必须整份重跑。
 - **登录口径固定：`ssh -p 2233 -i ~/.ssh/id_ed25519_newserver client_update@154.37.155.17`**（22 端口直接
   `Connection closed`，root 和其他 key 一律 publickey 拒绝；多行 ssh 脚本会被掐断，写脚本传上去再 `bash 脚本`）。
 - **该机没有 `ss`、没有 systemd**：`ss | grep 端口` 永远回 "NOT LISTENING"，会误判服务挂了；查端口用
