@@ -89,12 +89,11 @@ function scopeDetailText(items: ManageScopeName[] | undefined, raw: string): str
 const balanceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const clubModeLabels: Record<string, string> = { "1": "普通模式", "2": "茶楼模式", "3": "带分模式" };
 const clubStatusLabels: Record<string, string> = { used: "正常", init: "未启用", del: "已解散" };
-const relationTypeLabels: Record<string, string> = { device: "同设备", gps: "同GPS网格", ip: "同公网IP" };
+const relationTypeLabels: Record<string, string> = { device: "同设备", gps: "同GPS网格" };
 
 function relationStrength(score: number): { label: string; className: string } {
   if (score >= 100) return { label: "强", className: "is-strong" };
-  if (score >= 60) return { label: "中", className: "is-medium" };
-  return { label: "弱", className: "is-weak" };
+  return { label: "中", className: "is-medium" };
 }
 
 export default function PlayersPage({ can, canViewSensitive, notify }: { can: (permission: string) => boolean; canViewSensitive: boolean; notify: (message: string, kind?: "success" | "error") => void }) {
@@ -626,8 +625,8 @@ function PlayerRelationsModal({ player, onClose, notify }: { player: PlayerItem;
   }, [data]);
   return <Modal wide title={`关联账号 · ${player.name || player.playerId}`} eyebrow="RELATED ACCOUNTS" onClose={onClose}>
     <div className="password-reset-player"><span>{player.name.slice(0, 1) || "玩"}</span><div><strong>{player.name || "未设置昵称"}</strong><p>游戏ID {player.playerId} · 关联账号 {data ? data.total : "…"} 个</p></div></div>
-    <div className="sensitive-operation-notice"><strong>关联只作排查线索</strong><p>同设备为高置信，同GPS网格为中置信，同公网IP为弱线索；NAT、网吧、家人共用设备都可能误报，不能直接作为作弊结论。</p></div>
-    {loading ? <LoadingBlock label="正在读取关联账号" /> : error ? <div className="sensitive-load-error"><span>{error}</span><button type="button" onClick={() => void load()}>重新读取</button></div> : !data || data.items.length === 0 ? <EmptyState title="暂未发现关联账号" description="按同设备、同GPS网格、同公网IP都没有找到其他账号；数据会随玩家登录逐步积累。" /> : <>
+    <div className="sensitive-operation-notice"><strong>关联只作排查线索</strong><p>同设备为高置信，同GPS网格为中置信；网吧、家人共用设备等场景都可能误报，不能直接作为作弊结论。</p></div>
+    {loading ? <LoadingBlock label="正在读取关联账号" /> : error ? <div className="sensitive-load-error"><span>{error}</span><button type="button" onClick={() => void load()}>重新读取</button></div> : !data || data.items.length === 0 ? <EmptyState title="暂未发现关联账号" description="按同设备、同GPS网格都没有找到其他账号；数据会随玩家登录逐步积累。" /> : <>
       <div className="relation-summary">
         <span>共 <strong>{data.total}</strong> 个</span>
         {Object.entries(relationTypeLabels).map(([type, label]) => <span key={type}>{label} <strong>{typeCounts[type] || 0}</strong></span>)}

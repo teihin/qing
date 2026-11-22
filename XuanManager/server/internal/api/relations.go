@@ -14,16 +14,14 @@ import (
 const (
 	relationDeviceDays    = 90
 	relationGPSDays       = 7
-	relationIPDays        = 7
-	relationMaxSharedIP   = 20
 	relationMaxSharedCell = 50
 	relationMatchRowLimit = 20000
 	relationDetailLimit   = 200
 )
 
-var relationScores = map[string]int{"device": 100, "gps": 60, "ip": 30}
+var relationScores = map[string]int{"device": 100, "gps": 60}
 
-var relationTypeOrder = []string{"device", "gps", "ip"}
+var relationTypeOrder = []string{"device", "gps"}
 
 type relationCell struct {
 	Lat int64
@@ -46,7 +44,8 @@ type playerRelation struct {
 	LastSeen string   `json:"lastSeen"`
 }
 
-// loadPlayerRelations 按方案 §6 聚合同设备 / 同 GPS 网格 / 同公网 IP 的关联账号。
+// loadPlayerRelations 按方案 §6 聚合同设备 / 同 GPS 网格的关联账号。
+// 高防后面所有人共用出口 IP，同 IP 关联失去意义，已不再参与判定。
 // 关联查询失败不能拖垮玩家列表；调用方按需降级。
 func (s *Server) loadPlayerRelations(ctx context.Context, guuids []string) (map[string][]playerRelation, error) {
 	sources := make([]string, 0, len(guuids))
@@ -66,7 +65,6 @@ func (s *Server) loadPlayerRelations(ctx context.Context, guuids []string) (map[
 
 	devices := map[string][]string{}
 	cells := map[relationCell][]string{}
-	ips := map[uint32][]string{}
 
 	for _, part := range chunkRelationValues(sources, 400) {
 		rows, err := s.gameDB.QueryContext(ctx, `SELECT user_guuid, device_id, gps_lat_e3, gps_lon_e3, last_gps_at
@@ -100,37 +98,6 @@ WHERE user_guuid IN (`+placeholders(len(part))+`)
 		rows.Close()
 	}
 
-	for _, part := range chunkRelationValues(sources, 400) {
-		rows, err := s.gameDB.QueryContext(ctx, `SELECT user_guuid, login_ip
-FROM usr_login_ip_info
-WHERE user_guuid IN (`+placeholders(len(part))+`)
-  AND ip_public = 1
-  AND login_day >= DATE_SUB(CURDATE(), INTERVAL `+strconv.Itoa(relationIPDays)+` DAY)`, stringArgs(part)...)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var guuid string
-			var ip uint32
-			if err := rows.Scan(&guuid, &ip); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			if ip != 0 {
-				ips[ip] = append(ips[ip], guuid)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-	}
-
-	allowedIPs, err := s.relationAllowedIPs(ctx, ips)
-	if err != nil {
-		return nil, err
-	}
 	allowedCells, err := s.relationAllowedCells(ctx, cells)
 	if err != nil {
 		return nil, err
@@ -138,7 +105,9 @@ WHERE user_guuid IN (`+placeholders(len(part))+`)
 
 	acc := make(map[string]map[string]*relationAccumulator, len(sources))
 	add := func(src, rel, name, kind string, seen time.Time) {
-		if rel == "" || rel == src {
+		// 设备/登录上报在账号信息未就绪时会把界面占位文字（ID??? / 匿名）当 guuid 写进库；
+		// 这类脏行不是真实账号，不参与关联，避免列表里冒出「匿名 ID???」。
+		if !isNumericPlayerID(rel) || rel == src {
 			return
 		}
 		bySrc := acc[src]
@@ -158,45 +127,13 @@ WHERE user_guuid IN (`+placeholders(len(part))+`)
 				item.score = 100
 			}
 		}
-		// 名称优先设备快照：IP 先写入，GPS/设备随后覆盖。
+		// 名称优先设备快照：GPS 先写入，设备随后覆盖。
 		if name != "" {
 			item.name = name
 		}
 		if seen.After(item.lastSeen) {
 			item.lastSeen = seen
 		}
-	}
-
-	for _, part := range chunkRelationValues(allowedIPs, 300) {
-		args := uint32Args(part)
-		query := `SELECT user_guuid, user_name, login_ip, last_login_time
-FROM usr_login_ip_info
-WHERE login_ip IN (` + placeholders(len(part)) + `)
-  AND ip_public = 1
-  AND login_day >= DATE_SUB(CURDATE(), INTERVAL ` + strconv.Itoa(relationIPDays) + ` DAY)
-LIMIT ?`
-		queryArgs := append(args, relationMatchRowLimit)
-		rows, err := s.gameDB.QueryContext(ctx, query, queryArgs...)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var rel, name string
-			var ip uint32
-			var seen time.Time
-			if err := rows.Scan(&rel, &name, &ip, &seen); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			for _, src := range ips[ip] {
-				add(src, rel, name, "ip", seen)
-			}
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
 	}
 
 	for _, part := range chunkRelationValues(allowedCells, 100) {
@@ -297,50 +234,6 @@ LIMIT ?`
 		result[src] = list
 	}
 	return result, nil
-}
-
-func (s *Server) relationAllowedIPs(ctx context.Context, ips map[uint32][]string) ([]uint32, error) {
-	if len(ips) == 0 {
-		return nil, nil
-	}
-	values := make([]uint32, 0, len(ips))
-	for ip := range ips {
-		values = append(values, ip)
-	}
-	counts := map[uint32]int{}
-	for _, part := range chunkRelationValues(values, 300) {
-		query := `SELECT login_ip, COUNT(DISTINCT user_guuid)
-FROM usr_login_ip_info
-WHERE login_ip IN (` + placeholders(len(part)) + `)
-  AND ip_public = 1
-  AND login_day >= DATE_SUB(CURDATE(), INTERVAL ` + strconv.Itoa(relationIPDays) + ` DAY)
-GROUP BY login_ip`
-		rows, err := s.gameDB.QueryContext(ctx, query, uint32Args(part)...)
-		if err != nil {
-			return nil, err
-		}
-		for rows.Next() {
-			var ip uint32
-			var count int
-			if err := rows.Scan(&ip, &count); err != nil {
-				rows.Close()
-				return nil, err
-			}
-			counts[ip] = count
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, err
-		}
-		rows.Close()
-	}
-	allowed := make([]uint32, 0, len(values))
-	for _, ip := range values {
-		if counts[ip] <= relationMaxSharedIP {
-			allowed = append(allowed, ip)
-		}
-	}
-	return allowed, nil
 }
 
 func (s *Server) relationAllowedCells(ctx context.Context, cells map[relationCell][]string) ([]relationCell, error) {
@@ -453,15 +346,19 @@ func chunkRelationValues[T any](values []T, size int) [][]T {
 	return out
 }
 
-func stringArgs(values []string) []any {
-	args := make([]any, len(values))
-	for i, value := range values {
-		args[i] = value
+func isNumericPlayerID(value string) bool {
+	if value == "" || len(value) > 20 {
+		return false
 	}
-	return args
+	for i := 0; i < len(value); i++ {
+		if value[i] < '0' || value[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
-func uint32Args(values []uint32) []any {
+func stringArgs(values []string) []any {
 	args := make([]any, len(values))
 	for i, value := range values {
 		args[i] = value

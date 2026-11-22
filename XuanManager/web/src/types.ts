@@ -288,7 +288,7 @@ export interface PlayerRelationItem {
   name: string;
   /** 已绑定的个人ID靓号；未绑定或游戏服未建表时为空。 */
   prettyNo?: string;
-  /** device=同设备，gps=同GPS网格，ip=同公网IP。 */
+  /** device=同设备，gps=同GPS网格。 */
   types: string[];
   score: number;
   lastSeen: string;

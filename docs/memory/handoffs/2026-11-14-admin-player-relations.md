@@ -67,3 +67,23 @@
 - 未做登录态页面实操（列显示、弹窗、空状态）；用户需刷新页面确认「—」变为 0。
 - 正式设备表没有 `last_ip` / `last_ip_public` 两列，与方案 §4.2/§5.3 的建表/upsert 不一致；当前登录写入未报错，说明游戏服实现已避开这两列，后续修服务端时不要按文档原样加。
 - 大页（100 人）关联查询的 p95 未压测；IP 表数据增长后建议按方案关注慢查询与共享阈值告警。
+
+## 2026-11-22 追加：去掉同公网 IP 关联
+
+- 用户要求：服务器已接入高防，玩家出口 IP 被统一改写，同 IP 关联无意义，只保留设备与 GPS 两路。
+- 后端 `server/internal/api/relations.go`：删除 `relationIPDays`、`relationMaxSharedIP`、`relationAllowedIPs`、`usr_login_ip_info` 的两次查询与 IP 匹配循环、`uint32Args`；`relationScores`/`relationTypeOrder` 只留 `device`(100)/`gps`(60)。
+- 前端：`PlayersPage.tsx` 的 `relationTypeLabels` 去 `ip`，`relationStrength` 只留强/中，弹窗说明与空状态去掉「同公网IP」；`styles.css` 删 `.relation-tag--ip`、`.relation-strength.is-weak`；`types.ts` 注释同步。
+- 文档：`XuanManager/新后台管理系统接口文档.md` §4.5.6 同步口径（评分、时间窗、共享阈值、types 取值）。
+- 保留不动：玩家列表「IP短码」列、详情页「最近上报 IP」（用户只要求砍关联判定）。
+- 验证：`go build ./...`、`go vet ./internal/api/`、`tsc -b`、eslint 通过。
+- 部署（2026-11-22 16:45/16:46）：同一二进制 sha256 `65bbe034f82d9702d9315e8e70a3ae290e32dca9f2ff0cc4caba4d22a94e03f7`（15,925,958 B）+ 前端 `index-CstP5xGn.js` / `index-BZMncE-w.css`；测试服 `/www/html/.xuanmanager`、正式服 `/www/.xuanmanager` 均 stop → 换 bin/web → start。
+- 回滚点：测试服 `bin/xuanmanager.previous-iprel-20261122-1645` + `backups/web.previous-iprel-20261122-1645/`；正式服 `bin/xuanmanager.previous-iprel-20261122-1646` + `backups/web.previous-iprel-20261122-1646/`。
+- 部署后核对：两台 health 200、首页/JS/CSS 200、`/api/game/players/{id}/relations` 未登录 401、JS/CSS md5 与本地一致（`0911ccce…` / `52172256…`）；服务器 /tmp 临时文件已清。
+
+## 2026-11-22 16:53 追加：过滤非数字 guuid（ID??? / 匿名 脏行）
+
+- 现象：关联列表出现「匿名 · ID：ID??? · 同设备 · 强」。查 `kbedm.usr_player_device_info` 存在 `user_guuid='ID???'`、`user_name='匿名'` 共 5 行（5 台设备各 1），`usr_login_ip_info` 同样 5 行；`tbl_Account` 无此账号。
+- 成因：游戏服上报设备/登录 IP 时账号信息未就绪，把界面占位文字当 guuid/昵称写入（同设备真实玩家 470390 在 22:37:05 上报，50 秒后出现 ID??? 行）。
+- 修法（用户要求只改后台）：`relations.go` 的 `add()` 前置 `isNumericPlayerID(rel)`，非纯数字（或空、超 20 位）的候选 guuid 直接丢弃；`relatedCount` 同步不受污染。
+- 未做：脏行未清、游戏服写入侧未改（`/home/release/kbe` 对 `client_update` Permission denied），新脏行仍会产生但后台不再展示。
+- 部署：只换二进制 sha256 `7214aaf783a53081f95475b0a16bf742bc3b2348d7afe7cfff2c31e7c83184eb`（15,925,211 B），web/配置/DB 未动；备份 `bin/xuanmanager.previous-anonfilter-20261122-1653`（测试服）、`…-1654`（正式服）。两台 health 200、首页 200、关联接口未登录 401。

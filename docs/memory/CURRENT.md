@@ -4,6 +4,18 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-22 后台「关联账号」去掉同公网 IP 维度（两台已部署）
+
+- 原因：服务器已接入高防，玩家出口 IP 被统一改写，同 IP 关联出来的都是假关联。用户要求只去掉 IP 这一路。
+- 后端 `XuanManager/server/internal/api/relations.go`：删掉 `usr_login_ip_info` 两段查询、`relationAllowedIPs` 与 IP 共享阈值，评分只留同设备 100 分（90 天）/ 同 GPS 网格 60 分（7 天）；`types` 只返回 `device` / `gps`。
+- 前端 `PlayersPage.tsx` 去掉「同公网IP」标签、说明与空状态文案、弱强度档；`styles.css` 删 `.relation-tag--ip`、`.relation-strength.is-weak`；`types.ts` 注释同步；接口文档 §4.5.6 同步。
+- **玩家列表「IP短码」列和详情「最近上报 IP」保留**：只砍关联判定，不动 IP 展示。
+- 部署：同一二进制 sha256 `65bbe034…`（15,925,958 B）+ 前端 `index-CstP5xGn.js` / `index-BZMncE-w.css` 已上测试服 16:45、正式服 16:46；两台 health 200、页面与资源 200、关联接口未登录 401、产物 md5 与本地一致。
+- 回滚点：测试服 `bin/xuanmanager.previous-iprel-20261122-1645` + `backups/web.previous-iprel-20261122-1645/`；正式服 `bin/xuanmanager.previous-iprel-20261122-1646` + `backups/web.previous-iprel-20261122-1646/`。回滚 = stop.sh → 还原两处 → start.sh。**代码未提交。**
+- **2026-11-22 16:53/16:54 追加兜底**（用户要求只改后台、不动库和游戏服）：`relations.go` 的 `add()` 增加 `isNumericPlayerID`，非纯数字 guuid 一律不参与关联。起因是库里存在 `user_guuid='ID???' / user_name='匿名'` 的脏行（游戏服上报设备/登录 IP 时账号未就绪，把界面占位文字写进了库，测试服 5 台设备各 1 条，与真实玩家共设备），导致关联列表多出「匿名 ID：ID???·同设备·强」。
+- 本次只换二进制（sha256 `7214aaf7…`），**web、配置、数据库均未改**；备份 `bin/xuanmanager.previous-anonfilter-20261122-1653`（测试服）/ `…-1654`（正式服）。两台 health 200、首页 200、关联接口未登录 401。
+- **遗留（用户明确暂不处理）**：脏行没清、游戏服写入侧没改（`/home/release/kbe` 需 release 权限），新脏行仍会写库，只是后台不再展示。
+
 ## 2026-11-22 推广站跳转地址改由后台配置（正式服已上线）
 
 - 后台「系统配置 → 游戏推广下载地址」页下半部分可改苹果/安卓跳转地址，存 `mgr_platform_setting`（`promotion.site.ios_url` / `promotion.site.android_url`），保存即时生效，不用重传网站。
