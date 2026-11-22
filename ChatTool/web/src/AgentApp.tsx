@@ -196,7 +196,7 @@ function AgentLogin({ notice, onLogin }: { notice: string; onLogin: (agent: Agen
     if (!code.trim()) return
     setLoading(true); setError('')
     try {
-      const result = await api<AgentLoginResult>('/api/agent/auth/login/totp/verify', { method: 'POST', body: jsonBody({ challengeToken, code: code.trim() }) })
+      const result = await api<AgentLoginResult>('/api/agent/auth/totp/verify', { method: 'POST', body: jsonBody({ challengeToken, code: code.trim() }) })
       if (result.agent && result.csrfToken) onLogin(result.agent, result.csrfToken)
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : '验证失败，请稍后重试')

@@ -46,7 +46,6 @@ REQUIRED_SITE_FILES = {
     "assets/by-logo.png",
     "assets/by-app-icon.png",
     "assets/by-login-background.png",
-    "downloads/BF.mobileconfig",
 }
 PUBLIC_EXCLUDED_NAMES = {"Caddyfile.example"}
 PUBLIC_EXCLUDED_SUFFIXES = {".md"}
@@ -55,6 +54,7 @@ DEFAULT_APK_RELATIVE = "downloads/BF.apk"
 # 服务器上历史版本用过的旧名，仅用于读取已有 APK 哈希避免重复传输。
 REMOTE_LEGACY_APK_NAMES = ("downloads/BY.apk",)
 CACHE_BUST_LENGTH = 12
+INSTALL_URL_KEYS = (("iosInstallUrl", "苹果安装页"), ("androidInstallUrl", "安卓下载页"))
 
 
 @dataclasses.dataclass(frozen=True)
@@ -97,6 +97,7 @@ def update_static_cache_versions(source_dir: Path) -> None:
 
 
 def run_profile_generator(source_dir: Path) -> None:
+    """兼容旧版站点：仍配置了站内 .mobileconfig 时才重新生成描述文件。"""
     generator = source_dir / "scripts" / "generate_mobileconfig.py"
     if source_dir != DEFAULT_SOURCE_DIR.resolve():
         return
@@ -120,6 +121,13 @@ def relative_download_path(url: object, config_key: str) -> str:
     if not normalized or posix_path.is_absolute() or ".." in posix_path.parts:
         raise RuntimeError(f"{config_key} 相对路径不安全: {url}")
     return posix_path.as_posix()
+
+
+def optional_relative_path(url: object, config_key: str) -> str | None:
+    """旧版“站内文件下载”配置已可缺省；缺省时不打包对应文件。"""
+    if url is None or (isinstance(url, str) and not url.strip()):
+        return None
+    return relative_download_path(url, config_key)
 
 
 def validate_android_apk(apk_path: Path) -> None:
@@ -184,8 +192,8 @@ def create_promotion_archive(
     expected_names = [entry.archive_name for entry in entries]
     if len(names) != len(set(names)) or set(names) != set(expected_names):
         raise RuntimeError("生成的推广网站ZIP内容与预期文件不一致")
-    if "index.html" not in names or "downloads/BF.mobileconfig" not in names:
-        raise RuntimeError("生成的推广网站ZIP缺少入口页或苹果描述文件")
+    if "index.html" not in names or "app.js" not in names or "site-config.json" not in names:
+        raise RuntimeError("生成的推广网站ZIP缺少入口页、脚本或站点配置")
 
 
 def validate_mobileconfig(profile_path: Path, expected_game_url: str) -> None:
@@ -216,10 +224,7 @@ def validate_mobileconfig(profile_path: Path, expected_game_url: str) -> None:
         raise RuntimeError("苹果描述文件没有内嵌有效的BF桌面图标")
 
 
-def collect_source_files(source_dir: Path) -> tuple[list[ArchiveEntry], dict, str]:
-    if not source_dir.is_dir():
-        raise RuntimeError(f"推广网站目录不存在: {source_dir}")
-
+def read_site_config(source_dir: Path) -> dict:
     config_path = source_dir / "site-config.json"
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -227,24 +232,47 @@ def collect_source_files(source_dir: Path) -> tuple[list[ArchiveEntry], dict, st
         raise RuntimeError(f"推广网站配置读取失败 {config_path}: {exc}") from exc
     if not isinstance(config, dict):
         raise RuntimeError(f"推广网站配置格式错误: {config_path}")
+    return config
 
-    apk_relative = relative_download_path(config.get("androidApkUrl"), "androidApkUrl")
-    profile_relative = relative_download_path(config.get("iosProfileUrl"), "iosProfileUrl")
-    game_url = config.get("iosGameUrl")
+
+def collect_source_files(source_dir: Path) -> tuple[list[ArchiveEntry], dict, str | None]:
+    if not source_dir.is_dir():
+        raise RuntimeError(f"推广网站目录不存在: {source_dir}")
+
+    config = read_site_config(source_dir)
+
+    for key, label in INSTALL_URL_KEYS:
+        value = config.get(key)
+        if not isinstance(value, str) or urlsplit(value.strip()).scheme not in {"http", "https"}:
+            raise RuntimeError(
+                f"site-config.json 的 {key}（{label}）必须是完整HTTP/HTTPS地址"
+            )
+
     public_url = config.get("promotionSiteUrl")
-    if not isinstance(game_url, str) or urlsplit(game_url).scheme not in {"http", "https"}:
-        raise RuntimeError("site-config.json 的 iosGameUrl 必须是完整HTTP/HTTPS地址")
-    if not isinstance(public_url, str) or urlsplit(public_url).scheme not in {"http", "https"}:
-        raise RuntimeError("site-config.json 的 promotionSiteUrl 必须是完整HTTP/HTTPS地址")
+    if public_url not in (None, "") and (
+        not isinstance(public_url, str) or urlsplit(public_url).scheme not in {"http", "https"}
+    ):
+        raise RuntimeError("site-config.json 的 promotionSiteUrl 必须是完整HTTP/HTTPS地址或省略")
 
     expected_files = set(REQUIRED_SITE_FILES)
-    expected_files.add(profile_relative)
+    profile_relative = optional_relative_path(config.get("iosProfileUrl"), "iosProfileUrl")
+    if profile_relative:
+        expected_files.add(profile_relative)
+
     missing = sorted(name for name in expected_files if not (source_dir / name).is_file())
     if missing:
         raise RuntimeError("推广网站文件不完整，缺少: " + ", ".join(missing))
 
-    profile_path = source_dir / profile_relative
-    validate_mobileconfig(profile_path, game_url.strip())
+    if profile_relative:
+        game_url = config.get("iosGameUrl")
+        if not isinstance(game_url, str) or urlsplit(game_url).scheme not in {"http", "https"}:
+            raise RuntimeError("site-config.json 的 iosGameUrl 必须是完整HTTP/HTTPS地址")
+        validate_mobileconfig(source_dir / profile_relative, game_url.strip())
+
+    # 跳转模式下下载目录整个不发布：旧 APK / 描述文件里带历史服务器地址，公网上不该留。
+    publish_downloads = bool(
+        profile_relative or optional_relative_path(config.get("androidApkUrl"), "androidApkUrl")
+    )
 
     entries: list[ArchiveEntry] = []
     for path in sorted(source_dir.rglob("*")):
@@ -253,6 +281,7 @@ def collect_source_files(source_dir: Path) -> tuple[list[ArchiveEntry], dict, st
             upload_common.should_skip(relative_path)
             or "__pycache__" in relative_path.parts
             or relative_path.parts[0] == "scripts"
+            or (not publish_downloads and relative_path.parts[0] == "downloads")
             or path.name in PUBLIC_EXCLUDED_NAMES
             or path.suffix.lower() in PUBLIC_EXCLUDED_SUFFIXES
         ):
@@ -260,14 +289,9 @@ def collect_source_files(source_dir: Path) -> tuple[list[ArchiveEntry], dict, st
         if path.is_symlink():
             raise RuntimeError(f"推广网站不允许包含符号链接: {relative_path}")
         if path.is_file():
-            if relative_path.as_posix() == apk_relative:
-                continue
             entries.append(ArchiveEntry(path, relative_path.as_posix()))
 
-    relative_names = {entry.archive_name for entry in entries}
-    if profile_relative not in relative_names:
-        raise RuntimeError(f"推广网站归档缺少苹果描述文件: {profile_relative}")
-    return entries, config, apk_relative
+    return entries, config, profile_relative
 
 
 def read_remote_apk_sha256(
@@ -314,13 +338,11 @@ def read_remote_apk_sha256(
 def build_remote_deploy_script(
     remote_archive: PurePosixPath,
     archive_sha256: str,
-    index_sha256: str,
-    config_sha256: str,
-    profile_sha256: str,
-    apk_sha256: str,
+    checks: dict[str, str],
     expected_file_count: int,
     apk_in_archive: bool,
-    apk_relative: str = DEFAULT_APK_RELATIVE,
+    apk_relative: str | None,
+    apk_sha256: str | None,
 ) -> str:
     stage = REMOTE_PARENT / f".{remote_archive.stem}.staging"
     values = {
@@ -330,16 +352,48 @@ def build_remote_deploy_script(
         "archive": str(remote_archive),
         "stage": str(stage),
         "archive_sha256": archive_sha256,
-        "index_sha256": index_sha256,
-        "config_sha256": config_sha256,
-        "profile_sha256": profile_sha256,
-        "apk_sha256": apk_sha256,
-        "apk_rel": apk_relative,
-        "apk_candidates": " ".join([apk_relative, *REMOTE_LEGACY_APK_NAMES]),
         "file_count": str(expected_file_count),
+        "index_sha256": checks["index.html"],
         "apk_in_archive": "1" if apk_in_archive else "0",
+        "apk_rel": apk_relative or "",
+        "apk_sha256": apk_sha256 or "",
+        "apk_candidates": " ".join([apk_relative, *REMOTE_LEGACY_APK_NAMES]) if apk_relative else "",
     }
     assignments = "\n".join(f"{key}={shlex.quote(value)}" for key, value in values.items())
+
+    required_stage_files = "\n".join(f'[ -f "$stage/{name}" ]' for name in checks)
+    stage_hashes = "\n".join(
+        f'[ "$(sha256sum "$stage/{name}" | awk \'{{print $1}}\')" = "{digest}" ]'
+        for name, digest in checks.items()
+    )
+    deployed_hashes = "\n".join(
+        f'[ "$(sha256sum "$target/{name}" | awk \'{{print $1}}\')" = "{digest}" ]'
+        for name, digest in checks.items()
+    )
+
+    if apk_relative:
+        apk_stage_block = f'''if [ "$apk_in_archive" = "1" ]; then
+    [ -f "$stage/$apk_rel" ]
+else
+    apk_src=""
+    for rel in $apk_candidates; do
+        if [ -f "$target/$rel" ]; then
+            apk_src="$target/$rel"
+            break
+        fi
+    done
+    [ -n "$apk_src" ]
+    [ "$(sha256sum "$apk_src" | awk '{{print $1}}')" = "$apk_sha256" ]
+    mkdir -p "$stage/downloads"
+    cp -- "$apk_src" "$stage/$apk_rel"
+fi'''
+        apk_verify_block = """[ "$(sha256sum "$stage/$apk_rel" | awk '{print $1}')" = "$apk_sha256" ]"""
+        apk_deployed_block = """[ "$(sha256sum "$target/$apk_rel" | awk '{print $1}')" = "$apk_sha256" ]"""
+    else:
+        apk_stage_block = ":"
+        apk_verify_block = ":"
+        apk_deployed_block = ":"
+
     return f"""set -eu
 {assignments}
 old_moved=0
@@ -379,24 +433,8 @@ actual_archive_sha=$(sha256sum "$archive" | awk '{{print $1}}')
 rm -rf -- "$stage"
 mkdir -- "$stage"
 unzip -q "$archive" -d "$stage"
-[ -f "$stage/index.html" ]
-[ -f "$stage/site-config.json" ]
-[ -f "$stage/downloads/BF.mobileconfig" ]
-if [ "$apk_in_archive" = "1" ]; then
-    [ -f "$stage/$apk_rel" ]
-else
-    apk_src=""
-    for rel in $apk_candidates; do
-        if [ -f "$target/$rel" ]; then
-            apk_src="$target/$rel"
-            break
-        fi
-    done
-    [ -n "$apk_src" ]
-    [ "$(sha256sum "$apk_src" | awk '{{print $1}}')" = "$apk_sha256" ]
-    mkdir -p "$stage/downloads"
-    cp -- "$apk_src" "$stage/$apk_rel"
-fi
+{required_stage_files}
+{apk_stage_block}
 
 find "$stage" -type d -exec chmod 755 {{}} +
 find "$stage" -type f -exec chmod 644 {{}} +
@@ -407,10 +445,8 @@ unsearchable_dir_count=$(find "$stage" -type d ! -perm -005 | wc -l | tr -d ' ')
 
 actual_file_count=$(find "$stage" -type f | wc -l | tr -d ' ')
 [ "$actual_file_count" = "$file_count" ]
-[ "$(sha256sum "$stage/index.html" | awk '{{print $1}}')" = "$index_sha256" ]
-[ "$(sha256sum "$stage/site-config.json" | awk '{{print $1}}')" = "$config_sha256" ]
-[ "$(sha256sum "$stage/downloads/BF.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
-[ "$(sha256sum "$stage/$apk_rel" | awk '{{print $1}}')" = "$apk_sha256" ]
+{stage_hashes}
+{apk_verify_block}
 
 if [ -e "$target" ] && [ ! -d "$target" ]; then
     echo "目标路径存在但不是目录: $target" >&2
@@ -426,14 +462,12 @@ mv -- "$stage" "$target"
 
 deployed_file_count=$(find "$target" -type f | wc -l | tr -d ' ')
 [ "$deployed_file_count" = "$file_count" ]
-[ "$(sha256sum "$target/index.html" | awk '{{print $1}}')" = "$index_sha256" ]
-[ "$(sha256sum "$target/site-config.json" | awk '{{print $1}}')" = "$config_sha256" ]
-[ "$(sha256sum "$target/downloads/BF.mobileconfig" | awk '{{print $1}}')" = "$profile_sha256" ]
-[ "$(sha256sum "$target/$apk_rel" | awk '{{print $1}}')" = "$apk_sha256" ]
+{deployed_hashes}
+{apk_deployed_block}
 
 rm -f -- "$archive"
 trap - EXIT HUP INT TERM
-printf 'PROMOTION_SITE_DEPLOY_OK files=%s index_sha256=%s\n' "$deployed_file_count" "$index_sha256"
+printf 'PROMOTION_SITE_DEPLOY_OK files=%s index_sha256=%s\\n' "$deployed_file_count" "$index_sha256"
 """
 
 
@@ -446,35 +480,53 @@ def main() -> int:
     parser.add_argument("--port", type=int)
     parser.add_argument("--user")
     parser.add_argument("--identity-file")
+    parser.add_argument("--public-url", help="覆盖输出里显示的推广站公网地址")
     parser.add_argument("--yes", action="store_true", help="跳过上传确认")
     parser.add_argument("--dry-run", action="store_true", help="只生成、打包和校验，不连接服务器")
     args = parser.parse_args()
 
     source_dir = args.source_dir.resolve()
-    run_profile_generator(source_dir)
+
+    preview_config = read_site_config(source_dir)
+    if optional_relative_path(preview_config.get("iosProfileUrl"), "iosProfileUrl"):
+        run_profile_generator(source_dir)
     update_static_cache_versions(source_dir)
-    entries, site_config, apk_relative = collect_source_files(source_dir)
-    apk_path = find_release_apk(args.apk_dir.resolve())
-    apk_sha256 = upload_common.sha256_file(apk_path)
+    entries, site_config, profile_relative = collect_source_files(source_dir)
+
+    apk_relative = optional_relative_path(site_config.get("androidApkUrl"), "androidApkUrl")
+    apk_path: Path | None = None
+    apk_sha256: str | None = None
+    if apk_relative:
+        apk_path = find_release_apk(args.apk_dir.resolve())
+        apk_sha256 = upload_common.sha256_file(apk_path)
+
     host, port, user, identity_file = upload_common.resolve_connection(args)
     index_sha256 = upload_common.sha256_file(source_dir / "index.html")
     config_sha256 = upload_common.sha256_file(source_dir / "site-config.json")
-    profile_sha256 = upload_common.sha256_file(source_dir / "downloads" / "BF.mobileconfig")
-    public_url = str(site_config["promotionSiteUrl"]).strip()
+    public_url = (args.public_url or str(site_config.get("promotionSiteUrl") or "")).strip() or "（未配置，可用 --public-url 指定）"
 
     remote_apk_sha256: str | None = None
-    apk_in_archive = True
-    if not args.dry_run:
-        print("\n[预检] 比较本地与服务器APK版本...", flush=True)
-        remote_apk_sha256 = read_remote_apk_sha256(
-            host, port, user, identity_file, apk_relative
-        )
-        apk_in_archive = remote_apk_sha256 != apk_sha256
-    if apk_in_archive:
-        entries.append(ArchiveEntry(apk_path, apk_relative))
+    apk_in_archive = False
+    if apk_relative:
+        apk_in_archive = True
+        if not args.dry_run:
+            print("\n[预检] 比较本地与服务器APK版本...", flush=True)
+            remote_apk_sha256 = read_remote_apk_sha256(
+                host, port, user, identity_file, apk_relative
+            )
+            apk_in_archive = remote_apk_sha256 != apk_sha256
+        if apk_in_archive and apk_path and apk_sha256:
+            entries.append(ArchiveEntry(apk_path, apk_relative))
 
     total_bytes = sum(entry.source.stat().st_size for entry in entries)
-    final_file_count = len(entries) if apk_in_archive else len(entries) + 1
+    # 归档里没有APK时，服务器沿用上一版APK，切换后目录里仍会多出这一个文件。
+    final_file_count = len(entries) + 1 if apk_relative and not apk_in_archive else len(entries)
+
+    checks = {"index.html": index_sha256, "site-config.json": config_sha256}
+    if profile_relative:
+        checks[profile_relative] = upload_common.sha256_file(source_dir / profile_relative)
+    if apk_relative and apk_in_archive and apk_sha256:
+        checks[apk_relative] = apk_sha256
 
     with tempfile.TemporaryDirectory(prefix="qing-promotion-site-") as temp_dir:
         archive_path = Path(temp_dir) / "webhome.zip"
@@ -484,14 +536,19 @@ def main() -> int:
         print("\n准备上传推广网站：")
         print(f"  本地目录: {source_dir}")
         print(f"  生成时间: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(source_dir.stat().st_mtime))}")
-        print(f"  本地APK: {apk_path}")
-        print(f"  APK SHA-256: {apk_sha256}")
-        if args.dry_run:
-            print("  APK上传策略: dry-run不连接服务器，按需要上传新APK演练")
-        elif apk_in_archive:
-            print("  APK上传策略: 服务器没有相同APK，本次包含APK")
+        print(f"  苹果安装页: {site_config['iosInstallUrl'].strip()}")
+        print(f"  安卓下载页: {site_config['androidInstallUrl'].strip()}")
+        if apk_relative and apk_path:
+            print(f"  本地APK: {apk_path}")
+            print(f"  APK SHA-256: {apk_sha256}")
+            if args.dry_run:
+                print("  APK上传策略: dry-run不连接服务器，按需要上传新APK演练")
+            elif apk_in_archive:
+                print("  APK上传策略: 服务器没有相同APK，本次包含APK")
+            else:
+                print("  APK上传策略: SHA-256与服务器一致，本次跳过APK并沿用服务器文件")
         else:
-            print("  APK上传策略: SHA-256与服务器一致，本次跳过APK并沿用服务器文件")
+            print("  APK上传策略: 站点已改为跳转，不打包APK")
         print(f"  ZIP文件数量: {len(entries)}")
         print(f"  部署后文件数量: {final_file_count}")
         print(f"  原始大小: {total_bytes / 1024 / 1024:.2f} MB")
@@ -554,13 +611,11 @@ def main() -> int:
         remote_script = build_remote_deploy_script(
             remote_archive,
             archive_sha256,
-            index_sha256,
-            config_sha256,
-            profile_sha256,
-            apk_sha256,
+            checks,
             final_file_count,
-            apk_in_archive=apk_in_archive,
+            apk_in_archive=apk_in_archive if apk_relative else False,
             apk_relative=apk_relative,
+            apk_sha256=apk_sha256,
         )
         deploy = subprocess.run(
             [

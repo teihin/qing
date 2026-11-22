@@ -3,7 +3,8 @@
 SCRIPT_DIR="${0:A:h}"
 cd "$SCRIPT_DIR"
 result_code=0
-python3 tools/upload_promotion_site.py || result_code=$?
+python3 tools/upload_promotion_site.py \
+    --public-url "https://154-37-155-17.nip.io/webhome/" || result_code=$?
 
 echo
 if (( result_code == 0 )); then

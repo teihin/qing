@@ -5,23 +5,21 @@
     siteName: "BF 官方下载",
     gameName: "BF",
     versionText: "官方最新版",
-    androidApkUrl: "./downloads/BF.apk",
-    iosProfileUrl: "./downloads/BF.mobileconfig",
-    iosGameUrl: "https://154-37-155-17.sslip.io/"
+    iosInstallUrl: "https://dgwsd.yycdzx.com/UMuGWv",
+    androidInstallUrl: "https://www.gulubase.com/bf888"
   });
 
   const state = {
     config: { ...DEFAULT_CONFIG },
     device: null,
     toastTimer: 0,
-    activeSheet: null
+    navigating: false
   };
 
   const elements = {
     primaryAction: document.getElementById("primaryAction"),
     primaryLabel: document.getElementById("primaryLabel"),
     primarySubLabel: document.getElementById("primarySubLabel"),
-    primaryMark: document.getElementById("primaryMark"),
     actionNote: document.getElementById("actionNote"),
     androidAction: document.getElementById("androidAction"),
     iosAction: document.getElementById("iosAction"),
@@ -34,13 +32,6 @@
     installTip: document.getElementById("installTip"),
     versionText: document.getElementById("versionText"),
     particles: document.getElementById("particles"),
-    iosSheet: document.getElementById("iosSheet"),
-    browserSheet: document.getElementById("browserSheet"),
-    sheetBackdrop: document.getElementById("sheetBackdrop"),
-    downloadProfileAction: document.getElementById("downloadProfileAction"),
-    copyAddressAction: document.getElementById("copyAddressAction"),
-    browserSheetText: document.getElementById("browserSheetText"),
-    browserRoute: document.getElementById("browserRoute"),
     toast: document.getElementById("toast")
   };
 
@@ -50,7 +41,6 @@
     const touchPoints = navigator.maxTouchPoints || 0;
     const query = new URLSearchParams(window.location.search);
     const forcedPlatform = (query.get("platform") || "").toLowerCase();
-    const forcedBrowser = (query.get("browser") || "").toLowerCase();
 
     const ipadDesktopMode = platform === "MacIntel" && touchPoints > 1;
     let isIOS = /iPhone|iPad|iPod/i.test(ua) || ipadDesktopMode;
@@ -67,43 +57,23 @@
       isIOS = false;
     }
 
-    const isWeChat = /MicroMessenger/i.test(ua);
-    const isQQ = /QQ\//i.test(ua) || /MQQBrowser/i.test(ua);
-    const isWeibo = /Weibo/i.test(ua);
-    const isDouyin = /aweme|BytedanceWebview|ToutiaoMicroApp/i.test(ua);
-    const isAlipay = /AlipayClient/i.test(ua);
-    const isEmbedded = isWeChat || isQQ || isWeibo || isDouyin || isAlipay;
-    const isCriOS = /CriOS/i.test(ua);
-    const isFxiOS = /FxiOS/i.test(ua);
-    const isEdgeIOS = /EdgiOS/i.test(ua);
-    const isOperaIOS = /OPiOS/i.test(ua);
-    let isSafari = /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|OPiOS|Android/i.test(ua);
-
-    if (forcedBrowser === "safari") {
-      isSafari = true;
-    }
-
     let browserName = "系统浏览器";
-    if (isWeChat) browserName = "微信内置浏览器";
-    else if (isQQ) browserName = "QQ内置浏览器";
-    else if (isWeibo) browserName = "微博内置浏览器";
-    else if (isDouyin) browserName = "抖音内置浏览器";
-    else if (isAlipay) browserName = "支付宝内置浏览器";
-    else if (isSafari) browserName = "Safari";
-    else if (isCriOS || /Chrome/i.test(ua)) browserName = "Chrome";
-    else if (isFxiOS || /Firefox/i.test(ua)) browserName = "Firefox";
-    else if (isEdgeIOS || /Edg/i.test(ua)) browserName = "Edge";
-    else if (isOperaIOS || /OPR/i.test(ua)) browserName = "Opera";
+    if (/MicroMessenger/i.test(ua)) browserName = "微信内置浏览器";
+    else if (/QQ\//i.test(ua) || /MQQBrowser/i.test(ua)) browserName = "QQ内置浏览器";
+    else if (/Weibo/i.test(ua)) browserName = "微博内置浏览器";
+    else if (/aweme|BytedanceWebview|ToutiaoMicroApp/i.test(ua)) browserName = "抖音内置浏览器";
+    else if (/AlipayClient/i.test(ua)) browserName = "支付宝内置浏览器";
+    else if (/CriOS/i.test(ua) || /Chrome/i.test(ua)) browserName = "Chrome";
+    else if (/FxiOS/i.test(ua) || /Firefox/i.test(ua)) browserName = "Firefox";
+    else if (/EdgiOS/i.test(ua) || /Edg/i.test(ua)) browserName = "Edge";
+    else if (/OPiOS/i.test(ua) || /OPR/i.test(ua)) browserName = "Opera";
+    else if (/Safari/i.test(ua)) browserName = "Safari";
 
     return {
       isIOS,
       isAndroid,
       isDesktop: !isIOS && !isAndroid,
-      isSafari,
-      isEmbedded,
-      browserName,
-      embeddedName: isWeChat ? "微信" : isQQ ? "QQ" : isWeibo ? "微博" : isDouyin ? "抖音" : isAlipay ? "支付宝" : "当前应用",
-      isStandalone: window.navigator.standalone === true || window.matchMedia("(display-mode: standalone)").matches
+      browserName
     };
   }
 
@@ -114,7 +84,7 @@
       const loaded = await response.json();
       state.config = { ...DEFAULT_CONFIG, ...loaded };
     } catch (error) {
-      console.warn("下载配置读取失败，使用内置默认值。", error);
+      console.warn("安装地址读取失败，使用内置默认值。", error);
       state.config = { ...DEFAULT_CONFIG };
     }
   }
@@ -159,115 +129,66 @@
 
     if (device.isIOS) {
       elements.deviceIcon.classList.add("is-ios");
-      elements.downloadTitle.textContent = "苹果签名版";
-      elements.primaryLabel.textContent = device.isSafari && !device.isEmbedded ? "安装苹果签名版" : "使用 Safari 打开";
-      elements.primarySubLabel.textContent = device.isSafari && !device.isEmbedded ? "按系统提示完成安装" : "苹果签名版需通过Safari安装";
-      elements.actionNote.textContent = device.isStandalone ? "苹果签名版已安装" : "安装完成后即可进入游戏";
-      elements.flowDeviceText.textContent = "已为你匹配苹果签名版";
-      setInstallTip("苹果签名版", device.isSafari && !device.isEmbedded ? "下载后前往“设置 → 已下载描述文件”完成安装。" : "请复制本页地址并切换到Safari浏览器打开。 ");
+      elements.downloadTitle.textContent = "iPhone / iPad";
+      elements.primaryLabel.textContent = "前往苹果安装页";
+      elements.primarySubLabel.textContent = "点击后前往安装";
+      elements.actionNote.textContent = "点击按钮跳转到苹果安装页面";
+      elements.flowDeviceText.textContent = "已识别 iPhone / iPad";
+      setInstallTip("苹果安装提示", "点击上方按钮前往苹果安装页面，按页面提示完成安装。");
     } else if (device.isAndroid) {
       elements.deviceIcon.classList.add("is-android");
       elements.downloadTitle.textContent = "Android 手机";
-      elements.primaryLabel.textContent = device.isEmbedded ? "使用浏览器打开" : "下载 Android 版";
-      elements.primarySubLabel.textContent = device.isEmbedded ? `当前位于${device.embeddedName}内置浏览器` : "下载官方APK安装包";
-      elements.actionNote.textContent = device.isEmbedded ? "请从右上角菜单选择“在浏览器打开”" : "下载完成后按系统提示允许安装";
-      elements.flowDeviceText.textContent = "已为你匹配Android版本";
-      setInstallTip("安卓安装提示", device.isEmbedded ? "内置浏览器可能拦截APK，请切换系统浏览器。" : "如系统提示未知来源，请仅对当前浏览器授权。 ");
+      elements.primaryLabel.textContent = "前往安卓下载页";
+      elements.primarySubLabel.textContent = "点击后前往下载安装";
+      elements.actionNote.textContent = "点击按钮跳转到安卓下载页面";
+      elements.flowDeviceText.textContent = "已识别 Android 设备";
+      setInstallTip("安卓安装提示", "点击上方按钮前往下载页面，按页面提示完成安装。");
     } else {
       elements.downloadTitle.textContent = "电脑浏览器";
       elements.primaryLabel.textContent = "选择手机版本";
-      elements.primarySubLabel.textContent = "支持 Android 与苹果签名版";
-      elements.actionNote.textContent = "建议直接使用手机打开本页面下载";
-      elements.flowDeviceText.textContent = "请选择Android或苹果签名版";
-      setInstallTip("电脑访问提示", "请选择下方平台，或将本页地址发送到手机打开。 ");
+      elements.primarySubLabel.textContent = "支持 Android 与苹果安装";
+      elements.actionNote.textContent = "建议直接使用手机打开本页面";
+      elements.flowDeviceText.textContent = "请选择 Android 或苹果安装";
+      setInstallTip("电脑访问提示", "请选择下方平台，或把本页地址发到手机上打开。");
     }
 
     elements.primaryAction.disabled = false;
   }
 
-  function absoluteUrl(value) {
+  // 只接受 https 目标：落地页本身是 http，配置一旦被改写成 http 地址就拒绝，避免把玩家送去可被劫持的下载源。
+  function safeHttpsUrl(value) {
+    const text = typeof value === "string" ? value.trim() : "";
+    if (!text) return "";
+    let parsed;
     try {
-      return new URL(value, window.location.href).href;
+      parsed = new URL(text, window.location.href);
     } catch (_error) {
-      return value;
+      return "";
     }
+    if (parsed.protocol !== "https:") {
+      console.warn("已忽略非 HTTPS 安装地址:", text);
+      return "";
+    }
+    return parsed.href;
   }
 
-  function startAndroidDownload() {
-    if (state.device.isEmbedded) {
-      openBrowserGuide("android");
+  function installUrlFor(platform) {
+    const isIOS = platform === "ios";
+    const configured = safeHttpsUrl(isIOS ? state.config.iosInstallUrl : state.config.androidInstallUrl);
+    if (configured) return configured;
+    return safeHttpsUrl(isIOS ? DEFAULT_CONFIG.iosInstallUrl : DEFAULT_CONFIG.androidInstallUrl);
+  }
+
+  function goToInstallPage(platform) {
+    const target = installUrlFor(platform);
+    if (!target) {
+      showToast("安装地址暂不可用，请稍后重试");
       return;
     }
-    showToast("正在开始下载Android安装包…");
-    window.setTimeout(() => {
-      window.location.assign(absoluteUrl(state.config.androidApkUrl));
-    }, 180);
-  }
-
-  function startIOSInstall() {
-    if (state.device.isEmbedded || (state.device.isIOS && !state.device.isSafari)) {
-      openBrowserGuide("ios");
-      return;
-    }
-    openSheet(elements.iosSheet);
-  }
-
-  function openBrowserGuide(targetPlatform) {
-    const isIOSGuide = targetPlatform === "ios" || state.device.isIOS;
-    elements.browserSheetText.textContent = isIOSGuide
-      ? "苹果签名版需要使用Safari下载。请复制本页地址，再切换到Safari粘贴打开。"
-      : "当前应用的内置浏览器可能拦截APK下载。请点击右上角菜单，选择在系统浏览器中打开。";
-    elements.browserRoute.textContent = isIOSGuide ? "复制地址　→　打开 Safari　→　粘贴访问" : "右上角菜单　→　在浏览器中打开";
-    openSheet(elements.browserSheet);
-  }
-
-  function openSheet(sheet) {
-    closeSheets(true);
-    state.activeSheet = sheet;
-    elements.sheetBackdrop.hidden = false;
-    sheet.hidden = false;
-    document.body.classList.add("sheet-open");
-    window.requestAnimationFrame(() => {
-      elements.sheetBackdrop.classList.add("is-open");
-      sheet.classList.add("is-open");
-      const focusTarget = sheet.querySelector("button");
-      if (focusTarget) focusTarget.focus({ preventScroll: true });
-    });
-  }
-
-  function closeSheets(immediate = false) {
-    const sheets = [elements.iosSheet, elements.browserSheet];
-    sheets.forEach((sheet) => sheet.classList.remove("is-open"));
-    elements.sheetBackdrop.classList.remove("is-open");
-    document.body.classList.remove("sheet-open");
-    state.activeSheet = null;
-
-    const finish = () => {
-      sheets.forEach((sheet) => { sheet.hidden = true; });
-      elements.sheetBackdrop.hidden = true;
-    };
-    if (immediate) finish();
-    else window.setTimeout(finish, 220);
-  }
-
-  async function copyPageAddress() {
-    const address = window.location.href;
-    try {
-      await navigator.clipboard.writeText(address);
-      showToast("本页地址已复制，请在系统浏览器中打开");
-      return;
-    } catch (_error) {
-      const input = document.createElement("textarea");
-      input.value = address;
-      input.setAttribute("readonly", "");
-      input.style.position = "fixed";
-      input.style.opacity = "0";
-      document.body.appendChild(input);
-      input.select();
-      const copied = document.execCommand("copy");
-      input.remove();
-      showToast(copied ? "本页地址已复制，请在系统浏览器中打开" : "请长按浏览器地址栏复制本页地址");
-    }
+    if (state.navigating) return;
+    state.navigating = true;
+    showToast(platform === "ios" ? "正在打开苹果安装页面…" : "正在打开安卓下载页面…");
+    window.setTimeout(() => window.location.assign(target), 120);
   }
 
   function showToast(message) {
@@ -279,29 +200,19 @@
 
   function handlePrimaryAction() {
     if (state.device.isIOS) {
-      startIOSInstall();
+      goToInstallPage("ios");
     } else if (state.device.isAndroid) {
-      startAndroidDownload();
+      goToInstallPage("android");
     } else {
-      showToast("请在下方选择 Android 或苹果签名版");
+      showToast("请在下方选择 Android 或苹果安装");
       elements.androidAction.focus();
     }
   }
 
   function bindEvents() {
     elements.primaryAction.addEventListener("click", handlePrimaryAction);
-    elements.androidAction.addEventListener("click", startAndroidDownload);
-    elements.iosAction.addEventListener("click", startIOSInstall);
-    elements.sheetBackdrop.addEventListener("click", () => closeSheets());
-    document.querySelectorAll("[data-close-sheet]").forEach((button) => button.addEventListener("click", () => closeSheets()));
-    elements.downloadProfileAction.addEventListener("click", () => {
-      showToast("正在下载BF苹果签名版…");
-      window.setTimeout(() => window.location.assign(absoluteUrl(state.config.iosProfileUrl)), 160);
-    });
-    elements.copyAddressAction.addEventListener("click", copyPageAddress);
-    document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && state.activeSheet) closeSheets();
-    });
+    elements.androidAction.addEventListener("click", () => goToInstallPage("android"));
+    elements.iosAction.addEventListener("click", () => goToInstallPage("ios"));
     window.addEventListener("offline", () => showToast("网络已断开，请恢复网络后重试"));
     window.addEventListener("online", () => showToast("网络已恢复"));
   }

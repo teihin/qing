@@ -1,13 +1,18 @@
 # BF 官方下载站
 
-这是一个零依赖静态下载站，支持：
+这是一个零依赖静态跳转站（2026-11-22 起不再站内发文件）：
 
 - 自动识别 iPhone、iPad、Android 和桌面浏览器。
-- 识别微信、QQ、微博、抖音、支付宝等内置浏览器并给出切换提示。
-- Android 下载正式 APK。
-- iPhone/iPad 通过 `.mobileconfig` 安装全屏 Web Clip；即使进入同域的客服、语音等其他路径，也继续保持无 Safari 地址栏的全屏模式。
-- iPhone 非 Safari 浏览器引导复制地址并切换 Safari。
-- 桌面和手机响应式布局、刘海屏安全区、减少动画偏好和键盘关闭弹层。
+- iPhone/iPad 点击主按钮跳转苹果安装页（不自动跳，先给用户看落地页）。
+- Android 点击主按钮跳转安卓下载页。
+- 桌面浏览器提供两个平台的入口按钮。
+- 响应式布局、刘海屏安全区、减少动画偏好。
+
+跳转地址集中在 `site-config.json`：
+
+- `iosInstallUrl`：苹果安装页，当前 `https://dgwsd.yycdzx.com/UMuGWv`。
+- `androidInstallUrl`：安卓下载页，当前 `https://www.gulubase.com/bf888`。
+- `promotionSiteUrl`：只用于上传脚本打印公网地址。
 
 ## 目录
 
@@ -18,27 +23,16 @@ WebHome/
 ├── app.js
 ├── site-config.json
 ├── assets/
-├── downloads/
-│   ├── BF.mobileconfig
-│   └── BF.apk              # 上传时由app/release唯一APK映射，不需手工复制
+├── downloads/          # 仅本机留档，不发布到公网（含历史服务器地址）
+│   └── BF.mobileconfig
 └── scripts/generate_mobileconfig.py
 ```
 
-## 修改发布配置
+## 旧版站内文件（仅历史保留）
 
-所有下载地址集中在 `site-config.json`：
-
-- `promotionSiteUrl`：推广下载站正式访问地址。
-- `androidApkUrl`：Android APK地址。
-- `iosProfileUrl`：苹果描述文件地址。
-- `iosGameUrl`：安装到桌面后打开的游戏网页，目前为 `https://154-37-155-17.sslip.io/web-mobile/`。
-
-修改 `iosGameUrl`、名称、组织或描述后，必须重新生成描述文件：
-
-```bash
-python3 WebHome/scripts/generate_mobileconfig.py
-plutil -lint WebHome/downloads/BF.mobileconfig
-```
+`downloads/BF.mobileconfig` 与 `scripts/generate_mobileconfig.py` 是改版前的苹果 Web Clip 安装流程，
+页面已不再引用。只有当 `site-config.json` 里重新配置相对的 `androidApkUrl` / `iosProfileUrl` /
+`iosGameUrl` 时，上传脚本才会重新生成描述文件、打包 APK 并做对应校验；三者为空即按跳转模式发布。
 
 ## 本地预览
 
@@ -51,24 +45,28 @@ python3 -m http.server 7460 --directory WebHome
 打开 `http://127.0.0.1:7460/`。可以使用查询参数检查不同展示：
 
 - `?platform=android`
-- `?platform=ios&browser=safari`
+- `?platform=ios`（会立刻跳转到苹果安装页）
 - `?platform=desktop`
 
 ## 正式部署
 
-1. 确保Cocos Android生成目录的`app/release/`第一层只有一个已签名并经过真机验证的APK，文件名不限。
-2. 重新执行描述文件生成脚本并通过 `plutil -lint`。
-3. 把整个 `WebHome` 目录上传到静态服务器。
-4. 为 `.mobileconfig` 返回 `application/x-apple-aspen-config`，为 `.apk` 返回 `application/vnd.android.package-archive`。
-5. 用Android系统浏览器、iPhone Safari、微信和QQ内置浏览器分别检查一次。
+1. 改 `site-config.json` 的两个跳转地址（如需要）。
+2. 双击上面对应的上传脚本，或在根目录执行
+   `python3 tools/upload_promotion_site.py --dry-run` 先校验打包结果。
+3. 用 Android 系统浏览器、iPhone Safari 各开一次公网地址，确认跳转目标正确。
 
-也可以在项目根目录双击 `4上传推广网站.command`。脚本会重新生成并校验描述文件，从`build/jsb-link/frameworks/runtime-src/proj.android-studio/app/release/`读取唯一APK，打包后上传到服务器 `/www/html/webhome`，原子替换目录并把上一版保留在 `/www/html/.webhome.previous`。如果服务器APK的SHA-256与本地一致，本次ZIP不会包含APK，切换网站时直接沿用服务器文件，避免重复传输约几十MB内容。
+也可以直接双击根目录的上传脚本：
 
-`Caddyfile.example` 提供了部署到 `/webhome/` 的示例。`.mobileconfig` 当前未做证书签名，安装时iOS会显示描述文件信息并要求玩家在“设置”中确认；如面向大量陌生用户分发，建议使用可信证书签名以降低用户疑虑。
+- `4上传推广网站.command`：测试服（`.hot-update-upload-config.json`）。
+- `9-4上传推广网站-正式服.command`：正式服（`.hot-update-upload-config.prod.json`，8.153.70.197）。
+
+打包后上传到服务器 `/www/html/webhome`，原子替换目录并把上一版保留在 `/www/html/.webhome.previous`。
+跳转模式下 ZIP 约 1.5 MB，不含 APK。
+
+`Caddyfile.example` 提供了部署到 `/webhome/` 的示例。
 
 ## 重要边界
 
-- `.mobileconfig` 只是把网页入口添加到iPhone/iPad桌面，不是IPA，也不把Cocos资源离线安装进手机。
-- 玩家下载描述文件后需要在8分钟内进入“设置 → 已下载描述文件”完成安装。
-- 清理Safari网站数据可能清除网页版设备标识；Web Clip不能提供原生设备ID保证。
-- 网页语音仍受HTTPS/WSS和浏览器麦克风权限约束。
+- 本页只做跳转，不再提供 APK 与描述文件下载；装包流程由苹果安装页和安卓下载页各自负责。
+- 只在用户点击按钮后才跳转；关掉脚本时页面仍给出两个平台的直链（`<noscript>` 兜底）。
+- 微信/QQ 等内置浏览器可能拦截外跳或二次跳转，需要时引导玩家用系统浏览器打开。
