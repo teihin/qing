@@ -361,6 +361,11 @@ export default class panelGameView extends UIPanelViewBase {
     onLoad () {
         super.onLoad();
 
+        // 牌背那三个 Toggle 只挂了 cc.Toggle、没有 cc.Button，
+        // 而 UIViewBase.onLoad 是按 cc.Button 注册控件的，点了只有勾动、配置不落盘。
+        // 只补这三项，其它开关不动。见 BindPlainToggles。
+        this.BindPlainToggles();
+
         this.BindQueueMatchUI();
         this.BindRoomInviteUI();
         this.BindRoomReadyBreathing();
@@ -1016,16 +1021,104 @@ export default class panelGameView extends UIPanelViewBase {
     public UpdateBackImg()
     {
         let strName = Tool.GetCardBackIndex();
-        let arrayAll = Tool.GetChild(this.node,"UserInfo").getComponentsInChildren(PKCardInfoScript);
+        // 先按节点名直接刷一遍：不依赖组件遍历，展示牌这种平时不激活、
+        // 或者不确定挂在哪个节点上的牌也能刷到。
+        this.ApplyCardBackToTree(this.node, strName);
+
+        // 再让每个牌组件走自己的入口：它记着牌面占位等状态，缓存也要同步。
+        let arrayAll = this.node.getComponentsInChildren(PKCardInfoScript);
         for(let one of arrayAll)
         {
-            let img = one.node.getChildByName("BK1").getComponent(cc.Sprite);
-            Tool.LoadImg(img,"zuotype/牌背"+strName);
+            one.ApplyCardBack();
         }
 
         //调整搓牌背面
         let cuo = Tool.GetChild(this.node,"搓牌窗口/遮罩").getComponent(cc.Sprite);
         Tool.LoadImg(cuo,"zuotype/搓背"+strName);
+    }
+
+    /** 递归把树上所有 BK1/ZBK1（牌背节点）换成设置里的牌背。
+     *  只认节点名，不依赖 PKCardInfoScript：切牌背时那几张"没被组件遍历覆盖到"的牌
+     *  就是靠这条兜住的。 */
+    private ApplyCardBackToTree(transRoot:cc.Node, strName:string):void
+    {
+        if(transRoot == null || !cc.isValid(transRoot))
+            return;
+        let bk1 = this.FindCardBackNode(transRoot);
+        if(bk1 != null)
+        {
+            let spr = bk1.getComponent(cc.Sprite);
+            if(spr != null)
+                Tool.LoadImg(spr, "zuotype/牌背" + strName);
+        }
+        let arrayChild = transRoot.children;
+        for(let i = 0; i < arrayChild.length; i++)
+            this.ApplyCardBackToTree(arrayChild[i], strName);
+    }
+
+    /** 找牌背节点。除了 BK1/ZBK1，也认编辑器复制出来的「BK1 copy」——精确同名匹配会漏。 */
+    private FindCardBackNode(transRoot:cc.Node):cc.Node
+    {
+        let arrayChild = transRoot.children;
+        for(let i = 0; i < arrayChild.length; i++)
+        {
+            let strName = arrayChild[i].name;
+            if(strName.indexOf("BK1") == 0 || strName.indexOf("ZBK1") == 0)
+                return arrayChild[i];
+        }
+        return null;
+    }
+
+    /** 只补「牌背0/1/2」这三个 Toggle。
+     *  它们只挂了 cc.Toggle、没有 cc.Button，而 UIViewBase.onLoad 是按 cc.Button 遍历注册的，
+     *  所以点牌背只有勾选框动、localStorage 不落盘，牌面永远停在默认那张。
+     *  其它 Toggle（桌面/奖池/牌局回顾/各开关）保持原样，不在这里动。 */
+    private BindPlainToggles():void
+    {
+        let arrayAll = this.node.getComponentsInChildren(cc.Toggle);
+        for(let one of arrayAll)
+        {
+            if(one == null || !cc.isValid(one.node))
+                continue;
+            if(one.node.name.indexOf("牌背") < 0)
+                continue;
+            if(one.node.getComponent(cc.Button) != null)
+                continue;
+            let node = one.node as any;
+            if(node.__toggleBound === true)
+                continue;
+            node.__toggleBound = true;
+            one.node.on(cc.Node.EventType.TOUCH_END, ()=>{
+                this.scheduleOnce(()=>{
+                    if(one == null || !cc.isValid(one.node))
+                        return;
+                    this.onToggleClick(one);
+                    this.SyncExclusiveToggle(one);
+                    if(one.isChecked)
+                        this.PlayAudio("按键");
+                },0);
+            }, this);
+        }
+    }
+
+    /** 牌背三选一互斥。这三个节点没配 ToggleGroup，不手动处理会几个勾同时亮。 */
+    private SyncExclusiveToggle(toggle:cc.Toggle):void
+    {
+        if(toggle == null || !cc.isValid(toggle.node) || !toggle.isChecked)
+            return;
+        if(toggle.node.name.indexOf("牌背") < 0)
+            return;
+        let parent = toggle.node.parent;
+        if(parent == null)
+            return;
+        for(let child of parent.children)
+        {
+            if(child === toggle.node)
+                continue;
+            let other = child.getComponent(cc.Toggle);
+            if(other != null && other.isChecked)
+                other.isChecked = false;
+        }
     }
 
     public onToggleClick(toggle:cc.Toggle)
@@ -1041,6 +1134,9 @@ export default class panelGameView extends UIPanelViewBase {
             let strName = toggle.node.name.replace("牌背","");
             cc.sys.localStorage.setItem("牌背",strName);
             this.UpdateBackImg();
+            // 牌背图是异步 load：万一这一刻还没进缓存，稍后再对一次，
+            // 免得出现「其他人换了、某几张没换」。
+            this.scheduleOnce(()=>{ this.UpdateBackImg(); }, 0.15);
         }
         else if(toggle.node.name === "搓牌开关")
         {
