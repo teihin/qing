@@ -130,6 +130,8 @@ func newServer(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) *Serv
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", s.handleHealth)
+	// 推广落地页的公开只读接口：玩家浏览器直接请求，不登录、不带 Cookie。
+	s.mux.HandleFunc("GET /api/public/promotion-links", s.handlePublicPromotionSiteLinks)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleLogin)
 	s.mux.HandleFunc("POST /api/auth/login/totp", s.handleTOTPLogin)
 	s.mux.Handle("GET /api/auth/totp/status", s.authorized("", false, s.handleTOTPStatus))
@@ -300,6 +302,9 @@ func (s *Server) routes() {
 	s.mux.Handle("PUT /api/configuration/club-seat-stone-ratio", s.authorized("configuration.stone_consume.update", true, s.handleUpdateClubSeatStoneRatio))
 	s.mux.Handle("GET /api/configuration/promotion-download", s.authorized("configuration.promotion_download.view", false, s.handleGetPromotionDownloadURL))
 	s.mux.Handle("PUT /api/configuration/promotion-download", s.authorized("configuration.promotion_download.update", true, s.handleUpdatePromotionDownloadURL))
+	// 推广落地站（/webhome/）的苹果/安卓跳转地址：后台可改，落地页每次打开实时读取。
+	s.mux.Handle("GET /api/configuration/promotion-site-links", s.authorized("configuration.promotion_download.view", false, s.handleGetPromotionSiteLinks))
+	s.mux.Handle("PUT /api/configuration/promotion-site-links", s.authorized("configuration.promotion_download.update", true, s.handleUpdatePromotionSiteLinks))
 	s.mux.Handle("GET /api/users", s.authorized("user.view", false, s.handleListUsers))
 	s.mux.Handle("GET /api/users/role-options", s.authorized("user.view", false, s.handleRoleOptions))
 	s.mux.Handle("POST /api/users", s.authorized("user.create", true, s.handleCreateUser))

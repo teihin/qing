@@ -8,11 +8,15 @@
 - 桌面浏览器提供两个平台的入口按钮。
 - 响应式布局、刘海屏安全区、减少动画偏好。
 
-跳转地址集中在 `site-config.json`：
+跳转地址取值顺序（前者优先）：
 
-- `iosInstallUrl`：苹果安装页，当前 `https://dgwsd.yycdzx.com/UMuGWv`。
-- `androidInstallUrl`：安卓下载页，当前 `https://www.gulubase.com/bf888`。
-- `promotionSiteUrl`：只用于上传脚本打印公网地址。
+1. 后台「系统配置 → 游戏推广下载地址」配的两个地址，落地页用本目录下的
+   `links.json` 读取（Caddy 内部转给后台只读接口，页面里不会出现 `/xuanmanager`）。
+2. 同目录 `site-config.json` 的 `iosInstallUrl` / `androidInstallUrl`（接口不可用时的兜底）。
+3. `app.js` 里的 `DEFAULT_CONFIG`。
+
+当前地址：苹果 `https://dgwsd.yycdzx.com/UMuGWv`，安卓 `https://www.gulubase.com/bf888`。
+公网地址只用于上传脚本打印，可用 `--public-url` 指定。
 
 ## 目录
 

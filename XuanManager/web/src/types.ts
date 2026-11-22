@@ -1047,6 +1047,12 @@ export interface PromotionDownloadURLState {
   rowCount: number;
 }
 
+/** 推广落地站（/webhome/）的苹果/安卓跳转地址，存在 mgr_platform_setting。 */
+export interface PromotionSiteLinksState {
+  iosUrl: string;
+  androidUrl: string;
+}
+
 /** 俱乐部管理：列表项。群主由 sm_club_make 反查，代理数来自 club_invite_code_info。 */
 export interface ClubListItem {
   clubId: string;

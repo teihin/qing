@@ -89,6 +89,39 @@
     }
   }
 
+  // 后台「系统配置 → 游戏推广下载地址」里配的两个跳转地址。
+  // 页面只在同一个目录下要 links.json（Caddy 内部转到后台只读接口），
+  // 也拿不到（后台没配、接口挂了、或不是 https）就静默保留站点自带的 site-config.json。
+  async function loadRemoteLinks() {
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 2500);
+    try {
+      const response = await fetch(`links.json?v=${Date.now()}`, {
+        cache: "no-store",
+        credentials: "omit",
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      const data = payload && payload.data ? payload.data : payload;
+      const links = {};
+      if (data && safeHttpsUrl(data.iosUrl)) links.iosInstallUrl = data.iosUrl.trim();
+      if (data && safeHttpsUrl(data.androidUrl)) links.androidInstallUrl = data.androidUrl.trim();
+      return links;
+    } catch (error) {
+      console.warn("后台跳转配置读取失败，继续使用站点配置。", error);
+      return {};
+    } finally {
+      window.clearTimeout(timer);
+    }
+  }
+
+  async function refreshRemoteLinks() {
+    const links = await loadRemoteLinks();
+    if (!links.iosInstallUrl && !links.androidInstallUrl) return;
+    state.config = { ...state.config, ...links };
+  }
+
   function createParticles() {
     if (!elements.particles || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const fragment = document.createDocumentFragment();
@@ -223,6 +256,7 @@
     bindEvents();
     await loadConfig();
     renderDevice();
+    void refreshRemoteLinks();
   }
 
   boot();

@@ -85,6 +85,32 @@ header @webhome {
 - 回滚：`cp /etc/caddy/Caddyfile.bak.sec-20261122-105504 /etc/caddy/Caddyfile && caddy reload --config /etc/caddy/Caddyfile`。
 - 仍**明文 HTTP**（用户决定暂不上 TLS）：中间人可篡改 HTML/JS 本身，本轮安全头挡不住这一层。
 
+## 2026-11-22 五次调整：跳转地址改后台配置（不用再发版本）
+
+**后台**：`系统配置 → 游戏推广下载地址` 页下半部分新增「苹果安装地址 / 安卓下载地址」两个输入框。
+
+- 存储：`mgr_platform_setting` 的 `promotion.site.ios_url` / `promotion.site.android_url`（无迁移，表本来就有）。
+- 接口：`GET /api/public/promotion-links`（公开只读、`Cache-Control: no-store`、允许跨域）、
+  `GET/PUT /api/configuration/promotion-site-links`（权限沿用 `configuration.promotion_download.view/update`，
+  保存要勾选确认、只收 https、写审计）。读走 `platformSetting` 的 10 秒缓存，写后立即失效。
+- 代码：`XuanManager/server/internal/api/promotion_site_links.go`；路由在 `server.go` 的公开区与
+  promotion-download 旁边；前端 `web/src/pages/PromotionDownloadPage.tsx` + `web/src/types.ts`。
+
+**落地页**：`app.js` 先请求 `/xuanmanager/api/public/promotion-links?v=时间戳`（2.5s 超时、`credentials: omit`、
+只接受 https），失败静默回退 `site-config.json`，再回退内置默认值；`boot()` 不阻塞首屏。
+
+**部署（正式服 8.153.70.197）**：`GOOS=linux GOARCH=amd64` 编 `./cmd/xuanmanager`（15MB，sha `1116e5a2…`）+ `npm run build`
+（`index-SozfhwRq.js`），`/www/.xuanmanager` 用 stop.sh → 换 `bin/xuanmanager` 与 `web/` → start.sh。
+备份：`bin/xuanmanager.previous-promolinks-20261122-112211`、`web.previous-promolinks-20261122-112211/`。
+两条配置用 pymysql 直连（`XUAN_DB_*` 取自 runtime.env）初始化，`updated_by=seed-20261122`。
+
+**验证**：经 Caddy 的 `/xuanmanager/api/public/promotion-links` 返回两条地址；把 DB 里 ios_url 临时改成
+`https://example.com/ios-from-backend` 后，落地页点「前往苹果安装页」确实跳到该地址（证明后台生效、未重传网站），
+随后已恢复真值并复测跳转正确；health 200、未登录管理接口 401、后台页面与静态资源 200。
+
+**注意**：测试服 `154.37.155.17` 上的 XuanManager 与落地页都没更新，那边仍走 site-config；
+改后台值后备 `site-config.json` 不会自动跟着变（后台接口挂掉时才会用到它，建议重要变更时顺手同步）。
+
 ## 未做 / 注意
 
 - **测试服 `154.37.155.17:/www/html/webhome` 没动**：仍是旧下载页（含旧 APK）。要同步双击 `4上传推广网站.command`；

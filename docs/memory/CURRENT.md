@@ -4,6 +4,12 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-22 推广站跳转地址改由后台配置（正式服已上线）
+
+- 后台「系统配置 → 游戏推广下载地址」页下半部分可改苹果/安卓跳转地址，存 `mgr_platform_setting`（`promotion.site.ios_url` / `promotion.site.android_url`），保存即时生效，不用重传网站。
+- 落地页每次打开请求同目录 `links.json`（Caddy 改写到后台只读接口，**页面里不出现 `/xuanmanager`**；no-store，只接受 https），取不到回退 `site-config.json` → 内置默认值。
+- 后端新增 `promotion_site_links.go` 三条路由，沿用 `configuration.promotion_download.*` 权限，无迁移；正式服 bin `67942c12…`、前端 `index-SozfhwRq.js`；回滚点 `bin/xuanmanager.previous-hidelinks-20261122-112901`、Caddy `Caddyfile.bak.weblinks-20261122-112831`。**代码未提交。**
+
 ## 2026-11-22 推广站改为按平台跳转（正式服已发布，测试服未动，详见[交接](handoffs/2026-11-22-promotion-site-redirect.md)）
 
 - 不再站内发 APK/描述文件：iOS 和安卓都是**点主按钮才跳**（`https://dgwsd.yycdzx.com/UMuGWv` / `https://www.gulubase.com/bf888`，不做自动跳，避免落地页一闪而过），桌面给两个入口；iOS 安装弹层/浏览器引导/描述文件下载整段删除。
