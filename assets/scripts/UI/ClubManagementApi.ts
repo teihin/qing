@@ -1004,9 +1004,12 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 todayWin:optionalText(row,["today_score"]),
                 yesterdayWin:optionalText(row,["yesterday_score"]),
                 totalWin:optionalText(row,["total_score"]),
-                todayContribution:optionalFen(row,["today_contrib_fen"]),
-                yesterdayContribution:optionalFen(row,["yesterday_contrib_fen"]),
-                totalContribution:optionalFen(row,["total_contrib_fen"]),
+                // 2026-11-23：成员卡三格改读代理红利净额（分），不再用团队抽水贡献。
+                // 注意 today/yesterday 是「本人当日新增红利」，total 是「本人累计
+                // （未提取 bonus + 已提取流水）」，三者都不是团队口径。
+                todayContribution:optionalFen(row,["today_bonus_fen"]),
+                yesterdayContribution:optionalFen(row,["yesterday_bonus_fen"]),
+                totalContribution:optionalFen(row,["total_bonus_fen"]),
                 contribSim:sim.contrib,
                 scoreSim:sim.score
             });
