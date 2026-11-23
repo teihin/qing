@@ -30,8 +30,9 @@ export default class PaiHangScrollItem  extends ScrollItemBase {
         const avatarMask = avatar && avatar.getChildByName("mask");
         const avatarImage = avatarMask && avatarMask.getChildByName("img");
         const avatarSprite = avatarImage && avatarImage.getComponent(cc.Sprite);
+        // 排行榜整页几十上百行，逐行单查会把请求打爆，这里走批量头像接口。
         if (avatarSprite && id != null && String(id) !== "")
-            ImageManager.getInstance().BindPlayerListAvatar(String(id), avatarSprite);
+            ImageManager.getInstance().BindBatchListAvatar(String(id), avatarSprite);
         this.node.getChildByName("played_count").getComponent(cc.Label).string = PaiHangScrollItem.number(jRoom.activity_num, signed);
         this.node.getChildByName("user_reward").getComponent(cc.Label).string = PaiHangScrollItem.number(jRoom.user_reward);
         this.node.getChildByName("proxy_guuid").active = false;
