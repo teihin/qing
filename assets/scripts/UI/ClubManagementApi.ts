@@ -36,6 +36,26 @@ function optionalText(row:any,names:string[]):string|undefined {
     const value=field(row,names);
     return value === undefined ? undefined : String(value);
 }
+/**
+ * 成员行上的分组归属（《俱乐部玩家分组》§6.3）：2026-11-07 起行带
+ * `groups:[{group_id,group_name}]`，老服务端只有 `group_id`/`group_name`。
+ * 客户端按「一人一组」展示，真返回多条时用「 / 」拼起来。
+ * 只有管理域管理者（小BOSS）/ 平台 boss 才拿到真实值，其余账号恒为空。
+ */
+function groupNameOf(row:any):string|undefined {
+    const list=field(row,["groups","group_list"]);
+    const names:string[]=[];
+    if(Array.isArray(list)) {
+        for(const item of list) {
+            if(!item || typeof item !== "object")continue;
+            const name=String(item.group_name || item.groupName || "").trim();
+            if(name !== "" && names.indexOf(name) < 0)names.push(name);
+        }
+    }
+    if(names.length > 0)return names.join(" / ");
+    const one=optionalText(row,["group_name","groupName"]);
+    return one === undefined || one.trim() === "" ? undefined : one.trim();
+}
 function displayNumber(value:any):string|undefined {
     if(value === undefined || value === null || String(value).trim() === "")return undefined;
     const number=Number(value);
@@ -996,6 +1016,8 @@ export default class HallClubManagementApi implements ClubManagementApi {
                 darkPercent:displayNumber(field(row,["dark_percent","dark","agent_dark_percent","agentDarkPercent","darkPercent"])),
                 // note 为 2026-10-30 新增的成员备注，服务端恒下发（无值为空串）。
                 note:optionalText(row,["note"]),
+                // 分组归属：只有管理域管理者/平台 boss 拿到真实值，其余恒为空。
+                groupName:groupNameOf(row),
                 status:optionalText(row,["status"]),
                 teamCount:optionalText(row,["team_count"]),
                 // club_gold is the current club balance; it is not a score delta.

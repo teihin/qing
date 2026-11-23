@@ -62,6 +62,9 @@ export default class panelPlayerPicker extends UIPanelViewBase {
 
     onLoad () {
         super.onLoad();
+        // 选择器永远是「在某个面板上再叠一层」的浮层（牌桌优化、玩家信息里的加分组…），
+        // 打开它的面板通常会抬高自己的 zIndex，这里必须再高一级，否则会被盖住点不到。
+        this.node.zIndex = Tool.PanelBaseZ(this.node) + 2;
         KBEngine.Event.register("ClubPlayerGroupList", this, "OnGroupList");
         KBEngine.Event.register("onHallCommand", this, "OnHallCommand");
 

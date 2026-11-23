@@ -2716,6 +2716,11 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         if(data == null || !Array.isArray(data.groups))
             return;
         const ctx = String(data.context == null ? "" : data.context);
+        // 别的面板也会查分组：独立「玩家信息」弹窗加人走 `pgset:`，
+        // 通用选组弹窗 panelPlayerPicker 查询走 `pickgrp:`，两条都归它们自己处理，
+        // 这里不能跟着渲染/弹提示，更不能把在途的 groupContext 清掉。
+        if(ctx.indexOf("pgset:") >= 0 || ctx.indexOf("pickgrp:") >= 0)
+            return;
         if(this.groupContext !== "" && ctx !== "" && ctx !== this.groupContext)
             return;
         this.FinishGroup();
@@ -2747,6 +2752,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         if(action === "")
             return;
         const ctx = String(data.context == null ? "" : data.context);
+        // 同 OnGroupList：`pgset:` 是玩家信息弹窗加人的回执，别在这里再弹一次提示。
+        if(ctx.indexOf("pgset:") >= 0 || ctx.indexOf("pickgrp:") >= 0)
+            return;
         if(this.groupContext !== "" && ctx !== "" && ctx !== this.groupContext)
             return;
         this.FinishGroup();

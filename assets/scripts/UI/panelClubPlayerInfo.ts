@@ -5,6 +5,7 @@ import Tool from "../common/Tool";
 import GameDataManager from "../GameDataManager";
 import ClubManagementView, { ClubContext, ClubPlayer } from "./ClubManagementView";
 import HallClubManagementApi from "./ClubManagementApi";
+import panelPlayerPicker, { PlayerPickerItem } from "./panelPlayerPicker";
 var KBEngine = require("kbengine");
 
 const {ccclass, property} = cc._decorator;
@@ -54,6 +55,16 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
     private api:HallClubManagementApi = null;
     private context:ClubContext = null;
 
+    // ---- 下级成员行内「添加到分组」（《俱乐部玩家分组》§4.1）----
+    /**
+     * 选组沿用现成的 panelPlayerPicker（mode=group），这里只负责发「设置_俱乐部_分组_成员」。
+     * 加人回执用 `pgset:` 前缀的 context：panelBossPlayerInfo 也监听同名推送，
+     * 靠前缀区分归属，避免它重复弹提示并白刷一次分组列表。
+     */
+    private groupContext:string = "";
+    private groupTimer:any = null;
+    private static groupSerial:number = 0;
+
     onLoad () {
         super.onLoad();
         // 从数据统计（基准 0 或牌桌里的 1）点开，比它高一层就够；不要再写死 210，
@@ -61,6 +72,8 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
         this.node.zIndex = Tool.PanelBaseZ(this.node) + 1;
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
         KBEngine.Event.register("NumberList", this, "OnMemberList");
+        // 加人结果走 ClubPlayerGroupResult 推送（0x200 只带 context）。
+        KBEngine.Event.register("ClubPlayerGroupResult", this, "OnGroupResult");
     }
 
     start () {
@@ -109,6 +122,8 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
             clearTimeout(this.extTimer);
             this.extTimer = null;
         }
+        this.ClearGroupTimer();
+        this.groupContext = "";
         if(this.api)
             KBEngine.Event.deregisterAll(this.api);
         this.api = null;
@@ -161,6 +176,12 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
             // SetApi 里会顺带刷新大厅那张俱乐部主页卡片，独立弹窗里没有那些节点，
             // 失败不影响弹窗本身的可视化与页签请求。
         }
+        // 下级成员行内的「添加到分组」：只有小BOSS（俱乐部/联盟管理员）才注入入口，
+        // 不是小BOSS 时 ClubManagementView 那边一颗按钮都不会亮。
+        this.view.SetGroupPicker({
+            canAdd:(item:ClubPlayer)=>this.CanAddGroup(item),
+            open:(item:ClubPlayer)=>this.OpenGroupPicker(item)
+        });
     }
 
     private Message(text:string):void {
@@ -224,6 +245,15 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
 
     public onHallCommand(nCode:number, param:string):void {
         const text = param == null ? "" : String(param);
+        // 加人命令的回执：受理只带 context（结果在推送里），失败带错误文案。
+        if(this.groupContext !== "" && text.indexOf(this.groupContext) >= 0) {
+            if(nCode === 0x200 || nCode === 0x500)
+                return;
+            const failed = this.ErrorText(text);
+            this.FinishGroupRequest();
+            this.Message(failed);
+            return;
+        }
         // 扩展信息用独立 context 且回包常晚于成员详情，必须在 loading 判断之前拦下来。
         if(this.extContext !== "" && text.indexOf(this.extContext) >= 0) {
             this.OnExtInfo(nCode, text);
@@ -441,6 +471,130 @@ export default class panelClubPlayerInfo extends UIPanelViewBase {
         }
         catch(error) {}
         return "查询失败，请稍后重试";
+    }
+
+    // ------------------------------------------------------------------
+    // 下级成员行内「添加到分组」
+    // 文档：服务器文档整理/俱乐部玩家分组-客户端与后台接口文档.md（§3.1 / §4.1）
+    // 只有小BOSS（后台配了 club_manage / union_manage 的管理员）才有这个入口，
+    // 服务端仍会按管理域再校验一次，跨俱乐部 / 跨联盟会被拒。
+    // ------------------------------------------------------------------
+
+    /**
+     * 当前账号能不能给这个玩家加分组。
+     * - 不是小BOSS（没有 club_manage / union_manage）→ 不显示按钮；
+     * - 俱乐部管理员只对自己管理范围内的俱乐部放行；
+     * - 联盟管理员在客户端拿不到「俱乐部属于哪个联盟」，按已配管理范围放行、服务端复核；
+     * - 盟主行属于联盟里另一家俱乐部，恒不加（也避开那行「额度」两格的位置）。
+     */
+    private CanAddGroup(item:ClubPlayer):boolean {
+        if(item == null || item.isLeader === true)
+            return false;
+        const id = String(item.id || "").trim();
+        if(!/^\d+$/.test(id))
+            return false;
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return false;
+        const clubs = GameDataManager.SplitIdList(account.club_manage);
+        const unions = GameDataManager.SplitIdList(account.union_manage);
+        if(clubs.length === 0 && unions.length === 0)
+            return false;
+        const clubId = String(item.clubId || this.clubId || "").trim();
+        if(clubId !== "" && clubs.indexOf(clubId) >= 0)
+            return true;
+        return unions.length > 0;
+    }
+
+    /**
+     * 行内「添加到分组」：先选分组（复用现成的 panelPlayerPicker），选完再发加人命令。
+     * 选组弹窗是另外 showPanel 出来的浮层，层级由 panelPlayerPicker 自己抬（见它的 onLoad）。
+     */
+    private OpenGroupPicker(item:ClubPlayer):void {
+        if(!this.CanAddGroup(item))
+            return;
+        const clubId = String(item.clubId || this.clubId || "").trim();
+        if(clubId === "") {
+            this.Message("缺少俱乐部信息，无法查询分组");
+            return;
+        }
+        panelPlayerPicker.Open({
+            title:"添加到分组",
+            mode:"group",
+            clubId:clubId,
+            onPick:(picked:PlayerPickerItem)=>{
+                if(picked == null || String(picked.id || "").trim() === "")
+                    return;
+                this.SubmitGroupSet(String(picked.id).trim(),item);
+            }
+        });
+    }
+
+    /** 设置_俱乐部_分组_成员：成功数据走 ClubPlayerGroupResult 推送，0x200 只代表已受理。 */
+    private SubmitGroupSet(groupId:string,item:ClubPlayer):void {
+        const userId = item == null ? "" : String(item.id || "").trim();
+        if(groupId === "" || userId === "")
+            return;
+        const account:any = GameDataManager.getAccount();
+        if(account == null) {
+            this.Message("网络未就绪，请稍后重试");
+            return;
+        }
+        this.FinishGroupRequest();
+        this.groupContext = "pgset:" + Date.now() + ":" + (++panelClubPlayerInfo.groupSerial);
+        const ctx = this.groupContext;
+        this.groupTimer = setTimeout(()=>{
+            if(this.groupContext !== ctx)
+                return;
+            this.groupContext = "";
+            this.groupTimer = null;
+            this.Message("操作超时，请刷新后确认是否已加入分组");
+        }, 12000);
+        try {
+            account.reqHallCommand(JSON.stringify({
+                header:"设置_俱乐部_分组_成员",
+                group_id:groupId,
+                user_id:userId,
+                context:ctx
+            }), "P@" + ctx);
+        }
+        catch(error) {
+            this.FinishGroupRequest();
+            this.Message("请求发送失败，请稍后重试");
+        }
+    }
+
+    /** ClubPlayerGroupResult：action=set_member 才是这次加人的结果。 */
+    public OnGroupResult(raw:any):void {
+        if(this.groupContext === "")
+            return;
+        const data = this.Unwrap(raw);
+        if(data == null)
+            return;
+        if(String(data.action == null ? "" : data.action) !== "set_member")
+            return;
+        const ctx = String(data.context == null ? "" : data.context);
+        if(ctx !== "" && ctx !== this.groupContext)
+            return;
+        this.FinishGroupRequest();
+        const userId = String(data.user_id == null ? "" : data.user_id).trim();
+        const groupName = String(data.group_name == null ? "" : data.group_name).trim();
+        const who = String(data.user_name == null ? "" : data.user_name).trim() || userId || "玩家";
+        if(this.view)
+            this.view.SetMemberGroup(userId,groupName);
+        this.Message(groupName !== "" ? "已把「" + who + "」加入「" + groupName + "」" : "已加入分组");
+    }
+
+    private FinishGroupRequest():void {
+        this.ClearGroupTimer();
+        this.groupContext = "";
+    }
+
+    private ClearGroupTimer():void {
+        if(this.groupTimer != null) {
+            clearTimeout(this.groupTimer);
+            this.groupTimer = null;
+        }
     }
 
     // ------------------------------------------------------------------

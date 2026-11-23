@@ -43,6 +43,11 @@ export export interface ClubPlayer {
     clubQuotaFen?:number;
     /** 服务端若在成员行下发暗扣值则优先展示；当前文档没有该字段。 */
     darkPercent?:string;
+    /**
+     * 行上的分组归属（《俱乐部玩家分组》§6.3）。只有管理域管理者（小BOSS）与
+     * 平台 boss 才拿到真实值，其余账号恒为空；空串 / 缺省都按「未分组」处理。
+     */
+    groupName?:string;
 }
 /** give = 玩家之间赠送（扣自己积分）；updown = 代理按授信额度给成员上下分。 */
 export type ClubGiftMode = "give" | "updown";
@@ -135,6 +140,11 @@ export default class ClubManagementView {
     private darkOverrides:{[key:string]:number} = {};
     /** 盟友管理里的额度/盟主比例调整走同一个输入弹窗，单独记录目标俱乐部和方向。 */
     private selectedUnionMember:ClubUnionMember = null;
+    /**
+     * 行内「添加到分组」入口：只有独立「玩家信息」弹窗（panelClubPlayerInfo）会注入，
+     * 俱乐部主页里的成员/下级列表保持原样（不注入就不显示这颗按钮）。
+     */
+    private groupPicker:{canAdd:(item:ClubPlayer)=>boolean; open:(item:ClubPlayer)=>void} = null;
     private unionQuotaMode:"increase"|"decrease"|"percent"|null = null;
     /** 最近一次盟友列表返回的联盟池额度（分），用于弹窗抬头。 */
     private allyPoolQuotaFen:number = undefined;
@@ -1667,6 +1677,68 @@ export default class ClubManagementView {
         }
         // 行尾「对话」：群主/盟主/代理可以找同俱乐部成员开聊，自己那行不显示。
         this.bindDirectChat(row,item,context);
+        // 行尾「添加到分组」：只有注入过入口的独立弹窗 + 小BOSS 才显示。
+        this.bindGroupAdd(row,item);
+    }
+
+    /**
+     * 注入行内「添加到分组」入口（独立玩家信息弹窗用）。
+     * 传 null 收回入口；成员列表与下级列表都会立刻按新状态重绘按钮。
+     */
+    public SetGroupPicker(picker:{canAdd:(item:ClubPlayer)=>boolean; open:(item:ClubPlayer)=>void}):void {
+        this.groupPicker = picker;
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        if(panel) this.renderDownline(panel);
+    }
+
+    /**
+     * 行内分组位：「添加到分组」按钮与「分组名」文字二选一（prefab 里两者同位置，会叠）。
+     * 与数据统计列表同一口径（主人 2026-11-23 确认客户端按一人一组做）：已经分组只显示
+     * 分组名，未分组且当前账号是小BOSS 才显示按钮，点开由外部弹窗选组。
+     */
+    private bindGroupAdd(row:cc.Node,item:ClubPlayer):void {
+        const btn = this.at("添加到分组",row);
+        const tag = this.at("分组名",row);
+        if(!btn && !tag) return;
+        const groupName = String(item && item.groupName || "").trim();
+        const inGroup = groupName !== "";
+        if(tag) {
+            tag.active = inGroup;
+            const label = tag.getComponent(cc.Label);
+            if(label) label.string = inGroup ? "分组:" + groupName : "";
+        }
+        if(!btn) return;
+        const picker = this.groupPicker;
+        const canAdd = !inGroup && picker != null && picker.canAdd(item);
+        btn.active = canAdd;
+        if(!canAdd) return;
+        btn.targetOff(this);
+        btn.on("click",()=>{ picker.open(item); },this);
+    }
+
+    /** 分组写回执后就地换行内显示，不必整页重查下级列表。 */
+    public SetMemberGroup(userId:string,groupName:string):void {
+        const id = String(userId || "").trim();
+        if(id === "") return;
+        for(const item of this.selectedDownline || []) {
+            if(item && String(item.id) === id) item.groupName = String(groupName || "").trim();
+        }
+        const panel = this.at("面板",this.at("俱乐部玩家设置弹窗"));
+        const list = panel ? this.at("玩家设置下级列表",panel) : null;
+        const row = list ? list.getChildByName("下级玩家_" + id) : null;
+        if(row == null) return;
+        const name = String(groupName || "").trim();
+        const tag = this.at("分组名",row);
+        if(tag) {
+            tag.active = name !== "";
+            const label = tag.getComponent(cc.Label);
+            if(label) label.string = name !== "" ? "分组:" + name : "";
+        }
+        const btn = this.at("添加到分组",row);
+        if(btn) {
+            const item = (this.selectedDownline || []).filter(one=>one && String(one.id) === id)[0];
+            btn.active = name === "" && this.groupPicker != null && !!item && this.groupPicker.canAdd(item);
+        }
     }
 
     /**
