@@ -1271,8 +1271,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
 
     /**
      * 一行数据已加入的分组名。
-     * 优先接口 2026-11-07 新增的 `groups` 数组（`NumberList` 成员行与代理链 `chain[]` 节点同结构，
-     * 一人一组时最多 1 项）；老服务端没下发 `groups` 时退回 `group_id` / `group_name`。
+     * 优先接口 2026-11-07 新增的 `groups` 数组（`NumberList` 成员行与代理链 `chain[]` 节点同结构；
+     * 2026-11-23 起一人可属多组，可能多项，用「 / 」拼）；老服务端没下发 `groups` 时退回
+     * `group_id` / `group_name`。
      */
     private GroupText(raw:any):string {
         const data:any = raw || {};
@@ -1301,9 +1302,10 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
     }
 
     /**
-     * 行内分组位：「添加到分组」按钮与「分组名」文字二选一。
-     * 该玩家已经在本管理域的分组里 → 藏掉按钮，直接显示分组名（一人只能属于一个分组，不许重复加）；
-     * 未分组 → 显示按钮。分组页签的成员弹窗把这个按钮当「移出成员」用，不走这里。
+     * 行内分组位：「添加到分组」按钮与「分组名」文字二选一（prefab 里两者同位置，会叠）。
+     * 客户端按「一人一个分组」做：有分组 → 只显示分组名、藏掉按钮；未分组 → 显示按钮。
+     * 服务器虽支持一人多组，客户端不跟（2026-11-23 主人确认）；真返回多个时分组名用「 / 」拼起来。
+     * 分组页签的成员弹窗把这个按钮当「移出成员」用，不走这里。
      */
     private ApplyGroupCell(row:cc.Node, userId:string, groupName:string):void {
         const inGroup = groupName !== "";
@@ -1430,7 +1432,10 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         }
     }
 
-    private ShowTab(tab:string, first:boolean):void {
+    /**
+     * @param force 为 true 时忽略缓存，强制重新查询一次（点页签时用，避免只渲染旧数据）。
+     */
+    private ShowTab(tab:string, first:boolean, force:boolean = false):void {
         this.currentTab = tab;
         // 五个页签共用同一个 content，切换时把别的页签的行清掉。
         const owners:{key:string, prefix:string}[] = [
@@ -1492,7 +1497,7 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         if(tab === "info")
             this.Text("说明", "按玩家本人统计（不含下线）；联盟内每个俱乐部一行");
         else if(tab === "group")
-            this.Text("说明", "分组统计为组内成员真实值（不套展示折扣）；一人只能属于一个分组");
+            this.Text("说明", "分组统计为组内成员真实值（不套展示折扣）；一人只加入一个分组");
         else if(tab === "players")
             this.Text("说明", "玩家本人值（输赢/贡献/红利）；点已选排序条件可切升/降序");
         else if(tab === "agents")
@@ -1506,12 +1511,13 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             this.Active("加载", false);
             this.Active("错误", false);
             this.RenderSortBar(tab);
-            if(loaded) {
+            if(loaded && !force) {
                 this.RenderAllList(tab);
                 return;
             }
+            // 有缓存但被要求强制刷新时，先保留旧行，等推送回来再覆盖，别闪成空白。
             this.Active("空状态", false);
-            // 第一次进这个页签才拉数据；之后来回切都用缓存，避免反复打服务端。
+            // 第一次进这个页签才拉数据；之后来回切都用缓存（点页签触发 force 的除外）。
             if(isAgent)
                 this.QueryAllAgents(this.agentPage);
             else
@@ -3152,14 +3158,16 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         }
         if(mode === "kick") {
             const userId = this.dialogUserId;
-            if(userId === "") {
+            const groupId = this.dialogGroupId;
+            if(userId === "" || groupId === "") {
                 this.CloseDialog();
                 return;
             }
             // 弹窗留在成员列表上，等推送回来再刷一遍，不打断连续移人。
             this.BackToMemberList();
-            // 文档 §4.2：只传 user_id，一个人在一个管理域最多属于一个分组。
-            this.SendGroup("移除_俱乐部_分组_成员", {user_id:userId});
+            // 服务端按 group_id 定位分组，缺了会直接报错；成员列表本身就在某个分组下，
+            // dialogGroupId 即 OpenMemberDialog 传进来的 memberGroupId。
+            this.SendGroup("移除_俱乐部_分组_成员", {group_id:groupId, user_id:userId});
         }
     }
 
@@ -3173,7 +3181,9 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
         if(template == null)
             return;
         for(const child of content.children.slice()) {
-            if(child.name.indexOf("选项_") === 0)
+            // 「组内成员」弹窗和「选分组」共用一个 content（选项列表），
+            // 只清自己的前缀会留下另一套行：选分组弹窗里冒出玩家卡片就是这个原因。
+            if(child.name.indexOf("选项_") === 0 || child.name.indexOf("成员_") === 0)
                 child.destroy();
         }
         template.active = false;
@@ -3324,7 +3334,8 @@ export default class panelBossPlayerInfo extends UIPanelViewBase {
             return;
         }
         if(name === "页签_玩家列表") {
-            this.ShowTab("players", false);
+            // 点页签强制重查一次：只渲染缓存的话，别处改了数据这里看不到最新值。
+            this.ShowTab("players", false, true);
             return;
         }
         if(name === "页签_代理列表") {
