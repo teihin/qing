@@ -417,6 +417,8 @@ export default class panelMain extends UIPanelViewBase {
             const infoClubQuota = Number(infoClubQuotaRaw);
             const infoClubQuotaKnown = infoClubQuotaRaw !== undefined && infoClubQuotaRaw !== null &&
                 String(infoClubQuotaRaw).trim() !== "" && Number.isFinite(infoClubQuota);
+            // 卡片「额度」以 查询_俱乐部_信息 的 union_quota 为准（该接口在点「我的」时强制重拉，
+            // 且 查询_联盟_额度 回包也会同步写回这里）；缺字段时才回退联盟额度结论。
             const clubQuotaFen = infoClubQuotaKnown ? infoClubQuota :
                 (union && union.isOwner !== true && union.quotaFen !== undefined ? union.quotaFen : undefined);
             return {accountId:guuid,ownerId:owns ? guuid : info && String(info.club_owner || ""),
@@ -2843,8 +2845,10 @@ export default class panelMain extends UIPanelViewBase {
             const account = GameDataManager.getAccount();
             if(id && account)
             {
-                if(!this.clubDetails[id])
-                    account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_信息",club_id:id}),"p@club:info:" + id);
+                // 卡片的「额度」取自 查询_俱乐部_信息 的 union_quota，原来只在没缓存时查一次，
+                // 服务端不推送就永远停在首次的旧数；这里每次进「我的」都强制重拉。
+                this.clubInfoAsked[id] = 0;
+                account.reqHallCommand(JSON.stringify({header:"查询_俱乐部_信息",club_id:id}),"p@club:info:" + id);
                 const cachedAgent = this.clubAgentInfo[id];
                 const cachedCode = cachedAgent && cachedAgent.invite_code != null ?
                     String(cachedAgent.invite_code).trim() : "";
@@ -2852,10 +2856,12 @@ export default class panelMain extends UIPanelViewBase {
                 if(!cachedAgent || !cachedCode)
                     this.RequestCurrentClubAgent(id,true);
                 // 联盟审批不会推送，进「我的」时补查一次，入盟后创建/加入入口自动收起。
-                this.RequestClubUnionStatus(id,false);
+                // force = true：每次点底栏「我的」都重新取一次额度，服务端不推送时卡片也不会停在旧值。
+                this.RequestClubUnionStatus(id,true);
                 this.RequestClubUnionName(id,true);
-                // 群主钻石池只在群主卡片显示；查询节流，避免每次切页重复发。
-                this.RequestClubStonePool(id);
+                // 群主钻石池只在群主卡片显示；同样每次点「我的」都强制重取，
+                // 避免靠 15 秒节流 + 服务端推送，池子变了卡片还是旧数字。
+                this.RequestClubStonePool(id,true);
             }
         }
         if(strName !== "钱包")
@@ -4746,7 +4752,9 @@ export default class panelMain extends UIPanelViewBase {
                 info.union_id = unionId;
                 if(unionName) info.union_name = unionName;
                 // is_owner=0 的 union_quota 是本俱乐部额度；is_owner=1 是联盟池，不能写进俱乐部额度。
-                if(isOwner === false && quotaKnown) info.union_quota = quotaFen;
+                // is_owner 缺失（额度刷新类回包可能不带该字段）时也按本俱乐部额度写回，
+                // 否则「查询_俱乐部_信息」缓存会一直停在旧值，卡片额度怎么点都不变。
+                if(isOwner !== true && quotaKnown) info.union_quota = quotaFen;
             }
             else
             {

@@ -12,14 +12,16 @@ const {ccclass} = cc._decorator;
 /**
  * 「我的 → 额度授权记录」。
  *
- * 协议（《俱乐部俱乐部联盟模式V2方案-客户端接口文档》§8.1，2026-11-09 新增）：
- *   Hall 命令 `查询_联盟_授信_记录`，参数 club_id(可省，空串同省) / count / page / context；
- *   同步回包只有空壳，列表经 `ClubUnionGrantList` 推送。
- *   club_id 为空时服务端按身份取范围：总群主看全联盟，盟主看自己名下俱乐部。
- *   行字段：number / count（真实总条数，不封顶）/ date / type（授信/收回/注资/注资扣减）/
- *   quota（有符号变动额，分）/ quota_after（变动后余额，分；remark 与它同值）/ club_id / club_name /
- *   guuid / name（额度归属账号）/ opter_guuid / opter_name / is_inject / is_self。
+ * 协议（《俱乐部积分与额度方案-客户端接口文档》§11.2）：
+ *   Hall 命令 `查询_俱乐部_额度流水`，参数 club_id / user_id / count / page / context；
+ *   `user_id="ALL"` 取俱乐部全部额度流水（仅俱乐部创建者 / 联盟创建者 / boss 可查）；
+ *   同步回包只有空壳，列表经 `ClubQuotaWater` 推送。
+ *   行字段：number / count / date / type（带入、结算、额度授信、额度收回、额度转入、额度抽水回补、
+ *   额度兑换、额度联盟授信、额度联盟注资…原样展示）/ quota（有符号变动额，分）/ remark
+ *   （带入/结算 = 变动后余额，分；其它类型通常是「旧→新」）/ room_id /
+ *   guuid / name（额度归属账号）/ opter_name / actor_guuid（实际触发人）。
  *
+ * 这里不做任何类型过滤：俱乐部所有额度流水都列出来。
  * 分页走服务端：每页条数与面板行数一致，翻页时重新请求并带上页码。
  */
 @ccclass
@@ -37,7 +39,7 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
     {
         super.onLoad();
 
-        KBEngine.Event.register("ClubUnionGrantList", this, "OnGrantList");
+        KBEngine.Event.register("ClubQuotaWater", this, "OnClubQuotaWater");
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
     }
 
@@ -71,12 +73,13 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
 
         this.clubId = clubId;
         this.requestedPage = nPage;
-        this.requestContext = "club:union-grant:" + clubId + ":" + nPage + ":" + Date.now();
+        this.requestContext = "club:quota-water:" + clubId + ":" + nPage + ":" + Date.now();
 
         const strParam = JSON.stringify({
-            header:"查询_联盟_授信_记录",
-            // 空串 = 按身份取范围：总群主看全联盟，盟主看自己名下俱乐部。
-            club_id:"",
+            header:"查询_俱乐部_额度流水",
+            club_id:clubId,
+            // ALL = 俱乐部全部额度流水（服务端仅对俱乐部创建者 / 联盟创建者 / boss 放行）。
+            user_id:"ALL",
             count:panelQuotaGrantRecord.PAGE_COUNT,
             page:nPage,
             context:this.requestContext
@@ -84,7 +87,7 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         account.reqHallCommand(strParam,"P@" + this.requestContext);
     }
 
-    public OnGrantList(strMsg:any,secondaryRaw?:any)
+    public OnClubQuotaWater(strMsg:any,secondaryRaw?:any)
     {
         // KBEngine 偶尔以 (nCode, strMsg) 形式派发，沿用 ClubManagementApi 的兼容写法。
         if(secondaryRaw !== undefined && (typeof strMsg === "number" || typeof strMsg === "boolean"))
@@ -107,7 +110,7 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         }
 
         // 连续翻页时丢弃旧页回包。
-        const rows = data["ClubUnionGrantList"];
+        const rows = data["ClubQuotaWater"];
         let pageNumber:any = data["number"];
         if((pageNumber == null || pageNumber === "") && Array.isArray(rows) && rows.length > 0)
             pageNumber = rows[0]["number"];
@@ -118,7 +121,7 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
                 return;
         }
 
-        this.scrollWater.UpdateList(payload,"ClubUnionGrantList","额度授权记录对象",
+        this.scrollWater.UpdateList(payload,"ClubQuotaWater","额度授权记录对象",
             panelQuotaGrantRecord.PAGE_COUNT,this.SetRowInfo.bind(this));
     }
 
@@ -136,47 +139,54 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         if(data == null || typeof data !== "object")
             return null;
 
-        if(Array.isArray(data["ClubUnionGrantList"]))
+        if(Array.isArray(data["ClubQuotaWater"]))
             return JSON.stringify(data);
 
         const result = data["result"];
-        if(result != null && Array.isArray(result["ClubUnionGrantList"]))
+        if(result != null && Array.isArray(result["ClubQuotaWater"]))
             return JSON.stringify(result);
 
         const retResult = data["ret_result"];
-        if(retResult != null && Array.isArray(retResult["ClubUnionGrantList"]))
+        if(retResult != null && Array.isArray(retResult["ClubQuotaWater"]))
             return JSON.stringify(retResult);
 
         return null;
     }
 
-    /** 行：时间 / 盟主 / 授权额度 / 余额。 */
+    /** 行：时间 / 归属人（下方一行补「类型 · 触发人」）/ 变动额 / 变动后余额。 */
     private SetRowInfo(node:cc.Node, jItem:any)
     {
         node.active = true;
 
         const type = jItem["type"] == null ? "" : String(jItem["type"]).trim();
-        const isInject = Number(jItem["is_inject"]) === 1 || type.indexOf("注资") >= 0;
+        // 额度归属账号（V2 通常是俱乐部群主）和实际触发人是两个人：上面显示归属人，
+        // 下面一行显示「类型 · 触发人」，否则只看得到盟主，看不出这笔额度是谁引发的。
+        const owner = String(jItem["name"] == null ? "" : jItem["name"]).trim();
+        const opter = String(jItem["opter_name"] == null ? "" : jItem["opter_name"]).trim();
         const nameNode = node.getChildByName("type");
         if(nameNode != null)
         {
-            let name = isInject ? "联盟池" : String(jItem["name"] == null ? "" : jItem["name"]).trim();
-            if(name === "" && !isInject)
-                name = String(jItem["club_name"] == null ? "" : jItem["club_name"]).trim();
+            const name = owner !== "" ? owner : opter;
             nameNode.getComponent(cc.Label).string = name === "" ? "—" : name;
         }
 
-        // 服务端 type（授信/收回/注资/注资扣减/额度奖励）直接展示在盟主名下方。
+        // 服务端 opt_type 原样展示（带入/结算/额度授信/额度收回/额度转入/额度抽水回补/额度兑换/
+        // 额度联盟授信/额度联盟注资…），客户端不按类型过滤。
         const typeNode = node.getChildByName("typelabel");
         if(typeNode != null)
         {
             typeNode.active = true;
             const label = typeNode.getComponent(cc.Label);
             if(label != null)
-                label.string = type === "" ? "类型：—" : "类型：" + type;
+            {
+                const typeText = type === "" ? "—" : type;
+                // 触发人与归属人是同一人（玩家自己带入/结算）时不重复显示。
+                const trigger = opter !== "" && opter !== owner ? " · " + opter : "";
+                label.string = typeText + trigger;
+            }
         }
 
-        // 服务端 type 已按正负号定好（授信/收回/注资/注资扣减），这里只按 quota 符号着色。
+        // quota 是带符号变动额（分）：带入为负、结算/授信为正。
         const quota = Number(String(jItem["quota"] == null ? "" : jItem["quota"]).replace(/,/g,""));
         const valid = isFinite(quota);
         const yuan = valid ? Math.round(quota) / 100 : 0;
@@ -193,13 +203,9 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         const nowNode = node.getChildByName("now");
         if(nowNode != null)
         {
-            // quota_after 是变动后余额，单位分；remark 与它同值，兼容只带 remark 的回包。
-            const rawAfter = jItem["quota_after"] == null || String(jItem["quota_after"]).trim() === "" ?
-                jItem["remark"] : jItem["quota_after"];
-            const afterFen = Number(String(rawAfter == null ? "" : rawAfter).replace(/,/g,""));
-            nowNode.getComponent(cc.Label).string = rawAfter == null ||
-                String(rawAfter).trim() === "" || !isFinite(afterFen) ?
-                "--" : panelQuotaGrantRecord.Money(afterFen / 100);
+            const afterFen = panelQuotaGrantRecord.BalanceFen(jItem["remark"]);
+            nowNode.getComponent(cc.Label).string = isFinite(afterFen) ?
+                panelQuotaGrantRecord.Money(afterFen / 100) : "--";
             nowNode.color = new cc.Color(239,225,194,255);
         }
 
@@ -213,6 +219,25 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
             if(icon != null)
                 icon.active = key === "quota";
         }
+    }
+
+    /**
+     * 变动后余额（分）：`带入`/`结算` 的 remark 直接是余额；其它类型通常写成「旧→新」，
+     * 取箭头后半段。兼容千分位与空格。
+     */
+    private static BalanceFen(raw:any):number
+    {
+        if(raw == null)
+            return NaN;
+        let text = String(raw).trim();
+        if(text === "")
+            return NaN;
+        const arrow = text.lastIndexOf("→");
+        if(arrow >= 0)
+            text = text.substring(arrow + 1);
+        text = text.replace(/[,，\s]/g,"");
+        const fen = Number(text);
+        return isFinite(fen) ? fen : NaN;
     }
 
     //--------------------------------------------------------------------------
@@ -255,12 +280,12 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         if(text.indexOf(this.requestContext) < 0)
             return;
 
-        // 0x200 最终成功、0x500 已受理：有列表就先用，没有则等 ClubUnionGrantList 推送。
+        // 0x200 最终成功、0x500 已受理：有列表就先用，没有则等 ClubQuotaWater 推送。
         if(nCode === 0x200 || nCode === 0x500)
         {
             const payload = panelQuotaGrantRecord.NormalizeList(text);
             if(payload != null)
-                this.OnGrantList(payload);
+                this.OnClubQuotaWater(payload);
             return;
         }
 
@@ -274,7 +299,7 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         }
         catch(error) {}
         UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
-            strError !== "" ? strError : "授信记录查询失败，请稍后重试！");
+            strError !== "" ? strError : "额度流水查询失败，请稍后重试！");
     }
 
     public onButtonClick(button:cc.Button)
