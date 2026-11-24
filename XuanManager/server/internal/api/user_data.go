@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -54,6 +55,7 @@ type userDataClub struct {
 	UpperName string              `json:"upperName"`
 	Percent   int64               `json:"percent"`
 	QuotaFen  int64               `json:"quotaFen"`
+	ClubGold  float64             `json:"clubGold"` // 该玩家在这个俱乐部的金币余额（tbl_Account.sm_club_gold 的对应项）
 	IsCreator bool                `json:"isCreator"`
 	IsAgent   bool                `json:"isAgent"`
 	Chain     []userDataChainNode `json:"chain"`
@@ -323,26 +325,61 @@ func (s *Server) readUserDataProfile(ctx context.Context, playerID string) (user
 	var profile userDataProfile
 	var clubMake, clubMake2, clubJoin, clubJoin2, clubManage string
 	var hongliRaw int64
+	var clubGoldRaw, clubGoldRaw2 string
 	err := s.db.QueryRowContext(ctx, `SELECT sm_guuid, COALESCE(sm_wxID, ''), COALESCE(sm_name, ''),
 COALESCE(sm_role, ''), COALESCE(sm_reg_time, ''), COALESCE(sm_client_version, ''),
 COALESCE(sm_union_manage, ''), COALESCE(sm_club_manage, ''),
 COALESCE(sm_gold, 0) + COALESCE(sm_gold2, 0) / 100.0,
 COALESCE(sm_stone, 0), COALESCE(sm_hongli, 0),
 COALESCE(sm_club_make, ''), COALESCE(sm_club_make2, ''),
-COALESCE(sm_club_join, ''), COALESCE(sm_club_join2, ''), COALESCE(sm_club_manage, '')
+COALESCE(sm_club_join, ''), COALESCE(sm_club_join2, ''), COALESCE(sm_club_manage, ''),
+COALESCE(sm_club_gold, ''), COALESCE(sm_club_gold2, '')
 FROM kbedm.tbl_Account WHERE sm_guuid = ? LIMIT 1`, playerID).Scan(
 		&profile.PlayerID, &profile.LoginName, &profile.Name,
 		&profile.Role, &profile.RegTime, &profile.ClientVersion,
 		&profile.ManageUnions, &profile.ManageClubs,
 		&profile.Gold, &profile.Stone, &hongliRaw,
 		&clubMake, &clubMake2, &clubJoin, &clubJoin2, &clubManage,
+		&clubGoldRaw, &clubGoldRaw2,
 	)
 	if err != nil {
 		return userDataProfile{}, err
 	}
 	profile.UnclaimedBonus = float64(hongliRaw) / 100
-	profile.Clubs, profile.QuotaVisible = s.readUserDataClubs(ctx, playerID, clubMake, clubMake2, clubJoin, clubJoin2, clubManage)
+	// 俱乐部金币按俱乐部号存在 JSON 里（{"503543": 566}），两列合并取并集。
+	clubGold := parseUserDataClubGold(clubGoldRaw)
+	for clubID, amount := range parseUserDataClubGold(clubGoldRaw2) {
+		if _, ok := clubGold[clubID]; !ok {
+			clubGold[clubID] = amount
+		}
+	}
+	profile.Clubs, profile.QuotaVisible = s.readUserDataClubs(ctx, playerID, clubMake, clubMake2, clubJoin, clubJoin2, clubManage, clubGold)
 	return profile, nil
+}
+
+// parseUserDataClubGold 解析 tbl_Account.sm_club_gold / sm_club_gold2：
+// 形如 {"503543": 566, "487987": 0}，值可能是数字也可能是字符串，单条异常只跳过该条。
+func parseUserDataClubGold(raw string) map[string]float64 {
+	result := map[string]float64{}
+	raw = strings.TrimSpace(raw)
+	if raw == "" || raw == "{}" {
+		return result
+	}
+	var values map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return result
+	}
+	for clubID, value := range values {
+		clubID = strings.TrimSpace(clubID)
+		if clubID == "" {
+			continue
+		}
+		text := strings.Trim(strings.TrimSpace(string(value)), `"`)
+		if amount, err := strconv.ParseFloat(strings.TrimSpace(text), 64); err == nil {
+			result[clubID] = amount
+		}
+	}
+	return result
 }
 
 // userDataClubMeta 是俱乐部 + 联盟的展示信息；创建者按 club_guuid_info.account_id 反查。
@@ -365,7 +402,7 @@ type userDataAgentRow struct {
 	Percent  int64
 }
 
-func (s *Server) readUserDataClubs(ctx context.Context, playerID, clubMake, clubMake2, clubJoin, clubJoin2, clubManage string) ([]userDataClub, bool) {
+func (s *Server) readUserDataClubs(ctx context.Context, playerID, clubMake, clubMake2, clubJoin, clubJoin2, clubManage string, clubGold map[string]float64) ([]userDataClub, bool) {
 	makeIDs := toStringSet(clubMake, clubMake2)
 	manageIDs := toStringSet(clubManage)
 	joinIDs := toStringSet(clubJoin, clubJoin2)
@@ -462,6 +499,7 @@ WHERE status = 'used' AND user_guuid = ? AND club_guuid IN (`+placeholders+`)`, 
 			Role:      role,
 			UnionID:   meta.UnionID,
 			UnionName: meta.UnionName,
+			ClubGold:  clubGold[clubID],
 			IsCreator: isCreator,
 			IsAgent:   isAgent,
 		}

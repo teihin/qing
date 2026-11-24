@@ -21,6 +21,7 @@ type ClubRef = {
   upperName: string;
   percent: number;
   quotaFen: number;
+  clubGold: number;
   isCreator: boolean;
   isAgent: boolean;
   chain: ChainNode[];
@@ -452,6 +453,10 @@ function UserDataIdentity({ profile }: { profile: Profile }) {
                 <div>
                   <dt>分成比例</dt>
                   <dd>{hasClubPercent(club) ? `${club.percent}%` : "—"}</dd>
+                </div>
+                <div>
+                  <dt>俱乐部金币</dt>
+                  <dd>{moneyFormatter.format(club.clubGold)} 元</dd>
                 </div>
                 <div>
                   <dt>当前额度</dt>

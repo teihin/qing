@@ -20,9 +20,10 @@ import (
 //     remark1 是收益归属账号，proxy_guuid=club-<俱乐部号> 是产生该笔收益的俱乐部；
 //     remark3 是分成基数（元），remark4 是设置的暗抽百分点，tax_number 是到账金额（分），
 //     bonus_tax_number 是平台再从这笔红利里扣走的红利暗抽（分）。
-//   - 奖池：usr_income_info2 同一账号的 remark1 记录（unionroot / clubroot 两个层级），
-//     与账号红利流水 usr_activity_info_sub_hongli 的 activity_type='红利2' 逐笔一致；
-//     proxy_guuid 同样能拆到产生收益的俱乐部。
+//   - 奖池：usr_income_info 中 remark5=unionroot（联盟主）/ clubroot（独立俱乐部创建者）的记录，
+//     remark3 是奖池基数（元），remark4=100 表示该层级全额；proxy_guuid 同样能拆到产生收益的俱乐部。
+//     2026-11-24 线上核对：usr_income_info2 全库 0 行（游戏服从未写入这张表），
+//     奖池流水实际写在 usr_income_info 里，与暗抽同表不同标签，所以奖池页也查 usr_income_info。
 //
 // 联盟大盟主的收益可能来自多个俱乐部，所以接口同时给出“按俱乐部汇总”；
 // 群主所在俱乐部若已入盟，暗抽/奖池归联盟大盟主，接口会明确返回收益归属人。
@@ -470,10 +471,13 @@ type ownerEarningsQuerySource struct {
 
 func ownerEarningsSource(kind string) ownerEarningsQuerySource {
 	if kind == ownerEarningsKindJackpot {
+		// 奖池与暗抽同在 usr_income_info，用 remark5 区分：
+		// unionroot = 联盟大盟主的奖池收益，clubroot = 未入盟的独立俱乐部创建者的奖池收益。
 		return ownerEarningsQuerySource{
-			Table:    "kbedm.usr_income_info2 i",
-			NetExpr:  "(i.tax_number - COALESCE(i.bonus_tax_number, 0))",
-			BaseExpr: "0",
+			Table:      "kbedm.usr_income_info i",
+			NetExpr:    "(i.tax_number - COALESCE(i.bonus_tax_number, 0))",
+			BaseExpr:   "CAST(NULLIF(TRIM(i.remark3), '') AS DECIMAL(18,2))",
+			LevelWhere: " AND i.remark5 IN ('unionroot', 'clubroot')",
 		}
 	}
 	return ownerEarningsQuerySource{

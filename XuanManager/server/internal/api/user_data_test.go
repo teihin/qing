@@ -142,3 +142,28 @@ func TestParseTrailingFloat(t *testing.T) {
 		t.Fatal("non numeric remark should not parse")
 	}
 }
+
+func TestParseUserDataClubGold(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want map[string]float64
+	}{
+		{"", map[string]float64{}},
+		{"{}", map[string]float64{}},
+		{"not-json", map[string]float64{}},
+		{`{"503543": 566, "487987": 0}`, map[string]float64{"503543": 566, "487987": 0}},
+		{`{"503543": "566"}`, map[string]float64{"503543": 566}},
+		{`{"503543": 566, "bad": "x"}`, map[string]float64{"503543": 566}},
+	}
+	for _, item := range cases {
+		got := parseUserDataClubGold(item.raw)
+		if len(got) != len(item.want) {
+			t.Fatalf("parseUserDataClubGold(%q) = %v, want %v", item.raw, got, item.want)
+		}
+		for clubID, want := range item.want {
+			if got[clubID] != want {
+				t.Fatalf("parseUserDataClubGold(%q)[%s] = %v, want %v", item.raw, clubID, got[clubID], want)
+			}
+		}
+	}
+}

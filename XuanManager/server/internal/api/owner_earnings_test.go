@@ -115,7 +115,9 @@ func TestOwnerEarningsWhereSplitsLevelAndClubFilters(t *testing.T) {
 	}
 
 	base, baseArgs := ownerEarningsBaseWhere(ownerEarningsSource(ownerEarningsKindJackpot), "895742", filters)
-	if base != "i.date BETWEEN ? AND ? AND i.remark1 = ?" || len(baseArgs) != 3 {
+	// 奖池与暗抽同在 usr_income_info，靠 remark5 区分层级（unionroot / clubroot）。
+	wantBase := "i.date BETWEEN ? AND ? AND i.remark1 = ? AND i.remark5 IN ('unionroot', 'clubroot')"
+	if base != wantBase || len(baseArgs) != 3 {
 		t.Fatalf("unexpected base where: %q %#v", base, baseArgs)
 	}
 }

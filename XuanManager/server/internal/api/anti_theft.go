@@ -54,6 +54,29 @@ func (s *Server) handleListAntiTheftAccounts(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "设备平台必须是 android、ios 或 web")
 		return
 	}
+	// 排序：默认按注册记录 id 倒序；传 sort=boundAt 时按设备绑定时间排，
+	// 未绑定的行（device_bound_at 为空）无论升降序都排在最后，避免把空白行顶到第一页。
+	sortBy := strings.TrimSpace(r.URL.Query().Get("sort"))
+	sortOrder := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("order")))
+	if sortBy != "" && sortBy != "boundAt" {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "排序字段只支持 boundAt")
+		return
+	}
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		writeError(w, http.StatusBadRequest, "INVALID_FILTER", "排序方向只能是 asc 或 desc")
+		return
+	}
+	orderBy := "m.id DESC"
+	if sortBy == "boundAt" {
+		if sortOrder == "asc" {
+			orderBy = "m.device_bound_at IS NULL, m.device_bound_at ASC, m.id ASC"
+		} else {
+			orderBy = "m.device_bound_at IS NULL, m.device_bound_at DESC, m.id DESC"
+		}
+	}
 	// 设备绑定表按真实玩家 ID 存，关键字是个人ID 靓号时先反解。
 	keyword = s.resolvePlayerInput(r.Context(), keyword)
 	where, args := buildAntiTheftWhere(keyword, status, platform)
@@ -82,7 +105,7 @@ FROM kbedm.third_marketing_info m
 LEFT JOIN kbedm.tbl_Account a ON a.sm_guuid = m.player_guuid
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 WHERE `+where+`
-ORDER BY m.id DESC
+ORDER BY `+orderBy+`
 LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		s.logger.Error("list anti theft accounts", "error", err)

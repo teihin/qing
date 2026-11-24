@@ -24,6 +24,8 @@ export default function AntiTheftPage({ can, notify }: {
   const [platform, setPlatform] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  // 绑定时间排序：none = 默认顺序（注册记录倒序），desc/asc = 按 device_bound_at 排。
+  const [boundSort, setBoundSort] = useState<"none" | "desc" | "asc">("none");
   const [loading, setLoading] = useState(false);
   const [unbindTarget, setUnbindTarget] = useState<AntiTheftAccountItem | null>(null);
   const [queryRevision, refreshQuery] = useQueryRefresh();
@@ -36,6 +38,7 @@ export default function AntiTheftPage({ can, notify }: {
       if (appliedKeyword) params.set("keyword", appliedKeyword);
       if (status) params.set("status", status);
       if (platform) params.set("platform", platform);
+      if (boundSort !== "none") { params.set("sort", "boundAt"); params.set("order", boundSort); }
       const result = await api<AntiTheftAccountsResponse>(`/api/game/anti-theft?${params.toString()}`);
       setData(result);
       if (result.total > 0 && page > Math.ceil(result.total / pageSize)) setPage(Math.max(1, Math.ceil(result.total / pageSize)));
@@ -44,12 +47,16 @@ export default function AntiTheftPage({ can, notify }: {
     } finally {
       setLoading(false);
     }
-  }, [appliedKeyword, notify, page, pageSize, platform, queryRevision, status]);
+  }, [appliedKeyword, boundSort, notify, page, pageSize, platform, queryRevision, status]);
 
   useEffect(() => { void load(); }, [load]);
 
   const search = () => { setAppliedKeyword(keyword.trim()); setPage(1); refreshQuery(); };
-  const reset = () => { setKeyword(""); setAppliedKeyword(""); setStatus(""); setPlatform(""); setPage(1); refreshQuery(); };
+  const reset = () => { setKeyword(""); setAppliedKeyword(""); setStatus(""); setPlatform(""); setBoundSort("none"); setPage(1); refreshQuery(); };
+  const toggleBoundSort = () => {
+    setBoundSort((value) => value === "none" ? "desc" : value === "desc" ? "asc" : "none");
+    setPage(1);
+  };
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / pageSize));
   const firstRow = data?.total ? (page - 1) * pageSize + 1 : 0;
   const lastRow = data ? Math.min(page * pageSize, data.total) : 0;
@@ -74,7 +81,7 @@ export default function AntiTheftPage({ can, notify }: {
 
       {loading && !data ? <LoadingBlock label="正在读取防盗号状态" /> : !data || data.items.length === 0 ? <EmptyState title={hasFilters ? "没有匹配账号" : "暂无注册账号"} description={hasFilters ? "请调整或清空查询条件。" : "KB 注册数据中暂时没有账号。"} /> : <>
         <div className={`table-wrap ${loading ? "is-loading" : ""}`}>
-          <table className="anti-theft-table"><thead><tr><th>玩家</th><th>登录账号 / 注册（北京时间）</th><th>防盗号</th><th>绑定设备</th><th>绑定记录（北京时间）</th><th className="align-right">操作</th></tr></thead><tbody>{data.items.map((item) => <AntiTheftRow key={item.registrationId} item={item} canUnbind={can("game.anti_theft.unbind")} onUnbind={setUnbindTarget} />)}</tbody></table>
+          <table className="anti-theft-table"><thead><tr><th>玩家</th><th>登录账号 / 注册（北京时间）</th><th>防盗号</th><th>绑定设备</th><th><button type="button" className={`table-sort ${boundSort !== "none" ? "is-active" : ""}`} onClick={toggleBoundSort} title="按设备绑定时间排序；第三次点击恢复默认顺序">绑定记录（北京时间） <span>{boundSort === "desc" ? "↓" : boundSort === "asc" ? "↑" : "↕"}</span></button></th><th className="align-right">操作</th></tr></thead><tbody>{data.items.map((item) => <AntiTheftRow key={item.registrationId} item={item} canUnbind={can("game.anti_theft.unbind")} onUnbind={setUnbindTarget} />)}</tbody></table>
         </div>
         <footer className="table-pagination"><span>显示 {firstRow}–{lastRow}，共 {data.total} 个注册账号</span><div><label>每页<select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}><option value="20">20</option><option value="50">50</option><option value="100">100</option></select></label><button type="button" disabled={page <= 1 || loading} onClick={() => setPage((value) => value - 1)}>上一页</button><strong>{page} / {totalPages}</strong><button type="button" disabled={page >= totalPages || loading} onClick={() => setPage((value) => value + 1)}>下一页</button></div></footer>
       </>}
