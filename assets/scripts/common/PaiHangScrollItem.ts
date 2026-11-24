@@ -10,9 +10,8 @@ export default class PaiHangScrollItem  extends ScrollItemBase {
         let text = String(value).replace(/,/g, "");
         if (!/^[+-]?\d+(\.\d+)?$/.test(text)) return "—";
         if (signed && Number(text) > 0 && text.charAt(0) !== "+") text = "+" + text;
-        const parts = text.split(".");
-        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-        return parts.join(".");
+        // 排行榜数字直接显示原值，不加千分位逗号。
+        return text;
     }
 
     public Refresh(jRoom:any, signed:boolean = false){

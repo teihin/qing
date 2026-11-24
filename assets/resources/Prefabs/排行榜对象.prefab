@@ -207,9 +207,9 @@
     ],
     "_srcBlendFactor": 770,
     "_dstBlendFactor": 771,
-    "_string": "—",
-    "_N$string": "—",
-    "_fontSize": 72,
+    "_string": "100",
+    "_N$string": "100",
+    "_fontSize": 40,
     "_lineHeight": 77,
     "_enableWrapText": false,
     "_N$file": {
