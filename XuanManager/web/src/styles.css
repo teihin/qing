@@ -279,6 +279,7 @@ td strong { color: #294149; }
 .money-value, .stone-value { color: #117b72; font-family: Georgia, "Songti SC", serif; font-size: 16px; }
 .club-chip-list { display: flex; flex-wrap: wrap; gap: 5px; max-width: 230px; }
 .club-chip { display: inline-flex; align-items: center; max-width: 100%; overflow: hidden; padding: 4px 9px; border: 1px solid #cfe7e3; border-radius: 999px; color: #176f67; background: #f0f9f7; font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+.club-chip__gold { margin-left: 5px; color: #b2432f; font-weight: 800; font-variant-numeric: tabular-nums; }
 
 /* Operational controls: player balance, live rooms, payment channels and activities. */
 .balance-adjust-player { display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 14px; margin-bottom: 18px; padding: 14px; border: 1px solid #deeaeb; border-radius: 12px; background: #f8fbfb; }

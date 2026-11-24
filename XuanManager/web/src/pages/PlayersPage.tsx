@@ -87,6 +87,8 @@ function scopeDetailText(items: ManageScopeName[] | undefined, raw: string): str
 }
 
 const balanceFormatter = new Intl.NumberFormat("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// 俱乐部金币是整数元，列表里不补两位小数，避免一排 0.00 占地方。
+const clubGoldFormatter = new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 });
 const clubModeLabels: Record<string, string> = { "1": "普通模式", "2": "茶楼模式", "3": "带分模式" };
 const clubStatusLabels: Record<string, string> = { used: "正常", init: "未启用", del: "已解散" };
 const relationTypeLabels: Record<string, string> = { device: "同设备", gps: "同GPS网格" };
@@ -228,7 +230,7 @@ export default function PlayersPage({ can, canViewSensitive, notify }: { can: (p
                     <td><code>{player.loginName || "—"}</code>{player.accountName && player.accountName !== player.loginName && <small className="cell-subtitle">KBE：{player.accountName}</small>}</td>
                     {canViewPassword && <td><PlayerPasswordCell player={player} /></td>}
                     <td><strong className="stone-value">{player.stone.toLocaleString("zh-CN")}</strong><small className="cell-subtitle">钻石</small></td>
-                    <td>{player.clubs.length > 0 ? <div className="club-chip-list">{player.clubs.map((club) => <span className="club-chip" key={club.clubId} title={`俱乐部ID：${club.clubId}`}>{club.name || club.clubId}</span>)}</div> : <span className="muted">未加入俱乐部</span>}</td>
+                    <td>{player.clubs.length > 0 ? <div className="club-chip-list">{player.clubs.map((club) => <span className="club-chip" key={club.clubId} title={`俱乐部ID：${club.clubId} · 俱乐部金币：${clubGoldFormatter.format(club.clubGold ?? 0)} 元`}>{club.name || club.clubId}<b className="club-chip__gold">{clubGoldFormatter.format(club.clubGold ?? 0)}</b></span>)}</div> : <span className="muted">未加入俱乐部</span>}</td>
                     <td><strong>{player.roomId > 0 ? `房间 ${player.roomId}` : "未在房间"}</strong><small className="cell-subtitle">{player.clientStatus || "状态未上报"}{player.clientVersion ? ` · ${player.clientVersion}` : ""}</small></td>
                     <td><code>{player.ipCode || "—"}</code>{canViewSensitive && player.ip && <small className="cell-subtitle">{player.ip}</small>}</td>
                     <td>{formatDate(player.registrationTime)}</td>

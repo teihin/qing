@@ -240,6 +240,8 @@ export interface PlayerStoneGrantRecordsResponse {
 export interface PlayerClubRef {
   clubId: string;
   name: string;
+  /** 该玩家在这个俱乐部里的金币余额；后端未取到时为 null。 */
+  clubGold: number | null;
 }
 
 export interface PlayerClubMembership {

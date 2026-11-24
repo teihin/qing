@@ -12,6 +12,9 @@ import (
 type playerClubSummary struct {
 	ClubID string `json:"clubId"`
 	Name   string `json:"name"`
+	// ClubGold 是该玩家在这个俱乐部里的金币余额（tbl_Account.sm_club_gold 对应项），
+	// 列表直接展示，免得每次点开玩家信息才能看到。
+	ClubGold *int64 `json:"clubGold"`
 }
 
 type playerClubMembership struct {
@@ -121,12 +124,14 @@ func (s *Server) attachPlayerClubs(ctx context.Context, items []playerItem) erro
 		return err
 	}
 	for index := range items {
+		clubGold := parseUserDataClubGold(items[index].rawClubGold)
 		for _, clubID := range clubIDsFromMembershipColumns(playerMembershipColumns(items[index])...) {
 			meta, ok := metas[clubID]
 			if !ok {
 				continue
 			}
-			items[index].Clubs = append(items[index].Clubs, playerClubSummary{ClubID: meta.ClubID, Name: meta.Name})
+			amount := int64(clubGold[clubID])
+			items[index].Clubs = append(items[index].Clubs, playerClubSummary{ClubID: meta.ClubID, Name: meta.Name, ClubGold: &amount})
 		}
 	}
 	return nil

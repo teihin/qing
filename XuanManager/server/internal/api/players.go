@@ -97,7 +97,9 @@ type playerItem struct {
 	clubJoin  string
 	clubMake2 string
 	clubJoin2 string
-	rawIP     string
+	// rawClubGold 是 sm_club_gold 的 JSON（{"俱乐部号": 金币}），只用于给 Clubs 补金币余额。
+	rawClubGold string
+	rawIP       string
 }
 
 // 玩家登录密码只对管理员返回。管理员 = `super_admin` 角色（含 admin999 超级管理员
@@ -241,7 +243,7 @@ a.sm_totoal_round_count, a.sm_total_score, a.sm_reg_time,
 FROM_UNIXTIME(NULLIF(k.lasttime, 0)), COALESCE(k.numlogin, 0), a.sm_remark,
 COALESCE(a.sm_club_make, ''), COALESCE(a.sm_club_join, ''),
 COALESCE(a.sm_club_make2, ''), COALESCE(a.sm_club_join2, ''),
-COALESCE(a.sm_club_manage, ''), %s, %s, %s
+COALESCE(a.sm_club_manage, ''), %s, %s, %s, COALESCE(a.sm_club_gold, '')
 FROM kbedm.tbl_Account a
 LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id
 LEFT JOIN kbedm.tbl_Account agent ON agent.sm_guuid = a.sm_agentID%s`, unionManageExpr, bossExpr, prettyExpr, prettyNumberJoin(hasPretty))
@@ -308,7 +310,7 @@ func (s *Server) queryAndScanPlayerItems(ctx context.Context, query string, args
 			&item.TotalRounds, &item.TotalScore, &item.RegistrationTime,
 			&lastLogin, &item.LoginCount, &item.Remark,
 			&item.clubMake, &item.clubJoin, &item.clubMake2, &item.clubJoin2, &item.ClubManage,
-			&item.UnionManage, &item.IsBoss, &item.PrettyNo,
+			&item.UnionManage, &item.IsBoss, &item.PrettyNo, &item.rawClubGold,
 		); err != nil {
 			return nil, err
 		}
