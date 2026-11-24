@@ -291,11 +291,21 @@ export default class panelMain extends UIPanelViewBase {
     private antiTheftSyncing:boolean = false;
     private antiTheftRequestId:string = "";
     private antiTheftDesired:boolean = false;
+    // 登录后自动绑定的状态：autoBindTried 保证一次登录只尝试一次，
+    // autoBinding 标记当前这次绑定是系统自动发起的，失败/超时都不弹窗打扰玩家。
+    private antiTheftAutoBindTried:boolean = false;
+    private antiTheftAutoBinding:boolean = false;
     private antiTheftTimeoutHandler = ()=>{
         if(!this.antiTheftBusy)
             return;
         this.antiTheftBusy = false;
         this.antiTheftRequestId = "";
+        if(this.antiTheftAutoBinding)
+        {
+            this.antiTheftAutoBinding = false;
+            this.RefreshAntiTheftSetting();
+            return;
+        }
         this.RefreshAntiTheftSetting("操作超时，请刷新设置后重试",true);
     };
     onLoad () {
@@ -322,6 +332,9 @@ export default class panelMain extends UIPanelViewBase {
         this.antiTheftToggle = Tool.GetChild(this.node,"设置/列表/item/防盗号/防盗号开关").getComponent(cc.Toggle);
         this.antiTheftStatus = Tool.GetChild(this.node,"设置/列表/item/防盗号状态").getComponent(cc.Label);
         DeviceIdentityManager.getInstance().prepare();
+        // 登录后自动绑定当前设备。延迟一点，避开进大厅那一刻的批量请求；
+        // 只在本面板加载时跑一次（即一次登录一次），换设备要先在旧设备设置里解绑。
+        this.scheduleOnce(()=>this.TryAutoBindAntiTheft(),1.5);
 
         
         
@@ -2667,6 +2680,34 @@ export default class panelMain extends UIPanelViewBase {
         });
     }
 
+    /**
+     * 登录后自动把当前设备绑成该账号的防盗号设备（玩家不需要任何操作）。
+     *
+     * 规则：
+     * - 已绑定（anti_theft_on=1）直接跳过，不会覆盖原绑定；
+     * - 一次登录只尝试一次，失败不弹窗、不打断玩家，下次登录会重新尝试；
+     * - 设备标识拿不到或不能稳定保存（浏览器隐私模式等）时不绑，避免把自己锁在门外。
+     * 换设备要换绑时，先在旧设备的「设置 → 防盗号」里关闭，再在新设备登录即自动绑定。
+     */
+    private TryAutoBindAntiTheft()
+    {
+        if(this.antiTheftAutoBindTried || this.antiTheftBusy)
+            return;
+        if(GameDataManager.getAccount() == null || this.IsAntiTheftEnabled())
+            return;
+        this.antiTheftAutoBindTried = true;
+        DeviceIdentityManager.getInstance().prepare().then((identity)=>{
+            if(!cc.isValid(this.node) || this.antiTheftBusy || this.IsAntiTheftEnabled())
+                return;
+            if(!identity.available || !identity.persistent)
+                return;
+            this.antiTheftAutoBinding = true;
+            this.SendAntiTheftSetting(true,identity.deviceId,identity.platform,identity.version);
+        }).catch(()=>{
+            // 自动绑定失败不做任何提示，设置页保持「未开启」，下次登录再试。
+        });
+    }
+
     private SendAntiTheftSetting(enabled:boolean,deviceId:string,platform:string,version:number)
     {
         if(this.antiTheftBusy)
@@ -2701,8 +2742,11 @@ export default class panelMain extends UIPanelViewBase {
         if(!success)
         {
             let message = result != null && result.message ? result.message : "防盗号设置失败，请稍后重试";
+            // 自动绑定失败只回写状态，不弹窗打断玩家。
+            let silent = this.antiTheftAutoBinding;
             this.FinishAntiTheftSetting(message,true);
-            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+            if(!silent)
+                UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
             return;
         }
         if(this.IsAntiTheftEnabled() === this.antiTheftDesired)
@@ -2728,6 +2772,7 @@ export default class panelMain extends UIPanelViewBase {
         this.unschedule(this.antiTheftTimeoutHandler);
         this.antiTheftBusy = false;
         this.antiTheftRequestId = "";
+        this.antiTheftAutoBinding = false;
         this.RefreshAntiTheftSetting(message,isError);
     }
 

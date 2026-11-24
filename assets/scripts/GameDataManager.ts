@@ -34,6 +34,20 @@ export default class GameDataManager extends cc.Component {
     private _forcedLogoutReasonPending:boolean = false;
     private _forcedLogoutListeners:((message:string)=>void)[] = [];
 
+    // 同一账号连续 5 次登录密码错误 → 本机锁 10 分钟，提示“连接异常了，稍事休息”。
+    // 说明：这是官方客户端内的防手滑/防连点。真正的账号级锁定必须由 KB 登录服按账号计数，
+    // 客户端拦不住改包脚本，这一段只负责体验与自助止损。
+    private static readonly LoginPasswordFailLimit:number = 5;
+    private static readonly LoginPasswordLockMs:number = 10 * 60 * 1000;
+    private static readonly LoginFailWindowMs:number = 30 * 60 * 1000;
+    private static readonly LoginPasswordLockMessage:string = "连接异常了，稍事休息";
+    private _lastLoginManual:boolean = true;
+
+    // KB 的防盗号专用登录错误码没登记进 server_errors.xml，客户端拿到的 name 是
+    // UNKNOWN_SERVER_ERROR_<数字>，只能按数字识别。实测 2563 = 设备与绑定不一致
+    // （已绑定的号在另一台设备登录）。KB 若调整号段，同步改这里。
+    private static readonly KbAntiTheftDeviceMismatchCode:number = 2563;
+
     // 踢线提示分两种：只有确认是账号在别处登录时才报顶号，
     // 服务器重启/停机仍沿用既有的中性失效提示（历史上误报异地登录会被玩家投诉）。
     private static readonly KickMessageOtherDevice:string = "该账号已被其他设备登录";
@@ -347,6 +361,19 @@ export default class GameDataManager extends cc.Component {
             UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,
                 "登录失败，服务端拒绝了本次登录，请联系客服");
         }
+        else if(this.isPasswordLoginError(failedcode))
+        {
+            // 账号或密码错误：不自动重试；同一账号连续错 5 次，本机锁 10 分钟。
+            UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
+            let locked = this._lastLoginManual && this.recordLoginPasswordFailure(this.strLastUserName);
+            let message = "";
+            try { message = (KBEngine.app.serverErrDes(failedcode) || "").toString(); } catch(error) { message = ""; }
+            if(locked)
+                message = GameDataManager.LoginPasswordLockMessage;
+            else if(message == "")
+                message = "账号或密码错误，请重新输入";
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,message);
+        }
         else if(failedcode>=3 && failedcode<=6)
         {
             UIManager.getInstance().closePanelByName("panelLoading",ClosePanelMode.Top);
@@ -619,6 +646,8 @@ export default class GameDataManager extends cc.Component {
         //登陆成功，启动心跳校验
         this.dtLastSuccess = new Date().getTime();
         this.bLoginSuccess = true;
+        // 登录成功即清掉该账号的密码错误计数（锁定中的账号本来也走不到这里）。
+        this.clearLoginPasswordFailure(this.strLastUserName);
         this._antiTheftLoginStopped = false;
         this._automaticReconnectStoppedByKick = false;
         // 重新登录成功说明上一次踢线提示已经过期，清掉残留，避免下次进登录页又弹一次。
@@ -690,11 +719,87 @@ export default class GameDataManager extends cc.Component {
      }
 
     
-    //登陆游戏
+    // ---- 登录密码连续失败锁定（按账号，存本机） ----
+
+    private loginPasswordFailKey(account:string):string
+    {
+        return "qing_login_fail_" + (account || "").trim().toLowerCase();
+    }
+
+    private readLoginPasswordFailState(account:string):{n:number,first:number,lock:number}
+    {
+        try
+        {
+            let raw = cc.sys.localStorage.getItem(this.loginPasswordFailKey(account));
+            if(raw == null || raw == "")
+                return {n:0,first:0,lock:0};
+            let data = JSON.parse(raw);
+            return {
+                n:Number(data != null && data.n != null ? data.n : 0) || 0,
+                first:Number(data != null && data.first != null ? data.first : 0) || 0,
+                lock:Number(data != null && data.lock != null ? data.lock : 0) || 0
+            };
+        }
+        catch(error)
+        {
+            return {n:0,first:0,lock:0};
+        }
+    }
+
+    private writeLoginPasswordFailState(account:string,state:{n:number,first:number,lock:number})
+    {
+        try
+        {
+            cc.sys.localStorage.setItem(this.loginPasswordFailKey(account),JSON.stringify(state));
+        }
+        catch(error) {}
+    }
+
+    /** 剩余锁定毫秒数，0 表示未锁定；锁定过期或窗口过期会把计数清零。 */
+    private loginPasswordLockRemainMs(account:string):number
+    {
+        let state = this.readLoginPasswordFailState(account);
+        let now = new Date().getTime();
+        if(state.lock > now)
+            return state.lock - now;
+        if(state.lock > 0)
+        {
+            this.writeLoginPasswordFailState(account,{n:0,first:0,lock:0});
+            return 0;
+        }
+        if(state.first > 0 && now - state.first > GameDataManager.LoginFailWindowMs)
+            this.writeLoginPasswordFailState(account,{n:0,first:0,lock:0});
+        return 0;
+    }
+
+    /** 记一次密码错误，返回 true 表示本次刚好触发 10 分钟锁定。 */
+    private recordLoginPasswordFailure(account:string):boolean
+    {
+        let now = new Date().getTime();
+        let state = this.readLoginPasswordFailState(account);
+        if(state.lock > now)
+            return true;
+        if(state.lock > 0 || state.first <= 0 || now - state.first > GameDataManager.LoginFailWindowMs)
+            state = {n:0,first:0,lock:0};
+        state.n += 1;
+        if(state.first <= 0)
+            state.first = now;
+        if(state.n >= GameDataManager.LoginPasswordFailLimit)
+            state.lock = now + GameDataManager.LoginPasswordLockMs;
+        this.writeLoginPasswordFailState(account,state);
+        return state.lock > now;
+    }
+
+    private clearLoginPasswordFailure(account:string)
+    {
+        this.writeLoginPasswordFailState(account,{n:0,first:0,lock:0});
+    }
+
     async loginGame(strUserName:string,strPass:string,other:string)
     {
         this.strLastUserName = strUserName;
         this.strLastPass = strPass;
+        this._lastLoginManual = other !== "重连";
         if(other !== "重连")
         {
             this._antiTheftLoginStopped = false;
@@ -702,6 +807,12 @@ export default class GameDataManager extends cc.Component {
         }
         if(this._antiTheftLoginStopped || this._automaticReconnectStoppedByKick)
             return;
+        // 手动登录被锁定时直接拦在本地，不再发包；重连不拦（重连用的是上次成功的密码）。
+        if(this._lastLoginManual && this.loginPasswordLockRemainMs(strUserName) > 0)
+        {
+            UIManager.getInstance().showPanel("panelMsgView",ShowPanelMode.Cover,GameDataManager.LoginPasswordLockMessage);
+            return;
+        }
         let attempt = ++this._loginAttempt;
         UIManager.getInstance().showPanel("panelLoading",ShowPanelMode.Top);
         let loginData = await DeviceIdentityManager.getInstance().createLoginData(other === "重连" ? "reconnect" : "login");
@@ -783,6 +894,8 @@ export default class GameDataManager extends cc.Component {
 
     private isAntiTheftLoginError(failedcode:number):boolean
     {
+        if(failedcode === GameDataManager.KbAntiTheftDeviceMismatchCode)
+            return true;
         let code = "";
         let description = "";
         try { code = (KBEngine.app.serverErr(failedcode) || "").toString(); } catch(error) {}
@@ -796,8 +909,27 @@ export default class GameDataManager extends cc.Component {
             text.indexOf("防盗号校验暂不可用") >= 0;
     }
 
+    /**
+     * 服务端错误码是否表示“账号或密码不正确”。
+     * 名字优先（各服 server_errors 可能不同），名字里看不出时按描述兜底。
+     * 未登记的码在上游分支已经拦掉，这里只处理有明确登记的情况。
+     */
+    private isPasswordLoginError(failedcode:number):boolean
+    {
+        let code = "";
+        let description = "";
+        try { code = (KBEngine.app.serverErr(failedcode) || "").toString().toUpperCase(); } catch(error) {}
+        try { description = (KBEngine.app.serverErrDes(failedcode) || "").toString(); } catch(error) {}
+        if(code.indexOf("NAME_PASSWORD") >= 0 || code.indexOf("PASSWORD") >= 0 ||
+            code.indexOf("NOT_MATCH") >= 0 || code.indexOf("ACCOUNT_LOGIN_FAILED") >= 0)
+            return true;
+        return description.indexOf("密码") >= 0 || description.toUpperCase().indexOf("PASSWORD") >= 0;
+    }
+
     private antiTheftLoginMessage(failedcode:number):string
     {
+        if(failedcode === GameDataManager.KbAntiTheftDeviceMismatchCode)
+            return "当前账号已绑定设备，请先解绑";
         let code = "";
         let description = "";
         try { code = (KBEngine.app.serverErr(failedcode) || "").toString().toUpperCase(); } catch(error) {}
@@ -807,7 +939,7 @@ export default class GameDataManager extends cc.Component {
         if(code.indexOf("ANTI_THEFT_DEVICE_INVALID") >= 0)
             return "当前设备信息获取失败，请重启游戏后再试";
         if(code.indexOf("ANTI_THEFT_DEVICE_MISMATCH") >= 0 || description.indexOf("当前设备不是绑定设备") >= 0)
-            return "当前设备不是绑定设备，请在原设备关闭防盗号或联系客服解绑";
+            return "当前账号已绑定设备，请先解绑";
         if(code.indexOf("ANTI_THEFT_VERIFY_UNAVAILABLE") >= 0 || description.indexOf("防盗号校验暂不可用") >= 0)
             return "防盗号校验暂不可用，请稍后再试或联系客服";
         return description == "" ? "防盗号校验失败，请联系客服" : description;
