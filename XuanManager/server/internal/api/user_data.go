@@ -75,6 +75,20 @@ type userDataProfile struct {
 	Clubs          []userDataClub `json:"clubs"`
 }
 
+// userDataLookupItem 是「用户端数据查询」搜索框的候选玩家：只给定位身份用的字段。
+type userDataLookupItem struct {
+	PlayerID    string `json:"playerId"`
+	Name        string `json:"name"`
+	LoginName   string `json:"loginName"`
+	AccountName string `json:"accountName"`
+	Role        string `json:"role"`
+}
+
+type userDataLookupResponse struct {
+	Items []userDataLookupItem `json:"items"`
+	Total int                  `json:"total"`
+}
+
 type userDataRecord struct {
 	ID             int64   `json:"id"`
 	Kind           string  `json:"kind"`
@@ -154,6 +168,63 @@ func (s *Server) handleUserDataProfile(w http.ResponseWriter, r *http.Request, _
 		return
 	}
 	writeData(w, http.StatusOK, profile)
+}
+
+// handleUserDataLookup 支持搜索框输入游戏用户ID、登录ID 或昵称，先定位到玩家再查明细。
+// 一次最多回 20 个候选，前端单条命中直接进详情，多条让运营点选。
+func (s *Server) handleUserDataLookup(w http.ResponseWriter, r *http.Request, _ principal) {
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	if keyword == "" {
+		writeError(w, http.StatusBadRequest, "INVALID_KEYWORD", "请输入游戏用户ID、登录ID 或昵称")
+		return
+	}
+	if len([]rune(keyword)) > 50 {
+		writeError(w, http.StatusBadRequest, "INVALID_KEYWORD", "查询文字不能超过 50 个字符")
+		return
+	}
+	items, err := s.searchUserDataPlayers(r.Context(), keyword)
+	if err != nil {
+		s.logger.Error("search user data players", "keyword", keyword, "error", err)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "查询玩家失败")
+		return
+	}
+	writeData(w, http.StatusOK, userDataLookupResponse{Items: items, Total: len(items)})
+}
+
+// searchUserDataPlayers 精确命中「游戏ID / 登录ID」，同时支持昵称、登录账号模糊匹配；
+// 排序把精确命中放前面，其余按注册先后倒序，最多 20 条。
+func (s *Server) searchUserDataPlayers(ctx context.Context, keyword string) ([]userDataLookupItem, error) {
+	like := "%" + keyword + "%"
+	conditions := []string{"a.sm_guuid = ?", "a.sm_wxID = ?", "k.accountName = ?", "a.sm_name LIKE ?"}
+	args := []any{keyword, keyword, keyword, like}
+	prettyJoin := ""
+	if s.hasPrettyNumberTable(ctx) {
+		prettyJoin = "\nLEFT JOIN kbedm.usr_pretty_no_info p ON p.user_guuid = a.sm_guuid AND p.kind = 'uid' AND p.status = 'used'"
+		conditions = append(conditions, "p.pretty_no = ?")
+		args = append(args, keyword)
+	}
+	query := `SELECT a.sm_guuid, COALESCE(a.sm_name, ''), COALESCE(a.sm_wxID, ''),
+COALESCE(k.accountName, ''), COALESCE(a.sm_role, '')
+FROM kbedm.tbl_Account a
+LEFT JOIN kbedm.kbe_accountinfos k ON k.entityDBID = a.id` + prettyJoin + `
+WHERE (` + strings.Join(conditions, " OR ") + `)
+ORDER BY (a.sm_guuid = ?) DESC, (a.sm_wxID = ? OR k.accountName = ?) DESC, a.id DESC
+LIMIT 20`
+	args = append(args, keyword, keyword, keyword)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]userDataLookupItem, 0, 8)
+	for rows.Next() {
+		var item userDataLookupItem
+		if rows.Scan(&item.PlayerID, &item.Name, &item.LoginName, &item.AccountName, &item.Role) != nil {
+			continue
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
 }
 
 func (s *Server) handleUserDataRecords(w http.ResponseWriter, r *http.Request, _ principal) {

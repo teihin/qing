@@ -4,6 +4,7 @@ import GameDataManager from "../GameDataManager";
 import Tool from "../common/Tool";
 import ScrollViewEx from "../common/ScrollViewEx";
 import { ClosePanelMode, ShowPanelMode } from "../common/GameDef";
+import { normalizeRoomClubId, normalizeRoomUnionId, resolveRoomClubId, resolveRoomSettingUnionId } from "../logic/RoomClubContext";
 
 var KBEngine = require("kbengine");
 const {ccclass} = cc._decorator;
@@ -12,9 +13,12 @@ const {ccclass} = cc._decorator;
  * 「我的 → 额度授权记录」。
  *
  * 协议（《俱乐部·联盟模式 V2 客户端接口文档》§8.1）：
- *   Hall 命令 `查询_联盟_授信_记录`，参数 count / page / context；
- *   **不传 club_id**：服务端按身份决定范围 —— 联盟总群主（含 `union_manage` 授权账号）看全联盟，
- *   盟主只看自己名下的俱乐部，平台 boss/bigboss 另需 union_id（客户端没有该身份，不传）。
+ *   Hall 命令 `查询_联盟_授信_记录`，参数 club_id / union_id / count / page / context；
+ *   **club_id 与 union_id 都带**：club_id 是当前俱乐部、union_id 是它所属联盟，
+ *   服务端两个都用来定位授信流水（缺了会按账号默认俱乐部猜，多俱乐部账号就会「找不到」）。
+ *   范围仍由服务端按身份决定 —— 联盟总群主（含 `union_manage` 授权账号）看全联盟，
+ *   盟主只看自己名下的俱乐部，平台 boss/bigboss 另需身份标记（客户端没有，不传）。
+ *   入口 strUserData 传 `{"club_id":"...","union_id":"..."}`（JSON，同 panelClubPlayerInfo）。
  *   列表经 `ClubUnionGrantList` 推送，只有最近 3 个自然日的授信 / 收回 / 平台注资 / 额度奖励四类。
  *   行字段：number / count / date / type（授信、收回、注资、注资扣减、额度奖励，服务端按符号给中文）/
  *   quota（分，有符号变动额）/ quota_after（分，变动后余额）/ remark（与 quota_after 同值）/
@@ -64,18 +68,75 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         if(account == null)
             return;
 
+        const entry = this.ReadEntry();
+        const clubId = this.ResolveClubId(account,entry.clubId);
+        const unionId = this.ResolveUnionId(account,entry.unionId);
         this.requestedPage = nPage;
-        this.requestContext = "union:grant-list:" + nPage + ":" + Date.now();
+        this.requestContext = "union:grant-list:" + (clubId === "" ? "-" : clubId) +
+            ":" + (unionId === "" ? "-" : unionId) + ":" + nPage + ":" + Date.now();
 
-        // 不传 club_id：总群主看全联盟（含平台注资、奖励池侧），盟主只看自己俱乐部，
-        // 都由服务端按账号身份判定；传了 club_id 反而会把总群主缩小到单个俱乐部。
-        const strParam = JSON.stringify({
+        const param:any = {
             header:"查询_联盟_授信_记录",
             count:panelQuotaGrantRecord.PAGE_COUNT,
             page:nPage,
             context:this.requestContext
-        });
+        };
+        // 俱乐部 + 联盟都带：服务端靠这两个定位授信范围，缺一个就只能按账号默认俱乐部猜。
+        if(clubId !== "")
+            param.club_id = clubId;
+        if(unionId !== "")
+            param.union_id = unionId;
+        const strParam = JSON.stringify(param);
         account.reqHallCommand(strParam,"P@" + this.requestContext);
+    }
+
+    /**
+     * 入口参数：`{"club_id":"...","union_id":"..."}`（panelMain 已经算好，两边口径一致）。
+     * 兼容纯字符串：6 位数字按 club_id 处理。
+     */
+    private ReadEntry():{clubId:string;unionId:string}
+    {
+        const result = { clubId:"", unionId:"" };
+        const raw = this.strUserData == null ? "" : String(this.strUserData).trim();
+        if(raw === "")
+            return result;
+
+        if(raw.charAt(0) === "{")
+        {
+            try
+            {
+                const data:any = JSON.parse(raw);
+                if(data != null && typeof data === "object")
+                {
+                    result.clubId = normalizeRoomClubId(data["club_id"] || data["clubId"]);
+                    result.unionId = normalizeRoomUnionId(data["union_id"] || data["unionId"]);
+                }
+            }
+            catch(error) {}
+            return result;
+        }
+
+        result.clubId = normalizeRoomClubId(raw);
+        return result;
+    }
+
+    /** 当前俱乐部：入口没给就按大厅当前选中俱乐部解析。 */
+    private ResolveClubId(account:any,fromEntry:string):string
+    {
+        if(fromEntry !== "")
+            return fromEntry;
+        return resolveRoomClubId(account);
+    }
+
+    /**
+     * 当前俱乐部所在联盟：入口没给就退回房间 setting 里的 union_id（联盟共享房才有）。
+     * 都拿不到返回空串，报文就不带 union_id，交服务端按身份兜底。
+     */
+    private ResolveUnionId(account:any,fromEntry:string):string
+    {
+        if(fromEntry !== "")
+            return fromEntry;
+        return resolveRoomSettingUnionId(account);
     }
 
     public OnUnionGrantList(strMsg:any,secondaryRaw?:any)

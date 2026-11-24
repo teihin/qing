@@ -43,6 +43,7 @@
 - `GET /api/agent/hosting/ledger/owners?date=YYYY-MM-DD`：当前可见范围内的盟主选项。
 - `GET /api/agent/hosting/ledger/agents?date=YYYY-MM-DD`：当前可见范围内的客服选项；普通客服始终只返回自己。
 - `POST .../gold` 请求新增 `clientRequestId`（≤64 字符）幂等键；同一编号重复提交不会重复执行，成功重复返回 `duplicate=true`，处理中/失败返回 409。
+- `POST .../gold` 支持 `syncUnionQuota`（布尔，只在上分时生效；客服界面「同步增加盟主额度」默认勾选）：后台先执行上分，再调用游戏后台命令 `发放_盟主_奖励`，把同等额度从联盟池划给该俱乐部。第二步失败不回滚积分，原因通过响应 `quotaSyncError` 返回（空串=同步成功）；俱乐部未加入联盟时返回「该俱乐部未加入联盟，无法同步盟主额度」。
 
 ## 俱乐部直聊接口
 

@@ -690,6 +690,9 @@ textarea { resize: none; }
 .hosted-gold-modal input { width: calc(100% - 44px); height: 44px; margin: 0 22px; padding: 0 12px; outline: 0; border: 1px solid #d6e2df; border-radius: 9px; color: var(--ink); background: #f8faf9; font-size: 17px; }
 .hosted-gold-target { margin: 14px 22px 0; color: #5f7671; font-size: 12px; line-height: 1.7; }
 .hosted-gold-modal label { padding-top: 12px; }
+.hosted-gold-modal label.hosted-gold-sync { display: flex; align-items: center; gap: 8px; margin: 10px 22px 0; padding-top: 0; color: #2f4a45; font-size: 14px; cursor: pointer; }
+.hosted-gold-modal label.hosted-gold-sync input { width: 18px; height: 18px; margin: 0; padding: 0; border-radius: 4px; accent-color: #2f6a5c; }
+.hosted-gold-modal label.hosted-gold-sync span { display: inline; margin: 0; padding: 0; color: #2f4a45; font-size: 14px; font-weight: 600; }
 .hosted-balance { padding: 3px 10px; color: #2f4a45; border-radius: 12px; background: #eef6f2; font-size: 13px; font-weight: 600; white-space: nowrap; }
 
 /* 托管会话的备注名与置顶标记 */

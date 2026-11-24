@@ -7,6 +7,10 @@ type Kind = "club" | "gift" | "gold" | "stone" | "bonus" | "quota";
 
 type ChainNode = { playerId: string; name: string; role: string; clubId: string; clubName: string; percent: number };
 
+type LookupItem = { playerId: string; name: string; loginName: string; accountName: string; role: string };
+
+type LookupResponse = { items: LookupItem[]; total: number };
+
 type ClubRef = {
   clubId: string;
   clubName: string;
@@ -107,6 +111,15 @@ function signed(value: number, digits = 2): string {
   return formatter.format(0);
 }
 
+// 本人这一格的比例：是创建者或有邀请码的代理就显示，percent=0 也显示 0%（明确是代理但比例为 0）。
+function hasClubPercent(club: ClubRef): boolean {
+  return club.isCreator || club.isAgent || club.percent > 0;
+}
+
+function selfChainPercentText(club: ClubRef): string {
+  return hasClubPercent(club) ? ` · ${club.percent}%` : "";
+}
+
 function roleTone(role: string): string {
   switch (role) {
     case "大盟主": return "root";
@@ -122,6 +135,8 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
   const initialPlayerId = useMemo(() => new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("playerId")?.trim() ?? "", []);
   const [playerIdDraft, setPlayerIdDraft] = useState(initialPlayerId);
   const [playerId, setPlayerId] = useState(initialPlayerId);
+  const [candidates, setCandidates] = useState<LookupItem[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [kind, setKind] = useState<Kind>("club");
@@ -152,7 +167,7 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
       })
       .finally(() => { if (alive) setProfileLoading(false); });
     return () => { alive = false; };
-  }, [playerId, notify]);
+  }, [playerId, reloadKey, notify]);
 
   const load = useCallback(async () => {
     if (!playerId) return;
@@ -182,15 +197,39 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
     if (profile && kind === "quota" && !profile.quotaVisible) setKind("club");
   }, [profile, kind]);
 
-  const searchPlayer = () => {
-    const clean = playerIdDraft.trim();
-    if (!clean) { notify("请输入游戏用户ID", "error"); return; }
-    setPlayerId(clean);
-    setPlayerIdDraft(clean);
+  const applyPlayer = (id: string) => {
+    setCandidates([]);
+    setPlayerId(id);
+    setPlayerIdDraft(id);
     setProfile(null);
     setData(null);
     setKind("club");
     setPage(1);
+    setReloadKey((value) => value + 1);
+  };
+
+  // 搜索框同时接受游戏ID（含靓号）、登录ID 和昵称：先查候选玩家，命中一条直接进详情，多条让运营点选。
+  const searchPlayer = async () => {
+    const clean = playerIdDraft.trim();
+    if (!clean) { notify("请输入游戏用户ID、登录ID 或昵称", "error"); return; }
+    setLookupLoading(true);
+    setCandidates([]);
+    try {
+      const result = await api<LookupResponse>(`/api/game/user-data/lookup?keyword=${encodeURIComponent(clean)}`);
+      if (result.items.length === 0) {
+        notify("没有找到匹配的玩家，请检查游戏ID、登录ID 或昵称", "error");
+        return;
+      }
+      if (result.items.length === 1) {
+        applyPlayer(result.items[0].playerId);
+        return;
+      }
+      setCandidates(result.items);
+    } catch (reason) {
+      notify(reason instanceof ApiError ? reason.message : "查询玩家失败", "error");
+    } finally {
+      setLookupLoading(false);
+    }
   };
 
   const applyRange = () => {
@@ -234,24 +273,48 @@ export default function UserDataPage({ notify }: { notify: (message: string, kin
       <PageHeader
         eyebrow="USER LEDGER"
         title="用户端数据查询"
-        description="输入游戏用户ID，查看账号基本信息、所在俱乐部与代理链，并按客户端「我的」页面口径查询上下分、赠送、金币、钻石、收益红利和额度变化明细。默认最近 7 天，单次最多 31 天。"
+        description="支持输入游戏用户ID（含靓号）、登录ID 或昵称定位玩家，查看账号基本信息、所在俱乐部与代理链，并按客户端「我的」页面口径查询上下分、赠送、金币、钻石、收益红利和额度变化明细。默认最近 7 天，单次最多 31 天。"
         actions={<span className="readonly-badge"><i />只读查询</span>}
       />
 
       <section className="panel user-data-search">
         <div>
           <span className="eyebrow">STEP 01</span>
-          <strong>输入游戏用户ID</strong>
-          <p>精确查询该玩家的客户端明细，不接受昵称代替用户ID。</p>
+          <strong>输入游戏ID / 登录ID / 昵称</strong>
+          <p>游戏ID 和登录ID 精确匹配（含靓号），昵称模糊匹配；命中多个时先选择玩家。</p>
         </div>
-        <form onSubmit={(event) => { event.preventDefault(); searchPlayer(); }}>
+        <form onSubmit={(event) => { event.preventDefault(); void searchPlayer(); }}>
           <div className="search-box search-box--wide">
-            <span>ID</span>
-            <input value={playerIdDraft} onChange={(event) => setPlayerIdDraft(event.target.value)} placeholder="游戏用户ID 或靓号，例如 292989" autoComplete="off" />
-            <button type="submit">查询用户明细</button>
+            <span>查</span>
+            <input value={playerIdDraft} onChange={(event) => setPlayerIdDraft(event.target.value)} placeholder="游戏ID、登录ID 或昵称，例如 292989 / aa111333 / 测试四号选手" autoComplete="off" />
+            <button type="submit" disabled={lookupLoading}>{lookupLoading ? "查询中…" : "查询用户明细"}</button>
           </div>
         </form>
       </section>
+
+      {candidates.length > 0 && (
+        <section className="panel">
+          <div className="toolbar player-toolbar">
+            <div><strong>匹配到 {candidates.length} 个玩家</strong><span>点「查看明细」进入该玩家的用户端数据</span></div>
+            <span className="toolbar__count">{candidates.length >= 20 ? "最多显示 20 条" : ""}</span>
+          </div>
+          <div className="table-wrap">
+            <table className="user-data-table">
+              <thead><tr><th>昵称</th><th>游戏ID</th><th>登录ID</th><th>账号角色</th><th>操作</th></tr></thead>
+              <tbody>{candidates.map((item) => (
+                <tr key={item.playerId}>
+                  <td><strong>{item.name || "未设置昵称"}</strong></td>
+                  <td><code>{item.playerId}</code></td>
+                  <td>{item.loginName || item.accountName || "—"}{item.loginName && item.accountName && item.loginName !== item.accountName && <small className="cell-subtitle">KBE 账号 {item.accountName}</small>}</td>
+                  <td>{item.role || "—"}</td>
+                  <td><button type="button" className="player-profile-link" onClick={() => applyPlayer(item.playerId)}>查看明细</button></td>
+                </tr>))}
+              </tbody>
+            </table>
+          </div>
+          <p className="field__hint">条件不够精确时条目会较多，补充更完整的昵称或直接输入游戏ID / 登录ID 可缩小范围。</p>
+        </section>
+      )}
 
       {!playerId && (
         <section className="panel transaction-welcome">
@@ -351,7 +414,7 @@ function UserDataIdentity({ profile }: { profile: Profile }) {
         <div>
           <span className="eyebrow">BASIC PROFILE</span>
           <h3>基本信息与代理链</h3>
-          <p>账号资料、所在俱乐部身份，以及从直属上级到俱乐部创建者 / 大盟主的代理链。</p>
+          <p>账号资料、所在俱乐部身份，以及从直属上级到俱乐部创建者 / 大盟主的代理链（带各级代理比例）。</p>
         </div>
         <span className="toolbar__count">{profile.clubs.length} 个俱乐部</span>
       </header>
@@ -388,7 +451,7 @@ function UserDataIdentity({ profile }: { profile: Profile }) {
                 </div>
                 <div>
                   <dt>分成比例</dt>
-                  <dd>{club.isCreator || club.isAgent ? `${club.percent}%` : "—"}</dd>
+                  <dd>{hasClubPercent(club) ? `${club.percent}%` : "—"}</dd>
                 </div>
                 <div>
                   <dt>当前额度</dt>
@@ -398,11 +461,11 @@ function UserDataIdentity({ profile }: { profile: Profile }) {
               <div className="user-data-chain">
                 <span className="user-data-chain__label">代理链</span>
                 <div className="user-data-chain__track">
-                  <span className="user-data-chain__self">本人</span>
+                  <span className="user-data-chain__self">本人{selfChainPercentText(club)}</span>
                   {club.chain.map((node) => (
                     <Fragment key={`${club.clubId}-${node.playerId}`}>
                       <i>→</i>
-                      <span className="user-data-chain__node">{node.name || node.playerId}<small>{node.role}</small></span>
+                      <span className="user-data-chain__node">{node.name || node.playerId}<small>{node.role}{node.percent > 0 ? ` · 比例 ${node.percent}%` : ""}</small></span>
                     </Fragment>
                   ))}
                   {club.chain.length === 0 && <><i>→</i><span className="user-data-chain__empty">无上级</span></>}

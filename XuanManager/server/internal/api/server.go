@@ -184,6 +184,7 @@ func (s *Server) routes() {
 		s.mux.Handle("POST "+base+"/{prettyNo}/bind", s.authorized(manage, true, s.handleBindPrettyNumber))
 		s.mux.Handle("POST "+base+"/{prettyNo}/unbind", s.authorized(manage, true, s.handleUnbindPrettyNumber))
 	}
+	s.mux.Handle("GET /api/game/user-data/lookup", s.authorized("game.user_data.view", false, s.handleUserDataLookup))
 	s.mux.Handle("GET /api/game/user-data/profile", s.authorized("game.user_data.view", false, s.handleUserDataProfile))
 	s.mux.Handle("GET /api/game/user-data/records", s.authorized("game.user_data.view", false, s.handleUserDataRecords))
 	s.mux.Handle("GET /api/game/clubs", s.authorized("game.club.view", false, s.handleListClubs))

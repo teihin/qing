@@ -27,40 +27,46 @@ type xuanServiceError struct {
 
 func (e *xuanServiceError) Error() string { return e.Message }
 
-var xuanServiceHTTPClient = &http.Client{Timeout: 10 * time.Second}
+var xuanServiceHTTPClient = &http.Client{Timeout: 25 * time.Second}
 
-func (s *Server) callXuanMemberGold(ctx context.Context, clubID, userID string, delta int, actor, operationContext string) error {
+// callXuanMemberGold 执行上下分。syncUnionQuota 为 true 时，后台会在上分成功后
+// 调游戏命令「授信_联盟_额度」给该俱乐部同步增加同等额度；第二步失败不影响本次上分结果，
+// 通过返回的 quotaSyncError 告知客服（空串表示同步成功或本次未勾选）。
+func (s *Server) callXuanMemberGold(ctx context.Context, clubID, userID string, delta int,
+	actor, operationContext string, syncUnionQuota bool) (string, error) {
 	if s.cfg.XuanServiceToken == "" {
-		return &xuanServiceError{Status: http.StatusServiceUnavailable, Message: "客服上下分尚未配置后台服务令牌"}
+		return "", &xuanServiceError{Status: http.StatusServiceUnavailable, Message: "客服上下分尚未配置后台服务令牌"}
 	}
 	payload, err := json.Marshal(map[string]any{
 		"delta": delta, "actor": actor, "context": operationContext,
+		"syncUnionQuota": syncUnionQuota,
 	})
 	if err != nil {
-		return &xuanServiceError{Status: http.StatusInternalServerError, Message: "上下分请求编码失败"}
+		return "", &xuanServiceError{Status: http.StatusInternalServerError, Message: "上下分请求编码失败"}
 	}
 	endpoint := strings.TrimRight(s.cfg.XuanManagerURL, "/") + "/api/service/clubs/" +
 		url.PathEscape(clubID) + "/members/" + url.PathEscape(userID) + "/gold"
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
 	if err != nil {
-		return &xuanServiceError{Status: http.StatusInternalServerError, Message: "上下分请求创建失败"}
+		return "", &xuanServiceError{Status: http.StatusInternalServerError, Message: "上下分请求创建失败"}
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+s.cfg.XuanServiceToken)
 	response, err := xuanServiceHTTPClient.Do(request)
 	if err != nil {
-		return &xuanServiceError{Status: http.StatusBadGateway, Message: "后台服务暂不可用，请稍后重试"}
+		return "", &xuanServiceError{Status: http.StatusBadGateway, Message: "后台服务暂不可用，请稍后重试"}
 	}
 	defer response.Body.Close()
 	data, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
-		return &xuanServiceError{Status: http.StatusBadGateway, Message: "后台服务返回内容读取失败"}
+		return "", &xuanServiceError{Status: http.StatusBadGateway, Message: "后台服务返回内容读取失败"}
 	}
 	var envelope struct {
 		OK   bool `json:"ok"`
 		Data struct {
-			RetCode int    `json:"retCode"`
-			Message string `json:"message"`
+			RetCode        int    `json:"retCode"`
+			Message        string `json:"message"`
+			QuotaSyncError string `json:"quotaSyncError"`
 		} `json:"data"`
 		Error struct {
 			Code    string `json:"code"`
@@ -68,7 +74,7 @@ func (s *Server) callXuanMemberGold(ctx context.Context, clubID, userID string, 
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
-		return &xuanServiceError{Status: http.StatusBadGateway, Message: "后台服务返回内容无法识别"}
+		return "", &xuanServiceError{Status: http.StatusBadGateway, Message: "后台服务返回内容无法识别"}
 	}
 	if response.StatusCode != http.StatusOK || !envelope.OK {
 		message := strings.TrimSpace(envelope.Error.Message)
@@ -79,9 +85,9 @@ func (s *Server) callXuanMemberGold(ctx context.Context, clubID, userID string, 
 		if status < 400 || status > 599 {
 			status = http.StatusBadGateway
 		}
-		return &xuanServiceError{Status: status, Message: message}
+		return "", &xuanServiceError{Status: status, Message: message}
 	}
-	return nil
+	return strings.TrimSpace(envelope.Data.QuotaSyncError), nil
 }
 
 // readBalanceAfterHostedGold 解决游戏库写入延迟：操作前读一次，成功后短轮询直到余额变化或等于预期值。
@@ -124,6 +130,7 @@ func (s *Server) handleHostedGold(w http.ResponseWriter, r *http.Request, princi
 		Action          string `json:"action"`
 		Amount          int    `json:"amount"`
 		ClientRequestID string `json:"clientRequestId"`
+		SyncUnionQuota  bool   `json:"syncUnionQuota"`
 	}
 	if !decodeJSON(w, r, &body, 8<<10) {
 		return
@@ -195,13 +202,17 @@ func (s *Server) handleHostedGold(w http.ResponseWriter, r *http.Request, princi
 	if action == "down" {
 		delta = -body.Amount
 	}
+	// 只有上分才同步额度：下分不动盟主额度。
+	syncUnionQuota := body.SyncUnionQuota && action == "up"
 	operationContext := "cs-hosted-gold-" + requestID
 	actor := fmt.Sprintf("chattool:agent:%d", principal.ID)
 	var beforeBalance *int64
 	if view, balanceErr := s.direct.HostedBalance(r.Context(), hostedGuuid, conversationID); balanceErr == nil {
 		beforeBalance = view.ClubGold
 	}
-	if callErr := s.callXuanMemberGold(r.Context(), target.ClubID, target.PeerGuuid, delta, actor, operationContext); callErr != nil {
+	quotaSyncError, callErr := s.callXuanMemberGold(r.Context(), target.ClubID, target.PeerGuuid, delta, actor,
+		operationContext, syncUnionQuota)
+	if callErr != nil {
 		_ = s.finishHostingGoldLedger(r.Context(), ledgerID, "failed", nil, callErr.Error())
 		status := http.StatusBadGateway
 		code := "HOSTED_GOLD_FAILED"
@@ -262,11 +273,13 @@ func (s *Server) handleHostedGold(w http.ResponseWriter, r *http.Request, princi
 			"hostedGuuid": hostedGuuid, "clubId": target.ClubID, "peerGuuid": target.PeerGuuid,
 			"amount": body.Amount, "action": action, "context": operationContext,
 			"requestId": requestID, "ledgerId": ledgerID, "balance": balance,
+			"syncUnionQuota": syncUnionQuota, "quotaSyncError": quotaSyncError,
 			"noticeMessageId": notice.ID, "noticeError": noticeError,
 		}, clientIP(r))
 	writeData(w, http.StatusOK, map[string]any{
 		"action": action, "amount": body.Amount, "message": notice, "balance": balance,
 		"duplicate": false, "ledgerId": ledgerID,
 		"noticeError": noticeError, "peerName": target.PeerName,
+		"syncUnionQuota": syncUnionQuota, "quotaSyncError": quotaSyncError,
 	})
 }

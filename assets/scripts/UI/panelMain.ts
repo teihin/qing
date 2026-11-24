@@ -1737,7 +1737,11 @@ export default class panelMain extends UIPanelViewBase {
                 this.RefreshClubFinanceMenuVisibility();
                 return;
             }
-            UIManager.getInstance().showPanel("panelQuotaGrantRecord",ShowPanelMode.Cover);
+            // 俱乐部和它所属联盟都传：服务端靠这两个定位授信范围，
+            // 缺一个就只能按账号默认俱乐部猜，多俱乐部账号或刚切过俱乐部会「找不到」。
+            const grantUnionId = this.ResolveClubUnionId(grantClubId);
+            UIManager.getInstance().showPanel("panelQuotaGrantRecord",ShowPanelMode.Cover,
+                JSON.stringify({club_id:grantClubId,union_id:grantUnionId}));
         }
         else if(button.node.name === "金币充值")
         {

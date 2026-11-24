@@ -1,8 +1,22 @@
 # qing 当前状态
 
-更新时间：2026-11-22
+更新时间：2026-11-24
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-24 用户端数据查询支持登录ID/昵称 + 代理链显示各级比例（已上测试服，详见[交接](handoffs/2026-11-24-userdata-lookup-and-chain-percent.md)）
+
+- 后端新增 `GET /api/game/user-data/lookup?keyword=`（权限沿用 `game.user_data.view`）：游戏ID（含靓号）与登录ID（`sm_wxID` / `kbe_accountinfos.accountName`）精确、昵称 `sm_name` 模糊，精确优先，最多 20 条。
+- 前端搜索框改成「先定位玩家」：命中 1 条直接进详情，多条先出候选表点选。代理链每级显示 `角色 · 比例 X%`（`club_agent_info.percent`，`0` 不显示）；本人若是创建者/代理也显示 `本人 · X%`（与「分成比例」同一判定，0 也显示）。
+- 验证：`go build/vet/test`、`tsc/lint/build` 通过；测试服登录ID `1018888` → `981149`、昵称 `测试四` → `327553`；部署后 health 200、新 bundle `index-BJvnC5L-.js`、lookup 未登录 401。**未做登录态点测**，正式服未动，代码未提交。
+
+## 2026-11-24 客服上分可同步增加盟主额度（已上测试服，详见[交接](handoffs/2026-11-24-cs-hosted-gold-sync-union-quota.md)）
+
+- 客服「托管会话 → 上分」弹窗新增「同步增加盟主额度」勾选，**默认勾选**；上多少分同步给该俱乐部盟主加多少额度，下分不涉及。
+- **没用用户点名的 `授信_联盟_额度`**：该命令按调用者自己的联盟判定，`/hall/command` 固定以 `Hall.boss` 执行，boss 无联盟，实测恒返回 769「该俱乐部不在你的联盟里」。改用后台专用命令 **`发放_盟主_奖励`**（池 → 盟主俱乐部，写库 `额度奖励`）。
+- 上分成功后调该命令并回读 `club_guuid_info.union_quota`；第二步失败不回滚积分，原因经 `quotaSyncError` 回显客服，俱乐部未入盟给明确提示。
+- 验证：`go vet/test`、`tsc+build` 通过；测试服端到端 +1 → 玩家积分 1337→1338、俱乐部额度 6123001→6123002、联盟池 40231999→40231998。
+- 测试服已部署（前端 `index-CCJtSAUV.js`、ChatTool `ec68ba29…`、XuanManager `1cdd9f52…`），**正式服未动**，回滚点见交接。**代码未提交。**
 
 ## 2026-11-22 后台「关联账号」去掉同公网 IP 维度（两台已部署）
 
@@ -67,21 +81,9 @@
 - `tools/apply_leaderboard_number_align.py`：`played_count`/`user_reward` 改右对齐（40 个 Label），右边缘落在列分隔线右内 8px，框宽 200/160 防裁 `−18,630`；`render_ui_prefab.py` 预览补对齐。
 - 1334/1624 离屏：手数右边缘 559、奖励 713 全齐（改前 515/500/501）；未构建/热更/真机。详见[交接](handoffs/2026-11-18-leaderboard-tabular-digits.md)。
 
-## 2026-11-18 实时战绩按新效果图重做（场景 + Prefab 同步，未导入/未构建/未真机）
-
-- 场景 `drh8.fire` 与 `panelGameView.prefab` 内的「实时战绩」子树同步改写：新 `战绩标题`、`表头`、`战绩列表`、`围观底板`、`title2`、`围观列表`、`搓牌字/线/开关`；旧汇总区（`bk`、`V8战绩底板`、`V8围观底板`、总带入/总得分、奖池、V8概况/表头、旧 title）整组隐藏未删。
-- 二轮美术按参考图重生成后，面板改为居中且不再顶满：`bg` 594×1262、Widget TOP+BOT+LEFT（l=78/t=36/b=36），`_opacity=170` 让牌桌透出来；标题 TOP 68、表头 TOP 212、列表 TOP 292/BOT 352、围观框 BOT 150、搓牌行 BOT 76，全部 Widget 定位。
-- 第四轮按真机反馈收版：围观 76×35、搓牌 76×33（同 x=-199），金线素材改 512×5 通栏细线（围观线 322×5@x=12、搓牌线 204×5@x=-47），`title2` 高 35；围观列表 content 顶部对齐、Layout 改 GRID 152×80（`_resize=1`）、左右 padding 16、Mask 启用，三列成行、纵向可滚；围观模板 `name` 移到 x=32/w=74，根下旧 92×92 头像框不再参与渲染。
-- 脚本：滑块随开关移动、战绩行补头像加载、结算行切 `V8结算底`、提示行隐藏头像与底。
-- 静态核对 0 坏引用，场景/Prefab 节点与 15 个 SpriteFrame 引用一致；1334/1624 两档模拟排版图见 `vibe_images/2026-11-18-realtime-record/`。Creator 导入、构建、热更、真机均未做。详见[交接](handoffs/2026-11-18-realtime-record-v2.md)。
-
-## 2026-11-18 牌局结算行底：正分金卡、非正分普通蓝底（脚本就绪，未构建/热更/真机）
-
-- `settlement_card_row.png`（金卡）与 `settlement_card_row_normal.png`（普通，sprite-frame `33f21cbe…`）均 1400×168、RGBA 未量化；内部改为逐行中值重建的平滑渐变并强制不透明——原图内部的半透明条纹就是实机“褶皱”来源。金卡保留原金边/外发光，同名同 UUID，共用 prefab 引用不变。
-- `战绩玩家对象.prefab` 新增首个子节点「底_普通」（700×100、默认隐藏）；`panelRecordInfo.setRecordItemInfo` 按 `nScore > 0` 切换根 Sprite 与普通底。
-- Creator 已导入（prefab 22:02、普通图 22:13、金卡 22:20）；未构建/热更/真机。详见[交接](handoffs/2026-11-18-settlement-row-normal-card.md)。
-
 ## 更早批次
+
+- 2026-11-18 的实时战绩按新效果图重做、牌局结算行底两篇原文见 [`archive/2026-11-24/current-nov18-client-ui.md`](archive/2026-11-24/current-nov18-client-ui.md)。
 
 - 2026-11-18 的「下注位芒N残留」「投芒动画收尾」「结算界面重做」「俱乐部成员汇总条」原文见 [`archive/2026-11-22/current-2026-11-18-batches.md`](archive/2026-11-22/current-2026-11-18-batches.md)。
 

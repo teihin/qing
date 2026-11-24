@@ -3,9 +3,24 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestHandleUserDataLookupRejectsEmptyKeyword(t *testing.T) {
+	server := &Server{}
+	cases := []string{"", "   ", strings.Repeat("长", 51)}
+	for _, keyword := range cases {
+		request := httptest.NewRequest(http.MethodGet, "/api/game/user-data/lookup?keyword="+url.QueryEscape(keyword), nil)
+		recorder := httptest.NewRecorder()
+		server.handleUserDataLookup(recorder, request, principal{})
+		if recorder.Code != http.StatusBadRequest {
+			t.Fatalf("keyword %q code = %d, want 400", keyword, recorder.Code)
+		}
+	}
+}
 
 func TestParseUserDataFiltersDefaultsToSevenDays(t *testing.T) {
 	now := time.Date(2026, 11, 13, 10, 30, 0, 0, dashboardLocation)

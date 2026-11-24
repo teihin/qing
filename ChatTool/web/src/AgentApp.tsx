@@ -1113,8 +1113,11 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
   const [amount, setAmount] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
+  // 上分时默认同步给盟主（俱乐部）授信同等额度，客服可按需取消。
+  const [syncQuota, setSyncQuota] = useState(true)
   const requestID = useRef(createClientMessageID())
   const verb = action === 'up' ? '上分' : '下分'
+  const syncEnabled = action === 'up' && syncQuota
   const value = Number(amount)
   const valid = Number.isInteger(value) && value > 0 && value <= 1_000_000_000
   const submit = async (event: FormEvent) => {
@@ -1123,11 +1126,14 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
     setSending(true)
     setError('')
     try {
-      const result = await api<{ noticeError?: string; duplicate?: boolean }>(`/api/agent/hosted/conversations/${conversation.conversationId}/gold`, {
+      const result = await api<{ noticeError?: string; quotaSyncError?: string; duplicate?: boolean }>(`/api/agent/hosted/conversations/${conversation.conversationId}/gold`, {
         method: 'POST',
-        body: jsonBody({ guuid: conversation.hostedGuuid, action, amount: value, clientRequestId: requestID.current }),
+        body: jsonBody({ guuid: conversation.hostedGuuid, action, amount: value, clientRequestId: requestID.current, syncUnionQuota: syncEnabled }),
       })
-      onDone(result.duplicate ? '' : (result.noticeError ? `${verb}成功（${value} 积分），但系统消息发送失败：${result.noticeError}` : ''))
+      const warnings: string[] = []
+      if (result.noticeError) warnings.push(`系统消息发送失败：${result.noticeError}`)
+      if (result.quotaSyncError) warnings.push(`盟主额度未同步：${result.quotaSyncError}`)
+      onDone(result.duplicate ? '' : `${verb}成功（${value} 积分）${warnings.length ? `，但${warnings.join('；')}` : ''}`)
     } catch (reason) {
       if (reason instanceof ApiError && (reason.code === 'HOSTED_GOLD_RETRY' || reason.code === 'REQUEST_CONFLICT')) {
         requestID.current = createClientMessageID()
@@ -1141,6 +1147,10 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
     <header><div><small>HOSTED GOLD</small><h3>{verb}</h3></div><button type="button" onClick={onClose}>×</button></header>
     <p className="hosted-gold-target">托管账号：{owner?.name || conversation.hostedName}（{owner?.roleName || conversation.hostedRoleName || '托管'}）<br />操作对象：{conversation.peer.name}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''} · {conversation.clubName}</p>
     <label><span>{verb}积分</span><input type="number" min={1} max={1000000000} step={1} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入整数积分" autoFocus /></label>
+    {action === 'up' && <label className="hosted-gold-sync" title="勾选后，本次上分会给该俱乐部盟主同步增加同等额度（占用联盟池额度）">
+      <input type="checkbox" checked={syncQuota} onChange={(event) => setSyncQuota(event.target.checked)} />
+      <span>同步增加盟主额度（{valid ? value.toLocaleString('zh-CN') : '同上分数量'}）</span>
+    </label>}
     <p className="hosted-gold-target">成功后会在会话内发送「玩家 {conversation.peer.name} {verb} {valid ? value : '金额'} 成功（客服托管）」系统消息。</p>
     {error && <div className="form-error">{error}</div>}
     <footer><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={!valid || sending}>{sending ? '提交中…' : `确认${verb}`}</button></footer>
