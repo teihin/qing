@@ -4,6 +4,13 @@
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
+## 2026-11-25 牌桌内「牌局优化」列表加「只看当前房间」勾选（未构建/未真机，详见[交接](handoffs/2026-11-25-ingame-optimize-room-filter.md)）
+
+- 列表区筛选行下新增 `筛选_当前房间` 勾选项（cc.Toggle，默认不勾）；勾上后 `异步_查询_胜率目标_列表` 带 `room_id = account.roomID`，服务端按**查询时实时所在房间**过滤。
+- 口径：`room_id>0` 且 `state` 空的请求服务端按 `active` 处理 → 勾选时客户端同步切「进行中」，勾着时点「全部」只提示；`history=1` 无房间列 → 进历史自动取消勾选。房间号取不到时拒绝勾选。
+- prefab：`列表` 让出一行（Widget `_top` 60→100），新增节点带 `cc.Widget`；脚本只加 `onToggleClick`/`ApplyRoomOnly` 等，改 `QueryList` 带参。
+- 校验：语法 0 诊断、prefab 引用/`PrefabInfo` 完整、Creator 20:28 已重导入、离屏渲染 750×1334 无压叠。**未构建/未热更/未真机**；`tools/apply_ingame_optimize_panel.py` 已落后，别再重跑。
+
 ## 2026-11-25 客户端「额度授权记录」按身份区分 club_id（未构建热更、未真机，详见[交接](handoffs/2026-11-25-quota-grant-record-union-owner.md)）
 
 - 口径：`查询_联盟_授信_记录` 大盟主（当前俱乐部所在联盟的总群主）看全联盟 → **只带 `union_id`、不传 `club_id`**；盟主只看自己名下俱乐部 → `club_id` + `union_id` 都带。

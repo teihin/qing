@@ -106,6 +106,9 @@
   否则编辑器会把新节点当成"额外节点"而不是 prefab 的一份子。
   2026-10-26 加「兑换钻石」按钮就栽在这：prefab 改完 library 也导入了，编辑器/运行都还是 8 个按钮。
 - **手写/生成 Prefab 引用脚本组件用「5 头压缩 uuid」23 字符**（如 `d41a8PtsLlNyrBYfqkaV+As`），算法=hex[:5]+每 3 个 hex（自 index 5）→2 个 base64；资源 `.meta` 里的 uuid 是 36 字符标准形式，别混。`Tool.GetChild` 按名字取**第一个**同名子节点，同层级重名按钮必须改名。
+- **手写 prefab 的 `cc.Toggle`：`checkMark` 必须指向 `cc.Sprite` 组件，不是节点** —— 引擎 `_updateCheckMark` 写的是 `this.checkMark.node.active`，
+  指成 `cc.Node` 一点就抛 `Cannot set properties of undefined (setting 'active')`（2026-11-25 牌局优化「只看当前房间」即此）。
+  `_N$target` 才是 Node（Button.target，通常指向 Background 节点）；`_N$isChecked` 与 `checkMark` 的 `_active` 要保持一致。
 - **别把新增节点的 `_prefab` 值当成坏数据**：Cocos 2.4 给 prefab 里新增的节点保存时可能写成
   `{"__id__": <已有 cc.PrefabInfo 的 id>, "fileId": "…"}`（没有 `__type__`），HEAD 里没有先例也不等于损坏；
   判据是 `library/imports/<前2位>/<uuid>.json` 有本次导入产物且 mtime 对得上（2026-11-02 panelMain 的两个「玩家热区」即此，21:29 保存 → 21:30 导入成功）。

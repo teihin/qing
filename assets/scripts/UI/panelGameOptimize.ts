@@ -44,6 +44,7 @@ interface OptimizeRow {
  * 服务端接口（全部走 reqHallCommand）：
  *   异步_设置_胜率目标 / 异步_查询_胜率目标_列表 / 异步_停止_胜率目标
  * 分组选择复用 查询_俱乐部_分组列表（推送 ClubPlayerGroupList）。
+ * 列表区勾选「只看当前房间」后查询带 room_id（按查询时实时所在房间过滤），默认不勾。
  */
 @ccclass
 export default class panelGameOptimize extends UIPanelViewBase {
@@ -65,6 +66,11 @@ export default class panelGameOptimize extends UIPanelViewBase {
     private filter:string = "";              // ""=全部 / active / done / stopped
     /** 默认查当前目标；点「历史」才查 usr_opt_target_history 快照。 */
     private historyMode:boolean = false;
+    /** 勾选「只看当前房间」：查询带 room_id，服务端按查询时实时所在房间过滤（历史表没有房间列）。 */
+    private roomOnly:boolean = false;
+    private roomToggle:cc.Toggle = null;
+    /** 代码里改勾选状态时置位，避免 toggle 回调重入。 */
+    private roomSyncing:boolean = false;
     private listPage:number = 0;
     private readonly pageSize:number = 20;
     private listTotal:number = 0;
@@ -114,6 +120,13 @@ export default class panelGameOptimize extends UIPanelViewBase {
             if(this.rowTemplate != null)
                 this.rowTemplate.active = false;
         }
+        // 房间勾选项默认不勾：只有勾上才把 room_id 带进查询。
+        const roomNode = this.At("列表区/筛选_当前房间");
+        this.roomToggle = roomNode == null ? null : roomNode.getComponent(cc.Toggle);
+        this.roomOnly = false;
+        if(this.roomToggle != null)
+            this.roomToggle.isChecked = false;
+        this.RefreshRoomLabel();
         this.RefreshModeButtons();
         this.RefreshDirectionButtons();
         this.RefreshFilterButtons();
@@ -208,6 +221,12 @@ export default class panelGameOptimize extends UIPanelViewBase {
         // 状态筛选只作用于当前目标表：点任一状态 chip 就退出历史表。
         if(this.filter === state && !this.historyMode)
             return;
+        // 勾了「只看当前房间」时服务端对空 state 一律按 active 处理（正在优化），
+        // 让「全部」保持高亮会和实际数据不一致，这里直接提示。
+        if(this.roomOnly && state === "") {
+            this.ShowStatus("勾选「只看当前房间」时只查进行中的目标", true);
+            return;
+        }
         this.filter = state;
         this.historyMode = false;
         this.listPage = 0;
@@ -218,12 +237,91 @@ export default class panelGameOptimize extends UIPanelViewBase {
 
     /** 五个 chip 互斥：进历史查历史表（全部状态），再点一次回到当前目标表的「全部」。 */
     private SetHistoryMode():void {
-        this.historyMode = !this.historyMode;
+        const next = !this.historyMode;
+        // 历史表没有房间列，服务端 history=1 时拒绝 room_id；进历史顺带把房间勾选取消。
+        if(next && this.roomOnly) {
+            this.roomOnly = false;
+            this.SetRoomToggle(false);
+            this.ShowStatus("历史记录不支持按当前房间筛选，已取消勾选", false);
+        }
+        this.historyMode = next;
         this.filter = "";
         this.listPage = 0;
         this.RefreshFilterButtons();
         this.LayoutList();
         this.RefreshListNow();
+    }
+
+    // ------------------------------------------------------------------
+    // 只看当前房间
+    // ------------------------------------------------------------------
+    /** Toggle 由 UIBase 统一注册（onButtonClickVirtual 走这条回调），不重复挂 click。 */
+    public onToggleClick(toggle:cc.Toggle):void {
+        if(toggle != null && toggle.node != null && toggle.node.name === "筛选_当前房间") {
+            if(this.roomSyncing)
+                return;
+            this.ApplyRoomOnly(toggle.isChecked);
+            return;
+        }
+        super.onToggleClick(toggle);
+    }
+
+    private SetRoomToggle(checked:boolean):void {
+        if(this.roomToggle == null || this.roomToggle.isChecked === checked)
+            return;
+        this.roomSyncing = true;
+        this.roomToggle.isChecked = checked;
+        this.roomSyncing = false;
+    }
+
+    private ApplyRoomOnly(on:boolean):void {
+        if(on) {
+            if(this.historyMode) {
+                this.SetRoomToggle(false);
+                this.ShowStatus("历史记录不支持按当前房间筛选", true);
+                return;
+            }
+            if(this.CurrentRoomId() <= 0) {
+                this.SetRoomToggle(false);
+                this.ShowStatus("当前不在房间内，无法按房间筛选", true);
+                return;
+            }
+            this.roomOnly = true;
+            // room_id>0 且 state 为空时服务端按 active 处理，这里同步把筛选切成「进行中」，
+            // 避免「全部」高亮但只回来进行中的目标。
+            if(this.filter === "") {
+                this.filter = "active";
+                this.RefreshFilterButtons();
+                this.LayoutList();
+            }
+            this.ShowStatus("", false);
+        }
+        else {
+            this.roomOnly = false;
+            this.ShowStatus("", false);
+        }
+        this.listPage = 0;
+        this.RefreshListNow();
+    }
+
+    private CurrentRoomId():number {
+        const account:any = GameDataManager.getAccount();
+        if(account == null)
+            return 0;
+        const roomId = Number(account.roomID);
+        return isFinite(roomId) && roomId > 0 ? Math.floor(roomId) : 0;
+    }
+
+    /** 勾选项文字带上当前房号，勾之前就能确认筛的是哪一间。 */
+    private RefreshRoomLabel():void {
+        const node = this.At("列表区/筛选_当前房间/文字");
+        if(node == null)
+            return;
+        const label = node.getComponent(cc.Label);
+        if(label == null)
+            return;
+        const roomId = this.CurrentRoomId();
+        label.string = roomId > 0 ? "只看当前房间 · " + roomId : "只看当前房间";
     }
 
     private ChangeListPage(delta:number):void {
@@ -425,6 +523,12 @@ export default class panelGameOptimize extends UIPanelViewBase {
                 state:this.filter,
                 context:this.listContext
             };
+            // 勾了「只看当前房间」才带 room_id；服务端按查询时实时所在房间过滤（不是设置时快照）。
+            if(this.roomOnly && !this.historyMode) {
+                const roomId = this.CurrentRoomId();
+                if(roomId > 0)
+                    param.room_id = roomId;
+            }
             if(this.historyMode) {
                 param.history = 1;
                 param.count = this.pageSize;
@@ -462,7 +566,8 @@ export default class panelGameOptimize extends UIPanelViewBase {
                 const label = empty.getComponent(cc.Label);
                 if(label != null)
                     label.string = this.historyMode ? "暂无历史记录" :
-                        (this.filter === "" ? "暂无优化记录" : "当前筛选下没有记录");
+                        (this.roomOnly ? "本房当前没有进行中的目标" :
+                            (this.filter === "" ? "暂无优化记录" : "当前筛选下没有记录"));
             }
             this.ResizeListContent(0);
             return;
