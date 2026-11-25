@@ -3286,3 +3286,85 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
 .pay-link-copied { display: block; margin-top: 6px; font-size: 12px; font-weight: 600; }
 .pay-link-copied.is-ok { color: #12857c; }
 .pay-link-copied.is-warn { color: #bf4655; }
+
+/* ---- 自动输赢平衡 ---- */
+.ab-tabs { display: flex; gap: 8px; padding: 6px; border: 1px solid #e0e9ea; border-radius: 12px; background: #f7fafa; width: fit-content; }
+.ab-tabs button { min-height: 38px; padding: 0 18px; border: 0; border-radius: 8px; color: #58737a; background: transparent; font-size: 13px; font-weight: 700; transition: .16s; }
+.ab-tabs button:hover { background: #ecf4f4; }
+.ab-tabs button.is-active { color: #10605a; background: #fff; box-shadow: 0 4px 14px rgba(21, 55, 62, .09); }
+.optimization-status.is-warn { color: #96702a; background: #fdf5e6; }
+.optimization-status.is-warn i { background: #d9a13d; box-shadow: 0 0 0 4px rgba(217, 161, 61, .12); }
+.optimization-status.is-danger { color: #a63c48; background: #fdeff1; }
+.optimization-status.is-danger i { background: #cf5a68; box-shadow: 0 0 0 4px rgba(207, 90, 104, .14); }
+.ab-team-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 320px; }
+.ab-team-list { display: flex; flex-direction: column; gap: 4px; padding: 14px; border-right: 1px solid #edf2f2; background: #fafcfc; overflow: auto; max-height: 620px; }
+.ab-team-list button { display: grid; gap: 3px; padding: 10px 12px; border: 1px solid transparent; border-radius: 9px; text-align: left; background: transparent; cursor: pointer; }
+.ab-team-list button:hover { background: #eef6f6; }
+.ab-team-list button.is-active { border-color: #bfe3df; background: #fff; box-shadow: 0 4px 12px rgba(21, 55, 62, .06); }
+.ab-team-list strong { color: #29434b; font-size: 13px; word-break: break-all; }
+.ab-team-list span { color: #819499; font-size: 11px; }
+.ab-team-detail { min-width: 0; }
+.ab-team-detail__head { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 15px 18px; border-bottom: 1px solid #edf2f2; }
+.ab-team-detail__head strong { display: block; color: #29434b; font-size: 15px; }
+.ab-team-detail__head span { display: block; margin-top: 3px; color: #819499; font-size: 12px; }
+.ab-group-list { display: grid; gap: 8px; max-height: 300px; margin-top: 14px; overflow: auto; padding-right: 4px; }
+.ab-group-list label { display: flex; align-items: center; gap: 11px; padding: 11px 13px; border: 1px solid #e2ebec; border-radius: 10px; background: #fbfdfd; cursor: pointer; }
+.ab-group-list label.is-active { border-color: #9ed7d1; background: #f2fbf9; }
+.ab-group-list strong { display: block; color: #29434b; font-size: 13px; }
+.ab-group-list span { display: block; margin-top: 3px; color: #819499; font-size: 11px; }
+@media (max-width: 900px) {
+  .ab-team-layout { grid-template-columns: 1fr; }
+  .ab-team-list { flex-direction: row; max-height: none; border-right: 0; border-bottom: 1px solid #edf2f2; overflow-x: auto; }
+}
+
+/* 自动输赢平衡：排除玩家标签输入 + 按底皮覆盖卡片 */
+.ab-tags { margin-top: 14px; }
+.ab-tags__box { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 52px; padding: 9px 11px; border: 1px solid #dbe6e7; border-radius: 10px; background: #fbfdfd; }
+.ab-tags__box:focus-within { border-color: #5bbcb5; background: #fff; box-shadow: 0 0 0 3px rgba(32, 156, 147, .09); }
+.ab-tags__box input { flex: 1; min-width: 180px; height: 30px; border: 0; outline: 0; background: transparent; font-size: 14px; color: #29434a; }
+.ab-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 6px 5px 11px; border-radius: 999px; color: #146b64; background: #e8f6f4; font-size: 13px; font-weight: 700; }
+.ab-tag button { display: grid; width: 18px; height: 18px; place-items: center; border: 0; border-radius: 50%; color: #4e8d88; background: #d6eeeb; font-size: 13px; line-height: 1; cursor: pointer; }
+.ab-tag button:hover { color: #fff; background: #cf5a68; }
+.ab-tags__foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; }
+.ab-tags__foot > span { color: #819499; font-size: 12px; }
+.ab-tags__foot > div { display: flex; gap: 8px; }
+.ab-tags .form-error { margin-top: 10px; }
+
+.ab-dipi { display: grid; gap: 12px; margin-top: 14px; }
+.ab-dipi__empty { padding: 14px; border: 1px dashed #d9e5e6; border-radius: 10px; color: #7d9095; background: #fbfdfd; font-size: 13px; }
+.ab-dipi__hint { color: #87999d; font-size: 12px; }
+.ab-dipi-card { border: 1px solid #e0e9ea; border-radius: 12px; background: #fff; overflow: hidden; }
+.ab-dipi-card__head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; padding: 13px 15px; border-bottom: 1px solid #eef3f3; background: #fafcfc; }
+.ab-dipi-card__head label { display: grid; gap: 6px; flex: 1; max-width: 320px; }
+.ab-dipi-card__head label > span { color: #5e767c; font-size: 12px; font-weight: 700; }
+.ab-dipi-card__head input, .ab-dipi-card__head select { height: 38px; padding: 0 11px; border: 1px solid #dbe6e7; border-radius: 8px; background: #fff; font-size: 14px; color: #29434a; }
+.ab-dipi-card__head button { padding: 8px 11px; border: 0; border-radius: 7px; color: #c4515e; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.ab-dipi-card__head button:hover { background: #fff0f2; }
+.ab-dipi-card__rows { display: grid; gap: 9px; padding: 14px 15px; }
+.ab-dipi-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto; gap: 9px; align-items: center; }
+.ab-dipi-row select, .ab-dipi-row input { height: 38px; padding: 0 10px; border: 1px solid #dbe6e7; border-radius: 8px; background: #fbfdfd; font-size: 13px; color: #29434a; }
+.ab-dipi-row button { padding: 8px 10px; border: 0; border-radius: 7px; color: #c4515e; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.ab-dipi-row button:hover { background: #fff0f2; }
+.ab-dipi-add { justify-self: start; padding: 7px 10px; border: 1px dashed #cddfe0; border-radius: 8px; color: #247f78; background: transparent; font-size: 12px; font-weight: 700; cursor: pointer; }
+.ab-dipi-add:hover { background: #f1fafa; }
+@media (max-width: 900px) {
+  .ab-dipi-row { grid-template-columns: 1fr; }
+}
+
+/* 自动输赢平衡：当前模式徽标（比普通状态标签更显眼） */
+.ab-mode-badge { display: inline-flex; align-items: center; gap: 9px; min-height: 48px; padding: 0 17px; border: 1px solid; border-radius: 13px; }
+.ab-mode-badge > i { width: 9px; height: 9px; flex: 0 0 9px; border-radius: 50%; }
+.ab-mode-badge > span { font-size: 12px; font-weight: 700; letter-spacing: .05em; opacity: .7; }
+.ab-mode-badge > strong { font-size: 19px; font-weight: 800; letter-spacing: .01em; white-space: nowrap; }
+.ab-mode-badge.is-observe { color: #3f6469; background: #f1f7f6; border-color: #d6e7e4; }
+.ab-mode-badge.is-observe > i { background: #7aa8a2; box-shadow: 0 0 0 4px rgba(122, 168, 162, .16); }
+.ab-mode-badge.is-advice { color: #8b6114; background: #fdf6e6; border-color: #ecdbb8; }
+.ab-mode-badge.is-advice > i { background: #d9a13d; box-shadow: 0 0 0 4px rgba(217, 161, 61, .16); }
+.ab-mode-badge.is-auto { color: #a72f3d; background: #fdeef0; border-color: #f2c8ce; box-shadow: 0 0 0 3px rgba(207, 90, 104, .08); }
+.ab-mode-badge.is-auto > i { background: #cf5a68; box-shadow: 0 0 0 4px rgba(207, 90, 104, .18); }
+.ab-mode-badge.is-unknown { color: #5f747a; background: #f3f6f6; border-color: #e0e8e9; }
+.ab-mode-badge.is-unknown > i { background: #9ca9ab; }
+@media (max-width: 900px) {
+  .ab-mode-badge { min-height: 42px; padding: 0 13px; }
+  .ab-mode-badge > strong { font-size: 16px; }
+}

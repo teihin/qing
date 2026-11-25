@@ -13,12 +13,13 @@ const {ccclass} = cc._decorator;
  * 「我的 → 额度授权记录」。
  *
  * 协议（《俱乐部·联盟模式 V2 客户端接口文档》§8.1）：
- *   Hall 命令 `查询_联盟_授信_记录`，参数 club_id / union_id / count / page / context；
- *   **club_id 与 union_id 都带**：club_id 是当前俱乐部、union_id 是它所属联盟，
- *   服务端两个都用来定位授信流水（缺了会按账号默认俱乐部猜，多俱乐部账号就会「找不到」）。
+ *   Hall 命令 `查询_联盟_授信_记录`，参数 club_id / union_id / count / page / context。
+ *   **定位参数按身份分**（2026-11-25 口径）：大盟主（联盟总群主）看全联盟 → 只带 union_id，
+ *   **不带 club_id**；盟主只看自己名下俱乐部 → club_id 与 union_id 都带。
  *   范围仍由服务端按身份决定 —— 联盟总群主（含 `union_manage` 授权账号）看全联盟，
  *   盟主只看自己名下的俱乐部，平台 boss/bigboss 另需身份标记（客户端没有，不传）。
- *   入口 strUserData 传 `{"club_id":"...","union_id":"..."}`（JSON，同 panelClubPlayerInfo）。
+ *   入口 strUserData 传 `{"club_id":"...","union_id":"...","is_union_owner":bool}`
+ *   （JSON，同 panelClubPlayerInfo；`is_union_owner` 由 panelMain 按「当前俱乐部所在联盟是不是自己当总群主」判定）。
  *   列表经 `ClubUnionGrantList` 推送，只有最近 3 个自然日的授信 / 收回 / 平台注资 / 额度奖励四类。
  *   行字段：number / count / date / type（授信、收回、注资、注资扣减、额度奖励，服务端按符号给中文）/
  *   quota（分，有符号变动额）/ quota_after（分，变动后余额）/ remark（与 quota_after 同值）/
@@ -71,8 +72,12 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
         const entry = this.ReadEntry();
         const clubId = this.ResolveClubId(account,entry.clubId);
         const unionId = this.ResolveUnionId(account,entry.unionId);
+        // 大盟主（联盟总群主）查全联盟：只带 union_id，**不带 club_id**；
+        // 盟主只看自己名下俱乐部：club_id + union_id 都带。
+        // 大盟主却没有 union_id 时退回带 club_id，否则报文没有任何定位参数。
+        const sendClubId = !(entry.unionOwner && unionId !== "");
         this.requestedPage = nPage;
-        this.requestContext = "union:grant-list:" + (clubId === "" ? "-" : clubId) +
+        this.requestContext = "union:grant-list:" + (sendClubId ? (clubId === "" ? "-" : clubId) : "-") +
             ":" + (unionId === "" ? "-" : unionId) + ":" + nPage + ":" + Date.now();
 
         const param:any = {
@@ -81,8 +86,7 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
             page:nPage,
             context:this.requestContext
         };
-        // 俱乐部 + 联盟都带：服务端靠这两个定位授信范围，缺一个就只能按账号默认俱乐部猜。
-        if(clubId !== "")
+        if(sendClubId && clubId !== "")
             param.club_id = clubId;
         if(unionId !== "")
             param.union_id = unionId;
@@ -91,12 +95,13 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
     }
 
     /**
-     * 入口参数：`{"club_id":"...","union_id":"..."}`（panelMain 已经算好，两边口径一致）。
+     * 入口参数：`{"club_id":"...","union_id":"...","is_union_owner":true}`（panelMain 已经算好，两边口径一致）。
+     * `is_union_owner` = 当前俱乐部的联盟是不是自己当总群主（大盟主），决定报文带不带 club_id。
      * 兼容纯字符串：6 位数字按 club_id 处理。
      */
-    private ReadEntry():{clubId:string;unionId:string}
+    private ReadEntry():{clubId:string;unionId:string;unionOwner:boolean}
     {
-        const result = { clubId:"", unionId:"" };
+        const result = { clubId:"", unionId:"", unionOwner:false };
         const raw = this.strUserData == null ? "" : String(this.strUserData).trim();
         if(raw === "")
             return result;
@@ -110,6 +115,8 @@ export default class panelQuotaGrantRecord extends UIPanelViewBase
                 {
                     result.clubId = normalizeRoomClubId(data["club_id"] || data["clubId"]);
                     result.unionId = normalizeRoomUnionId(data["union_id"] || data["unionId"]);
+                    const owner:any = data["is_union_owner"];
+                    result.unionOwner = owner === true || owner === 1 || owner === "1" || owner === "true";
                 }
             }
             catch(error) {}

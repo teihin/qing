@@ -1774,3 +1774,164 @@ export interface PayLinkResponse {
   url: string;
   expiresAt: string;
 }
+
+// ---- 自动输赢平衡（游戏服 auto_balance 命令族）----
+export type AutoBalanceMode = "observe" | "advice" | "auto";
+
+export interface AutoBalanceProtectConfig {
+  min_loss_score: number;
+  min_rounds: number;
+  min_minutes: number;
+  min_room_players: number;
+  max_per_room: number;
+  daily_max_times: number;
+  cooldown_sec: number;
+  target_value: number;
+  chance: number;
+  min_today_loss: number;
+}
+
+export interface AutoBalanceSuppressConfig {
+  mode: string;
+  min_win_score: number;
+  min_rounds: number;
+  min_victims: number;
+  daily_max_times: number;
+  cooldown_sec: number;
+  target_value: number;
+  chance: number;
+  min_today_win: number;
+}
+
+export interface AutoBalanceLimits {
+  max_active_total: number;
+  max_set_per_tick: number;
+  max_set_per_day: number;
+  idle_stop_sec: number;
+}
+
+export interface AutoBalanceConfig {
+  enabled?: boolean;
+  mode?: AutoBalanceMode | string;
+  protect_exclude_guuids?: string[];
+  room_play_mode?: string;
+  require_club_mode?: boolean;
+  by_dipi?: Record<string, Record<string, number>>;
+  protect?: Partial<AutoBalanceProtectConfig>;
+  suppress?: Partial<AutoBalanceSuppressConfig>;
+  limits?: Partial<AutoBalanceLimits>;
+}
+
+export interface AutoBalanceDipiOption {
+  key: string;
+  label: string;
+}
+
+export interface AutoBalanceOverview {
+  config: AutoBalanceConfig;
+  today: { setCount: number; active: number };
+  team: { teams: number; members: number };
+  lastTick: string;
+  dipiOptions?: AutoBalanceDipiOption[];
+}
+
+export interface AutoBalancePlayerCheck {
+  guuid: string;
+  name: string;
+  loginName: string;
+}
+
+export interface AutoBalanceCandidate {
+  guuid: string;
+  nick: string;
+  roomId: number;
+  init: number;
+  periodNet: number;
+  rounds: number;
+  seconds: number;
+  todayNet: number | null;
+  teamName: string;
+  hit: boolean;
+  action: "protect" | "suppress" | "none" | string;
+  targetValue: number;
+  chance: number;
+  hasTarget: boolean;
+  cooldownLeft: number;
+}
+
+export interface AutoBalanceCandidateResponse {
+  items: AutoBalanceCandidate[];
+  total: number;
+  roomId: number;
+  limit: number;
+}
+
+export interface AutoBalanceEntry {
+  guuid: string;
+  name?: string;
+  error?: string;
+  action?: string;
+  target_value?: number;
+  chance?: number;
+  team_name?: string;
+  status?: string;
+}
+
+export interface AutoBalanceExecuteResponse {
+  action: string;
+  ok: AutoBalanceEntry[];
+  failed: AutoBalanceEntry[];
+  stopped: AutoBalanceEntry[];
+}
+
+export interface AutoBalanceTeam {
+  teamName: string;
+  memberCount: number;
+  updateDate: string;
+}
+
+export interface AutoBalanceMember {
+  teamName: string;
+  guuid: string;
+  name: string;
+  clubId: string;
+  todayNet: number | null;
+  todayRounds: number;
+  status: string;
+  remark: string;
+  operator: string;
+  updateDate: string;
+}
+
+export interface AutoBalanceTeamsResponse {
+  teams: AutoBalanceTeam[];
+  members: AutoBalanceMember[];
+}
+
+export interface AutoBalanceTeamWriteResponse {
+  ok: AutoBalanceEntry[];
+  failed: AutoBalanceEntry[];
+  stopped: AutoBalanceEntry[];
+}
+
+export interface AutoBalanceImportResponse {
+  dryRun: boolean;
+  teams: number;
+  members: number;
+  affected: number;
+  stopped: AutoBalanceEntry[];
+}
+
+export interface AutoBalanceGroup {
+  id: number;
+  groupName: string;
+  scopeType: string;
+  scopeId: string;
+  memberCount: number;
+  updateDate: string;
+}
+
+export interface AutoBalanceGroupsResponse {
+  items: AutoBalanceGroup[];
+  warning?: string;
+}

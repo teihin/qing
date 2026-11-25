@@ -1750,11 +1750,16 @@ export default class panelMain extends UIPanelViewBase {
                 this.RefreshClubFinanceMenuVisibility();
                 return;
             }
-            // 俱乐部和它所属联盟都传：服务端靠这两个定位授信范围，
-            // 缺一个就只能按账号默认俱乐部猜，多俱乐部账号或刚切过俱乐部会「找不到」。
+            // 身份不同定位参数也不同（2026-11-25 口径）：
+            // 大盟主看全联盟，请求只带 union_id、不带 club_id；盟主只看自己那家，club_id + union_id 都带。
+            // 服务端缺参数就只能按账号默认俱乐部猜，多俱乐部账号或刚切过俱乐部会「找不到」。
             const grantUnionId = this.ResolveClubUnionId(grantClubId);
             UIManager.getInstance().showPanel("panelQuotaGrantRecord",ShowPanelMode.Cover,
-                JSON.stringify({club_id:grantClubId,union_id:grantUnionId}));
+                JSON.stringify({
+                    club_id:grantClubId,
+                    union_id:grantUnionId,
+                    is_union_owner:this.IsUnionOwnerOfClub(grantClubId)
+                }));
         }
         else if(button.node.name === "金币充值")
         {

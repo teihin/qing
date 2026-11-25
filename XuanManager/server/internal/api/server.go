@@ -229,6 +229,18 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/game/player-optimization", s.authorized("game.player_optimization.create", true, s.handleCreatePlayerOptimization))
 	s.mux.Handle("PUT /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.update", true, s.handleUpdatePlayerOptimization))
 	s.mux.Handle("DELETE /api/game/player-optimization/{playerId}", s.authorized("game.player_optimization.delete", true, s.handleDeletePlayerOptimization))
+	// 自动输赢平衡：8 条命令全部走游戏服 8890 /hall/command，后台不直连游戏库写入。
+	// 分组下拉只读 kbedm.club_player_group_info（导入源），不参与任何写操作。
+	s.mux.Handle("GET /api/game/auto-balance/config", s.authorized("game.auto_balance.view", false, s.handleGetAutoBalanceOverview))
+	s.mux.Handle("PUT /api/game/auto-balance/config", s.authorized("game.auto_balance.config", true, s.handleSetAutoBalanceConfig))
+	s.mux.Handle("GET /api/game/auto-balance/candidates", s.authorized("game.auto_balance.view", false, s.handleListAutoBalanceCandidates))
+	s.mux.Handle("POST /api/game/auto-balance/execute", s.authorized("game.auto_balance.execute", true, s.handleExecuteAutoBalance))
+	s.mux.Handle("GET /api/game/auto-balance/teams", s.authorized("game.auto_balance.view", false, s.handleListAutoBalanceTeams))
+	s.mux.Handle("POST /api/game/auto-balance/teams/members", s.authorized("game.auto_balance.team", true, s.handleSetAutoBalanceMembers))
+	s.mux.Handle("DELETE /api/game/auto-balance/teams/members", s.authorized("game.auto_balance.team", true, s.handleRemoveAutoBalanceMembers))
+	s.mux.Handle("POST /api/game/auto-balance/teams/import", s.authorized("game.auto_balance.team", true, s.handleImportAutoBalanceTeams))
+	s.mux.Handle("GET /api/game/auto-balance/groups", s.authorized("game.auto_balance.team", false, s.handleListAutoBalanceGroups))
+	s.mux.Handle("GET /api/game/auto-balance/player", s.authorized("game.auto_balance.team", false, s.handleCheckAutoBalancePlayer))
 	s.mux.Handle("GET /api/game/jackpot/agents", s.authorized("game.jackpot.view", false, s.handleJackpotAgents))
 	s.mux.Handle("GET /api/game/club-perf/unions", s.authorized("game.club_perf.view", false, s.handleClubPerfUnions))
 	s.mux.Handle("GET /api/game/club-perf/overview", s.authorized("game.club_perf.view", false, s.handleClubPerfOverview))

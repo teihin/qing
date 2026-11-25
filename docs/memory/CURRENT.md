@@ -1,8 +1,22 @@
 # qing 当前状态
 
-更新时间：2026-11-24
+更新时间：2026-11-25
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
+
+## 2026-11-25 客户端「额度授权记录」按身份区分 club_id（未构建热更、未真机，详见[交接](handoffs/2026-11-25-quota-grant-record-union-owner.md)）
+
+- 口径：`查询_联盟_授信_记录` 大盟主（当前俱乐部所在联盟的总群主）看全联盟 → **只带 `union_id`、不传 `club_id`**；盟主只看自己名下俱乐部 → `club_id` + `union_id` 都带。
+- 实现：`panelMain` 打开面板时透传 `is_union_owner = IsUnionOwnerOfClub(clubId)`（只认服务端结论、不落盘）；`panelQuotaGrantRecord.ReadEntry/GetRecords` 按该标记决定发不发 `club_id`，**大盟主但 `union_id` 为空时仍退回带 `club_id`** 兜底。
+- 仅语法自检 0 诊断；待 Creator 编译后实机抓报文确认。
+
+## 2026-11-25 自动输赢平衡：后台完整版（已上正式服；游戏服命令未部署，功能暂不可用，详见[交接](handoffs/2026-11-25-auto-balance-admin.md)）
+
+- 新增独立模块「自动输赢平衡」`/game/auto-balance`（`parent_id=20`、`sort_order=72`、icon `balance`），配置 / 候选 / 名单三个 Tab；迁移 `075_auto_balance.sql`（模块 id 66、权限 5841-5844 授权 role 1）。
+- 后端 `auto_balance.go` 9 条路由，全走 8890 `/hall/command`；4 权限 `view/config/execute/team`；`mode=auto` 强制 `confirm:true`；写操作串行锁 + 审计；分组下拉只读 `club_player_group_info`。
+- 两台已部署（15:36/15:43），二进制 `77f44df7…`、health 200、新路由 401；回滚点见交接。测试服仅 role 1 有玩家控制权限，故只授权 role 1。
+- 16:46–17:01 前端调整：隐藏「生效玩法」；排除玩家标签输入 + 后台核对玩家存在（新接口 `GET /auto-balance/player`）；底皮只能下拉选 9 档；文案全中文化。二进制 `e0744d9b…`。
+- **阻塞**：正式服游戏服没这套实现 —— 无 `auto_balance.py`、`Hall.py` 无 8 条命令、两张表都不存在，`查询_自动平衡_配置` 实测 769。页面打开显示「接口未注册」，需游戏服部署 + reload。代码已提交推送（`codex/club-ui`）。
 
 ## 2026-11-24 用户端数据查询支持登录ID/昵称 + 代理链显示各级比例（已上测试服，详见[交接](handoffs/2026-11-24-userdata-lookup-and-chain-percent.md)）
 
@@ -67,21 +81,9 @@
 - 改动只有两个节点的 `_contentSize`：`观战对象.prefab` 的 `V8头像框` 64→**100**，`带入记录.prefab` 的 `ring` 46→**72**；PNG/`.meta`/UUID 未动，`tools/apply_realtime_record_v2.py` 常量同步。
 - 离屏与合成图核对见 `vibe_images/2026-11-19-avatar-ring/`；Creator 导入、构建、热更、真机未做。详见[交接](handoffs/2026-11-19-realtime-avatar-ring-size.md)。
 
-## 2026-11-18 游戏设置入口：按「当前俱乐部所属联盟」判身份（脚本就绪，未构建/热更/真机）
-
-- A3 有两家俱乐部（一家盟主、一家大盟主），当前在盟主那家；首次进大厅入口正确隐藏，点过「我的」回大厅后入口又冒出来。
-- 根因：入口用**账号级**扫描——`clubUnionStatus` 里任意一家 `isOwner===true` 就亮，跟当前俱乐部无关；`start()` 里 `schedule(...,1)` 每秒轮询，另一家（大盟主）的 `is_owner=1` 被「我的」页补查回来之后，1 秒内就翻上去了。
-- 修正（`panelMain.ts` `RefreshGameSettingsEntry`）：改用既有 `IsUnionOwnerOfClub(clubId)`（只看当前俱乐部所属联盟），口径与「上下分记录/钻石池消耗」一致；可见 = `unionKnown && (当前联盟的总群主 || (确认未入盟 && 当前俱乐部创建者))`，联盟未知时藏并按 30 秒节流补查。同日另修 `OnClubMyUnion` 不再写 `isOwner`。
-- TS 转译 0 诊断；入口判定 6 例（盟主/大盟主/未入盟创建者/非创建者/状态未知）跑真实方法切片全部符合预期。未构建/热更/真机。详见[交接](handoffs/2026-11-18-game-settings-entry-union-gate.md)。
-
-## 2026-11-18 排行榜数字等宽等基线 + 列右对齐（就绪，未导入/构建/热更）
-
-- 根因：`leaderboard_v8_digits.fnt` 的 `xadvance` 33~40 连字宽、基线差 3px，数字宽窄不一且上下抖。
-- `tools/apply_leaderboard_tabular_digits.py`：17 字形统一 56px 高、基线 59、数字 `xadvance=43`；贴图尺寸/UUID/`.meta` 不变，原图备份 `art_sources/v8-repairs/leaderboard/digits-tabular-before/`。
-- `tools/apply_leaderboard_number_align.py`：`played_count`/`user_reward` 改右对齐（40 个 Label），右边缘落在列分隔线右内 8px，框宽 200/160 防裁 `−18,630`；`render_ui_prefab.py` 预览补对齐。
-- 1334/1624 离屏：手数右边缘 559、奖励 713 全齐（改前 515/500/501）；未构建/热更/真机。详见[交接](handoffs/2026-11-18-leaderboard-tabular-digits.md)。
-
 ## 更早批次
+
+- 2026-11-18 的「游戏设置入口按当前联盟判身份」「排行榜数字等宽等基线」原文见 [`archive/2026-11-25/current-2026-11-18-union-leaderboard.md`](archive/2026-11-25/current-2026-11-18-union-leaderboard.md)。
 
 - 2026-11-18 的实时战绩按新效果图重做、牌局结算行底两篇原文见 [`archive/2026-11-24/current-nov18-client-ui.md`](archive/2026-11-24/current-nov18-client-ui.md)。
 
