@@ -43,6 +43,9 @@ type unionListItem struct {
 	// DarkEnabled 是联盟总群主俱乐部的开房暗抽开关：
 	// usr_hash_info 的「暗抽_俱乐部_<ownerClubId>」。
 	DarkEnabled bool `json:"darkEnabled"`
+	// SeatStoneForced 是联盟总群主俱乐部的「强制带入钻石」开关：
+	// usr_hash_info 的「强制入座扣钻_俱乐部_<ownerClubId>」。
+	SeatStoneForced bool `json:"seatStoneForced"`
 	// LeaderboardEnabled 是该联盟成员俱乐部的大厅排行榜入口开关：
 	// usr_hash_info 的「排行榜_联盟_<unionId>」。
 	LeaderboardEnabled bool `json:"leaderboardEnabled"`
@@ -154,6 +157,13 @@ LIMIT ? OFFSET ?`, queryArgs...)
 		}
 	} else {
 		s.logger.Error("read union dark settings", "error", darkErr)
+	}
+	if forced, forceErr := s.readClubSeatStoneForces(r.Context(), ownerClubIDs); forceErr == nil {
+		for index := range items {
+			items[index].SeatStoneForced = forced[items[index].OwnerClubID]
+		}
+	} else {
+		s.logger.Error("read union seat stone forces", "error", forceErr)
 	}
 	leaderboardKeys := make([]string, 0, len(items))
 	for _, item := range items {
@@ -278,6 +288,12 @@ LIMIT 1`, unionID).Scan(&item.UnionID, &item.Name, &item.OwnerID, &item.OwnerNam
 			item.DarkEnabled = enabled
 		} else {
 			s.logger.Error("read union dark setting", "error", darkErr,
+				"unionId", item.UnionID, "ownerClubId", item.OwnerClubID)
+		}
+		if forced, forceErr := s.readClubSeatStoneForce(ctx, item.OwnerClubID); forceErr == nil {
+			item.SeatStoneForced = forced
+		} else {
+			s.logger.Error("read union seat stone force", "error", forceErr,
 				"unionId", item.UnionID, "ownerClubId", item.OwnerClubID)
 		}
 	}

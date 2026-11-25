@@ -46,6 +46,14 @@ const DARK_HASH_CONTEXT_PREFIX = "暗抽开关_";
 /** 哈希查询超时按关闭处理，避免网络异常时一直停留在旧状态。 */
 const DARK_HASH_TIMEOUT = 5;
 /**
+ * 后台按俱乐部强制的「同步带入钻石」：usr_hash_info 的「强制入座扣钻_俱乐部_<clubId>」。
+ * 开启后创建规则弹窗里的开关默认打开且不可关闭；游戏服在创建玩法与建房两处兜底。
+ */
+const SEAT_STONE_FORCE_HASH_PREFIX = "强制入座扣钻_俱乐部_";
+const SEAT_STONE_FORCE_CONTEXT_PREFIX = "强制带入钻石_";
+/** 读取失败按「未强制」放行：真被强制的俱乐部由服务端建房时兜底，不会漏扣钻石。 */
+const SEAT_STONE_FORCE_TIMEOUT = 5;
+/**
  * 关闭暗抽后整项隐藏，需要把创建规则弹窗收紧：
  * 顶部组下移 76、下方组上移 96，内容重新居中，面板高度保持 1080。
  * 数值按当前 Prefab（702x1080）推导；改布局后要同步复核。
@@ -152,6 +160,14 @@ export default class panelGameSettings extends UIPanelViewBase {
     private darkLayoutBase: {[name: string]: number} = {};
     private darkLayoutCompact: boolean = false;
 
+    // ---------------------------------------------------------------- 强制带入钻石
+    /** 后台是否强制当前俱乐部同步带入钻石；默认未强制，等哈希回包再锁。 */
+    private seatStoneForced: boolean = false;
+    /** 当前已查询/已应用的俱乐部 ID，用于忽略切换俱乐部后的旧回包。 */
+    private seatStoneForceClubId: string = "";
+    private seatStoneForcePendingContext: string = "";
+    private seatStoneForcePendingAt: number = 0;
+
     onLoad() {
         super.onLoad();
         KBEngine.Event.register("onHallCommand", this, "onHallCommand");
@@ -177,6 +193,7 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.hideDeleteDialog();
         this.selectTab(0);
         this.requestDarkState(true);
+        this.requestSeatStoneForce(true);
         this.refreshRows();
     }
 
@@ -832,12 +849,13 @@ export default class panelGameSettings extends UIPanelViewBase {
         this.createNine = true;
         this.createWater = 5;
         this.createDark = 0;
-        this.createSeatStone = false;
+        this.createSeatStone = this.seatStoneForced;
         this.setCreateHint("");
         // 后台改价后不重登也要拿到新价；节流，连续开关弹窗不会重复请求。
         ConfigManager.getInstance().RefreshConsumePrice();
         // 每次打开都补拉一次开关；后台刚改也能在下一次打开时生效。
         this.requestDarkState(true);
+        this.requestSeatStoneForce(true);
         this.refreshCreateDialog();
         if (this.createDialog) this.createDialog.active = true;
         if (!this.rulesLoaded && !this.rulesLoading) this.requestRules();
@@ -952,6 +970,11 @@ export default class panelGameSettings extends UIPanelViewBase {
     /** 「同步带入钻石」开关：默认关闭，打开时建房规则带 special_rule=入座扣钻。 */
     private toggleCreateSeatStone() {
         if (this.createPending) return;
+        if (this.seatStoneForced) {
+            // 后台强制时开关锁死，点击只给提示，不发任何状态变更。
+            this.setCreateHint("该俱乐部已强制带入钻石，不可关闭");
+            return;
+        }
         this.createSeatStone = !this.createSeatStone;
         this.setCreateHint("");
         this.refreshCreateDialog();
@@ -960,16 +983,28 @@ export default class panelGameSettings extends UIPanelViewBase {
     private refreshSeatStoneRow() {
         const switchNode = Tool.GetChild(this.node, "创建规则弹窗/面板/同步带入钻石行/同步带入钻石开关");
         if (switchNode) {
+            // 强制时无论本地状态如何都显示为「开」，并把开关置灰。
+            const showOn = this.seatStoneForced || this.createSeatStone;
             const on = switchNode.getChildByName("开");
             const off = switchNode.getChildByName("关");
-            if (on) on.active = this.createSeatStone;
-            if (off) off.active = !this.createSeatStone;
+            if (on) on.active = showOn;
+            if (off) off.active = !showOn;
+            const button = switchNode.getComponent(cc.Button);
+            if (button) button.interactable = !this.seatStoneForced;
+            switchNode.opacity = this.seatStoneForced ? 150 : 255;
         }
         const hint = Tool.GetChild(this.node, "创建规则弹窗/面板/同步带入钻石行/说明");
         if (!hint) return;
         const label = hint.getComponent(cc.Label);
         if (!label) return;
         const ratio = ConfigManager.getInstance().GetClubSeatStoneRatio();
+        if (this.seatStoneForced) {
+            label.string = ratio > 0
+                ? "运营已强制开启（不可关闭）· 1 积分 = " + panelGameSettings.FormatRatio(ratio) + " 钻同步扣退"
+                : "运营已强制开启（不可关闭）· 兑换比例为 0，暂不扣钻石";
+            hint.color = new cc.Color(255, 205, 130, 255);
+            return;
+        }
         label.string = ratio > 0
             ? "带入/结算按 1 积分 = " + panelGameSettings.FormatRatio(ratio) + " 钻同步扣退"
             : "兑换比例为 0，开启后不扣钻石";
@@ -1037,7 +1072,8 @@ export default class panelGameSettings extends UIPanelViewBase {
             context: context
         };
         // 服务端按房间 special_rule 里的「入座扣钻」开启带入/结算钻石同步；不勾选不传，行为不变。
-        if (this.createSeatStone)
+        // 后台强制时即使本地状态没到位也必须带上，服务端还会再兜一次。
+        if (this.createSeatStone || this.seatStoneForced)
             params.special_rule = "入座扣钻";
         account.reqHallCommand(JSON.stringify(params), context);
         KBEngine.Event.fire("RefreshClubRoomList", 1.5);
@@ -1269,6 +1305,13 @@ export default class panelGameSettings extends UIPanelViewBase {
         if (!info) return;
         const key = info.key == null ? "" : String(info.key).trim();
         const context = info.context == null ? "" : String(info.context).trim();
+        if (this.isSeatStoneForceHashResponse(key, context)) {
+            this.seatStoneForcePendingContext = "";
+            this.seatStoneForcePendingAt = 0;
+            this.unschedule(this.onSeatStoneForceTimeout);
+            this.applySeatStoneForced(this.darkValue(info.content));
+            return;
+        }
         if (!this.isDarkHashResponse(key, context)) return;
         this.darkPendingContext = "";
         this.darkPendingAt = 0;
@@ -1281,6 +1324,13 @@ export default class panelGameSettings extends UIPanelViewBase {
         const info = msg && (msg.UserHashError || (msg.result && msg.result.UserHashError));
         if (!info) return;
         const context = info.context == null ? "" : String(info.context).trim();
+        if (this.seatStoneForceContextMatches(context, this.seatStoneForceClubId)) {
+            this.seatStoneForcePendingContext = "";
+            this.seatStoneForcePendingAt = 0;
+            this.unschedule(this.onSeatStoneForceTimeout);
+            this.applySeatStoneForced(false);
+            return;
+        }
         if (!this.darkContextMatches(context, this.darkClubId))
             return;
         this.darkPendingContext = "";
@@ -1312,6 +1362,67 @@ export default class panelGameSettings extends UIPanelViewBase {
         const text = String(content).trim().toLowerCase();
         return text === "1" || text === "true" || text === "on" ||
             text === "yes" || text === "开" || text === "开启";
+    }
+
+    // ---------------------------------------------------------------- 强制带入钻石（哈希）
+
+    /** 读当前俱乐部是否被后台强制带入钻石；force=false 时 1 秒内不重复请求。 */
+    private requestSeatStoneForce(force: boolean = false) {
+        const clubId = this.resolveSettingsClubId();
+        if (clubId === "") {
+            this.seatStoneForceClubId = "";
+            this.seatStoneForcePendingContext = "";
+            this.applySeatStoneForced(false);
+            return;
+        }
+        if (clubId !== this.seatStoneForceClubId) {
+            // 切俱乐部先回到未强制，避免 A 俱乐部的锁带到 B 俱乐部。
+            this.seatStoneForceClubId = clubId;
+            this.applySeatStoneForced(false);
+        }
+        const now = Date.now();
+        const context = SEAT_STONE_FORCE_CONTEXT_PREFIX + clubId;
+        if (!force && context === this.seatStoneForcePendingContext &&
+            now - this.seatStoneForcePendingAt < 1000)
+            return;
+        this.seatStoneForcePendingContext = context;
+        this.seatStoneForcePendingAt = now;
+        this.unschedule(this.onSeatStoneForceTimeout);
+        this.scheduleOnce(this.onSeatStoneForceTimeout, SEAT_STONE_FORCE_TIMEOUT);
+        ConfigManager.getInstance().GetOneHashKey(SEAT_STONE_FORCE_HASH_PREFIX + clubId, context);
+    }
+
+    /** 超时按「未强制」放行；迟到的回包仍会按 context 重新应用。 */
+    private onSeatStoneForceTimeout() {
+        if (this.seatStoneForcePendingContext === "") return;
+        this.seatStoneForcePendingContext = "";
+        this.seatStoneForcePendingAt = 0;
+        this.applySeatStoneForced(false);
+    }
+
+    private isSeatStoneForceHashResponse(key: string, context: string): boolean {
+        const clubId = this.resolveSettingsClubId();
+        if (clubId === "") return false;
+        const expectedKey = SEAT_STONE_FORCE_HASH_PREFIX + clubId;
+        if (key !== "" && key !== expectedKey) return false;
+        return this.seatStoneForceContextMatches(context, clubId);
+    }
+
+    /** 兼容服务端回传的 param context（强制带入钻石_x）和账号命令 context（P@强制带入钻石_x）。 */
+    private seatStoneForceContextMatches(context: string, clubId: string): boolean {
+        if (context === "" || clubId === "") return false;
+        const base = SEAT_STONE_FORCE_CONTEXT_PREFIX + clubId;
+        return context === base || context === "P@" + base ||
+            context === this.seatStoneForcePendingContext ||
+            context === "P@" + this.seatStoneForcePendingContext;
+    }
+
+    /** 被强制时开关恒为开；后台取消后要等下一次打开弹窗/重进页面才解锁。 */
+    private applySeatStoneForced(forced: boolean) {
+        this.seatStoneForced = forced;
+        if (forced) this.createSeatStone = true;
+        if (this.createDialog && this.createDialog.active)
+            this.refreshSeatStoneRow();
     }
 
     private applyDarkEnabled(enabled: boolean) {

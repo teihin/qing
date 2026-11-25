@@ -192,6 +192,9 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/clubs/{clubId}/earnings", s.authorized("game.club.view", false, s.handleClubEarnings))
 	s.mux.Handle("POST /api/game/clubs/{clubId}/stone-pool-adjustments", s.authorized("game.club.stone_pool_adjust", true, s.handleAdjustClubStonePool))
 	s.mux.Handle("PUT /api/game/clubs/{clubId}/dark-setting", s.authorized("game.club.dark_setting", true, s.handleSetClubDarkSetting))
+	// 强制带入钻石：写「强制入座扣钻_俱乐部_<clubId>」，客户端据此锁死开房规则的同步带入钻石，
+	// 游戏服在创建玩法与建房两处做强校验。
+	s.mux.Handle("PUT /api/game/clubs/{clubId}/seat-stone-force", s.authorized("game.club.seat_stone_force", true, s.handleSetClubSeatStoneForce))
 	s.mux.Handle("PUT /api/game/clubs/{clubId}/bf-chat", s.authorized("game.club.bf_chat", true, s.handleSetClubBFChat))
 	// 大厅排行榜入口：独立俱乐部写「排行榜_俱乐部_<clubId>」，已入盟的俱乐部由联盟写
 	// 「排行榜_联盟_<unionId>」，客户端用 查询_哈希_信息 读取后决定「发现」页按钮显隐。
@@ -202,6 +205,8 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /api/game/unions/{unionId}/earnings", s.authorized("game.union.view", false, s.handleUnionEarnings))
 	s.mux.Handle("POST /api/game/unions/{unionId}/quota-adjustments", s.authorized("game.union.quota_adjust", true, s.handleAdjustUnionQuota))
 	s.mux.Handle("PUT /api/game/unions/{unionId}/dark-setting", s.authorized("game.union.dark_setting", true, s.handleSetUnionDarkSetting))
+	// 联盟版强制带入钻石：写联盟总群主俱乐部的同一个 key。
+	s.mux.Handle("PUT /api/game/unions/{unionId}/seat-stone-force", s.authorized("game.union.seat_stone_force", true, s.handleSetUnionSeatStoneForce))
 	// 俱乐部荣耀榜：一个 scope（联盟 / 独立俱乐部）一份配置，读写走游戏服
 	// 异步_查询/设置_俱乐部_活动_配置；俱乐部与联盟共用同一对权限码。
 	s.mux.Handle("GET /api/game/clubs/{clubId}/honor-rank", s.authorized("game.club_honor_rank.view", false, s.handleGetClubHonorRank))

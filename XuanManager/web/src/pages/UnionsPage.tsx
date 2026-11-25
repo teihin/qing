@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import DarkSettingModal from "../components/DarkSettingModal";
+import SeatStoneForceModal from "../components/SeatStoneForceModal";
 import LeaderboardEntryModal from "../components/LeaderboardEntryModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, submitGuard } from "../components/ui";
@@ -43,11 +44,14 @@ export default function UnionsPage({
   const [loading, setLoading] = useState(true);
   const [adjustTarget, setAdjustTarget] = useState<{ union: UnionListItem; action: "add" | "subtract" } | null>(null);
   const [darkUnion, setDarkUnion] = useState<UnionListItem | null>(null);
+  const [forceUnion, setForceUnion] = useState<UnionListItem | null>(null);
   const [leaderboardUnion, setLeaderboardUnion] = useState<UnionListItem | null>(null);
   const [earningsUnion, setEarningsUnion] = useState<UnionListItem | null>(null);
   const canAdjust = can("game.union.quota_adjust");
   const canSetDark = can("game.union.dark_setting");
   const canSetLeaderboardEntry = can("game.union.leaderboard_entry");
+  const canSetSeatStoneForce = can("game.union.seat_stone_force");
+  const canViewSeatStoneRatio = can("configuration.stone_consume.view");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,6 +160,7 @@ export default function UnionsPage({
                     <th>联盟池</th>
                     <th>已分配</th>
                     <th>暗抽</th>
+                    <th title="强制开房带钻石：开启后联盟总群主俱乐部创建房间规则必须同步带入钻石，玩家不能关闭">强制带钻</th>
                     <th>排行榜</th>
                     <th>状态 / 创建时间</th>
                     <th className="align-right">操作</th>
@@ -205,6 +210,16 @@ export default function UnionsPage({
                         <small className="cell-subtitle">总群主俱乐部</small>
                       </td>
                       <td>
+                        {union.seatStoneForced ? (
+                          <strong className="club-force-on" title="强制开房带钻石已开启：联盟总群主俱乐部创建规则必须带入钻石">
+                            强制开启
+                          </strong>
+                        ) : (
+                          <strong className="club-quota-missing" title="未开启强制开房带钻石">关闭</strong>
+                        )}
+                        <small className="cell-subtitle">总群主俱乐部</small>
+                      </td>
+                      <td>
                         <strong className={union.leaderboardEnabled ? "club-quota-value" : "club-quota-missing"}>
                           {union.leaderboardEnabled ? "开启" : "关闭"}
                         </strong>
@@ -249,6 +264,20 @@ export default function UnionsPage({
                             }
                           >
                             暗抽设置
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setForceUnion(union)}
+                            disabled={!canSetSeatStoneForce || !union.ownerClubId}
+                            title={
+                              !union.ownerClubId
+                                ? "该联盟没有总群主俱乐部，无法设置强制开房带钻石"
+                                : canSetSeatStoneForce
+                                  ? "开启后联盟总群主俱乐部创建规则必须同步带入钻石，玩家不能关闭"
+                                  : "当前角色没有强制开房带钻石的权限"
+                            }
+                          >
+                            强制开房带钻石
                           </button>
                           <button
                             type="button"
@@ -330,6 +359,21 @@ export default function UnionsPage({
           canEdit={canSetDark}
           notify={notify}
           onClose={() => setDarkUnion(null)}
+          onDone={() => void load()}
+        />
+      )}
+
+      {forceUnion && (
+        <SeatStoneForceModal
+          scope="union"
+          targetId={forceUnion.unionId}
+          targetName={forceUnion.name || forceUnion.unionId}
+          ownerClubId={forceUnion.ownerClubId}
+          currentEnabled={!!forceUnion.seatStoneForced}
+          canEdit={canSetSeatStoneForce}
+          canViewRatio={canViewSeatStoneRatio}
+          notify={notify}
+          onClose={() => setForceUnion(null)}
           onDone={() => void load()}
         />
       )}

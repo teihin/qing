@@ -55,6 +55,9 @@ type clubListItem struct {
 	TotalClubGold *int64 `json:"totalClubGold"`
 	// DarkEnabled 是客户端开房页暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。
 	DarkEnabled bool `json:"darkEnabled"`
+	// SeatStoneForced 是「强制带入钻石」：usr_hash_info 的「强制入座扣钻_俱乐部_<clubId>」。
+	// 开启后该俱乐部创建房间规则时「同步带入钻石」默认打开且不可关闭。
+	SeatStoneForced bool `json:"seatStoneForced"`
 	// LeaderboardEnabled 是大厅「发现」页排行榜入口开关。独立俱乐部读
 	// 「排行榜_俱乐部_<clubId>」，已入盟读「排行榜_联盟_<unionId>」，这里给的是生效值。
 	LeaderboardEnabled bool `json:"leaderboardEnabled"`
@@ -419,6 +422,13 @@ LIMIT ? OFFSET ?`, queryArgs...)
 	} else {
 		s.logger.Error("read club dark settings", "error", darkErr)
 	}
+	if forced, forceErr := s.readClubSeatStoneForces(r.Context(), clubIDs); forceErr == nil {
+		for index := range items {
+			items[index].SeatStoneForced = forced[items[index].ClubID]
+		}
+	} else {
+		s.logger.Error("read club seat stone forces", "error", forceErr)
+	}
 	if bfChat, bfErr := s.readClubBFChatStates(r.Context(), items); bfErr == nil {
 		for index := range items {
 			items[index].BFChatEnabled = bfChat[items[index].ClubID]
@@ -742,6 +752,11 @@ WHERE c.club_guuid = ? LIMIT 1`, clubID).Scan(
 		detail.Club.DarkEnabled = darkEnabled
 	} else {
 		s.logger.Error("read club dark setting", "error", darkErr, "clubId", clubID)
+	}
+	if forced, forceErr := s.readClubSeatStoneForce(ctx, clubID); forceErr == nil {
+		detail.Club.SeatStoneForced = forced
+	} else {
+		s.logger.Error("read club seat stone force", "error", forceErr, "clubId", clubID)
 	}
 
 	members, err := s.readClubMembers(ctx, clubID, detail.Club.Mode)

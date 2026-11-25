@@ -87,9 +87,10 @@ FROM kbedm.usr_hash_info WHERE hash_key = ? ORDER BY id`, key)
 	return result, rows.Err()
 }
 
-// readClubDarkSetting 取某个俱乐部当前开关；同 key 多行时以最新 id 为准。
-func (s *Server) readClubDarkSetting(ctx context.Context, clubID string) (bool, []hashSettingRow, error) {
-	rows, err := s.loadHashSettingRows(ctx, clubDarkSettingKey(clubID))
+// readBoolHashSetting 读一个「1/0 型」哈希开关；缺行按关闭，同 key 多行时以最新 id 为准。
+// 暗抽与强制带入钻石共用这套读写，避免同一种存储出现两份实现。
+func (s *Server) readBoolHashSetting(ctx context.Context, key string) (bool, []hashSettingRow, error) {
+	rows, err := s.loadHashSettingRows(ctx, key)
 	if err != nil {
 		return false, nil, err
 	}
@@ -99,23 +100,28 @@ func (s *Server) readClubDarkSetting(ctx context.Context, clubID string) (bool, 
 	return parseDarkSettingContent(rows[len(rows)-1].Content), rows, nil
 }
 
-// readClubDarkSettings 批量读取当前页俱乐部的开关，避免逐行查库。
-func (s *Server) readClubDarkSettings(ctx context.Context, clubIDs []string) (map[string]bool, error) {
+// readClubDarkSetting 取某个俱乐部当前开关；同 key 多行时以最新 id 为准。
+func (s *Server) readClubDarkSetting(ctx context.Context, clubID string) (bool, []hashSettingRow, error) {
+	return s.readBoolHashSetting(ctx, clubDarkSettingKey(clubID))
+}
+
+// readBoolHashSettings 以 <prefix><id> 的形式批量读取开关，避免列表页逐行查库。
+func (s *Server) readBoolHashSettings(ctx context.Context, prefix string, ids []string) (map[string]bool, error) {
 	result := map[string]bool{}
-	keys := make([]string, 0, len(clubIDs))
-	keyToClub := map[string]string{}
-	for _, clubID := range clubIDs {
-		clubID = strings.TrimSpace(clubID)
-		if clubID == "" {
+	keys := make([]string, 0, len(ids))
+	keyToID := map[string]string{}
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
 			continue
 		}
-		key := clubDarkSettingKey(clubID)
-		if _, exists := keyToClub[key]; exists {
+		key := prefix + id
+		if _, exists := keyToID[key]; exists {
 			continue
 		}
-		keyToClub[key] = clubID
+		keyToID[key] = id
 		keys = append(keys, key)
-		result[clubID] = false
+		result[id] = false
 	}
 	if len(keys) == 0 {
 		return result, nil
@@ -136,19 +142,23 @@ FROM kbedm.usr_hash_info WHERE hash_key IN (`+placeholders+`) ORDER BY id`, args
 		if err := rows.Scan(&key, &content); err != nil {
 			return nil, err
 		}
-		clubID, ok := keyToClub[key]
+		id, ok := keyToID[key]
 		if !ok {
 			continue
 		}
 		// ORDER BY id：后出现的行覆盖前面的，等价于取最新 id。
-		result[clubID] = parseDarkSettingContent(content)
+		result[id] = parseDarkSettingContent(content)
 	}
 	return result, rows.Err()
 }
 
-// writeClubDarkSetting 写入并回读校验；失败时按写入前的行快照恢复。
-func (s *Server) writeClubDarkSetting(ctx context.Context, clubID string, enabled bool) (bool, error) {
-	key := clubDarkSettingKey(clubID)
+// readClubDarkSettings 批量读取当前页俱乐部的暗抽开关。
+func (s *Server) readClubDarkSettings(ctx context.Context, clubIDs []string) (map[string]bool, error) {
+	return s.readBoolHashSettings(ctx, clubDarkSettingKeyPrefix, clubIDs)
+}
+
+// writeBoolHashSetting 写入并回读校验；失败时按写入前的行快照恢复。
+func (s *Server) writeBoolHashSetting(ctx context.Context, key string, enabled bool) (bool, error) {
 	beforeRows, err := s.loadHashSettingRows(ctx, key)
 	if err != nil {
 		return false, err
@@ -173,7 +183,7 @@ func (s *Server) writeClubDarkSetting(ctx context.Context, clubID string, enable
 		return false, err
 	}
 
-	after, _, verifyErr := s.readClubDarkSetting(ctx, clubID)
+	after, _, verifyErr := s.readBoolHashSetting(ctx, key)
 	if verifyErr != nil {
 		verifyErr = fmt.Errorf("回读失败: %w", verifyErr)
 	} else if after != enabled {
@@ -186,6 +196,11 @@ func (s *Server) writeClubDarkSetting(ctx context.Context, clubID string, enable
 		return false, verifyErr
 	}
 	return after, nil
+}
+
+// writeClubDarkSetting 写某个俱乐部的暗抽开关。
+func (s *Server) writeClubDarkSetting(ctx context.Context, clubID string, enabled bool) (bool, error) {
+	return s.writeBoolHashSetting(ctx, clubDarkSettingKey(clubID), enabled)
 }
 
 func (s *Server) restoreHashSettingRows(ctx context.Context, key string, before []hashSettingRow, insertedID int64) error {

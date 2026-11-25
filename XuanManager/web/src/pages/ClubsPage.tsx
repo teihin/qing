@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../api";
 import DarkSettingModal from "../components/DarkSettingModal";
+import SeatStoneForceModal from "../components/SeatStoneForceModal";
 import LeaderboardEntryModal from "../components/LeaderboardEntryModal";
 import BFChatModal from "../components/BFChatModal";
 import OwnerEarningsModal from "../components/OwnerEarningsModal";
@@ -138,6 +139,7 @@ export default function ClubsPage({
   const [selected, setSelected] = useState<ClubListItem | null>(null);
   const [stonePoolClub, setStonePoolClub] = useState<ClubListItem | null>(null);
   const [darkClub, setDarkClub] = useState<ClubListItem | null>(null);
+  const [forceClub, setForceClub] = useState<ClubListItem | null>(null);
   const [bfChatClub, setBFChatClub] = useState<ClubListItem | null>(null);
   const [leaderboardClub, setLeaderboardClub] = useState<ClubListItem | null>(null);
   const [earningsClub, setEarningsClub] = useState<ClubListItem | null>(null);
@@ -208,6 +210,8 @@ export default function ClubsPage({
   const canSetDark = can("game.club.dark_setting");
   const canSetBFChat = can("game.club.bf_chat");
   const canSetLeaderboardEntry = can("game.club.leaderboard_entry");
+  const canSetSeatStoneForce = can("game.club.seat_stone_force");
+  const canViewSeatStoneRatio = can("configuration.stone_consume.view");
 
   return (
     <div className="page-stack">
@@ -396,6 +400,7 @@ export default function ClubsPage({
                     <th>钻石池</th>
                     <th>俱乐部总积分</th>
                     <th>暗抽</th>
+                    <th title="强制开房带钻石：开启后创建房间规则必须同步带入钻石，玩家不能关闭">强制带钻</th>
                     <th>BF聊天</th>
                     <th>排行榜</th>
                     <th>抽成</th>
@@ -474,6 +479,20 @@ export default function ClubsPage({
                         </strong>
                       </td>
                       <td>
+                        {club.seatStoneForced ? (
+                          <strong className="club-force-on" title="强制开房带钻石已开启：创建规则必须带入钻石，玩家不能关闭">
+                            强制开启
+                          </strong>
+                        ) : (
+                          <strong
+                            className="club-quota-missing"
+                            title="未开启强制开房带钻石；已入盟俱乐部由联盟管理控制"
+                          >
+                            {club.unionId ? "随联盟" : "关闭"}
+                          </strong>
+                        )}
+                      </td>
+                      <td>
                         <strong className={club.bfChatEnabled === true ? "club-quota-value" : "club-quota-missing"}
                           title="消息页置顶的 BF 聊天（官方客服）入口；关闭后普通成员只保留盟主默认对话；默认关闭">
                           {club.bfChatEnabled === true ? "开启" : "关闭"}
@@ -539,6 +558,20 @@ export default function ClubsPage({
                             }
                           >
                             暗抽设置
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setForceClub(club)}
+                            disabled={!canSetSeatStoneForce || !!club.unionId}
+                            title={
+                              club.unionId
+                                ? "该俱乐部已入盟，请在联盟管理里设置强制开房带钻石"
+                                : canSetSeatStoneForce
+                                  ? "开启后创建规则必须同步带入钻石，玩家不能关闭"
+                                  : "当前角色没有强制开房带钻石的权限"
+                            }
+                          >
+                            强制开房带钻石
                           </button>
                           <button
                             type="button"
@@ -640,6 +673,20 @@ export default function ClubsPage({
           canEdit={canSetDark}
           notify={notify}
           onClose={() => setDarkClub(null)}
+          onDone={() => void load()}
+        />
+      )}
+
+      {forceClub && (
+        <SeatStoneForceModal
+          scope="club"
+          targetId={forceClub.clubId}
+          targetName={forceClub.name || forceClub.clubId}
+          currentEnabled={!!forceClub.seatStoneForced}
+          canEdit={canSetSeatStoneForce}
+          canViewRatio={canViewSeatStoneRatio}
+          notify={notify}
+          onClose={() => setForceClub(null)}
           onDone={() => void load()}
         />
       )}

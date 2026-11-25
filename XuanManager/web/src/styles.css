@@ -2556,6 +2556,8 @@ td strong { color: #294149; }
 .club-tree__quota { color: #2f6f86; font-size: 12px; font-weight: 700; }
 .club-quota-value { color: #1f6f83; font-variant-numeric: tabular-nums; }
 .club-quota-missing { color: #9aa8ab; font-size: 12px; }
+/* 「强制开房带钻石」生效中的红字标记：必须一眼看出来，不能和普通"开启"混。 */
+.club-force-on { display: inline-block; padding: 2px 8px; border-radius: 6px; color: #b02a37; background: #fdeced; font-weight: 700; box-shadow: inset 0 0 0 1px #f3c8cd; white-space: nowrap; }
 .row-actions button:disabled { color: #a8b6b8; cursor: not-allowed; background: transparent; }
 
 /* 联盟管理（V2） */

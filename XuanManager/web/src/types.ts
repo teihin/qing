@@ -1082,6 +1082,8 @@ export interface ClubListItem {
   totalClubGold: number | null;
   /** 开房-游戏设置里的暗抽开关：usr_hash_info 的「暗抽_俱乐部_<clubId>」。 */
   darkEnabled?: boolean;
+  /** 强制带入钻石：usr_hash_info 的「强制入座扣钻_俱乐部_<clubId>」，默认关闭。 */
+  seatStoneForced?: boolean;
   /** 消息页置顶 BF 聊天（官方客服）入口开关，按俱乐部维护，默认关闭。 */
   bfChatEnabled?: boolean;
   /**
@@ -1280,6 +1282,8 @@ export interface UnionListItem {
   createdAt: string;
   /** 总群主俱乐部的开房暗抽开关：usr_hash_info 的「暗抽_俱乐部_<ownerClubId>」。 */
   darkEnabled?: boolean;
+  /** 总群主俱乐部的强制带入钻石开关：「强制入座扣钻_俱乐部_<ownerClubId>」。 */
+  seatStoneForced?: boolean;
   /** 联盟所有俱乐部的大厅排行榜入口开关：usr_hash_info 的「排行榜_联盟_<unionId>」。 */
   leaderboardEnabled?: boolean;
 }
@@ -1321,6 +1325,16 @@ export interface UnionQuotaAdjustmentResponse {
 
 /** 俱乐部/联盟暗抽开关的保存结果；联盟会带回实际写入的总群主俱乐部 ID。 */
 export interface DarkSettingState {
+  scope: "club" | "union";
+  targetId: string;
+  ownerClubId?: string;
+  enabled: boolean;
+  verified: boolean;
+  message: string;
+}
+
+/** 俱乐部/联盟强制带入钻石开关的保存结果；联盟会带回实际写入的总群主俱乐部 ID。 */
+export interface SeatStoneForceState {
   scope: "club" | "union";
   targetId: string;
   ownerClubId?: string;
