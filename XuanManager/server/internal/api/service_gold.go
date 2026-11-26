@@ -12,6 +12,11 @@ import (
 // 客服托管上下分：ChatTool 通过本机服务通道调用后台，后台再执行游戏厅命令。
 // 两套系统保持分离：ChatTool 不直接访问 8890 游戏管理通道。
 
+// 客服上分 / 下分后同步调整盟主额度用的游戏命令（以游戏服实际注册名为准）。
+// 一个命令两个方向：`quota_fen` 正数=授信（联盟池 → 俱乐部），负数=收回（俱乐部 → 联盟池）。
+// 2026-11-26 实测 `quota_fen:-1` 返回 512、俱乐部额度确实减少，负数已可用。
+const clubQuotaCreditCommand = "后台_授信_盟主_额度"
+
 type serviceClubMemberGoldRequest struct {
 	Delta   int    `json:"delta"`
 	Actor   string `json:"actor"`
@@ -75,8 +80,11 @@ func (s *Server) handleServiceClubMemberGold(w http.ResponseWriter, r *http.Requ
 	// 上分已成功：按勾选同步给该俱乐部盟主增加额度。第二步失败不回滚积分，
 	// 只把原因回给客服，避免「钱加了但客服不知道额度没跟上」。
 	quotaSyncError := ""
-	if input.SyncUnionQuota && input.Delta > 0 {
-		quotaSyncError = s.syncClubUnionQuota(r.Context(), clubID, int64(input.Delta), operationContext)
+	if input.SyncUnionQuota && input.Delta != 0 {
+		// 客服上/下分金额是「元/积分」，联盟额度池按「分」记账（界面上 1 元 = 100 分），
+		// 少乘这 100 会出现「上分 11 元、额度只加 0.11 元」（2026-11-26 用户发现）。
+		// 负数表示下分同步扣额度。
+		quotaSyncError = s.syncClubUnionQuota(r.Context(), clubID, int64(input.Delta)*100, operationContext)
 	}
 	auditAfter := map[string]any{"retCode": result.RetCode}
 	auditMessage := "客服托管上下分成功"
@@ -91,16 +99,24 @@ func (s *Server) handleServiceClubMemberGold(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// syncClubUnionQuota 给俱乐部盟主同步增加额度（联盟池 → 俱乐部）。
-// 走后台专用命令「发放_盟主_奖励」（2026-11-13 起，仅 Hall.boss 可调）。
-// 不用老命令「授信_联盟_额度」：那条按调用者自己的联盟判定，Hall.boss 没有联盟，
-// 实测固定返回 769「该俱乐部不在你的联盟里」。
+// syncClubUnionQuota 按上下分方向同步调整俱乐部盟主额度：正数授信（联盟池 → 俱乐部），
+// 负数收回（俱乐部 → 联盟池，用于客服下分同步扣额度）。
+// 2026-11-26 起改用「后台_授信_盟主_额度」：服务端按俱乐部自身 union_id 定位联盟，
+// 写 opt_type='额度联盟授信'（不进奖励统计），不再用「发放_盟主_奖励」记成奖励流水。
+// 也不再传 union_id —— 契约只接受 club_id/quota_fen/context，传错联盟会被拒。
+// 命令名以游戏服注册为准：`异步_授信_盟主_额度` 返回 769 空返回（不存在），
+// `后台_授信_盟主_额度` 会走金额校验（"授信金额必须大于 0"），后者才是真名。
 // 返回空串表示成功；否则返回给客服看的原因。联盟池不足、俱乐部不在联盟等都会在这里暴露。
 func (s *Server) syncClubUnionQuota(ctx context.Context, clubID string, deltaFen int64, operationContext string) string {
-	if deltaFen <= 0 {
+	if deltaFen == 0 {
 		return ""
 	}
-	cmdCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// 方向直接由金额正负表达：正数授信、负数收回，不再换成另一条命令。
+	command := clubQuotaCreditCommand
+	quotaFen := deltaFen
+	// 授信要写联盟池 + 俱乐部两边流水并下发通知，回包比普通命令慢（实测超过 6 秒），
+	// 这里给足超时，避免「已经记账但我们先断连」。
+	cmdCtx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 	quotaContext := operationContext + "-quota"
 	var unionID string
@@ -113,19 +129,34 @@ func (s *Server) syncClubUnionQuota(ctx context.Context, clubID string, deltaFen
 			return "该俱乐部未加入联盟，无法同步盟主额度"
 		}
 	}
-	params := map[string]any{"club_id": clubID, "quota_fen": deltaFen, "context": quotaContext}
-	if strings.TrimSpace(unionID) != "" {
-		params["union_id"] = unionID
-	}
-	result, callErr := s.callGameCommand(cmdCtx, "发放_盟主_奖励", params)
+	params := map[string]any{"club_id": clubID, "quota_fen": quotaFen, "context": quotaContext}
+	result, callErr := s.callGameCommandWith(slowGameHTTPClient, cmdCtx, command, params)
 	if callErr != nil {
 		s.logger.Error("sync club union quota command failed", "error", callErr,
 			"clubId", clubID, "unionId", unionID, "deltaFen", deltaFen, "context", quotaContext)
-		return "游戏服务调用失败，盟主额度未确认增加"
+		// 回包超时 ≠ 没执行：游戏服可能已经记完账才回。这里回读额度自证，
+		// 到账就按成功返回，绝不提示客服重复提交（会多加一份）。
+		if beforeErr == nil {
+			verifyCtx, verifyCancel := context.WithTimeout(context.Background(), 8*time.Second)
+			defer verifyCancel()
+			if after, readErr := s.waitForClubUnionQuota(verifyCtx, clubID, before+deltaFen); readErr == nil && after == before+deltaFen {
+				s.logger.Warn("授信回包超时但额度已到账", "clubId", clubID, "before", before, "after", after)
+				return ""
+			}
+		}
+		return "额度命令回包超时，额度未确认：请先核对俱乐部额度，确认没变再重新操作，不要重复提交"
 	}
-	if result.RetCode != 512 {
-		message := gameCommandErrorMessage(result, "发放盟主额度被游戏服务拒绝")
-		s.logger.Warn("sync club union quota rejected", "clubId", clubID, "unionId", unionID,
+	// 512=同步成功；1280=异步入口已受理。之后仍按额度回读核对，两者都放过。
+	if result.RetCode != 512 && result.RetCode != 1280 {
+		fallbackText := "盟主额度调整被游戏服务拒绝"
+		if deltaFen < 0 {
+			fallbackText = "扣减盟主额度被游戏服务拒绝"
+		}
+		message := gameCommandErrorMessage(result, fallbackText)
+		if strings.TrimSpace(message) == "" || message == fallbackText {
+			message = fmt.Sprintf("游戏服未受理「%s」（返回 %d，无原因），请确认游戏服已部署并 reload 该命令", command, result.RetCode)
+		}
+		s.logger.Warn("sync club union quota rejected", "command", command, "clubId", clubID, "unionId", unionID,
 			"deltaFen", deltaFen, "retCode", result.RetCode, "message", message)
 		return message
 	}

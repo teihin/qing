@@ -27,11 +27,15 @@ type xuanServiceError struct {
 
 func (e *xuanServiceError) Error() string { return e.Message }
 
-var xuanServiceHTTPClient = &http.Client{Timeout: 25 * time.Second}
+// 授信盟主额度要在游戏服写两边额度流水，回包可能超过 20 秒；客服侧等够 45 秒，
+// 让后台把「到账/未确认」的结论带回来，而不是在中间被客服这边先掐断。
+var xuanServiceHTTPClient = &http.Client{Timeout: 45 * time.Second}
 
 // callXuanMemberGold 执行上下分。syncUnionQuota 为 true 时，后台会在上分成功后
 // 调游戏命令「授信_联盟_额度」给该俱乐部同步增加同等额度；第二步失败不影响本次上分结果，
 // 通过返回的 quotaSyncError 告知客服（空串表示同步成功或本次未勾选）。
+//
+// 游戏服的具体调用与回包由后台记录，客服工作台通过「服务端调用日志」按 context 前缀读取。
 func (s *Server) callXuanMemberGold(ctx context.Context, clubID, userID string, delta int,
 	actor, operationContext string, syncUnionQuota bool) (string, error) {
 	if s.cfg.XuanServiceToken == "" {
@@ -202,14 +206,14 @@ func (s *Server) handleHostedGold(w http.ResponseWriter, r *http.Request, princi
 	if action == "down" {
 		delta = -body.Amount
 	}
-	// 只有上分才同步额度：下分不动盟主额度。
-	syncUnionQuota := body.SyncUnionQuota && action == "up"
+	// 上分同步增加、下分同步扣除盟主额度，方向由后台按金额正负判断。
+	syncUnionQuota := body.SyncUnionQuota
 	operationContext := "cs-hosted-gold-" + requestID
-	actor := fmt.Sprintf("chattool:agent:%d", principal.ID)
 	var beforeBalance *int64
 	if view, balanceErr := s.direct.HostedBalance(r.Context(), hostedGuuid, conversationID); balanceErr == nil {
 		beforeBalance = view.ClubGold
 	}
+	actor := fmt.Sprintf("chattool:agent:%d", principal.ID)
 	quotaSyncError, callErr := s.callXuanMemberGold(r.Context(), target.ClubID, target.PeerGuuid, delta, actor,
 		operationContext, syncUnionQuota)
 	if callErr != nil {

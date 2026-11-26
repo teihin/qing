@@ -142,6 +142,7 @@ func (s *Server) routes() {
 	s.mux.Handle("POST /api/auth/totp/disable", s.authorized("", true, s.handleTOTPDisable))
 	s.mux.Handle("POST /api/auth/totp/recovery", s.authorized("", true, s.handleTOTPRegenerateRecovery))
 	s.mux.Handle("POST /api/service/clubs/{clubId}/members/{userId}/gold", s.serviceAuthorized(s.handleServiceClubMemberGold))
+	s.mux.Handle("GET /api/service/game-call-logs", s.serviceAuthorized(s.handleServiceGameCallLogs))
 	// 注册接口已迁到独立端口（见 NewRegistrationOnly / XUAN_REGISTRATION_ADDR）。
 	// 主服务保留这两个路径，但只返回明确的升级提示：
 	// 旧客户端如果不升级会表现为「点了没反应」，给一句话比给 404 好排查。

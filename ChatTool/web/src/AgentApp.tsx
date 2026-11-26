@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type ClipboardEvent, type FormEvent, type RefObject } from 'react'
 import { agentSessionExpiredEvent, agentSessionURL, api, ApiError, jsonBody, notifyAgentSessionExpired, setAgentExpectedID, setCSRF } from './api'
 import { createClientMessageID, gameAdminPlayerURL, playIncomingMessageSound, readAgentSoundPreference, writeAgentSoundPreference } from './client'
 import { Avatar, EmptyState, LoadingScreen, MessageBubble, StatusDot, formatAgo, formatDateTime } from './components'
 import HostingLedgerPage from './HostingLedgerPage'
+import GameCallLogsPage from './GameCallLogsPage'
 import SecuritySettingsModal from './SecuritySettingsModal'
 import type { Agent, Conversation, ConversationDetail, Message, ServiceChannel, TeamMember } from './types'
 
@@ -289,6 +290,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
   const [hostedBalance, setHostedBalance] = useState<HostedBalance | null>(null)
   const [goldAction, setGoldAction] = useState<'' | 'up' | 'down'>('')
   const [showLedger, setShowLedger] = useState(false)
+  const [showGameLogs, setShowGameLogs] = useState(false)
   const [deletingHostedOwner, setDeletingHostedOwner] = useState('')
   /** 备注弹窗：非 null 表示正在给这个会话的玩家改备注。 */
   const [remarkTarget, setRemarkTarget] = useState<HostedConversation | null>(null)
@@ -298,13 +300,22 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
   const [deleteBusyID, setDeleteBusyID] = useState('')
   const [hostedQuickOpen, setHostedQuickOpen] = useState(false)
   const [showQuickManager, setShowQuickManager] = useState(false)
+  /** 操作结果浮层：成功用绿色、带告警用橙色，4 秒自动消失；红条只留给真正的失败。 */
+  const [flash, setFlash] = useState<{ kind: 'ok' | 'warn'; text: string } | null>(null)
+  /** 实时通道状态：断开时页面顶部给提示，避免「没红点没声音」时误以为业务坏了。 */
+  const [realtimeDown, setRealtimeDown] = useState(false)
   const hostedLoadSerial = useRef(0)
   const lastHostedSoundID = useRef('')
   const lastHostedSoundAt = useRef(0)
   const hostedUnreadRef = useRef(-1)
   const hostedSelectionRef = useRef<{ guuid: string; conversationId: string } | null>(null)
   const expandedOwnersRef = useRef<Record<string, boolean>>({})
-  const listEnd = useRef<HTMLDivElement>(null)
+  /** 消息区容器与「是否贴在底部」标记：只有贴着底部时才跟随新消息，客服上翻查记录时不再被拉回底部。 */
+  const messageListRef = useRef<HTMLDivElement>(null)
+  const stickToBottom = useRef(true)
+  const lastChatKey = useRef('')
+  /** 切换会话后的短暂窗口：期间不按滚动位置改判「是否贴底」，否则空列表被浏览器回弹会被误判成客服主动上翻。 */
+  const scrollLockUntil = useRef(0)
   const typingIdleTimer = useRef<number | undefined>(undefined)
   const typingHeartbeatTimer = useRef<number | undefined>(undefined)
   const typingActive = useRef(false)
@@ -453,11 +464,31 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
 
   useEffect(() => {
     const refresh = () => { void Promise.all([loadDashboard(), loadConversations(), loadTeam(), selectedID ? loadSelected(selectedID) : Promise.resolve()]).catch(() => undefined) }
-    const source = new EventSource(agentSessionURL('/api/agent/events'))
-    source.addEventListener('conversation.changed', refresh)
-    source.addEventListener('conversation.assigned', refresh)
-    source.addEventListener('conversation.cleared', refresh)
-    source.addEventListener('message.created', (event) => {
+    let source: EventSource | null = null
+    let retryTimer: number | undefined
+    let attempt = 0
+    let disposed = false
+    // EventSource 自己只在 200+event-stream 时重连；服务重启/代理 502 后会永久停住，
+    // 表现为「新消息没有红点和声音」，所以这里自己做带退避的重连。
+    const connect = () => {
+      if (disposed) return
+      source?.close()
+      const es = new EventSource(agentSessionURL('/api/agent/events'))
+      source = es
+      es.addEventListener('open', () => { attempt = 0; setRealtimeDown(false) })
+      es.addEventListener('error', () => {
+        es.close()
+        setRealtimeDown(true)
+        if (source === es) source = null
+        if (disposed) return
+        attempt = Math.min(attempt + 1, 8)
+        window.clearTimeout(retryTimer)
+        retryTimer = window.setTimeout(connect, Math.min(attempt * 1500, 15000))
+      })
+    es.addEventListener('conversation.changed', refresh)
+    es.addEventListener('conversation.assigned', refresh)
+    es.addEventListener('conversation.cleared', refresh)
+    es.addEventListener('message.created', (event) => {
       try {
         const data = JSON.parse((event as MessageEvent).data) as { conversationId?: string; payload?: Message }
         if (soundEnabled && data.payload?.senderType === 'player' && data.payload.id && data.payload.id !== lastSoundMessageID.current) {
@@ -471,8 +502,8 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
       } catch { /* ignore malformed realtime event */ }
       void Promise.all([loadDashboard(), loadConversations()])
     })
-	  source.addEventListener('team.changed', () => void Promise.all([loadTeam(), loadDashboard()]))
-	  source.addEventListener('hosted.message', (event) => {
+	  es.addEventListener('team.changed', () => void Promise.all([loadTeam(), loadDashboard()]))
+	  es.addEventListener('hosted.message', (event) => {
 	    try {
 	      const data = JSON.parse((event as MessageEvent).data) as { conversationId?: string; payload?: { hostedGuuid?: string; messageId?: string; incoming?: boolean; preview?: string; messageType?: string } }
 	      const hostedGuuid = data.payload?.hostedGuuid || ''
@@ -523,8 +554,8 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
 	      void loadHostedGroups().catch(() => undefined)
 	    } catch { /* ignore malformed realtime event */ }
 	  })
-	  source.addEventListener('hosted.read', () => void loadHostedGroups().catch(() => undefined))
-	  source.addEventListener('hosted.preference', (event) => {
+	  es.addEventListener('hosted.read', () => void loadHostedGroups().catch(() => undefined))
+	  es.addEventListener('hosted.preference', (event) => {
 		// 备注/置顶是全团队共享的，其他客服改完后这里要同步刷新列表与头部。
 		try {
 		  const data = JSON.parse((event as MessageEvent).data) as { payload?: { hostedGuuid?: string } }
@@ -535,7 +566,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
 		} catch { /* 忽略无效事件 */ }
 		void loadHostedGroups().catch(() => undefined)
 	  })
-	  source.addEventListener('hosted.conversation.deleted', (event) => {
+	  es.addEventListener('hosted.conversation.deleted', (event) => {
 		try {
 		  const data = JSON.parse((event as MessageEvent).data) as { conversationId?: string; payload?: { hostedGuuid?: string } }
 		  if (hostedSelectionRef.current?.conversationId === data.conversationId) {
@@ -550,7 +581,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
 		} catch { /* 忽略无效事件 */ }
 		void loadHostedGroups().catch(() => undefined)
 	  })
-	  source.addEventListener('hosted.deleted', (event) => {
+	  es.addEventListener('hosted.deleted', (event) => {
 		try {
 		  const data = JSON.parse((event as MessageEvent).data) as { hostedGuuid?: string }
 		  if (hostedSelectionRef.current?.guuid === data.hostedGuuid) {
@@ -561,8 +592,8 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
 		} catch { /* 忽略无效事件 */ }
 		void loadHostedGroups().catch(() => undefined)
 	  })
-	  source.addEventListener('player.memo.changed', () => setMemoRevision((value) => value + 1))
-	  source.addEventListener('session.replaced', (event) => {
+	  es.addEventListener('player.memo.changed', () => setMemoRevision((value) => value + 1))
+	  es.addEventListener('session.replaced', (event) => {
 		try {
 		  const data = JSON.parse((event as MessageEvent).data) as { payload?: { message?: string } }
 		  notifyAgentSessionExpired(data.payload?.message || '该账号已在其他设备登录，当前登录已退出')
@@ -570,11 +601,26 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
 		  notifyAgentSessionExpired('该账号已在其他设备登录，当前登录已退出')
 		}
 	  })
-    source.addEventListener('typing', (event) => {
+    es.addEventListener('typing', (event) => {
       try { const data = JSON.parse((event as MessageEvent).data) as { conversationId?: string; payload?: { actor?: string; typing?: boolean } }; if (data.conversationId === selectedID && data.payload?.actor === 'player') updatePlayerTyping(Boolean(data.payload.typing)) } catch { /* ignore */ }
     })
+    }
+    connect()
+    const wake = () => {
+      if (disposed) return
+      if (document.visibilityState === 'visible' && !source) { attempt = 0; connect() }
+    }
+    document.addEventListener('visibilitychange', wake)
+    window.addEventListener('online', wake)
     const poll = window.setInterval(refresh, 20000)
-    return () => { source.close(); window.clearInterval(poll) }
+    return () => {
+      disposed = true
+      window.clearTimeout(retryTimer)
+      window.clearInterval(poll)
+      document.removeEventListener('visibilitychange', wake)
+      window.removeEventListener('online', wake)
+      source?.close()
+    }
   }, [loadConversations, loadDashboard, loadHostedBalance, loadHostedConversations, loadHostedGroups, loadHostedMessages, loadSelected, loadTeam, selectedID, soundEnabled, updatePlayerTyping])
 
   useEffect(() => {
@@ -617,12 +663,73 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
   }, [scope, loadHostedGroups])
 
   useEffect(() => {
+    if (!flash) return
+    const timer = window.setTimeout(() => setFlash(null), 4000)
+    return () => window.clearTimeout(timer)
+  }, [flash])
+
+  /** 客服自己上翻查看历史时保持当前位置；贴近底部（96px 内）才算「跟随新消息」。 */
+  /** 历史图片解码完成会把列表撑高，贴底时应再落一次底。 */
+  const pinToBottomIfSticky = () => {
+    const element = messageListRef.current
+    if (!element || !stickToBottom.current) return
+    element.scrollTop = element.scrollHeight
+  }
+
+  // 原生 load 监听（捕获阶段）：历史图片/视频加载完会把列表撑高，贴底时补一次落底。
+  useEffect(() => {
+    const element = messageListRef.current
+    if (!element) return
+    const handler = () => pinToBottomIfSticky()
+    element.addEventListener('load', handler, true)
+    return () => element.removeEventListener('load', handler, true)
+  }, [selectedID, hostedSelection?.conversationId, scope, messages.length, hostedMessages.length])
+
+  // 原生 load 监听（捕获阶段）：历史图片/视频加载完会把列表撑高，贴底时补一次落底。
+  useEffect(() => {
+    const element = messageListRef.current
+    if (!element) return
+    const handler = () => pinToBottomIfSticky()
+    element.addEventListener('load', handler, true)
+    return () => element.removeEventListener('load', handler, true)
+  }, [selectedID, hostedSelection?.conversationId, scope, messages.length, hostedMessages.length])
+
+  const handleMessageScroll = () => {
+    const element = messageListRef.current
+    if (!element) return
+    if (Date.now() < scrollLockUntil.current) return
+    stickToBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96
+  }
+
+  useEffect(() => {
+    const element = messageListRef.current
+    const chatKey = scope === 'hosted'
+      ? `hosted:${hostedSelection?.conversationId || ''}`
+      : `agent:${selectedID || ''}`
+    const switched = lastChatKey.current !== chatKey
+    lastChatKey.current = chatKey
+    if (!element) return
+    if (switched) {
+      // 新会话一律落到底部：消息和历史图片是异步来的，多补几次跳跃保证最终停在最底部。
+      stickToBottom.current = true
+      scrollLockUntil.current = Date.now() + 1000
+      const jump = () => {
+        const target = messageListRef.current
+        if (!target || !stickToBottom.current) return
+        target.scrollTop = target.scrollHeight
+      }
+      jump()
+      const timers = [80, 240, 520, 900].map((delay) => window.setTimeout(jump, delay))
+      return () => timers.forEach((timer) => window.clearTimeout(timer))
+    }
+    // 定时轮询会重复塞同一批消息，只有仍贴底时才跟随，避免把客服正在上翻的阅读位置拉走。
+    if (!stickToBottom.current) return
     try {
-      listEnd.current?.scrollIntoView({ behavior: 'smooth' })
+      element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
     } catch {
       // 部分浏览器在区域刚切换时不支持带选项滚动，不能因此卸载整个工作台。
     }
-  }, [messages, playerTyping, hostedMessages])
+  }, [messages, playerTyping, hostedMessages, selectedID, hostedSelection?.conversationId, scope])
 
   useEffect(() => {
     if (detail?.status !== 'active' || internalNote) stopAgentTyping()
@@ -648,6 +755,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
     setSending(true); setError('')
     try {
       const item = await api<Message>(`/api/agent/conversations/${selectedID}/messages`, { method: 'POST', body: jsonBody({ text: content, clientMessageId: createClientMessageID(), internalNote }) })
+      stickToBottom.current = true
       setMessages((current) => current.some((message) => message.id === item.id) ? current : [...current, item]); setText('')
     } catch (reason) { setError(reason instanceof ApiError ? reason.message : '消息发送失败') }
     finally { setSending(false) }
@@ -661,7 +769,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
     if (!selectedID || uploading || detail?.status !== 'active') return
     stopAgentTyping()
     setUploading(true)
-    try { const form = new FormData(); form.append('file', file); const item = await api<Message>(`/api/agent/conversations/${selectedID}/uploads`, { method: 'POST', body: form }); setMessages((current) => [...current, item]) }
+    try { const form = new FormData(); form.append('file', file); const item = await api<Message>(`/api/agent/conversations/${selectedID}/uploads`, { method: 'POST', body: form }); stickToBottom.current = true; setMessages((current) => [...current, item]) }
     catch (reason) { setError(reason instanceof ApiError ? reason.message : '文件上传失败') }
     finally { setUploading(false) }
   }
@@ -854,6 +962,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
         method: 'POST',
         body: jsonBody({ guuid: hostedSelection.guuid, text: value, clientMessageId: createClientMessageID() }),
       })
+      stickToBottom.current = true
       setHostedMessages((current) => current.some((item) => item.id === result.message.id) ? current : [...current, result.message])
       if (hostedText.trim() === value) setHostedText('')
       void loadHostedConversations(hostedSelection.guuid).catch(() => undefined)
@@ -900,6 +1009,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
         `/api/agent/hosted/conversations/${selection.conversationId}/uploads?guuid=${encodeURIComponent(selection.guuid)}`,
         { method: 'POST', body: form },
       )
+      stickToBottom.current = true
       setHostedMessages((current) => current.some((item) => item.id === result.message.id) ? current : [...current, result.message])
       void loadHostedConversations(selection.guuid).catch(() => undefined)
       void loadHostedGroups().catch(() => undefined)
@@ -935,7 +1045,7 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
   return <main className="agent-shell">
     <header className="agent-topbar"><div className="agent-logo"><span className="brand-mark brand-mark-small">BY</span><div><strong>玩家服务中枢</strong><small>{agent.channelName}</small></div></div>
       <div className="topbar-metrics"><span><b>{dashboard.queued}</b> 人待接入</span><span><b>{dashboard.myActive}</b> 个接待中</span><span><b>{dashboard.onlineAgents}</b> 位客服在线</span></div>
-      <div className="agent-account"><Avatar name={agent.displayName} /><div><strong>{agent.displayName}</strong><small>{agent.isSuper ? '在线客服' : agent.role === 'supervisor' ? '客服主管' : '在线客服'}</small></div><button className={`sound-toggle ${soundEnabled ? 'active' : ''}`} type="button" aria-pressed={soundEnabled} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); writeAgentSoundPreference(next); if (next) void playIncomingMessageSound() }}>{soundEnabled ? '声音开' : '声音关'}</button><button type="button" onClick={() => setShowLedger(true)}>对账统计</button><button type="button" onClick={() => setShowPassword(true)}>改密码</button><button type="button" onClick={onSecurity}>安全</button>{agent.role === 'supervisor' && <button type="button" onClick={() => setShowTeam(true)}>团队</button>}<button className="logout-button" type="button" onClick={() => void logout()}>退出</button></div>
+      <div className="agent-account"><Avatar name={agent.displayName} /><div><strong>{agent.displayName}</strong><small>{agent.isSuper ? '在线客服' : agent.role === 'supervisor' ? '客服主管' : '在线客服'}</small></div><button className={`sound-toggle ${soundEnabled ? 'active' : ''}`} type="button" aria-pressed={soundEnabled} onClick={() => { const next = !soundEnabled; setSoundEnabled(next); writeAgentSoundPreference(next); if (next) void playIncomingMessageSound() }}>{soundEnabled ? '声音开' : '声音关'}</button><button type="button" onClick={() => setShowLedger(true)}>对账统计</button>{agent.username === 'admin999' && <button type="button" onClick={() => setShowGameLogs(true)}>服务端调用日志</button>}<button type="button" onClick={() => setShowPassword(true)}>改密码</button><button type="button" onClick={onSecurity}>安全</button>{agent.role === 'supervisor' && <button type="button" onClick={() => setShowTeam(true)}>团队</button>}<button className="logout-button" type="button" onClick={() => void logout()}>退出</button></div>
     </header>
     <section className={`agent-workspace ${detailOpen ? 'mobile-detail-open' : ''}`}>
       <aside className="conversation-sidebar">
@@ -992,9 +1102,11 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
         })}</div> : <div className="conversation-list">{conversations.length === 0 ? <EmptyState icon="聊" title="暂无会话" text={scope === 'queue' ? '当前没有玩家等待接入' : '新的玩家咨询会显示在这里'} /> : conversations.map((item) => <ConversationCard key={item.id} item={item} selected={selectedID === item.id} onClick={() => selectConversation(item)} />)}</div>}
       </aside>
       <section className="agent-chat-panel">
-        {scope === 'hosted' ? (selectedHostedConversation ? <HostedChatPanel conversation={selectedHostedConversation} owner={selectedHostedOwner} messages={hostedMessages} text={hostedText} sending={hostedSending} error={error} balance={hostedBalance} quickReplies={quickReplies} quickOpen={hostedQuickOpen} pinBusy={pinBusyID === `conversation:${selectedHostedConversation.conversationId}`} deleteBusy={deleteBusyID === selectedHostedConversation.conversationId} onText={setHostedText} onSend={sendHostedMessage} onQuickOpen={setHostedQuickOpen} onQuickSend={(content) => { setHostedQuickOpen(false); void sendHostedText(content) }} onManageQuick={() => { setHostedQuickOpen(false); setShowQuickManager(true) }} onRemark={() => { setRemarkError(''); setRemarkTarget(selectedHostedConversation) }} onTogglePin={(pinned) => void toggleHostedPin(selectedHostedConversation, pinned)} onDelete={() => void deleteHostedConversation(selectedHostedConversation)} onDismissError={() => setError('')} onImage={setPreviewImage} onGold={setGoldAction} uploading={hostedUploading} onUploadImage={(file) => void uploadHostedImage(file)} onPasteImage={pasteHostedImage} /> : <EmptyState icon="托" title="选择托管会话" text="左侧按联盟或俱乐部展开托管账号，选择会话后即可查看记录并代其回复" />) : !detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
+        {realtimeDown && <div className="agent-rt-warning" role="status">实时连接已断开，正在重连…（红点与提示音会延迟）</div>}
+    {flash && <div className={`agent-flash agent-flash-${flash.kind}`} role="status" onClick={() => setFlash(null)}>{flash.text}</div>}
+            {scope === 'hosted' ? (selectedHostedConversation ? <HostedChatPanel conversation={selectedHostedConversation} owner={selectedHostedOwner} messages={hostedMessages} text={hostedText} sending={hostedSending} error={error} balance={hostedBalance} quickReplies={quickReplies} quickOpen={hostedQuickOpen} pinBusy={pinBusyID === `conversation:${selectedHostedConversation.conversationId}`} deleteBusy={deleteBusyID === selectedHostedConversation.conversationId} onText={setHostedText} onSend={sendHostedMessage} onQuickOpen={setHostedQuickOpen} onQuickSend={(content) => { setHostedQuickOpen(false); void sendHostedText(content) }} onManageQuick={() => { setHostedQuickOpen(false); setShowQuickManager(true) }} onRemark={() => { setRemarkError(''); setRemarkTarget(selectedHostedConversation) }} onTogglePin={(pinned) => void toggleHostedPin(selectedHostedConversation, pinned)} onDelete={() => void deleteHostedConversation(selectedHostedConversation)} onDismissError={() => setError('')} onImage={setPreviewImage} onGold={setGoldAction} uploading={hostedUploading} onUploadImage={(file) => void uploadHostedImage(file)} onPasteImage={pasteHostedImage} listRef={messageListRef} onListScroll={handleMessageScroll} onMediaLoad={pinToBottomIfSticky} /> : <EmptyState icon="托" title="选择托管会话" text="左侧按联盟或俱乐部展开托管账号，选择会话后即可查看记录并代其回复" />) : !detail ? <EmptyState icon="BY" title="选择一条会话开始服务" text="玩家的消息、资料和服务记录会在这里同步显示" /> : <>
           <header className="chat-header"><button className="mobile-back" onClick={() => setDetailOpen(false)} aria-label="返回会话列表">‹</button><Avatar name={detail.nickname} url={detail.avatarUrl} /><div className="chat-person"><strong>{detail.nickname}<small>ID {detail.playerId} · {detail.category}</small></strong><span><i className={detail.status === 'active' ? 'active' : ''} />{detail.status === 'active' ? '接待中' : detail.status === 'queued' ? '等待接入' : '已结束'}</span></div><div className="chat-actions">{detail.status !== 'queued' && <button className="danger-light" disabled={clearing} onClick={() => void clearHistory()}>{clearing ? '清空中…' : '清空记录'}</button>}{detail.status === 'active' && <><button onClick={() => setShowTransfer(true)}>转接</button><button className="danger-light" onClick={() => void close()}>结束会话</button></>}</div></header>
-          <div className="agent-message-list">{messages.map((message) => <MessageBubble key={message.id} message={message} own={(message.senderType === 'agent' || message.senderType === 'note') && message.senderId === String(agent.id)} peerAvatar={detail.avatarUrl} onImage={setPreviewImage} />)}{playerTyping && <div className="agent-typing">玩家正在输入 <i /><i /><i /></div>}<div ref={listEnd} /></div>
+          <div className="agent-message-list" ref={messageListRef} onScroll={handleMessageScroll} onLoadCapture={pinToBottomIfSticky}>{messages.map((message) => <MessageBubble key={message.id} message={message} own={(message.senderType === 'agent' || message.senderType === 'note') && message.senderId === String(agent.id)} peerAvatar={detail.avatarUrl} onImage={setPreviewImage} />)}{playerTyping && <div className="agent-typing">玩家正在输入 <i /><i /><i /></div>}</div>
           {error && <div className="workspace-error">{error}<button onClick={() => setError('')}>×</button></div>}
           <form className="agent-composer" onSubmit={send}>
             <div className="composer-tools"><label title="发送图片、视频或文件">＋<input type="file" accept="image/*,video/*,.pdf,.txt,.zip" onChange={upload} /></label><button type="button" onClick={() => setShowQuick((value) => !value)}>快捷回复</button><label className="note-switch"><input type="checkbox" checked={internalNote} onChange={(event) => { if (event.target.checked) stopAgentTyping(); setInternalNote(event.target.checked) }} /><span />内部备注</label><small>{uploading ? '正在上传文件…' : internalNote ? '备注仅客服可见' : 'Enter 发送，Shift+Enter 换行'}</small></div>
@@ -1007,10 +1119,11 @@ function AgentWorkspace({ agent, onLogout, onSecurity }: { agent: Agent; onLogou
       <aside className="player-info-panel">{scope === 'hosted' ? (selectedHostedOwner ? <HostedOwnerInfo owner={selectedHostedOwner} conversation={selectedHostedConversation} canDelete={agent.role === 'supervisor'} deleting={deletingHostedOwner === selectedHostedOwner.guuid} onDelete={() => void deleteHostedOwner(selectedHostedOwner)} /> : <EmptyState icon="托" title="托管账号资料" text="选择托管账号后显示" />) : detail ? <PlayerInfo detail={detail} memoRevision={memoRevision} /> : <EmptyState icon="资" title="玩家资料" text="选择会话后显示" />}</aside>
     </section>
     {showTransfer && detail && <TransferModal team={team} currentAgentID={detail.assignedAgentId} onClose={() => setShowTransfer(false)} onSubmit={async (agentID, reason) => { await api(`/api/agent/conversations/${detail.id}/transfer`, { method: 'POST', body: jsonBody({ agentId: agentID, reason }) }); setShowTransfer(false); await Promise.all([loadSelected(detail.id), loadConversations()]) }} />}
-    {goldAction && selectedHostedConversation && <HostedGoldModal conversation={selectedHostedConversation} owner={selectedHostedOwner} action={goldAction} onClose={() => setGoldAction('')} onDone={(warning) => { setGoldAction(''); if (warning) setError(warning); const selection = { guuid: selectedHostedConversation.hostedGuuid, conversationId: selectedHostedConversation.conversationId }; void loadHostedMessages(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedBalance(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedGroups().catch(() => undefined); }} />}
+    {goldAction && selectedHostedConversation && <HostedGoldModal conversation={selectedHostedConversation} owner={selectedHostedOwner} action={goldAction} onClose={() => setGoldAction('')} onDone={(text, warned) => { setGoldAction(''); if (text) setFlash({ kind: warned ? 'warn' : 'ok', text }); const selection = { guuid: selectedHostedConversation.hostedGuuid, conversationId: selectedHostedConversation.conversationId }; void loadHostedMessages(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedBalance(selection.guuid, selection.conversationId).catch(() => undefined); void loadHostedGroups().catch(() => undefined); }} />}
     {remarkTarget && <HostedRemarkModal target={remarkTarget} saving={remarkSaving} error={remarkError} onClose={() => { if (!remarkSaving) setRemarkTarget(null) }} onSubmit={(value) => void saveHostedRemark(remarkTarget, value)} />}
     {showQuickManager && <QuickReplyManager items={quickReplies} onClose={() => setShowQuickManager(false)} onChanged={() => void loadQuickReplies().catch(() => undefined)} />}
     {showLedger && <HostingLedgerPage role={agent.role} onClose={() => setShowLedger(false)} />}
+    {showGameLogs && agent.username === 'admin999' && <GameCallLogsPage onClose={() => setShowGameLogs(false)} />}
     {showTeam && <TeamModal members={team} channels={channels} currentAgentID={agent.id} currentIsSuper={agent.isSuper} onClose={() => setShowTeam(false)} onRefresh={loadTeam} />}
     {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
     {previewImage && <div className="image-preview" role="dialog" aria-modal="true" onClick={() => setPreviewImage('')}><button type="button">×</button><img src={previewImage} alt="图片预览" /></div>}
@@ -1021,15 +1134,11 @@ function ConversationCard({ item, selected, onClick }: { item: Conversation; sel
   return <button className={`conversation-card ${selected ? 'selected' : ''}`} onClick={onClick}><span className="conversation-avatar"><Avatar name={item.nickname} url={item.avatarUrl} />{item.status === 'active' && <i />}</span><span className="conversation-copy"><span className="conversation-title"><strong>{item.nickname}</strong>{item.vip && <em>{item.vip}</em>}<time>{formatAgo(item.lastMessageAt)}</time></span><small>ID {item.playerId} · {item.category}</small><span className="conversation-preview">{item.lastMessage || '暂时没有消息'}</span></span>{item.unread > 0 && <b className="unread-badge">{item.unread > 99 ? '99+' : item.unread}</b>}{item.status === 'queued' && <b className="queue-badge">待接入</b>}</button>
 }
 
-function HostedChatPanel({ conversation, owner, messages, text, sending, error, balance, quickReplies, quickOpen, pinBusy, deleteBusy, onText, onSend, onQuickOpen, onQuickSend, onManageQuick, onRemark, onTogglePin, onDelete, onDismissError, onImage, onGold, uploading, onUploadImage, onPasteImage }: { conversation: HostedConversation; owner: HostedOwner | null; messages: HostedMessage[]; text: string; sending: boolean; error: string; balance: HostedBalance | null; quickReplies: QuickReply[]; quickOpen: boolean; pinBusy: boolean; deleteBusy: boolean; onText: (value: string) => void; onSend: (event: FormEvent) => void; onQuickOpen: (open: boolean) => void; onQuickSend: (content: string) => void; onManageQuick: () => void; onRemark: () => void; onTogglePin: (pinned: boolean) => void; onDelete: () => void; onDismissError: () => void; onImage: (src: string) => void; onGold: (action: 'up' | 'down') => void; uploading: boolean; onUploadImage: (file: File) => void; onPasteImage: (event: ClipboardEvent<HTMLTextAreaElement>) => boolean }) {
+function HostedChatPanel({ conversation, owner, messages, text, sending, error, balance, quickReplies, quickOpen, pinBusy, deleteBusy, onText, onSend, onQuickOpen, onQuickSend, onManageQuick, onRemark, onTogglePin, onDelete, onDismissError, onImage, onGold, uploading, onUploadImage, onPasteImage, listRef, onListScroll, onMediaLoad }: { conversation: HostedConversation; owner: HostedOwner | null; messages: HostedMessage[]; text: string; sending: boolean; error: string; balance: HostedBalance | null; quickReplies: QuickReply[]; quickOpen: boolean; pinBusy: boolean; deleteBusy: boolean; onText: (value: string) => void; onSend: (event: FormEvent) => void; onQuickOpen: (open: boolean) => void; onQuickSend: (content: string) => void; onManageQuick: () => void; onRemark: () => void; onTogglePin: (pinned: boolean) => void; onDelete: () => void; onDismissError: () => void; onImage: (src: string) => void; onGold: (action: 'up' | 'down') => void; uploading: boolean; onUploadImage: (file: File) => void; onPasteImage: (event: ClipboardEvent<HTMLTextAreaElement>) => boolean; listRef: RefObject<HTMLDivElement | null>; onListScroll: () => void; onMediaLoad: () => void }) {
   const readOnly = owner?.enabled === false || !conversation.canSend
-  const listEnd = useRef<HTMLDivElement>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const [playingID, setPlayingID] = useState('')
-  useEffect(() => {
-    try { listEnd.current?.scrollIntoView({ behavior: 'smooth' }) }
-    catch { /* 部分浏览器不支持带选项滚动 */ }
-  }, [messages])
+  // 滚动由工作台统一处理（贴底才跟随），这里不再每次刷新都强制拉到底部。
   useEffect(() => () => { audioRef.current?.pause() }, [])
   const toggleVoice = (message: HostedMessage) => {
     const url = message.attachment?.url || ''
@@ -1068,7 +1177,7 @@ function HostedChatPanel({ conversation, owner, messages, text, sending, error, 
         <button type="button" className="danger-light" disabled={deleteBusy} onClick={onDelete}>{deleteBusy ? '删除中…' : '删除会话'}</button>
       </div>
     </header>
-    <div className="agent-message-list">{messages.length === 0 ? <p className="hosted-hint">正在读取聊天记录…</p> : <>{messages.map((message) => <HostedMessageBubble key={message.id} message={message} hostedGuuid={conversation.hostedGuuid} peerAvatar={conversation.peer.avatar} playing={playingID === message.id} onImage={onImage} onPlayVoice={toggleVoice} />)}<div ref={listEnd} /></>}</div>
+    <div className="agent-message-list" ref={listRef} onScroll={onListScroll} onLoadCapture={onMediaLoad}>{messages.length === 0 ? <p className="hosted-hint">正在读取聊天记录…</p> : <>{messages.map((message) => <HostedMessageBubble key={message.id} message={message} hostedGuuid={conversation.hostedGuuid} peerAvatar={conversation.peer.avatar} playing={playingID === message.id} onImage={onImage} onPlayVoice={toggleVoice} />)}</>}</div>
     {error && <div className="workspace-error">{error}<button onClick={onDismissError}>×</button></div>}
     <form className={`agent-composer hosted-composer ${readOnly ? 'hosted-composer-readonly' : ''}`} onSubmit={onSend}>
       <div className="composer-tools">
@@ -1109,15 +1218,15 @@ function HostedMessageBubble({ message, hostedGuuid, peerAvatar, playing, onImag
   </div>
 }
 
-function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { conversation: HostedConversation; owner: HostedOwner | null; action: 'up' | 'down'; onClose: () => void; onDone: (warning: string) => void }) {
+function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { conversation: HostedConversation; owner: HostedOwner | null; action: 'up' | 'down'; onClose: () => void; onDone: (text: string, warned: boolean) => void }) {
   const [amount, setAmount] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState('')
-  // 上分时默认同步给盟主（俱乐部）授信同等额度，客服可按需取消。
+  // 默认同步调整盟主（俱乐部）额度：上分加、下分扣，客服可按需取消。
   const [syncQuota, setSyncQuota] = useState(true)
   const requestID = useRef(createClientMessageID())
   const verb = action === 'up' ? '上分' : '下分'
-  const syncEnabled = action === 'up' && syncQuota
+  const syncEnabled = syncQuota
   const value = Number(amount)
   const valid = Number.isInteger(value) && value > 0 && value <= 1_000_000_000
   const submit = async (event: FormEvent) => {
@@ -1133,7 +1242,11 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
       const warnings: string[] = []
       if (result.noticeError) warnings.push(`系统消息发送失败：${result.noticeError}`)
       if (result.quotaSyncError) warnings.push(`盟主额度未同步：${result.quotaSyncError}`)
-      onDone(result.duplicate ? '' : `${verb}成功（${value} 积分）${warnings.length ? `，但${warnings.join('；')}` : ''}`)
+      if (result.duplicate) {
+        onDone('该操作此前已成功，未重复执行', false)
+      } else {
+        onDone(`${verb}成功（${value.toLocaleString('zh-CN')} 积分）${warnings.length ? `；${warnings.join('；')}` : ''}`, warnings.length > 0)
+      }
     } catch (reason) {
       if (reason instanceof ApiError && (reason.code === 'HOSTED_GOLD_RETRY' || reason.code === 'REQUEST_CONFLICT')) {
         requestID.current = createClientMessageID()
@@ -1147,10 +1260,10 @@ function HostedGoldModal({ conversation, owner, action, onClose, onDone }: { con
     <header><div><small>HOSTED GOLD</small><h3>{verb}</h3></div><button type="button" onClick={onClose}>×</button></header>
     <p className="hosted-gold-target">托管账号：{owner?.name || conversation.hostedName}（{owner?.roleName || conversation.hostedRoleName || '托管'}）<br />操作对象：{conversation.peer.name}{conversation.peer.roleName ? `（${conversation.peer.roleName}）` : ''} · {conversation.clubName}</p>
     <label><span>{verb}积分</span><input type="number" min={1} max={1000000000} step={1} value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="请输入整数积分" autoFocus /></label>
-    {action === 'up' && <label className="hosted-gold-sync" title="勾选后，本次上分会给该俱乐部盟主同步增加同等额度（占用联盟池额度）">
+    <label className="hosted-gold-sync" title={action === 'up' ? '勾选后，本次上分会给该俱乐部盟主同步增加同等额度（占用联盟池额度）' : '勾选后，本次下分会从该俱乐部盟主额度里同步扣除同等额度（退回联盟池）'}>
       <input type="checkbox" checked={syncQuota} onChange={(event) => setSyncQuota(event.target.checked)} />
-      <span>同步增加盟主额度（{valid ? value.toLocaleString('zh-CN') : '同上分数量'}）</span>
-    </label>}
+      <span>{action === 'up' ? '同步增加盟主额度' : '同步扣除盟主额度'}（{valid ? value.toLocaleString('zh-CN') : `同${verb}数量`}）</span>
+    </label>
     <p className="hosted-gold-target">成功后会在会话内发送「玩家 {conversation.peer.name} {verb} {valid ? value : '金额'} 成功（客服托管）」系统消息。</p>
     {error && <div className="form-error">{error}</div>}
     <footer><button type="button" onClick={onClose}>取消</button><button className="primary" type="submit" disabled={!valid || sending}>{sending ? '提交中…' : `确认${verb}`}</button></footer>

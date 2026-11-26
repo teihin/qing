@@ -1,9 +1,18 @@
 package api
 
-import "testing"
+import (
+	"encoding/json"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 const (
-	sampleGameCallLine = `{"time":"2026-11-07T18:29:54.497891855+08:00","level":"INFO","msg":"[游戏服调用] GET /hall/command | 命令=异步_查询_代理_展示数据 | 参数={\"agent_id\":\"895742\"}","route":"/hall/command","header":"异步_查询_代理_展示数据","params":"{\"agent_id\":\"895742\",\"metric\":\"contrib\"}"}`
+	sampleGameCallLine   = `{"time":"2026-11-07T18:29:54.497891855+08:00","level":"INFO","msg":"[游戏服调用] GET /hall/command | 命令=异步_查询_代理_展示数据 | 参数={\"agent_id\":\"895742\"}","route":"/hall/command","header":"异步_查询_代理_展示数据","params":"{\"agent_id\":\"895742\",\"metric\":\"contrib\"}"}`
 	sampleGameResultLine = `{"time":"2026-11-07T18:29:54.588272406+08:00","level":"INFO","msg":"[游戏服返回] GET /hall/command | 命令=异步_查询_代理_展示数据 | HTTP=200 | ret_code=512 (0x200) | ret_result={\"agent_id\":\"895742\"} | 耗时=90ms","route":"/hall/command","header":"异步_查询_代理_展示数据","params":"{\"agent_id\":\"895742\"}","http_status":200,"ret_code":512,"ret_result":"{\"agent_id\":\"895742\"}","duration_ms":90}`
 	sampleGameErrorLine  = `{"time":"2026-11-07T18:30:00.100000000+08:00","level":"ERROR","msg":"[游戏服调用失败] GET /hall/command | 命令=设置_大厅_配置数据 | 参数={} | 错误=dial tcp 127.0.0.1:8890: connect: connection refused | 耗时=3ms","route":"/hall/command","header":"设置_大厅_配置数据","params":"{}","error":"dial tcp 127.0.0.1:8890: connect: connection refused","duration_ms":3}`
 )
@@ -54,5 +63,35 @@ func TestParseGameCallLogLinesKeepsLatest(t *testing.T) {
 	}
 	if entries[1].Kind != "error" {
 		t.Fatalf("最后一条应是失败日志，实际 %+v", entries[1])
+	}
+}
+
+func TestServiceGameCallLogsFiltersByContext(t *testing.T) {
+	const csLine = `{"time":"2026-11-26T15:00:00.000000000+08:00","level":"INFO","msg":"[游戏服返回] GET /hall/command | 命令=添加_俱乐部_成员_积分 | HTTP=200 | ret_code=512 (0x200) | ret_result={} | 耗时=88ms","route":"/hall/command","header":"添加_俱乐部_成员_积分","params":"{\"club_id\":\"1001\",\"context\":\"cs-hosted-gold-abc\"}","http_status":200,"ret_code":512,"ret_result":"{}","duration_ms":88}`
+	path := filepath.Join(t.TempDir(), "xuanmanager.log")
+	body := sampleGameCallLine + "\n" + csLine + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XUAN_LOG_FILE", path)
+
+	s := &Server{logger: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	recorder := httptest.NewRecorder()
+	s.handleServiceGameCallLogs(recorder, httptest.NewRequest(http.MethodGet,
+		"/api/service/game-call-logs?limit=50&contextPrefix=cs-hosted-gold-", nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("期望 200，得到 %d body=%s", recorder.Code, recorder.Body.String())
+	}
+	var envelope struct {
+		OK   bool `json:"ok"`
+		Data struct {
+			Entries []gameCallLogEntry `json:"entries"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &envelope); err != nil || !envelope.OK {
+		t.Fatalf("返回内容无法解析: %v %s", err, recorder.Body.String())
+	}
+	if len(envelope.Data.Entries) != 1 || envelope.Data.Entries[0].Command != "添加_俱乐部_成员_积分" {
+		t.Fatalf("应只保留客服上下分的命令，实际 %s", recorder.Body.String())
 	}
 }

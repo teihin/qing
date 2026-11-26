@@ -52,6 +52,53 @@ type gameCallLogRecord struct {
 	Body       string      `json:"body"`
 }
 
+// handleServiceGameCallLogs 给客服系统（ChatTool）读同一份游戏服调用日志。
+//
+// 走服务通道（Bearer + 仅本机直连），口径与后台页面一致：只暴露「后端 → 游戏服」的
+// 调用与回包。客服上下分的游戏参数里带 context=cs-hosted-gold-…，客服侧按前缀过滤，
+// 只留自己触发的命令，避免把后台其它操作的日志带过去。
+func (s *Server) handleServiceGameCallLogs(w http.ResponseWriter, r *http.Request) {
+	limit := gameCallLogDefault
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		if parsed, err := strconv.Atoi(raw); err == nil && parsed > 0 {
+			if parsed > gameCallLogMax {
+				parsed = gameCallLogMax
+			}
+			limit = parsed
+		}
+	}
+	prefix := strings.TrimSpace(r.URL.Query().Get("contextPrefix"))
+	path := gameCallLogPath()
+	if path == "" {
+		writeError(w, http.StatusServiceUnavailable, "GAME_LOG_MISSING", "没有找到后端日志文件，请确认服务由 supervise.sh 启动")
+		return
+	}
+	lines, err := readLogTailLines(path, gameCallLogWindowBytes)
+	if err != nil {
+		s.logger.Error("read game call log", "error", err, "path", path)
+		writeError(w, http.StatusServiceUnavailable, "GAME_LOG_UNREADABLE", "读取后端日志失败")
+		return
+	}
+	entries := parseGameCallLogLines(lines, gameCallLogMax)
+	if prefix != "" {
+		filtered := make([]gameCallLogEntry, 0, len(entries))
+		for _, entry := range entries {
+			if strings.Contains(entry.Params, prefix) {
+				filtered = append(filtered, entry)
+			}
+		}
+		entries = filtered
+	}
+	if len(entries) > limit {
+		entries = entries[len(entries)-limit:]
+	}
+	writeData(w, http.StatusOK, map[string]any{
+		"entries":   entries,
+		"file":      filepath.Base(path),
+		"updatedAt": time.Now().Format("2006-01-02 15:04:05"),
+	})
+}
+
 func (s *Server) handleGameCallLogs(w http.ResponseWriter, r *http.Request, _ principal) {
 	limit := gameCallLogDefault
 	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {

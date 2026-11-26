@@ -29,7 +29,15 @@ type gameCommandResponse struct {
 	RetResult json.RawMessage `json:"ret_result"`
 }
 
+// slowGameHTTPClient 给「授信盟主额度」这类要写两边额度流水、回包偏慢的命令用。
+// 全局 6 秒超时会在回包未到时提前断连，游戏服其实已经记账（2026-11-26 实测 11 分整笔成功但回包超时）。
+var slowGameHTTPClient = &http.Client{Timeout: 12 * time.Second}
+
 func (s *Server) callGameCommand(ctx context.Context, header string, params map[string]any) (gameCommandResponse, error) {
+	return s.callGameCommandWith(s.gameHTTPClient, ctx, header, params)
+}
+
+func (s *Server) callGameCommandWith(client httpDoer, ctx context.Context, header string, params map[string]any) (gameCommandResponse, error) {
 	started := time.Now()
 	paramBody, err := json.Marshal(params)
 	if err != nil {
@@ -50,7 +58,7 @@ func (s *Server) callGameCommand(ctx context.Context, header string, params map[
 		return gameCommandResponse{}, fmt.Errorf("create game command request: %w", err)
 	}
 	request.Header.Set("Accept", "application/json")
-	response, err := s.gameHTTPClient.Do(request)
+	response, err := client.Do(request)
 	if err != nil {
 		if s.logger != nil {
 			s.logger.Error(
