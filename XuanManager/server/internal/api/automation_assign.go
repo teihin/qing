@@ -41,6 +41,8 @@ VALUES (?, ?, ?, ?, ?, 0, ?, NOW(3))`,
 		return
 	}
 	_, _ = db.ExecContext(ctx, "UPDATE mgr_automation_worker SET last_event_at = NOW() WHERE id = ?", workerID)
+	// 后台自己写的系统事件也要推给页面（节点日志面板实时刷新）。
+	agentStreams.notifyChange("events", map[string]any{"workerId": workerID, "robotId": robotID})
 }
 
 // assignWaitingRobotsToWorker 把「已入会 + 已启用 + 还没挂节点」的机器人填给指定节点，
@@ -135,6 +137,8 @@ WHERE id = ? AND worker_id IS NULL`, workerID, item.id)
 		if logger != nil {
 			logger.Info("assign robots to worker", "workerId", workerID, "assigned", assigned)
 		}
+		// 新分到的终端立刻让节点补一次心跳，不必等下一拍（最长 5 秒）。
+		agentStreams.wake(workerID, "assign")
 	}
 	return assigned
 }
@@ -187,4 +191,62 @@ WHERE worker_id IS NULL AND enabled = 1 AND join_status = 'joined'
 func refreshWorkerLoad(ctx context.Context, db *sql.DB) {
 	_, _ = db.ExecContext(ctx, `UPDATE mgr_automation_worker w
 SET robot_count = (SELECT COUNT(*) FROM mgr_automation_robot r WHERE r.worker_id = w.id)`)
+}
+
+// releaseRobotsOfWorker 把某个节点名下的机器人立刻收回等待池，好让别的在线节点接走。
+// 节点挂掉/主动退出时调用，避免机器人一直挂在死节点上（原先是等 10 分钟才回收）。
+// 只动 enabled 的账号；desired_status 保持 running，新节点接手后会直接拉起。
+func releaseRobotsOfWorker(ctx context.Context, db *sql.DB, logger *slog.Logger, workerID int64, reason string) int {
+	if workerID <= 0 {
+		return 0
+	}
+	type row struct {
+		id        int64
+		account   string
+		terminal  string
+	}
+	items := []row{}
+	rows, err := db.QueryContext(ctx, `SELECT id, account, terminal_no FROM mgr_automation_robot
+WHERE worker_id = ? AND enabled = 1`, workerID)
+	if err != nil {
+		if logger != nil {
+			logger.Error("release worker robots query", "error", err, "workerId", workerID)
+		}
+		return 0
+	}
+	for rows.Next() {
+		var item row
+		if err := rows.Scan(&item.id, &item.account, &item.terminal); err == nil {
+			items = append(items, item)
+		}
+	}
+	rows.Close()
+	released := 0
+	for _, item := range items {
+		result, err := db.ExecContext(ctx, `UPDATE mgr_automation_robot
+SET worker_id = NULL, status = 'idle', room_id = NULL, seat_no = 0, schedule_state = '', last_error = ''
+WHERE id = ? AND worker_id = ?`, item.id, workerID)
+		if err != nil {
+			if logger != nil {
+				logger.Error("release worker robot", "error", err, "robotId", item.id)
+			}
+			continue
+		}
+		if affected, _ := result.RowsAffected(); affected == 0 {
+			continue
+		}
+		released++
+		recordWorkerEvent(ctx, db, workerID, workerEventRobotReleased, item.id, item.terminal, map[string]any{
+			"account":    item.account,
+			"terminalNo": item.terminal,
+			"message":    "节点" + reason + "，账号 " + item.account + " 已转给其它在线节点",
+		})
+	}
+	if released > 0 {
+		refreshWorkerLoad(ctx, db)
+		if logger != nil {
+			logger.Info("released robots of gone worker", "workerId", workerID, "count", released, "reason", reason)
+		}
+	}
+	return released
 }

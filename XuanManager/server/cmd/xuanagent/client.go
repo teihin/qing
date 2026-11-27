@@ -170,6 +170,8 @@ type assignment struct {
 	BuyinMultiple  int             `json:"buyinMultiple"`
 	RoomPi         string          `json:"roomPi"`
 	Intelligence   int             `json:"intelligence"`
+	// 后台记录的当前房间号：节点重启后用它在启动时回原房（留座还在就继续打）。
+	RoomID         int64  `json:"roomId"`
 	DesiredStatus  string          `json:"desiredStatus"`
 	Status         string          `json:"status"`
 	JoinStatus     string          `json:"joinStatus"`
@@ -183,6 +185,8 @@ type assignment struct {
 	PeriodEnd    string `json:"periodEnd"`
 	TodayNet     int64  `json:"todayNet"`
 	PeriodNet    int64  `json:"periodNet"`
+	// 俱乐部金币：带入从这里扣，客户端坐下前用它判断够不够。
+	ClubGold int64 `json:"clubGold"`
 }
 
 type heartbeatResponse struct {

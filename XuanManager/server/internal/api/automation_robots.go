@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -17,6 +18,11 @@ import (
 
 type automationRobotItem struct {
 	ID                int64      `json:"id"`
+	// 游戏侧身份：用户ID（玩家 guuid）与所在俱乐部（含该玩家在俱乐部里的金币）。
+	PlayerID string      `json:"playerId"`
+	Clubs    []robotClub `json:"clubs"`
+	// StrategyOverride 是这台机器人在绑定策略之上的自定义参数（只有被改过的字段）。
+	StrategyOverride json.RawMessage `json:"strategyOverride,omitempty"`
 	TerminalNo        string     `json:"terminalNo"`
 	Account           string     `json:"account"`
 	Nickname          string     `json:"nickname"`
@@ -84,7 +90,7 @@ r.enabled, r.invite_code, r.join_status, r.joined_at, r.activated_at, r.activati
 COALESCE(g.profit_mode, ''), COALESCE(g.profit_target, 0), g.period_start, g.period_end,
 r.balance, r.today_rounds, r.today_net,
 r.last_heartbeat, r.last_error, r.risk_flag, r.is_demo, r.updated_at,
-r.login_password <> '', r.password_updated_at
+r.login_password <> '', r.password_updated_at, COALESCE(r.strategy_override_json, '')
 FROM mgr_automation_robot r
 LEFT JOIN mgr_automation_club c ON c.club_id = r.club_id
 LEFT JOIN mgr_automation_group g ON g.id = r.group_id
@@ -97,6 +103,7 @@ func scanAutomationRobot(row rowScanner) (automationRobotItem, error) {
 	var heartbeat, joinedAt, activatedAt, periodStart, periodEnd, groupPeriodStart, groupPeriodEnd sql.NullTime
 	var riskFlag, isDemo, enabled, passwordSet int
 	var passwordUpdatedAt, ipSeenAt sql.NullTime
+	var strategyOverrideRaw string
 	err := row.Scan(&item.ID, &item.TerminalNo, &item.Account, &item.Nickname, &item.Avatar, &item.ClubID, &item.ClubName,
 		&groupID, &item.GroupName, &strategyID, &item.StrategyName,
 		&workerID, &item.WorkerName, &item.EgressIP, &item.Status, &item.DesiredStatus,
@@ -108,7 +115,7 @@ func scanAutomationRobot(row rowScanner) (automationRobotItem, error) {
 		&item.GroupProfitMode, &item.GroupProfitTarget, &groupPeriodStart, &groupPeriodEnd,
 		&item.Balance, &item.TodayRounds, &item.TodayNet,
 		&heartbeat, &item.LastError, &riskFlag, &isDemo, &item.UpdatedAt,
-		&passwordSet, &passwordUpdatedAt)
+		&passwordSet, &passwordUpdatedAt, &strategyOverrideRaw)
 	if err != nil {
 		return automationRobotItem{}, err
 	}
@@ -163,6 +170,9 @@ func scanAutomationRobot(row rowScanner) (automationRobotItem, error) {
 	item.RiskFlag = riskFlag == 1
 	item.IsDemo = isDemo == 1
 	item.PasswordSet = passwordSet == 1
+	if strings.TrimSpace(strategyOverrideRaw) != "" && json.Valid([]byte(strategyOverrideRaw)) {
+		item.StrategyOverride = json.RawMessage(strategyOverrideRaw)
+	}
 	if passwordUpdatedAt.Valid {
 		item.PasswordUpdatedAt = &passwordUpdatedAt.Time
 	}
@@ -246,6 +256,8 @@ func (s *Server) handleListAutomationRobots(w http.ResponseWriter, r *http.Reque
 		}
 		items = append(items, item)
 	}
+	// 补游戏侧身份（用户ID、俱乐部与俱乐部金币），账号还没登录过就留空。
+	s.attachRobotGameProfiles(r.Context(), items)
 	writeData(w, http.StatusOK, map[string]any{"items": items, "page": page, "pageSize": size, "total": total})
 }
 
@@ -272,6 +284,10 @@ func (s *Server) handleGetAutomationRobot(w http.ResponseWriter, r *http.Request
 	if !s.automationClubOrError(w, r, scope, robot.ClubID) {
 		return
 	}
+	// 详情同样带上用户ID与俱乐部金币。
+	single := []automationRobotItem{robot}
+	s.attachRobotGameProfiles(r.Context(), single)
+	robot = single[0]
 	var config string
 	if robot.StrategyID != nil {
 		_ = s.db.QueryRowContext(r.Context(), "SELECT COALESCE(config_json, '{}') FROM mgr_automation_strategy WHERE id = ?", *robot.StrategyID).Scan(&config)
@@ -297,6 +313,8 @@ type automationRobotCreateRequest struct {
 	ProfitTarget  int64  `json:"profitTarget"`
 	PeriodStart   string `json:"periodStart"`
 	PeriodEnd     string `json:"periodEnd"`
+	// StrategyOverride 是这台机器人在绑定策略之上的自定义参数（只存被改的字段，空表示完全跟随策略）。
+	StrategyOverride json.RawMessage `json:"strategyOverride"`
 	InviteCode    string `json:"inviteCode"`
 	Enabled       *bool  `json:"enabled"`
 }
@@ -364,6 +382,9 @@ func (s *Server) automationRobotInviteCode(ctx context.Context, clubID, provided
 }
 
 func (s *Server) ensureAutomationRobotQuota(ctx context.Context, clubID string, adding int) string {
+	// 2026-11-27 用户要求：取消「每个俱乐部可投放 N 台」的限制，这里直接放行（保留函数签名，调用点不用改）。
+	return ""
+
 	var quota, used int
 	if err := s.db.QueryRowContext(ctx, `SELECT c.robot_quota,
 (SELECT COUNT(*) FROM mgr_automation_robot r WHERE r.club_id = c.club_id)
@@ -542,6 +563,19 @@ func (s *Server) handleBulkCreateAutomationRobots(w http.ResponseWriter, r *http
 		return
 	}
 	input.Prefix = strings.TrimSpace(input.Prefix)
+	if input.Prefix == "" {
+		// 不填前缀就走自动：固定 worker 开头，序号接着现有账号往后排，避免人工记编号。
+		input.Prefix = robotAutoAccountPrefix
+		if input.StartNo < 1 {
+			next, err := s.nextRobotAccountNo(r.Context())
+			if err != nil {
+				s.logger.Error("next robot account no", "error", err)
+				writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取现有账号编号失败")
+				return
+			}
+			input.StartNo = next
+		}
+	}
 	if !validRobotPrefix(input.Prefix) {
 		writeError(w, http.StatusBadRequest, "INVALID_PREFIX", "账号前缀必须为 3 到 13 位英文字母或数字，生成后的账号总长为 6 到 16 位")
 		return
@@ -649,8 +683,8 @@ func (s *Server) handleBulkCreateAutomationRobots(w http.ResponseWriter, r *http
 		registration, err := tx.ExecContext(r.Context(), `INSERT INTO kbedm.third_marketing_info
 (date, time, upper_guuid, upper2_guuid, upper3_guuid, player_wxid, player_wxname, player_wxpwd, status, level,
  anti_theft_on, device_id, device_platform, device_version, device_bound_at, binding_revision)
-VALUES (CURDATE(), CURTIME(), '', '', '', ?, ?, MD5(?), '', 0, 0, '', NULL, 1, NULL, 0)`,
-			account, nickname, input.Password)
+VALUES (CURDATE(), CURTIME(), '', '', '', ?, ?, MD5(?), '', 0, 1, ?, ?, ?, NOW(), 1)`,
+			account, nickname, input.Password, robotDeviceFleetID, robotDevicePlatform, robotDeviceVersion)
 		if err != nil {
 			if isDuplicateKey(err) {
 				writeError(w, http.StatusConflict, "ACCOUNT_EXISTS", "游戏账号 "+account+" 已存在，请调整前缀或起始序号")
@@ -697,7 +731,11 @@ VALUES (?, ?, ?, NOW(), ?, ?, '', NULLIF(?, 0), NULLIF(?, 0), '',
 	s.audit(r.Context(), &p, "automation.robot.bulk_create", "automation_robot", joinInt64s(ids), nil, nil,
 		map[string]any{"prefix": input.Prefix, "count": len(created), "startNo": input.StartNo, "groupId": input.GroupID, "intelligence": input.Intelligence, "buyinMultiple": input.BuyinMultiple}, 0,
 		message, clientIP(r))
-	writeData(w, http.StatusCreated, map[string]any{"items": created, "count": len(created), "message": message})
+	accounts := make([]string, 0, len(created))
+	for _, item := range created {
+		accounts = append(accounts, fmt.Sprint(item["account"]))
+	}
+	writeData(w, http.StatusCreated, map[string]any{"items": created, "count": len(created), "accounts": accounts, "message": message})
 }
 
 type automationRobotUpdateRequest struct {
@@ -718,6 +756,8 @@ type automationRobotUpdateRequest struct {
 	Enabled        *bool                `json:"enabled"`
 	// LoginPassword 留空表示不改；填写时同时更新游戏库的登录密码与 Worker 用的密文。
 	LoginPassword string `json:"loginPassword"`
+	// StrategyOverride 是这台机器人在绑定策略之上的自定义参数（只存被改的字段），空/缺省表示跟随策略。
+	StrategyOverride json.RawMessage `json:"strategyOverride"`
 }
 
 func (s *Server) handleUpdateAutomationRobot(w http.ResponseWriter, r *http.Request, p principal) {
@@ -854,8 +894,14 @@ func (s *Server) handleUpdateAutomationRobot(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
+	strategyOverrideJSON, overrideMessage := normalizeRobotStrategyOverride(input.StrategyOverride)
+	if overrideMessage != "" {
+		writeError(w, http.StatusBadRequest, "INVALID_STRATEGY_OVERRIDE", overrideMessage)
+		return
+	}
 	if _, err := tx.ExecContext(r.Context(), `UPDATE mgr_automation_robot
-SET nickname = ?, group_id = NULLIF(?, 0), strategy_id = NULLIF(?, 0),
+SET strategy_override_json = NULLIF(?, ''),
+nickname = ?, group_id = NULLIF(?, 0), strategy_id = NULLIF(?, 0),
 worker_id = NULLIF(?, 0), egress_ip = ?, buyin_multiple = ?, room_pi = ?,
 intelligence = ?, profit_mode = ?, profit_target = ?, period_start = ?, period_end = ?, profit_schedule = ?,
 schedule_window = CASE WHEN ? = 1 THEN ? ELSE schedule_window END,
@@ -865,7 +911,7 @@ enabled = ?, status = ?, desired_status = CASE WHEN ? = 0 THEN 'stopped' ELSE de
 login_password = CASE WHEN ? = '' THEN login_password ELSE ? END,
 password_updated_at = CASE WHEN ? = '' THEN password_updated_at ELSE NOW() END,
 last_heartbeat = NOW()
-WHERE id = ?`, input.Nickname, input.GroupID, input.StrategyID, input.WorkerID, input.EgressIP, input.BuyinMultiple, roomPi,
+WHERE id = ?`, strategyOverrideJSON, input.Nickname, input.GroupID, input.StrategyID, input.WorkerID, input.EgressIP, input.BuyinMultiple, roomPi,
 		input.Intelligence, input.ProfitMode, input.ProfitTarget, nullableTime(periodStart), nullableTime(periodEnd), scheduleJSON,
 		resetFlag, scheduleWindow, resetFlag, resetFlag, scheduleState,
 		enabled, nextStatus, enabled, sealedPassword, sealedPassword, sealedPassword, id); err != nil {

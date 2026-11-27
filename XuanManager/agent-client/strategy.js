@@ -187,8 +187,16 @@ function bestSplit(cards, opts) {
 }
 
 // 前两张手牌是否「够大」：牌型 ≥ 策略里的大牌线，或者单牌里有 8/9/Q/2。
+// 手上有没有 2 / 8 / 9 / Q（Q 在牌面里是 12）——芒果规则的前提。
+function hasMangCard(cards) {
+  const target = [2, 8, 9, 12];
+  return (cards || []).some((card) => Array.isArray(card) && target.includes(Number(card[1])));
+}
+
 function handIsBig(cards, opts) {
   if (!Array.isArray(cards) || cards.length < 2) return false;
+  // 还有 [0,0] 暗牌（未翻牌）：牌力未知，不能按「大」处理。
+  if (cards.some((card) => Number(card && card[1]) === 0)) return false;
   if (pairFen(cards[0], cards[1], opts) >= tuningOf(opts).bigPairFen) return true;
   const big = [8, 9, 12, 2];
   return big.includes(cards[0][1]) || big.includes(cards[1][1]);
@@ -337,9 +345,19 @@ function decide(ctx) {
   const bigHand = handIsBig(hand, opts);
 
   // 扯牌 / 看牌轮：按牌型选小大或大大。
-  if (role === '看牌' || role === '搓牌') {
+  // 只有真正的扯牌（分牌）阶段才拆牌；「看牌」是翻牌确认，不是分牌。
+  if (role.includes('扯') || role.includes('分牌')) {
     const split = chooseSplit(hand, opts, ctx.table);
     return { action: 'show', cards: split.cards, amount: null, reason: split.reason };
+  }
+
+  // 芒果规则（用户 2026-11-26）：手上含 2/8/9/Q 时，
+  // 只要「芒果金额 > 桌面剩余分」或「芒果倍数 ≥ 3」就直接下注芒果金额；钱不够芒果就敲。
+  const mangAmount = Number(ctx.mangAmount || 0);
+  const mangTimes = Number(ctx.mangTimes || 0);
+  if (mangAmount > 0 && hasMangCard(hand) && (mangAmount > money || mangTimes >= 3)) {
+    if (money < mangAmount) return act('qiao', null, '芒果 ' + mangAmount + ' 高于余额 ' + money + '：敲');
+    if (flags.da) return act('da', mangAmount, '芒果 x' + mangTimes + ' ' + mangAmount + '（≥ 剩余分 或 3 倍）：直接下注芒果金额');
   }
 
   if (intent === 'win') {

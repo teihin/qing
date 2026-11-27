@@ -415,6 +415,147 @@ function DeployClubDetail({ clubId, can, notify, onBack }: {
   </div>;
 }
 
+type DeployClubOption = {
+  clubId: string;
+  name: string;
+  inviteCode: string;
+  status: string;
+  robotQuota: number;
+  robotCount: number;
+  remaining: number;
+  // 联盟层级（后端 deployClubOption 新增）；独立俱乐部为空
+  unionId?: string;
+  unionName?: string;
+};
+
+type DeployTreeNode = {
+  type: "union" | "leader" | "agent" | "club";
+  id: string;
+  name: string;
+  subtitle?: string;
+  inviteCode?: string;
+  children: number;
+  unionId?: string;
+  memberId?: string;
+};
+
+// 投放弹窗的俱乐部树：联盟 → 盟主 → 代理 → 俱乐部，逐级懒加载（点开才查）。
+function DeployClubTree({ keyword, pickedClubId, onPick }: {
+  keyword: string;
+  pickedClubId: string;
+  onPick: (node: DeployTreeNode) => void;
+}) {
+  const [roots, setRoots] = useState<DeployTreeNode[] | null>(null);
+  const [children, setChildren] = useState<Record<string, DeployTreeNode[]>>({});
+  const [open, setOpen] = useState<string[]>([]);
+  const [loading, setLoading] = useState<string>("");
+
+  const nodeKey = (node: DeployTreeNode) => `${node.type}:${node.id}`;
+
+  const fetchLevel = async (params: Record<string, string>): Promise<DeployTreeNode[]> => {
+    const query = new URLSearchParams(params).toString();
+    const response = await api<{ items: DeployTreeNode[] }>(`/api/automation/deploy/club-tree?${query}`);
+    return response.items ?? [];
+  };
+
+  // 根节点：联盟列表（关键字变了重查）
+  useEffect(() => {
+    let cancelled = false;
+    setRoots(null);
+    setChildren({});
+    setOpen([]);
+    const timer = setTimeout(async () => {
+      try {
+        const items = await fetchLevel({ level: "unions", keyword: keyword.trim() });
+        if (cancelled) return;
+        setRoots(items);
+        // 默认只展开到「盟主」这一级：联盟自动展开并拉一次盟主；更深的代理点开才查。
+        const expandable = items.filter((node) => node.children > 0);
+        const pairs = await Promise.all(expandable.map(async (node) => {
+          const list = await loadChildren(node).catch(() => [] as DeployTreeNode[]);
+          return [nodeKey(node), list] as const;
+        }));
+        if (cancelled) return;
+        setChildren(Object.fromEntries(pairs));
+        setOpen(expandable.map(nodeKey));
+      } catch {
+        if (!cancelled) setRoots([]);
+      }
+    }, keyword ? 300 : 0);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [keyword]);
+
+  const loadChildren = async (node: DeployTreeNode): Promise<DeployTreeNode[]> => {
+    if (node.type === "union") {
+      return fetchLevel({ level: "leaders", unionId: node.unionId || node.id, keyword: keyword.trim() });
+    }
+    if (node.type === "leader" || node.type === "agent") {
+      const memberId = node.memberId || node.id;
+      const [agents, clubs] = await Promise.all([
+        fetchLevel({ level: "agents", memberId }).catch(() => []),
+        fetchLevel({ level: "clubs", memberId }).catch(() => []),
+      ]);
+      return [...agents, ...clubs];
+    }
+    return [];
+  };
+
+  const toggle = async (node: DeployTreeNode) => {
+    const key = nodeKey(node);
+    if (open.includes(key)) {
+      setOpen((prev) => prev.filter((item) => item !== key));
+      return;
+    }
+    setOpen((prev) => [...prev, key]);
+    if (children[key]) return;
+    if (node.children === 0) return;
+    setLoading(key);
+    try {
+      const items = await loadChildren(node);
+      setChildren((prev) => ({ ...prev, [key]: items }));
+    } finally {
+      setLoading("");
+    }
+  };
+
+  const renderNodes = (nodes: DeployTreeNode[], depth: number): React.ReactNode => nodes.map((node) => {
+    const key = nodeKey(node);
+    const expanded = open.includes(key);
+    const isClub = node.type === "club";
+    const active = isClub && pickedClubId === node.id;
+    const canExpand = node.children > 0;
+    return <div key={key}>
+      <button type="button"
+        onClick={() => (isClub ? onPick(node) : void toggle(node))}
+        disabled={!isClub && !canExpand}
+        style={{
+          display: "flex", width: "100%", alignItems: "center", gap: 6,
+          padding: `7px 10px 7px ${10 + depth * 18}px`,
+          border: 0, borderBottom: "1px solid #f5f7fa",
+          background: active ? "#ecfdf5" : depth === 0 ? "#f8fafc" : "transparent",
+          cursor: isClub || canExpand ? "pointer" : "default",
+          fontSize: 13, textAlign: "left",
+          color: active ? "#047857" : "#0f172a",
+          fontWeight: depth === 0 || active ? 600 : 400,
+        }}>
+        <span style={{ width: 12, color: "#94a3b8" }}>{isClub || !canExpand ? "" : (expanded ? "▾" : "▸")}</span>
+        {isClub && <span style={{ width: 6, height: 6, borderRadius: 3, background: active ? "#10b981" : "#cbd5e1" }} />}
+        <span>{node.name}</span>
+        {node.subtitle && <span style={{ color: "#64748b", fontWeight: 400 }}>· {node.subtitle}</span>}
+        {!isClub && canExpand && <span style={{ marginLeft: "auto", color: "#94a3b8", fontWeight: 400 }}>{loading === key ? "读取中…" : ""}</span>}
+      </button>
+      {expanded && children[key] && renderNodes(children[key], depth + 1)}
+      {expanded && !children[key] && loading !== key && <div style={{ padding: `6px 10px 6px ${28 + depth * 18}px`, fontSize: 12, color: "#94a3b8" }}>没有下级</div>}
+    </div>;
+  });
+
+  return <div style={{ marginTop: 8, maxHeight: 300, overflowY: "auto", border: "1px solid var(--line, #e5e7eb)", borderRadius: 10, background: "#fff" }}>
+    {roots === null ? <div style={{ padding: 12, fontSize: 13, color: "#6b7280" }}>正在读取联盟…</div>
+      : roots.length === 0 ? <div style={{ padding: 12, fontSize: 13, color: "#6b7280" }}>没有匹配的联盟或盟主</div>
+      : renderNodes(roots, 0)}
+  </div>;
+}
+
 function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDeployed }: {
   notify: AutomationPageProps["notify"];
   fixedClubId?: string;
@@ -423,6 +564,12 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
   onDeployed: (message: string, clubId: string) => void;
 }) {
   const [inviteCode, setInviteCode] = useState(fixedInviteCode ?? "");
+  // 俱乐部既可以从下拉里选，也可以只填邀请码；下拉选中后把邀请码回填到下面那个输入框。
+  const [clubKeyword, setClubKeyword] = useState("");
+  const [clubOptions, setClubOptions] = useState<DeployClubOption[]>([]);
+  const [clubOptionsLoading, setClubOptionsLoading] = useState(false);
+  const [pickedClubId, setPickedClubId] = useState(fixedClubId ?? "");
+  const [pickedClubName, setPickedClubName] = useState("");
   const [lookup, setLookup] = useState<DeployLookup | null>(null);
   const [lookupError, setLookupError] = useState("");
   const [looking, setLooking] = useState(false);
@@ -487,6 +634,33 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
     if (patch.schedule !== undefined) setProfitSchedule(patch.schedule);
   };
 
+  // 俱乐部候选：按关键词搜游戏库里有可用邀请码的俱乐部，打开弹窗先拉一批默认的。
+  useEffect(() => {
+    if (fixedInviteCode) return;
+    let cancelled = false;
+    setClubOptionsLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const query = clubKeyword.trim() ? `?keyword=${encodeURIComponent(clubKeyword.trim())}&limit=30` : "?limit=30";
+        const response = await api<{ items: DeployClubOption[] }>(`/api/automation/deploy/club-options${query}`);
+        if (!cancelled) setClubOptions(response.items ?? []);
+      } catch {
+        if (!cancelled) setClubOptions([]);
+      } finally {
+        if (!cancelled) setClubOptionsLoading(false);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [clubKeyword, fixedInviteCode]);
+
+  // 手输邀请码命中候选时，把下拉选中项也同步过去，避免两处显示不一致。
+  useEffect(() => {
+    const code = inviteCode.trim();
+    if (!/^\d{6}$/.test(code)) return;
+    const matched = clubOptions.find((option) => option.inviteCode === code);
+    setPickedClubId(matched ? matched.clubId : "");
+  }, [inviteCode, clubOptions]);
+
   useEffect(() => {
     const code = inviteCode.trim();
     if (!/^\d{6}$/.test(code)) { setLookup(null); setLookupError(""); return; }
@@ -542,6 +716,7 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
   }, [poolItems]);
   const activatedFiltered = useMemo(() => filtered.filter((item) => Boolean(item.activatedAt)), [filtered]);
 
+
   const remaining = lookup && lookup.robotQuota > 0 ? Math.max(0, lookup.robotQuota - lookup.robotCount) : null;
   const selectedCount = tab === "robots" ? robotIds.length : groupIds.reduce((total, id) => total + (groupPool.get(id) ?? 0), 0);
   const overQuota = remaining !== null && selectedCount > remaining;
@@ -587,16 +762,27 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
     <form className="form-grid" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <ErrorBanner message={error} />
       <div className="automation-form-note automation-form-note--wide">
-        输入俱乐部的 6 位邀请码定位俱乐部，选中的机器人会投放到这个俱乐部并自动加入。
+        选择俱乐部或直接输入 6 位邀请码，两种方式二选一即可；选中的机器人会投放到这个俱乐部并自动加入。
       </div>
-      <Field label="俱乐部邀请码" hint={fixedInviteCode ? "从俱乐部详情进入时已锁定当前俱乐部" : "6 位数字，可在俱乐部接入里查看"}>
+      {!fixedInviteCode && <Field label="选择俱乐部" hint="按名称 / 俱乐部编号 / 邀请码搜索，选中后自动填下面的邀请码">
+        <div className="automation-filter-row">
+          <input value={clubKeyword} onChange={(event) => setClubKeyword(event.target.value)} placeholder="搜索联盟 / 盟主 / 俱乐部名称或邀请码" />
+        </div>
+        <DeployClubTree keyword={clubKeyword} pickedClubId={pickedClubId} onPick={(node) => {
+          setPickedClubId(node.id);
+          setPickedClubName(node.name);
+          if (node.inviteCode) setInviteCode(node.inviteCode);
+        }} />
+        {pickedClubId && <div style={{ marginTop: 6, fontSize: 12, color: "#059669" }}>已选：{pickedClubName || pickedClubId}</div>}
+      </Field>}
+      <Field label="俱乐部邀请码" hint={fixedInviteCode ? "从俱乐部详情进入时已锁定当前俱乐部" : "也可以只填这里，6 位数字"}>
         <input value={inviteCode} maxLength={6} disabled={Boolean(fixedInviteCode)} placeholder="例如 880101" onChange={(event) => setInviteCode(event.target.value.replace(/\D/g, ""))} />
       </Field>
 
       {looking && <div className="automation-form-note automation-form-note--wide">正在按邀请码查询俱乐部…</div>}
       {lookupError && <div className="automation-form-note automation-form-note--wide automation-warn-text">{lookupError}</div>}
       {lookup && <div className="automation-form-note automation-form-note--wide">
-        匹配到 <strong>{lookup.name}</strong>（{lookup.clubId}）：投放数量 {lookup.robotQuota || "不限"} 台，已投放 {lookup.robotCount} 台{remaining !== null ? `，还能投放 ${remaining} 台` : ""}，每房最多 {lookup.maxPerRoom} 台。
+        匹配到 <strong>{lookup.name}</strong>（{lookup.clubId}）：已投放 {lookup.robotCount} 台，每房最多 {lookup.maxPerRoom} 台。
       </div>}
 
       {lookup && <>
@@ -652,7 +838,6 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
           </>}
         </>}
 
-        {overQuota && <div className="automation-form-note automation-form-note--wide automation-warn-text">本次选择 {selectedCount} 台，超过剩余投放数量 {remaining} 台，请减少选择。</div>}
 
         <h3 className="automation-section-title automation-form-note--wide">投放策略、输赢目标与底皮</h3>
         <div className="automation-form-note automation-form-note--wide">
@@ -688,7 +873,7 @@ function DeployRobotModal({ notify, fixedClubId, fixedInviteCode, onClose, onDep
           {roomPi ? ` 这批机器人只进 ${roomPiText(roomPi)} 的房间。` : " 不限底皮。"}
         </div>
 
-        <div className="automation-form-actions-wide"><FormActions onCancel={onClose} busy={busy} submitText={`投放 ${selectedCount} 台`} disabled={overQuota || selectedCount === 0 || strategies.length === 0} /></div>
+        <div className="automation-form-actions-wide"><FormActions onCancel={onClose} busy={busy} submitText={`投放 ${selectedCount} 台`} disabled={selectedCount === 0 || strategies.length === 0} /></div>
       </>}
     </form>
   </Modal>;

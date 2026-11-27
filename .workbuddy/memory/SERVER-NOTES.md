@@ -61,6 +61,17 @@
   "already running" 让人误判。稳妥做法是一条命令里做完 `kill → mv → ./start.sh → sha256sum /proc/<pid>/exe`，
   发现 sha 不对就再 kill 一次重启。
 
+## 重复 supervisor 抢 8891（2026-11-25 踩过）
+
+- `stop.sh` **只杀 `run/supervisor.pid` 里那一个** supervisor。如果这个 pid 文件过期（之前手工 kill 过、
+  或 start.sh 在 cron watchdog 跑到一半时并发启动），就会留下**两个 `supervise.sh`**：
+  一个占着 8891 正常服务，另一个每 3 秒拉起子进程、子进程 bind 失败 →
+  `xuanmanager.log` 里刷 `server stopped unexpectedly / listen tcp 127.0.0.1:8891: bind: address already in use`，
+  外部请求出现 **502**（表现为 Worker 侧「实时通道断开 / 心跳失败 502」，约 20 秒后自愈）。
+- 处理：`ps -eo pid,ppid,cmd | grep -E "[.]xuanmanager/(supervise|bin)"` 看清有几对，
+  杀掉多余的那一对（supervisor + 它自己的子进程），把存活 supervisor 的 pid 写回 `run/supervisor.pid`。
+- 判据：只应存在 **1 个 supervise.sh + 1 个 bin/xuanmanager**，且日志不再刷 bind 失败。
+
 ## 正式服 8.153.70.197（与测试服 154.37.155.17 不是一台）
 
 - 登录同测试服：`ssh -p 2233 -i ~/.ssh/id_ed25519_newserver client_update@8.153.70.197`
@@ -78,3 +89,27 @@
   服务起来了 = 迁移都执行成功了。
 - 正式服后台二进制和测试服同为 `codex/club-ui` 线（不是 main）；`main` 停在 2026-10-24，
   缺 honor-rank / club-perf 等路由，别把 main 的构建往上发。
+
+## 从 MEMORY.md 拆入（2026-11-25）：数据库 / 原生构建
+
+- **`webcm_user` 没有 `LOCK TABLES` 权限**：`mysqldump` 备份直接 `mysql <` 导入会 `ERROR 1044`
+  （每张表都带 `LOCK TABLES ... WRITE`）。先 `sed -e "/^LOCK TABLES/d" -e "/^UNLOCK TABLES/d"` 过滤再导；
+  mysql 客户端没有跳过它的开关，且遇错即停、前面 `DROP/CREATE` 已生效 → 必须整份重跑。
+- **正式服 pymysql 读环境变量要剥引号**：`runtime.env` 里 `XUAN_DB_PASSWORD="..."` 带引号，
+  直接把值拼进 `pymysql.connect` 会 `1045 Access denied`；解析后要 `.strip().strip('"').strip("'")`。
+- **Android（`build/jsb-link/.../proj.android-studio`）**：Gradle project cache 必须在持久目录
+  （现为 `~/Library/Caches/qing-android-gradle-project-cache`，工程内 `.gradle` 是软链接，`gradlew` 里
+  另有 `--project-cache-dir`，两处要一致；指过 `/private/tmp` 重启被清 → 软链接悬空报
+  `Cannot create directory .../.gradle/8.9/fileHashes`）。
+- **Gradle daemon 堆必须显式调大**：`gradle.properties` 的
+  `org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m`（默认 512m，release 打包 R8+资源压缩+双 ABI 会 OOM，
+  AS 只报 `PackageAndroidArtifact$IncrementalSplitterRunnable`）。**判别口诀：先看工程目录有没有
+  `java_pid<daemonPid>.hprof`**（配了 `+HeapDumpOnOutOfMemoryError`，只有真 OOM 才落堆转储；这些 hprof 是证据别删）。
+- **`proj.android-studio` 是 Cocos 生成的**（模板 `cocos2d-x/templates/js-template-link/...`，那行 jvmargs 在模板里是注释的 — OOM 根子）。
+  **在 Creator 里重新构建原生 Android/iOS 会覆盖本目录**，把 4G 堆、`.gradle` 软链接、`gradlew`/`build.gradle` 的 hack 全冲掉；
+  要持久化就镜像到 `build-templates/<构建输出目录名>/`（`build-templates/web-mobile/` ↔ `build/web-mobile`，原生 link 用
+  `build-templates/jsb-link/...`），**软链接没法靠模板复制**。日常 1/2/3/4 号 `.command`（热更/上传）不会重建原生工程。
+- **iOS 原生工程已做持久化**：`proj.ios_mac/ios/*`（QingVoiceBridge / QingAppServices / 各 Bridge / AppController.mm / Info.plist）
+  与 `8L.xcodeproj/project.pbxproj` 已镜像到 `build-templates/jsb-link/frameworks/runtime-src/proj.ios_mac/`；
+  重建后原生行为异常（语音/分享/保存图片/音频会话）先跑 `python3 tools/ios/check_ios_native.py`，再 `--restore` 恢复（会先备份）。
+  pbxproj 里 bundle id `com.fireball.qing`、team `7Q54T2MBWP` 是写死的，换 Creator 大版本后别直接覆盖。

@@ -35,7 +35,7 @@ interface RobotDetailResponse {
   logs: { action: string; message: string; operator: string; createdAt: string }[];
 }
 
-const robotStatuses = ["created", "idle", "entering", "seated", "playing", "paused", "draining", "stopped", "faulted", "offline"];
+const robotStatuses = ["created", "idle", "entering", "seated", "playing", "paused", "draining", "stopped", "shortage", "faulted", "offline"];
 
 // 点开机器人先看当前牌局，其他信息在标签里切换。
 const runningStatuses = ["entering", "seated", "playing"];
@@ -117,6 +117,8 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [batchAction, setBatchAction] = useState<BatchActionOption | null>(null);
   const [batchResult, setBatchResult] = useState<BatchResponse | null>(null);
+  // 上分 / 下分：单台和批量共用一个弹窗（选俱乐部 + 金额），走俱乐部积分接口。
+  const [clubGoldTarget, setClubGoldTarget] = useState<{ ids: number[]; action: "add" | "subtract" } | null>(null);
   const [managingGroups, setManagingGroups] = useState(false);
 
   const canCreate = can("automation.robot.create");
@@ -270,6 +272,8 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
         <span>在房 {impact.inRoom} 台 · 已停用 {impact.disabled} 台 · 涉及 {impact.clubs} 个俱乐部</span>
         <div>
           {batchActions.map((action) => <button key={action.value} type="button" className="button button--secondary button--sm" onClick={() => setBatchAction(action)}>{action.label.replace("批量", "")}</button>)}
+          <button type="button" className="button button--secondary button--sm" onClick={() => setClubGoldTarget({ ids: selectedIds, action: "add" })}>上分</button>
+          <button type="button" className="button button--secondary button--sm" onClick={() => setClubGoldTarget({ ids: selectedIds, action: "subtract" })}>下分</button>
           <button type="button" className="button button--ghost button--sm" onClick={() => setSelectedIds([])}>清空选择</button>
         </div>
       </div>}
@@ -278,16 +282,20 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
           <table className="automation-table automation-table--robots">
             <thead><tr>
               {canOperate && <th className="automation-select-cell"><input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="全选本页机器人" /></th>}
-              <th>机器人</th><th>俱乐部 / 分组</th><th>智力</th><th>加入状态</th><th>状态 / 启用</th><th>房间 / 今日</th><th>心跳</th><th>操作</th>
+              <th>机器人</th><th>用户ID</th><th>俱乐部 / 金币</th><th>智力</th><th>加入状态</th><th>状态 / 启用</th><th>房间 / 今日</th><th>心跳</th><th>操作</th>
             </tr></thead>
             <tbody>
               {pageItems.map((robot) => <tr key={robot.id} className={[robot.riskFlag ? "is-risk" : "", robot.activatedAt ? "" : "automation-row-inactive"].filter(Boolean).join(" ")}>
                 {canOperate && <td className="automation-select-cell"><input type="checkbox" checked={selectedIds.includes(robot.id)} onChange={() => toggleSelect(robot.id)} aria-label={`选择 ${robot.account}`} /></td>}
                 <td><div className="robot-name-cell"><span className="robot-avatar-chip">{robot.avatar}</span><div><button type="button" className="link-button" onClick={() => openDetail(robot)}>{robot.nickname || robot.account}</button><small className="cell-subtitle">{robot.account} · {robot.terminalNo}</small></div></div></td>
-                <td>{robot.clubName || robot.clubId}<small className="cell-subtitle">{robot.groupName || "未分组"}</small></td>
+                <td>{robot.playerId || <span className="automation-warn-text">未登录</span>}</td>
+                <td><RobotClubCell robot={robot} /></td>
                 <td>{effectiveIntelligence(robot)}<small className="cell-subtitle">{robot.intelligence > 0 ? "单独设置" : "跟随分组"}</small></td>
                 <td><AutomationBadge value={robot.joinStatus} /><small className="cell-subtitle">邀请码 {robot.inviteCode || "—"}</small></td>
-                <td><AutomationBadge value={robot.status} /> <AutomationBadge value={robot.enabled ? "enabled" : "disabled"} />{!robot.activatedAt && <AutomationBadge value="pending" label="未激活" />}{robot.riskFlag && <small className="automation-risk-text">风控标记</small>}{!robot.activatedAt && <small className="cell-subtitle automation-warn-text">{robot.activationError || "账号还没登录过，等空闲 Worker 自动激活"}</small>}</td>
+                <td><AutomationBadge value={robot.status} /> <AutomationBadge value={robot.enabled ? "enabled" : "disabled"} />{!robot.activatedAt && <AutomationBadge value="pending" label="未激活" />}{robot.riskFlag && <small className="automation-risk-text">风控标记</small>}
+                  {/* 状态是「终端进程」的状态，不是分配关系：补一行节点与期望状态，避免「已分配却显示空闲」看不出原因。 */}
+                  <small className="cell-subtitle">{robot.workerName ? `节点 ${robot.workerName}` : "未分配节点"} · 期望{desiredStatusLabel(robot.desiredStatus)}</small>
+                  {!robot.activatedAt && <small className="cell-subtitle automation-warn-text">{robot.activationError || "账号还没登录过，等空闲 Worker 自动激活"}</small>}</td>
                 <td>{robot.roomId ?? "—"}<small className="cell-subtitle">{robot.seatNo > 0 ? `${robot.seatNo} 号座` : "未入座"} · {robot.todayRounds} 局 / {formatSigned(robot.todayNet)}</small></td>
                 <td>{timeText(robot.lastHeartbeat)}{robot.lastError && <small className="cell-subtitle automation-warn-text">{robot.lastError}</small>}</td>
                 <td><div className="row-actions">
@@ -295,6 +303,8 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
                   {canUpdate && <button type="button" onClick={() => setEditing(robot)}>编辑</button>}
                   {canOperate && robot.enabled && !robot.activatedAt && <button type="button" disabled={activatingId === robot.id} onClick={() => void activateRobot(robot)}>{activatingId === robot.id ? "排队中…" : "激活"}</button>}
                   {canOperate && <RobotQuickToggle robot={robot} busy={togglingId === robot.id} onToggle={() => void toggleRobot(robot)} />}
+                  {canOperate && <button type="button" onClick={() => setClubGoldTarget({ ids: [robot.id], action: "add" })}>上分</button>}
+                  {canOperate && <button type="button" onClick={() => setClubGoldTarget({ ids: [robot.id], action: "subtract" })}>下分</button>}
                   {canDelete && <button type="button" className="is-danger" onClick={() => setDeleting(robot)}>删除</button>}
                 </div></td>
               </tr>)}
@@ -307,6 +317,13 @@ export default function AutomationRobotsPage({ can, notify }: AutomationPageProp
 
     {batchAction && <BatchConfirmModal action={batchAction} impact={impact} onClose={() => setBatchAction(null)} onSubmit={runBatch} />}
     {batchResult && <BatchResultModal result={batchResult} onClose={() => setBatchResult(null)} />}
+    {clubGoldTarget && <RobotClubGoldModal ids={clubGoldTarget.ids} action={clubGoldTarget.action} onClose={() => setClubGoldTarget(null)} onDone={(result) => {
+      const batch = clubGoldTarget.ids.length > 1;
+      setClubGoldTarget(null);
+      setBatchResult(result);
+      if (batch) setSelectedIds([]);
+      void load(page, pageSize, true);
+    }} />}
     {detailId !== null && <RobotDetailModal robotId={detailId} initialTab={detailTab} canOperate={canOperate} notify={notify} onClose={() => setDetailId(null)} onChanged={() => load(page, pageSize, true)} />}
     {adding && <RobotAddModal groups={groups} canCreateGroup={can("automation.group.create")} onGroupCreated={reloadGroups} onClose={() => setAdding(false)} onSaved={(message) => { setAdding(false); notify(message); void load(page, pageSize, true); }} />}
     {managingGroups && <GroupManagerModal
@@ -366,7 +383,7 @@ function RobotDetailModal({ robotId, initialTab, canOperate, notify, onClose, on
 
   const robot = data?.robot;
 
-  return <Modal title={robot ? `${robot.nickname || robot.account} · ${robot.terminalNo}` : `机器人 #${robotId}`} eyebrow="ROBOT DETAIL" onClose={onClose} wide>
+  return <Modal title={robot ? `${robot.nickname || robot.account} · ${robot.terminalNo}` : `机器人 #${robotId}`} eyebrow="ROBOT DETAIL" onClose={onClose} xwide>
     {loading ? <LoadingBlock label="正在读取机器人详情" /> : error && !robot ? <ErrorBanner message={error} /> : robot && <>
       <ErrorBanner message={error} />
       <div className="automation-detail-metrics">
@@ -398,7 +415,14 @@ function RobotDetailModal({ robotId, initialTab, canOperate, notify, onClose, on
           <div><dt>游戏账号</dt><dd>{robot.account}</dd></div>
           <div><dt>终端编号</dt><dd>{robot.terminalNo}</dd></div>
           <div><dt>游戏头像</dt><dd>头像 {robot.avatar}</dd></div>
-          <div><dt>俱乐部</dt><dd>{robot.clubName || robot.clubId}</dd></div>
+          <div><dt>用户ID</dt><dd className={robot.playerId ? "" : "automation-warn-text"}>{robot.playerId || "未登录（游戏侧还没建号）"}</dd></div>
+          <div><dt>所属俱乐部</dt><dd className={robot.clubs && robot.clubs.length > 0 ? "" : "automation-warn-text"}>
+            {(robot.clubs ?? []).length === 0
+              ? (robot.clubName || robot.clubId || "未加入任何俱乐部")
+              : (robot.clubs ?? []).map((club, index) => <span key={club.clubId}>
+                  {index > 0 ? "、　" : ""}{club.name}（{club.clubId}）· 俱乐部金币 <strong className={club.clubGold && club.clubGold > 0 ? "" : "automation-warn-text"}>{club.clubGold ?? "—"}</strong>
+                </span>)}
+          </dd></div>
           <div><dt>分组</dt><dd>{robot.groupName || "未分组"}</dd></div>
           <div><dt>加入状态</dt><dd>{statusLabel(robot.joinStatus)} · {robot.inviteCode || "—"}</dd></div>
           <div><dt>加入时间</dt><dd>{timeText(robot.joinedAt)}</dd></div>
@@ -412,6 +436,12 @@ function RobotDetailModal({ robotId, initialTab, canOperate, notify, onClose, on
           <div><dt>登记出口 IP</dt><dd>{robot.egressIp || "未指定"}</dd></div>
           <div><dt>登录密码</dt><dd>{robot.passwordSet ? `已配置 · ${timeText(robot.passwordUpdatedAt)}` : "未配置（Worker 无法登录）"}</dd></div>
           <div><dt>当前带入 / 余额</dt><dd>{formatMoney(robot.buyin)} / {formatMoney(robot.balance)}</dd></div>
+          <div><dt>俱乐部金币</dt><dd className={(robot.clubs ?? []).some((club) => (club.clubGold ?? 0) > 0) ? "" : "automation-warn-text"}>
+            {(robot.clubs ?? []).length === 0
+              ? "未加入俱乐部"
+              : (robot.clubs ?? []).map((club) => `${club.name} ${club.clubGold ?? "—"}`).join(" / ")}
+            <small className="cell-subtitle">带入从俱乐部金币扣；为 0 时机器人会暂停坐下并报警</small>
+          </dd></div>
           <div><dt>期望状态</dt><dd>{desiredStatusLabel(robot.desiredStatus)}</dd></div>
           <div><dt>最近心跳</dt><dd>{timeText(robot.lastHeartbeat)}</dd></div>
           <div><dt>最近错误</dt><dd className={robot.lastError ? "automation-warn-text" : ""}>{robot.lastError || "—"}</dd></div>
@@ -532,3 +562,104 @@ function BatchResultModal({ result, onClose }: { result: BatchResponse; onClose:
   </Modal>;
 }
 
+
+// RobotClubCell：机器人在游戏里实际加入的俱乐部与各自的俱乐部金币。
+// 玩家管理也是这个口径（sm_club_gold 里对应俱乐部那一项），带入就是从那里扣。
+function RobotClubCell({ robot }: { robot: AutomationRobotItem }) {
+  const clubs = robot.clubs ?? [];
+  if (clubs.length === 0) {
+    return <>{robot.clubName || robot.clubId || <span className="automation-warn-text">未加入</span>}<small className="cell-subtitle">{robot.groupName || "未分组"}</small></>;
+  }
+  return <>
+    <div className="automation-club-chips">
+      {clubs.map((club) => <span key={club.clubId} className={`automation-badge ${club.clubGold !== null && club.clubGold > 0 ? "automation-badge--ok" : "automation-badge--warn"}`}>
+        {club.name} · {club.clubGold === null ? "金币 ?" : `金币 ${club.clubGold}`}
+      </span>)}
+    </div>
+    <small className="cell-subtitle">{robot.groupName || "未分组"}</small>
+  </>;
+}
+
+// RobotClubGoldModal：批量给机器人的**俱乐部积分**上分 / 下分。
+// 规则（用户确认）：没加入俱乐部的机器人不能上分；属于多个俱乐部的必须选一个俱乐部。
+function RobotClubGoldModal({ ids, action, onClose, onDone }: {
+  ids: number[];
+  action: "add" | "subtract";
+  onClose: () => void;
+  onDone: (result: BatchResponse) => void;
+}) {
+  const [options, setOptions] = useState<{ clubId: string; name: string; robots: number }[] | null>(null);
+  const [clubId, setClubId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const label = action === "add" ? "上分" : "下分";
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await api<{ items: { clubId: string; name: string; robots: number }[] }>(
+          `/api/automation/robots/club-options?ids=${ids.join(",")}`);
+        if (cancelled) return;
+        const items = response.items ?? [];
+        setOptions(items);
+        setClubId(items.length === 1 ? items[0].clubId : "");
+      } catch (cause) {
+        if (!cancelled) {
+          setOptions([]);
+          setError(cause instanceof ApiError ? cause.message : "读取俱乐部失败");
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [ids]);
+
+  const submit = async () => {
+    const value = Number(amount);
+    if (!clubId) { setError("请选择要给哪个俱乐部" + label); return; }
+    if (!Number.isFinite(value) || value < 1) { setError("请输入大于 0 的整数金币"); return; }
+    if (reason.trim().length < 2) { setError("请填写操作原因（至少 2 个字）"); return; }
+    setBusy(true); setError("");
+    try {
+      const result = await api<BatchResponse>("/api/automation/robots/club-gold", {
+        method: "POST",
+        ...jsonBody({ ids, clubId, action, amount: Math.floor(value), reason: reason.trim(), confirm: true }),
+      });
+      onDone(result);
+    } catch (cause) {
+      setError(cause instanceof ApiError ? cause.message : `批量${label}失败`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const covered = options?.find((item) => item.clubId === clubId)?.robots ?? 0;
+  return <Modal title={`${ids.length > 1 ? "批量" : ""}${label}`} eyebrow="CLUB GOLD" onClose={onClose} wide>
+    <form className="form-grid" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+      <ErrorBanner message={error} />
+      <div className="automation-form-note automation-form-note--wide">
+        改的是机器人「在该俱乐部的积分」，也就是带入时扣的那份钱；牌桌上已带入的筹码不会变，机器人需要重新带入才生效。没有加入俱乐部的机器人会被跳过。
+      </div>
+      <div className="automation-detail-metrics">
+        <div><span>{ids.length > 1 ? "已选机器人" : "目标机器人"}</span><strong>{ids.length} 台</strong></div>
+        <div><span>涉及俱乐部</span><strong>{options === null ? "读取中…" : `${options.length} 个`}</strong></div>
+        <div><span>本俱乐部可覆盖</span><strong>{clubId ? `${covered} 台` : "未选择"}</strong></div>
+      </div>
+      <Field label="选择俱乐部" hint={options && options.length > 1 ? "所选机器人分属多个俱乐部，请选择本次上分的目标俱乐部" : "机器人所在俱乐部"}>
+        <select value={clubId} onChange={(event) => setClubId(event.target.value)} disabled={options !== null && options.length === 0}>
+          <option value="">{options === null ? "读取中…" : options.length === 0 ? "所选机器人都没有加入俱乐部" : "请选择俱乐部"}</option>
+          {(options ?? []).map((item) => <option key={item.clubId} value={item.clubId}>{item.name}（{item.clubId}）· {item.robots} 台</option>)}
+        </select>
+      </Field>
+      <Field label={`${ids.length > 1 ? "每个机器人" : ""}${label}金币`} hint="整数，1 ~ 1,000,000；下分不能超过该机器人在此俱乐部的余额">
+        <input value={amount} inputMode="numeric" placeholder="例如 1000" onChange={(event) => setAmount(event.target.value.replace(/[^0-9]/g, ""))} />
+      </Field>
+      <Field label="操作原因（必填）" hint="会写入审计，便于事后追查">
+        <textarea value={reason} maxLength={120} rows={2} onChange={(event) => setReason(event.target.value)} />
+      </Field>
+      <FormActions onCancel={onClose} busy={busy} submitText={`确认${label}`} disabled={!clubId || !amount} />
+    </form>
+  </Modal>;
+}

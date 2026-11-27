@@ -128,3 +128,45 @@
 `当前模式`（12px 小字）+ 模式名（**19px / 800 字重**）+ 状态点，48px 高、带边框底色；三档配色区分——
 只观察=灰绿、人工确认=琥珀、自动执行=红色（auto 额外加外发光，最显眼）。窄屏降到 16px/42px 高。
 产物 `index-Ba1vfw-r.js` / `index-CS1fWXkD.css`，两台只替换 web 未重启；回滚 `web/index.html.previous-abmode-20261125-1703`。
+
+## 追加：2026-11-26 名单命令回包多一层数组 + 候选状态列（两台已部署）
+
+游戏服侧反馈：4 条异步名单命令的回包会被包成数组 `[{"teams":[]...}]`。实测确认
+`异步_查询_伙牌名单` 返回 `{"ret_code":512,"ret_result":[{"teams":[],"members":[]}]}`；
+`decodeGameObject` 只认对象，遇到数组直接得空 map → **伙牌名单页面永远是空的**（导入也回 0）。
+
+改动：
+- 后端 `auto_balance.go` 新增 `decodeAutoBalancePayload`，`callAutoBalance` 改用它：按
+  「字符串外壳 → 数组取首元素 → `result` 包装」摊平到对象，最多 6 层；非数组/非字符串回包行为不变。
+  4 条异步命令（导入/查询/设置/移除）共用这一处，全部覆盖。
+- 候选结构补文档 §4.3 的 `existingTargetValue / existingTargetMan / existingTargetTime`（has_target 已存在）。
+  前端「状态」列按文档改成 `已有目标（补偿 +800 · 手工）` / `已有目标（压制 -1,200 · 自动）` /
+  值 0 或来源空 → `已有目标（方向未知）`；`existingTargetTime` 放 `title` 悬浮提示。
+  勾选/执行禁用逻辑不变（仍按 `hasTarget`）。
+- 候选页「动作」下拉按 §4.4 加「未命中」（`hit=0`，不按 action 判），顺序：全部/仅命中/未命中/补偿/压制。
+- 新增单测 `internal/api/auto_balance_decode_test.go`：object / 字符串 object / array / 字符串 array /
+  `result` 包数组 / 空数组 / 非法 JSON 七种形状。
+
+验证：`go build`、`go test -run TestDecodeAutoBalancePayloadShapes` 通过；`npx tsc --noEmit`、`vite build` 通过。
+测试服 `154.37.155.17` 已更新（**正式服未动**）：
+- 二进制 sha256 `8877b0fa317e25f0fbf9dafdefdfa6312c460a6832450689f3f4e33ff333d6dc`（strip 构建，与线上原体积一致 11808952），
+  单 supervise + 单 bin，health 200；回滚点 `bin/xuanmanager.20261126-1634-rollback`。
+- 前端 `index-DmOggmZr.js` / `index-D0Wf5v9H.css`，脚本内已确认含「未命中」「方向未知」；
+  回滚点 `web.previous-ab-balance-20261126/`。
+- 未做登录态页面点测（无后台账号）：名单是否真出数据、状态列文案要主人登录确认。
+
+### 16:43 正式服发布（8.153.70.197）
+
+基线隔离：XuanManager 工作区仍有别人未提交的 `automation_*` / `xuanagent` / realtime 改动，**不能直接拿工作区编**。
+用 `git worktree add --detach /tmp/xm-head-wt codex/club-ui`（HEAD `de99048f`）干净树，
+先只拷上次那 6 个文件（`game_call_logs.go` `game_call_logs_test.go` `game_commands.go` `server.go` `service_gold.go` `service_gold_test.go`）
+构建 → sha `b5cc11ee…` **与正式服在线二进制逐字节一致**，证明基线口径正确；再叠加本次 `auto_balance.go` 构建 → `5ceb18b1…`。
+
+- 正式服：`/www/.xuanmanager`，二进制 `5ceb18b1…`（11706552 字节），单 supervise + 单 bin，health 200，
+  `teams`/`candidates` 未登录 401；`/www/.xuanmanager/runtime.env` 未改。
+  回滚点 `bin/xuanmanager.20261126-1643-rollback`、`web.previous-ab-balance-20261126/`。
+- 前端两台同产物：`index-DmOggmZr.js` / `index-D0Wf5v9H.css`（CSS hash 与发布前相同，说明同事的 automation 前端改动此前已上线，
+  本次 JS 只多出自动平衡改动；上线前已用 `EventSource`/`club-chips` 特征比对确认无别人未发布内容）。
+- **正式服游戏服侧已可用**：`异步_查询_伙牌名单` 返回 512 + 数组 `[{"teams":[...8 个团队...],"members":[...]}]`，
+  回包确实是数组包装，修复后页面才有数据。测试服当时名单为空，正式服有真实数据。
+- 未做：登录态页面点测（无后台账号）。

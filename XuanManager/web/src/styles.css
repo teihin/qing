@@ -2284,9 +2284,13 @@ td strong { color: #294149; }
 .automation-token-issued { display: grid; gap: 9px; margin-top: 12px; padding: 13px 15px; border: 1px solid #cfe8e3; border-radius: 11px; background: #f2faf8; }
 .automation-token-value { display: block; padding: 9px 11px; overflow-x: auto; border: 1px dashed #b6dbd5; border-radius: 8px; color: #1b6d64; background: #fff; font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
 .automation-code { margin: 0; padding: 11px 13px; overflow-x: auto; border-radius: 9px; color: #d8ece9; background: #123840; font-family: ui-monospace, monospace; font-size: 12px; line-height: 1.75; white-space: pre-wrap; word-break: break-all; }
-.automation-detail-list { display: grid; gap: 8px; max-height: 320px; margin-top: 12px; overflow-y: auto; }
+/* 机器人列表里一个账号可能属于多个俱乐部，标签自动换行不撑破表格。 */
+.automation-club-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.automation-club-chips .automation-badge { font-weight: 700; }
+.automation-detail-list { display: grid; gap: 8px; max-height: min(58vh, 640px); margin-top: 12px; padding-right: 4px; overflow-y: auto; }
 .automation-worker-stream { margin-top: 16px; }
-.automation-worker-stream .automation-detail-list { max-height: 360px; }
+/* 运行日志是排查主力，窗口给高一点：默认 66vh，最长 820px。 */
+.automation-worker-stream .automation-detail-list { max-height: min(66vh, 820px); }
 .automation-detail-row { display: grid; grid-template-columns: minmax(0, 1.1fr) 92px minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid #eef4f4; border-radius: 9px; background: #fbfdfd; }
 .automation-detail-row > div { min-width: 0; }
 .automation-detail-row .automation-json { display: block; max-width: 100%; }

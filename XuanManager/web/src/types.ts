@@ -1870,6 +1870,9 @@ export interface AutoBalanceCandidate {
   targetValue: number;
   chance: number;
   hasTarget: boolean;
+  existingTargetValue: number;
+  existingTargetMan: string;
+  existingTargetTime: string;
   cooldownLeft: number;
 }
 

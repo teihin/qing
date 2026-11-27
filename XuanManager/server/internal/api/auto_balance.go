@@ -87,11 +87,54 @@ func (s *Server) callAutoBalance(ctx context.Context, header string, params map[
 			message: describeGameFailure(header, result.RetCode, result.RetResult),
 		}
 	}
-	payload := decodeGameObject(result.RetResult)
+	payload := decodeAutoBalancePayload(result.RetResult)
 	if message := gameValueString(payload, "error"); message != "" {
 		return nil, &autoBalanceGameError{status: http.StatusBadRequest, code: "AUTO_BALANCE_REJECTED", message: message}
 	}
 	return payload, nil
+}
+
+// 4 条异步名单命令（导入/查询/设置/移除）的回包会被游戏服再包一层数组，形如 [{"ok":true,...}]。
+// decodeGameObject 只认对象，遇到数组直接得到空 map，表现就是后台伙牌名单空白、导入回来全是 0。
+// 这里按「字符串外壳 → 数组取首元素 → result 包装」的顺序摊平到对象，其它命令行为不变。
+func decodeAutoBalancePayload(raw json.RawMessage) map[string]any {
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return map[string]any{}
+	}
+	for depth := 0; depth < 6; depth++ {
+		switch typed := value.(type) {
+		case string:
+			trimmed := strings.TrimSpace(typed)
+			if trimmed == "" {
+				return map[string]any{}
+			}
+			var decoded any
+			if err := json.Unmarshal([]byte(trimmed), &decoded); err != nil {
+				return map[string]any{}
+			}
+			value = decoded
+		case []any:
+			if len(typed) == 0 {
+				return map[string]any{}
+			}
+			value = typed[0]
+		case map[string]any:
+			inner, wrapped := typed["result"]
+			if !wrapped {
+				return typed
+			}
+			switch inner.(type) {
+			case string, map[string]any, []any:
+				value = inner
+			default:
+				return typed
+			}
+		default:
+			return map[string]any{}
+		}
+	}
+	return map[string]any{}
 }
 
 func rawJSONOrEmpty(value any) json.RawMessage {
@@ -269,21 +312,25 @@ func (s *Server) handleSetAutoBalanceConfig(w http.ResponseWriter, r *http.Reque
 }
 
 type autoBalanceCandidate struct {
-	Guuid        string `json:"guuid"`
-	Nick         string `json:"nick"`
-	RoomID       int64  `json:"roomId"`
-	Init         int64  `json:"init"`
-	PeriodNet    int64  `json:"periodNet"`
-	Rounds       int64  `json:"rounds"`
-	Seconds      int64  `json:"seconds"`
-	TodayNet     *int64 `json:"todayNet"`
-	TeamName     string `json:"teamName"`
-	Hit          bool   `json:"hit"`
-	Action       string `json:"action"`
-	TargetValue  int64  `json:"targetValue"`
-	Chance       int64  `json:"chance"`
-	HasTarget    bool   `json:"hasTarget"`
-	CooldownLeft int64  `json:"cooldownLeft"`
+	Guuid       string `json:"guuid"`
+	Nick        string `json:"nick"`
+	RoomID      int64  `json:"roomId"`
+	Init        int64  `json:"init"`
+	PeriodNet   int64  `json:"periodNet"`
+	Rounds      int64  `json:"rounds"`
+	Seconds     int64  `json:"seconds"`
+	TodayNet    *int64 `json:"todayNet"`
+	TeamName    string `json:"teamName"`
+	Hit         bool   `json:"hit"`
+	Action      string `json:"action"`
+	TargetValue int64  `json:"targetValue"`
+	Chance      int64  `json:"chance"`
+	HasTarget   bool   `json:"hasTarget"`
+	// 已有目标的真实值与来源：targetValue 只是候选建议值，不能拿来判断已有目标的方向。
+	ExistingTargetValue int64  `json:"existingTargetValue"`
+	ExistingTargetMan   string `json:"existingTargetMan"`
+	ExistingTargetTime  string `json:"existingTargetTime"`
+	CooldownLeft        int64  `json:"cooldownLeft"`
 }
 
 func (s *Server) handleListAutoBalanceCandidates(w http.ResponseWriter, r *http.Request, p principal) {
@@ -316,21 +363,24 @@ func (s *Server) handleListAutoBalanceCandidates(w http.ResponseWriter, r *http.
 			continue
 		}
 		items = append(items, autoBalanceCandidate{
-			Guuid:        gameValueString(object, "guuid"),
-			Nick:         gameValueString(object, "nick"),
-			RoomID:       anyInt(object["room_id"]),
-			Init:         anyInt(object["init"]),
-			PeriodNet:    anyInt(object["period_net"]),
-			Rounds:       anyInt(object["rounds"]),
-			Seconds:      anyInt(object["seconds"]),
-			TodayNet:     optionalGameInt(object["today_net"]),
-			TeamName:     gameValueString(object, "team_name"),
-			Hit:          anyInt(object["hit"]) == 1,
-			Action:       gameValueString(object, "action"),
-			TargetValue:  anyInt(object["target_value"]),
-			Chance:       anyInt(object["chance"]),
-			HasTarget:    anyInt(object["has_target"]) == 1,
-			CooldownLeft: anyInt(object["cooldown_left"]),
+			Guuid:               gameValueString(object, "guuid"),
+			Nick:                gameValueString(object, "nick"),
+			RoomID:              anyInt(object["room_id"]),
+			Init:                anyInt(object["init"]),
+			PeriodNet:           anyInt(object["period_net"]),
+			Rounds:              anyInt(object["rounds"]),
+			Seconds:             anyInt(object["seconds"]),
+			TodayNet:            optionalGameInt(object["today_net"]),
+			TeamName:            gameValueString(object, "team_name"),
+			Hit:                 anyInt(object["hit"]) == 1,
+			Action:              gameValueString(object, "action"),
+			TargetValue:         anyInt(object["target_value"]),
+			Chance:              anyInt(object["chance"]),
+			HasTarget:           anyInt(object["has_target"]) == 1,
+			ExistingTargetValue: anyInt(object["existing_target_value"]),
+			ExistingTargetMan:   gameValueString(object, "existing_target_man"),
+			ExistingTargetTime:  gameValueString(object, "existing_target_time"),
+			CooldownLeft:        anyInt(object["cooldown_left"]),
 		})
 	}
 	writeData(w, http.StatusOK, map[string]any{"items": items, "total": len(items), "roomId": roomID, "limit": limit})

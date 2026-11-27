@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, ApiError } from "../../api";
 import { EmptyState, LoadingBlock } from "../../components/ui";
+import { useAutomationStream } from "./useAutomationStream";
 import { ErrorBanner, formatMoney, formatSigned, timeText } from "./shared";
 
 export type AutomationTableCard = [number, number];
@@ -82,14 +83,21 @@ export function RobotTablePanel({ robotId }: { robotId: number }) {
     }
   }, [robotId]);
 
+  // 实时通道：这台机器人有新事件（发牌、结算、换桌）就立刻重拉快照。
+  const streamConnected = useAutomationStream((change) => {
+    if (change.scope !== "robots" && change.scope !== "events") return;
+    if (change.robotId && change.robotId !== robotId) return;
+    void load(true);
+  });
+
   useEffect(() => {
     setLoaded(false);
     setTable(null);
     setReceivedAt(null);
     void load();
-    const timer = window.setInterval(() => { void load(true); }, 5000);
+    const timer = window.setInterval(() => { void load(true); }, streamConnected ? 20000 : 5000);
     return () => window.clearInterval(timer);
-  }, [load]);
+  }, [load, streamConnected]);
 
   if (!loaded) return <LoadingBlock label="正在读取当前牌局" />;
   if (error && !table) return <ErrorBanner message={error} />;

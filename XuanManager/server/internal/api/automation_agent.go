@@ -31,8 +31,9 @@ const (
 	agentMaxCommands      = 50
 	agentDefaultLimit     = 20
 	agentJanitorInterval  = 5 * time.Second
-	// 节点离线超过这么久，就把它的账号收回等待池，交给其它在线节点接。
-	agentOfflineReleaseMinutes = 10
+	// 节点离线超过这么久才把账号收回等待池：太短会在后台重启/网络抖动时把机器人赶下桌，
+	// 太长则节点真的挂了机器人一直挂着。1 分钟是折中（心跳 5 秒、租约 20 秒）。
+	agentOfflineReleaseMinutes = 1
 )
 
 // agentCommandTypes 固定枚举：动作只影响本节点上的终端/任务。
@@ -58,6 +59,8 @@ var agentEventTypes = map[string]bool{
 	// 结算下桌但人还在房间里：俱乐部模式的一轮结束，接下来会原地重新带入。
 	"PlayerUnseated": true,
 	"TaskCompleted":  true, "TaskFailed": true,
+	// 余额不足 / 补分后恢复：客户端据此停下坐下动作并报警，后台在告警中心开单。
+	"FundShortage": true, "FundRestored": true,
 	// 客户端调试日志：策略决策、GPS 上报等，便于在「运行日志」里直接看到。
 	"TerminalLog": true,
 	// 当前牌桌快照：机器人所在房间的座位与全桌手牌。
@@ -95,6 +98,8 @@ func (s *Server) registerAutomationAgentRoutes() {
 	s.mux.Handle("GET /agent/v1/commands", s.agentAuthorized(s.handleAgentPullCommands))
 	s.mux.Handle("POST /agent/v1/commands/{commandNo}/ack", s.agentAuthorized(s.handleAgentAckCommand))
 	s.mux.Handle("POST /agent/v1/events/batch", s.agentAuthorized(s.handleAgentReportEvents))
+	// 实时通道：节点 WS 长连接 + 后台页面 SSE，见 automation_stream.go。
+	s.registerAutomationStreamRoutes()
 }
 
 type agentHandlerFunc func(http.ResponseWriter, *http.Request, agentIdentity)
@@ -103,21 +108,13 @@ type agentHandlerFunc func(http.ResponseWriter, *http.Request, agentIdentity)
 // 节点被后台停用则 403，让 agent 停止心跳之外的所有动作。
 func (s *Server) agentAuthorized(next agentHandlerFunc) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := strings.TrimSpace(r.Header.Get("X-Agent-Token"))
-		if token == "" || len(token) < 32 {
-			writeError(w, http.StatusUnauthorized, "AGENT_UNAUTHORIZED", "缺少节点租约令牌")
-			return
-		}
-		var agent agentIdentity
-		err := s.db.QueryRowContext(r.Context(), `SELECT id, node_code, status, max_robots
-FROM mgr_automation_worker
-WHERE lease_token_hash = ? AND lease_expires_at IS NOT NULL AND lease_expires_at > NOW()`, security.HashToken(token)).
-			Scan(&agent.WorkerID, &agent.NodeCode, &agent.Status, &agent.MaxRobots)
-		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusUnauthorized, "AGENT_UNAUTHORIZED", "节点租约已失效，请重新注册")
-			return
-		}
+		// 身份解析与 WS 通道共用同一份实现（automation_stream.go）。
+		agent, err := s.agentIdentityByToken(r.Context(), r.Header.Get("X-Agent-Token"))
 		if err != nil {
+			if errors.Is(err, errAgentTokenInvalid) {
+				writeError(w, http.StatusUnauthorized, "AGENT_UNAUTHORIZED", "节点租约已失效，请重新注册")
+				return
+			}
 			s.logger.Error("agent authorize", "error", err)
 			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "校验节点身份失败")
 			return
@@ -256,6 +253,8 @@ SET status = 'idle', last_error = '' WHERE worker_id = ? AND status = 'offline'`
 	if assigned := assignWaitingRobotsToWorker(r.Context(), s.db, s.logger, workerID); assigned > 0 {
 		s.logger.Info("worker auto assigned robots on register", "workerId", workerID, "assigned", assigned)
 	}
+	agentStreams.notifyChange("workers", map[string]any{"workerId": workerID})
+	agentStreams.notifyChange("robots", map[string]any{"workerId": workerID})
 	writeData(w, http.StatusOK, map[string]any{
 		"workerId":          workerID,
 		"workerCode":        code,
@@ -299,84 +298,12 @@ func (s *Server) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request, ag
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	setClauses := []string{
-		"last_heartbeat = NOW()",
-		"lease_expires_at = DATE_ADD(NOW(), INTERVAL ? SECOND)",
-		"status = IF(status = 'disabled', 'disabled', IF(status = 'draining', 'draining', 'online'))",
-		"cpu_pct = ?",
-		"mem_pct = ?",
-	}
-	args := []any{agentLeaseTTLSeconds, clampInt(input.CPUPct, 0, 100, 0), clampInt(input.MemPct, 0, 100, 0)}
-	if input.Capacity > 0 {
-		setClauses = append(setClauses, "max_robots = ?")
-		args = append(args, clampInt(input.Capacity, 1, 200, agent.MaxRobots))
-	}
-	if version := clipText(strings.TrimSpace(input.Version), 32); version != "" {
-		setClauses = append(setClauses, "version = ?")
-		args = append(args, version)
-	}
-	if cidr := clipText(strings.TrimSpace(input.EgressCIDR), 64); cidr != "" {
-		setClauses = append(setClauses, "egress_cidr = ?")
-		args = append(args, cidr)
-	}
-	if input.LastEventSeq > 0 {
-		setClauses = append(setClauses, "last_event_seq = GREATEST(last_event_seq, ?)")
-		args = append(args, input.LastEventSeq)
-	}
-	args = append(args, agent.WorkerID)
-	if _, err := s.db.ExecContext(r.Context(), "UPDATE mgr_automation_worker SET "+strings.Join(setClauses, ", ")+" WHERE id = ?", args...); err != nil {
-		s.logger.Error("agent heartbeat", "error", err, "workerId", agent.WorkerID)
+	data, err := s.applyAgentHeartbeat(r.Context(), agent, input, clientIP(r))
+	if err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_ERROR", "心跳写入失败")
 		return
 	}
-	// 节点从离线恢复：把它下面的终端从「离线」状态放回空闲，等待重新调度。
-	if agent.Status == "offline" {
-		if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_robot
-SET status = 'idle', last_error = '' WHERE worker_id = ? AND status = 'offline'`, agent.WorkerID); err != nil {
-			s.logger.Error("agent heartbeat revive robots", "error", err, "workerId", agent.WorkerID)
-		}
-	}
-	var status string
-	var pending int
-	_ = s.db.QueryRowContext(r.Context(), "SELECT status FROM mgr_automation_worker WHERE id = ?", agent.WorkerID).Scan(&status)
-	_ = s.db.QueryRowContext(r.Context(), `SELECT COUNT(*) FROM mgr_automation_worker_command
-WHERE worker_id = ? AND status = 'PENDING'`, agent.WorkerID).Scan(&pending)
-	// 这个节点还有空位、全局又有等着上节点的账号，就顺手补分配一次。
-	// 必须先分配再取指派清单，新分到的终端才会出现在本次心跳的回包里，节点下一拍就能拉起来。
-	if status == "online" {
-		if countWaitingRobots(r.Context(), s.db) > 0 {
-			if assigned := assignWaitingRobotsToWorker(r.Context(), s.db, s.logger, agent.WorkerID); assigned > 0 {
-				s.logger.Info("worker auto assigned robots on heartbeat", "workerId", agent.WorkerID, "assigned", assigned)
-			}
-		}
-		// 还有空位就补一次激活：新账号要在投放前完成首次登录。
-		if assigned := assignActivationRobotsToWorker(r.Context(), s.db, s.logger, agent.WorkerID); assigned > 0 {
-			s.logger.Info("worker auto assigned activation robots on heartbeat", "workerId", agent.WorkerID, "assigned", assigned)
-		}
-	}
-	s.resetRobotNetPeriods(r.Context())
-	assignments, err := s.queryAgentAssignments(r.Context(), agent.WorkerID)
-	if err != nil {
-		s.logger.Error("agent heartbeat assignments", "error", err, "workerId", agent.WorkerID)
-		assignments = []agentAssignment{}
-	}
-	// 游戏服看到的是连接来源 IP：心跳这里把它记到机器人上，用来核对出口是否按预期。
-	// 真机同样由服务端观察 IP，客户端本身无法伪造该字段。
-	if observedIP := clipText(clientIP(r), 64); observedIP != "" {
-		if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_robot
-SET public_ip = ?, ip_seen_at = NOW()
-WHERE worker_id = ? AND (public_ip <> ? OR ip_seen_at IS NULL)`, observedIP, agent.WorkerID, observedIP); err != nil {
-			s.logger.Error("agent heartbeat robot ip", "error", err, "workerId", agent.WorkerID)
-		}
-	}
-	writeData(w, http.StatusOK, map[string]any{
-		"status":            status,
-		"pendingCommands":   pending,
-		"heartbeatInterval": agentHeartbeatSeconds,
-		"leaseExpiresAt":    time.Now().Add(agentLeaseTTLSeconds * time.Second).UTC().Format(time.RFC3339),
-		"serverTime":        time.Now().UTC().Format(time.RFC3339),
-		"assignments":       assignments,
-	})
+	writeData(w, http.StatusOK, data)
 }
 
 // handleAgentOffline 由 agent 在正常退出/被关闭前调用：立刻置离线并清租约，
@@ -412,6 +339,14 @@ WHERE worker_id = ? AND status NOT IN ('offline', 'stopped')`, reason, agent.Wor
 		"message": "节点主动下线（" + reason + "）",
 	})
 	s.logger.Info("agent offline", "workerId", agent.WorkerID, "node", agent.NodeCode, "reason", reason)
+	// 节点主动退出：把它名下的机器人立刻转给其它在线节点，避免挂在已经没人的终端上。
+	if released := releaseRobotsOfWorker(r.Context(), s.db, s.logger, agent.WorkerID, "主动退出"); released > 0 {
+		if assigned := assignWaitingRobots(r.Context(), s.db, s.logger); assigned > 0 {
+			s.logger.Info("reassigned robots after worker offline", "assigned", assigned)
+		}
+	}
+	agentStreams.notifyChange("workers", map[string]any{"workerId": agent.WorkerID})
+	agentStreams.notifyChange("robots", map[string]any{"workerId": agent.WorkerID})
 	writeData(w, http.StatusOK, map[string]any{"status": "offline"})
 }
 
@@ -432,6 +367,8 @@ type agentAssignment struct {
 	BuyinMultiple  int             `json:"buyinMultiple"`
 	RoomPi         string          `json:"roomPi"`
 	Intelligence   int             `json:"intelligence"`
+	// 当前所在房间（切换/重启节点后客户端据此回原房，留座还在就继续打）。
+	RoomID        int64  `json:"roomId"`
 	DesiredStatus  string          `json:"desiredStatus"`
 	Status         string          `json:"status"`
 	JoinStatus     string          `json:"joinStatus"`
@@ -446,6 +383,8 @@ type agentAssignment struct {
 	PeriodEnd    *time.Time `json:"periodEnd"`
 	TodayNet     int64      `json:"todayNet"`
 	PeriodNet    int64      `json:"periodNet"`
+	// 俱乐部金币：带入是从俱乐部金币里扣的，客户端坐下前用它判断钱够不够。
+	ClubGold int64 `json:"clubGold"`
 }
 
 // applyStrategyConfig 把机器人绑定的策略合并进指派：策略里非 0 / 非空的值覆盖机器人自身配置，
@@ -466,9 +405,37 @@ func applyStrategyConfig(item *agentAssignment, raw string) {
 	item.StrategyConfig = json.RawMessage(raw)
 }
 
+// mergeRobotStrategyOverride 把机器人级的自定义参数合并到策略配置上（覆盖优先）。
+// 只影响下发给客户端的 strategyConfig，不动策略本身。
+func mergeRobotStrategyOverride(item *agentAssignment, overrideRaw string) {
+	overrideRaw = strings.TrimSpace(overrideRaw)
+	if overrideRaw == "" || !json.Valid([]byte(overrideRaw)) {
+		return
+	}
+	var override map[string]any
+	if err := json.Unmarshal([]byte(overrideRaw), &override); err != nil || len(override) == 0 {
+		return
+	}
+	base := map[string]any{}
+	if len(item.StrategyConfig) > 0 {
+		_ = json.Unmarshal(item.StrategyConfig, &base)
+	}
+	for key, value := range override {
+		base[key] = value
+	}
+	if amount, ok := base["buyinMultiple"].(float64); ok && amount > 0 {
+		item.BuyinMultiple = int(amount)
+	}
+	merged, err := json.Marshal(base)
+	if err != nil {
+		return
+	}
+	item.StrategyConfig = merged
+}
+
 func (s *Server) queryAgentAssignments(ctx context.Context, workerID int64) ([]agentAssignment, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT r.id, r.terminal_no, r.account, r.login_password, r.nickname,
-r.club_id, r.invite_code, COALESCE(g.name, ''), COALESCE(st.name, ''),
+r.club_id, r.invite_code, COALESCE(g.name, ''), COALESCE(st.name, ''), COALESCE(r.room_id, 0),
 r.buyin_multiple, r.room_pi, r.gps, r.intelligence, r.desired_status, r.status, r.join_status, r.enabled,
 COALESCE(NULLIF(r.profit_mode, ''), COALESCE(g.profit_mode, '')),
 COALESCE(NULLIF(r.profit_target, 0), COALESCE(g.profit_target, 0)),
@@ -477,7 +444,15 @@ COALESCE(r.period_start, g.period_start), COALESCE(r.period_end, g.period_end),
 CASE WHEN r.profit_mode = 'schedule' THEN r.window_net ELSE r.today_net END,
 r.period_net,
 r.activated_at IS NULL,
-CASE WHEN st.status IN ('gray', 'enabled') THEN COALESCE(st.config_json, '') ELSE '' END
+-- 策略不再区分草稿/发布：绑定了就下发当前配置（保存即生效）。
+COALESCE(st.config_json, ''),
+-- 俱乐部积分：带入扣的是「这个玩家在这个俱乐部的积分」（tbl_Account.sm_club_gold[club_id]），
+-- 不是俱乐部池余额（club_guuid_info.club_gold）。取错了客户端会一直以为没钱。
+COALESCE((SELECT a1.sm_club_gold FROM kbedm.third_marketing_info m1
+  JOIN kbedm.tbl_Account a1 ON a1.sm_guuid = m1.player_guuid WHERE m1.player_wxid = r.account LIMIT 1), ''),
+COALESCE((SELECT a2.sm_club_gold2 FROM kbedm.third_marketing_info m2
+  JOIN kbedm.tbl_Account a2 ON a2.sm_guuid = m2.player_guuid WHERE m2.player_wxid = r.account LIMIT 1), ''),
+COALESCE(r.strategy_override_json, '')
 FROM mgr_automation_robot r
 LEFT JOIN mgr_automation_group g ON g.id = r.group_id
 LEFT JOIN mgr_automation_strategy st ON st.id = r.strategy_id
@@ -494,16 +469,20 @@ WHERE r.worker_id = ? ORDER BY r.id LIMIT 200`, workerID)
 		var enabledRaw int
 		var sealedPassword string
 		var strategyConfigRaw string
+		var clubGoldRaw, clubGold2Raw, strategyOverrideRaw string
 		var loginOnlyRaw int
 		var periodStart, periodEnd sql.NullTime
 		if err := rows.Scan(&item.RobotID, &item.TerminalNo, &item.Account, &sealedPassword, &item.Nickname,
-			&item.ClubID, &item.InviteCode, &item.GroupName, &item.StrategyName,
+			&item.ClubID, &item.InviteCode, &item.GroupName, &item.StrategyName, &item.RoomID,
 			&item.BuyinMultiple, &item.RoomPi, &item.Gps, &item.Intelligence, &item.DesiredStatus, &item.Status, &item.JoinStatus, &enabledRaw,
 			&item.ProfitMode, &item.ProfitTarget, &periodStart, &periodEnd, &item.TodayNet, &item.PeriodNet,
-			&loginOnlyRaw, &strategyConfigRaw); err != nil {
+			&loginOnlyRaw, &strategyConfigRaw, &clubGoldRaw, &clubGold2Raw, &strategyOverrideRaw); err != nil {
 			return nil, err
 		}
+		item.ClubGold = clubGoldOf(clubGoldRaw, clubGold2Raw, item.ClubID)
 		applyStrategyConfig(&item, strategyConfigRaw)
+		// 机器人在策略之上做过自定义：把覆盖字段合并进来，客户端只看到一份最终配置。
+		mergeRobotStrategyOverride(&item, strategyOverrideRaw)
 		item.LoginOnly = loginOnlyRaw == 1
 		item.Enabled = enabledRaw == 1
 		if periodStart.Valid {
@@ -585,75 +564,10 @@ func (s *Server) handleAgentPullCommands(w http.ResponseWriter, r *http.Request,
 	if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 {
 		limit = clampInt(value, 1, agentMaxCommands, agentDefaultLimit)
 	}
-	// 过期未下发的直接作废，避免节点长时间离线后突然收到一堆旧命令。
-	_, _ = s.db.ExecContext(r.Context(), `UPDATE mgr_automation_worker_command SET status = 'EXPIRED', finished_at = NOW()
-WHERE worker_id = ? AND status = 'PENDING' AND expires_at IS NOT NULL AND expires_at < NOW()`, agent.WorkerID)
-
-	rows, err := s.db.QueryContext(r.Context(), `SELECT c.id, c.command_no, c.command_type, c.robot_id,
-COALESCE(r.terminal_no, ''), c.params_json, c.expires_at, c.attempts
-FROM mgr_automation_worker_command c
-LEFT JOIN mgr_automation_robot r ON r.id = c.robot_id
-WHERE c.worker_id = ? AND c.status = 'PENDING' AND c.id > ?
-ORDER BY c.id LIMIT ?`, agent.WorkerID, cursor, limit)
+	items, nextCursor, err := s.claimAgentCommands(r.Context(), agent.WorkerID, cursor, limit)
 	if err != nil {
-		s.logger.Error("agent pull commands", "error", err, "workerId", agent.WorkerID)
 		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取命令失败")
 		return
-	}
-	type pending struct {
-		id   int64
-		item agentCommandItem
-	}
-	list := []pending{}
-	for rows.Next() {
-		var row pending
-		var robotID sql.NullInt64
-		var params sql.NullString
-		var expires sql.NullTime
-		if err := rows.Scan(&row.id, &row.item.CommandNo, &row.item.Type, &robotID,
-			&row.item.TerminalNo, &params, &expires, &row.item.Attempts); err != nil {
-			rows.Close()
-			s.logger.Error("agent pull commands scan", "error", err)
-			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取命令失败")
-			return
-		}
-		if robotID.Valid {
-			value := robotID.Int64
-			row.item.RobotID = &value
-		}
-		if params.Valid && strings.TrimSpace(params.String) != "" {
-			row.item.Params = json.RawMessage(params.String)
-		} else {
-			row.item.Params = json.RawMessage("{}")
-		}
-		if expires.Valid {
-			value := expires.Time
-			row.item.ExpiresAt = &value
-		}
-		row.item.Label = agentCommandTypes[row.item.Type]
-		list = append(list, row)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取命令失败")
-		return
-	}
-	nextCursor := cursor
-	items := make([]agentCommandItem, 0, len(list))
-	for _, row := range list {
-		items = append(items, row.item)
-		nextCursor = row.id
-	}
-	if len(list) > 0 {
-		ids := make([]any, 0, len(list))
-		for _, row := range list {
-			ids = append(ids, row.id)
-		}
-		if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_worker_command
-SET status = 'DELIVERED', delivered_at = NOW(), attempts = attempts + 1
-WHERE id IN (`+placeholders(len(ids))+`) AND status = 'PENDING'`, ids...); err != nil {
-			s.logger.Error("agent mark delivered", "error", err, "workerId", agent.WorkerID)
-		}
 	}
 	writeData(w, http.StatusOK, map[string]any{"items": items, "cursor": nextCursor})
 }
@@ -677,73 +591,12 @@ func (s *Server) handleAgentAckCommand(w http.ResponseWriter, r *http.Request, a
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	nextStatus := strings.ToUpper(strings.TrimSpace(input.Status))
-	if !agentAckStatuses[nextStatus] {
-		writeError(w, http.StatusBadRequest, "INVALID_STATUS", "命令状态只能是 ACCEPTED/RUNNING/COMPLETED/REJECTED")
+	data, failure := s.applyAgentAck(r.Context(), agent, commandNo, input)
+	if failure != nil {
+		writeError(w, failure.Status, failure.Code, failure.Message)
 		return
 	}
-	var commandID int64
-	var current string
-	var robotID sql.NullInt64
-	err := s.db.QueryRowContext(r.Context(), `SELECT id, status, robot_id FROM mgr_automation_worker_command
-WHERE worker_id = ? AND command_no = ?`, agent.WorkerID, commandNo).Scan(&commandID, &current, &robotID)
-	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "COMMAND_NOT_FOUND", "没有找到这条命令")
-		return
-	}
-	if err != nil {
-		s.logger.Error("agent ack lookup", "error", err)
-		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取命令失败")
-		return
-	}
-	if current == nextStatus {
-		writeData(w, http.StatusOK, map[string]any{"commandNo": commandNo, "status": current, "message": "状态已同步"})
-		return
-	}
-	allowed := false
-	for _, candidate := range agentAckTransitions[current] {
-		if candidate == nextStatus {
-			allowed = true
-			break
-		}
-	}
-	if !allowed {
-		writeError(w, http.StatusConflict, "INVALID_TRANSITION",
-			fmt.Sprintf("命令当前状态 %s 不能变成 %s", current, nextStatus))
-		return
-	}
-	setClauses := []string{"status = ?", "ack_at = NOW()"}
-	args := []any{nextStatus}
-	if nextStatus == "COMPLETED" || nextStatus == "REJECTED" {
-		setClauses = append(setClauses, "finished_at = NOW()")
-	}
-	if len(input.Result) > 0 && string(input.Result) != "null" {
-		setClauses = append(setClauses, "result_json = ?")
-		args = append(args, clipText(string(input.Result), 4000))
-	}
-	if code := clipText(strings.TrimSpace(input.ErrorCode), 64); code != "" {
-		setClauses = append(setClauses, "error_code = ?")
-		args = append(args, code)
-	}
-	if message := clipText(strings.TrimSpace(input.ErrorMessage), 255); message != "" {
-		setClauses = append(setClauses, "error_message = ?")
-		args = append(args, message)
-	}
-	args = append(args, commandID)
-	if _, err := s.db.ExecContext(r.Context(), "UPDATE mgr_automation_worker_command SET "+strings.Join(setClauses, ", ")+" WHERE id = ?", args...); err != nil {
-		s.logger.Error("agent ack update", "error", err, "commandNo", commandNo)
-		writeError(w, http.StatusInternalServerError, "UPDATE_ERROR", "写入命令回执失败")
-		return
-	}
-	// 终端类命令失败时把原因写回机器人，界面上能直接看到卡在哪。
-	if nextStatus == "REJECTED" && robotID.Valid {
-		message := clipText(strings.TrimSpace(input.ErrorMessage), 255)
-		if message == "" {
-			message = "节点拒绝了命令"
-		}
-		_, _ = s.db.ExecContext(r.Context(), "UPDATE mgr_automation_robot SET last_error = ? WHERE id = ?", message, robotID.Int64)
-	}
-	writeData(w, http.StatusOK, map[string]any{"commandNo": commandNo, "status": nextStatus})
+	writeData(w, http.StatusOK, data)
 }
 
 // ---- 事件上报 ----
@@ -771,73 +624,12 @@ func (s *Server) handleAgentReportEvents(w http.ResponseWriter, r *http.Request,
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if len(input.Events) == 0 {
-		writeData(w, http.StatusOK, map[string]any{"accepted": 0, "duplicated": 0, "skipped": 0})
+	data, failure := s.applyAgentEvents(r.Context(), agent, input.Events)
+	if failure != nil {
+		writeError(w, failure.Status, failure.Code, failure.Message)
 		return
 	}
-	if len(input.Events) > agentMaxBatchEvents {
-		writeError(w, http.StatusBadRequest, "BATCH_TOO_LARGE", fmt.Sprintf("单批最多上报 %d 条事件", agentMaxBatchEvents))
-		return
-	}
-	accepted, duplicated, skipped := 0, 0, 0
-	maxSeq := int64(0)
-	for index, event := range input.Events {
-		eventID := clipText(strings.TrimSpace(event.EventID), 64)
-		if eventID == "" {
-			s.logger.Warn("agent event without id", "workerId", agent.WorkerID, "index", index+1)
-			skipped++
-			continue
-		}
-		eventType := strings.TrimSpace(event.Type)
-		if !agentEventTypes[eventType] {
-			// 单条类型不认就跳过，不连累同一批里的其它事件（新旧版本混跑时很常见）。
-			s.logger.Warn("agent event unsupported type", "workerId", agent.WorkerID, "eventType", eventType)
-			skipped++
-			continue
-		}
-		robotID := s.resolveAgentRobotID(r.Context(), agent.WorkerID, event)
-		var payload any
-		if len(event.Payload) > 0 && string(event.Payload) != "null" {
-			payload = clipText(string(event.Payload), 8000)
-		}
-		var occurred any
-		if value := strings.TrimSpace(event.OccurredAt); value != "" {
-			if parsed, err := time.Parse(time.RFC3339, value); err == nil {
-				occurred = parsed
-			} else if parsed, err := time.Parse("2006-01-02 15:04:05", value); err == nil {
-				occurred = parsed
-			}
-		}
-		result, err := s.db.ExecContext(r.Context(), `INSERT IGNORE INTO mgr_automation_worker_event
-(worker_id, event_id, robot_id, terminal_no, event_type, sequence, room_id, round_id,
- strategy_version, command_no, payload_json, occurred_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			agent.WorkerID, eventID, nullableID(robotID), clipText(strings.TrimSpace(event.TerminalNo), 32),
-			eventType, event.Sequence, nullableID(event.RoomID), clipText(strings.TrimSpace(event.RoundID), 64),
-			event.StrategyVersion, clipText(strings.TrimSpace(event.CommandNo), 40), payload, occurred)
-		if err != nil {
-			s.logger.Error("agent event insert", "error", err, "workerId", agent.WorkerID, "eventId", eventID)
-			writeError(w, http.StatusInternalServerError, "EVENT_ERROR", "写入事件失败")
-			return
-		}
-		affected, _ := result.RowsAffected()
-		if affected == 0 {
-			duplicated++
-			continue
-		}
-		accepted++
-		if event.Sequence > maxSeq {
-			maxSeq = event.Sequence
-		}
-		if robotID > 0 {
-			s.applyAgentEventToRobot(r.Context(), robotID, eventType, event.Payload)
-		}
-	}
-	if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_worker
-SET last_event_seq = GREATEST(last_event_seq, ?), last_event_at = NOW() WHERE id = ?`, maxSeq, agent.WorkerID); err != nil {
-		s.logger.Error("agent event seq", "error", err, "workerId", agent.WorkerID)
-	}
-	writeData(w, http.StatusOK, map[string]any{"accepted": accepted, "duplicated": duplicated, "skipped": skipped})
+	writeData(w, http.StatusOK, data)
 }
 
 func (s *Server) resolveAgentRobotID(ctx context.Context, workerID int64, event agentEventItem) int64 {
@@ -917,8 +709,10 @@ SET status = IF(status IN ('seated', 'playing'), status, 'idle'), last_heartbeat
 SET status = 'idle', room_id = NULL, seat_no = 0, last_heartbeat = NOW() WHERE id = ?`, robotID)
 	case "RoomJoined", "PlayerSeated", "GameReady":
 		if data.RoomID > 0 {
+			// 坐进去了说明之前的「金币不足/抢座失败」已经不成立：顺手清掉旧错误，
+			// 否则列表里会出现「已入座」还挂着「带入金币不足」的矛盾。
 			_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
-SET status = 'seated', room_id = ?, seat_no = ?, last_heartbeat = NOW() WHERE id = ?`,
+SET status = 'seated', room_id = ?, seat_no = ?, last_error = '', last_heartbeat = NOW() WHERE id = ?`,
 				data.RoomID, data.SeatNo, robotID)
 			return
 		}
@@ -938,9 +732,53 @@ WHERE id = ?`, delta, delta, delta, delta, robotID)
 		// 房间没结束，只是这一轮结算下桌：保留 room_id（人还在房里），座位号清掉等重新带入。
 		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
 SET status = 'idle', seat_no = 0, last_heartbeat = NOW() WHERE id = ?`, robotID)
-	case "RoomLeft", "RoomClosed":
+	case "FundShortage":
+		// 余额不足：不再反复坐下（客户端已停），这里记原因并在告警中心开一条单。
+		var shortage struct {
+			Gold    int64  `json:"gold"`
+			Need    int64  `json:"need"`
+			Message string `json:"message"`
+		}
+		if len(payload) > 0 {
+			_ = json.Unmarshal(payload, &shortage)
+		}
+		detail := strings.TrimSpace(shortage.Message)
+		// 带入扣的是俱乐部金币，不补就用账号金币会误导运营；这里以库里的俱乐部金币为准。
+		var clubID, playerID string
+		_ = s.db.QueryRowContext(ctx, `SELECT COALESCE(r.club_id, ''), COALESCE(m.player_guuid, '')
+FROM mgr_automation_robot r
+LEFT JOIN kbedm.third_marketing_info m ON m.player_wxid = r.account
+WHERE r.id = ?`, robotID).Scan(&clubID, &playerID)
+		clubGold, _ := s.readRobotClubGold(ctx, playerID, clubID)
+		if detail == "" {
+			detail = fmt.Sprintf("俱乐部金币 %d 不足（房间最低带入 %d），已暂停坐下等待补金币", clubGold, shortage.Need)
+		}
+		if clubID != "" && !strings.Contains(detail, "俱乐部金币") {
+			detail = detail + fmt.Sprintf("（俱乐部 %s 当前金币 %d）", clubID, clubGold)
+		}
+		// 缺钱时机器人确实卡住了，状态要跟着变（否则列表显示「空闲」，运营看不出问题）。
+		// 在桌上/打牌中不改，避免把正在进行的对局标成异常。
 		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
-SET status = 'idle', room_id = NULL, seat_no = 0, last_heartbeat = NOW() WHERE id = ?`, robotID)
+SET status = IF(status IN ('seated', 'playing'), status, 'shortage'), last_error = ?, last_heartbeat = NOW()
+WHERE id = ?`, clipText(detail, 255), robotID)
+		s.syncRobotFundAlert(ctx, robotID, detail)
+	case "FundRestored":
+		// 补分到位：清掉余额不足的提示并关掉对应告警。
+		var restored struct {
+			Gold int64 `json:"gold"`
+			Need int64 `json:"need"`
+		}
+		if len(payload) > 0 {
+			_ = json.Unmarshal(payload, &restored)
+		}
+		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
+SET status = IF(status IN ('shortage', 'faulted'), 'idle', status), last_error = '', last_heartbeat = NOW()
+WHERE id = ? AND (last_error LIKE '%额度%' OR last_error LIKE '%余额%' OR last_error LIKE '%带入金币不足%')`, robotID)
+		s.resolveRobotFundAlert(ctx, robotID)
+	case "RoomLeft", "RoomClosed":
+		// 额度不足的机器人离房后不能把状态刷回「空闲」，否则列表上看不出问题。
+		_, _ = s.db.ExecContext(ctx, `UPDATE mgr_automation_robot
+SET status = IF(status = 'shortage', 'shortage', 'idle'), room_id = NULL, seat_no = 0, last_heartbeat = NOW() WHERE id = ?`, robotID)
 	case "TaskFailed":
 		message := "节点上报任务失败"
 		var failure struct {
@@ -1023,6 +861,10 @@ VALUES (?, ?, ?, ?, ?, 'PENDING', ?, DATE_ADD(NOW(), INTERVAL ? SECOND), ?)`,
 		if err := s.db.QueryRowContext(ctx, "SELECT command_no FROM mgr_automation_worker_command WHERE idem_key = ?", idem).Scan(&existing); err == nil {
 			return existing, nil
 		}
+	} else {
+		// 新命令入队：节点在线长连接就立刻叫它来取，不必等 2 秒轮询。
+		agentStreams.wake(workerID, "command")
+		agentStreams.notifyChange("workers", map[string]any{"workerId": workerID})
 	}
 	return commandNo, nil
 }
@@ -1030,6 +872,8 @@ VALUES (?, ?, ?, ?, ?, 'PENDING', ?, DATE_ADD(NOW(), INTERVAL ? SECOND), ?)`,
 // RunAutomationWorkerJanitor 后台巡检：心跳断掉的节点置离线、超时命令回收。
 // 与状态相关的判定全用数据库时间（NOW()），避免容器与库的时钟差。
 func RunAutomationWorkerJanitor(ctx context.Context, db *sql.DB, logger *slog.Logger) {
+	// 机器人账号的设备绑定（只能由 worker 登录）：建号时绑过，这里兜老数据，5 分钟最多跑一次。
+	syncRobotDeviceBindings(ctx, db, logger)
 	ticker := time.NewTicker(agentJanitorInterval)
 	defer ticker.Stop()
 	for {

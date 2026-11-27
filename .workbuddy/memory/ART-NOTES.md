@@ -146,3 +146,26 @@
   build 未纳入 git，但改它可让当前部署免重建立即生效；源码改动仍需重新构建才进发布包。
 - ⚠️ 压缩后的 js 里短词 `8L` 可能同时是 uuid 片段（如 `"95deb362KlHwJUYKk8LMtGv"`），
   **必须逐处看上下文**，改完用 `count(新词)==1 && count(旧词)==预期` 自检。
+
+## 从 MEMORY.md 拆入（2026-11-25）：Prefab 结构与引用
+
+- **`panelXxx` 面板一律由 `UIManager.showPanel` 用 `cc.loader.loadRes("UI/"+名字)` + `cc.instantiate` 动态创建**
+  → 改外观/尺寸改 `assets/resources/UI/panelXxx.prefab`；改场景 `drh8.fire` 里的同名节点对运行无效（那是编辑器残留实例）。
+- **唯一例外 `panelGameView`**：`Canvas/Normal` 下已挂了它，`UIManager.showPanel` 先在 `optRoot.children` 找到同名就
+  `setPanelInfo` 返回，**不 instantiate**。所以必须同步改 `assets/Scenes/drh8.fire` 里 id 6 那棵树，
+  两边 `cc.PrefabInfo.fileId` 要一致（`root`=6、`asset`=panelGameView prefab uuid），否则编辑器当成"额外节点"。
+- **引用脚本组件用「5 头压缩 uuid」23 字符**（如 `d41a8PtsLlNyrBYfqkaV+As`）：hex[:5] + 自 index 5 每 3 个 hex → 2 个 base64；
+  `.meta` 里的 36 字符标准 uuid 别混用。`Tool.GetChild` 按名字取**第一个**同名子节点，同层重名按钮必须改名。
+- **`cc.Toggle`（手写 prefab）**：`checkMark` 必须指向 `cc.Sprite` 组件，不是节点 —— 引擎 `_updateCheckMark` 写
+  `this.checkMark.node.active`，指成 `cc.Node` 一点就抛 `Cannot set properties of undefined (setting 'active')`；
+  `_N$target` 才是 Node（Button.target，通常指向 Background）；`_N$isChecked` 与 checkMark 的 `_active` 要一致。
+- **`cc.Label` 文案要改两个字段**：`_string`（网页/编辑器）和 `_N$string`（**原生端渲染读它**），只改前者手机仍显示旧字。
+- **别把新增节点 `_prefab` 的异常值当坏数据**：Cocos 2.4 可能写成 `{"__id__": <已有 PrefabInfo 的 id>, "fileId": "…"}`
+  （无 `__type__`），HEAD 没先例也不等于损坏；判据是 `library/imports/<前2位>/<uuid>.json` 有本次产物且 mtime 对得上。
+- **`cp -p` 会带权限位**：从旧工程拷 PNG 过来常是 755，提交会出现 `mode change 100644 => 100755` → 收尾 `chmod 644`。
+- **覆盖 PNG 后 Creator 不会自动重导**，两步必做：`touch` 目标 PNG（`cp -p` 带旧 mtime，Creator 判"没变"）+
+  `osascript -e 'tell application "CocosCreator" to activate'`（窗口不前台就不扫资源；走 System Events 会被拒）。
+  是否真导入只看 `library/imports/<uuid前2位>/<uuid>.png` 的 md5 与 mtime。
+- **音效素材**：首选 Mixkit（`https://assets.mixkit.co/active_storage/sfx/<id>/<id>-preview.mp3`，免费商用、preview 即完整），
+  次选 free-sound-effects.net（页面 `data-download` 给 mp3 直链）；Pixabay 反爬、freesound 只有低质预览。
+  **禁止用 numpy 从零合成波形**；报奖音效「合成」和「找素材混音」主人都否决过 → 接需求先问要成品文件还是参考音。

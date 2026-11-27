@@ -32,6 +32,7 @@ func (s *Server) registerAutomationRoutes() {
 	s.mux.Handle("GET /api/automation/robots", s.authorized("automation.robot.view", false, s.handleListAutomationRobots))
 	s.mux.Handle("POST /api/automation/robots", s.authorized("automation.robot.create", true, s.handleCreateAutomationRobot))
 	s.mux.Handle("POST /api/automation/robots/bulk", s.authorized("automation.robot.create", true, s.handleBulkCreateAutomationRobots))
+	s.registerRobotClubGoldRoutes()
 	s.mux.Handle("POST /api/automation/robots/batch", s.authorized("automation.robot.operate", true, s.handleAutomationRobotBatch))
 	s.mux.Handle("GET /api/automation/robots/{id}", s.authorized("automation.robot.view", false, s.handleGetAutomationRobot))
 	s.mux.Handle("GET /api/automation/robots/{id}/events", s.authorizedAny([]string{"automation.robot.view", "automation.worker.view"}, false, s.handleListAutomationRobotEvents))
@@ -96,6 +97,9 @@ type automationStrategyConfig struct {
 	SitTimeoutMs     int `json:"sitTimeoutMs"`
 	ReinstateDelayMs int `json:"reinstateDelayMs"`
 	RoomRetryMs      int `json:"roomRetryMs"`
+	// 是否允许进等待/准备中的房间；默认 false（只进已开局的房）。
+	// 注意：decodeJSON 开了 DisallowUnknownFields，前端有的字段这里必须都有，否则保存直接 400。
+	AllowWaitingRoom bool `json:"allowWaitingRoom"`
 
 	// 出牌节奏：替代客户端里写死的 1200–2500ms 与 6 秒
 	ActionDelayMinMs int `json:"actionDelayMinMs"`
@@ -303,7 +307,7 @@ func (s *Server) handleCreateAutomationStrategy(w http.ResponseWriter, r *http.R
 	}
 	result, err := s.db.ExecContext(r.Context(), `INSERT INTO mgr_automation_strategy
 (name, code, version, play_style, status, config_json, updated_by, is_demo)
-VALUES (?, ?, 1, ?, 'draft', ?, ?, 0)`,
+VALUES (?, ?, 1, ?, 'enabled', ?, ?, 0)`,
 		input.Name, input.Code, input.PlayStyle, string(configBody), automationOperator(p))
 	if err != nil {
 		if duplicateKey(err) {
@@ -314,8 +318,8 @@ VALUES (?, ?, 1, ?, 'draft', ?, ?, 0)`,
 		return
 	}
 	id, _ := result.LastInsertId()
-	s.audit(r.Context(), &p, "automation.strategy.create", "automation_strategy", strconv.FormatInt(id, 10), input, nil, input, 0, "策略草稿已创建", clientIP(r))
-	writeData(w, http.StatusCreated, map[string]any{"id": id, "message": "策略草稿已创建"})
+	s.audit(r.Context(), &p, "automation.strategy.create", "automation_strategy", strconv.FormatInt(id, 10), input, nil, input, 0, "策略已创建并立即生效", clientIP(r))
+	writeData(w, http.StatusCreated, map[string]any{"id": id, "message": "策略已创建，绑定它的机器人下一次心跳即生效"})
 }
 
 func (s *Server) handleUpdateAutomationStrategy(w http.ResponseWriter, r *http.Request, p principal) {
@@ -340,17 +344,17 @@ FROM mgr_automation_strategy WHERE id = ?`, id).
 	}
 	configBody, _ := json.Marshal(input.Config)
 	if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_strategy
-SET name = ?, play_style = ?, status = 'draft', previous_config_json = config_json,
+SET name = ?, play_style = ?, status = 'enabled', previous_config_json = config_json,
 previous_version = version, version = version + 1, config_json = ?, updated_by = ?
 WHERE id = ?`, input.Name, input.PlayStyle, string(configBody), automationOperator(p), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_ERROR", "保存策略失败")
 		return
 	}
 	before := map[string]any{"name": beforeName, "playStyle": beforeStyle, "status": beforeStatus, "version": beforeVersion, "config": json.RawMessage(beforeConfig)}
-	after := map[string]any{"name": input.Name, "playStyle": input.PlayStyle, "status": "draft", "version": beforeVersion + 1, "config": input.Config}
+	after := map[string]any{"name": input.Name, "playStyle": input.PlayStyle, "status": "enabled", "version": beforeVersion + 1, "config": input.Config}
 	s.audit(r.Context(), &p, "automation.strategy.update", "automation_strategy", strconv.FormatInt(id, 10), input, before, after, 0,
-		fmt.Sprintf("策略已更新到 v%d，等待发布", beforeVersion+1), clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"version": beforeVersion + 1, "message": fmt.Sprintf("策略已保存为 v%d 草稿，发布前不会变更线上版本", beforeVersion+1)})
+		fmt.Sprintf("策略已更新到 v%d，立即生效", beforeVersion+1), clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"version": beforeVersion + 1, "message": fmt.Sprintf("策略已保存到 v%d，绑定它的机器人下一次心跳即生效", beforeVersion+1)})
 }
 
 func (s *Server) handlePublishAutomationStrategy(w http.ResponseWriter, r *http.Request, p principal) {
@@ -411,15 +415,15 @@ FROM mgr_automation_strategy WHERE id = ?`, id).
 		return
 	}
 	if _, err := s.db.ExecContext(r.Context(), `UPDATE mgr_automation_strategy
-SET config_json = ?, version = ?, previous_config_json = ?, previous_version = ?, status = 'draft', updated_by = ?
+SET config_json = ?, version = ?, previous_config_json = ?, previous_version = ?, status = 'enabled', updated_by = ?
 WHERE id = ?`, previousConfig, previousVersion, currentConfig, currentVersion, automationOperator(p), id); err != nil {
 		writeError(w, http.StatusInternalServerError, "UPDATE_ERROR", "回滚策略失败")
 		return
 	}
 	s.audit(r.Context(), &p, "automation.strategy.rollback", "automation_strategy", strconv.FormatInt(id, 10), nil,
 		map[string]any{"version": currentVersion}, map[string]any{"version": previousVersion}, 0,
-		fmt.Sprintf("策略已回滚到 v%d 草稿", previousVersion), clientIP(r))
-	writeData(w, http.StatusOK, map[string]any{"version": previousVersion, "message": fmt.Sprintf("已回滚到 v%d，确认后需要重新发布", previousVersion)})
+		fmt.Sprintf("策略已回滚到 v%d，立即生效", previousVersion), clientIP(r))
+	writeData(w, http.StatusOK, map[string]any{"version": previousVersion, "message": fmt.Sprintf("已回滚到 v%d，立即生效", previousVersion)})
 }
 
 type automationTaskItem struct {

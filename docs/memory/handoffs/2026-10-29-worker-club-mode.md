@@ -140,3 +140,24 @@
   `state.selfBeginScore` 已经存了上次的带入值，可直接用。
 - **远程节点同步**：`agent-client/` 不在部署包里，远端 worker 节点要手动拷贝一份（本机节点已是最新的）。
 - 未连真服跑过；`XUAN_REINSTATE_DELAY_MS`、8 秒带入节流、3 秒兜底都是保守值，实跑后可调。
+
+## 追加（2026-11-25）：带入资金来源＝俱乐部金币
+
+用户确认：现在**整个游戏都是俱乐部模式，带入扣的是俱乐部金币**，不是玩家个人金币。之前的实现
+（`sendSit` / `tryBuyin` 里拿 `account.gold` 判断够不够）口径错了——`worker001` 个人 6000 金币仍被
+服务端回 770「带入金币不足」，实际原因是对应俱乐部（775447）`club_gold = 0`。
+
+调整：
+
+- 后端 `queryAgentAssignments` 多返回 `clubGold`（`kbedm.club_guuid_info.club_gold` 子查询，无俱乐部为 0）；
+  `FundShortage` 告警原因以库里的俱乐部金币为准，文案写「俱乐部金币 X 不足（房间最低带入 Y）」。
+- 节点 `cmd/xuanagent`：`assignment.ClubGold` → 终端启动注入 `XUAN_CLUB_GOLD`，变化时经 stdin
+  `{cmd:"config",clubGold}` 热更新（心跳即刷新，不用重启终端）。
+- 客户端 `agent-client/client.js`：新增 `availableFunds()`——有俱乐部就看俱乐部金币，没俱乐部才退回账号金币；
+  `sendSit`、`tryBuyin`、770 处理、余额观察器全部改用它。**预坐前本地先按俱乐部金币挡一道**，
+  钱不够根本不发 `预坐_事件`，不再刷服务端 770。
+- 恢复条件：观察器比对「报警时的俱乐部金币」与最新值，只有真的涨了才恢复；节点心跳把新值推给客户端后自动续座，
+  同时上报 `FundRestored` 让后台把 `robot_fund` 告警关掉。
+
+实测（测试服，俱乐部 775447 金币 0）：进场后 1.5 秒本地判定不足、**预坐请求 0 次**、服务端 770 只出现 1 条、
+告警 `robot_fund/open` 落库，随后静默等待。俱乐部金币补齐后应自动坐下（待运营充值后验证）。

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../../api";
 import { Button, EmptyState, Field, LoadingBlock, Modal, PageHeader, formatDate } from "../../components/ui";
 import { RobotLogList } from "./AutomationRobotLogs";
+import { useAutomationStream } from "./useAutomationStream";
 import {
   AutomationBadge,
   ErrorBanner,
@@ -58,11 +59,16 @@ export default function AutomationWorkersPage({ can, notify }: AutomationPagePro
 
   useEffect(() => { void load(); }, [load]);
 
-  // 节点可能随时退出或被关掉，列表跟着自动刷新，不用手动点「刷新」。
+  // 实时通道：节点上下线、机器人状态、命令回执一有变化立刻重拉，不用等轮询。
+  const streamConnected = useAutomationStream((change) => {
+    if (change.scope === "workers" || change.scope === "robots" || change.scope === "events") void load(true);
+  });
+
+  // 实时通道连着时轮询退化成 20 秒兜底；没连上仍按 5 秒刷新。
   useEffect(() => {
-    const timer = window.setInterval(() => { void load(true); }, 5000);
+    const timer = window.setInterval(() => { void load(true); }, streamConnected ? 20000 : 5000);
     return () => window.clearInterval(timer);
-  }, [load]);
+  }, [load, streamConnected]);
 
   const summary = useMemo(() => {
     const list = items ?? [];
@@ -80,7 +86,9 @@ export default function AutomationWorkersPage({ can, notify }: AutomationPagePro
     <PageHeader
       eyebrow="WORKER NODES"
       title="Worker 节点"
-      description="无头节点通过接入令牌注册后领取命令、上报事件；这里看节点健康、下发命令、处理异常终端。"
+      description={streamConnected
+        ? "无头节点通过接入令牌注册后领取命令、上报事件；实时通道已连接，状态变化即时推送。"
+        : "无头节点通过接入令牌注册后领取命令、上报事件；实时通道未连接，按 5 秒轮询刷新。"}
       actions={<div className="row-actions">
         <Button variant="secondary" disabled={loading} onClick={() => void load()}>{loading ? "正在刷新…" : "刷新"}</Button>
       </div>}
@@ -103,7 +111,7 @@ export default function AutomationWorkersPage({ can, notify }: AutomationPagePro
           <button>搜索</button>
         </form>
         <div className="automation-filter-row">
-          <label>状态<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">全部状态</option>{workerStatuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
+          <label>状态<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">在线节点</option>{workerStatuses.map((value) => <option key={value} value={value}>{statusLabel(value)}</option>)}</select></label>
         </div>
       </div>
 
@@ -121,7 +129,7 @@ export default function AutomationWorkersPage({ can, notify }: AutomationPagePro
                   <small className="cell-subtitle">{worker.host || "—"}{worker.labels ? ` · ${worker.labels}` : ""}</small>
                 </td>
                 <td><AutomationBadge value={worker.status} /><small className="cell-subtitle">{worker.platform || worker.os || "—"}{worker.arch ? `/${worker.arch}` : ""} · v{worker.version || "—"}</small></td>
-                <td>{worker.leased ? <span className="automation-ok-text">有效</span> : <span className="automation-warn-text">已过期</span>}<small className="cell-subtitle">注册 {timeText(worker.enrolledAt)}</small></td>
+                <td>{worker.leased ? <span className="automation-ok-text">有效</span> : <span className="automation-warn-text">已过期</span>}<small className="cell-subtitle">{worker.realtime ? "实时通道已连接" : "轮询模式"} · 注册 {timeText(worker.enrolledAt)}</small></td>
                 <td>{worker.robotCount} / {worker.maxRobots}<ProgressBar value={worker.robotCount} max={Math.max(worker.maxRobots, 1)} danger={worker.robotCount >= worker.maxRobots} hideValue /><small className="cell-subtitle">{worker.faultedRobots > 0 ? `${worker.faultedRobots} 台异常` : "全部正常"}</small></td>
                 <td>CPU {worker.cpuPct}%<small className="cell-subtitle">内存 {worker.memPct}%</small></td>
                 <td>待执行 {worker.pendingCommands}<small className="cell-subtitle">执行中 {worker.runningCommands}</small></td>
@@ -335,12 +343,13 @@ function WorkerDetailModal({ workerId, canManage, notify, onClose, onChanged }: 
   const commands = data?.commands ?? [];
   const events = data?.events ?? [];
 
-  return <Modal title={worker ? `${worker.nodeCode} · 节点详情` : `节点 #${workerId}`} eyebrow="WORKER DETAIL" onClose={onClose} wide>
+  return <Modal title={worker ? `${worker.nodeCode} · 节点详情` : `节点 #${workerId}`} eyebrow="WORKER DETAIL" onClose={onClose} xwide>
     {loading ? <LoadingBlock label="正在读取节点详情" /> : error && !worker ? <ErrorBanner message={error} /> : worker && <>
       <ErrorBanner message={error} />
       <div className="automation-detail-metrics">
         <div><span>状态</span><strong className="automation-detail-text"><AutomationBadge value={worker.status} /></strong></div>
         <div><span>租约</span><strong className={worker.leased ? "automation-ok-text" : "automation-warn-text"}>{worker.leased ? "有效" : "已过期"}</strong></div>
+        <div><span>实时通道</span><strong className={worker.realtime ? "automation-ok-text" : "automation-warn-text"}>{worker.realtime ? "WebSocket 已连接" : "未连接（轮询兜底）"}</strong></div>
         <div><span>承载终端</span><strong>{worker.robotCount} / {worker.maxRobots}</strong></div>
         <div><span>待执行命令</span><strong>{worker.pendingCommands}</strong></div>
         <div><span>异常终端</span><strong className={worker.faultedRobots > 0 ? "automation-warn-text" : ""}>{worker.faultedRobots}</strong></div>

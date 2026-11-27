@@ -72,6 +72,17 @@ type agent struct {
 	seq    atomic.Int64
 	cursor int64
 
+	// wakeCh 由实时通道投递「有活干了」，主循环收到就补心跳 + 拉命令。
+	wakeCh chan string
+	// commands 收后台推来的命令；执行统一在主循环里做，避免和轮询并发执行同一条。
+	commands chan command
+	// handled 记录已执行的 commandNo，推送与轮询重复时只执行一次。
+	handled map[string]struct{}
+	// rt 是当前的长连接传输层；为 nil 时所有调用自动走 HTTP。
+	rt atomic.Pointer[wsTransport]
+	// pendingEvents 是上报失败待重发的批次（事件带幂等键，重发安全）。
+	pendingEvents []event
+
 	lastAssignments []assignment
 	strategyVersion int
 	droppedEvents   atomic.Int64
@@ -89,6 +100,9 @@ func main() {
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: level}))
 
+	// 关终端窗口时 stdout 会断（EPIPE → 默认 SIGPIPE 直接杀进程），先忽略掉，
+	// 让退出流程能把 /agent/v1/offline 发出去。
+	signal.Ignore(syscall.SIGPIPE)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -100,9 +114,26 @@ func main() {
 		roundsPerRoom: cfg.roundsPerRoom,
 		terminals:     map[string]*terminal{},
 		events:        make(chan event, 1024),
+		wakeCh:        make(chan string, 8),
+		commands:      make(chan command, 32),
+		handled:       map[string]struct{}{},
 		runID:         newRunID(),
 	}
 	a.ctx, a.cancel = context.WithCancel(ctx)
+
+	// 直接关窗口发的是 SIGHUP：先抢在进程被杀之前上报下线，再走正常退出。
+	// 不接这个信号，后台要等 20 秒租约过期才显示离线。
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	go func() {
+		select {
+		case <-hup:
+			a.log.Info("收到 SIGHUP（窗口关闭），先上报下线")
+			a.offline("窗口关闭")
+			a.cancel()
+		case <-a.ctx.Done():
+		}
+	}()
 
 	if err := a.run(); err != nil {
 		logger.Error("agent 退出", "error", err)
@@ -345,19 +376,33 @@ func (a *agent) run() error {
 	// 先立刻心跳一次：拿到指派清单，终端才建得起来，后面收到的终端命令才有对象可执行。
 	a.heartbeat()
 
+	// 实时通道：连上后后台一有命令/指派变化就推 wake，下面的 2 秒轮询退化成兜底。
+	go a.realtimeLoop()
+
 	heartbeat := time.NewTicker(interval)
 	defer heartbeat.Stop()
 	commands := time.NewTicker(2 * time.Second)
 	defer commands.Stop()
 
 	a.log.Info("agent 已就绪", "node", a.cfg.code, "heartbeat", interval, "capacity", a.cfg.capacity)
+	pullTicks := 0
 	for {
 		select {
 		case <-a.ctx.Done():
 			return nil
+		case reason := <-a.wakeCh:
+			// 后台推来的「有活」：补一拍心跳拿最新指派，再立刻取命令。
+			a.log.Debug("唤醒后同步", "reason", reason)
+			a.heartbeat()
+			a.pullCommands()
 		case <-heartbeat.C:
 			a.heartbeat()
 		case <-commands.C:
+			pullTicks++
+			// 实时通道连着时，轮询只做 30 秒一次的兜底；没连上就保持 2 秒。
+			if a.realtimeActive() && pullTicks%15 != 0 {
+				continue
+			}
 			a.pullCommands()
 		}
 	}
@@ -402,7 +447,7 @@ func (a *agent) heartbeat() {
 	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 	defer cancel()
 	active := a.activeTerminalCount()
-	result, err := a.client.heartbeat(ctx, heartbeatRequest{
+	result, err := a.sendHeartbeat(ctx, heartbeatRequest{
 		Version:         version,
 		CPUPct:          0,
 		MemPct:          0,
@@ -434,7 +479,7 @@ func (a *agent) heartbeat() {
 func (a *agent) pullCommands() {
 	for round := 0; round < 5; round++ {
 		ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
-		batch, err := a.client.pullCommands(ctx, a.cursor, 20)
+		batch, err := a.pullCommandsRemote(ctx, a.cursor, 20)
 		cancel()
 		if err != nil {
 			var detail *apiError
@@ -465,9 +510,13 @@ func (a *agent) pullCommands() {
 
 // executeCommand 走「接受 -> 执行 -> 完成/拒绝」三段回执，失败也要把原因写回后台。
 func (a *agent) executeCommand(item command) {
+	if !a.markHandled(item.CommandNo) {
+		a.log.Debug("命令已执行过，跳过", "commandNo", item.CommandNo)
+		return
+	}
 	ctx, cancel := context.WithTimeout(a.ctx, 20*time.Second)
 	defer cancel()
-	if err := a.client.ack(ctx, item.CommandNo, "ACCEPTED", nil, "", ""); err != nil {
+	if err := a.sendAck(ctx, item.CommandNo, "ACCEPTED", nil, "", ""); err != nil {
 		a.log.Warn("命令接受回执失败", "commandNo", item.CommandNo, "error", err)
 		return
 	}
@@ -476,7 +525,7 @@ func (a *agent) executeCommand(item command) {
 	if errCode != "" {
 		status = "REJECTED"
 	}
-	if err := a.client.ack(ctx, item.CommandNo, status, result, errCode, errMessage); err != nil {
+	if err := a.sendAck(ctx, item.CommandNo, status, result, errCode, errMessage); err != nil {
 		a.log.Warn("命令完成回执失败", "commandNo", item.CommandNo, "error", err)
 		return
 	}
@@ -577,19 +626,35 @@ func (a *agent) emitAt(t *terminal, eventType, roundID string, roomID int64, pay
 }
 
 func (a *agent) flushLoop() {
-	ticker := time.NewTicker(800 * time.Millisecond)
-	defer ticker.Stop()
 	for {
+		// 实时通道在时 250ms 一冲，状态到后台更快；否则保持 800ms 攒批，少发几次请求。
+		// 每轮重算：连接可能中途建立或掉线。
+		interval := 800 * time.Millisecond
+		if a.realtimeActive() {
+			interval = 250 * time.Millisecond
+		}
+		timer := time.NewTimer(interval)
 		select {
 		case <-a.ctx.Done():
+			timer.Stop()
 			return
-		case <-ticker.C:
+		case <-timer.C:
 			a.flush(a.ctx)
 		}
 	}
 }
 
 func (a *agent) flush(ctx context.Context) {
+	// 先补发上次失败的批次；发不出去就整轮跳过，避免越积越乱。
+	if len(a.pendingEvents) > 0 {
+		retry := a.pendingEvents
+		if err := a.sendEvents(ctx, retry); err != nil {
+			a.failedFlushes.Add(1)
+			return
+		}
+		a.pendingEvents = nil
+		a.log.Debug("补发事件成功", "count", len(retry))
+	}
 	for {
 		batch := make([]event, 0, 64)
 		draining := true
@@ -605,11 +670,16 @@ func (a *agent) flush(ctx context.Context) {
 			return
 		}
 		sendCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-		err := a.client.reportEvents(sendCtx, batch)
+		err := a.sendEvents(sendCtx, batch)
 		cancel()
 		if err != nil {
+			// 事件带 eventId 幂等键，重发安全；留在队列里等下一拍或重连后再发。
+			a.pendingEvents = append(a.pendingEvents, batch...)
+			if len(a.pendingEvents) > 2000 {
+				a.pendingEvents = a.pendingEvents[len(a.pendingEvents)-2000:]
+			}
 			a.failedFlushes.Add(1)
-			a.log.Warn("上报事件失败", "count", len(batch), "error", err)
+			a.log.Warn("上报事件失败，稍后重发", "count", len(batch), "pending", len(a.pendingEvents), "error", err)
 			return
 		}
 		a.log.Debug("上报事件", "count", len(batch))

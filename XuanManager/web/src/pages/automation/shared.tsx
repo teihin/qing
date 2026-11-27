@@ -133,6 +133,12 @@ export interface AutomationRobotItem {
   riskFlag: boolean;
   isDemo: boolean;
   updatedAt: string;
+  /** 游戏用户ID（玩家 guuid），没登录过时为空。 */
+  playerId?: string;
+  /** 已加入的俱乐部与各自的金币余额。 */
+  clubs?: AutomationRobotClub[];
+  /** 这台机器人在绑定策略之上的自定义参数（只有被改过的字段）。 */
+  strategyOverride?: Record<string, unknown> | null;
 }
 
 export interface AutomationStrategyTier {
@@ -150,6 +156,8 @@ export interface AutomationStrategyConfig {
   sitTimeoutMs: number;
   reinstateDelayMs: number;
   roomRetryMs: number;
+  /** 是否允许进「等待中/准备中」的房间；默认 false —— 只进已经开局的房间。 */
+  allowWaitingRoom: boolean;
   // 出牌节奏
   actionDelayMinMs: number;
   actionDelayMaxMs: number;
@@ -248,6 +256,13 @@ export interface AutomationWorkerItem {
 }
 
 /** Worker 节点列表行：在总览那份精简字段之上，补 Worker 通道的租约、命令与事件信息。 */
+/** 机器人在游戏侧的俱乐部（含该玩家在这个俱乐部里的金币）。 */
+export interface AutomationRobotClub {
+  clubId: string;
+  name: string;
+  clubGold: number | null;
+}
+
 export interface AutomationWorkerRow extends AutomationWorkerItem {
   platform: string;
   arch: string;
@@ -260,6 +275,8 @@ export interface AutomationWorkerRow extends AutomationWorkerItem {
   pendingCommands: number;
   runningCommands: number;
   faultedRobots: number;
+  /** 是否挂着实时长连接（/agent/v1/ws）：true 时状态变化是推送的，不靠轮询。 */
+  realtime?: boolean;
 }
 
 export interface AutomationWorkerRobot {
@@ -544,6 +561,7 @@ const statusLabels: Record<string, string> = {
   paused: "已暂停",
   stopped: "已停止",
   faulted: "故障",
+  shortage: "额度不足",
   queued: "排队中",
   running: "执行中",
   success: "成功",

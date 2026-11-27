@@ -10,6 +10,7 @@ import {
   workerEventTone,
   type AutomationWorkerEvent,
 } from "./shared";
+import { useAutomationStream } from "./useAutomationStream";
 
 // RobotLogList 是机器人的运行日志：数据来自节点上报的事件流，按 robot_id 过滤。
 // 投放详情、机器人详情、节点详情三处共用同一个接口和同一个列表。
@@ -29,12 +30,20 @@ export function RobotLogList({ robotId, limit = 200, live = true }: { robotId: n
     }
   }, [robotId, limit]);
 
+  // 实时通道：这台机器人一有新事件立刻重拉；没连上就退回 5 秒轮询。
+  const streamConnected = useAutomationStream((change) => {
+    if (!live) return;
+    if (change.robotId && change.robotId !== robotId) return;
+    if (change.scope !== "events" && change.scope !== "robots") return;
+    void load(true);
+  });
+
   useEffect(() => {
     void load();
     if (!live) return;
-    const timer = window.setInterval(() => { void load(true); }, 5000);
+    const timer = window.setInterval(() => { void load(true); }, streamConnected ? 20000 : 5000);
     return () => window.clearInterval(timer);
-  }, [load, live]);
+  }, [load, live, streamConnected]);
 
   if (items === null) return error ? <ErrorBanner message={error} /> : <LoadingBlock label="正在读取机器人日志" />;
   if (items.length === 0) return <EmptyState title="还没有运行日志" description="机器人在节点上登录、进房、开局、结算都会记在这里；刚投放的机器人可能还没被节点拉起。" />;
@@ -43,7 +52,7 @@ export function RobotLogList({ robotId, limit = 200, live = true }: { robotId: n
     <div className="automation-detail-list">
       {items.map((event) => <RobotLogRow key={event.id} event={event} />)}
     </div>
-    <small className="automation-inline-meta">最近 {items.length} 条{live ? "，每 5 秒自动刷新" : ""}。</small>
+    <small className="automation-inline-meta">最近 {items.length} 条{live ? (streamConnected ? "，实时刷新" : "，每 5 秒自动刷新") : ""}。</small>
   </>;
 }
 
@@ -74,7 +83,7 @@ export function RobotLogModal({ robotId, title, eyebrow = "ROBOT LOG", onClose }
   eyebrow?: string;
   onClose: () => void;
 }) {
-  return <Modal title={title} eyebrow={eyebrow} onClose={onClose} wide>
+  return <Modal title={title} eyebrow={eyebrow} onClose={onClose} xwide>
     <RobotLogList robotId={robotId} />
   </Modal>;
 }

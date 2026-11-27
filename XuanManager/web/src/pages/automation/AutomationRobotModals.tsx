@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, jsonBody } from "../../api";
 import { Button, Field, FormActions, LoadingBlock, Modal } from "../../components/ui";
 import { RobotLogList } from "./AutomationRobotLogs";
@@ -17,8 +17,10 @@ import {
   useAutomationStrategies,
   type AutomationGroupItem,
   type AutomationRobotItem,
+  type AutomationStrategyConfig,
   type ProfitScheduleEntry,
 } from "./shared";
+import { StrategyConfigForm, emptyStrategyConfig, normalizeStrategyConfig } from "./StrategyConfigForm";
 
 interface RobotAddModalProps {
   groups: AutomationGroupItem[];
@@ -105,9 +107,7 @@ function GroupPicker({ value, onChange, groups, canCreate, onGroupCreated, hint 
 }
 
 export function RobotAddModal({ groups, canCreateGroup, onGroupCreated, onClose, onSaved }: RobotAddModalProps) {
-  const [prefix, setPrefix] = useState("");
   const [count, setCount] = useState("5");
-  const [startNo, setStartNo] = useState("1");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [groupId, setGroupId] = useState("");
@@ -115,20 +115,18 @@ export function RobotAddModal({ groups, canCreateGroup, onGroupCreated, onClose,
   const [error, setError] = useState("");
 
   const countValue = Math.max(1, Math.min(50, Number(count) || 1));
-  const startValue = Math.max(1, Math.min(999, Number(startNo) || 1));
-  const firstAccount = prefix ? `${prefix}${String(startValue).padStart(3, "0")}` : "";
-  const lastAccount = prefix ? `${prefix}${String(Math.min(999, startValue + countValue - 1)).padStart(3, "0")}` : "";
 
   const submit = async () => {
-    if (!/^[A-Za-z0-9]{3,13}$/.test(prefix)) { setError("账号前缀必须为 3 到 13 位英文字母或数字"); return; }
     if (password.length < 6 || password.length > 32) { setError("登录密码必须为 6 到 32 个字符"); return; }
     if (password !== passwordConfirm) { setError("两次输入的登录密码不一致"); return; }
     setBusy(true); setError("");
     try {
-      const result = await api<{ message: string }>("/api/automation/robots/bulk", {
+      const result = await api<{ message: string; accounts?: string[] }>("/api/automation/robots/bulk", {
         method: "POST",
         ...jsonBody({
-          prefix, count: countValue, startNo: startValue, password,
+          // 账号不填前缀：后台自动用 worker 开头、按现有账号往后编号。
+          count: countValue,
+          password,
           groupId: Number(groupId) || 0,
           // 智力、带入倍数、启用状态都不在创建时设置：创建即可被调度，具体跑法由策略决定。
           intelligence: 0,
@@ -136,7 +134,10 @@ export function RobotAddModal({ groups, canCreateGroup, onGroupCreated, onClose,
           enabled: true,
         }),
       });
-      onSaved(result.message);
+      const accounts = result.accounts ?? [];
+      onSaved(accounts.length > 0
+        ? `${result.message}（${accounts[0]}${accounts.length > 1 ? ` ~ ${accounts[accounts.length - 1]}` : ""}）`
+        : result.message);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "批量创建机器人失败");
     } finally {
@@ -148,16 +149,14 @@ export function RobotAddModal({ groups, canCreateGroup, onGroupCreated, onClose,
     <form className="form-grid form-grid--two" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
       <ErrorBanner message={error} />
       <div className="automation-form-note automation-form-note--wide">
-        会在游戏服真实创建 <strong>{countValue}</strong> 个游戏账号：登录名为「账号前缀 + 三位序号」，昵称和头像随机生成。密码以<strong>密文</strong>保存在后台（游戏服只存 MD5），Worker 拉起客户端时由后台解密后下发。
+        会在游戏服真实创建 <strong>{countValue}</strong> 个游戏账号：登录名<strong>自动按 worker 往后编号</strong>（接着现有账号排，例如 worker003、worker004…），昵称和头像随机生成。密码以<strong>密文</strong>保存在后台（游戏服只存 MD5），Worker 拉起客户端时由后台解密后下发。
       </div>
-      <Field label="账号前缀" hint="3–13 位英文字母或数字，生成后的登录名为 6–16 位"><input value={prefix} onChange={(event) => setPrefix(event.target.value.trim())} placeholder="例如 star" /></Field>
-      <Field label="批量数量" hint="1–50 个"><input type="number" min={1} max={50} value={count} onChange={(event) => setCount(event.target.value)} /></Field>
-      <Field label="起始序号" hint="账号会生成 前缀 + 三位序号"><input type="number" min={1} max={999} value={startNo} onChange={(event) => setStartNo(event.target.value)} /></Field>
+      <Field label="创建数量" hint="1–50 个"><input type="number" min={1} max={50} value={count} onChange={(event) => setCount(event.target.value)} /></Field>
       <Field label="登录密码" hint="6–32 个字符，密文保存在后台"><input type="password" autoComplete="new-password" value={password} onChange={(event) => setPassword(event.target.value)} /></Field>
       <Field label="确认密码"><input type="password" autoComplete="new-password" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} /></Field>
       <GroupPicker value={groupId} onChange={setGroupId} groups={groups} canCreate={canCreateGroup} onGroupCreated={onGroupCreated} hint="创建后会加入这个分组，也可以稍后修改" />
       <div className="automation-form-note automation-form-note--wide">
-        {firstAccount ? <>将创建 <strong>{firstAccount}</strong>{countValue > 1 ? <> 到 <strong>{lastAccount}</strong></> : null} 共 {countValue} 个账号，创建后到 <strong>投放管理</strong> 选择投放。</> : "填写账号前缀后会显示将创建的登录名。"}
+        将创建 {countValue} 个账号，登录名由后台自动分配（worker 开头、接着现有编号）；创建完到 <strong>投放管理</strong> 选择俱乐部投放。
       </div>
       <div className="automation-form-actions-wide"><FormActions onCancel={onClose} busy={busy} submitText={`创建 ${countValue} 个机器人`} /></div>
     </form>
@@ -334,6 +333,20 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
   const [profitSchedule, setProfitSchedule] = useState<ProfitScheduleEntry[]>([]);
   const [roomPi, setRoomPi] = useState("");
   const [busy, setBusy] = useState(false);
+  // 策略：可以直接换绑别的策略，也可以在所选策略之上做这台机器人的自定义参数。
+  const strategies = useAutomationStrategies();
+  const [strategyId, setStrategyId] = useState("");
+
+  // 自定义 = 在所选策略之上整份覆盖（所有策略项都能改）。
+  const [customConfig, setCustomConfig] = useState<AutomationStrategyConfig>(emptyStrategyConfig);
+  const [overrideDoc, setOverrideDoc] = useState<Record<string, unknown> | null>(null);
+
+  // 自定义底稿 = 所选策略的参数 + 这台机器人已有的覆盖；切换策略时重新按策略填。
+  useEffect(() => {
+    const strategy = strategies.find((item) => String(item.id) === strategyId);
+    const base = normalizeStrategyConfig((strategy?.config ?? null) as Partial<AutomationStrategyConfig> | null);
+    setCustomConfig(normalizeStrategyConfig({ ...base, ...(overrideDoc ?? {}) } as Partial<AutomationStrategyConfig>));
+  }, [strategies, strategyId]);
 
   const load = useCallback(async () => {
     setLoading(true); setError("");
@@ -347,6 +360,10 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
       setPeriodEnd(next.periodEnd ? next.periodEnd.slice(0, 10) : "");
       setProfitSchedule(parseProfitSchedule(next.profitSchedule));
       setRoomPi(next.roomPi ?? "");
+      setStrategyId(next.strategyId ? String(next.strategyId) : "");
+      const override = (next.strategyOverride ?? null) as Record<string, unknown> | null;
+      const hasOverride = Boolean(override && Object.keys(override).length > 0);
+      setOverrideDoc(hasOverride ? override : null);
     } catch (reason) {
       setError(reason instanceof ApiError ? reason.message : "读取投放配置失败");
     } finally {
@@ -355,6 +372,13 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
   }, [robotId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  const strategyConfig = useMemo(() => {
+    const strategy = strategies.find((item) => String(item.id) === strategyId);
+    return normalizeStrategyConfig((strategy?.config ?? null) as Partial<AutomationStrategyConfig> | null);
+  }, [strategies, strategyId]);
+  // 与所选策略完全一致就不写覆盖层；有任何差异就整份存成这台机器人的自定义参数。
+  const overrideToSubmit = JSON.stringify(customConfig) === JSON.stringify(strategyConfig) ? null : customConfig;
 
   const submit = async () => {
     if (!robot) return;
@@ -370,7 +394,9 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
         ...jsonBody({
           nickname: robot.nickname,
           groupId: robot.groupId ?? 0,
-          strategyId: robot.strategyId ?? 0,
+          strategyId: Number(strategyId) || 0,
+          // 和策略不一样才写覆盖层（整份存）；完全一致就跟随策略，免得以后策略升级这台不跟。
+          strategyOverride: overrideToSubmit,
           workerId: robot.workerId ?? 0,
           egressIp: robot.egressIp,
           buyinMultiple: robot.buyinMultiple,
@@ -412,7 +438,23 @@ export function RobotDeployConfigModal({ robotId, label, canManage, onClose, onS
           if (patch.periodEnd !== undefined) setPeriodEnd(patch.periodEnd);
           if (patch.schedule !== undefined) setProfitSchedule(patch.schedule);
         }} />
+        <Field label="绑定策略" hint="决定跑法与出牌；换策略后下一次心跳生效。留空表示跟随分组/机器人自己的设置">
+          <select value={strategyId} onChange={(event) => setStrategyId(event.target.value)} disabled={!canManage}>
+            <option value="">跟随分组</option>
+            {strategies.map((item) => <option key={item.id} value={item.id}>
+              {item.name}{item.status === "enabled" ? "" : item.status === "gray" ? "（灰度）" : "（旧草稿·已生效）"}
+            </option>)}
+          </select>
+        </Field>
+        <div className="automation-form-note automation-form-note--wide">
+          策略参数 · 下面是所选策略的完整参数，改了保存即成为这台机器人的自定义（不跟策略升级）；
+          全部保持和策略一致则自动跟随策略。保存后下一次心跳下发，客户端按新规则立即生效。
+        </div>
         <div className="automation-form-note--wide">
+          <StrategyConfigForm config={customConfig} onChange={setCustomConfig} disabled={!canManage} />
+        </div>
+
+        <div className="automation-form-note automation-form-note--wide">
           <Field as="div" label="只进的底皮档位" hint={`现在是 ${roomPiText(roomPi)}；改完要从节点详情重新拉起这台终端才生效`}>
             <RoomPiPicker value={roomPi} onChange={setRoomPi} disabled={!canManage} />
           </Field>

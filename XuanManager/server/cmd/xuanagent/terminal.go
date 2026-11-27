@@ -64,6 +64,7 @@ type terminal struct {
 	gps          string
 	profitMode   string
 	profitTarget int64
+	clubGold     int64
 	periodStart  string
 	periodEnd    string
 	todayNet     int64
@@ -237,6 +238,8 @@ func (a *agent) runRealTerminal(t *terminal) {
 	buyin, robotID, roomPi := t.buyinMultiple, t.robotID, t.roomPi
 	gps, profitMode, profitTarget := t.gps, t.profitMode, t.profitTarget
 	periodStart, periodEnd, todayNet, periodNet := t.periodStart, t.periodEnd, t.todayNet, t.periodNet
+	clubGold := t.clubGold
+	resumeRoom := t.roomID
 	strategy := t.strategy
 	loginOnly := t.loginOnly
 	paused := t.state == termPaused
@@ -255,6 +258,8 @@ func (a *agent) runRealTerminal(t *terminal) {
 		"XUAN_CLUB_ID="+clubID,
 		"XUAN_INVITE_CODE="+inviteCode,
 		"XUAN_JOIN_STATUS="+joinStatus,
+		// 上次所在的房间：客户端启动时先尝试回这个房（留座还在就继续打，不用重新找房/预坐）。
+		"XUAN_RESUME_ROOM="+strconv.FormatInt(resumeRoom, 10),
 	)
 	if buyin > 0 {
 		env = append(env, "XUAN_BUYIN_MULTIPLE="+strconv.Itoa(buyin))
@@ -269,6 +274,8 @@ func (a *agent) runRealTerminal(t *terminal) {
 	if gps != "" {
 		env = append(env, "XUAN_GPS="+gps)
 	}
+	// 带入扣的是俱乐部金币：启动时就把当前值带给客户端，之后靠 config 热更新。
+	env = append(env, "XUAN_CLUB_GOLD="+strconv.FormatInt(clubGold, 10))
 	if profitMode != "" {
 		env = append(env, "XUAN_PROFIT_MODE="+profitMode)
 	}
@@ -416,21 +423,22 @@ func (a *agent) forwardRealEvent(t *terminal, msg realMessage) {
 	}
 }
 
+// logClientLine 按「账号 时:分:秒: 内容」的简版格式输出客户端日志。
+// 用户要求日志一眼能扫，别带 time=… level=… msg=… 那串前缀；WARN/ERROR 才加标记。
 func (a *agent) logClientLine(t *terminal, level, message string) {
 	message = strings.TrimSpace(message)
-	if message == "" {
+	if message == "" || level == "debug" {
 		return
 	}
+	stamp := time.Now().Format("15:04:05")
+	mark := ""
 	switch level {
-	case "debug":
-		a.log.Debug("client: "+message, "terminal", t.describe())
 	case "warn":
-		a.log.Warn("client: "+message, "terminal", t.describe())
+		mark = "WARN "
 	case "error":
-		a.log.Error("client: "+message, "terminal", t.describe())
-	default:
-		a.log.Info("client: "+message, "terminal", t.describe())
+		mark = "ERROR "
 	}
+	fmt.Fprintf(os.Stdout, "%s %s: %s%s\n", t.account, stamp, mark, message)
 }
 
 func numberAsInt(value any) (int, bool) {
@@ -559,6 +567,10 @@ func (a *agent) ensureTerminal(item assignment) {
 	t.roomPi = item.RoomPi
 	t.nickname = item.Nickname
 	t.clubID = item.ClubID
+	if t.roomID == 0 && item.RoomID > 0 {
+		// 节点刚启动时用自己的记录为空，用后台回传的房间号补上，进程重启后也能回原房。
+		t.roomID = item.RoomID
+	}
 	t.group = item.GroupName
 	t.inviteCode = item.InviteCode
 	t.joinStatus = item.JoinStatus
@@ -581,6 +593,11 @@ func (a *agent) ensureTerminal(item assignment) {
 		t.profitTarget = item.ProfitTarget
 		configChanged = true
 	}
+	// 俱乐部金币变了（补分/消耗）要热推给客户端，它才知道什么时候能继续坐下。
+	if item.ClubGold != t.clubGold {
+		t.clubGold = item.ClubGold
+		configChanged = true
+	}
 	if item.TodayNet != t.todayNet || item.PeriodNet != t.periodNet {
 		t.todayNet, t.periodNet = item.TodayNet, item.PeriodNet
 		configChanged = true
@@ -598,6 +615,7 @@ func (a *agent) ensureTerminal(item assignment) {
 		"periodEnd":    t.periodEnd,
 		"todayNet":     t.todayNet,
 		"periodNet":    t.periodNet,
+		"clubGold":     t.clubGold,
 	}
 	// 策略整份下发，客户端按需覆盖跑法参数与打牌阈值。
 	if t.strategy != "" {
@@ -700,8 +718,13 @@ func (a *agent) stopTerminal(terminalNo string, robotID int64, reason string) *t
 		a.mu.Unlock()
 		return nil
 	}
+	alreadyStopped := t.getState() == termStopped && !t.running()
 	t.setState(termStopped)
 	a.mu.Unlock()
+	if alreadyStopped {
+		// 已经停过了：不再发控制命令、不刷日志（心跳每 5 秒都会走一遍这里）。
+		return t
+	}
 	t.writeControl("stop")
 	a.log.Info("terminal stop requested", "terminal", t.describe(), "reason", reason)
 	return t
@@ -779,11 +802,38 @@ func (a *agent) reconcile(items []assignment) {
 	}
 	a.mu.Unlock()
 	for _, t := range extra {
+		// 已经停干净（进程没了）的直接从表里摘掉：否则每轮心跳都会重发一次 stop，
+		// 日志刷成 "terminal stop requested reason=not-assigned" 而实际上什么都没做。
+		if t.getState() == termStopped && !t.running() {
+			a.removeTerminal(t.no, t.robotID)
+			continue
+		}
 		a.stopTerminal(t.no, t.robotID, "not-assigned")
 	}
 	for _, item := range items {
 		a.ensureTerminal(item)
 	}
+}
+
+// running 判断终端进程是否还活着（有 cmd 且未退出）。
+func (t *terminal) running() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.cmd != nil
+}
+
+// removeTerminal 把已经停止的终端从节点表里摘掉，避免反复对账。
+func (a *agent) removeTerminal(terminalNo string, robotID int64) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	t := a.findLocked(terminalNo, robotID)
+	if t == nil {
+		return
+	}
+	if t.getState() != termStopped || t.running() {
+		return
+	}
+	delete(a.terminals, t.no)
 }
 
 func (a *agent) activeTerminalCount() int {

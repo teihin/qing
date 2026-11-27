@@ -81,6 +81,8 @@ type automationWorkerListRow struct {
 	PendingCommands int        `json:"pendingCommands"`
 	RunningCommands int        `json:"runningCommands"`
 	FaultedRobots   int        `json:"faultedRobots"`
+	// 是否挂着实时长连接（/agent/v1/ws）。false 时状态靠 5 秒心跳 + 页面轮询。
+	Realtime bool `json:"realtime"`
 }
 
 type automationWorkerRobot struct {
@@ -137,6 +139,7 @@ func scanAutomationWorkerRow(rows interface{ Scan(...any) error }) (automationWo
 	}
 	item.IsDemo = isDemo == 1
 	item.Leased = leased == 1
+	item.Realtime = agentStreams.connected(item.ID)
 	return item, nil
 }
 
@@ -154,6 +157,10 @@ func (s *Server) handleListAutomationWorkers(w http.ResponseWriter, r *http.Requ
 		// 用租约是否过期判定实时状态，租约超时但巡检还没跑到的节点也按离线筛选。
 		conditions = append(conditions, "CASE WHEN w.status = 'online' AND (w.lease_expires_at IS NULL OR w.lease_expires_at <= NOW()) THEN 'offline' ELSE w.status END = ?")
 		args = append(args, status)
+	} else {
+		// 默认只列在线的节点（排空中也算在线）：每双击一次脚本都会注册一行，
+		// 离线的没必要一直堆在列表里；要查历史就按状态筛「离线」。
+		conditions = append(conditions, "("+automationWorkerOnlineSQL+" OR w.status = 'draining')")
 	}
 	query := automationWorkerListSelect + " WHERE " + strings.Join(conditions, " AND ") + " ORDER BY w.id"
 	rows, err := s.db.QueryContext(r.Context(), query, args...)

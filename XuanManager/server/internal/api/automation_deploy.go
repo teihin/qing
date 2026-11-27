@@ -113,6 +113,24 @@ type deployLookup struct {
 	RobotCount int    `json:"robotCount"`
 	MaxPerRoom int    `json:"maxPerRoom"`
 	Remaining  int    `json:"remaining"`
+	// 联盟层级：投放界面按「联盟 → 俱乐部」树形展开。没有联盟的俱乐部 unionId 为空。
+	UnionID   string `json:"unionId"`
+	UnionName string `json:"unionName"`
+}
+
+// deployClubOption 是「选择俱乐部」下拉里的一项。
+// 只列游戏库里邀请码可用（status=used）的俱乐部 —— 没码的俱乐部投放时也定位不到。
+type deployClubOption struct {
+	ClubID     string `json:"clubId"`
+	Name       string `json:"name"`
+	InviteCode string `json:"inviteCode"`
+	Status     string `json:"status"`
+	RobotQuota int    `json:"robotQuota"`
+	RobotCount int    `json:"robotCount"`
+	Remaining  int    `json:"remaining"`
+	// 联盟层级：投放界面按「联盟 → 俱乐部」树形展开；没有联盟的俱乐部 unionId 为空。
+	UnionID   string `json:"unionId"`
+	UnionName string `json:"unionName"`
 }
 
 type deployRequest struct {
@@ -133,6 +151,9 @@ func (s *Server) registerAutomationDeployRoutes() {
 	s.mux.Handle("GET /api/automation/deploy/clubs", s.authorized("automation.deploy.view", false, s.handleListDeployClubs))
 	s.mux.Handle("GET /api/automation/deploy/clubs/{clubId}", s.authorized("automation.deploy.view", false, s.handleGetDeployClub))
 	s.mux.Handle("GET /api/automation/deploy/lookup", s.authorized("automation.deploy.manage", false, s.handleLookupDeployClub))
+	// 投放弹窗的「选择俱乐部」下拉：按名称/编号/邀请码搜索游戏库里有可用邀请码的俱乐部。
+	s.mux.Handle("GET /api/automation/deploy/club-options", s.authorized("automation.deploy.manage", false, s.handleListDeployClubOptions))
+	s.mux.Handle("GET /api/automation/deploy/club-tree", s.authorized("automation.deploy.manage", false, s.handleDeployClubTree))
 	s.mux.Handle("POST /api/automation/deploy", s.authorized("automation.deploy.manage", true, s.handleDeployByInvite))
 	s.mux.Handle("POST /api/automation/robots/{id}/join", s.authorized("automation.deploy.manage", true, s.handleJoinAutomationRobot))
 	s.mux.Handle("POST /api/automation/deploy/clubs/{clubId}/dispatch", s.authorized("automation.deploy.manage", true, s.handleDispatchAutomationClub))
@@ -548,6 +569,75 @@ FROM mgr_automation_session WHERE club_id = ?`, clubID).Scan(&sessions, &rounds,
 	return nil
 }
 
+// handleListDeployClubOptions 给投放弹窗的「选择俱乐部」用：
+// 以游戏库里的可用邀请码为入口倒查俱乐部（俱乐部表近百万行，不能整表列出来），
+// 关键词匹配邀请码 / 俱乐部编号 / 俱乐部名称，只返回有投放权限的。
+func (s *Server) handleListDeployClubOptions(w http.ResponseWriter, r *http.Request, p principal) {
+	keyword := strings.TrimSpace(r.URL.Query().Get("keyword"))
+	limit := agentDefaultLimit
+	if value, err := strconv.Atoi(r.URL.Query().Get("limit")); err == nil && value > 0 {
+		limit = clampInt(value, 1, 300, agentDefaultLimit)
+	}
+	scope, err := s.automationScope(r.Context(), p)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取数据范围失败")
+		return
+	}
+	like := "%" + keyword + "%"
+	// 先按邀请码分支筛（used 的码只有几十条），再回俱乐部表取名称，避免扫百万行。
+	rows, err := s.db.QueryContext(r.Context(), `SELECT i.invite_code, i.club_guuid, COALESCE(c.club_name, ''),
+COALESCE(c.club_status, ''),
+COALESCE(c.union_id, ''),
+COALESCE((SELECT NULLIF(ui.union_name, '') FROM kbedm.club_union_info ui
+  WHERE ui.union_id = c.union_id AND COALESCE(ui.union_name, '') <> '' LIMIT 1), NULLIF(un.union_name, ''), ''),
+COALESCE(m.robot_quota, 0),
+(SELECT COUNT(*) FROM mgr_automation_robot rb WHERE rb.club_id = i.club_guuid)
+FROM kbedm.club_invite_code_info i
+LEFT JOIN kbedm.club_guuid_info c ON c.club_guuid = i.club_guuid
+LEFT JOIN kbedm.union_guuid_info un ON un.union_guuid = c.union_id
+LEFT JOIN mgr_automation_club m ON m.club_id = i.club_guuid
+WHERE i.status = 'used' AND COALESCE(i.club_guuid, '') <> ''
+  AND (? = '' OR i.invite_code LIKE ? OR i.club_guuid LIKE ? OR c.club_name LIKE ?)
+ORDER BY i.id DESC LIMIT ?`, keyword, like, like, like, limit*4)
+	if err != nil {
+		s.logger.Error("list deploy club options", "error", err, "keyword", keyword)
+		writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取俱乐部列表失败")
+		return
+	}
+	defer rows.Close()
+	items := make([]deployClubOption, 0, limit)
+	seen := map[string]bool{}
+	for rows.Next() {
+		var item deployClubOption
+		if err := rows.Scan(&item.InviteCode, &item.ClubID, &item.Name, &item.Status, &item.UnionID, &item.UnionName, &item.RobotQuota, &item.RobotCount); err != nil {
+			s.logger.Error("scan deploy club option", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取俱乐部列表失败")
+			return
+		}
+		// 同一俱乐部可能有多个代理各自的邀请码，只留最近的一个。
+		if seen[item.ClubID] || !scope.Allows(item.ClubID) {
+			continue
+		}
+		seen[item.ClubID] = true
+		if strings.TrimSpace(item.Name) == "" {
+			item.Name = item.ClubID
+		}
+		if item.RobotQuota > 0 {
+			item.Remaining = max(0, item.RobotQuota-item.RobotCount)
+		}
+		items = append(items, item)
+		if len(items) >= limit {
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		s.logger.Error("iterate deploy club options", "error", err)
+	}
+	// 排查用：返回了多少个俱乐部 / 关键词 / 数据范围命中情况
+	s.logger.Info("deploy club options", "count", len(items), "keyword", keyword, "limit", limit)
+	writeData(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func (s *Server) handleLookupDeployClub(w http.ResponseWriter, r *http.Request, p principal) {
 	code := strings.TrimSpace(r.URL.Query().Get("inviteCode"))
 	if !isSixDigitCode(code) {
@@ -841,4 +931,187 @@ func joinInt64List(values []int64) string {
 		parts = append(parts, strconv.FormatInt(value, 10))
 	}
 	return strings.Join(parts, ",")
+}
+
+// deployTreeNode 投放树的一个节点：联盟 / 盟主 / 代理 / 俱乐部。
+type deployTreeNode struct {
+	Type       string `json:"type"`  // union | leader | agent | club
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Subtitle   string `json:"subtitle,omitempty"`
+	InviteCode string `json:"inviteCode,omitempty"`
+	Children   int    `json:"children"` // >0 表示还能继续展开
+	// 展开下一级用的参数
+	UnionID  string `json:"unionId,omitempty"`
+	MemberID string `json:"memberId,omitempty"`
+}
+
+// handleDeployClubTree 投放弹窗的树形数据。按需逐级查：联盟 → 盟主 → 代理 → 俱乐部。
+// level=unions            根：联盟 + 独立俱乐部
+// level=leaders&unionId=  某个联盟下的盟主
+// level=agents&unionId=&memberId= 某盟主/代理下的下级代理 + 直挂俱乐部
+// level=clubs&unionId=&memberId=  某个成员名下的俱乐部
+func (s *Server) handleDeployClubTree(w http.ResponseWriter, r *http.Request, p principal) {
+	q := r.URL.Query()
+	level := strings.TrimSpace(q.Get("level"))
+	if level == "" {
+		level = "unions"
+	}
+	unionID := strings.TrimSpace(q.Get("unionId"))
+	memberID := strings.TrimSpace(q.Get("memberId"))
+	keyword := strings.TrimSpace(q.Get("keyword"))
+	like := "%" + keyword + "%"
+	ctx := r.Context()
+	items := make([]deployTreeNode, 0, 32)
+
+	switch level {
+	case "unions":
+		rows, err := s.db.QueryContext(ctx, `SELECT u.union_id, COALESCE(NULLIF(ui.union_name, ''), u.union_id)
+FROM (SELECT DISTINCT union_id FROM kbedm.club_guuid_info WHERE COALESCE(union_id, '') <> '') u
+LEFT JOIN (SELECT union_id, MAX(union_name) AS union_name FROM kbedm.club_union_info GROUP BY union_id) ui
+  ON ui.union_id = u.union_id
+WHERE (? = '' OR u.union_id LIKE ? OR COALESCE(ui.union_name, '') LIKE ?)
+ORDER BY u.union_id DESC LIMIT 200`, keyword, like, like)
+		if err != nil {
+			s.logger.Error("deploy tree unions", "error", err)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取联盟失败")
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var node deployTreeNode
+			if err := rows.Scan(&node.ID, &node.Name); err != nil {
+				continue
+			}
+			node.Type = "union"
+			node.UnionID = node.ID
+			node.Children = 1 // 具体数量展开时才知道
+			items = append(items, node)
+		}
+		// 独立俱乐部：没有联盟的那些，作为一个可展开的虚拟根（点开再按关键词查）
+		items = append(items, deployTreeNode{Type: "union", ID: "__indep__", Name: "独立俱乐部（无联盟）", UnionID: "__indep__", Children: 1})
+
+	case "leaders":
+		if unionID == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_PARAM", "缺少 unionId")
+			return
+		}
+		where := "m.union_id = ? AND m.role = 'leader'"
+		args := []any{unionID}
+		if unionID == "__indep__" {
+			where = "(COALESCE(m.union_id, '') = '' OR m.union_id IS NULL) AND m.role = 'leader'"
+			args = []any{}
+		}
+		if keyword != "" {
+			where += " AND (m.name LIKE ? OR m.agent_id LIKE ?)"
+			args = append(args, like, like)
+		}
+		query := `SELECT m.agent_id, COALESCE(NULLIF(m.name, ''), m.agent_id),
+  (SELECT COUNT(*) FROM mgr_agent_reward_member c WHERE c.upper_id = m.agent_id),
+  (SELECT COUNT(*) FROM mgr_agent_reward_member c WHERE c.upper_id = m.agent_id AND COALESCE(c.club_id, '') <> '')
+FROM mgr_agent_reward_member m WHERE ` + where + ` ORDER BY m.agent_id LIMIT 200`
+		rows, err := s.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			s.logger.Error("deploy tree leaders", "error", err, "unionId", unionID)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取盟主失败")
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var node deployTreeNode
+			var childAgents, childClubs int
+			if err := rows.Scan(&node.ID, &node.Name, &childAgents, &childClubs); err != nil {
+				continue
+			}
+			node.Type = "leader"
+			node.MemberID = node.ID
+			node.Subtitle = "盟主 · " + node.ID
+			node.Children = childAgents + childClubs
+			items = append(items, node)
+		}
+
+	case "agents":
+		if memberID == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_PARAM", "缺少 memberId")
+			return
+		}
+		rows, err := s.db.QueryContext(ctx, `SELECT m.agent_id, COALESCE(NULLIF(m.name, ''), m.agent_id), COALESCE(m.role, ''),
+  (SELECT COUNT(*) FROM mgr_agent_reward_member c WHERE c.upper_id = m.agent_id)
+FROM mgr_agent_reward_member m WHERE m.upper_id = ? ORDER BY m.agent_id LIMIT 200`, memberID)
+		if err != nil {
+			s.logger.Error("deploy tree agents", "error", err, "memberId", memberID)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取下级代理失败")
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var node deployTreeNode
+			var role string
+			var children int
+			if err := rows.Scan(&node.ID, &node.Name, &role, &children); err != nil {
+				continue
+			}
+			node.Type = "agent"
+			node.MemberID = node.ID
+			node.Subtitle = roleLabel(role) + " · " + node.ID
+			node.Children = children
+			items = append(items, node)
+		}
+
+	case "clubs":
+		// 某个成员名下（agent_id = memberID）的俱乐部，带邀请码
+		rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT m.club_id,
+  COALESCE(c.club_name, ''), COALESCE(c.club_status, ''),
+  COALESCE((SELECT i.invite_code FROM kbedm.club_invite_code_info i
+    WHERE i.club_guuid = m.club_id AND i.status = 'used' ORDER BY i.id DESC LIMIT 1), '')
+FROM mgr_agent_reward_member m
+LEFT JOIN kbedm.club_guuid_info c ON c.club_guuid = m.club_id
+WHERE m.agent_id = ? AND COALESCE(m.club_id, '') <> ''
+ORDER BY c.club_name LIMIT 200`, memberID)
+		if err != nil {
+			s.logger.Error("deploy tree clubs", "error", err, "memberId", memberID)
+			writeError(w, http.StatusInternalServerError, "QUERY_ERROR", "读取俱乐部失败")
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var node deployTreeNode
+			var status string
+			if err := rows.Scan(&node.ID, &node.Name, &status, &node.InviteCode); err != nil {
+				continue
+			}
+			node.Type = "club"
+			if strings.TrimSpace(node.Name) == "" {
+				node.Name = node.ID
+			}
+			node.Subtitle = node.InviteCode + " · " + node.ID
+			items = append(items, node)
+		}
+
+	default:
+		writeError(w, http.StatusBadRequest, "INVALID_PARAM", "未知的 level")
+		return
+	}
+	s.logger.Info("deploy club tree", "level", level, "unionId", unionID, "memberId", memberID, "count", len(items))
+	writeData(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func roleLabel(role string) string {
+	switch role {
+	case "leader":
+		return "盟主"
+	case "partner":
+		return "合伙人"
+	case "grand":
+		return "总代"
+	case "boss":
+		return "老板"
+	case "agent":
+		return "代理"
+	default:
+		if role == "" {
+			return "代理"
+		}
+		return role
+	}
 }

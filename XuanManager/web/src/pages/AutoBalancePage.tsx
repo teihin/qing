@@ -98,6 +98,14 @@ function cooldownText(seconds: number): string {
   return minutes > 0 ? `${minutes} 分 ${rest} 秒` : `${rest} 秒`;
 }
 
+// 已有目标要按真实目标值（existingTargetValue）判方向，不能用候选建议值 targetValue。
+function existingTargetText(item: AutoBalanceCandidate): string {
+  const value = item.existingTargetValue;
+  const direction = value > 0 ? `补偿 ${signed(value)}` : value < 0 ? `压制 ${signed(value)}` : "方向未知";
+  const source = item.existingTargetMan === "auto_balance" ? " · 自动" : item.existingTargetMan ? " · 手工" : "";
+  return `已有目标（${direction}${source}）`;
+}
+
 export default function AutoBalancePage({
   can,
   notify,
@@ -784,7 +792,7 @@ function CandidatePanel({
   const [query, setQuery] = useState({ roomId: "", limit: "100" });
   const [items, setItems] = useState<AutoBalanceCandidate[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filter, setFilter] = useState<"all" | "protect" | "suppress" | "hit">("all");
+  const [filter, setFilter] = useState<"all" | "protect" | "suppress" | "hit" | "miss">("all");
   const [selected, setSelected] = useState<string[]>([]);
   const [result, setResult] = useState<AutoBalanceExecuteResponse | null>(null);
   const [stopOpen, setStopOpen] = useState(false);
@@ -824,6 +832,8 @@ function CandidatePanel({
   const visible = useMemo(() => {
     if (filter === "all") return items;
     if (filter === "hit") return items.filter((item) => item.hit);
+    // 未命中只看 hit=0，不按 action 判断，避免以后 action 语义变化。
+    if (filter === "miss") return items.filter((item) => !item.hit);
     return items.filter((item) => item.action === filter);
   }, [items, filter]);
 
@@ -919,9 +929,10 @@ function CandidatePanel({
               动作
               <select value={filter} onChange={(event) => setFilter(event.target.value as typeof filter)} style={{ height: 38, borderRadius: 8, border: "1px solid #dce7e8", padding: "0 8px" }}>
                 <option value="all">全部</option>
+                <option value="hit">仅命中</option>
+                <option value="miss">未命中</option>
                 <option value="protect">补偿</option>
                 <option value="suppress">压制</option>
-                <option value="hit">仅命中</option>
               </select>
             </label>
             <Button type="button" variant="secondary" onClick={() => { setQuery({ roomId, limit }); }} disabled={loading}>
@@ -1019,8 +1030,14 @@ function CandidatePanel({
                     <td>
                       {item.action === "none" ? "—" : <><strong>{signed(item.targetValue)}</strong><small className="cell-subtitle">{item.chance}%</small></>}
                     </td>
-                    <td>
-                      {item.hasTarget ? "已有目标" : item.cooldownLeft > 0 ? `冷却 ${cooldownText(item.cooldownLeft)}` : item.hit ? "可执行" : "—"}
+                    <td title={item.hasTarget && item.existingTargetTime ? `目标设置时间 ${item.existingTargetTime}` : undefined}>
+                      {item.hasTarget
+                        ? existingTargetText(item)
+                        : item.cooldownLeft > 0
+                          ? `冷却 ${cooldownText(item.cooldownLeft)}`
+                          : item.hit
+                            ? "可执行"
+                            : "—"}
                     </td>
                     <td>
                       <div className="row-actions">

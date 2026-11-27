@@ -1,21 +1,204 @@
 # qing 当前状态
 
-更新时间：2026-11-25
+更新时间：2026-11-26
 
 规则见 `AGENTS.md`；版本与 UI 见 [决策](DECISIONS.md)、[专题](topics/v7-ui.md)。未发布与待验证汇总见[剩余问题清单](handoffs/2026-10-28-open-issues-backlog.md)。
 
-## 2026-11-25 牌桌内「牌局优化」列表加「只看当前房间」勾选（未构建/未真机，详见[交接](handoffs/2026-11-25-ingame-optimize-room-filter.md)）
+## 2026-11-27 投放树改懒加载（联盟→盟主→代理→俱乐部）
 
-- 列表区筛选行下新增 `筛选_当前房间` 勾选项（cc.Toggle，默认不勾）；勾上后 `异步_查询_胜率目标_列表` 带 `room_id = account.roomID`，服务端按**查询时实时所在房间**过滤。
-- 口径：`room_id>0` 且 `state` 空的请求服务端按 `active` 处理 → 勾选时客户端同步切「进行中」，勾着时点「全部」只提示；`history=1` 无房间列 → 进历史自动取消勾选。房间号取不到时拒绝勾选。
-- prefab：`列表` 让出一行（Widget `_top` 60→100），新增节点带 `cc.Widget`；脚本只加 `onToggleClick`/`ApplyRoomOnly` 等，改 `QueryList` 带参。
-- 校验：语法 0 诊断、prefab 引用/`PrefabInfo` 完整、Creator 20:28 已重导入、离屏渲染 750×1334 无压叠。**未构建/未热更/未真机**；`tools/apply_ingame_optimize_panel.py` 已落后，别再重跑。
+- 新接口 `GET /api/automation/deploy/club-tree`：`level=unions|leaders|agents|clubs`，按需逐级查；
+  数据源 `mgr_agent_reward_member`(role/upper_id) + 俱乐部/联盟/邀请码表。
+- 前端 `DeployClubTree`：默认展开到盟主（只拉一级），点代理才查下级，点俱乐部回填邀请码。只部署测试服。
+
+## 2026-11-27 取消「每俱乐部可投放 N 台」限制
+
+前端去掉「还可投 N 台」与超配额拦截，后端 `ensureAutomationRobotQuota` 直接放行。见 [`归档`](archive/2026-11-27/current-no-quota.md)。
+
+## 2026-11-27 投放「选择俱乐部」改树形（联盟 → 俱乐部）
+
+`deployClubOption` 加 `unionId/unionName`（优先 `kbedm.club_union_info.union_name`），前端改可折叠树。详见 [`归档`](archive/2026-11-27/current-club-tree.md)。
+
+## 2026-11-26 额度不足：直接报警停手（用户确认）
+
+- 用户确认「就是额度不够才坐不下」。改：`坐下_事件` 回 **769 / 301** → 直接 `markFundShortage()`
+  （后台 FundShortage 告警 + 停止一切坐下动作 + 60s~300s 退避重探），**不再换座/加码重试**；
+  `sendSit` 增加 `fundShortage` 守卫（缺额期间不发任何坐下）；告警文案改为「俱乐部额度/积分不足」。
+- 另：预坐回包走 `onGameCommand`，已按 200/0x200/512 判成功并设 `presitOk`。
+- 状态展示：机器人状态新增 **`shortage`（额度不足）**。后端 `FundShortage` 事件 → 不在座时 `status='shortage'`，
+  `FundRestored` → 回 `idle` 并清 last_error；前端 `shared.tsx` 加 `shortage: "额度不足"`、机器人筛选也加该项；
+  客户端事件的 60 秒节流改为 10 秒（否则重启后可能一次都不上报）。后端与 `web/` 已部署到测试服。
+  **补丁**：`RoomLeft/RoomClosed` 会把 status 刷回 `idle`，导致列表看不出额度不足 → 改为 `IF(status='shortage','shortage','idle')`；
+  已把现存的 3 台回填成 `shortage`。前端需强刷（Ctrl+Shift+R）才能看到新的状态标签。
+
+## 2026-11-26 只有 0 号位坐得上（769 对照）
+
+0 号位 `{money:100,type:"直接"}` → 512；1/2/3 号位同一报文 → 769，状态一致 → 不是字段问题。已加自愈：769 用「最低带入 + 申请」回退一次；预坐回包走 `onGameCommand` 也已解闸。详见 [`归档`](archive/2026-11-26/current-769-compare.md)。
+
+## 2026-11-26 严格按时序走：请求串行 + 补芒回包驱动预坐
+
+`pendingReq` 闸门（tryTakeSeat/sendSit 有请求在飞就等，onRoomCommand 回包清闸）；补芒查询 → `不补芒（坐下N）` → 才发预坐；`不补芒` 不再并入「已结算」分支（曾导致进房即补带入）。详见 [`归档`](archive/2026-11-26/current-serial-flow.md)。
+
+## 2026-11-26 本地日志加「C->S / S->C」线路日志
+
+- 用户要求日志要像真实客户端那样能看到收发报文。做法：
+  - `wrapAccountWire(account)`：登录成功后给实体的所有 `req*` 方法套一层，打印 `C->S:reqXxx <参数>`；
+  - `onEvent` 入口对关键下行（`onMessage/PlayerList/onRoomCommand/onGameCommand/onHallCommand/onEnterRoom/PromptInfo*`）
+    打印 `S->C:名字 <原文前 400 字>`；
+  - 只写本地 `log()`（`/tmp/xuanagent-<节点>.log`），不推后台事件，避免刷爆后台；
+  - 完整原始报文仍逐条落 `/tmp/xuanagent-game/<账号>-<日期>.log`。
+- 需重启 worker 生效。
+
+
+## 2026-11-26 按真实报文对齐坐下链路（座位 0 基）
+
+见 [`归档`](archive/2026-11-26/current-seat-0based.md)。
+
+## 2026-11-26 对齐客户端坐站流程（含带入区间）
+
+- 首次坐下 = `预坐_事件{site}` → `坐下_事件{money,ready:1,type:"直接",club_id}`；已坐过（留座/回座）=
+  `坐下_事件{site}`（不带 money），桌面没钱再发 `{money,type:"申请"}`。
+- 带入金额必须落在服务端下发的 `buy_in_min ~ buy_in_max`（结算态常见 0~17），超了回 769；已按区间夹取并对齐步长。
+
+## 2026-11-26 看牌卡死：动画中间态占掉正式窗口
+
+见 [`归档`](archive/2026-11-26/current-kanpai-midstate.md)。
+
+## 2026-11-26 消息归属以 PlayerList 座位为准
+
+见 [`归档`](archive/2026-11-26/current-seat-ownership.md)。
+
+## 2026-11-26 日志记录实际发出的请求
+
+见 [`归档`](archive/2026-11-26/current-sent-log.md)。
+
+## 2026-11-26 看牌与扯牌（分牌）区分
+
+见 [`归档`](archive/2026-11-26/current-split-phase.md)。
+
+## 2026-11-26 策略「芒果下注」规则
+
+见 [`归档`](archive/2026-11-26/current-mang.md)。
+
+## 2026-11-26 轮到我 3 秒未出牌就兜底过牌
+
+见 [`归档`](archive/2026-11-26/current-pending-timeout.md)。
+
+## 2026-11-26 「轮到我但角色不可用（等待）」改为回退下单
+
+见 [`归档`](archive/2026-11-26/current-role-wait-skip.md)。
+
+## 2026-11-26 看牌阶段整桌卡住：确认看牌后直接下注
+
+见 [`归档`](archive/2026-11-26/current-kanpai-stall2.md)。要点：搓牌事件只作确认，400ms 后直接按策略下注；1.5 秒未推进补过牌。
+
+## 2026-11-26 切换/重启节点后回原房继续打
+
+见 [`归档`](archive/2026-11-26/current-resume-room.md)。要点：`roomId` 随指派下发 → `XUAN_RESUME_ROOM` → 登录后先进原房，留座在则直接补带入，不预坐。
+
+## 2026-11-26 按真实客户端「每人一个对象」整理消息归属
+
+见 [`归档`](archive/2026-11-26/current-seatviews.md)。
+
+## 2026-11-26 「轮到我却不出牌」主因：别人的消息取消了我的出牌
+
+见 [`归档`](archive/2026-11-26/current-action-canceled.md)。要点：`!isDecisionState` 时曾无条件 `cancelAction()`；别人的倒计时也取消；`!seated` 还丢消息。现在只处理 `mine`。
+
+## 2026-11-26 预坐不带分死循环 + 空座推算
+
+见 [`归档`](archive/2026-11-26/current-presit-no-buyin.md)。
+
+## 2026-11-26 每个机器人保存原始游戏消息日志
+
+原文见 [`archive/2026-11-26/current-game-raw-log.md`](archive/2026-11-26/current-game-raw-log.md)。要点：`/tmp/xuanagent-game/<账号>-<日期>.log`，JSON 行存每条 `onEvent` 原始报文。
+
+## 2026-11-26 修「已入座仍挂金币不足」+ 后台重启误释放
+
+原文见 [`archive/2026-11-26/current-stale-error-and-release.md`](archive/2026-11-26/current-stale-error-and-release.md)。要点：入座事件清 `last_error`；WS 断开不再判离线/释放，离线满 1 分钟才收回机器人。
+
+## 2026-11-26 看牌窗口处理
+
+见 [`归档`](archive/2026-11-26/current-kanpai-window.md)。
+
+## 2026-11-26 按余额选房（钱不够去低底皮）
+
+见 [`归档`](archive/2026-11-26/current-pickroom-by-funds.md)。
+
+## 2026-11-26 第二圈（第三张牌）不出牌：去重改用决策窗口
+
+原文见 [`archive/2026-11-26/current-second-round-noaction.md`](archive/2026-11-26/current-second-round-noaction.md)。要点：第二圈不发「决策_信息_消息」→ captureId 不变 → 按 capture 去重会静默跳过；改为 `状态名+count_times+座位` 判窗口。
+
+## 2026-11-26 对照真实客户端复核打牌链路（修小额房加注 ×10）
+
+原文见 [`archive/2026-11-26/current-playflow-audit.md`](archive/2026-11-26/current-playflow-audit.md)。要点：判窗口/出牌命令/扯牌报文/capture/带入报文/手牌来源六项一致；小额房（0.1/0.3、0.2/0.5）加注需 ×10。
+
+## 2026-11-26 「坐不上 / 不出牌」修复：座位表未到不判无座 + 带入时序
+
+原文见 [`archive/2026-11-26/current-sit-buyin-fix.md`](archive/2026-11-26/current-sit-buyin-fix.md)。
+
+## 2026-11-26 抢座改为「逐个试空座，没空座就换房」
+
+见 [`归档`](archive/2026-11-26/current-seat-retry.md)。
+
+## 2026-11-26 「有分却报故障」修复：770 不再一律当缺钱
+
+原文见 [`archive/2026-11-26/current-770-misjudge.md`](archive/2026-11-26/current-770-misjudge.md)。要点：座位被占也回 770，改为看最近 3 秒 PromptInfo 文案判定缺钱；误标的 4 台已清回 idle。
+
+## 2026-11-26 策略保存即生效（取消草稿门槛）
+
+见 [`归档`](archive/2026-11-26/current-strategy-no-draft.md)。
+
+## 2026-11-26 投放配置「改了不生效」修复
+
+原文见 [`archive/2026-11-26/current-live-apply-fix.md`](archive/2026-11-26/current-live-apply-fix.md)。要点：策略参数默认展开、保存自动判差异写 override；`allowWaitingRoom` 变禁止且当前房未开局时立即离房重找。
+
+## 2026-11-26 策略「是否进等待中的房间」默认不进
+
+原文见 [`archive/2026-11-26/current-waiting-room-flag.md`](archive/2026-11-26/current-waiting-room-flag.md)。要点：`allowWaitingRoom` 默认 false，`pickRoom` 跳过等待/准备房；用户 2026-11-26 明确不要兜底，严格按策略执行。
+
+## 2026-11-26 修节点「terminal stop requested reason=not-assigned」刷屏
+
+见 [`归档`](archive/2026-11-26/current-not-assigned-noise.md)。
+
+## 2026-11-26 机器人批量上分 / 下分（走俱乐部积分，测试服已部署）
+
+原文见 [`archive/2026-11-26/current-robot-club-gold.md`](archive/2026-11-26/current-robot-club-gold.md)。要点：`POST /api/automation/robots/club-gold`，上分走 `异步_发放_玩家_奖励`、下分走 `添加_俱乐部_成员_积分`（回 1280 需回读余额校验）；未加入俱乐部的跳过，多俱乐部必须选一个。
+
+## 2026-11-26 自动输赢平衡：名单回包多一层数组 + 候选状态列（两台已部署）
+
+- 根因：游戏服 4 条异步名单命令回包被包成数组（实测 `异步_查询_伙牌名单` →
+  `{"ret_code":512,"ret_result":[{"teams":[],"members":[]}]}`），后台 `decodeGameObject` 只认对象 → 空 map → 伙牌名单永远空白、导入回来全 0。
+- 后端 `auto_balance.go` 新增 `decodeAutoBalancePayload`（字符串外壳 → 数组取首元素 → `result` 包装，最多 6 层），
+  4 条异步命令共用；候选结构补 `existingTargetValue/Man/Time`。
+- 前端状态列按文档 §4.3 显示 `已有目标（补偿 +800 · 手工）`/`（压制 -1,200 · 自动）`，值 0 或来源空 → `方向未知`；
+  动作下拉按 §4.4 加「未命中」。
+- 测试服二进制 `8877b0fa…`；正式服 `5ceb18b1…`（干净 HEAD + 上次 6 个文件 + 本次改动；先验证基线构建 sha 与线上 `b5cc11ee…` 逐字节一致）。
+  前端两台 `index-DmOggmZr.js` / `index-D0Wf5v9H.css`，health 200、单实例。**正式服游戏服侧已可用**（名单有 8 个团队真实数据）。
+  回滚点 `bin/xuanmanager.20261126-1643-rollback`、`web.previous-ab-balance-20261126/`，详见[交接](handoffs/2026-11-25-auto-balance-admin.md)。
+
+## 2026-11-25 机器人设备绑定 + Worker 离线即时转移（测试服已部署）
+
+原文见 [`archive/2026-11-25/current-device-and-offline.md`](archive/2026-11-25/current-device-and-offline.md)。要点：机器人账号统一绑 `xuanagent-worker-fleet-v1`（`anti_theft_on=1`），只有 worker 能登录，冒名设备回 2563；节点离线（正常退出/断链 6 秒/巡检）立即把机器人收回并重新分配，Worker 列表默认只显示在线。
+
+## 2026-11-25 自动化通道改实时（WS + SSE）
+
+详见 [`handoffs/2026-11-25-automation-realtime-channel.md`](handoffs/2026-11-25-automation-realtime-channel.md) 与 [`归档`](archive/2026-11-25/current-realtime-channel.md)。
+## 2026-11-25 牌桌内「牌局优化」加「只看当前房间」（未构建/未真机）
+
+原文见 [`archive/2026-11-25/current-ingame-optimize.md`](archive/2026-11-25/current-ingame-optimize.md)。
 
 ## 2026-11-25 客户端「额度授权记录」按身份区分 club_id（未构建热更、未真机，详见[交接](handoffs/2026-11-25-quota-grant-record-union-owner.md)）
 
 - 口径：`查询_联盟_授信_记录` 大盟主（当前俱乐部所在联盟的总群主）看全联盟 → **只带 `union_id`、不传 `club_id`**；盟主只看自己名下俱乐部 → `club_id` + `union_id` 都带。
 - 实现：`panelMain` 打开面板时透传 `is_union_owner = IsUnionOwnerOfClub(clubId)`（只认服务端结论、不落盘）；`panelQuotaGrantRecord.ReadEntry/GetRecords` 按该标记决定发不发 `club_id`，**大盟主但 `union_id` 为空时仍退回带 `club_id`** 兜底。
 - 仅语法自检 0 诊断；待 Creator 编译后实机抓报文确认。
+
+## 2026-11-26 客服站：admin999 专用「服务端调用日志」（测试服 + 正式服均已上）
+
+- 数据源是后台游戏命令日志：XuanManager 新增服务通道 `GET /api/service/game-call-logs`（Bearer + 仅本机，按 `contextPrefix` 过滤）；ChatTool 同名客服接口代理它，只留 `cs-hosted-gold-` 的调用/回包/异常行。
+- 同批次：客服上分「同步增加盟主额度」只走 `后台_授信_盟主_额度`（`club_id`/`quota_fen`/`context`，写 `额度联盟授信`；`异步_` 是错名，游戏服返回空 769），**不回退老命令**。**额度是「分」，金额是「元」，换算 ×100**（少乘导致 11 元只加 0.11 元，已修）；下分同一命令传负 `quota_fen`（测试服实测 512 生效，正式服待验）。回包超过全局 6 秒 → 单独用 12 秒客户端，超时后回读额度自证到账，避免重复提交。
+- 同批次：客服消息区「贴底才跟随」，轮询不再把上翻查记录的客服拉回底部；托管面板同一套逻辑。
+- 日志页倒序（最新在最上），参数/返回完整显示，只留 时间/类型/命令/参数/返回/ret_code 六列。上下分结果改走绿色浮层（带告警是橙色，4 秒自动消失），红条只留真失败。
+- 仅 `username=admin999` 可见（前端按钮 + 后端 403）。两台均已发布：测试服 xuan `f32e56d2…`；正式服 xuan `b5cc11ee…`（干净 HEAD + 本次改动编译，避开他人未提交的 automation 改动）+ chat `ee7e409a…` + 前端 `index-D6GZXvNu.js`。
 
 ## 2026-11-25 自动输赢平衡：后台完整版（已上正式服；游戏服命令未部署，功能暂不可用，详见[交接](handoffs/2026-11-25-auto-balance-admin.md)）
 
@@ -25,82 +208,13 @@
 - 16:46–17:01 前端调整：隐藏「生效玩法」；排除玩家标签输入 + 后台核对玩家存在（新接口 `GET /auto-balance/player`）；底皮只能下拉选 9 档；文案全中文化。二进制 `e0744d9b…`。
 - **阻塞**：正式服游戏服没这套实现 —— 无 `auto_balance.py`、`Hall.py` 无 8 条命令、两张表都不存在，`查询_自动平衡_配置` 实测 769。页面打开显示「接口未注册」，需游戏服部署 + reload。代码已提交推送（`codex/club-ui`）。
 
-## 2026-11-24 用户端数据查询支持登录ID/昵称 + 代理链显示各级比例（已上测试服，详见[交接](handoffs/2026-11-24-userdata-lookup-and-chain-percent.md)）
-
-- 后端新增 `GET /api/game/user-data/lookup?keyword=`（权限沿用 `game.user_data.view`）：游戏ID（含靓号）与登录ID（`sm_wxID` / `kbe_accountinfos.accountName`）精确、昵称 `sm_name` 模糊，精确优先，最多 20 条。
-- 前端搜索框改成「先定位玩家」：命中 1 条直接进详情，多条先出候选表点选。代理链每级显示 `角色 · 比例 X%`（`club_agent_info.percent`，`0` 不显示）；本人若是创建者/代理也显示 `本人 · X%`（与「分成比例」同一判定，0 也显示）。
-- 验证：`go build/vet/test`、`tsc/lint/build` 通过；测试服登录ID `1018888` → `981149`、昵称 `测试四` → `327553`；部署后 health 200、新 bundle `index-BJvnC5L-.js`、lookup 未登录 401。**未做登录态点测**，正式服未动，代码未提交。
-
-## 2026-11-24 客服上分可同步增加盟主额度（已上测试服，详见[交接](handoffs/2026-11-24-cs-hosted-gold-sync-union-quota.md)）
-
-- 客服「托管会话 → 上分」弹窗新增「同步增加盟主额度」勾选，**默认勾选**；上多少分同步给该俱乐部盟主加多少额度，下分不涉及。
-- **没用用户点名的 `授信_联盟_额度`**：该命令按调用者自己的联盟判定，`/hall/command` 固定以 `Hall.boss` 执行，boss 无联盟，实测恒返回 769「该俱乐部不在你的联盟里」。改用后台专用命令 **`发放_盟主_奖励`**（池 → 盟主俱乐部，写库 `额度奖励`）。
-- 上分成功后调该命令并回读 `club_guuid_info.union_quota`；第二步失败不回滚积分，原因经 `quotaSyncError` 回显客服，俱乐部未入盟给明确提示。
-- 验证：`go vet/test`、`tsc+build` 通过；测试服端到端 +1 → 玩家积分 1337→1338、俱乐部额度 6123001→6123002、联盟池 40231999→40231998。
-- 测试服已部署（前端 `index-CCJtSAUV.js`、ChatTool `ec68ba29…`、XuanManager `1cdd9f52…`），**正式服未动**，回滚点见交接。**代码未提交。**
-
-## 2026-11-22 后台「关联账号」去掉同公网 IP 维度（两台已部署）
-
-- 原因：服务器已接入高防，玩家出口 IP 被统一改写，同 IP 关联出来的都是假关联。用户要求只去掉 IP 这一路。
-- 后端 `XuanManager/server/internal/api/relations.go`：删掉 `usr_login_ip_info` 两段查询、`relationAllowedIPs` 与 IP 共享阈值，评分只留同设备 100 分（90 天）/ 同 GPS 网格 60 分（7 天）；`types` 只返回 `device` / `gps`。
-- 前端 `PlayersPage.tsx` 去掉「同公网IP」标签、说明与空状态文案、弱强度档；`styles.css` 删 `.relation-tag--ip`、`.relation-strength.is-weak`；`types.ts` 注释同步；接口文档 §4.5.6 同步。
-- **玩家列表「IP短码」列和详情「最近上报 IP」保留**：只砍关联判定，不动 IP 展示。
-- 部署：同一二进制 sha256 `65bbe034…`（15,925,958 B）+ 前端 `index-CstP5xGn.js` / `index-BZMncE-w.css` 已上测试服 16:45、正式服 16:46；两台 health 200、页面与资源 200、关联接口未登录 401、产物 md5 与本地一致。
-- 回滚点：测试服 `bin/xuanmanager.previous-iprel-20261122-1645` + `backups/web.previous-iprel-20261122-1645/`；正式服 `bin/xuanmanager.previous-iprel-20261122-1646` + `backups/web.previous-iprel-20261122-1646/`。回滚 = stop.sh → 还原两处 → start.sh。**代码未提交。**
-- **2026-11-22 16:53/16:54 追加兜底**（用户要求只改后台、不动库和游戏服）：`relations.go` 的 `add()` 增加 `isNumericPlayerID`，非纯数字 guuid 一律不参与关联。起因是库里存在 `user_guuid='ID???' / user_name='匿名'` 的脏行（游戏服上报设备/登录 IP 时账号未就绪，把界面占位文字写进了库，测试服 5 台设备各 1 条，与真实玩家共设备），导致关联列表多出「匿名 ID：ID???·同设备·强」。
-- 本次只换二进制（sha256 `7214aaf7…`），**web、配置、数据库均未改**；备份 `bin/xuanmanager.previous-anonfilter-20261122-1653`（测试服）/ `…-1654`（正式服）。两台 health 200、首页 200、关联接口未登录 401。
-- **遗留（用户明确暂不处理）**：脏行没清、游戏服写入侧没改（`/home/release/kbe` 需 release 权限），新脏行仍会写库，只是后台不再展示。
-
-## 2026-11-22 推广站跳转地址改由后台配置（正式服已上线）
-
-- 后台「系统配置 → 游戏推广下载地址」页下半部分可改苹果/安卓跳转地址，存 `mgr_platform_setting`（`promotion.site.ios_url` / `promotion.site.android_url`），保存即时生效，不用重传网站。
-- 落地页每次打开请求同目录 `links.json`（Caddy 改写到后台只读接口，**页面里不出现 `/xuanmanager`**；no-store，只接受 https），取不到回退 `site-config.json` → 内置默认值。
-- 后端新增 `promotion_site_links.go` 三条路由，沿用 `configuration.promotion_download.*` 权限，无迁移；正式服 bin `67942c12…`、前端 `index-SozfhwRq.js`；回滚点 `bin/xuanmanager.previous-hidelinks-20261122-112901`、Caddy `Caddyfile.bak.weblinks-20261122-112831`。**代码未提交。**
-
-## 2026-11-22 推广站改为按平台跳转（正式服已发布，测试服未动，详见[交接](handoffs/2026-11-22-promotion-site-redirect.md)）
-
-- 不再站内发 APK/描述文件：iOS 和安卓都是**点主按钮才跳**（`https://dgwsd.yycdzx.com/UMuGWv` / `https://www.gulubase.com/bf888`，不做自动跳，避免落地页一闪而过），桌面给两个入口；iOS 安装弹层/浏览器引导/描述文件下载整段删除。
-- `site-config.json` 改 `iosInstallUrl`/`androidInstallUrl`；`downloads/BF.mobileconfig` 与生成脚本留档不再引用。`upload_promotion_site.py` 变跳转模式（无 APK 配置就不打包/不校验，ZIP 1.43 MB），新增 `--public-url`；新增 `9-4上传推广网站-正式服.command`。
-- 正式服 `8.153.70.197:/www/html/webhome` 已发布（7 文件，index sha `6eb9c977…`；已清掉公网 `downloads/` 与测试服域名，app.js 只接受 https 目标），`:28800` 默认 `root /www/html` 直接可用；公网转发域名 200。**测试服 `154.37.155.17` 仍是旧下载页，双击 `4上传推广网站.command` 才同步（会替换掉服务器上的旧 APK）。** 未真机验证。
-
-## 2026-11-22 客服站两步验证 404（正式服已修，详见[交接](handoffs/2026-11-22-chattool-totp-path.md)）
-
-## 2026-11-21 大厅排行榜入口按俱乐部/联盟开关（客户端 + 后台就绪，未构建/未部署/未真机）
-
-- 大厅「发现」页「排行榜」按钮原来一直显示。现在后台按俱乐部放行：独立俱乐部自己设，已入盟由联盟统一设，玩家切俱乐部后按新归属重判。
-- 存储沿用哈希表，**不改游戏服命令**：`kbedm.usr_hash_info` 的 `排行榜_俱乐部_<clubId>` / `排行榜_联盟_<unionId>`（1=显示）。客户端读 `查询_哈希_信息`；后台后端直接读写并回读校验。
-- 客户端（`panelMain.ts`）：`union_id` 非空读联盟 key、确认未入盟读俱乐部 key、归属未知先隐藏并补查 `查询_俱乐部_信息`；进大厅/进发现页/切俱乐部/入盟推送/关系变化都会重算；5 秒超时按隐藏，同 key 10 秒节流，迟到回包按 key 丢弃。只切 `Main/发现/排行榜` 的 `active`，未改 Prefab。
-- 后台：新增 `PUT /api/game/{clubs|unions}/{id}/leaderboard-entry` + 权限迁移 074；俱乐部/联盟列表回 `leaderboardEnabled`；行内加「排行榜」按钮与状态列，**旧「荣耀榜」按钮已去掉**（配置仍走独立模块「排行榜」，`HonorRankModal.tsx` 已删）。
-- 验证：`go build`、`go vet`、排行榜/暗抽相关测试、`npx tsc --noEmit` 全通过；`go test ./internal/api/` 仅剩既有失败 `TestGameRegistrationHoneypotRejectsAndBansIP`（`REGISTRATION_MOVED`，与本次无关）。客户端只做语法转译。详见[交接](handoffs/2026-11-21-lobby-leaderboard-entry.md)。
-- 后台**两台都已部署**：测试服 22:15（`154.37.155.17:/www/html/.xuanmanager`，权限角色 1/4）、正式服 22:17（`8.153.70.197:/www/.xuanmanager`，只有 super_admin）。同一二进制 `9c76aa1d…`，health 200，迁移 074 均已应用，新路由 401、页面已换 `index-BD8zmkfA.js`。回滚点：测试服 `backups/20261121-2218-rollback/`，正式服 `bin/xuanmanager.previous-leaderboardentry-20261121-2220` + `web.previous-leaderboardentry-20261121-2220/`。
-- 待办：默认全隐藏，需运营逐个放开；客户端构建后测三种情况（独立俱乐部开/关、入盟跟随联盟、切俱乐部切换）。
-
-## 2026-11-21 iOS 未签名包（BF 品牌，热更基线 7.0.6，含声音修复；待企业签名/真机）
-
-- 三次出包都在 `build/ios-unsigned/`，均在 Creator 构建 jsb-link + 「1生成热更新包」之后直接 archive（不重复构建，44–50s）：`unsigned-20261121.ipa`（20:22，基线 7.0.4，**缺声音修复**）、`qing-unsigned-20261121-2322.ipa`（7.0.6）、`qing-unsigned-20261121-2325.ipa`（7.0.6 + 声音修复，**交付这版**，SHA-256 `eb3fa9e8…`）。忽略 2322 中间版，只发 2325。
-- 共同核验：136 MB、`CODE_SIGNING_ALLOWED=NO` 且 `codesign -dv` = not signed at all（无 `_CodeSignature`/描述文件）、arm64、`CFBundleDisplayName=BF`/`com.fireball.qing`/1.0.0(1)/最低 iOS 12.0、包内 `index.jsc` 与 build 同哈希、`unzip -t` 通过、无 AppleDouble。
-- 声音修复只改 `build-templates/.../proj.ios_mac/ios/QingVoiceBridge.{h,mm}`（22:03/22:43，出房间静音 + 切后台回前台 `end()`/`lazyInit()` 重建引擎 + 1.2s 补恢复），Creator 23:18 构建已自动同步（两侧 diff 一致），archive 日志确认 `QingVoiceBridge.mm`/`AppController.mm` 重新 CompileC。**判据：二进制 `RestoreGameAudio` 旧包 count=0、新包 count=1**（Objective-C 方法名在 `__objc_methname` 段，strip 不掉；二进制大小差 104 字节、中文字符串零差异都不可当判据）。
-- 线上 `/up` 仍 6.0.26，7.0.6 未上传；dSYMs 为空（该配置不产，企业签名不依赖）。真机未验。
-
 ## 2026-11-19 实时战绩头像框：环不再缩在头像里（Prefab 就绪，未导入/构建/热更/真机）
 
-- 根因：`record_avatar_ring.png` 92×92 四周留了透明边距，环外径只占画布 0.659；节点按 64/46 绘制后可见环径仅 42/30，而头像 62/44，框被"跑进"照片里。
-- 改动只有两个节点的 `_contentSize`：`观战对象.prefab` 的 `V8头像框` 64→**100**，`带入记录.prefab` 的 `ring` 46→**72**；PNG/`.meta`/UUID 未动，`tools/apply_realtime_record_v2.py` 常量同步。
-- 离屏与合成图核对见 `vibe_images/2026-11-19-avatar-ring/`；Creator 导入、构建、热更、真机未做。详见[交接](handoffs/2026-11-19-realtime-avatar-ring-size.md)。
+原文见 [`archive/2026-11-26/current-2026-11-19-avatar-ring.md`](archive/2026-11-26/current-2026-11-19-avatar-ring.md)。要点：只改 `观战对象.prefab` 的 `V8头像框` 与 `带入记录.prefab` 的 `ring` 两处 `_contentSize`（64→100、46→72），PNG/`.meta`/UUID 未动。
 
 ## 更早批次
 
-- 2026-11-18 的「游戏设置入口按当前联盟判身份」「排行榜数字等宽等基线」原文见 [`archive/2026-11-25/current-2026-11-18-union-leaderboard.md`](archive/2026-11-25/current-2026-11-18-union-leaderboard.md)。
-
-- 2026-11-18 的实时战绩按新效果图重做、牌局结算行底两篇原文见 [`archive/2026-11-24/current-nov18-client-ui.md`](archive/2026-11-24/current-nov18-client-ui.md)。
-
-- 2026-11-18 的「下注位芒N残留」「投芒动画收尾」「结算界面重做」「俱乐部成员汇总条」原文见 [`archive/2026-11-22/current-2026-11-18-batches.md`](archive/2026-11-22/current-2026-11-18-batches.md)。
-
-- 2026-11-15 批次（业绩股全局折算、逃跑惩罚统计、玩家优化接胜率目标、排行榜独立模块、代理链、俱乐部荣耀榜、BF 聊天默认关闭）见 [`archive/2026-11-18/current-nov15-batches.md`](archive/2026-11-18/current-nov15-batches.md)。
-- 2026-11-14 批次（后台靓号、BF 消息规则、玩家关联账号/IP 短码、客户端 BOSS IP 短码）见 [`archive/2026-11-17/current-nov14-batches.md`](archive/2026-11-17/current-nov14-batches.md)。
-- 2026-11-13 批次（BF 聊天开关移交后台、业绩核心共享三阶段发放、额度授权记录类型、后台用户端数据查询）见 [`archive/2026-11-15/current-nov13-batches.md`](archive/2026-11-15/current-nov13-batches.md)。
-- 2026-11-03～11-09 的历史客户端、额度、牌局和后台批次见 [`docs/memory/archive/`](archive/2026-11-15/)。
-
+见 [`handoffs/`](handoffs/)：11-23~11-25 的自动化通道、客服站、自动输赢平衡等历史交接。
 ## 本轮实时核对：记忆整理
 
 ## 最近报告的 UI 状态

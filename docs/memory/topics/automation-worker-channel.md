@@ -193,3 +193,47 @@ DELIVERED 无回执重投、离线 10 分钟收回账号的真实链路、页面
 远程节点需另同步。
 
 改动清单、已核对「不改」的项、四项冒烟与待验证项见[交接](../handoffs/2026-10-29-worker-club-mode.md)。
+
+## 11. 实时通道：节点全线长连接（WS）+ 后台 SSE（2026-11-25，测试服已部署）
+
+**口径**：长连接是主通道，HTTP 只做注册/退出/兜底。第一版「WS 只推唤醒、业务走 HTTP」被用户否掉
+（一条长连接上再叠 HTTP 心跳与事件白费流量）。
+
+- 节点侧 `GET /agent/v1/ws`（`internal/api/automation_stream.go`）：租约令牌鉴权（与 HTTP 共用
+  `agentIdentityByToken`），升级后发 `hello`（`heartbeatInterval`、`realtime:true`）。
+  信封 `{type,id,data}`：带 `id` 是请求/应答，不带是推送。同一节点重复连接顶掉旧连接；读超时 60 秒
+  （节点 15 秒一次 `ping`）。
+- 上行（请求）：`heartbeat` / `pull` / `ack` / `events`；应答：`heartbeatAck` / `commands` /
+  `ackResult` / `eventsAck` / `error`。下行推送：`command`（服务端主动下发）、`sync`（让节点补心跳）、
+  `pong`。
+- 业务内核在 `internal/api/automation_agent_core.go`：`applyAgentHeartbeat` / `claimAgentCommands` /
+  `applyAgentAck` / `applyAgentEvents`，HTTP 处理器只是「解码 + 调内核 + 写响应」。
+  **改业务逻辑只改内核这一处**，别在 WS 分支里另写一套。
+- 触发推送：`enqueueWorkerCommand` 插入成功、`assignWaitingRobotsToWorker` 分配成功、节点注册。
+  推送时命令即置 `DELIVERED`；没回执由 janitor 120 秒后重投（`attempts` 用尽才 `EXPIRED`）。
+- 节点侧（`cmd/xuanagent/transport.go`）：`wsTransport` 用 id→channel 做请求应答；断线 `failAll`
+  立刻唤醒等待方回退 HTTP；`realtime.go` 负责 2s→30s 退避重连、15 秒 ping、推送命令进主循环队列。
+  发不出去的事件进 `pendingEvents`（上限 2000），下一拍或重连后重发，服务端按 `event_id` 去重。
+  长连接可用时命令轮询降为 30 秒一次、事件冲刷 800ms→250ms。
+- 后台页面 `GET /api/automation/stream`（SSE）：只推 `{type:"change",scope,workerId,robotId}`，
+  20 秒一次 `: keepalive`；前端 `useAutomationStream.ts` 300ms 防抖后重拉 REST，页面轮询 5 秒→20 秒。
+- 实现细节：`server/internal/realtime/` 是自己写的最小 RFC 6455（握手/分片/ping-pong/close，1 MB 上限），
+  **没有引第三方 WS 库**（后端只依赖 mysql 驱动与 x/crypto）。改动时别顺手换成 gorilla 之类。
+- 已验证：`go test`（握手往返、大消息、SSE 流、顶掉旧连接）、测试服公网探针（hello/heartbeat/pull/
+  events/ack/ping 全通）、真实 worker 短跑（WS 连上、事件落库、强杀后 30 秒内判离线）。
+  未验证：浏览器登录态下的 SSE 实际推送、后台点命令的 1 秒端到端。
+
+## 12. 机器人账号设备绑定：只能由 Worker 登录（2026-11-25）
+
+- 目标：机器人账号的密码在运营手里流转，必须保证**只有 worker 能登**，别人拿到密码也登不进去。
+- 做法（`api/automation_robot_device.go`）：
+  - 设备码是**整个 worker 集群统一的一个常量** `robotDeviceFleetID = "xuanagent-worker-fleet-v1"`
+    （`client.js` 里 `cfg.deviceId` 默认同一个值，`XUAN_DEVICE_ID` 可覆盖）。
+    worker 是可替换执行器，任何机器都要能接手任何机器人，所以设备码跟着集群走，不跟账号/机器/终端号走。
+  - 建号时 `kbedm.third_marketing_info` 直接写 `anti_theft_on=1, device_id=<上式>, device_platform='web',
+    device_version='1', device_bound_at=NOW(), binding_revision=1`。
+  - `syncRobotDeviceBindings` 在 janitor 里跑（5 分钟节流），把老数据/绑错的补齐或纠正。
+- 实测：worker002 用默认（集群）设备码登录成功；把 `XUAN_DEVICE_ID` 换成一个陌生值再登 → `LoginFailed code=2563`。
+  说明拦截在游戏服侧生效，后台只负责把绑定值写对。
+- 运维注意：给机器人换绑设备要改库（或临时设 `XUAN_DEVICE_ID` 让 worker 提交那个值），
+  否则 worker 自己也会被挡；`anti_theft_on=0` 就等于放开（后台防盗号页有解绑入口）。
