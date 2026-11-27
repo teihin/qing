@@ -3374,3 +3374,17 @@ input.totp-code-input:focus { border-color: #55bdb5; background: #fff; box-shado
   .ab-mode-badge { min-height: 42px; padding: 0 13px; }
   .ab-mode-badge > strong { font-size: 16px; }
 }
+
+/* 注册防护：全服日注册上限的进度展示 */
+.registration-quota__input { display: flex; align-items: center; gap: 8px; }
+.registration-quota__input input { width: 118px; padding: 10px 12px; border: 1px solid #cfe0e2; border-radius: 10px; color: #203d45; font-size: 16px; font-weight: 700; text-align: right; }
+.registration-quota__input span { color: #70868c; font-size: 13px; }
+.registration-quota { margin-top: 18px; padding: 16px; border: 1px solid #dbe9e7; border-radius: 14px; background: #f7fbfa; }
+.registration-quota__headline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.registration-quota__headline strong { color: #0f5f57; font-size: 20px; }
+.registration-quota__headline span { color: #60787e; font-size: 13px; }
+.registration-quota__bar { height: 10px; margin: 12px 0 8px; overflow: hidden; border-radius: 999px; background: #e3efed; }
+.registration-quota__bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, #35b6a5, #128178); transition: width 0.25s ease; }
+.registration-quota.is-reached .registration-quota__bar i { background: linear-gradient(90deg, #e0674f, #b2432f); }
+.registration-quota.is-reached .registration-quota__headline strong { color: #b2432f; }
+.registration-quota__hint { color: #70868c; font-size: 12px; }

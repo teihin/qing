@@ -111,13 +111,13 @@ func newServer(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) *Serv
 		attemptsPer10Min = 0
 	}
 	s := &Server{
-		db:                     db,
-		gameDB:                 gameDB,
-		cfg:                    cfg,
-		mux:                    http.NewServeMux(),
-		logger:                 logger,
-		registrationLimiter:    newRegistrationRateLimiter(attemptsPer10Min, 10*time.Minute),
-		registrationGuard:      newRegistrationGuard(db, cfg, logger),
+		db:                  db,
+		gameDB:              gameDB,
+		cfg:                 cfg,
+		mux:                 http.NewServeMux(),
+		logger:              logger,
+		registrationLimiter: newRegistrationRateLimiter(attemptsPer10Min, 10*time.Minute),
+		registrationGuard:   newRegistrationGuard(db, cfg, logger),
 		// 玩家自助改密（改登录密码 / 改交易密码共用）：1 小时窗口内失败 5 次（IP 20 次）锁 10 分钟。
 		// 锁时长从 30 分钟收到 10 分钟：玩家输错几次就被锁半小时，实际比密码错本身更劝退。
 		passwordAccountLimiter: newPasswordAttemptLimiter(5, time.Hour, 10*time.Minute),
@@ -127,6 +127,9 @@ func newServer(db, gameDB *sql.DB, cfg config.Config, logger *slog.Logger) *Serv
 		totpKey:                security.DeriveTOTPKey(cfg.CredentialKey),
 		captcha:                newCaptchaStore(),
 	}
+	// 全服日上限按「今日真实账号数」算：运营清理垃圾号后配额要能回落，
+	// 不能用只增不减的注册事件流水。
+	s.registrationGuard.globalCount = s.countTodayRegisteredAccounts
 	return s
 }
 

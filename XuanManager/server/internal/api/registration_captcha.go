@@ -122,22 +122,38 @@ func randomID() string {
 }
 
 // renderCaptchaImage 生成背景图（带缺口）与拼图块，返回 base64 PNG。
+//
+// 体积是硬约束：注册口是独立端口直连（高防四层转发），响应体过大时会被链路截断，
+// 客户端表现为 ERR_EMPTY_RESPONSE。所以噪点按 4×4 块铺（逐像素随机噪点会让 PNG 完全压不动，
+// 单张能到 90KB），输出前再量化成调色板图，最终整包控制在 20KB 以内。
 func renderCaptchaImage(answer, posY int) (string, string, error) {
 	bg := image.NewRGBA(image.Rect(0, 0, captchaImageWidth, captchaImageHeight))
-	// 渐变底色，再叠随机噪点，让模板匹配难以精确定位。
 	baseR := uint8(60 + randomInt(80))
 	baseG := uint8(70 + randomInt(80))
 	baseB := uint8(80 + randomInt(80))
-	for y := 0; y < captchaImageHeight; y++ {
-		ratio := float64(y) / float64(captchaImageHeight)
-		for x := 0; x < captchaImageWidth; x++ {
+	const noiseBlock = 4
+	for blockY := 0; blockY < captchaImageHeight; blockY += noiseBlock {
+		for blockX := 0; blockX < captchaImageWidth; blockX += noiseBlock {
 			noise := uint8(randomInt(36))
-			bg.SetRGBA(x, y, color.RGBA{
-				R: uint8(float64(baseR)*(1-ratio*0.5)) + noise/2,
-				G: uint8(float64(baseG)*(1-ratio*0.3)) + noise/2,
-				B: uint8(float64(baseB)*(1-ratio*0.2)) + noise/2,
-				A: 255,
-			})
+			maxY := blockY + noiseBlock
+			if maxY > captchaImageHeight {
+				maxY = captchaImageHeight
+			}
+			maxX := blockX + noiseBlock
+			if maxX > captchaImageWidth {
+				maxX = captchaImageWidth
+			}
+			for y := blockY; y < maxY; y++ {
+				ratio := float64(y) / float64(captchaImageHeight)
+				for x := blockX; x < maxX; x++ {
+					bg.SetRGBA(x, y, color.RGBA{
+						R: uint8(float64(baseR)*(1-ratio*0.5)) + noise/2,
+						G: uint8(float64(baseG)*(1-ratio*0.3)) + noise/2,
+						B: uint8(float64(baseB)*(1-ratio*0.2)) + noise/2,
+						A: 255,
+					})
+				}
+			}
 		}
 	}
 	// 若干干扰线
@@ -150,20 +166,47 @@ func renderCaptchaImage(answer, posY int) (string, string, error) {
 	// 拼图块从背景同位置裁出（保留原纹理，避免纯色块被一眼识别）
 	piece := image.NewRGBA(image.Rect(0, 0, captchaPieceSize, captchaPieceSize))
 	draw.Draw(piece, piece.Bounds(), bg, image.Pt(answer, posY), draw.Src)
-	// 缺口用半透明暗块标出来
+	// 缺口用暗块标出来
 	hole := color.RGBA{0, 0, 0, 110}
 	draw.Draw(bg, image.Rect(answer, posY, answer+captchaPieceSize, posY+captchaPieceSize),
 		&image.Uniform{hole}, image.Point{}, draw.Over)
 
-	var bgBuf, pieceBuf bytes.Buffer
-	if err := png.Encode(&bgBuf, bg); err != nil {
+	bgBuf, err := encodeCaptchaPNG(bg)
+	if err != nil {
 		return "", "", err
 	}
-	if err := png.Encode(&pieceBuf, piece); err != nil {
+	pieceBuf, err := encodeCaptchaPNG(piece)
+	if err != nil {
 		return "", "", err
 	}
 	return base64.StdEncoding.EncodeToString(bgBuf.Bytes()),
 		base64.StdEncoding.EncodeToString(pieceBuf.Bytes()), nil
+}
+
+// captchaPalette 是 6×6×6 的固定调色板：既要保住渐变和干扰线的观感，
+// 又要让 PNG8 编码出来的体积远小于真彩色。
+func captchaPalette() color.Palette {
+	palette := make(color.Palette, 0, 216)
+	for r := 0; r < 6; r++ {
+		for g := 0; g < 6; g++ {
+			for b := 0; b < 6; b++ {
+				palette = append(palette, color.RGBA{uint8(r * 51), uint8(g * 51), uint8(b * 51), 255})
+			}
+		}
+	}
+	return palette
+}
+
+// encodeCaptchaPNG 先量化到调色板再按最高压缩率编码，体积约为原来的 1/6。
+func encodeCaptchaPNG(src image.Image) (*bytes.Buffer, error) {
+	paletted := image.NewPaletted(src.Bounds(), captchaPalette())
+	draw.Draw(paletted, paletted.Bounds(), src, src.Bounds().Min, draw.Src)
+	var buf bytes.Buffer
+	encoder := png.Encoder{CompressionLevel: png.BestCompression}
+	if err := encoder.Encode(&buf, paletted); err != nil {
+		return nil, err
+	}
+	return &buf, nil
 }
 
 func drawLine(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
@@ -184,7 +227,7 @@ func drawLine(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
 }
 
 type captchaResponse struct {
-	CaptchaID string `json:"captchaId"`
+	CaptchaID  string `json:"captchaId"`
 	Background string `json:"background"`
 	Puzzle     string `json:"puzzle"`
 	PuzzleY    int    `json:"puzzleY"`

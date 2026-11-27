@@ -45,7 +45,7 @@ func TestRegistrationGuardBlocksAfterHourlyQuota(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		guard.record(ctx, registrationEvent{IPHash: hash, Result: registrationResultOK})
 	}
-	reason, wait, err := guard.blocked(ctx, hash, "")
+	reason, wait, err := guard.blocked(ctx, hash, "", 0)
 	if err != nil {
 		t.Fatalf("blocked: %v", err)
 	}
@@ -58,7 +58,7 @@ func TestRegistrationGuardBlocksAfterHourlyQuota(t *testing.T) {
 
 	// 另一个 IP 不受影响。
 	other := registrationIPHash("198.51.100.2")
-	if reason, _, _ := guard.blocked(ctx, other, ""); reason != registrationBlockNone {
+	if reason, _, _ := guard.blocked(ctx, other, "", 0); reason != registrationBlockNone {
 		t.Fatalf("another ip must not be blocked, got %q", reason)
 	}
 }
@@ -72,12 +72,12 @@ func TestRegistrationGuardIgnoresRejectedAttempts(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		guard.record(ctx, registrationEvent{IPHash: hash, Result: registrationResultRateLimited})
 	}
-	if reason, _, _ := guard.blocked(ctx, hash, ""); reason != registrationBlockNone {
+	if reason, _, _ := guard.blocked(ctx, hash, "", 0); reason != registrationBlockNone {
 		t.Fatalf("rejected attempts must not consume quota, got %q", reason)
 	}
 
 	guard.record(ctx, registrationEvent{IPHash: hash, Result: registrationResultOK})
-	if reason, _, _ := guard.blocked(ctx, hash, ""); reason != registrationBlockIPHourly {
+	if reason, _, _ := guard.blocked(ctx, hash, "", 0); reason != registrationBlockIPHourly {
 		t.Fatalf("one successful registration must exhaust a quota of 1, got %q", reason)
 	}
 }
@@ -93,7 +93,7 @@ func TestRegistrationGuardBlocksAfterDeviceDailyQuota(t *testing.T) {
 	guard.record(ctx, registrationEvent{IPHash: registrationIPHash("203.0.113.1"), DeviceKey: deviceKey, Result: registrationResultOK})
 
 	// 换了 IP，但同一设备，仍然要被拦。
-	reason, _, err := guard.blocked(ctx, registrationIPHash("203.0.113.2"), deviceKey)
+	reason, _, err := guard.blocked(ctx, registrationIPHash("203.0.113.2"), deviceKey, 0)
 	if err != nil {
 		t.Fatalf("blocked: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestRegistrationGuardBlocksAfterDeviceDailyQuota(t *testing.T) {
 	}
 
 	// 不传设备标识的客户端只按 IP 算，不能被空设备误伤。
-	if reason, _, _ := guard.blocked(ctx, registrationIPHash("203.0.113.3"), ""); reason != registrationBlockNone {
+	if reason, _, _ := guard.blocked(ctx, registrationIPHash("203.0.113.3"), "", 0); reason != registrationBlockNone {
 		t.Fatalf("empty device key must not be blocked, got %q", reason)
 	}
 }
@@ -114,7 +114,7 @@ func TestRegistrationGuardBlocksAtGlobalDailyLimit(t *testing.T) {
 	guard.record(ctx, registrationEvent{IPHash: registrationIPHash("203.0.113.11"), Result: registrationResultOK})
 	guard.record(ctx, registrationEvent{IPHash: registrationIPHash("203.0.113.12"), Result: registrationResultOK})
 
-	reason, _, err := guard.blocked(ctx, registrationIPHash("203.0.113.13"), "")
+	reason, _, err := guard.blocked(ctx, registrationIPHash("203.0.113.13"), "", 0)
 	if err != nil {
 		t.Fatalf("blocked: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestRegistrationGuardBanBlocksEvenBelowQuota(t *testing.T) {
 	hash := registrationIPHash("203.0.113.20")
 
 	guard.ban(ctx, hash, "honeypot", time.Now())
-	reason, wait, err := guard.blocked(ctx, hash, "")
+	reason, wait, err := guard.blocked(ctx, hash, "", 0)
 	if err != nil {
 		t.Fatalf("blocked: %v", err)
 	}
@@ -162,5 +162,39 @@ func TestGameRegistrationHoneypotRejectsAndBansIP(t *testing.T) {
 	second := post(`{"nickname":"玩家","loginName":"9001012","password":"111111"}`)
 	if second.Code != http.StatusForbidden {
 		t.Fatalf("banned ip status = %d, body = %s", second.Code, second.Body.String())
+	}
+}
+
+// 后台实时改的全服日上限优先于 env 配置：传 1 时，哪怕 env 没配也应立刻拦住第二个。
+func TestRegistrationGuardUsesRuntimeGlobalLimit(t *testing.T) {
+	guard := newMemoryRegistrationGuard(t, config.Config{RegIPHourly: 0, RegIPDaily: 0, RegGlobalDaily: 0})
+	ctx := context.Background()
+	guard.record(ctx, registrationEvent{IPHash: registrationIPHash("203.0.113.31"), Result: registrationResultOK})
+
+	reason, _, err := guard.blocked(ctx, registrationIPHash("203.0.113.32"), "", 1)
+	if err != nil {
+		t.Fatalf("blocked: %v", err)
+	}
+	if reason != registrationBlockGlobalDaily {
+		t.Fatalf("reason = %q, want %q", reason, registrationBlockGlobalDaily)
+	}
+	if reason, _, _ := guard.blocked(ctx, registrationIPHash("203.0.113.33"), "", 5); reason != registrationBlockNone {
+		t.Fatalf("reason = %q, want none when limit is higher", reason)
+	}
+}
+
+// 全服日上限要用注入的「真实账号数」，而不是只增不减的事件流水：
+// 运营清掉垃圾号后配额必须能回落，否则注册会一直被判超限。
+func TestRegistrationGuardPrefersInjectedGlobalCounter(t *testing.T) {
+	guard := newMemoryRegistrationGuard(t, config.Config{})
+	ctx := context.Background()
+	guard.record(ctx, registrationEvent{IPHash: registrationIPHash("203.0.113.41"), Result: registrationResultOK})
+	guard.globalCount = func(context.Context) (int, error) { return 99, nil }
+
+	if reason, _, _ := guard.blocked(ctx, registrationIPHash("203.0.113.42"), "", 100); reason != registrationBlockNone {
+		t.Fatalf("reason = %q, want none when injected count is below limit", reason)
+	}
+	if reason, _, _ := guard.blocked(ctx, registrationIPHash("203.0.113.43"), "", 99); reason != registrationBlockGlobalDaily {
+		t.Fatalf("reason = %q, want %q when injected count reaches limit", reason, registrationBlockGlobalDaily)
 	}
 }

@@ -136,6 +136,10 @@ func (s *Server) handleRegistrationOptions(w http.ResponseWriter, _ *http.Reques
 func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Request) {
 	setRegistrationCORS(w)
 	ip := clientIP(r)
+	// 注册链路排查用：客户端「点了没反应」时，先看这条日志是否出现——
+	// 没有就是请求根本没到服务端（网络/混合内容/高防），有就看后面的拒绝原因。
+	s.logger.Info("registration request received",
+		"remote", ip, "origin", r.Header.Get("Origin"), "userAgent", r.Header.Get("User-Agent"))
 	allowed, retryAfter := s.registrationLimiter.allow(ip, time.Now())
 	if !allowed {
 		w.Header().Set("Retry-After", strconv.Itoa(max(1, int(retryAfter.Seconds()))))
@@ -176,7 +180,7 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 	// 配额：单 IP 小时/日、单设备、全服日上限。库不可用时放行（fail open），
 	// 因为注册本身要写游戏库，库挂了注册也成功不了。
 	deviceKey := registrationDeviceKey(input.DeviceID)
-	if reason, wait, guardErr := s.registrationGuard.blocked(r.Context(), ipHash, deviceKey); guardErr != nil {
+	if reason, wait, guardErr := s.registrationGuard.blocked(r.Context(), ipHash, deviceKey, s.registrationGlobalDailyLimit(r.Context())); guardErr != nil {
 		s.logger.Warn("registration quota check failed", "error", guardErr)
 	} else if reason != registrationBlockNone {
 		wait = max(wait, time.Second)
@@ -184,6 +188,11 @@ func (s *Server) handleCreateGameRegistration(w http.ResponseWriter, r *http.Req
 		if reason == registrationBlockIPBanned {
 			// 被封的 IP 不再写事件，避免封禁状态自己把表刷大。
 			writeError(w, http.StatusForbidden, "REGISTRATION_REJECTED", "请求被拒绝，请稍后重试")
+			return
+		}
+		if reason == registrationBlockGlobalDaily {
+			// 全服日上限：对玩家来说是「今天注册不了」，不透露配额细节，也不写事件防止刷表。
+			writeError(w, http.StatusTooManyRequests, "REGISTRATION_LIMIT_REACHED", "注册异常，请联系管理员")
 			return
 		}
 		s.registrationGuard.record(r.Context(), registrationEvent{
@@ -334,6 +343,7 @@ VALUES (CURDATE(), CURTIME(), ?, ?, ?, ?, ?, MD5(?), '', 0, ?, ?, ?, ?, IF(? = 1
 		LoginName: registration.LoginName,
 		Result:    registrationResultOK,
 	})
+	s.logger.Info("registration completed", "loginName", registration.LoginName, "registrationId", id, "remote", ip)
 	writeData(w, http.StatusCreated, map[string]any{
 		"registrationId":   id,
 		"invitationCode":   registration.InvitationCode,

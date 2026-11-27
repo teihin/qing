@@ -43,6 +43,11 @@ type registrationGuard struct {
 	mu        sync.Mutex
 	memory    map[string][]time.Time
 	banMemory map[string]time.Time
+
+	// globalCount 是「全服日上限」的计数来源。默认按注册事件流水统计，
+	// 但运营清理垃圾账号时只删账号、不删流水，会让配额永远卡住；
+	// 所以服务端会注入「今日真实账号数」的实现（见 countTodayRegisteredAccounts）。
+	globalCount func(context.Context) (int, error)
 }
 
 func newRegistrationGuard(db *sql.DB, cfg config.Config, logger *slog.Logger) *registrationGuard {
@@ -92,7 +97,7 @@ const (
 	registrationBlockGlobalDaily registrationBlockReason = "global_daily"
 )
 
-func (g *registrationGuard) blocked(ctx context.Context, ipHash, deviceKey string) (registrationBlockReason, time.Duration, error) {
+func (g *registrationGuard) blocked(ctx context.Context, ipHash, deviceKey string, globalDaily int) (registrationBlockReason, time.Duration, error) {
 	// 蜜罐封禁默认开启；honeypotBan=0 时跳过（见 newRegistrationGuard）。
 	if g.honeypotBan > 0 {
 		if until, banned := g.bannedUntil(ctx, ipHash); banned {
@@ -128,16 +133,36 @@ func (g *registrationGuard) blocked(ctx context.Context, ipHash, deviceKey strin
 			return registrationBlockDeviceDaily, oldest.Add(24 * time.Hour).Sub(now), nil
 		}
 	}
-	if g.globalDaily > 0 {
-		count, _, err := g.countOK(ctx, registrationDimensionGlobal, "", startOfToday(now))
+	// 全服日上限由调用方传入（后台可实时改），0 表示不限。
+	if globalDaily <= 0 {
+		globalDaily = g.globalDaily
+	}
+	if globalDaily > 0 {
+		count, err := g.countGlobal(ctx, now)
 		if err != nil {
 			return registrationBlockNone, 0, err
 		}
-		if count >= g.globalDaily {
+		if count >= globalDaily {
 			return registrationBlockGlobalDaily, startOfTomorrow(now).Sub(now), nil
 		}
 	}
 	return registrationBlockNone, 0, nil
+}
+
+// countGlobal 统计今天全服已注册数量。优先用注入的「真实账号数」口径，
+// 没注入或查询失败时退回事件流水——宁可多算，也不能让上限失效。
+func (g *registrationGuard) countGlobal(ctx context.Context, now time.Time) (int, error) {
+	if g.globalCount != nil {
+		count, err := g.globalCount(ctx)
+		if err == nil {
+			return count, nil
+		}
+		if g.logger != nil {
+			g.logger.Warn("registration global counter failed, falling back to events", "error", err)
+		}
+	}
+	count, _, err := g.countOK(ctx, registrationDimensionGlobal, "", startOfToday(now))
+	return int(count), err
 }
 
 type registrationDimension string
